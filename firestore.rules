@@ -1,0 +1,139 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: {userId} (matches Firebase Auth UID)
+// Fields:
+//   - id: string (required) - UID
+//   - email: string (required, format: email)
+//   - displayName: string (optional)
+//   - photoURL: string (optional)
+//   - role: string (enum: ['admin', 'user'])
+//   - credits: map
+//     - available: number
+//     - used: number
+//     - plan: string (enum: ['free', 'starter', 'pro', 'studio', 'admin'])
+//   - stats: map
+//     - totalGenerations: number
+//     - totalAvatars: number
+//     - totalProducts: number
+//     - creditsUsed: number
+//     - lastActiveAt: string (ISO 8601)
+//   - onboardingDone: boolean (optional)
+//   - createdAt: string (ISO 8601)
+//
+// Collection: prompts
+// Document ID: {promptId}
+// Fields:
+//   - id: string (required)
+//   - authorId: string (required) - UID of the creator
+//   - promptText: string (required, max 2000 chars)
+//   - likes: number (default 0)
+//   - createdAt: string (ISO 8601)
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ═══════════════════════════════════════
+    // HELPER FUNCTIONS
+    // ═══════════════════════════════════════
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        (request.auth.token.email == 'grancornetin@gmail.com' && request.auth.token.email_verified == true)
+      );
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches('^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$');
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // ═══════════════════════════════════════
+    // DOMAIN VALIDATORS
+    // ═══════════════════════════════════════
+
+    function isValidUser(data) {
+      return data.id is string &&
+             data.email is string && isValidEmail(data.email) &&
+             (data.role in ['admin', 'user']) &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1000)) &&
+             data.credits is map &&
+             data.credits.available is number &&
+             data.credits.used is number &&
+             data.credits.plan in ['free', 'starter', 'pro', 'studio', 'admin'] &&
+             data.stats is map &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidPrompt(data) {
+      return data.id is string &&
+             data.authorId is string &&
+             data.promptText is string && data.promptText.size() > 0 && data.promptText.size() <= 2000 &&
+             data.likes is number &&
+             isValidDateString(data.createdAt);
+    }
+
+    // ═══════════════════════════════════════
+    // RULES
+    // ═══════════════════════════════════════
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) &&
+                      (request.resource.data.role == 'user' || isAdmin());
+      
+      allow update: if isAuthenticated() && (
+                      (isOwner(userId) && isValidUser(request.resource.data) && 
+                       request.resource.data.role == resource.data.role) || 
+                      isAdmin()
+                    );
+      
+      allow delete: if isAdmin();
+
+      // Subcollections (avatars, products, sets, outfits)
+      match /{subcollection}/{docId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    match /prompts/{promptId} {
+      allow read: if true;
+      
+      allow create: if isAuthenticated() && 
+                      request.resource.data.authorId == request.auth.uid && 
+                      isValidPrompt(request.resource.data);
+      
+      allow update: if isAuthenticated() && (
+                      (isOwner(resource.data.authorId) && isValidPrompt(request.resource.data)) ||
+                      (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']) &&
+                       request.resource.data.likes == resource.data.likes + 1) ||
+                      isAdmin()
+                    );
+      
+      allow delete: if isAdmin() || isOwner(resource.data.authorId);
+    }
+  }
+}

@@ -1,0 +1,43 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Build output
+node_modules
+dist
+dist-ssr
+
+# ── SECRETOS — NUNCA subir a GitHub ──────────────────
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.local
+*.json
+!package.json
+!package-lock.json
+!vercel.json
+!firebase-applet-config.json
+!tsconfig.json
+
+# Firebase config con keys reales
+# (Si tu firebase-applet-config.json tiene apiKey real, agrégalo aquí)
+# firebase-applet-config.json
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.vercel
