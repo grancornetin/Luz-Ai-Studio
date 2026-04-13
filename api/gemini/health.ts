@@ -2,10 +2,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { VertexAI } from '@google-cloud/vertexai';
 
-function getVertex(): VertexAI {
+function getVertex(location: string = 'us-central1'): VertexAI {
   const credentialsJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
   const projectId = process.env.GCP_PROJECT_ID;
-  const location = process.env.GCP_LOCATION || 'us-central1';
 
   if (!credentialsJson || !projectId) {
     throw new Error('Missing GOOGLE_SERVICE_ACCOUNT_KEY or GCP_PROJECT_ID environment variables.');
@@ -36,8 +35,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const vertex = getVertex();
-    const model = vertex.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    // gemini-2.5-flash funciona en us-central1
+    const vertex = getVertex('us-central1');
+    const model = vertex.getGenerativeModel({ model: 'gemini-2.5-flash' });
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: 'Respond with only: OK' }] }],
     });
@@ -48,7 +48,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       status: 'connected',
       project: process.env.GCP_PROJECT_ID || 'unknown',
-      location: process.env.GCP_LOCATION || 'us-central1',
       model_response: (text as any)?.text || 'no response',
       timestamp: new Date().toISOString(),
     });

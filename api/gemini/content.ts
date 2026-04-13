@@ -2,10 +2,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { VertexAI } from '@google-cloud/vertexai';
 
-function getVertex(): VertexAI {
+function getVertex(location: string = 'us-central1'): VertexAI {
   const credentialsJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
   const projectId = process.env.GCP_PROJECT_ID;
-  const location = process.env.GCP_LOCATION || 'us-central1';
 
   if (!credentialsJson || !projectId) {
     throw new Error('Missing GOOGLE_SERVICE_ACCOUNT_KEY or GCP_PROJECT_ID environment variables.');
@@ -65,8 +64,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Missing action or prompt' });
     }
 
-    const vertex = getVertex();
-    const modelName = body.model || 'gemini-1.5-pro';
+    // Modelo de texto: gemini-2.5-flash (barato, rápido, funciona en us-central1)
+    const modelName = body.model || 'gemini-2.5-flash';
+    const vertex = getVertex('us-central1');
 
     const generationConfig: Record<string, unknown> = {};
 
@@ -127,11 +127,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error: any) {
     console.error('Vertex AI content error:', error);
-
-    const status = error.status || error.code || 500;
     const message = error.message || 'Internal server error';
 
-    return res.status(typeof status === 'number' ? status : 500).json({
+    return res.status(500).json({
       success: false,
       error: message,
     });

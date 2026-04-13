@@ -1,11 +1,16 @@
 // api/gemini/image.ts
+// Modelos según routing del proyecto:
+//   PRO:   gemini-3-pro-image-preview     (identidad facial crítica)
+//   FLASH: gemini-3.1-flash-image-preview (sin identidad que mantener)
+//   FAST:  imagen-4.0-fast-generate-001   (máximo volumen, mínimo costo)
+//   TEXT:  gemini-2.5-flash               (solo texto/JSON)
+
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { VertexAI } from '@google-cloud/vertexai';
 
-function getVertex(): VertexAI {
+function getVertex(location: string = 'us-central1'): VertexAI {
   const credentialsJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
   const projectId = process.env.GCP_PROJECT_ID;
-  const location = process.env.GCP_LOCATION || 'us-central1';
 
   if (!credentialsJson || !projectId) {
     throw new Error('Missing GOOGLE_SERVICE_ACCOUNT_KEY or GCP_PROJECT_ID environment variables.');
@@ -72,7 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (body.action === 'generateImageFast') {
-      return await handleImagen3Generation(body, res);
+      return await handleImagen4Generation(body, res);
     }
 
     return res.status(400).json({ error: `Unknown action: ${body.action}` });
@@ -85,12 +90,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
+// ── Gemini Image Generation (PRO o FLASH según modelo) ──
 async function handleGeminiImageGeneration(
   body: ImageRequest,
   res: VercelResponse
 ) {
-  const vertex = getVertex();
-  const modelName = body.model || 'gemini-2.0-flash-preview-image-generation';
+  // Default: PRO (identidad facial). Frontend puede enviar FLASH model.
+  const modelName = body.model || 'gemini-3-pro-image-preview';
+
+  // Modelos 3.x preview pueden necesitar 'global' o 'us-central1'
+  // Probamos us-central1 primero; si falla, el frontend puede reintentar
+  const vertex = getVertex('us-central1');
 
   const model = vertex.getGenerativeModel({
     model: modelName,
@@ -101,6 +111,7 @@ async function handleGeminiImageGeneration(
 
   const parts: Array<Record<string, unknown>> = [];
 
+  // Agregar imágenes de referencia
   if (body.referenceImages && body.referenceImages.length > 0) {
     for (let i = 0; i < body.referenceImages.length; i++) {
       const ref = body.referenceImages[i];
@@ -152,13 +163,14 @@ async function handleGeminiImageGeneration(
   });
 }
 
-async function handleImagen3Generation(
+// ── Imagen 4 Fast (máximo volumen, mínimo costo) ──
+async function handleImagen4Generation(
   body: ImageRequest,
   res: VercelResponse
 ) {
   const projectId = getProjectId();
   const location = getLocation();
-  const modelName = 'imagen-3.0-generate-001';
+  const modelName = body.model || 'imagen-4.0-fast-generate-001';
 
   const endpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelName}:predict`;
 
@@ -190,8 +202,8 @@ async function handleImagen3Generation(
 
   if (!response.ok) {
     const errorBody = await response.text();
-    console.error('Imagen 3 API error:', errorBody);
-    throw new Error(`Imagen 3 API returned ${response.status}: ${errorBody}`);
+    console.error('Imagen 4 API error:', errorBody);
+    throw new Error(`Imagen 4 API returned ${response.status}: ${errorBody}`);
   }
 
   const data = await response.json();
@@ -207,10 +219,11 @@ async function handleImagen3Generation(
 
   return res.status(422).json({
     success: false,
-    error: 'Imagen 3 did not return an image',
+    error: 'Imagen 4 did not return an image',
   });
 }
 
+// ── Helper: obtener access token del Service Account ──
 async function getAccessToken(): Promise<string> {
   const { GoogleAuth } = await import('google-auth-library');
 

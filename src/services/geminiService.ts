@@ -1,8 +1,12 @@
 // services/geminiService.ts
 // ═══════════════════════════════════════════════════════════════════
 // REFACTORED: Calls Vercel API routes → Vertex AI (GCP billing)
-// Ya NO usa @firebase/vertexai-preview ni ningún SDK de IA en el browser.
-// Todas las llamadas a Gemini pasan por /api/gemini/*
+// 
+// ROUTING DE MODELOS:
+//   PRO:   gemini-3-pro-image-preview     → identidad facial crítica
+//   FLASH: gemini-3.1-flash-image-preview → sin identidad que mantener
+//   FAST:  imagen-4.0-fast-generate-001   → máximo volumen, mínimo costo
+//   TEXT:  gemini-2.5-flash               → análisis, variaciones, JSON
 // ═══════════════════════════════════════════════════════════════════
 
 import {
@@ -15,6 +19,14 @@ import {
 const API_BASE = '/api/gemini';
 const CONTENT_ENDPOINT = `${API_BASE}/content`;
 const IMAGE_ENDPOINT = `${API_BASE}/image`;
+
+// ── Modelos ─────────────────────────────────────────────────────
+const MODELS = {
+  TEXT: 'gemini-2.5-flash',
+  PRO_IMAGE: 'gemini-3-pro-image-preview',
+  FLASH_IMAGE: 'gemini-3.1-flash-image-preview',
+  FAST_IMAGE: 'imagen-4.0-fast-generate-001',
+};
 
 // ── Helpers ─────────────────────────────────────────────────────
 
@@ -40,10 +52,6 @@ function guessMimeFromBase64Header(base64: string) {
   return "image/jpeg";
 }
 
-/**
- * Extrae base64 limpio y mimeType de cualquier formato de imagen.
- * Soporta data URLs y raw base64.
- */
 function extractImageData(img: string, refLabel?: string): { data: string; mimeType: string } {
   const raw = (img || "").trim();
 
@@ -51,7 +59,6 @@ function extractImageData(img: string, refLabel?: string): { data: string; mimeT
     throw new Error(`Referencia de imagen inválida (vacía)${refLabel ? `: ${refLabel}` : ""}.`);
   }
 
-  // Data URL format
   const parsed = parseDataUrl(raw);
   if (parsed) {
     const base64 = (parsed.base64 || "").replace(/\s+/g, "");
@@ -61,7 +68,6 @@ function extractImageData(img: string, refLabel?: string): { data: string; mimeT
     return { data: base64, mimeType: parsed.mimeType || "image/jpeg" };
   }
 
-  // Raw base64 (puede tener prefix de comma)
   const maybeBase64 = raw.includes(",") ? raw.split(",")[1] : raw;
   const cleaned = (maybeBase64 || "").replace(/\s+/g, "");
 
@@ -80,9 +86,6 @@ function safeJsonParse(text: any) {
   }
 }
 
-/**
- * Helper genérico para llamar al endpoint de content.
- */
 async function callContentApi(payload: {
   action: string;
   images?: string[];
@@ -111,9 +114,6 @@ async function callContentApi(payload: {
   return data;
 }
 
-/**
- * Helper genérico para llamar al endpoint de image.
- */
 async function callImageApi(payload: {
   action: string;
   prompt: string;
@@ -143,7 +143,7 @@ async function callImageApi(payload: {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SERVICIO PÚBLICO — Misma interfaz que el original
+// SERVICIO PÚBLICO
 // ═══════════════════════════════════════════════════════════════════
 
 export const geminiService = {
@@ -157,7 +157,7 @@ export const geminiService = {
     throw error;
   },
 
-  // ── Extracción de perfil de avatar ──────────────────────────────
+  // ── Extracción de perfil de avatar (TEXT model) ─────────────────
   async extractAvatarProfile(images: string[]): Promise<any> {
     try {
       const extracted = images.map((img, idx) =>
@@ -170,7 +170,7 @@ export const geminiService = {
         mimeTypes: extracted.map(e => e.mimeType),
         prompt: "BIOMETRIC ANALYST: Extract exact facial features and identity profile. Output in strict JSON.",
         schema: AVATAR_EXTRACTOR_SCHEMA as any,
-        model: 'gemini-1.5-pro',
+        model: MODELS.TEXT,
       });
 
       return result.json || safeJsonParse(result.text);
@@ -179,7 +179,7 @@ export const geminiService = {
     }
   },
 
-  // ── Análisis de producto ────────────────────────────────────────
+  // ── Análisis de producto (TEXT model) ───────────────────────────
   async analyzeProduct(images: string[], userDescription?: string): Promise<any> {
     try {
       const extracted = images.map((img, idx) =>
@@ -196,7 +196,7 @@ export const geminiService = {
         mimeTypes: extracted.map(e => e.mimeType),
         prompt,
         schema: PRODUCT_ANALYZER_SCHEMA as any,
-        model: 'gemini-1.5-pro',
+        model: MODELS.TEXT,
       });
 
       return result.json || safeJsonParse(result.text);
@@ -205,7 +205,7 @@ export const geminiService = {
     }
   },
 
-  // ── Análisis de outfit ──────────────────────────────────────────
+  // ── Análisis de outfit (TEXT model) ─────────────────────────────
   async analyzeOutfit(image: string): Promise<any> {
     try {
       const extracted = extractImageData(image, "analyzeOutfit");
@@ -216,7 +216,7 @@ export const geminiService = {
         mimeTypes: [extracted.mimeType],
         prompt: "FASHION ANALYST: Detect coordinates (X, Y) and describe each garment with precision. Output in JSON.",
         schema: OUTFIT_ANALYZER_SCHEMA as any,
-        model: 'gemini-1.5-pro',
+        model: MODELS.TEXT,
       });
 
       return result.json || safeJsonParse(result.text);
@@ -225,7 +225,7 @@ export const geminiService = {
     }
   },
 
-  // ── Generación de imagen (con referencias) ─────────────────────
+  // ── Generación de imagen PRO (con referencias, identidad) ──────
   async generateImage(
     prompt: string,
     negative: string,
@@ -252,11 +252,15 @@ export const geminiService = {
 
       const instruction = `SYSTEM: Follow prompt exactly. REF slots are reference images.\nPROMPT: ${prompt}\nNEGATIVE: ${negative}`;
 
+      // PRO por defecto (identidad facial). Módulos sin persona usan FLASH.
+      const model = usePro ? MODELS.PRO_IMAGE : MODELS.FLASH_IMAGE;
+
       return await callImageApi({
         action: 'generateImage',
         prompt: instruction,
         negative,
         referenceImages: refs.length > 0 ? refs : undefined,
+        model,
         aspectRatio,
       });
     } catch (e) {
@@ -264,7 +268,7 @@ export const geminiService = {
     }
   },
 
-  // ── Generación de imagen con modelo específico ─────────────────
+  // ── Generación con modelo específico ───────────────────────────
   async generateImageWithModel(
     prompt: string,
     negative: string,
@@ -273,11 +277,38 @@ export const geminiService = {
     referenceImages?: (string | null)[],
     aspectRatio: "1:1" | "3:4" | "4:3" | "9:16" | "16:9" = "3:4"
   ): Promise<string> {
-    // Reutiliza generateImage — el modelo se maneja server-side
-    return this.generateImage(prompt, negative, true, size, referenceImages, aspectRatio);
+    try {
+      const refs: Array<{ data: string; mimeType: string }> = [];
+
+      if (referenceImages && referenceImages.length > 0) {
+        for (let i = 0; i < referenceImages.length; i++) {
+          const img = referenceImages[i];
+          if (img && img.trim().length > 0) {
+            try {
+              refs.push(extractImageData(img, `REF${i}`));
+            } catch {
+              // Skip invalid refs
+            }
+          }
+        }
+      }
+
+      const instruction = `PROMPT: ${prompt}\nNEGATIVE: ${negative}`;
+
+      return await callImageApi({
+        action: 'generateImage',
+        prompt: instruction,
+        negative,
+        referenceImages: refs.length > 0 ? refs : undefined,
+        model: modelName,
+        aspectRatio,
+      });
+    } catch (e) {
+      return this.handleApiError(e);
+    }
   },
 
-  // ── Generación rápida (Imagen 3, solo texto) ──────────────────
+  // ── Generación rápida FAST (Imagen 4, sin persona) ─────────────
   async generateImageFast(
     prompt: string,
     aspectRatio: "1:1" | "3:4" | "4:3" | "9:16" | "16:9" = "3:4"
@@ -286,6 +317,7 @@ export const geminiService = {
       return await callImageApi({
         action: 'generateImageFast',
         prompt,
+        model: MODELS.FAST_IMAGE,
         aspectRatio,
       });
     } catch (e) {
@@ -293,13 +325,13 @@ export const geminiService = {
     }
   },
 
-  // ── Generación de texto (JSON mode) ────────────────────────────
+  // ── Generación de texto / JSON (TEXT model) ────────────────────
   async generateText(prompt: string): Promise<string> {
     try {
       const result = await callContentApi({
         action: 'generateText',
         prompt,
-        model: 'gemini-1.5-flash',
+        model: MODELS.TEXT,
       });
 
       return result.text || '';
