@@ -1,13 +1,32 @@
 // api/gemini/content.ts
-// Handles: extractAvatarProfile, analyzeProduct, analyzeOutfit, generateText
-// POST /api/gemini/content
-
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getVertex } from '../_lib/vertexClient';
+import { VertexAI } from '@google-cloud/vertexai';
 
-// ── Schemas (duplicated server-side for validation) ─────────────
-// Estos schemas se envían desde el frontend en el body del request.
-// Vertex AI los usa para structured output (JSON mode).
+function getVertex(): VertexAI {
+  const credentialsJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+  const projectId = process.env.GCP_PROJECT_ID;
+  const location = process.env.GCP_LOCATION || 'us-central1';
+
+  if (!credentialsJson || !projectId) {
+    throw new Error('Missing GOOGLE_SERVICE_ACCOUNT_KEY or GCP_PROJECT_ID environment variables.');
+  }
+
+  let credentials: Record<string, unknown>;
+  try {
+    const decoded = credentialsJson.startsWith('{')
+      ? credentialsJson
+      : Buffer.from(credentialsJson, 'base64').toString('utf-8');
+    credentials = JSON.parse(decoded);
+  } catch {
+    throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY is not valid JSON or Base64.');
+  }
+
+  return new VertexAI({
+    project: projectId,
+    location,
+    googleAuthOptions: { credentials },
+  });
+}
 
 interface ContentRequest {
   action:
@@ -15,11 +34,11 @@ interface ContentRequest {
     | 'analyzeProduct'
     | 'analyzeOutfit'
     | 'generateText';
-  images?: string[];           // base64 strings (sin data URL prefix)
-  mimeTypes?: string[];        // mime types paralelos a images[]
+  images?: string[];
+  mimeTypes?: string[];
   prompt: string;
-  schema?: Record<string, unknown>; // responseSchema para JSON mode
-  model?: string;              // override del modelo (default: gemini-1.5-pro)
+  schema?: Record<string, unknown>;
+  model?: string;
 }
 
 function corsHeaders(res: VercelResponse) {
@@ -49,16 +68,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const vertex = getVertex();
     const modelName = body.model || 'gemini-1.5-pro';
 
-    // Configuración del modelo
     const generationConfig: Record<string, unknown> = {};
 
-    // Si hay schema, activar JSON mode
     if (body.schema) {
       generationConfig.responseMimeType = 'application/json';
       generationConfig.responseSchema = body.schema;
     }
 
-    // Para generateText siempre queremos JSON
     if (body.action === 'generateText' && !body.schema) {
       generationConfig.responseMimeType = 'application/json';
     }
@@ -68,10 +84,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       generationConfig,
     });
 
-    // Construir parts
     const parts: Array<Record<string, unknown>> = [];
 
-    // Agregar imágenes si existen
     if (body.images && body.images.length > 0) {
       for (let i = 0; i < body.images.length; i++) {
         const imageData = body.images[i];
@@ -86,10 +100,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Agregar prompt de texto
     parts.push({ text: body.prompt });
 
-    // Llamar a Vertex AI
     const result = await model.generateContent({
       contents: [{ role: 'user', parts }],
     });
@@ -101,12 +113,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .filter(Boolean)
         .join('') || '';
 
-    // Intentar parsear como JSON si es posible
     let parsedJson: unknown = null;
     try {
       parsedJson = JSON.parse(textContent);
     } catch {
-      // No es JSON, devolver como texto
+      // Not JSON, return as text
     }
 
     return res.status(200).json({

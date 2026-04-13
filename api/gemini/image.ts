@@ -1,19 +1,50 @@
 // api/gemini/image.ts
-// Handles: generateImage, generateImageWithModel, generateImageFast
-// POST /api/gemini/image
-
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getVertex, getProjectId, getLocation } from '../_lib/vertexClient';
+import { VertexAI } from '@google-cloud/vertexai';
+
+function getVertex(): VertexAI {
+  const credentialsJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+  const projectId = process.env.GCP_PROJECT_ID;
+  const location = process.env.GCP_LOCATION || 'us-central1';
+
+  if (!credentialsJson || !projectId) {
+    throw new Error('Missing GOOGLE_SERVICE_ACCOUNT_KEY or GCP_PROJECT_ID environment variables.');
+  }
+
+  let credentials: Record<string, unknown>;
+  try {
+    const decoded = credentialsJson.startsWith('{')
+      ? credentialsJson
+      : Buffer.from(credentialsJson, 'base64').toString('utf-8');
+    credentials = JSON.parse(decoded);
+  } catch {
+    throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY is not valid JSON or Base64.');
+  }
+
+  return new VertexAI({
+    project: projectId,
+    location,
+    googleAuthOptions: { credentials },
+  });
+}
+
+function getProjectId(): string {
+  return process.env.GCP_PROJECT_ID || '';
+}
+
+function getLocation(): string {
+  return process.env.GCP_LOCATION || 'us-central1';
+}
 
 interface ImageRequest {
   action: 'generateImage' | 'generateImageFast';
   prompt: string;
   negative?: string;
   referenceImages?: Array<{
-    data: string;       // base64 sin prefix
+    data: string;
     mimeType: string;
   }>;
-  model?: string;       // override
+  model?: string;
   aspectRatio?: '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
 }
 
@@ -36,12 +67,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Missing prompt' });
     }
 
-    // ── Ruta 1: Imagen Generation vía Gemini (multimodal con referencias) ──
     if (body.action === 'generateImage') {
       return await handleGeminiImageGeneration(body, res);
     }
 
-    // ── Ruta 2: Fast generation vía Imagen 3 API ──
     if (body.action === 'generateImageFast') {
       return await handleImagen3Generation(body, res);
     }
@@ -56,14 +85,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-// ── Gemini con capacidad nativa de generación de imágenes ──
 async function handleGeminiImageGeneration(
   body: ImageRequest,
   res: VercelResponse
 ) {
   const vertex = getVertex();
-
-  // gemini-2.0-flash-preview-image-generation soporta I/O multimodal con imágenes
   const modelName = body.model || 'gemini-2.0-flash-preview-image-generation';
 
   const model = vertex.getGenerativeModel({
@@ -75,7 +101,6 @@ async function handleGeminiImageGeneration(
 
   const parts: Array<Record<string, unknown>> = [];
 
-  // Agregar imágenes de referencia
   if (body.referenceImages && body.referenceImages.length > 0) {
     for (let i = 0; i < body.referenceImages.length; i++) {
       const ref = body.referenceImages[i];
@@ -91,7 +116,6 @@ async function handleGeminiImageGeneration(
     }
   }
 
-  // Instrucción
   let instruction = body.prompt;
   if (body.negative) {
     instruction += `\nNEGATIVE: ${body.negative}`;
@@ -104,7 +128,6 @@ async function handleGeminiImageGeneration(
 
   const response = result.response;
 
-  // Buscar parte con imagen generada
   const imagePart = response.candidates?.[0]?.content?.parts?.find(
     (p: any) => p.inlineData
   );
@@ -117,7 +140,6 @@ async function handleGeminiImageGeneration(
     });
   }
 
-  // Si no hay imagen, devolver el texto (podría ser un error o refusal)
   const textContent = response.candidates?.[0]?.content?.parts
     ?.map((p: any) => p.text || '')
     .filter(Boolean)
@@ -130,7 +152,6 @@ async function handleGeminiImageGeneration(
   });
 }
 
-// ── Imagen 3 via REST API (Vertex AI Predict endpoint) ──
 async function handleImagen3Generation(
   body: ImageRequest,
   res: VercelResponse
@@ -139,10 +160,8 @@ async function handleImagen3Generation(
   const location = getLocation();
   const modelName = 'imagen-3.0-generate-001';
 
-  // Imagen 3 usa el endpoint predict de Vertex AI
   const endpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelName}:predict`;
 
-  // Obtener access token via Service Account
   const accessToken = await getAccessToken();
 
   const requestBody = {
@@ -155,7 +174,6 @@ async function handleImagen3Generation(
       sampleCount: 1,
       aspectRatio: body.aspectRatio || '3:4',
       negativePrompt: body.negative || '',
-      // Vertex AI Imagen 3 parámetros
       personGeneration: 'allow_all',
       safetySetting: 'block_only_high',
     },
@@ -193,9 +211,7 @@ async function handleImagen3Generation(
   });
 }
 
-// ── Helper: obtener access token del Service Account ──
 async function getAccessToken(): Promise<string> {
-  // google-auth-library está incluida como dependencia de @google-cloud/vertexai
   const { GoogleAuth } = await import('google-auth-library');
 
   const credentialsJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '';

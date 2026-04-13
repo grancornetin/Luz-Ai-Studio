@@ -1,9 +1,32 @@
 // api/gemini/health.ts
-// GET /api/gemini/health
-// Verifica que la conexión a Vertex AI funciona correctamente.
-
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getVertex } from '../_lib/vertexClient';
+import { VertexAI } from '@google-cloud/vertexai';
+
+function getVertex(): VertexAI {
+  const credentialsJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+  const projectId = process.env.GCP_PROJECT_ID;
+  const location = process.env.GCP_LOCATION || 'us-central1';
+
+  if (!credentialsJson || !projectId) {
+    throw new Error('Missing GOOGLE_SERVICE_ACCOUNT_KEY or GCP_PROJECT_ID environment variables.');
+  }
+
+  let credentials: Record<string, unknown>;
+  try {
+    const decoded = credentialsJson.startsWith('{')
+      ? credentialsJson
+      : Buffer.from(credentialsJson, 'base64').toString('utf-8');
+    credentials = JSON.parse(decoded);
+  } catch {
+    throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY is not valid JSON or Base64.');
+  }
+
+  return new VertexAI({
+    project: projectId,
+    location,
+    googleAuthOptions: { credentials },
+  });
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -13,10 +36,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Intentar inicializar el cliente (valida credenciales)
     const vertex = getVertex();
-
-    // Hacer una llamada mínima para verificar que funciona
     const model = vertex.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: 'Respond with only: OK' }] }],
