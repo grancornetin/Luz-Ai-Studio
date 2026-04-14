@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@google-cloud/vertexai": "^1.10.4",
+    "@google/genai": "^1.48.0",
     "file-saver": "^2.0.5",
     "firebase": "^12.11.0",
     "google-auth-library": "^9.15.1",
