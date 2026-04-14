@@ -1,33 +1,28 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* FORZAMOS LOS COLORES DE LUZ IA MANUALMENTE */
-@layer utilities {
-  /* Clase para el fondo del botón (la que falta en tu captura) */
-  .bg-brand-600 {
-    background-color: #FF748B !important;
-  }
-
-  /* Clase para el color del texto si fuera necesario */
-  .text-brand-600 {
-    color: #FF748B !important;
-  }
-
-  /* Colores para los módulos del Dashboard (los que se veían blancos) */
-  .bg-indigo-50 { background-color: #eef2ff !important; }
-  .bg-violet-50 { background-color: #f5f3ff !important; }
-  .bg-emerald-50 { background-color: #ecfdf5 !important; }
-  .bg-amber-50 { background-color: #fffbeb !important; }
-  
-  .text-indigo-600 { color: #4f46e5 !important; }
-  .text-violet-600 { color: #7c3aed !important; }
-  .text-emerald-600 { color: #059669 !important; }
-  .text-amber-600 { color: #d97706 !important; }
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #f8fafc;
 }
 
-/* Aseguramos que el botón tenga sombra y sea visible */
-button.bg-brand-600 {
-  box-shadow: 0 10px 15px -3px rgba(255, 116, 139, 0.4);
-  min-height: 44px; /* Para asegurar que no colapse */
+.glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
 }
