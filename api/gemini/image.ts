@@ -127,9 +127,10 @@ async function handleGeminiImageGeneration(
   parts.push({ text: instruction });
 
   // Llamar al modelo con config de imagen
+  // ✅ FIX: agregar role: "user" al contents
   const response = await ai.models.generateContent({
     model: modelName,
-    contents: { parts },
+    contents: [{ role: "user", parts }],
     config: {
       responseModalities: ['TEXT', 'IMAGE'],
     },
@@ -173,9 +174,10 @@ async function handleFastGeneration(
   // Si el usuario quiere imagen-4.0, puede pasar el model explícitamente
   const modelName = body.model || 'gemini-3.1-flash-image-preview';
 
+  // ✅ FIX: agregar role: "user" al contents
   const response = await ai.models.generateContent({
     model: modelName,
-    contents: { parts: [{ text: body.prompt }] },
+    contents: [{ role: "user", parts: [{ text: body.prompt }] }],
     config: {
       responseModalities: ['TEXT', 'IMAGE'],
     },
