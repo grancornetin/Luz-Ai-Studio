@@ -2,11 +2,16 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from '@google/genai';
 
 // ===================================================================
-// CONFIGURACIÓN DE MODELOS - Estrategia de 3 niveles
+// CONFIGURACIÓN DE MODELOS - SOLO MODELOS DISPONIBLES
 // ===================================================================
-const MODEL_PRIMARY = 'gemini-3.1-flash-image-preview';
-const MODEL_SECONDARY = 'gemini-2.5-pro-image-preview';
+// Nota: Los modelos -preview no están disponibles en todos los proyectos.
+// imagen-3.0-generate-001 es estable y funciona.
+const MODEL_PRIMARY = 'imagen-3.0-generate-001';
+const MODEL_SECONDARY = 'imagen-3.0-generate-001';
 const MODEL_TERTIARY = 'imagen-3.0-generate-001';
+
+// Delay entre reintentos para manejar quota 429 (milisegundos)
+const RETRY_DELAY_MS = 5000;
 
 function getCredentials(): Record<string, unknown> {
   const credentialsJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
@@ -25,7 +30,6 @@ function getCredentials(): Record<string, unknown> {
 
 function getGenAIClient(): GoogleGenAI {
   const projectId = process.env.GCP_PROJECT_ID;
-  // CRÍTICO: Debe ser 'us-central1' para los modelos -image-preview
   const location = process.env.GCP_LOCATION || 'us-central1';
 
   if (!projectId) {
@@ -48,7 +52,14 @@ function cleanBase64(b64: string): string {
 }
 
 // ===================================================================
-// GENERACIÓN CON FALLBACK (3 niveles)
+// ESPERA (para manejar rate limits)
+// ===================================================================
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ===================================================================
+// GENERACIÓN CON FALLBACK Y MANEJO DE 429
 // ===================================================================
 async function generateImageWithFallback(
   ai: GoogleGenAI,
@@ -59,26 +70,38 @@ async function generateImageWithFallback(
   const errors: string[] = [];
 
   for (const model of models) {
-    try {
-      console.log(`[UGC] Intentando con modelo: ${model}`);
-      const response = await ai.models.generateContent({
-        model: model,
-        contents: [{ role: 'user', parts }],
-        config: {
-          responseModalities: ['IMAGE'],
-          imageConfig: { aspectRatio: aspectRatio as any, imageSize: '1K' },
-        },
-      });
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        console.log(`[UGC] Intentando con modelo: ${model} (intento ${attempt})`);
+        const response = await ai.models.generateContent({
+          model: model,
+          contents: [{ role: 'user', parts }],
+          config: {
+            responseModalities: ['IMAGE'],
+            imageConfig: { aspectRatio: aspectRatio as any, imageSize: '1K' },
+          },
+        });
 
-      const imagePart = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.data);
-      if (imagePart?.inlineData?.data) {
-        console.log(`[UGC] Éxito con modelo: ${model}`);
-        return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+        const imagePart = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.data);
+        if (imagePart?.inlineData?.data) {
+          console.log(`[UGC] Éxito con modelo: ${model}`);
+          return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+        }
+        errors.push(`${model}: no image data`);
+      } catch (error: any) {
+        const msg = error?.message || '';
+        console.warn(`[UGC] Modelo ${model} falló (intento ${attempt}):`, msg);
+        
+        // Si es error 429 (quota excedida), esperar y reintentar
+        if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED')) {
+          console.log(`[UGC] Quota excedida, esperando ${RETRY_DELAY_MS}ms antes de reintentar...`);
+          await delay(RETRY_DELAY_MS);
+          continue; // Reintentar con el mismo modelo
+        }
+        
+        errors.push(`${model}: ${msg}`);
+        break; // Si no es 429, pasar al siguiente modelo
       }
-      errors.push(`${model}: no image data`);
-    } catch (error: any) {
-      console.warn(`[UGC] Modelo ${model} falló:`, error.message);
-      errors.push(`${model}: ${error.message}`);
     }
   }
 
