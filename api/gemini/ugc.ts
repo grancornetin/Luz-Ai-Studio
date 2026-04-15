@@ -1,11 +1,13 @@
 // api/gemini/ugc.ts
 // ═══════════════════════════════════════════════════════════════
-// MODELOS VERIFICADOS:
-//   PRO:  gemini-3-pro-image-preview     @ global       (entiende referencias)
-//   TEXT: gemini-2.5-flash               @ us-central1  (análisis)
+// MODELO PRINCIPAL: gemini-3.1-flash-image-preview @ global
+//   - Balance velocidad/calidad
+//   - Evita timeout 504 de Vercel
+//   - Suficiente consistencia para UGC (OUTFIT, PRODUCT, AVATAR, SCENE)
 //
-// IMPORTANTE: imagen-3.0 NO entiende referencias de imagen.
-// Para UGC con identidad DEBE usarse gemini-3-pro-image-preview.
+// FALLBACKS:
+//   - gemini-3-pro-image-preview (más lento, mejor calidad)
+//   - gemini-2.5-flash-image (rápido, baja consistencia)
 // ═══════════════════════════════════════════════════════════════
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -37,16 +39,16 @@ function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// ── Generación de imagen con modelo PRO @ global ──
+// ── Generación de imagen con FLASH como principal ──
 async function generateImage(
   parts: any[],
   aspectRatio: string
 ): Promise<string> {
-  // Modelos en orden de fallback — todos en global
+  // FLASH primero para evitar 504
   const models = [
-    { name: 'gemini-3-pro-image-preview', location: 'global' },
-    { name: 'gemini-3.1-flash-image-preview', location: 'global' },
-    { name: 'gemini-2.5-flash-image', location: 'us-central1' },
+    { name: 'gemini-3.1-flash-image-preview', location: 'global' },  // PRINCIPAL
+    { name: 'gemini-3-pro-image-preview', location: 'global' },       // FALLBACK calidad
+    { name: 'gemini-2.5-flash-image', location: 'us-central1' },      // ÚLTIMO RECURSO
   ];
 
   const errors: string[] = [];
@@ -65,7 +67,6 @@ async function generateImage(
           },
         });
 
-        // Buscar imagen en respuesta
         const candidates = response.candidates || [];
         for (const candidate of candidates) {
           for (const part of (candidate.content?.parts || [])) {
@@ -116,7 +117,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    // Frontend envía: { action, payload: { ... } }
     const { action, payload } = req.body;
 
     if (!action) return res.status(400).json({ error: 'Missing action' });
@@ -130,7 +130,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const parts: any[] = [];
 
-      // Inyectar referencias (el modelo PRO las entiende)
       if (referenceImages && referenceImages.length > 0) {
         for (let i = 0; i < referenceImages.length; i++) {
           const ref = referenceImages[i];

@@ -74,45 +74,54 @@ function prepareReferenceImages(refs: (string | null | undefined)[]): Array<{ da
 }
 
 // ===================================================================
-// NEGATIVE PROMPT - REFORZADO CON ANTI-BEAUTIFICATION Y ANTI-EDITORIAL
+// NEGATIVE PROMPT - REFORZADO CON ANTI-BEAUTIFICATION, ANTI-EDITORIAL, ANTI-DRIFT
 // ===================================================================
 const NEGATIVE = `
-face drift, identity change, different person, different face, different features,
-product change, different product, different texture, different color, different shape,
-outfit change, different clothing, different color, different pattern,
-scene change, different background, different location, relocated furniture, different walls,
-scale distortion, wrong proportions,
-walking, mid-stride, running, motion blur,
-empty gaze, looking at nothing, staring into void,
-unnatural hands, frozen hands, hands without purpose,
-catalog pose, runway pose, overly staged,
-studio lighting, perfect lighting, artificial look,
-plastic skin, CGI look, AI artifacts,
-watermark, signature, text overlay, logos,
-talking without context, frozen mid-sentence,
-new objects not in reference, added elements,
-phone visible in selfie, camera visible,
-collage, multiple images, grid, side by side,
-micro adjustments only, same framing as REF0, identical composition,
-overly constructed, rigid, artificial, diagram-like, staged,
-static without interaction, mannequin-like, no movement,
-similar expressions across shots, repetitive expressions,
-same angle across all shots, same pose repeated,
-medium shot disguised as detail, face visible in detail shot, full body in detail shot,
-weak interaction, minimal hand movement, eye-level only, subtle angle changes,
+🔴🔴🔴 CRITICAL NEGATIVES - VIOLATION WILL INVALIDATE THE IMAGE 🔴🔴🔴
+
+IDENTITY DRIFT (ABSOLUTELY FORBIDDEN):
+different person, different face, different features, different bone structure,
+face replacement, identity change, person swap, different ethnicity, different age,
+woman replacing man, man replacing woman, different facial structure,
+face that does NOT match the face reference EXACTLY
+
+BEAUTIFICATION & EDITORIAL (FORBIDDEN):
+beautification, skin smoothing, beauty filter, airbrushed, retouched, perfect skin,
+editorial softening, high fashion look, luxury redesign, commercial polish,
+professional studio lighting, softbox lighting, glamour lighting,
+plastic skin, CGI skin, Instagram filter, FaceTune, porcelain skin,
+flawless skin, no pores, wax figure look, mannequin skin
+
+OUTFIT INVENTION (FORBIDDEN IN DETAIL SHOTS):
+inventing fabric continuation, fake hem, imaginary pants length, non-existent shorts to pants transition,
+adding tela where none exists, reconstructing garment structure beyond visible reference,
+inventing shoes, inventing accessories, changing fabric texture, changing color,
+altering garment length, adding folds that don't exist, changing silhouette
+
+SCENE REDESIGN (FORBIDDEN):
+different background, different location, relocated furniture, different walls, different floor,
+added decor not in reference, prettier version of scene, idealized environment,
+studio background replacing real scene, CGI background
+
+COMPOSITION VIOLATIONS:
+walking, mid-stride, running, motion blur, dynamic movement when static required,
+empty gaze, looking at nothing, staring into void, dead eyes,
+unnatural hands, frozen hands, hands without purpose, hands not interacting when required,
+catalog pose, runway pose, overly staged, model pose, fashion week pose,
+talking without context, frozen mid-sentence, open mouth without reason
+
+TECHNICAL ARTIFACTS:
+watermark, signature, text overlay, logos, brand names,
+collage, multiple images, grid, side by side, before/after,
+phone visible in selfie, camera visible, third-person selfie,
 extra limbs, duplicated arms, phantom hands, broken joints, impossible limb positions,
 color drift, different color temperature, different white balance, different saturation,
-filters, stylization, instagram filter, edited look, artificial lighting variation,
-walking pose, mid-step, exaggerated motion, fake movement, unnatural leg positions,
-superficial pose variation, same stance with minor hand variation,
-role mixing, detail with face, hero with competition, interaction without action,
-beautification, skin smoothing, beauty filter, airbrushed, retouched, perfect skin,
-editorial softening, high fashion, luxury redesign, redesigned furniture, added decor,
-idealized scene, prettier than original, different spatial layout,
-face not dominant in avatar mode, outfit detail dominating avatar,
-face dominant in outfit mode,
-selfie with phone visible, selfie as third-person portrait,
-beauty pass, commercial look, professional studio feel, unnatural perfection
+filters, stylization, edited look, artificial lighting variation
+
+ROLE MIXING (FORBIDDEN):
+detail shot with face visible, hero shot without proper framing,
+selfie as third-person portrait, interaction without action,
+expression without face dominance, context with person too large
 `;
 
 // ===================================================================
@@ -123,20 +132,16 @@ const RULE_PRIORITY_SYSTEM = `
 ║                    RULE PRIORITY SYSTEM                          ║
 ╚═══════════════════════════════════════════════════════════════════╝
 
-1️⃣ REF0 CONSISTENCY (HIGHEST - NUNCA VIOLAR)
-2️⃣ SHOT ROLE ENFORCEMENT (CRÍTICO - CADA SHOT CON SU ROL)
-3️⃣ MODE DOMINANCE (AVATAR/OUTFIT/PRODUCT/SCENE)
-4️⃣ FOCUS DOMINANCE
-5️⃣ NO COMPETITION
-6️⃣ DETAIL EXTREME RULE
-7️⃣ SELFIE PHYSICS (arm-length, handheld, no phone)
-8️⃣ INTERACTION RULE
-9️⃣ NO ROLE MIXING
-🔟 COLOR CONSISTENCY
-1️⃣1️⃣ BODY INTEGRITY
-1️⃣2️⃣ COMPOSITION DIVERSITY
-1️⃣3️⃣ ANTI-SIMILARITY
-1️⃣4️⃣ NATURALITY (LOWEST)
+1️⃣ IDENTITY LOCK (HIGHEST - FACE MUST REMAIN IDENTICAL TO FACE REF)
+2️⃣ REF0 CONSISTENCY (SECOND - LIGHT, SPACE, ACTIONS FROM REF0)
+3️⃣ SHOT ROLE ENFORCEMENT (CRÍTICO - CADA SHOT CON SU ROL ESPECÍFICO)
+4️⃣ MODE DOMINANCE (AVATAR/OUTFIT/PRODUCT/SCENE - NUNCA MEZCLAR)
+5️⃣ DETAIL EXTREME RULE (NO FACE, NO EXTRA GEOMETRY)
+6️⃣ SELFIE PHYSICS (arm-length, handheld, no phone, shoulder visible)
+7️⃣ INTERACTION RULE (hands must be doing something)
+8️⃣ NO ROLE MIXING (un shot = un rol)
+9️⃣ ANTI-BEAUTIFICATION (NO editorial, NO skin smoothing)
+🔟 SHOT DIVERSITY (cada shot debe diferir en framing/ángulo/distancia)
 `;
 
 // ===================================================================
@@ -147,11 +152,12 @@ const LOCK_SYSTEM = `
 ║                    LOCK SYSTEM (NUNCA CAMBIA)                    ║
 ╚═══════════════════════════════════════════════════════════════════╝
 
-🔒 IDENTITY LOCK (HARD):
-- The person MUST be EXACTLY the same as face reference.
-- Same face, same features, same bone structure.
-- NO beautification, NO skin smoothing, NO different person.
-- NO reinterpretation, NO approximation.
+🔒🔒🔒 IDENTITY LOCK (HARD - ABSOLUTE PRIORITY):
+- The person's FACE MUST be EXACTLY the same as face reference.
+- Same face, same features, same bone structure, same person.
+- NO face replacement, NO identity drift, NO different person.
+- NO beautification, NO skin smoothing, NO different expression that changes identity.
+- The face reference OVERRIDES any other image for identity.
 
 🔒 PRODUCT LOCK:
 - Same product. Same materials. Same details.
@@ -160,8 +166,9 @@ const LOCK_SYSTEM = `
 
 🔒 OUTFIT LOCK:
 - Same clothing. Same fit. Same fabric.
-- Same color. Same pattern.
-- NO changes. NO variation.
+- Same color. Same pattern. Same length.
+- NO changes. NO invented fabric continuation.
+- For DETAIL shots: ONLY show what is visible in reference. NO reconstruction.
 
 🔒 SCENE LOCK (NO REDESIGN):
 - Same environment. Same location. Same walls, same floor, same furniture.
@@ -202,21 +209,30 @@ const getModeDominance = (focus: Focus): string => {
 
 CRITICAL RULES:
 - FACE is the ABSOLUTE HERO in EVERY shot.
-- No outfit detail shot should dominate over the face.
-- The person's presence, expression, and personality are the focus.
+- MAXIMUM 1 full body shot per session.
+- SELFIE is MANDATORY (at least 1, with physical arm evidence).
+- Outfit, accessories, product are SECONDARY background only.
+- No detail shot of outfit as main subject.
+
+COMPOSITION LIMITS:
+- At least 2 face-led shots (expression, close-up, selfie)
+- SELFIE must show: arm extended, shoulder visible, handheld feel
+- HERO: medium shot (waist up), face dominant
+- LIFESTYLE: person visible, but face remains clear
+- FORBIDDEN: outfit detail shots, accessory-led shots, full-body hero
 
 PRIORITY ORDER:
-1. FACE (dominant, expressive, alive)
+1. FACE (dominant, expressive, alive, identical to faceRef)
 2. Expression (clear, varied, authentic)
-3. SELFIE (at least ONE per session - MANDATORY, with arm evidence)
-4. Product (if present: brand collaboration, shown naturally)
-5. Outfit (secondary, background context only)
+3. SELFIE (mandatory, with arm evidence)
+4. Product/Outfit (secondary, background only)
 
 FORBIDDEN in AVATAR mode:
 - Detail shots of belt, bag, shoes as main subject
 - Outfit dominating the frame
-- Full-body wide shots as hero
+- More than 1 full-body wide shot
 - Face not clearly visible in expression/selfie shots
+- Any shot where outfit competes with face for attention
 `;
   }
   
@@ -229,17 +245,25 @@ CRITICAL RULES:
 - OUTFIT is the ABSOLUTE HERO in EVERY shot.
 - Face is secondary, can be cropped or partially visible.
 - Full body visibility is REQUIRED for HERO shot.
+- DETAIL shots must show ONLY the target (shoe, fabric, accessory)
+- NO inventing fabric continuation beyond what is visible
+
+DETAIL SHOT RULES (CRITICAL):
+- DETAIL + shoe: ONLY shoe, ankle, floor. NO pant leg, NO hem, NO fabric continuation.
+- DETAIL + fabric: ONLY texture, NO full garment, NO face, NO body.
+- DETAIL + accessory: ONLY the accessory, NO surrounding garment.
+- DO NOT reconstruct garment structure. Only show what exists.
 
 PRIORITY ORDER:
-1. FULL BODY (complete silhouette)
-2. Outfit details (texture, fit, styling)
-3. Face (optional, secondary)
+1. FULL BODY (complete silhouette, outfit clearly visible)
+2. Outfit details (texture, fit, styling - target only)
+3. Face (optional, secondary, may be cropped)
 4. Product (only if complement)
 
 REQUIRED:
 - One HERO full-body shot showing entire outfit
-- Detail shots of fabric, texture, accessories
-- Silhouette and fit are the focus
+- Detail shots with EXTREME CROP (85-90% frame fill)
+- No face in detail shots unless role is EXPRESSION
 `;
   }
   
@@ -254,9 +278,9 @@ CRITICAL RULES:
 - The avatar shows genuine emotion toward the product.
 
 PRIORITY ORDER:
-1. PRODUCT (clearly visible, attractive)
-2. AVATAR FACE (emotional narrator)
-3. Hands (interaction)
+1. PRODUCT (clearly visible, attractive, identical to productRef)
+2. AVATAR FACE (emotional narrator, identical to faceRef)
+3. Hands (interaction with product)
 4. Environment (context)
 
 REQUIRED:
@@ -296,7 +320,7 @@ REQUIRED:
 // ===================================================================
 // ROLE ENFORCEMENT - REGLAS DURAS POR ROL
 // ===================================================================
-const getRoleEnforcement = (role: string, focus: Focus): string => {
+const getRoleEnforcement = (role: string, focus: Focus, detailTarget?: string): string => {
   if (role === 'HERO') {
     if (focus === 'AVATAR') {
       return `
@@ -304,15 +328,17 @@ const getRoleEnforcement = (role: string, focus: Focus): string => {
 - MEDIUM shot (waist up), NOT full body wide
 - Face MUST be clear, dominant, expressive
 - Outfit is secondary, NOT competing
-- NO extreme crop, NO full body as hero`;
+- NO extreme crop, NO full body as hero
+- Face takes 40-50% of frame`;
     }
     if (focus === 'OUTFIT') {
       return `
 🔴 HERO ROLE ENFORCEMENT (OUTFIT):
 - FULL BODY visible head to toe
 - Outfit is the ONLY visual hero
-- Face may be visible but secondary
-- Composition centered on clothing silhouette`;
+- Face may be visible but secondary (max 15% of frame)
+- Composition centered on clothing silhouette
+- No face dominance, no expression focus`;
     }
     if (focus === 'PRODUCT') {
       return `
@@ -331,13 +357,17 @@ const getRoleEnforcement = (role: string, focus: Focus): string => {
   
   if (role === 'SELFIE') {
     return `
-🔴 SELFIE ROLE ENFORCEMENT (HARD PHYSICS):
+🔴 SELFIE ROLE ENFORCEMENT (HARD PHYSICS - AUTHENTIC ONLY):
 - Camera held at arm's length by the person
 - Visible: shoulder, elbow, up to mid-forearm, face
-- Phone/camera MUST NOT be visible
-- Handheld framing, slight asymmetry allowed
+- Phone/camera MUST NOT be visible (it's the POV)
+- Handheld framing, slight asymmetry, slight lens distortion allowed
 - NO third-person perspective, NO full body
-- This is NOT a portrait taken by someone else`;
+- This is NOT a portrait taken by someone else
+- Slight imperfections, natural skin texture, NO beautification
+- The person's arm MUST be visible in the frame
+- Shoulder MUST be visible at bottom of frame
+- Feels like a real person taking a selfie, not a professional photo`;
   }
   
   if (role === 'DETAIL') {
@@ -348,6 +378,17 @@ const getRoleEnforcement = (role: string, focus: Focus): string => {
 - FORBIDDEN: outfit details (belt, bag, shoes) as main subject
 - The detail must serve the person's story, not the clothing`;
     }
+    if (focus === 'OUTFIT' && detailTarget === 'shoe') {
+      return `
+🔴 DETAIL ROLE ENFORCEMENT (OUTFIT - SHOE):
+- EXTREME close-up of SHOE ONLY
+- Frame fill: 85-90% shoe, ankle, floor
+- FORBIDDEN: pant leg, hem, fabric continuation, shorts, pants
+- DO NOT invent clothing above the shoe
+- If reference shows shorts, do NOT add pant leg
+- The shoe detail shows ONLY what exists in the reference
+- NO reconstruction of garment structure`;
+    }
     return `
 🔴 DETAIL ROLE ENFORCEMENT (HARD):
 - EXTREME close-up
@@ -355,16 +396,20 @@ const getRoleEnforcement = (role: string, focus: Focus): string => {
 - Face is FORBIDDEN (unless detail target is face)
 - Full body is FORBIDDEN
 - Background MUST be blurred or absent
-- If it looks like a MEDIUM shot, it is INVALID`;
+- If it looks like a MEDIUM shot, it is INVALID
+- For clothing details: ONLY show the target (fabric, texture, accessory)
+- DO NOT invent garment structure beyond what is visible
+- DO NOT add hems, seams, or fabric that doesn't exist in reference`;
   }
   
   if (role === 'INTERACTION') {
     return `
 🔴 INTERACTION ROLE ENFORCEMENT (HARD):
 - Hands MUST be visibly interacting
-- Clear action required (adjusting, holding, touching)
+- Clear action required (adjusting, holding, touching, using)
 - Mid shot framing (upper body + hands)
-- Static pose without action is FORBIDDEN`;
+- Static pose without action is FORBIDDEN
+- Face should be visible and engaged with the action`;
   }
   
   if (role === 'EXPRESSION') {
@@ -372,8 +417,10 @@ const getRoleEnforcement = (role: string, focus: Focus): string => {
 🔴 EXPRESSION ROLE ENFORCEMENT:
 - Face MUST fill 70-80% of frame
 - Expression MUST be PERCEPTUALLY DISTINCT from other shots
-- NO beautification, NO skin smoothing
-- Viewer must identify emotion at a glance`;
+- NO beautification, NO skin smoothing, NO retouching
+- Viewer must identify emotion at a glance
+- Natural skin texture, pores, imperfections allowed
+- This is a REAL PERSON expressing emotion, not a model`;
   }
   
   if (role === 'LIFESTYLE') {
@@ -382,7 +429,9 @@ const getRoleEnforcement = (role: string, focus: Focus): string => {
 - Person is STATIC: standing still, sitting, or leaning
 - Weight on BOTH feet, NOT mid-step, NOT walking
 - Context/environment visible
-- Authentic, candid feel`;
+- Authentic, candid feel
+- Face should be visible and natural
+- NO editorial posing, NO fashion walk`;
   }
   
   if (role === 'ALT_ANGLE') {
@@ -390,8 +439,9 @@ const getRoleEnforcement = (role: string, focus: Focus): string => {
 🔴 ALT ANGLE ROLE ENFORCEMENT:
 - Camera angle MUST differ significantly from HERO
 - Eye-level alone is NOT enough
-- Valid: side angle, low angle, high angle, 3/4 profile
-- Subtle angle changes are INVALID`;
+- Valid: side angle (45-90°), low angle (from below), high angle (from above), 3/4 profile
+- Subtle angle changes (5-10°) are INVALID
+- The shot must feel perceptually different`;
   }
   
   if (role === 'CONTEXT') {
@@ -400,10 +450,27 @@ const getRoleEnforcement = (role: string, focus: Focus): string => {
 - Environment is the hero, exactly as in scene reference
 - NO redesign, NO added furniture, NO beautification
 - Person visible (25-35% of frame), engaged with space
-- Scene details must match scene reference exactly`;
+- Scene details must match scene reference exactly
+- Person is a guest in the space, not the focus`;
   }
   
   return '';
+};
+
+// ===================================================================
+// SHOT DIVERSITY ENFORCEMENT
+// ===================================================================
+const getShotDiversityRule = (shotKey: string, role: string): string => {
+  return `
+🔴 SHOT DIVERSITY REQUIREMENT:
+- This shot (${shotKey}) must be PERCEPTUALLY DIFFERENT from other shots in the session
+- Change at least ONE of: distance, framing, angle, role, interaction type
+- Do NOT produce a slightly modified version of another shot
+- Each image should feel like a different photograph, not a sequence of micro-adjustments
+- If this is an ALT_ANGLE shot, the angle must be SIGNIFICANTLY different (≥30° difference)
+- If this is an EXPRESSION shot, the emotion must be CLEARLY different from other expression shots
+- If this is a DETAIL shot, the target must be UNIQUE (not repeating another detail shot)
+`;
 };
 
 // ===================================================================
@@ -438,58 +505,158 @@ The environment must look exactly as in REF0.
 };
 
 // ===================================================================
-// TRADUCIR SHOT DIRECTIVE A PROMPT
+// TRADUCIR SHOT DIRECTIVE A PROMPT - VERSIÓN REFORZADA
 // ===================================================================
 function translateDirectiveToPrompt(directive: ShotDirective, focus: Focus, ref0Analysis?: REF0Analysis): string {
   const parts: string[] = [];
   
+  // SELFIE - física real, no selfie bonita
   if (directive.role === 'SELFIE') {
     parts.push(`
-🔴🔴🔴 THIS IS A SELFIE SHOT - PHYSICAL RULES 🔴🔴🔴
+🔴🔴🔴 THIS IS AN AUTHENTIC SELFIE - PHYSICAL RULES 🔴🔴🔴
 - The person holds the camera at arm's length.
-- Visible: shoulder, elbow, up to mid-forearm, face.
-- Phone/camera is NOT visible (it's the POV).
-- Handheld framing, slight asymmetry is natural.
-- NO third-person view. NO full body.`);
-  } else if (directive.role === 'DETAIL' && focus !== 'AVATAR') {
+- Visible in frame: shoulder, elbow, up to mid-forearm, full face.
+- Phone/camera is NOT visible (it's the viewer's POV).
+- Handheld framing: slight asymmetry, natural imperfection, slight lens distortion.
+- NO third-person view. NO full body. NO professional portrait.
+- The arm extending from bottom/side of frame MUST be visible.
+- Shoulder visible at bottom edge.
+- This feels like a real person taking a selfie, not a staged photo.
+- NO beautification, NO skin smoothing, NO studio lighting.`);
+  } 
+  // DETAIL - extremo, sin invención de geometría
+  else if (directive.role === 'DETAIL') {
+    const target = directive.detailTarget || 'texture';
+    if (target === 'shoe') {
+      parts.push(`
+🔴🔴🔴 EXTREME SHOE DETAIL - NO FABRIC INVENTION 🔴🔴🔴
+- Camera distance: 10-15cm from the shoe.
+- ONLY visible: shoe, ankle, floor/ground.
+- FORBIDDEN: pant leg, hem, shorts, fabric continuation, fake clothing.
+- DO NOT invent tela, DO NOT add pants where none exist.
+- If reference shows shorts, the shoe detail shows shorts ending above shoe - NO pant leg added.
+- The shoe fills 85-90% of frame.
+- NO face. NO full body. NO upper body.
+- This is a PRODUCT/SHOE detail, not a clothing detail.`);
+    } else if (target === 'fabric' || target === 'texture') {
+      parts.push(`
+🔴🔴🔴 EXTREME FABRIC DETAIL - TEXTURE ONLY 🔴🔴🔴
+- Camera distance: 10-15cm from the fabric.
+- ONLY texture, weave, material surface visible.
+- NO garment silhouette, NO full clothing item, NO face, NO body.
+- The fabric fills 85-90% of frame.
+- Background completely blurred or absent.
+- This is MATERIAL texture, not clothing styling.`);
+    } else {
+      parts.push(`
+🔴🔴🔴 EXTREME DETAIL SHOT - TARGET: ${target} 🔴🔴🔴
+- Camera distance: 10-15cm from the target.
+- ONLY the target (${target}) fills 85-90% of frame.
+- NO face. NO full body. NO surrounding elements.
+- NO invention of non-existent geometry.
+- Background blurred or absent.`);
+    }
+  } 
+  // EXPRESSION - cara domina, sin beautification
+  else if (directive.role === 'EXPRESSION') {
     parts.push(`
-🔴🔴🔴 THIS IS AN EXTREME DETAIL SHOT 🔴🔴🔴
-- Camera is 10-15cm from the subject.
-- ONLY texture, fabric, material, or product surface visible.
-- NO face. NO full body. NO medium shot.
-- The detail fills 85-90% of the entire frame.`);
-  } else if (directive.role === 'EXPRESSION') {
-    parts.push(`
-🔴🔴🔴 THIS IS A FACE EXPRESSION SHOT 🔴🔴🔴
-- Face fills 70-80% of the frame.
+🔴🔴🔴 AUTHENTIC FACE EXPRESSION - NO BEAUTIFICATION 🔴🔴🔴
+- Face fills 70-80% of frame.
 - Expression must be clearly different from other shots.
-- NO beautification, NO skin smoothing.
-- This is a REAL PERSON, not a model.`);
-  } else if (directive.role === 'HERO' && focus === 'AVATAR') {
-    parts.push(`
-🔴🔴🔴 THIS IS AN AVATAR HERO SHOT 🔴🔴🔴
-- MEDIUM shot (waist up). Face is dominant.
-- NOT full body. NOT wide shot.
-- Outfit is secondary background.
-- The person's expression and presence are the focus.`);
-  } else if (directive.role === 'HERO' && focus === 'OUTFIT') {
-    parts.push(`
-🔴🔴🔴 THIS IS AN OUTFIT HERO SHOT 🔴🔴🔴
+- Natural skin texture, pores, imperfections visible and ALLOWED.
+- NO beautification, NO skin smoothing, NO retouching.
+- NO studio lighting, NO softbox.
+- This is a REAL PERSON expressing genuine emotion.
+- The face MUST be IDENTICAL to face reference.`);
+  } 
+  // HERO según modo
+  else if (directive.role === 'HERO') {
+    if (focus === 'AVATAR') {
+      parts.push(`
+🔴🔴🔴 AVATAR HERO SHOT - FACE DOMINANT 🔴🔴🔴
+- MEDIUM shot (waist up). NOT full body.
+- Face takes 40-50% of frame - CLEAR, DOMINANT, EXPRESSIVE.
+- Outfit is secondary background only.
+- Person's expression and presence are the focus.
+- NO outfit competition, NO accessory focus.
+- The face MUST be IDENTICAL to face reference.`);
+    } else if (focus === 'OUTFIT') {
+      parts.push(`
+🔴🔴🔴 OUTFIT HERO SHOT - CLOTHING DOMINANT 🔴🔴🔴
 - FULL BODY visible head to toe.
-- The outfit is the ONLY hero.
-- Face may be visible but secondary.
-- Show the complete silhouette.`);
+- The outfit is the ONLY visual hero.
+- Face may be visible but secondary (max 15% of frame).
+- Show complete silhouette, fit, drape.
+- The outfit MUST be IDENTICAL to outfit reference.`);
+    } else if (focus === 'PRODUCT') {
+      parts.push(`
+🔴🔴🔴 PRODUCT HERO SHOT - PRODUCT DOMINANT 🔴🔴🔴
+- Product and face both visible.
+- Product is visually dominant (40-50% of frame).
+- Avatar's face shows positive expression (20-30% of frame).
+- The product MUST be IDENTICAL to product reference.`);
+    }
+  }
+  // INTERACTION
+  else if (directive.role === 'INTERACTION') {
+    parts.push(`
+🔴🔴🔴 INTERACTION SHOT - HANDS IN ACTION 🔴🔴🔴
+- Hands MUST be visibly interacting with something.
+- Clear action: adjusting, holding, touching, using, demonstrating.
+- Mid shot framing: upper body + hands visible.
+- Face visible and engaged with the action.
+- Static pose without interaction is FORBIDDEN.
+- NO frozen hands, NO purposeless hand placement.`);
+  }
+  // LIFESTYLE
+  else if (directive.role === 'LIFESTYLE') {
+    parts.push(`
+🔴🔴🔴 LIFESTYLE SHOT - AUTHENTIC MOMENT 🔴🔴🔴
+- Person is STATIC: standing still, sitting, or leaning.
+- NOT walking, NOT mid-step, NOT in motion.
+- Context/environment visible around the person.
+- Authentic, candid feel - NOT editorial.
+- Face visible with natural expression.
+- Person occupies 40-50% of frame, environment the rest.`);
+  }
+  // ALT_ANGLE
+  else if (directive.role === 'ALT_ANGLE') {
+    parts.push(`
+🔴🔴🔴 ALTERNATE ANGLE - SIGNIFICANTLY DIFFERENT 🔴🔴🔴
+- Camera angle MUST differ significantly from HERO shot.
+- Valid options: side angle (45-90°), low angle (from below), high angle (from above), 3/4 profile.
+- Eye-level alone is NOT sufficient (needs ≥30° difference).
+- Same subject, different perspective.
+- This is NOT a micro-adjustment.`);
   }
   
+  // Agregar reglas base
   parts.push(`SHOT ROLE: ${directive.role}`);
-  parts.push(getRoleEnforcement(directive.role, focus));
+  parts.push(getRoleEnforcement(directive.role, focus, directive.detailTarget));
+  parts.push(getShotDiversityRule(directive.key, directive.role));
   parts.push(`FRAMING: ${directive.framing === 'EXTREME_CLOSE' ? 'EXTREME CLOSE-UP - 85-90% FRAME FILL' : directive.framing}`);
   parts.push(`INTENTION: ${directive.purpose}`);
+  
+  if (directive.requiredElements.length > 0) {
+    parts.push(`REQUIRED ELEMENTS: ${directive.requiredElements.join(', ')}`);
+  }
+  
+  if (directive.forbiddenElements.length > 0) {
+    parts.push(`FORBIDDEN ELEMENTS: ${directive.forbiddenElements.join(', ')}`);
+  }
   
   if (directive.exclusion.length > 0) {
     const exclusionText = directive.exclusion.map(e => `EXCLUDE: ${e}`).join('; ');
     parts.push(`EXCLUSIONS: ${exclusionText}`);
   }
+  
+  // Face lock adicional para todos los shots
+  parts.push(`
+🔒🔒🔒 FACE IDENTITY LOCK 🔒🔒🔒
+- The person's face MUST be EXACTLY the same as the face reference.
+- NO face replacement. NO identity drift. NO different person.
+- The face reference OVERRIDES any other image for identity.
+- This is NON-NEGOTIABLE.`);
   
   return parts.join('\n');
 }
@@ -647,18 +814,20 @@ CREATE THE ANCHOR IMAGE (REF0):
 
 This is a SINGLE REALISTIC PHOTO. NOT a collage. NOT multiple images.
 
-CRITICAL - LOCK SYSTEM ACTIVE:
-- The person MUST be IDENTICAL to face reference
+🔒 CRITICAL - LOCK SYSTEM ACTIVE:
+- The person's FACE MUST be IDENTICAL to face reference. NO face replacement.
 - The outfit MUST be IDENTICAL to outfit reference (if provided)
 - The product MUST be IDENTICAL to product reference (if provided)
 - The scene MUST be IDENTICAL to scene reference (if provided)
 
 RULES:
-${focus === 'AVATAR' ? '- 3rd person perspective. MEDIUM shot (waist up). Face is the dominant element.' : '- 3rd person perspective (NOT selfie). Full body visible.'}
+${focus === 'AVATAR' ? '- 3rd person perspective. MEDIUM shot (waist up). Face is the dominant element (40-50% of frame).' : '- 3rd person perspective (NOT selfie). Full body visible.'}
 - Person interacts with ${finalProductRef ? 'product' : 'environment'} naturally.
 - Person is STATIC (standing still, sitting, or leaning — NOT walking, NOT mid-step).
 - Natural lighting, iPhone quality, UGC feel.
-- NO beautification, NO skin smoothing, NO studio look.`;
+- NO beautification, NO skin smoothing, NO studio look.
+- NO editorial softening, NO luxury redesign.
+- The face MUST look like a real person, not a filtered model.`;
 
     const imageUrl = await generateWithResilience(prompt, refsToPass, system);
     
@@ -717,13 +886,14 @@ ${focus === 'AVATAR' ? '- 3rd person perspective. MEDIUM shot (waist up). Face i
       const fallbackPrompt = `
 CREATE A NEW PHOTO from the same session as REF0 for ${shotKey}.
 
-CRITICAL - SAME SESSION:
-- Keep PERSON, PRODUCT, OUTFIT, SCENE IDENTICAL to REF0
+🔒 CRITICAL - SAME SESSION:
+- Keep PERSON'S FACE IDENTICAL to faceRef (NO face replacement)
+- Keep PRODUCT, OUTFIT, SCENE IDENTICAL to REF0
 - Only change framing, distance, angle, interaction
 
-Natural UGC aesthetic.`;
+Natural UGC aesthetic. NO beautification.`;
 
-      const refs = [image0, faceRef];
+      const refs = [image0, faceRef, faceRef]; // faceRef duplicado para reforzar
       if (outfitRef) refs.push(outfitRef);
       if (productRef && productIsRelevant !== false) refs.push(productRef);
       if (sceneRef) refs.push(sceneRef);
@@ -739,11 +909,23 @@ Natural UGC aesthetic.`;
     const prompt = `
 CREATE A NEW PHOTO FROM THE SAME SESSION AS REF0.
 
-CRITICAL - LOCK SYSTEM ACTIVE:
-- The person's face MUST be IDENTICAL to REF0 and faceRef
-- The outfit MUST be IDENTICAL to REF0 and outfitRef (if provided)
-- The product MUST be IDENTICAL to REF0 and productRef (if provided)
-- The scene MUST be IDENTICAL to REF0 and sceneRef (if provided)
+🔒🔒🔒 CRITICAL - LOCK SYSTEM ACTIVE (NON-NEGOTIABLE):
+
+IDENTITY LOCK:
+- The person's FACE MUST be IDENTICAL to faceRef.
+- The faceRef OVERRIDES any other image for identity.
+- NO face drift, NO face replacement, NO different person.
+
+PRODUCT LOCK (if productRef exists):
+- The product MUST be IDENTICAL to productRef.
+
+OUTFIT LOCK (if outfitRef exists):
+- The outfit MUST be IDENTICAL to outfitRef.
+- For DETAIL shoe shots: ONLY shoe, ankle, floor. NO pant leg, NO fabric continuation.
+
+SCENE LOCK (if sceneRef exists):
+- The scene MUST be IDENTICAL to sceneRef.
+- NO redesign, NO added furniture, NO beautification.
 
 ${ref0AnalysisBlock}
 
@@ -751,15 +933,17 @@ ${directivePrompt}
 
 CRITICAL REMINDERS:
 - The ${focus.toUpperCase()} must be the VISUAL HERO according to MODE DOMINANCE
-- Keep PERSON, PRODUCT, OUTFIT, SCENE identical to REF0
+- Keep PERSON'S FACE, PRODUCT, OUTFIT, SCENE identical to references
 - Only change: framing, distance, angle, interaction, expression
 - NO beautification, NO skin smoothing, NO studio polish, NO editorial softening
+- NO face replacement, NO identity drift
 - Natural UGC aesthetic (iPhone quality, organic lighting, slight imperfections allowed)
 - ⚠️ ROLE ENFORCEMENT CONSTRAINTS ARE MANDATORY
 - ⚠️ NO ROLE MIXING - Each image serves ONE role only
-- ⚠️ LOCK SYSTEM ACTIVE - NO IDENTITY DRIFT, NO SCENE REDESIGN`;
+- ⚠️ LOCK SYSTEM ACTIVE - NO IDENTITY DRIFT, NO SCENE REDESIGN, NO FABRIC INVENTION`;
 
-    const refs: (string | null)[] = [image0, faceRef];
+    // Duplicar faceRef para reforzar el lock de identidad
+    const refs: (string | null)[] = [image0, faceRef, faceRef];
     if (outfitRef) refs.push(outfitRef);
     if (productRef && productIsRelevant !== false) refs.push(productRef);
     if (sceneRef) refs.push(sceneRef);

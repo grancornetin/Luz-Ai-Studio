@@ -46,11 +46,9 @@ function cleanBase64(b64: string): string {
 
 // ===================================================================
 // ANALIZAR REF0 PARA EXTRAER LIGHTING, SPATIAL Y POSE CONTEXT
-// AHORA USA ugcApiService (backend)
 // ===================================================================
 export async function analyzeREF0(image0Url: string): Promise<REF0Analysis> {
   try {
-    // Extraer datos de la imagen
     const match = image0Url.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/);
     if (!match) {
       throw new Error('Invalid image format');
@@ -64,7 +62,6 @@ export async function analyzeREF0(image0Url: string): Promise<REF0Analysis> {
     return result;
   } catch (e) {
     console.warn("[UGC Director] Error analyzing REF0:", e);
-    // Fallback conservador
     return {
       lighting: {
         primarySource: "natural window light",
@@ -90,7 +87,7 @@ export async function analyzeREF0(image0Url: string): Promise<REF0Analysis> {
 }
 
 // ===================================================================
-// ANALIZAR SI EL PRODUCTO ES RELEVANTE (AHORA USA ugcApiService)
+// ANALIZAR SI EL PRODUCTO ES RELEVANTE
 // ===================================================================
 export async function analyzeProductRelevance(
   productRef: string | null | undefined,
@@ -103,7 +100,6 @@ export async function analyzeProductRelevance(
     return { isRelevant: false, suggestion: '', productType: 'none' };
   }
   
-  // Extraer datos de la imagen
   const productMatch = productRef.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/);
   if (!productMatch) {
     return { isRelevant: false, suggestion: 'Could not read product image', productType: 'other' };
@@ -140,7 +136,7 @@ export async function analyzeProductRelevance(
 }
 
 // ===================================================================
-// ANALIZAR REFERENCIA DE OUTFIT (AHORA USA ugcApiService)
+// ANALIZAR REFERENCIA DE OUTFIT
 // ===================================================================
 async function analyzeOutfitReference(outfitRef: string | null | undefined): Promise<{
   hasJacket: boolean;
@@ -156,6 +152,7 @@ async function analyzeOutfitReference(outfitRef: string | null | undefined): Pro
   hasBag: boolean;
   hasHat: boolean;
   hasNecklace: boolean;
+  bottomType: 'shorts' | 'pants' | 'skirt' | 'unknown';
 }> {
   if (!outfitRef) {
     return {
@@ -171,7 +168,8 @@ async function analyzeOutfitReference(outfitRef: string | null | undefined): Pro
       hasBelt: false,
       hasBag: false,
       hasHat: false,
-      hasNecklace: false
+      hasNecklace: false,
+      bottomType: 'unknown'
     };
   }
 
@@ -190,15 +188,31 @@ async function analyzeOutfitReference(outfitRef: string | null | undefined): Pro
       hasBelt: false,
       hasBag: false,
       hasHat: false,
-      hasNecklace: false
+      hasNecklace: false,
+      bottomType: 'unknown'
     };
   }
   
   try {
-    return await ugcApiService.analyzeOutfit({
+    const result = await ugcApiService.analyzeOutfit({
       imageData: match[2],
       mimeType: match[1]
     });
+    
+    // Detectar tipo de prenda inferior
+    let bottomType: 'shorts' | 'pants' | 'skirt' | 'unknown' = 'unknown';
+    if (result.bottomType) {
+      bottomType = result.bottomType;
+    } else if (result.hasPants && !result.hasShorts) {
+      bottomType = 'pants';
+    } else if (result.hasShorts) {
+      bottomType = 'shorts';
+    }
+    
+    return {
+      ...result,
+      bottomType
+    };
   } catch (e) {
     console.warn("[UGC Director] Error analyzing outfit:", e);
     return {
@@ -214,13 +228,14 @@ async function analyzeOutfitReference(outfitRef: string | null | undefined): Pro
       hasBelt: false,
       hasBag: false,
       hasHat: false,
-      hasNecklace: false
+      hasNecklace: false,
+      bottomType: 'unknown'
     };
   }
 }
 
 // ===================================================================
-// ANALIZAR REFERENCIA DE ESCENA (AHORA USA ugcApiService)
+// ANALIZAR REFERENCIA DE ESCENA
 // ===================================================================
 async function analyzeSceneReference(sceneRef: string | null | undefined): Promise<{
   hasFurniture: boolean;
@@ -280,22 +295,22 @@ async function analyzeSceneReference(sceneRef: string | null | undefined): Promi
 }
 
 // ===================================================================
-// SHOT PLAN - AVATAR (6 SHOTS - ROSTRO DOMINANTE, SELFIE OBLIGATORIA)
+// SHOT PLAN - AVATAR (6 SHOTS - FACE DOMINANT, MAX 1 FULL BODY)
 // ===================================================================
 function buildAvatarShotDirectives(shotCount: number = 6, hasProduct: boolean = false): ShotDirective[] {
   const directives: ShotDirective[] = [];
   
-  // S1: HERO - retrato medio cuerpo, cara dominante
+  // S1: HERO - retrato medio cuerpo, cara dominante (NO full body)
   directives.push({
     key: 'S1',
     role: 'HERO',
-    purpose: 'Retrato principal de influencer. Rostro claro, medio cuerpo, expresión auténtica. El rostro es el héroe.',
-    requiredElements: ['face_clear', 'waist_up_framing', 'authentic_expression'],
-    forbiddenElements: ['outfit_dominance', 'extreme_crop', 'full_body_wide', 'beautification', 'editorial_softening'],
+    purpose: 'Retrato principal de influencer. Medio cuerpo, cara dominante (40-50% del frame). Expresión auténtica.',
+    requiredElements: ['face_clear', 'face_dominant_40_50_percent', 'waist_up_framing', 'authentic_expression'],
+    forbiddenElements: ['full_body', 'outfit_dominance', 'extreme_crop', 'beautification', 'editorial_softening', 'accessory_focus'],
     variationSpace: ['expresion_natural', 'composicion_centrada'],
     framing: 'MEDIUM',
     composition: 'EYE_LEVEL',
-    exclusion: ['environment_dominance', 'beautification', 'editorial_softening'],
+    exclusion: ['environment_dominance', 'beautification', 'editorial_softening', 'full_body'],
     intensity: 'normal'
   });
   
@@ -303,9 +318,9 @@ function buildAvatarShotDirectives(shotCount: number = 6, hasProduct: boolean = 
   directives.push({
     key: 'S2',
     role: 'SELFIE',
-    purpose: 'Selfie estilo UGC auténtico. Brazo extendido, hombro visible, cámara sostenida por la persona.',
-    requiredElements: ['arm_visible', 'shoulder_visible', 'handheld_perspective', 'close_camera'],
-    forbiddenElements: ['third_person_perspective', 'full_body', 'studio_composition', 'beautification', 'phone_visible'],
+    purpose: 'Selfie estilo UGC auténtico. Brazo extendido, hombro visible, cámara sostenida por la persona. NO selfie bonita.',
+    requiredElements: ['arm_visible', 'shoulder_visible', 'handheld_perspective', 'close_camera', 'face_dominant'],
+    forbiddenElements: ['third_person_perspective', 'full_body', 'studio_composition', 'beautification', 'phone_visible', 'professional_portrait'],
     variationSpace: ['encuadre_cercano', 'asimetria_natural', 'imperfeccion_permitida'],
     framing: 'SELFIE',
     composition: 'ASYMMETRIC',
@@ -313,31 +328,31 @@ function buildAvatarShotDirectives(shotCount: number = 6, hasProduct: boolean = 
     intensity: 'normal'
   });
   
-  // S3: EXPRESSION - sonrisa cálida
+  // S3: EXPRESSION - sonrisa cálida, face-led
   directives.push({
     key: 'S3',
     role: 'EXPRESSION',
-    purpose: 'Close-up facial con expresión cálida y auténtica. Rostro llena 70-80% del frame.',
-    requiredElements: ['face_fills_70_80_percent', 'clear_expression', 'warm_smile'],
-    forbiddenElements: ['subtle_micro_expression', 'same_as_other_shots', 'beautification', 'editorial_softening'],
+    purpose: 'Close-up facial con expresión cálida y auténtica. Rostro llena 70-80% del frame. Nada compite con la cara.',
+    requiredElements: ['face_fills_70_80_percent', 'clear_expression', 'warm_smile', 'face_only_focus'],
+    forbiddenElements: ['outfit_visible', 'accessory_visible', 'subtle_micro_expression', 'beautification', 'editorial_softening'],
     variationSpace: ['sonrisa_suave', 'expresion_autentica'],
     framing: 'CLOSE_UP',
     composition: 'EYE_LEVEL',
-    exclusion: ['background', 'beautification', 'editorial_softening'],
+    exclusion: ['background', 'beautification', 'editorial_softening', 'outfit', 'accessories'],
     intensity: 'normal'
   });
   
-  // S4: EXPRESSION - expresión diferente (confiada o pensativa)
+  // S4: EXPRESSION - expresión diferente (confiada o pensativa), face-led
   directives.push({
     key: 'S4',
     role: 'EXPRESSION',
-    purpose: 'Expresión diferente: confiada, directa, o pensativa. Rostro domina.',
-    requiredElements: ['face_fills_70_80_percent', 'different_expression', 'clear_emotion'],
-    forbiddenElements: ['same_as_S3', 'micro_expression', 'beautification', 'editorial_softening'],
+    purpose: 'Expresión diferente: confiada, directa, o pensativa. Rostro domina completamente.',
+    requiredElements: ['face_fills_70_80_percent', 'different_expression', 'clear_emotion', 'face_only_focus'],
+    forbiddenElements: ['same_as_S3', 'micro_expression', 'outfit_visible', 'beautification', 'editorial_softening'],
     variationSpace: ['confiada', 'pensativa', 'mirada_alternativa'],
     framing: 'CLOSE_UP',
     composition: 'THREE_QUARTERS',
-    exclusion: ['background', 'beautification', 'editorial_softening'],
+    exclusion: ['background', 'beautification', 'editorial_softening', 'outfit', 'accessories'],
     intensity: 'normal'
   });
   
@@ -346,35 +361,35 @@ function buildAvatarShotDirectives(shotCount: number = 6, hasProduct: boolean = 
     key: 'S5',
     role: 'INTERACTION',
     purpose: hasProduct 
-      ? 'Gesto natural con el producto, como influencer mostrándolo. Rostro y manos visibles.'
-      : 'Gesto natural con manos (tocar pelo, ajustar collar, mano en mentón). Rostro domina.',
+      ? 'Gesto natural con el producto, como influencer mostrándolo. Rostro y manos visibles. El producto es secundario.'
+      : 'Gesto natural con manos (tocar pelo, ajustar collar, mano en mentón). Rostro domina, manos acompañan.',
     requiredElements: hasProduct 
-      ? ['face_visible', 'hands_on_product', 'natural_gesture']
-      : ['face_visible', 'hands_visible', 'natural_gesture'],
-    forbiddenElements: ['outfit_dominance', 'static_pose', 'no_interaction', 'accessory_detail_only', 'beautification'],
+      ? ['face_visible', 'face_dominant', 'hands_on_product', 'natural_gesture']
+      : ['face_visible', 'face_dominant', 'hands_visible', 'natural_gesture'],
+    forbiddenElements: ['outfit_dominance', 'static_pose', 'no_interaction', 'accessory_detail_only', 'beautification', 'full_body'],
     variationSpace: hasProduct
       ? ['mostrando_producto', 'sosteniendo_producto']
       : ['mano_en_menton', 'tocando_pelo', 'ajustando_collar'],
     framing: 'MEDIUM',
     composition: 'THREE_QUARTERS',
-    exclusion: ['background_dominance', 'beautification', 'editorial_softening'],
+    exclusion: ['background_dominance', 'beautification', 'editorial_softening', 'full_body'],
     intensity: 'normal'
   });
   
-  // S6: LIFESTYLE - contexto natural, persona en ambiente
+  // S6: LIFESTYLE - persona en contexto, PERO con cara visible y dominante (no outfit-led)
   directives.push({
     key: 'S6',
     role: 'LIFESTYLE',
     purpose: hasProduct
-      ? 'Persona en contexto natural con producto visible, como post de colaboración. Rostro visible.'
-      : 'Persona en contexto natural, como foto candid de Instagram. Rostro visible.',
+      ? 'Persona en contexto natural con producto visible. La cara sigue siendo el foco principal.'
+      : 'Persona en contexto natural, como foto candid. La cara es clara y el foco de atención.',
     requiredElements: hasProduct
-      ? ['face_visible', 'product_visible', 'natural_context']
-      : ['face_visible', 'natural_context', 'authentic_moment'],
-    forbiddenElements: ['walking_simulation', 'artificial_movement', 'outfit_dominance', 'beautification'],
-    variationSpace: ['postura_relajada', 'contexto_visible'],
-    framing: 'WIDE',
-    composition: 'FULL_BODY_CENTERED',
+      ? ['face_visible', 'face_clear', 'product_visible_secondary', 'natural_context']
+      : ['face_visible', 'face_clear', 'natural_context', 'authentic_moment'],
+    forbiddenElements: ['walking_simulation', 'artificial_movement', 'outfit_dominance', 'accessory_focus', 'beautification', 'full_body_as_primary'],
+    variationSpace: ['postura_relajada', 'contexto_visible', 'rostro_claro'],
+    framing: 'MEDIUM', // No wide para evitar outfit dominance
+    composition: 'EYE_LEVEL',
     exclusion: ['environment_dominance', 'beautification', 'editorial_softening'],
     intensity: 'normal'
   });
@@ -383,7 +398,7 @@ function buildAvatarShotDirectives(shotCount: number = 6, hasProduct: boolean = 
 }
 
 // ===================================================================
-// SHOT PLAN - OUTFIT (6 SHOTS - ROPA DOMINANTE, CARA SECUNDARIA)
+// SHOT PLAN - OUTFIT (6 SHOTS - CLOTHING DOMINANT, DETAIL SIN INVENCIÓN)
 // ===================================================================
 function buildOutfitShotDirectives(
   outfitAnalysis: any,
@@ -401,14 +416,15 @@ function buildOutfitShotDirectives(
   const hasBelt = outfitAnalysis.hasBelt;
   const hasHat = outfitAnalysis.hasHat;
   const fabricType = outfitAnalysis.fabricType;
+  const bottomType = outfitAnalysis.bottomType || 'unknown';
   
-  // S1: HERO - outfit completo, cara secundaria o ausente
+  // S1: HERO - outfit completo, cara secundaria
   directives.push({
     key: 'S1',
     role: 'HERO',
-    purpose: 'Outfit completo head to toe. La ropa es la protagonista. Cara visible pero secundaria.',
-    requiredElements: ['full_body', 'outfit_visible', 'complete_silhouette'],
-    forbiddenElements: ['face_dominant', 'close_up_crop', 'dominant_background'],
+    purpose: 'Outfit completo head to toe. La ropa es la protagonista. Cara visible pero secundaria (max 15% del frame).',
+    requiredElements: ['full_body', 'outfit_visible', 'complete_silhouette', 'outfit_dominant'],
+    forbiddenElements: ['face_dominant', 'close_up_crop', 'dominant_background', 'beautification'],
     variationSpace: ['frontal_o_tres_cuartos', 'pose_natural'],
     framing: 'WIDE',
     composition: 'FULL_BODY_CENTERED',
@@ -416,14 +432,14 @@ function buildOutfitShotDirectives(
     intensity: 'normal'
   });
   
-  // S2: DETAIL - extreme close-up de textura/fabric
+  // S2: DETAIL - extreme close-up de textura/fabric (sin invención)
   directives.push({
     key: 'S2',
     role: 'DETAIL',
     detailTarget: fabricType !== 'unknown' ? 'fabric' : 'texture',
-    purpose: `Extreme close-up de ${fabricType !== 'unknown' ? 'textura de tela' : 'detalle de material'}. Cara NO visible.`,
-    requiredElements: ['detail_fills_80_90_percent', 'texture_visible', 'no_face'],
-    forbiddenElements: ['face', 'full_body', 'medium_framing', 'beautification'],
+    purpose: `Extreme close-up de ${fabricType !== 'unknown' ? 'textura de tela' : 'detalle de material'}. Cara NO visible. SOLO la textura, NO la prenda completa.`,
+    requiredElements: ['detail_fills_80_90_percent', 'texture_visible', 'no_face', 'no_garment_silhouette'],
+    forbiddenElements: ['face', 'full_body', 'medium_framing', 'beautification', 'garment_shape_visible'],
     variationSpace: ['acercamiento_agresivo', 'macro_detail'],
     framing: 'EXTREME_CLOSE',
     composition: 'EXTREME_CROP',
@@ -435,7 +451,7 @@ function buildOutfitShotDirectives(
   directives.push({
     key: 'S3',
     role: 'INTERACTION',
-    purpose: 'Manos ajustando o tocando la ropa. La prenda sigue siendo el foco.',
+    purpose: 'Manos ajustando o tocando la ropa. La prenda sigue siendo el foco. La cara puede no ser visible.',
     requiredElements: ['hands_on_clothing', 'clear_action', 'outfit_visible'],
     forbiddenElements: ['static_pose', 'no_interaction', 'face_dominant', 'beautification'],
     variationSpace: ['manos_ajustando', 'tocando_tejido'],
@@ -473,19 +489,19 @@ function buildOutfitShotDirectives(
     intensity: 'normal'
   });
   
-  // S6: DETAIL - calzado o accesorio
+  // S6: DETAIL - calzado o accesorio (CON reglas anti-invención)
   if (hasShoes) {
     directives.push({
       key: 'S6',
       role: 'DETAIL',
       detailTarget: 'shoe',
-      purpose: 'Extreme close-up de calzado. Parte inferior del look.',
-      requiredElements: ['shoes_visible', 'detail_fills_frame', 'no_face'],
-      forbiddenElements: ['face', 'upper_body', 'beautification'],
+      purpose: `Extreme close-up de calzado. SOLO zapato, tobillo, piso. ${bottomType === 'shorts' ? 'NO pantalón, NO tela adicional (la persona usa shorts).' : 'NO inventar tela más arriba del zapato.'}`,
+      requiredElements: ['shoes_visible', 'detail_fills_frame', 'no_face', 'no_fabric_invention'],
+      forbiddenElements: ['face', 'upper_body', 'pant_leg', 'hem', 'fabric_continuation', 'beautification'],
       variationSpace: ['angulo_bajo', 'crop_agresivo'],
       framing: 'EXTREME_CLOSE',
       composition: 'LOW_ANGLE',
-      exclusion: ['face', 'environment_dominance', 'beautification', 'editorial_softening'],
+      exclusion: ['face', 'environment_dominance', 'beautification', 'editorial_softening', 'fabric_continuation'],
       intensity: 'extreme'
     });
   } else if (hasBag || hasBelt || hasNecklace || hasHat) {
@@ -498,13 +514,13 @@ function buildOutfitShotDirectives(
       key: 'S6',
       role: 'DETAIL',
       detailTarget: accessoryTarget,
-      purpose: 'Extreme close-up de accesorio que complementa el look.',
-      requiredElements: ['accessory_visible', 'detail_fills_frame', 'no_face'],
-      forbiddenElements: ['face_dominant', 'full_body', 'beautification'],
+      purpose: 'Extreme close-up de accesorio que complementa el look. SOLO el accesorio, sin ropa alrededor.',
+      requiredElements: ['accessory_visible', 'detail_fills_frame', 'no_face', 'no_surrounding_garment'],
+      forbiddenElements: ['face_dominant', 'full_body', 'garment_visible', 'beautification'],
       variationSpace: ['crop_extremo', 'angulo_variable'],
       framing: 'EXTREME_CLOSE',
       composition: 'EXTREME_CROP',
-      exclusion: ['face', 'full_body', 'background', 'beautification', 'editorial_softening'],
+      exclusion: ['face', 'full_body', 'background', 'beautification', 'editorial_softening', 'garment'],
       intensity: 'extreme'
     });
   } else {
@@ -540,7 +556,7 @@ function buildProductShotDirectives(
   directives.push({
     key: 'S1',
     role: 'HERO',
-    purpose: 'Producto como héroe visual. Avatar presenta el producto. Ambos visibles.',
+    purpose: 'Producto como héroe visual. Avatar presenta el producto. Ambos visibles, producto dominante.',
     requiredElements: ['product_visible', 'product_dominant', 'face_visible', 'presenting_gesture'],
     forbiddenElements: ['background_dominant', 'face_cropped_out', 'beautification', 'editorial_softening'],
     variationSpace: ['producto_en_mano', 'mostrando_a_camara'],
@@ -555,9 +571,9 @@ function buildProductShotDirectives(
     key: 'S2',
     role: 'DETAIL',
     detailTarget: 'texture',
-    purpose: 'Extreme close-up de textura, material o característica única del producto.',
-    requiredElements: ['detail_fills_80_90_percent', 'texture_visible', 'no_face'],
-    forbiddenElements: ['face', 'full_body', 'medium_framing', 'beautification'],
+    purpose: 'Extreme close-up de textura, material o característica única del producto. SOLO producto, sin cara.',
+    requiredElements: ['detail_fills_80_90_percent', 'texture_visible', 'no_face', 'product_only'],
+    forbiddenElements: ['face', 'full_body', 'medium_framing', 'beautification', 'hands_visible'],
     variationSpace: ['macro_detail', 'shallow_depth'],
     framing: 'EXTREME_CLOSE',
     composition: 'EXTREME_CROP',
@@ -583,8 +599,8 @@ function buildProductShotDirectives(
   directives.push({
     key: 'S4',
     role: 'LIFESTYLE',
-    purpose: 'Producto en contexto natural. Avatar usándolo o interactuando.',
-    requiredElements: ['context_visible', 'product_in_use', 'person_visible', 'natural_setting'],
+    purpose: 'Producto en contexto natural. Avatar usándolo o interactuando. Producto visible, cara visible.',
+    requiredElements: ['context_visible', 'product_in_use', 'person_visible', 'natural_setting', 'face_visible'],
     forbiddenElements: ['studio_background', 'artificial_setting', 'walking_simulation', 'beautification'],
     variationSpace: ['contexto_natural', 'uso_cotidiano'],
     framing: 'WIDE',
@@ -597,8 +613,8 @@ function buildProductShotDirectives(
   directives.push({
     key: 'S5',
     role: 'EXPRESSION',
-    purpose: 'Close-up del avatar con expresión de satisfacción hacia el producto.',
-    requiredElements: ['face_fills_70_80_percent', 'positive_emotion', 'product_partially_visible'],
+    purpose: 'Close-up del avatar con expresión de satisfacción hacia el producto. Producto visible en segundo plano.',
+    requiredElements: ['face_fills_70_80_percent', 'positive_emotion', 'product_partially_visible', 'face_dominant'],
     forbiddenElements: ['neutral_expression', 'product_hidden_completely', 'beautification', 'editorial_softening'],
     variationSpace: ['sorpresa_positiva', 'satisfaccion', 'emocion_genuina'],
     framing: 'CLOSE_UP',
@@ -651,7 +667,7 @@ function buildSceneShotDirectives(
   directives.push({
     key: 'S1',
     role: 'CONTEXT',
-    purpose: 'Espacio completo. El lugar es el protagonista. Avatar visible pero secundario.',
+    purpose: 'Espacio completo. El lugar es el protagonista. Avatar visible pero secundario (25-35% del frame).',
     requiredElements: ['environment_full_view', 'space_dominant', 'person_visible_25_35_percent'],
     forbiddenElements: ['person_dominant', 'product_dominant', 'beautification', 'luxury_redesign'],
     variationSpace: ['angulo_establecimiento', 'vista_completa'],
@@ -689,14 +705,14 @@ function buildSceneShotDirectives(
     intensity: 'normal'
   });
   
-  // S4: DETAIL - detalle del espacio (decoración, textura, comida)
+  // S4: DETAIL - detalle del espacio (decoración, textura, comida) - SIN idealización
   directives.push({
     key: 'S4',
     role: 'DETAIL',
     detailTarget: 'feature',
-    purpose: 'Detalle atractivo del lugar. Sin idealizar ni embellecer.',
-    requiredElements: ['environment_detail', 'authentic_element', 'no_face'],
-    forbiddenElements: ['face_dominant', 'full_body', 'beautification', 'luxury_redesign'],
+    purpose: 'Detalle atractivo del lugar. Sin idealizar ni embellecer. Auténtico como en referencia.',
+    requiredElements: ['environment_detail', 'authentic_element', 'no_face', 'as_in_reference'],
+    forbiddenElements: ['face_dominant', 'full_body', 'beautification', 'luxury_redesign', 'idealized_version'],
     variationSpace: ['decoracion', 'textura_del_lugar', 'comida_real'],
     framing: 'CLOSE_UP',
     composition: 'ASYMMETRIC',
