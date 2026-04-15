@@ -72,10 +72,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'Missing prompt' });
       }
 
-      // Construir parts
       const parts: any[] = [];
 
-      // Agregar imágenes de referencia
       if (referenceImages && referenceImages.length > 0) {
         for (let i = 0; i < referenceImages.length; i++) {
           const ref = referenceImages[i];
@@ -90,10 +88,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
-      // Agregar prompt
       parts.push({ text: prompt });
 
-      // Modelo: gemini-2.5-flash-image (estable, funciona en us-central1)
       const modelName = 'gemini-2.5-flash-image';
 
       const response = await ai.models.generateContent({
@@ -127,10 +123,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'Missing prompt' });
       }
 
-      // Construir parts
       const parts: any[] = [];
 
-      // Agregar imágenes de referencia (REF0, faceRef, etc.)
       if (referenceImages && referenceImages.length > 0) {
         for (let i = 0; i < referenceImages.length; i++) {
           const ref = referenceImages[i];
@@ -145,10 +139,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
-      // Agregar prompt
       parts.push({ text: prompt });
 
-      // Modelo: gemini-2.5-flash-image (estable)
       const modelName = 'gemini-2.5-flash-image';
 
       const response = await ai.models.generateContent({
@@ -238,7 +230,6 @@ Respond ONLY with JSON:
 
       parts.push({ text: directive });
 
-      // Usar modelo de texto para análisis
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: [{ role: 'user', parts }],
@@ -250,6 +241,124 @@ Respond ONLY with JSON:
       const result = JSON.parse(clean);
 
       return res.status(200).json({ success: true, ...result });
+    }
+
+    // ===================================================================
+    // ACCIÓN: analyzeREF0 (Analizar luz, espacio y pose de REF0)
+    // ===================================================================
+    if (action === 'analyzeREF0') {
+      const { imageData, mimeType } = payload;
+
+      const parts: any[] = [
+        { text: "Analyze this image in detail. Respond ONLY with JSON." },
+        { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
+        { text: `{
+  "lighting": {
+    "primarySource": "string (e.g., 'window on the left', 'overhead soft light', 'natural light from behind camera')",
+    "direction": "string (e.g., 'left to right', 'top down', 'front facing')",
+    "colorTemperature": "string (e.g., 'warm golden', 'cool white', 'neutral daylight')",
+    "shadowType": "string (e.g., 'soft diffused', 'hard cast', 'minimal shadows')",
+    "intensity": "string (e.g., 'bright', 'dim', 'overcast')"
+  },
+  "spatial": {
+    "elements": ["string (list all visible objects: furniture, decor, architectural features)"],
+    "walls": "string (description of walls: color, texture, any visible features)",
+    "floor": "string (description of floor: material, color, texture)",
+    "geometry": "string (description of room layout: 'rectangular', 'corner', 'open space')"
+  },
+  "poseContext": {
+    "hasSeating": "boolean",
+    "hasLeaningSurface": "boolean",
+    "hasTable": "boolean",
+    "availableActions": ["string (e.g., 'standing', 'sitting on sofa', 'leaning on wall', 'holding product')"]
+  }
+}` }
+      ];
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [{ role: 'user', parts }],
+        config: { responseMimeType: 'application/json' },
+      });
+
+      const text = response.text || '';
+      const clean = text.replace(/```json|```/g, '').trim();
+      const result = JSON.parse(clean);
+
+      return res.status(200).json(result);
+    }
+
+    // ===================================================================
+    // ACCIÓN: analyzeOutfit (Analizar outfit)
+    // ===================================================================
+    if (action === 'analyzeOutfit') {
+      const { imageData, mimeType } = payload;
+
+      const parts: any[] = [
+        { text: "Analyze this outfit image. Respond ONLY with JSON." },
+        { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
+        { text: `{
+  "hasJacket": "boolean",
+  "hasPants": "boolean",
+  "hasShoes": "boolean",
+  "hasAccessories": "boolean",
+  "hasDetail": "boolean",
+  "fabricType": "string",
+  "colors": ["string"],
+  "hasTop": "boolean",
+  "hasBottom": "boolean",
+  "hasBelt": "boolean",
+  "hasBag": "boolean",
+  "hasHat": "boolean",
+  "hasNecklace": "boolean"
+}` }
+      ];
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [{ role: 'user', parts }],
+        config: { responseMimeType: 'application/json' },
+      });
+
+      const text = response.text || '';
+      const clean = text.replace(/```json|```/g, '').trim();
+      const result = JSON.parse(clean);
+
+      return res.status(200).json(result);
+    }
+
+    // ===================================================================
+    // ACCIÓN: analyzeScene (Analizar escena)
+    // ===================================================================
+    if (action === 'analyzeScene') {
+      const { imageData, mimeType } = payload;
+
+      const parts: any[] = [
+        { text: "Analyze this scene. Respond ONLY with JSON." },
+        { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
+        { text: `{
+  "hasFurniture": "boolean",
+  "hasNature": "boolean",
+  "hasEquipment": "boolean",
+  "hasTable": "boolean",
+  "hasSeating": "boolean",
+  "hasWindows": "boolean",
+  "hasProps": "boolean",
+  "sceneType": "string"
+}` }
+      ];
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [{ role: 'user', parts }],
+        config: { responseMimeType: 'application/json' },
+      });
+
+      const text = response.text || '';
+      const clean = text.replace(/```json|```/g, '').trim();
+      const result = JSON.parse(clean);
+
+      return res.status(200).json(result);
     }
 
     return res.status(400).json({ error: `Unknown action: ${action}` });

@@ -1,12 +1,76 @@
-import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
-import { Style, Focus, ShotKey, ProductSize, ProductCategory, ShotDirective, ShotExclusion, ShotComposition, REF0Analysis } from './types';
-import { buildUGCSessionPlanFromAnchor, detectProductCategory, analyzeProductRelevance, analyzeREF0 } from './ugcDirectorService';
+import { 
+  Focus, ShotKey, ProductSize, ProductCategory, 
+  ShotDirective, ShotRole, ShotFraming, ShotComposition, ShotExclusion, DetailTarget,
+  REF0Analysis,
+  CATEGORY_LABELS 
+} from './types';
+import { ugcApiService, REF0Analysis as ApiREF0Analysis } from '../../services/ugcApiService';
+import { buildUGCSessionPlanFromAnchor, detectProductCategory, analyzeProductRelevance as analyzeProductRelevanceDirect } from './ugcDirectorService';
 
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+// ===================================================================
+// DETECCIÓN DE CATEGORÍA DE PRODUCTO (wrapper)
+// ===================================================================
+export function detectProductCategory(sceneText?: string, productRef?: string | null): ProductCategory {
+  const text = (sceneText || '').toLowerCase();
+  
+  if (text.includes('anillo') || text.includes('arete') || text.includes('collar') || text.includes('pulsera') || 
+      text.includes('joya') || text.includes('ring') || text.includes('earring') || text.includes('necklace')) {
+    return 'JEWELRY';
+  }
+  if (text.includes('labial') || text.includes('maquillaje') || text.includes('makeup') || text.includes('lipstick') ||
+      text.includes('base') || text.includes('sombras')) {
+    return 'MAKEUP';
+  }
+  if (text.includes('celular') || text.includes('laptop') || text.includes('tech') || text.includes('phone') ||
+      text.includes('audifonos') || text.includes('tablet')) {
+    return 'TECH';
+  }
+  if (text.includes('zapatilla') || text.includes('pelota') || text.includes('sports') || text.includes('shoes') ||
+      text.includes('tenis') || text.includes('balon')) {
+    return 'SPORTS';
+  }
+  if (text.includes('gorra') || text.includes('bolso') || text.includes('fashion') || text.includes('bag') ||
+      text.includes('cinturon') || text.includes('bufanda')) {
+    return 'FASHION';
+  }
+  if (text.includes('mueble') || text.includes('silla') || text.includes('home') || text.includes('furniture') ||
+      text.includes('mesa') || text.includes('lampara')) {
+    return 'HOME';
+  }
+  return 'GENERIC';
+}
 
-function cleanBase64(b64: string): string {
-  if (!b64) return "";
-  return b64.replace(/^data:image\/(png|jpeg|webp);base64,/, "").replace(/\s/g, "");
+// ===================================================================
+// FUNCIONES DE UTILIDAD
+// ===================================================================
+function extractImageData(img: string | null | undefined): { data: string; mimeType: string } | null {
+  if (!img) return null;
+  
+  const trimmed = img.trim();
+  const match = trimmed.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/);
+  
+  if (match) {
+    return { mimeType: match[1], data: match[2] };
+  }
+  
+  if (/^[A-Za-z0-9+/=]+$/.test(trimmed)) {
+    return { mimeType: 'image/png', data: trimmed };
+  }
+  
+  return null;
+}
+
+function prepareReferenceImages(refs: (string | null | undefined)[]): Array<{ data: string; mimeType: string }> {
+  const result: Array<{ data: string; mimeType: string }> = [];
+  
+  for (const ref of refs) {
+    const extracted = extractImageData(ref);
+    if (extracted && extracted.data.length > 64) {
+      result.push(extracted);
+    }
+  }
+  
+  return result;
 }
 
 // ===================================================================
@@ -84,7 +148,7 @@ const LOCK_SYSTEM = `
 ╚═══════════════════════════════════════════════════════════════════╝
 
 🔒 IDENTITY LOCK (HARD):
-- The person MUST be EXACTLY the same as REF1 (faceRef).
+- The person MUST be EXACTLY the same as face reference.
 - Same face, same features, same bone structure.
 - NO beautification, NO skin smoothing, NO different person.
 - NO reinterpretation, NO approximation.
@@ -102,22 +166,11 @@ const LOCK_SYSTEM = `
 🔒 SCENE LOCK (NO REDESIGN):
 - Same environment. Same location. Same walls, same floor, same furniture.
 - NO idealization, NO added decor, NO prettier version.
-- The scene must be IDENTICAL to REF4.
+- The scene must be IDENTICAL to scene reference.
 
 🔒 SCALE LOCK:
 - Maintain real-world proportions.
 - NO distortion.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-⚠️ CRITICAL - SAME SESSION PARADIGM:
-- You are taking a NEW photo of the SAME person, SAME outfit, SAME product, SAME place.
-- Think of yourself as a photographer with a phone, moving around the same scene.
-- The person, clothes, product, and location NEVER change.
-- Only your camera position, distance, and angle change.
-- Do NOT reinterpret, do NOT beautify, do NOT redesign.
-
-If ANY locked element changes, the output is INVALID.
 `;
 
 const REF0_ANCHOR_RULE = LOCK_SYSTEM;
@@ -150,7 +203,6 @@ const getModeDominance = (focus: Focus): string => {
 CRITICAL RULES:
 - FACE is the ABSOLUTE HERO in EVERY shot.
 - No outfit detail shot should dominate over the face.
-- No accessory should be the main subject.
 - The person's presence, expression, and personality are the focus.
 
 PRIORITY ORDER:
@@ -163,10 +215,8 @@ PRIORITY ORDER:
 FORBIDDEN in AVATAR mode:
 - Detail shots of belt, bag, shoes as main subject
 - Outfit dominating the frame
-- Full-body wide shots as hero (only as lifestyle context)
+- Full-body wide shots as hero
 - Face not clearly visible in expression/selfie shots
-
-The avatar is a REAL PERSON telling a story, not a mannequin showing clothes.
 `;
   }
   
@@ -190,8 +240,6 @@ REQUIRED:
 - One HERO full-body shot showing entire outfit
 - Detail shots of fabric, texture, accessories
 - Silhouette and fit are the focus
-
-Face may be visible but should NOT dominate the frame.
 `;
   }
   
@@ -227,10 +275,10 @@ REQUIRED:
 CRITICAL RULES:
 - ENVIRONMENT is the hero.
 - NO redesign, NO idealization, NO added furniture.
-- The space must be IDENTICAL to REF0.
+- The space must be IDENTICAL to scene reference.
 
 PRIORITY ORDER:
-1. ENVIRONMENT (exactly as in REF0)
+1. ENVIRONMENT (exactly as in reference)
 2. AVATAR EXPERIENCE (person enjoying, reacting)
 3. Place details (as they are, not embellished)
 
@@ -256,8 +304,7 @@ const getRoleEnforcement = (role: string, focus: Focus): string => {
 - MEDIUM shot (waist up), NOT full body wide
 - Face MUST be clear, dominant, expressive
 - Outfit is secondary, NOT competing
-- NO extreme crop, NO full body as hero
-- NO beautification, NO skin smoothing`;
+- NO extreme crop, NO full body as hero`;
     }
     if (focus === 'OUTFIT') {
       return `
@@ -290,7 +337,6 @@ const getRoleEnforcement = (role: string, focus: Focus): string => {
 - Phone/camera MUST NOT be visible
 - Handheld framing, slight asymmetry allowed
 - NO third-person perspective, NO full body
-- The viewer should feel like the person took this photo themselves
 - This is NOT a portrait taken by someone else`;
   }
   
@@ -351,17 +397,17 @@ const getRoleEnforcement = (role: string, focus: Focus): string => {
   if (role === 'CONTEXT') {
     return `
 🔴 CONTEXT ROLE ENFORCEMENT (SCENE):
-- Environment is the hero, exactly as in REF0
+- Environment is the hero, exactly as in scene reference
 - NO redesign, NO added furniture, NO beautification
 - Person visible (25-35% of frame), engaged with space
-- Scene details must match REF0 exactly`;
+- Scene details must match scene reference exactly`;
   }
   
   return '';
 };
 
 // ===================================================================
-// INYECTAR REF0 ANALYSIS EN PROMPT (para congelar luz, espacio, acciones)
+// INYECTAR REF0 ANALYSIS EN PROMPT
 // ===================================================================
 const injectREF0Analysis = (analysis: REF0Analysis | undefined): string => {
   if (!analysis) return '';
@@ -397,7 +443,6 @@ The environment must look exactly as in REF0.
 function translateDirectiveToPrompt(directive: ShotDirective, focus: Focus, ref0Analysis?: REF0Analysis): string {
   const parts: string[] = [];
   
-  // Instrucción ultra-directa según rol
   if (directive.role === 'SELFIE') {
     parts.push(`
 🔴🔴🔴 THIS IS A SELFIE SHOT - PHYSICAL RULES 🔴🔴🔴
@@ -405,42 +450,35 @@ function translateDirectiveToPrompt(directive: ShotDirective, focus: Focus, ref0
 - Visible: shoulder, elbow, up to mid-forearm, face.
 - Phone/camera is NOT visible (it's the POV).
 - Handheld framing, slight asymmetry is natural.
-- NO third-person view. NO full body.
-- This must look like the person took it themselves.
-    `);
+- NO third-person view. NO full body.`);
   } else if (directive.role === 'DETAIL' && focus !== 'AVATAR') {
     parts.push(`
 🔴🔴🔴 THIS IS AN EXTREME DETAIL SHOT 🔴🔴🔴
 - Camera is 10-15cm from the subject.
 - ONLY texture, fabric, material, or product surface visible.
 - NO face. NO full body. NO medium shot.
-- The detail fills 85-90% of the entire frame.
-- Think MACRO PHOTOGRAPHY.
-    `);
+- The detail fills 85-90% of the entire frame.`);
   } else if (directive.role === 'EXPRESSION') {
     parts.push(`
 🔴🔴🔴 THIS IS A FACE EXPRESSION SHOT 🔴🔴🔴
 - Face fills 70-80% of the frame.
 - Expression must be clearly different from other shots.
 - NO beautification, NO skin smoothing.
-- This is a REAL PERSON, not a model.
-    `);
+- This is a REAL PERSON, not a model.`);
   } else if (directive.role === 'HERO' && focus === 'AVATAR') {
     parts.push(`
 🔴🔴🔴 THIS IS AN AVATAR HERO SHOT 🔴🔴🔴
 - MEDIUM shot (waist up). Face is dominant.
 - NOT full body. NOT wide shot.
 - Outfit is secondary background.
-- The person's expression and presence are the focus.
-    `);
+- The person's expression and presence are the focus.`);
   } else if (directive.role === 'HERO' && focus === 'OUTFIT') {
     parts.push(`
 🔴🔴🔴 THIS IS AN OUTFIT HERO SHOT 🔴🔴🔴
 - FULL BODY visible head to toe.
 - The outfit is the ONLY hero.
 - Face may be visible but secondary.
-- Show the complete silhouette.
-    `);
+- Show the complete silhouette.`);
   }
   
   parts.push(`SHOT ROLE: ${directive.role}`);
@@ -486,84 +524,39 @@ async function generateNeutralOutfit(focus: Focus, productCategory?: ProductCate
 }
 
 // ===================================================================
-// MOTOR DE GENERACIÓN
+// MOTOR DE GENERACIÓN (usa ugcApiService)
 // ===================================================================
 async function generateWithResilience(
   prompt: string,
   refs: (string | null)[],
   systemInstructions: string
 ): Promise<string> {
-  const ai = getAI();
-  const parts: any[] = [];
-  let textPrompt = "";
-  let imageAdded = false;
-
-  refs.forEach((img, idx) => {
-    if (img && img.length > 50 && !imageAdded) {
-      textPrompt += `[Image REF${idx} provided]\n`;
-      const mimeMatch = img.match(/^data:(image\/(png|jpeg|webp));base64,/);
-      const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
-      parts.push({ inlineData: { mimeType, data: cleanBase64(img) } });
-      imageAdded = true;
-    }
+  const referenceImages = prepareReferenceImages(refs);
+  
+  const fullPrompt = `${systemInstructions}\n\nTASK:\n${prompt}\n\nNEGATIVE:\n${NEGATIVE}`;
+  
+  return ugcApiService.generateImage0({
+    prompt: fullPrompt,
+    referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+    aspectRatio: '3:4',
   });
+}
 
-  textPrompt += `${systemInstructions}\n\nTASK:\n${prompt}\n\nNEGATIVE:\n${NEGATIVE}`;
-  parts.push({ text: textPrompt });
-
-  const IMAGE_MODELS = ['gemini-3.1-flash-image-preview', 'gemini-3-pro-image-preview', 'gemini-2.5-flash-image'];
-
-  const isRecoverable = (e: any) => {
-    const m = e?.message || JSON.stringify(e);
-    return ['500', 'INTERNAL', '503', 'UNAVAILABLE', 'high demand', 'overloaded', 'timeout', 'DEADLINE', '429'].some(s => m.includes(s));
-  };
-
-  const callModel = (modelId: string) => {
-    const config: any = {
-      imageConfig: { aspectRatio: "3:4" }
-    };
-    if (modelId !== 'gemini-2.5-flash-image') {
-      config.imageConfig.imageSize = "1K";
-    }
-    return ai.models.generateContent({
-      model: modelId,
-      contents: { parts },
-      config
-    });
-  };
-
-  let response: any = null;
-  let lastError: any = null;
-
-  for (let mi = 0; mi < IMAGE_MODELS.length; mi++) {
-    const max = mi === 0 ? 2 : 1;
-    for (let attempt = 1; attempt <= max; attempt++) {
-      try {
-        console.log(`[UGC] Intentando: ${IMAGE_MODELS[mi]} (intento ${attempt})`);
-        response = await callModel(IMAGE_MODELS[mi]);
-        break;
-      } catch (err: any) {
-        lastError = err;
-        const msg = err?.message || '';
-        if (['SAFETY', 'BLOCKED', 'prohibited'].some(s => msg.includes(s))) throw new Error("Content blocked.");
-        if (msg.includes('404') || msg.includes('not found')) break;
-        if (isRecoverable(err)) {
-          if (attempt === max && mi < IMAGE_MODELS.length - 1) break;
-          if (attempt < max) await new Promise(r => setTimeout(r, attempt * 2000));
-          else if (mi === IMAGE_MODELS.length - 1) throw new Error(`Service unavailable. Details: ${msg}`);
-        } else throw new Error(`API Error: ${msg}`);
-      }
-    }
-    if (response) break;
+// ===================================================================
+// ANALIZAR RELEVANCIA DE PRODUCTO (wrapper)
+// ===================================================================
+export async function analyzeProductRelevance(
+  productRef: string | null | undefined,
+  focus: Focus,
+  outfitRef?: string | null,
+  sceneRef?: string | null,
+  sceneText?: string
+): Promise<{ isRelevant: boolean; suggestion: string; productType: string }> {
+  if (!productRef) {
+    return { isRelevant: false, suggestion: '', productType: 'none' };
   }
-
-  if (!response) throw lastError || new Error("No image generated");
-
-  const candidate = (response as any).candidates?.[0];
-  const img = candidate?.content?.parts?.find((p: any) => p.inlineData?.data);
-  if (img?.inlineData?.data) return `data:image/png;base64,${img.inlineData.data}`;
-  if (candidate?.finishReason === 'SAFETY') throw new Error("Content blocked.");
-  throw new Error("No valid image.");
+  
+  return analyzeProductRelevanceDirect(productRef, focus, outfitRef, sceneRef, sceneText);
 }
 
 // ===================================================================
@@ -578,13 +571,11 @@ export interface SessionPlan {
 
 export const contentStudioService = {
   async ensureAccess() {
-    if (typeof window !== 'undefined' && (window as any).aistudio)
-      if (!(await (window as any).aistudio.hasSelectedApiKey()))
-        await (window as any).aistudio.openSelectKey();
+    // No-op - autenticación en el servidor
   },
 
   // ──────────────────────────────────────────────────────────────
-  // buildSessionPlan - AHORA USA EL DIRECTOR AVANZADO
+  // buildSessionPlan - USA EL DIRECTOR AVANZADO
   // ──────────────────────────────────────────────────────────────
   async buildSessionPlan(
     focus: Focus,
@@ -592,7 +583,6 @@ export const contentStudioService = {
     productSize?: ProductSize,
     productIsRelevant?: boolean
   ): Promise<SessionPlan> {
-    // Usar el director real de ugcDirectorService
     const plan = await buildUGCSessionPlanFromAnchor(
       "",
       focus,
@@ -617,7 +607,7 @@ export const contentStudioService = {
     outfitRef: string | null,
     sceneRef: string | null,
     sceneText: string,
-    _style: Style,
+    _style: any,
     focus: Focus = 'AVATAR',
     productSize?: ProductSize,
     productIsRelevant?: boolean
@@ -650,7 +640,7 @@ export const contentStudioService = {
     }
     refsToPass.push(finalSceneRef);
 
-    const system = `${RULE_PRIORITY_SYSTEM}\n${REF0_ANCHOR_RULE}\n${PARADIGM_RULE}\n${getModeDominance(focus)}\n${FOCUS_DOMINANCE_RULE}\n${NO_COMPETITION_RULE}\n${SHOT_TYPE_CONSTRAINTS}\n${COLOR_CONSISTENCY_RULE}\n${BODY_INTEGRITY_RULE}\n${COMPOSITION_DIVERSITY_RULE}\n${ANTI_SIMILARITY_RULE}\n${NATURALITY_RULE}`;
+    const system = `${RULE_PRIORITY_SYSTEM}\n${REF0_ANCHOR_RULE}\n${PARADIGM_RULE}\n${getModeDominance(focus)}`;
 
     const prompt = `
 CREATE THE ANCHOR IMAGE (REF0):
@@ -658,16 +648,10 @@ CREATE THE ANCHOR IMAGE (REF0):
 This is a SINGLE REALISTIC PHOTO. NOT a collage. NOT multiple images.
 
 CRITICAL - LOCK SYSTEM ACTIVE:
-- The person MUST be IDENTICAL to REF1 (faceRef)
-- The outfit MUST be IDENTICAL to REF2 (outfitRef if provided)
-- The product MUST be IDENTICAL to REF3 (productRef if provided)
-- The scene MUST be IDENTICAL to REF4 (sceneRef if provided)
-
-Use EXACTLY these references:
-- Person: REF1 (face) - MUST be IDENTICAL
-${finalOutfitRef ? '- Outfit: REF2 (clothing) - MUST be EXACT' : promptExtra.includes('Outfit:') ? '- Outfit: ' + promptExtra.match(/Outfit: (.*)/)?.[1] : ''}
-${finalProductRef ? '- Product: REF3 - MUST be EXACT' : ''}
-${finalSceneRef ? '- Scene: REF4 - MUST be EXACT' : promptExtra.includes('Scene:') ? '- Scene: ' + promptExtra.match(/Scene: (.*)/)?.[1] : ''}
+- The person MUST be IDENTICAL to face reference
+- The outfit MUST be IDENTICAL to outfit reference (if provided)
+- The product MUST be IDENTICAL to product reference (if provided)
+- The scene MUST be IDENTICAL to scene reference (if provided)
 
 RULES:
 ${focus === 'AVATAR' ? '- 3rd person perspective. MEDIUM shot (waist up). Face is the dominant element.' : '- 3rd person perspective (NOT selfie). Full body visible.'}
@@ -679,8 +663,30 @@ ${focus === 'AVATAR' ? '- 3rd person perspective. MEDIUM shot (waist up). Face i
     const imageUrl = await generateWithResilience(prompt, refsToPass, system);
     
     // Analizar REF0 para congelar luz, espacio y acciones
-    const analysis = await analyzeREF0(imageUrl);
-    console.log("[UGC] REF0 Analysis completed:", analysis);
+    const imageData = extractImageData(imageUrl);
+    let analysis: REF0Analysis;
+    
+    if (imageData) {
+      try {
+        analysis = await ugcApiService.analyzeREF0({
+          imageData: imageData.data,
+          mimeType: imageData.mimeType
+        });
+      } catch (e) {
+        console.warn("[UGC] Error analyzing REF0, using fallback:", e);
+        analysis = {
+          lighting: { primarySource: "natural light", direction: "from front", colorTemperature: "neutral", shadowType: "soft", intensity: "medium" },
+          spatial: { elements: ["wall", "floor"], walls: "neutral wall", floor: "hard floor", geometry: "standard" },
+          poseContext: { hasSeating: false, hasLeaningSurface: false, hasTable: false, availableActions: ["standing"] }
+        };
+      }
+    } else {
+      analysis = {
+        lighting: { primarySource: "natural light", direction: "from front", colorTemperature: "neutral", shadowType: "soft", intensity: "medium" },
+        spatial: { elements: ["wall", "floor"], walls: "neutral wall", floor: "hard floor", geometry: "standard" },
+        poseContext: { hasSeating: false, hasLeaningSurface: false, hasTable: false, availableActions: ["standing"] }
+      };
+    }
     
     return { imageUrl, analysis };
   },
@@ -694,7 +700,7 @@ ${focus === 'AVATAR' ? '- 3rd person perspective. MEDIUM shot (waist up). Face i
     outfitRef: string | null,
     productRef: string | null,
     sceneRef: string | null,
-    _style: Style,
+    _style: any,
     focus: Focus,
     shotKey: ShotKey,
     productSize?: ProductSize,
@@ -717,10 +723,9 @@ CRITICAL - SAME SESSION:
 
 Natural UGC aesthetic.`;
 
-      // Fallback con solo las referencias mínimas
       const refs = [image0, faceRef];
       if (outfitRef) refs.push(outfitRef);
-      if (productRef) refs.push(productRef);
+      if (productRef && productIsRelevant !== false) refs.push(productRef);
       if (sceneRef) refs.push(sceneRef);
       
       return generateWithResilience(fallbackPrompt, refs, '');
@@ -729,9 +734,8 @@ Natural UGC aesthetic.`;
     const directivePrompt = translateDirectiveToPrompt(directive, focus, ref0Analysis);
     const ref0AnalysisBlock = injectREF0Analysis(ref0Analysis);
 
-    const system = `${PARADIGM_RULE}\n${REF0_ANCHOR_RULE}\n${getModeDominance(focus)}\n${COLOR_CONSISTENCY_RULE}\n${BODY_INTEGRITY_RULE}`;
+    const system = `${PARADIGM_RULE}\n${REF0_ANCHOR_RULE}\n${getModeDominance(focus)}`;
 
-    // Construir prompt con todas las referencias relevantes
     const prompt = `
 CREATE A NEW PHOTO FROM THE SAME SESSION AS REF0.
 
@@ -755,7 +759,6 @@ CRITICAL REMINDERS:
 - ⚠️ NO ROLE MIXING - Each image serves ONE role only
 - ⚠️ LOCK SYSTEM ACTIVE - NO IDENTITY DRIFT, NO SCENE REDESIGN`;
 
-    // Construir array de referencias con TODAS las disponibles
     const refs: (string | null)[] = [image0, faceRef];
     if (outfitRef) refs.push(outfitRef);
     if (productRef && productIsRelevant !== false) refs.push(productRef);
@@ -764,113 +767,3 @@ CRITICAL REMINDERS:
     return generateWithResilience(prompt, refs, system);
   },
 };
-
-// ===================================================================
-// CONSTANTES ADICIONALES (referenciadas)
-// ===================================================================
-const FOCUS_DOMINANCE_RULE = `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎯 FOCUS DOMINANCE (CRITICAL):
-
-- AVATAR → Face dominates. Outfit secondary. Product as collaboration.
-- PRODUCT → Product hero, avatar emotional narrator, face visible.
-- OUTFIT → Clothing hero, full body, face secondary.
-- SCENE → Environment hero, no redesign, avatar experiences.
-`;
-
-const NO_COMPETITION_RULE = `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🚫 NO COMPETITION RULE:
-
-Only ONE element can be visually dominant in each image.
-The selected focus MUST be that element.
-
-If any secondary element competes for attention with the main focus,
-the output is INVALID.
-`;
-
-const SHOT_TYPE_CONSTRAINTS = `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📐 SHOT TYPE CONSTRAINTS:
-
-EXTREME_CLOSE:
-- Subject fills 80-90% of frame
-- Face and full body FORBIDDEN
-- Shallow depth of field REQUIRED
-
-CLOSE_UP:
-- Subject fills 70-80% of frame
-- Background minimal
-- Detail visible
-
-MEDIUM:
-- Upper body visible
-- Person occupies 40-50% of frame
-- Interaction visible
-
-WIDE:
-- Full body visible
-- Person occupies 30-40% of frame
-- Environment prominent
-
-SELFIE:
-- Arm's length perspective
-- Visible: shoulder, up to mid-forearm, face
-- Phone NOT visible
-`;
-
-const COLOR_CONSISTENCY_RULE = `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎨 COLOR CONSISTENCY RULE:
-
-All shots must maintain identical color grading and lighting tone.
-
-Requirements:
-- No filters, no stylization
-- No variation in warmth, contrast, or saturation
-- Colors must match exactly across all images
-
-If any shot appears filtered or stylized, the output is INVALID.
-`;
-
-const BODY_INTEGRITY_RULE = `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🧍 BODY INTEGRITY RULE:
-
-The subject must have anatomically correct body structure.
-
-Requirements:
-- No extra limbs, duplicated arms, or phantom hands
-- No broken joints or impossible limb positions
-
-If any anatomical inconsistency appears, the output is INVALID.
-`;
-
-const COMPOSITION_DIVERSITY_RULE = `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔄 COMPOSITION DIVERSITY RULE:
-
-Each shot should clearly differ in camera distance and framing.
-
-Prefer:
-- Varying crop between shots
-- Different subject positioning
-- Mix of close, medium, and wide shots
-`;
-
-const ANTI_SIMILARITY_RULE = `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔄 ANTI-SIMILARITY RULE:
-
-- Do NOT create a visually similar image to REF0
-- Each shot should feel like it was taken from a different camera position
-`;
-
-const NATURALITY_RULE = `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🌿 NATURALITY RULE:
-
-The image must feel NATURAL, ORGANIC, and REALISTIC.
-
-If the image looks overly constructed, rigid, or artificial, the output is INVALID.
-`;

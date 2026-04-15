@@ -1,24 +1,10 @@
-import { GoogleGenAI } from "@google/genai";
 import { 
   Focus, ShotKey, ProductSize, ProductCategory, 
   ShotDirective, ShotRole, ShotFraming, ShotComposition, ShotExclusion, DetailTarget,
   REF0Analysis,
   CATEGORY_LABELS 
 } from './types';
-
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-export interface UGCSessionPlan {
-  sessionTheme: string;
-  productCategory?: ProductCategory;
-  ref0Analysis?: REF0Analysis;
-  shots: ShotDirective[];
-}
-
-function cleanBase64(b64: string): string {
-  if (!b64) return "";
-  return b64.replace(/^data:image\/(png|jpeg|webp);base64,/, "").replace(/\s/g, "");
-}
+import { ugcApiService } from '../../services/ugcApiService';
 
 // ===================================================================
 // DETECCIÓN DE CATEGORÍA DE PRODUCTO
@@ -53,47 +39,29 @@ export function detectProductCategory(sceneText?: string, productRef?: string | 
   return 'GENERIC';
 }
 
+function cleanBase64(b64: string): string {
+  if (!b64) return "";
+  return b64.replace(/^data:image\/(png|jpeg|webp);base64,/, "").replace(/\s/g, "");
+}
+
 // ===================================================================
 // ANALIZAR REF0 PARA EXTRAER LIGHTING, SPATIAL Y POSE CONTEXT
+// AHORA USA ugcApiService (backend)
 // ===================================================================
 export async function analyzeREF0(image0Url: string): Promise<REF0Analysis> {
-  const ai = getAI();
-  
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [
-        { text: "Analyze this image in detail. Respond ONLY with JSON." },
-        { inlineData: { mimeType: "image/jpeg", data: cleanBase64(image0Url) } },
-        { text: `{
-  "lighting": {
-    "primarySource": "string (e.g., 'window on the left', 'overhead soft light', 'natural light from behind camera')",
-    "direction": "string (e.g., 'left to right', 'top down', 'front facing')",
-    "colorTemperature": "string (e.g., 'warm golden', 'cool white', 'neutral daylight')",
-    "shadowType": "string (e.g., 'soft diffused', 'hard cast', 'minimal shadows')",
-    "intensity": "string (e.g., 'bright', 'dim', 'overcast')"
-  },
-  "spatial": {
-    "elements": "string[] (list all visible objects: furniture, decor, architectural features)",
-    "walls": "string (description of walls: color, texture, any visible features)",
-    "floor": "string (description of floor: material, color, texture)",
-    "geometry": "string (description of room layout: 'rectangular', 'corner', 'open space')"
-  },
-  "poseContext": {
-    "hasSeating": "boolean",
-    "hasLeaningSurface": "boolean",
-    "hasTable": "boolean",
-    "availableActions": "string[] (e.g., ['standing', 'sitting on sofa', 'leaning on wall', 'holding product'])"
-  }
-}` }
-      ],
-      config: { responseMimeType: "application/json" }
+    // Extraer datos de la imagen
+    const match = image0Url.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/);
+    if (!match) {
+      throw new Error('Invalid image format');
+    }
+    
+    const result = await ugcApiService.analyzeREF0({
+      imageData: match[2],
+      mimeType: match[1]
     });
-
-    const raw = (response as any)?.text ??
-                (response as any)?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-    const clean = raw.replace(/```json|```/g, '').trim();
-    return JSON.parse(clean);
+    
+    return result;
   } catch (e) {
     console.warn("[UGC Director] Error analyzing REF0:", e);
     // Fallback conservador
@@ -122,7 +90,7 @@ export async function analyzeREF0(image0Url: string): Promise<REF0Analysis> {
 }
 
 // ===================================================================
-// ANALIZAR SI EL PRODUCTO ES RELEVANTE
+// ANALIZAR SI EL PRODUCTO ES RELEVANTE (AHORA USA ugcApiService)
 // ===================================================================
 export async function analyzeProductRelevance(
   productRef: string | null | undefined,
@@ -135,69 +103,44 @@ export async function analyzeProductRelevance(
     return { isRelevant: false, suggestion: '', productType: 'none' };
   }
   
-  const ai = getAI();
-  const parts: any[] = [];
-  
-  parts.push({ text: "PRODUCT IMAGE:" });
-  parts.push({ inlineData: { mimeType: "image/jpeg", data: cleanBase64(productRef) } });
-  
-  if (focus === 'OUTFIT' && outfitRef) {
-    parts.push({ text: "OUTFIT REFERENCE:" });
-    parts.push({ inlineData: { mimeType: "image/jpeg", data: cleanBase64(outfitRef) } });
+  // Extraer datos de la imagen
+  const productMatch = productRef.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/);
+  if (!productMatch) {
+    return { isRelevant: false, suggestion: 'Could not read product image', productType: 'other' };
   }
   
-  if (focus === 'SCENE' && sceneRef) {
-    parts.push({ text: "SCENE REFERENCE:" });
-    parts.push({ inlineData: { mimeType: "image/jpeg", data: cleanBase64(sceneRef) } });
+  let outfitData = null;
+  if (outfitRef) {
+    const outfitMatch = outfitRef.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/);
+    if (outfitMatch) {
+      outfitData = { data: outfitMatch[2], mimeType: outfitMatch[1] };
+    }
   }
   
-  const contextText = sceneText ? `Scene description: ${sceneText}` : '';
-  
-  const directive = `
-You are analyzing if a product/object is relevant to a ${focus.toUpperCase()} context.
-
-${focus === 'OUTFIT' ? `
-OUTFIT CONTEXT:
-Determine if this product is a COMPLEMENT to the outfit:
-- YES if it is: jewelry, bag, belt, hat, scarf, shoes, or any accessory
-- NO if it is: electronics, food/drink, tools, or anything not meant to be worn
-` : focus === 'SCENE' ? `
-SCENE CONTEXT:
-Determine if this product/object is RELEVANT to the scene:
-- YES if it naturally belongs in this environment
-- NO if it feels out of place
-` : ''}
-
-${contextText}
-
-Respond ONLY with JSON:
-{
-  "isRelevant": boolean,
-  "suggestion": "brief explanation",
-  "productType": "jewelry|accessory|clothing|electronics|food|sports|home|other"
-}`;
-
-  parts.push({ text: directive });
+  let sceneData = null;
+  if (sceneRef) {
+    const sceneMatch = sceneRef.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/);
+    if (sceneMatch) {
+      sceneData = { data: sceneMatch[2], mimeType: sceneMatch[1] };
+    }
+  }
   
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: { parts },
-      config: { responseMimeType: "application/json" }
+    return await ugcApiService.analyzeProductRelevance({
+      productRef: { data: productMatch[2], mimeType: productMatch[1] },
+      focus,
+      outfitRef: outfitData,
+      sceneRef: sceneData,
+      sceneText,
     });
-
-    const raw = (response as any)?.text ??
-                (response as any)?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-    const clean = raw.replace(/```json|```/g, '').trim();
-    return JSON.parse(clean);
   } catch (e) {
     console.warn("[UGC Director] Error analyzing product relevance:", e);
-    return { isRelevant: false, suggestion: "Could not determine", productType: "other" };
+    return { isRelevant: false, suggestion: 'Could not determine', productType: 'other' };
   }
 }
 
 // ===================================================================
-// ANALIZAR REFERENCIA DE OUTFIT
+// ANALIZAR REFERENCIA DE OUTFIT (AHORA USA ugcApiService)
 // ===================================================================
 async function analyzeOutfitReference(outfitRef: string | null | undefined): Promise<{
   hasJacket: boolean;
@@ -232,36 +175,30 @@ async function analyzeOutfitReference(outfitRef: string | null | undefined): Pro
     };
   }
 
-  const ai = getAI();
+  const match = outfitRef.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/);
+  if (!match) {
+    return {
+      hasJacket: false,
+      hasPants: true,
+      hasShoes: false,
+      hasAccessories: false,
+      hasDetail: false,
+      fabricType: 'unknown',
+      colors: [],
+      hasTop: true,
+      hasBottom: true,
+      hasBelt: false,
+      hasBag: false,
+      hasHat: false,
+      hasNecklace: false
+    };
+  }
   
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [
-        { text: "Analyze this outfit image. Respond ONLY with JSON." },
-        { inlineData: { mimeType: "image/jpeg", data: cleanBase64(outfitRef) } },
-        { text: `{
-  "hasJacket": boolean,
-  "hasPants": boolean,
-  "hasShoes": boolean,
-  "hasAccessories": boolean,
-  "hasDetail": boolean,
-  "fabricType": string,
-  "colors": string[],
-  "hasTop": boolean,
-  "hasBottom": boolean,
-  "hasBelt": boolean,
-  "hasBag": boolean,
-  "hasHat": boolean,
-  "hasNecklace": boolean
-}` }
-      ],
-      config: { responseMimeType: "application/json" }
+    return await ugcApiService.analyzeOutfit({
+      imageData: match[2],
+      mimeType: match[1]
     });
-
-    const raw = (response as any)?.text ?? '';
-    const clean = raw.replace(/```json|```/g, '').trim();
-    return JSON.parse(clean);
   } catch (e) {
     console.warn("[UGC Director] Error analyzing outfit:", e);
     return {
@@ -283,7 +220,7 @@ async function analyzeOutfitReference(outfitRef: string | null | undefined): Pro
 }
 
 // ===================================================================
-// ANALIZAR REFERENCIA DE ESCENA
+// ANALIZAR REFERENCIA DE ESCENA (AHORA USA ugcApiService)
 // ===================================================================
 async function analyzeSceneReference(sceneRef: string | null | undefined): Promise<{
   hasFurniture: boolean;
@@ -308,30 +245,25 @@ async function analyzeSceneReference(sceneRef: string | null | undefined): Promi
     };
   }
 
-  const ai = getAI();
+  const match = sceneRef.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/);
+  if (!match) {
+    return {
+      hasFurniture: false,
+      hasNature: false,
+      hasEquipment: false,
+      hasTable: false,
+      hasSeating: false,
+      hasWindows: false,
+      hasProps: false,
+      sceneType: 'generic'
+    };
+  }
   
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [
-        { text: "Analyze this scene. Respond ONLY with JSON." },
-        { inlineData: { mimeType: "image/jpeg", data: cleanBase64(sceneRef) } },
-        { text: `{
-  "hasFurniture": boolean,
-  "hasNature": boolean,
-  "hasEquipment": boolean,
-  "hasTable": boolean,
-  "hasSeating": boolean,
-  "hasWindows": boolean,
-  "hasProps": boolean,
-  "sceneType": string
-}` }
-      ],
-      config: { responseMimeType: "application/json" }
+    return await ugcApiService.analyzeScene({
+      imageData: match[2],
+      mimeType: match[1]
     });
-    const raw = (response as any)?.text ?? '';
-    const clean = raw.replace(/```json|```/g, '').trim();
-    return JSON.parse(clean);
   } catch (e) {
     console.warn("[UGC Director] Error analyzing scene:", e);
     return {
@@ -557,11 +489,10 @@ function buildOutfitShotDirectives(
       intensity: 'extreme'
     });
   } else if (hasBag || hasBelt || hasNecklace || hasHat) {
-    let accessoryTarget: DetailTarget = 'accessory';
+    let accessoryTarget: DetailTarget = 'fabric';
     if (hasBag) accessoryTarget = 'bag';
     else if (hasBelt) accessoryTarget = 'belt';
     else if (hasNecklace) accessoryTarget = 'necklace';
-    else if (hasHat) accessoryTarget = 'fabric';
     
     directives.push({
       key: 'S6',
@@ -821,14 +752,11 @@ export async function buildUGCSessionPlanFromAnchor(
 ): Promise<UGCSessionPlan> {
 
   const productCategory = detectProductCategory(refs?.sceneText || undefined, refs?.productRef);
-  const shotCount = 6; // TODOS 6 SHOTS
+  const shotCount = 6;
   
   let outfitAnalysis = null;
   let sceneAnalysis = null;
   let directives: ShotDirective[] = [];
-  
-  // ANALIZAR REF0 (se hará desde service.ts, aquí solo preparamos)
-  // El análisis real se hace en service.ts después de generar REF0
   
   if (focus === 'AVATAR') {
     directives = buildAvatarShotDirectives(shotCount, !!(refs?.productRef));
@@ -844,7 +772,6 @@ export async function buildUGCSessionPlanFromAnchor(
     directives = buildSceneShotDirectives(sceneAnalysis, productIsRelevant || false, shotCount);
   }
   
-  // Asegurar número correcto de shots
   while (directives.length < shotCount) {
     directives.push({
       key: `S${directives.length + 1}` as ShotKey,
