@@ -5,7 +5,7 @@ import {
   CATEGORY_LABELS 
 } from './types';
 import { ugcApiService, REF0Analysis as ApiREF0Analysis } from '../../services/ugcApiService';
-import { buildUGCSessionPlanFromAnchor, detectProductCategory, analyzeProductRelevance as analyzeProductRelevanceDirect } from './ugcDirectorService';
+import { buildUGCSessionPlanFromAnchor, analyzeProductRelevance as analyzeProductRelevanceDirect } from './ugcDirectorService';
 
 // ===================================================================
 // DETECCIÓN DE CATEGORÍA DE PRODUCTO (wrapper)
