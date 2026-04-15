@@ -141,7 +141,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       parts.push({ text: prompt });
 
-      const modelName = 'gemini-2.5-flash-image';
+      const modelName = 'imagen-3.0-fast-generate-001;
 
       const response = await ai.models.generateContent({
         model: modelName,
