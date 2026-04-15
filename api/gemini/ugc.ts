@@ -1,6 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from '@google/genai';
 
+// ===================================================================
+// CONFIGURACIÓN DE MODELOS - Estrategia de 3 niveles
+// ===================================================================
+const MODEL_PRIMARY = 'gemini-3.1-flash-image-preview';
+const MODEL_SECONDARY = 'gemini-2.5-pro-image-preview';
+const MODEL_TERTIARY = 'imagen-3.0-generate-001';
+
 function getCredentials(): Record<string, unknown> {
   const credentialsJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
   if (!credentialsJson) {
@@ -18,6 +25,7 @@ function getCredentials(): Record<string, unknown> {
 
 function getGenAIClient(): GoogleGenAI {
   const projectId = process.env.GCP_PROJECT_ID;
+  // CRÍTICO: Debe ser 'us-central1' para los modelos -image-preview
   const location = process.env.GCP_LOCATION || 'us-central1';
 
   if (!projectId) {
@@ -39,8 +47,46 @@ function cleanBase64(b64: string): string {
   return b64.replace(/^data:image\/(png|jpeg|webp);base64,/, '').replace(/\s/g, '');
 }
 
+// ===================================================================
+// GENERACIÓN CON FALLBACK (3 niveles)
+// ===================================================================
+async function generateImageWithFallback(
+  ai: GoogleGenAI,
+  parts: any[],
+  aspectRatio: string
+): Promise<string> {
+  const models = [MODEL_PRIMARY, MODEL_SECONDARY, MODEL_TERTIARY];
+  const errors: string[] = [];
+
+  for (const model of models) {
+    try {
+      console.log(`[UGC] Intentando con modelo: ${model}`);
+      const response = await ai.models.generateContent({
+        model: model,
+        contents: [{ role: 'user', parts }],
+        config: {
+          responseModalities: ['IMAGE'],
+          imageConfig: { aspectRatio: aspectRatio as any, imageSize: '1K' },
+        },
+      });
+
+      const imagePart = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.data);
+      if (imagePart?.inlineData?.data) {
+        console.log(`[UGC] Éxito con modelo: ${model}`);
+        return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+      }
+      errors.push(`${model}: no image data`);
+    } catch (error: any) {
+      console.warn(`[UGC] Modelo ${model} falló:`, error.message);
+      errors.push(`${model}: ${error.message}`);
+    }
+  }
+
+  throw new Error(`Todos los modelos fallaron: ${errors.join('; ')}`);
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Configurar CORS
+  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -75,8 +121,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const parts: any[] = [];
 
       if (referenceImages && referenceImages.length > 0) {
-        for (let i = 0; i < referenceImages.length; i++) {
-          const ref = referenceImages[i];
+        for (const ref of referenceImages) {
           if (ref.data && ref.data.length > 64) {
             parts.push({
               inlineData: {
@@ -90,27 +135,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       parts.push({ text: prompt });
 
-      const modelName = 'imagen-3.0-fast-generate-001';
-
-      const response = await ai.models.generateContent({
-        model: modelName,
-        contents: [{ role: 'user', parts }],
-        config: {
-          responseModalities: ['IMAGE'],
-          imageConfig: { aspectRatio: aspectRatio as any, imageSize: '1K' },
-        },
-      });
-
-      const imagePart = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.data);
-
-      if (!imagePart?.inlineData?.data) {
-        return res.status(422).json({ error: 'No image generated' });
-      }
-
-      return res.status(200).json({
-        success: true,
-        image: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
-      });
+      const image = await generateImageWithFallback(ai, parts, aspectRatio);
+      return res.status(200).json({ success: true, image });
     }
 
     // ===================================================================
@@ -126,8 +152,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const parts: any[] = [];
 
       if (referenceImages && referenceImages.length > 0) {
-        for (let i = 0; i < referenceImages.length; i++) {
-          const ref = referenceImages[i];
+        for (const ref of referenceImages) {
           if (ref.data && ref.data.length > 64) {
             parts.push({
               inlineData: {
@@ -141,31 +166,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       parts.push({ text: prompt });
 
-      const modelName = 'imagen-3.0-fast-generate-001';
-
-      const response = await ai.models.generateContent({
-        model: modelName,
-        contents: [{ role: 'user', parts }],
-        config: {
-          responseModalities: ['IMAGE'],
-          imageConfig: { aspectRatio: aspectRatio as any, imageSize: '1K' },
-        },
-      });
-
-      const imagePart = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.data);
-
-      if (!imagePart?.inlineData?.data) {
-        return res.status(422).json({ error: 'No image generated' });
-      }
-
-      return res.status(200).json({
-        success: true,
-        image: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
-      });
+      const image = await generateImageWithFallback(ai, parts, aspectRatio);
+      return res.status(200).json({ success: true, image });
     }
 
     // ===================================================================
-    // ACCIÓN: analyzeProductRelevance (texto)
+    // ACCIÓN: analyzeProductRelevance (texto con gemini-2.5-flash)
     // ===================================================================
     if (action === 'analyzeProductRelevance') {
       const { productRef, focus, outfitRef, sceneRef, sceneText } = payload;
@@ -244,7 +250,7 @@ Respond ONLY with JSON:
     }
 
     // ===================================================================
-    // ACCIÓN: analyzeREF0 (Analizar luz, espacio y pose de REF0)
+    // ACCIÓN: analyzeREF0 (gemini-2.5-flash)
     // ===================================================================
     if (action === 'analyzeREF0') {
       const { imageData, mimeType } = payload;
@@ -254,23 +260,23 @@ Respond ONLY with JSON:
         { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
         { text: `{
   "lighting": {
-    "primarySource": "string (e.g., 'window on the left', 'overhead soft light', 'natural light from behind camera')",
-    "direction": "string (e.g., 'left to right', 'top down', 'front facing')",
-    "colorTemperature": "string (e.g., 'warm golden', 'cool white', 'neutral daylight')",
-    "shadowType": "string (e.g., 'soft diffused', 'hard cast', 'minimal shadows')",
-    "intensity": "string (e.g., 'bright', 'dim', 'overcast')"
+    "primarySource": "string",
+    "direction": "string",
+    "colorTemperature": "string",
+    "shadowType": "string",
+    "intensity": "string"
   },
   "spatial": {
-    "elements": ["string (list all visible objects: furniture, decor, architectural features)"],
-    "walls": "string (description of walls: color, texture, any visible features)",
-    "floor": "string (description of floor: material, color, texture)",
-    "geometry": "string (description of room layout: 'rectangular', 'corner', 'open space')"
+    "elements": ["string"],
+    "walls": "string",
+    "floor": "string",
+    "geometry": "string"
   },
   "poseContext": {
     "hasSeating": "boolean",
     "hasLeaningSurface": "boolean",
     "hasTable": "boolean",
-    "availableActions": ["string (e.g., 'standing', 'sitting on sofa', 'leaning on wall', 'holding product')"]
+    "availableActions": ["string"]
   }
 }` }
       ];
@@ -289,7 +295,7 @@ Respond ONLY with JSON:
     }
 
     // ===================================================================
-    // ACCIÓN: analyzeOutfit (Analizar outfit)
+    // ACCIÓN: analyzeOutfit (gemini-2.5-flash)
     // ===================================================================
     if (action === 'analyzeOutfit') {
       const { imageData, mimeType } = payload;
@@ -328,7 +334,7 @@ Respond ONLY with JSON:
     }
 
     // ===================================================================
-    // ACCIÓN: analyzeScene (Analizar escena)
+    // ACCIÓN: analyzeScene (gemini-2.5-flash)
     // ===================================================================
     if (action === 'analyzeScene') {
       const { imageData, mimeType } = payload;
