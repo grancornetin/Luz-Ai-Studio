@@ -90,8 +90,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       parts.push({ text: prompt });
 
-      const modelName = 'gemini-3-flash-image-preview';
-
+      const modelName = 'gemini-3.1-flash-lite-preview';
+      
       const response = await ai.models.generateContent({
         model: modelName,
         contents: [{ role: 'user', parts }],
