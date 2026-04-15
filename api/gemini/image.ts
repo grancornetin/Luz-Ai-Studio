@@ -1,45 +1,37 @@
 // api/gemini/image.ts
-// Usa el SDK nuevo @google/genai con modo Vertex AI
-// Soporta modelos Gemini 3 de imagen correctamente
-//
-// ROUTING:
-//   PRO:   gemini-3-pro-image-preview     (identidad facial crítica)
-//   FLASH: gemini-3.1-flash-image-preview (sin identidad)
-//   FAST:  imagen-4.0-fast-generate-001   (máximo volumen)
+// ═══════════════════════════════════════════════════════════════
+// MODELOS VERIFICADOS (diagnostic 2026-04-14):
+//   PRO:   gemini-3-pro-image-preview     @ global
+//   FLASH: gemini-3.1-flash-image-preview @ global
+//   FAST:  gemini-2.5-flash-image         @ us-central1
+// ═══════════════════════════════════════════════════════════════
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from '@google/genai';
 
-function getCredentials(): Record<string, unknown> {
-  const credentialsJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-  if (!credentialsJson) {
-    throw new Error('Missing GOOGLE_SERVICE_ACCOUNT_KEY');
-  }
-  try {
-    const decoded = credentialsJson.startsWith('{')
-      ? credentialsJson
-      : Buffer.from(credentialsJson, 'base64').toString('utf-8');
-    return JSON.parse(decoded);
-  } catch {
-    throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY is not valid JSON or Base64.');
-  }
+// ── Ubicación correcta según modelo ──
+const MODEL_LOCATIONS: Record<string, string> = {
+  'gemini-3-pro-image-preview':     'global',
+  'gemini-3.1-flash-image-preview': 'global',
+  'gemini-2.5-flash-image':         'us-central1',
+};
+
+function getLocationForModel(model: string): string {
+  return MODEL_LOCATIONS[model] || 'us-central1';
 }
 
-function getGenAIClient(): GoogleGenAI {
-  const projectId = process.env.GCP_PROJECT_ID;
-  const location = process.env.GCP_LOCATION || 'us-central1';
+function getCredentials(): Record<string, unknown> {
+  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '';
+  const decoded = raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf-8');
+  return JSON.parse(decoded);
+}
 
-  if (!projectId) {
-    throw new Error('Missing GCP_PROJECT_ID');
-  }
-
-  const credentials = getCredentials();
-
+function getGenAIClient(location: string): GoogleGenAI {
   return new GoogleGenAI({
     vertexai: true,
-    project: projectId,
+    project: process.env.GCP_PROJECT_ID!,
     location,
-    googleAuthOptions: { credentials },
+    googleAuthOptions: { credentials: getCredentials() },
   });
 }
 
@@ -47,10 +39,7 @@ interface ImageRequest {
   action: 'generateImage' | 'generateImageFast';
   prompt: string;
   negative?: string;
-  referenceImages?: Array<{
-    data: string;
-    mimeType: string;
-  }>;
+  referenceImages?: Array<{ data: string; mimeType: string }>;
   model?: string;
   aspectRatio?: '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
 }
@@ -63,44 +52,32 @@ function corsHeaders(res: any) {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   corsHeaders(res);
-
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
     const body = req.body as ImageRequest;
-
-    if (!body.prompt) {
-      return res.status(400).json({ error: 'Missing prompt' });
-    }
+    if (!body.prompt) return res.status(400).json({ error: 'Missing prompt' });
 
     if (body.action === 'generateImage') {
-      return await handleGeminiImageGeneration(body, res);
+      return await handleImageGeneration(body, res);
     }
-
     if (body.action === 'generateImageFast') {
-      return await handleFastGeneration(body, res);
+      return await handleImageGeneration({ ...body, model: 'gemini-2.5-flash-image' }, res);
     }
 
     return res.status(400).json({ error: `Unknown action: ${body.action}` });
   } catch (error: any) {
-    console.error('Vertex AI image error:', error);
-    return res.status(500).json({
-      success: false,
-      error: error.message || 'Image generation failed',
-    });
+    console.error('Image error:', error);
+    return res.status(500).json({ success: false, error: error.message || 'Image generation failed' });
   }
 }
 
-// ── Gemini Image Generation (PRO o FLASH) usando @google/genai ──
-async function handleGeminiImageGeneration(
-  body: ImageRequest,
-  res: VercelResponse
-) {
-  const ai = getGenAIClient();
+async function handleImageGeneration(body: ImageRequest, res: VercelResponse) {
   const modelName = body.model || 'gemini-3-pro-image-preview';
+  const location = getLocationForModel(modelName);
+  const ai = getGenAIClient(location);
 
-  // Construir parts
   const parts: Array<any> = [];
 
   // Agregar imágenes de referencia
@@ -126,21 +103,18 @@ async function handleGeminiImageGeneration(
   }
   parts.push({ text: instruction });
 
-  // Llamar al modelo con config de imagen
-  // ✅ FIX: agregar role: "user" al contents
   const response = await ai.models.generateContent({
     model: modelName,
-    contents: [{ role: "user", parts }],
+    contents: [{ role: 'user', parts }],
     config: {
       responseModalities: ['TEXT', 'IMAGE'],
     },
   });
 
-  // Buscar imagen en la respuesta
+  // Buscar imagen en respuesta
   const candidates = response.candidates || [];
   for (const candidate of candidates) {
-    const candidateParts = candidate.content?.parts || [];
-    for (const part of candidateParts) {
+    for (const part of (candidate.content?.parts || [])) {
       if (part.inlineData?.data) {
         const mimeType = part.inlineData.mimeType || 'image/png';
         return res.status(200).json({
@@ -151,54 +125,12 @@ async function handleGeminiImageGeneration(
     }
   }
 
-  // Si no hay imagen, devolver texto de error
   const textContent = candidates[0]?.content?.parts
-    ?.map((p: any) => p.text || '')
-    .filter(Boolean)
-    .join('') || '';
+    ?.map((p: any) => p.text || '').filter(Boolean).join('') || '';
 
   return res.status(422).json({
     success: false,
     error: 'Model did not return an image',
     text: textContent,
-  });
-}
-
-// ── Fast Generation (Imagen 4 o fallback a Gemini Flash Image) ──
-async function handleFastGeneration(
-  body: ImageRequest,
-  res: VercelResponse
-) {
-  const ai = getGenAIClient();
-  // Para FAST, intentar con gemini-3.1-flash-image-preview (más compatible)
-  // Si el usuario quiere imagen-4.0, puede pasar el model explícitamente
-  const modelName = body.model || 'gemini-3.1-flash-image-preview';
-
-  // ✅ FIX: agregar role: "user" al contents
-  const response = await ai.models.generateContent({
-    model: modelName,
-    contents: [{ role: "user", parts: [{ text: body.prompt }] }],
-    config: {
-      responseModalities: ['TEXT', 'IMAGE'],
-    },
-  });
-
-  const candidates = response.candidates || [];
-  for (const candidate of candidates) {
-    const candidateParts = candidate.content?.parts || [];
-    for (const part of candidateParts) {
-      if (part.inlineData?.data) {
-        const mimeType = part.inlineData.mimeType || 'image/png';
-        return res.status(200).json({
-          success: true,
-          image: `data:${mimeType};base64,${part.inlineData.data}`,
-        });
-      }
-    }
-  }
-
-  return res.status(422).json({
-    success: false,
-    error: 'Fast model did not return an image',
   });
 }

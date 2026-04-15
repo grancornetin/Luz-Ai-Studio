@@ -1,48 +1,43 @@
+// api/gemini/ugc.ts
+// UGC Studio endpoint - usa modelos verificados con ubicación correcta
+//
+// MODELOS VERIFICADOS:
+//   PRO:  gemini-3-pro-image-preview     @ global
+//   FLASH: gemini-3.1-flash-image-preview @ global  
+//   FAST: gemini-2.5-flash-image         @ us-central1
+
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from '@google/genai';
 
-// ===================================================================
-// CONFIGURACIÓN DE MODELOS - SOLO MODELOS DISPONIBLES
-// ===================================================================
-// Nota: Los modelos -preview no están disponibles en todos los proyectos.
-// imagen-3.0-generate-001 es estable y funciona.
-const MODEL_PRIMARY = 'imagen-3.0-generate-001';
-const MODEL_SECONDARY = 'imagen-3.0-generate-001';
-const MODEL_TERTIARY = 'imagen-3.0-generate-001';
+// ── Modelos y ubicaciones verificadas ──
+const MODELS = {
+  PRO:  'gemini-3-pro-image-preview',
+  FLASH: 'gemini-3.1-flash-image-preview',
+  FAST: 'gemini-2.5-flash-image',
+  TEXT: 'gemini-2.5-flash',
+};
 
-// Delay entre reintentos para manejar quota 429 (milisegundos)
-const RETRY_DELAY_MS = 5000;
+const MODEL_LOCATIONS: Record<string, string> = {
+  [MODELS.PRO]:   'global',
+  [MODELS.FLASH]: 'global',
+  [MODELS.FAST]:  'us-central1',
+  [MODELS.TEXT]:  'us-central1',
+};
+
+const RETRY_DELAY_MS = 3000;
 
 function getCredentials(): Record<string, unknown> {
-  const credentialsJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-  if (!credentialsJson) {
-    throw new Error('Missing GOOGLE_SERVICE_ACCOUNT_KEY');
-  }
-  try {
-    const decoded = credentialsJson.startsWith('{')
-      ? credentialsJson
-      : Buffer.from(credentialsJson, 'base64').toString('utf-8');
-    return JSON.parse(decoded);
-  } catch {
-    throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY is not valid JSON or Base64.');
-  }
+  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '';
+  const decoded = raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf-8');
+  return JSON.parse(decoded);
 }
 
-function getGenAIClient(): GoogleGenAI {
-  const projectId = process.env.GCP_PROJECT_ID;
-  const location = process.env.GCP_LOCATION || 'us-central1';
-
-  if (!projectId) {
-    throw new Error('Missing GCP_PROJECT_ID');
-  }
-
-  const credentials = getCredentials();
-
+function getGenAIClient(location: string): GoogleGenAI {
   return new GoogleGenAI({
     vertexai: true,
-    project: projectId,
+    project: process.env.GCP_PROJECT_ID!,
     location,
-    googleAuthOptions: { credentials },
+    googleAuthOptions: { credentials: getCredentials() },
   });
 }
 
@@ -51,101 +46,113 @@ function cleanBase64(b64: string): string {
   return b64.replace(/^data:image\/(png|jpeg|webp);base64,/, '').replace(/\s/g, '');
 }
 
-// ===================================================================
-// ESPERA (para manejar rate limits)
-// ===================================================================
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// ===================================================================
-// GENERACIÓN CON FALLBACK Y MANEJO DE 429
-// ===================================================================
+// ── Generación con fallback entre modelos ──
 async function generateImageWithFallback(
-  ai: GoogleGenAI,
   parts: any[],
-  aspectRatio: string
+  aspectRatio: string,
+  preferredModel: string = MODELS.PRO
 ): Promise<string> {
-  const models = [MODEL_PRIMARY, MODEL_SECONDARY, MODEL_TERTIARY];
+  // Orden de fallback: modelo preferido → FLASH → FAST
+  const fallbackOrder = [preferredModel, MODELS.FLASH, MODELS.FAST]
+    .filter((v, i, a) => a.indexOf(v) === i); // eliminar duplicados
+
   const errors: string[] = [];
 
-  for (const model of models) {
-    for (let attempt = 1; attempt <= 3; attempt++) {
+  for (const model of fallbackOrder) {
+    const location = MODEL_LOCATIONS[model] || 'us-central1';
+    
+    for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        console.log(`[UGC] Intentando con modelo: ${model} (intento ${attempt})`);
+        console.log(`[UGC] Modelo: ${model} @ ${location} (intento ${attempt})`);
+        const ai = getGenAIClient(location);
+
         const response = await ai.models.generateContent({
-          model: model,
+          model,
           contents: [{ role: 'user', parts }],
           config: {
-            responseModalities: ['IMAGE'],
-            imageConfig: { aspectRatio: aspectRatio as any, imageSize: '1K' },
+            responseModalities: ['TEXT', 'IMAGE'],
           },
         });
 
-        const imagePart = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.data);
-        if (imagePart?.inlineData?.data) {
-          console.log(`[UGC] Éxito con modelo: ${model}`);
-          return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+        const candidates = response.candidates || [];
+        for (const candidate of candidates) {
+          for (const part of (candidate.content?.parts || [])) {
+            if (part.inlineData?.data) {
+              const mime = part.inlineData.mimeType || 'image/png';
+              return `data:${mime};base64,${part.inlineData.data}`;
+            }
+          }
         }
-        errors.push(`${model}: no image data`);
-      } catch (error: any) {
-        const msg = error?.message || '';
-        console.warn(`[UGC] Modelo ${model} falló (intento ${attempt}):`, msg);
-        
-        // Si es error 429 (quota excedida), esperar y reintentar
-        if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED')) {
-          console.log(`[UGC] Quota excedida, esperando ${RETRY_DELAY_MS}ms antes de reintentar...`);
+
+        errors.push(`${model}: no image in response`);
+        break; // No reintentar si respondió pero sin imagen
+      } catch (e: any) {
+        const msg = e.message || 'unknown';
+        errors.push(`${model} attempt ${attempt}: ${msg.slice(0, 100)}`);
+
+        if (msg.includes('429') && attempt < 2) {
+          console.log(`[UGC] Rate limited, waiting ${RETRY_DELAY_MS}ms...`);
           await delay(RETRY_DELAY_MS);
-          continue; // Reintentar con el mismo modelo
+          continue;
         }
-        
-        errors.push(`${model}: ${msg}`);
-        break; // Si no es 429, pasar al siguiente modelo
+        break; // Pasar al siguiente modelo en fallback
       }
     }
   }
 
-  throw new Error(`Todos los modelos fallaron: ${errors.join('; ')}`);
+  throw new Error(`All models failed: ${errors.join(' | ')}`);
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS
+// ── Análisis de texto ──
+async function analyzeWithText(prompt: string, images?: Array<{data: string; mimeType: string}>): Promise<any> {
+  const ai = getGenAIClient('us-central1');
+  const parts: any[] = [];
+
+  if (images) {
+    for (const img of images) {
+      parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
+    }
+  }
+  parts.push({ text: prompt });
+
+  const response = await ai.models.generateContent({
+    model: MODELS.TEXT,
+    contents: [{ role: 'user', parts }],
+    config: { responseMimeType: 'application/json' },
+  });
+
+  const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+  try { return JSON.parse(text); } catch { return {}; }
+}
+
+function corsHeaders(res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+// ── Handler principal ──
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  corsHeaders(res);
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { action, payload } = req.body;
+    const body = req.body;
+    const action = body.action;
 
-    if (!action) {
-      return res.status(400).json({ error: 'Missing action' });
-    }
-
-    const ai = getGenAIClient();
-
-    // ===================================================================
-    // ACCIÓN: generateImage0 (Master Anchor)
-    // ===================================================================
-    if (action === 'generateImage0') {
-      const { prompt, referenceImages, aspectRatio = '3:4' } = payload;
-
-      if (!prompt) {
-        return res.status(400).json({ error: 'Missing prompt' });
-      }
-
+    if (action === 'generateImage0' || action === 'generateDerivedShot') {
       const parts: any[] = [];
 
-      if (referenceImages && referenceImages.length > 0) {
-        for (const ref of referenceImages) {
-          if (ref.data && ref.data.length > 64) {
+      if (body.referenceImages && Array.isArray(body.referenceImages)) {
+        for (let i = 0; i < body.referenceImages.length; i++) {
+          const ref = body.referenceImages[i];
+          if (ref?.data) {
+            parts.push({ text: `REF${i}:` });
             parts.push({
               inlineData: {
                 mimeType: ref.mimeType || 'image/jpeg',
@@ -156,246 +163,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
-      parts.push({ text: prompt });
+      parts.push({ text: body.prompt || 'Generate an image' });
 
-      const image = await generateImageWithFallback(ai, parts, aspectRatio);
+      const preferredModel = body.model || MODELS.PRO;
+      const image = await generateImageWithFallback(parts, body.aspectRatio || '3:4', preferredModel);
+
       return res.status(200).json({ success: true, image });
     }
 
-    // ===================================================================
-    // ACCIÓN: generateDerivedShot (Shots derivados)
-    // ===================================================================
-    if (action === 'generateDerivedShot') {
-      const { prompt, referenceImages, aspectRatio = '3:4' } = payload;
+    if (action === 'analyzeProductRelevance' || action === 'analyzeText') {
+      const images: Array<{data: string; mimeType: string}> = [];
 
-      if (!prompt) {
-        return res.status(400).json({ error: 'Missing prompt' });
+      if (body.productRef?.data) {
+        images.push({ data: cleanBase64(body.productRef.data), mimeType: body.productRef.mimeType || 'image/jpeg' });
+      }
+      if (body.outfitRef?.data) {
+        images.push({ data: cleanBase64(body.outfitRef.data), mimeType: body.outfitRef.mimeType || 'image/jpeg' });
+      }
+      if (body.sceneRef?.data) {
+        images.push({ data: cleanBase64(body.sceneRef.data), mimeType: body.sceneRef.mimeType || 'image/jpeg' });
       }
 
-      const parts: any[] = [];
-
-      if (referenceImages && referenceImages.length > 0) {
-        for (const ref of referenceImages) {
-          if (ref.data && ref.data.length > 64) {
-            parts.push({
-              inlineData: {
-                mimeType: ref.mimeType || 'image/jpeg',
-                data: cleanBase64(ref.data),
-              },
-            });
-          }
-        }
-      }
-
-      parts.push({ text: prompt });
-
-      const image = await generateImageWithFallback(ai, parts, aspectRatio);
-      return res.status(200).json({ success: true, image });
-    }
-
-    // ===================================================================
-    // ACCIÓN: analyzeProductRelevance (texto con gemini-2.5-flash)
-    // ===================================================================
-    if (action === 'analyzeProductRelevance') {
-      const { productRef, focus, outfitRef, sceneRef, sceneText } = payload;
-
-      const parts: any[] = [];
-
-      if (productRef && productRef.data) {
-        parts.push({ text: 'PRODUCT IMAGE:' });
-        parts.push({
-          inlineData: {
-            mimeType: productRef.mimeType || 'image/jpeg',
-            data: cleanBase64(productRef.data),
-          },
-        });
-      }
-
-      if (focus === 'OUTFIT' && outfitRef?.data) {
-        parts.push({ text: 'OUTFIT REFERENCE:' });
-        parts.push({
-          inlineData: {
-            mimeType: outfitRef.mimeType || 'image/jpeg',
-            data: cleanBase64(outfitRef.data),
-          },
-        });
-      }
-
-      if (focus === 'SCENE' && sceneRef?.data) {
-        parts.push({ text: 'SCENE REFERENCE:' });
-        parts.push({
-          inlineData: {
-            mimeType: sceneRef.mimeType || 'image/jpeg',
-            data: cleanBase64(sceneRef.data),
-          },
-        });
-      }
-
-      const contextText = sceneText ? `Scene description: ${sceneText}` : '';
-
-      const directive = `
-You are analyzing if a product/object is relevant to a ${focus.toUpperCase()} context.
-
-${focus === 'OUTFIT' ? `
-OUTFIT CONTEXT:
-Determine if this product is a COMPLEMENT to the outfit:
-- YES if it is: jewelry, bag, belt, hat, scarf, shoes, or any accessory
-- NO if it is: electronics, food/drink, tools, or anything not meant to be worn
-` : focus === 'SCENE' ? `
-SCENE CONTEXT:
-Determine if this product/object is RELEVANT to the scene:
-- YES if it naturally belongs in this environment
-- NO if it feels out of place
-` : ''}
-
-${contextText}
-
-Respond ONLY with JSON:
-{
-  "isRelevant": boolean,
-  "suggestion": "brief explanation",
-  "productType": "jewelry|accessory|clothing|electronics|food|sports|home|other"
-}`;
-
-      parts.push({ text: directive });
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [{ role: 'user', parts }],
-        config: { responseMimeType: 'application/json' },
-      });
-
-      const text = response.text || '';
-      const clean = text.replace(/```json|```/g, '').trim();
-      const result = JSON.parse(clean);
-
-      return res.status(200).json({ success: true, ...result });
-    }
-
-    // ===================================================================
-    // ACCIÓN: analyzeREF0 (gemini-2.5-flash)
-    // ===================================================================
-    if (action === 'analyzeREF0') {
-      const { imageData, mimeType } = payload;
-
-      const parts: any[] = [
-        { text: "Analyze this image in detail. Respond ONLY with JSON." },
-        { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
-        { text: `{
-  "lighting": {
-    "primarySource": "string",
-    "direction": "string",
-    "colorTemperature": "string",
-    "shadowType": "string",
-    "intensity": "string"
-  },
-  "spatial": {
-    "elements": ["string"],
-    "walls": "string",
-    "floor": "string",
-    "geometry": "string"
-  },
-  "poseContext": {
-    "hasSeating": "boolean",
-    "hasLeaningSurface": "boolean",
-    "hasTable": "boolean",
-    "availableActions": ["string"]
-  }
-}` }
-      ];
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [{ role: 'user', parts }],
-        config: { responseMimeType: 'application/json' },
-      });
-
-      const text = response.text || '';
-      const clean = text.replace(/```json|```/g, '').trim();
-      const result = JSON.parse(clean);
-
-      return res.status(200).json(result);
-    }
-
-    // ===================================================================
-    // ACCIÓN: analyzeOutfit (gemini-2.5-flash)
-    // ===================================================================
-    if (action === 'analyzeOutfit') {
-      const { imageData, mimeType } = payload;
-
-      const parts: any[] = [
-        { text: "Analyze this outfit image. Respond ONLY with JSON." },
-        { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
-        { text: `{
-  "hasJacket": "boolean",
-  "hasPants": "boolean",
-  "hasShoes": "boolean",
-  "hasAccessories": "boolean",
-  "hasDetail": "boolean",
-  "fabricType": "string",
-  "colors": ["string"],
-  "hasTop": "boolean",
-  "hasBottom": "boolean",
-  "hasBelt": "boolean",
-  "hasBag": "boolean",
-  "hasHat": "boolean",
-  "hasNecklace": "boolean"
-}` }
-      ];
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [{ role: 'user', parts }],
-        config: { responseMimeType: 'application/json' },
-      });
-
-      const text = response.text || '';
-      const clean = text.replace(/```json|```/g, '').trim();
-      const result = JSON.parse(clean);
-
-      return res.status(200).json(result);
-    }
-
-    // ===================================================================
-    // ACCIÓN: analyzeScene (gemini-2.5-flash)
-    // ===================================================================
-    if (action === 'analyzeScene') {
-      const { imageData, mimeType } = payload;
-
-      const parts: any[] = [
-        { text: "Analyze this scene. Respond ONLY with JSON." },
-        { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
-        { text: `{
-  "hasFurniture": "boolean",
-  "hasNature": "boolean",
-  "hasEquipment": "boolean",
-  "hasTable": "boolean",
-  "hasSeating": "boolean",
-  "hasWindows": "boolean",
-  "hasProps": "boolean",
-  "sceneType": "string"
-}` }
-      ];
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [{ role: 'user', parts }],
-        config: { responseMimeType: 'application/json' },
-      });
-
-      const text = response.text || '';
-      const clean = text.replace(/```json|```/g, '').trim();
-      const result = JSON.parse(clean);
-
-      return res.status(200).json(result);
+      const result = await analyzeWithText(body.prompt || '', images.length > 0 ? images : undefined);
+      return res.status(200).json({ success: true, json: result, text: JSON.stringify(result) });
     }
 
     return res.status(400).json({ error: `Unknown action: ${action}` });
   } catch (error: any) {
-    console.error('UGC API error:', error);
-    return res.status(500).json({
-      success: false,
-      error: error.message || 'UGC generation failed',
-    });
+    console.error('UGC error:', error);
+    return res.status(500).json({ success: false, error: error.message || 'UGC generation failed' });
   }
 }

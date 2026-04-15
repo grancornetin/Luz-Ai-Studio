@@ -1,54 +1,37 @@
 // api/gemini/health.ts
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { VertexAI } from '@google-cloud/vertexai';
+import { GoogleGenAI } from '@google/genai';
 
-function getVertex(location: string = 'us-central1'): VertexAI {
-  const credentialsJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-  const projectId = process.env.GCP_PROJECT_ID;
-
-  if (!credentialsJson || !projectId) {
-    throw new Error('Missing GOOGLE_SERVICE_ACCOUNT_KEY or GCP_PROJECT_ID environment variables.');
-  }
-
-  let credentials: Record<string, unknown>;
-  try {
-    const decoded = credentialsJson.startsWith('{')
-      ? credentialsJson
-      : Buffer.from(credentialsJson, 'base64').toString('utf-8');
-    credentials = JSON.parse(decoded);
-  } catch {
-    throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY is not valid JSON or Base64.');
-  }
-
-  return new VertexAI({
-    project: projectId,
-    location,
-    googleAuthOptions: { credentials },
-  });
+function getCredentials(): Record<string, unknown> {
+  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '';
+  const decoded = raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf-8');
+  return JSON.parse(decoded);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    // gemini-2.5-flash funciona en us-central1
-    const vertex = getVertex('us-central1');
-    const model = vertex.getGenerativeModel({ model: 'gemini-2.5-flash' });
-    const result = await model.generateContent({
+    const ai = new GoogleGenAI({
+      vertexai: true,
+      project: process.env.GCP_PROJECT_ID!,
+      location: 'us-central1',
+      googleAuthOptions: { credentials: getCredentials() },
+    });
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
       contents: [{ role: 'user', parts: [{ text: 'Respond with only: OK' }] }],
     });
 
-    const text = result.response.candidates?.[0]?.content?.parts?.[0];
+    const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     return res.status(200).json({
       success: true,
       status: 'connected',
-      project: process.env.GCP_PROJECT_ID || 'unknown',
-      model_response: (text as any)?.text || 'no response',
+      project: process.env.GCP_PROJECT_ID,
+      model_response: text,
       timestamp: new Date().toISOString(),
     });
   } catch (error: any) {
@@ -56,11 +39,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: false,
       status: 'error',
       error: error.message,
-      hint: !process.env.GCP_PROJECT_ID
-        ? 'Missing GCP_PROJECT_ID env variable'
-        : !process.env.GOOGLE_SERVICE_ACCOUNT_KEY
-          ? 'Missing GOOGLE_SERVICE_ACCOUNT_KEY env variable'
-          : 'Check Service Account permissions for Vertex AI API',
     });
   }
 }
