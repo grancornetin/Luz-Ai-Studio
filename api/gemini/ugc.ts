@@ -1,28 +1,15 @@
 // api/gemini/ugc.ts
-// UGC Studio endpoint - usa modelos verificados con ubicación correcta
-//
+// ═══════════════════════════════════════════════════════════════
 // MODELOS VERIFICADOS:
-//   PRO:  gemini-3-pro-image-preview     @ global
-//   FLASH: gemini-3.1-flash-image-preview @ global  
-//   FAST: gemini-2.5-flash-image         @ us-central1
+//   PRO:  gemini-3-pro-image-preview     @ global       (entiende referencias)
+//   TEXT: gemini-2.5-flash               @ us-central1  (análisis)
+//
+// IMPORTANTE: imagen-3.0 NO entiende referencias de imagen.
+// Para UGC con identidad DEBE usarse gemini-3-pro-image-preview.
+// ═══════════════════════════════════════════════════════════════
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from '@google/genai';
-
-// ── Modelos y ubicaciones verificadas ──
-const MODELS = {
-  PRO:  'gemini-3-pro-image-preview',
-  FLASH: 'gemini-3.1-flash-image-preview',
-  FAST: 'gemini-2.5-flash-image',
-  TEXT: 'gemini-2.5-flash',
-};
-
-const MODEL_LOCATIONS: Record<string, string> = {
-  [MODELS.PRO]:   'global',
-  [MODELS.FLASH]: 'global',
-  [MODELS.FAST]:  'us-central1',
-  [MODELS.TEXT]:  'us-central1',
-};
 
 const RETRY_DELAY_MS = 3000;
 
@@ -50,56 +37,55 @@ function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// ── Generación con fallback entre modelos ──
-async function generateImageWithFallback(
+// ── Generación de imagen con modelo PRO @ global ──
+async function generateImage(
   parts: any[],
-  aspectRatio: string,
-  preferredModel: string = MODELS.PRO
+  aspectRatio: string
 ): Promise<string> {
-  // Orden de fallback: modelo preferido → FLASH → FAST
-  const fallbackOrder = [preferredModel, MODELS.FLASH, MODELS.FAST]
-    .filter((v, i, a) => a.indexOf(v) === i); // eliminar duplicados
+  // Modelos en orden de fallback — todos en global
+  const models = [
+    { name: 'gemini-3-pro-image-preview', location: 'global' },
+    { name: 'gemini-3.1-flash-image-preview', location: 'global' },
+    { name: 'gemini-2.5-flash-image', location: 'us-central1' },
+  ];
 
   const errors: string[] = [];
 
-  for (const model of fallbackOrder) {
-    const location = MODEL_LOCATIONS[model] || 'us-central1';
-    
+  for (const model of models) {
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        console.log(`[UGC] Modelo: ${model} @ ${location} (intento ${attempt})`);
-        const ai = getGenAIClient(location);
+        console.log(`[UGC] Modelo: ${model.name} @ ${model.location} (intento ${attempt})`);
+        const ai = getGenAIClient(model.location);
 
         const response = await ai.models.generateContent({
-          model,
+          model: model.name,
           contents: [{ role: 'user', parts }],
           config: {
             responseModalities: ['TEXT', 'IMAGE'],
           },
         });
 
+        // Buscar imagen en respuesta
         const candidates = response.candidates || [];
         for (const candidate of candidates) {
           for (const part of (candidate.content?.parts || [])) {
             if (part.inlineData?.data) {
               const mime = part.inlineData.mimeType || 'image/png';
+              console.log(`[UGC] Éxito con ${model.name}`);
               return `data:${mime};base64,${part.inlineData.data}`;
             }
           }
         }
-
-        errors.push(`${model}: no image in response`);
-        break; // No reintentar si respondió pero sin imagen
+        errors.push(`${model.name}: no image in response`);
+        break;
       } catch (e: any) {
         const msg = e.message || 'unknown';
-        errors.push(`${model} attempt ${attempt}: ${msg.slice(0, 100)}`);
-
+        errors.push(`${model.name} #${attempt}: ${msg.slice(0, 100)}`);
         if (msg.includes('429') && attempt < 2) {
-          console.log(`[UGC] Rate limited, waiting ${RETRY_DELAY_MS}ms...`);
           await delay(RETRY_DELAY_MS);
           continue;
         }
-        break; // Pasar al siguiente modelo en fallback
+        break;
       }
     }
   }
@@ -107,51 +93,48 @@ async function generateImageWithFallback(
   throw new Error(`All models failed: ${errors.join(' | ')}`);
 }
 
-// ── Análisis de texto ──
-async function analyzeWithText(prompt: string, images?: Array<{data: string; mimeType: string}>): Promise<any> {
+// ── Análisis de texto con gemini-2.5-flash @ us-central1 ──
+async function analyzeText(parts: any[]): Promise<any> {
   const ai = getGenAIClient('us-central1');
-  const parts: any[] = [];
-
-  if (images) {
-    for (const img of images) {
-      parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
-    }
-  }
-  parts.push({ text: prompt });
-
   const response = await ai.models.generateContent({
-    model: MODELS.TEXT,
+    model: 'gemini-2.5-flash',
     contents: [{ role: 'user', parts }],
     config: { responseMimeType: 'application/json' },
   });
 
   const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-  try { return JSON.parse(text); } catch { return {}; }
+  const clean = text.replace(/```json|```/g, '').trim();
+  return JSON.parse(clean);
 }
 
-function corsHeaders(res: any) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-}
 
-// ── Handler principal ──
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  corsHeaders(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const body = req.body;
-    const action = body.action;
+    // Frontend envía: { action, payload: { ... } }
+    const { action, payload } = req.body;
 
-    if (action === 'generateImage0' || action === 'generateDerivedShot') {
+    if (!action) return res.status(400).json({ error: 'Missing action' });
+
+    // ═══════════════════════════════════════════════════════════
+    // generateImage0 — Imagen ancla (Master/REF0)
+    // ═══════════════════════════════════════════════════════════
+    if (action === 'generateImage0') {
+      const { prompt, referenceImages, aspectRatio = '3:4' } = payload;
+      if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
+
       const parts: any[] = [];
 
-      if (body.referenceImages && Array.isArray(body.referenceImages)) {
-        for (let i = 0; i < body.referenceImages.length; i++) {
-          const ref = body.referenceImages[i];
-          if (ref?.data) {
+      // Inyectar referencias (el modelo PRO las entiende)
+      if (referenceImages && referenceImages.length > 0) {
+        for (let i = 0; i < referenceImages.length; i++) {
+          const ref = referenceImages[i];
+          if (ref.data && ref.data.length > 64) {
             parts.push({ text: `REF${i}:` });
             parts.push({
               inlineData: {
@@ -163,34 +146,159 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
-      parts.push({ text: body.prompt || 'Generate an image' });
+      parts.push({ text: prompt });
 
-      const preferredModel = body.model || MODELS.PRO;
-      const image = await generateImageWithFallback(parts, body.aspectRatio || '3:4', preferredModel);
-
+      const image = await generateImage(parts, aspectRatio);
       return res.status(200).json({ success: true, image });
     }
 
-    if (action === 'analyzeProductRelevance' || action === 'analyzeText') {
-      const images: Array<{data: string; mimeType: string}> = [];
+    // ═══════════════════════════════════════════════════════════
+    // generateDerivedShot — Shots derivados del ancla
+    // ═══════════════════════════════════════════════════════════
+    if (action === 'generateDerivedShot') {
+      const { prompt, referenceImages, aspectRatio = '3:4' } = payload;
+      if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
 
-      if (body.productRef?.data) {
-        images.push({ data: cleanBase64(body.productRef.data), mimeType: body.productRef.mimeType || 'image/jpeg' });
-      }
-      if (body.outfitRef?.data) {
-        images.push({ data: cleanBase64(body.outfitRef.data), mimeType: body.outfitRef.mimeType || 'image/jpeg' });
-      }
-      if (body.sceneRef?.data) {
-        images.push({ data: cleanBase64(body.sceneRef.data), mimeType: body.sceneRef.mimeType || 'image/jpeg' });
+      const parts: any[] = [];
+
+      if (referenceImages && referenceImages.length > 0) {
+        for (let i = 0; i < referenceImages.length; i++) {
+          const ref = referenceImages[i];
+          if (ref.data && ref.data.length > 64) {
+            parts.push({ text: `REF${i}:` });
+            parts.push({
+              inlineData: {
+                mimeType: ref.mimeType || 'image/jpeg',
+                data: cleanBase64(ref.data),
+              },
+            });
+          }
+        }
       }
 
-      const result = await analyzeWithText(body.prompt || '', images.length > 0 ? images : undefined);
-      return res.status(200).json({ success: true, json: result, text: JSON.stringify(result) });
+      parts.push({ text: prompt });
+
+      const image = await generateImage(parts, aspectRatio);
+      return res.status(200).json({ success: true, image });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // analyzeProductRelevance — Texto con visión
+    // ═══════════════════════════════════════════════════════════
+    if (action === 'analyzeProductRelevance') {
+      const { productRef, focus, outfitRef, sceneRef, sceneText } = payload;
+
+      const parts: any[] = [];
+
+      if (productRef?.data) {
+        parts.push({ text: 'PRODUCT IMAGE:' });
+        parts.push({
+          inlineData: {
+            mimeType: productRef.mimeType || 'image/jpeg',
+            data: cleanBase64(productRef.data),
+          },
+        });
+      }
+
+      if (focus === 'OUTFIT' && outfitRef?.data) {
+        parts.push({ text: 'OUTFIT REFERENCE:' });
+        parts.push({
+          inlineData: {
+            mimeType: outfitRef.mimeType || 'image/jpeg',
+            data: cleanBase64(outfitRef.data),
+          },
+        });
+      }
+
+      if (focus === 'SCENE' && sceneRef?.data) {
+        parts.push({ text: 'SCENE REFERENCE:' });
+        parts.push({
+          inlineData: {
+            mimeType: sceneRef.mimeType || 'image/jpeg',
+            data: cleanBase64(sceneRef.data),
+          },
+        });
+      }
+
+      const contextText = sceneText ? `Scene description: ${sceneText}` : '';
+
+      parts.push({ text: `
+You are analyzing if a product/object is relevant to a ${focus?.toUpperCase()} context.
+${focus === 'OUTFIT' ? 'Determine if this product is a COMPLEMENT to the outfit (jewelry, bag, belt, shoes = YES).' : ''}
+${focus === 'SCENE' ? 'Determine if this product naturally belongs in this environment.' : ''}
+${contextText}
+Respond ONLY with JSON:
+{ "isRelevant": boolean, "suggestion": "brief explanation", "productType": "jewelry|accessory|clothing|electronics|food|sports|home|other" }
+` });
+
+      const result = await analyzeText(parts);
+      return res.status(200).json({ success: true, ...result });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // analyzeREF0 — Análisis de luz/espacio/pose
+    // ═══════════════════════════════════════════════════════════
+    if (action === 'analyzeREF0') {
+      const { imageData, mimeType } = payload;
+
+      const parts: any[] = [
+        { text: "Analyze this image in detail. Respond ONLY with JSON." },
+        { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
+        { text: `{
+  "lighting": { "primarySource": "string", "direction": "string", "colorTemperature": "string", "shadowType": "string", "intensity": "string" },
+  "spatial": { "elements": ["string"], "walls": "string", "floor": "string", "geometry": "string" },
+  "poseContext": { "hasSeating": "boolean", "hasLeaningSurface": "boolean", "hasTable": "boolean", "availableActions": ["string"] }
+}` },
+      ];
+
+      const result = await analyzeText(parts);
+      return res.status(200).json(result);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // analyzeOutfit — Análisis de outfit
+    // ═══════════════════════════════════════════════════════════
+    if (action === 'analyzeOutfit') {
+      const { imageData, mimeType } = payload;
+
+      const parts: any[] = [
+        { text: "Analyze this outfit image. Respond ONLY with JSON." },
+        { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
+        { text: `{
+  "hasJacket": "boolean", "hasPants": "boolean", "hasShoes": "boolean", "hasAccessories": "boolean",
+  "hasDetail": "boolean", "fabricType": "string", "colors": ["string"],
+  "hasTop": "boolean", "hasBottom": "boolean", "hasBelt": "boolean", "hasBag": "boolean",
+  "hasHat": "boolean", "hasNecklace": "boolean"
+}` },
+      ];
+
+      const result = await analyzeText(parts);
+      return res.status(200).json(result);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // analyzeScene — Análisis de escena
+    // ═══════════════════════════════════════════════════════════
+    if (action === 'analyzeScene') {
+      const { imageData, mimeType } = payload;
+
+      const parts: any[] = [
+        { text: "Analyze this scene. Respond ONLY with JSON." },
+        { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
+        { text: `{
+  "hasFurniture": "boolean", "hasNature": "boolean", "hasEquipment": "boolean",
+  "hasTable": "boolean", "hasSeating": "boolean", "hasWindows": "boolean",
+  "hasProps": "boolean", "sceneType": "string"
+}` },
+      ];
+
+      const result = await analyzeText(parts);
+      return res.status(200).json(result);
     }
 
     return res.status(400).json({ error: `Unknown action: ${action}` });
   } catch (error: any) {
-    console.error('UGC error:', error);
+    console.error('UGC API error:', error);
     return res.status(500).json({ success: false, error: error.message || 'UGC generation failed' });
   }
 }
