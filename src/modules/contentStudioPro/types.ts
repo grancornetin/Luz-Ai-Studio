@@ -14,7 +14,7 @@ export type ProductCategory =
   | 'GENERIC';
 
 // ===================================================================
-// SHOT ROLE SYSTEM - CON detailTarget
+// SHOT ROLE SYSTEM - VERSIÓN COMPLETA
 // ===================================================================
 
 export type ShotRole = 
@@ -43,7 +43,9 @@ export type DetailTarget =
   | 'hem'
   | 'material'
   | 'logo'
-  | 'feature';
+  | 'feature'
+  | 'face'        // Para AVATAR detail
+  | 'hand_gesture'; // Para AVATAR interacción
 
 export type ShotFraming = 'CLOSE_UP' | 'MEDIUM' | 'WIDE' | 'EXTREME_CLOSE' | 'SELFIE';
 
@@ -70,14 +72,18 @@ export type ShotExclusion =
   | 'environment_dominance'
   | 'third_person_perspective'
   | 'product_dominance'
-  | 'background_dominance';
+  | 'background_dominance'
+  | 'beautification'
+  | 'editorial_softening'
+  | 'studio_polish'
+  | 'luxury_redesign';
 
 export type ShotIntensity = 'normal' | 'aggressive' | 'extreme';
 
 export interface ShotDirective {
   key: ShotKey;
   role: ShotRole;
-  detailTarget?: DetailTarget;  // NUEVO: específico para DETAIL shots
+  detailTarget?: DetailTarget;
   purpose: string;
   requiredElements: string[];
   forbiddenElements: string[];
@@ -89,7 +95,7 @@ export interface ShotDirective {
 }
 
 // ===================================================================
-// REF0 ANALYSIS - LIGHTING + SPATIAL + POSE ANCHORS
+// REF0 ANALYSIS - PARA CONGELAR LUZ, ESPACIO Y POSE
 // ===================================================================
 
 export interface REF0Analysis {
@@ -139,6 +145,7 @@ export interface ContentStudioProSet {
   sceneText?: string;
   faceAnchorUrl?: string | null;
   image0Url?: string | null;
+  ref0Analysis?: REF0Analysis;  // NUEVO: análisis guardado
   shots: Shot[];
   attemptsImage0: number;
 }
@@ -209,7 +216,9 @@ export const DETAIL_TARGET_LABELS: Record<DetailTarget, string> = {
   hem: 'Bajo',
   material: 'Material',
   logo: 'Logotipo',
-  feature: 'Característica'
+  feature: 'Característica',
+  face: 'Rostro',
+  hand_gesture: 'Gesto de mano'
 };
 
 export const COMPOSITION_LABELS: Record<ShotComposition, string> = {
@@ -225,7 +234,7 @@ export const COMPOSITION_LABELS: Record<ShotComposition, string> = {
 };
 
 export function getShotCount(focus: Focus, productSize?: ProductSize): number {
-  return 6;
+  return 6; // TODOS 6 SHOTS
 }
 
 export function getShotKeys(count: number): ShotKey[] {
@@ -309,14 +318,14 @@ export function shouldShowComplementCheckbox(focus: Focus, hasProduct: boolean):
 
 export function getShotCountText(focus: Focus, productSize?: ProductSize): string {
   const count = getShotCount(focus, productSize);
-  return `${count} ${count === 6 ? 'shots' : 'shots'}`;
+  return `${count} shots`;
 }
 
 export function getFocusDescription(focus: Focus): string {
   const descriptions: Record<Focus, string> = {
-    AVATAR: 'Influencer digital. Selfie obligatoria. Expresiones auténticas. Colaboración con marca si hay producto.',
-    PRODUCT: 'Review de producto. El avatar convence al cliente con emoción real. Texturas, uso y deseo.',
-    OUTFIT: 'Try-on haul. El avatar modela la ropa. Texturas, silueta y estilo completo.',
+    AVATAR: 'Influencer digital. Selfie obligatoria. Expresiones auténticas. El rostro es el héroe.',
+    PRODUCT: 'Review de producto. El avatar convence al cliente con emoción real. Producto y cara visibles.',
+    OUTFIT: 'Try-on haul. La ropa es la protagonista. Silueta, texturas y estilo completo.',
     SCENE: 'Review de lugar. El avatar vive el espacio. Ambiente, interacciones y experiencia.'
   };
   return descriptions[focus];

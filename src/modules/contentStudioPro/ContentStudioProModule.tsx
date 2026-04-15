@@ -23,7 +23,8 @@ import {
   getFocusDescription,
   ROLE_LABELS,
   COMPOSITION_LABELS,
-  CATEGORY_LABELS
+  CATEGORY_LABELS,
+  REF0Analysis
 } from './types';
 import { contentStudioService } from './service';
 import { contentStudioStorage } from './storage';
@@ -49,6 +50,7 @@ interface BatchSession {
   currentShotIndex: number;
   totalShots: number;
   ref0Url?: string;
+  ref0Analysis?: REF0Analysis;
   shotUrls: (string | null)[];
   progress: number;
 }
@@ -86,12 +88,13 @@ const ContentStudioProModule: React.FC = () => {
   const [loadingMsg, setLoadingMsg] = useState('');
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [sessionPlan, setSessionPlan] = useState<any>(null);
+  const [ref0Analysis, setRef0Analysis] = useState<REF0Analysis | undefined>(undefined);
   
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-  const [shotCount, setShotCount] = useState(4);
+  const [shotCount, setShotCount] = useState(6); // Ahora siempre 6
 
   const { checkAndDeduct, showNoCredits, requiredCredits, closeModal, refundCredits } = useCreditGuard();
 
@@ -166,6 +169,7 @@ const ContentStudioProModule: React.FC = () => {
     useProduct: boolean,
     plan: any,
     approvedRef0: string,
+    analysis: REF0Analysis,
     onProgress: (sessionId: string, shotIndex: number, shotUrl: string) => void
   ): Promise<ContentStudioProSet | null> => {
     try {
@@ -193,6 +197,7 @@ const ContentStudioProModule: React.FC = () => {
         sceneRef,
         sceneText,
         image0Url: approvedRef0,
+        ref0Analysis: analysis,
         attemptsImage0: 1,
         shots
       };
@@ -200,19 +205,22 @@ const ContentStudioProModule: React.FC = () => {
       for (let i = 0; i < shots.length; i++) {
         if (cancelBatch) return null;
         
-        const shot = shots[i] as any;
+        const shot = shots[i];
         const focusRef = useProduct ? productRef : null;
         
         const url = await contentStudioService.generateDerivedShot(
           approvedRef0,
           faceRefs[0],
-          focusRef || null,
+          outfitRef,
+          focusRef,
+          sceneRef,
           FIXED_STYLE,
           focus,
           shot.key,
           productSize,
           plan,
-          useProduct
+          useProduct,
+          analysis
         );
 
         shot.imageUrl = url;
@@ -241,10 +249,10 @@ const ContentStudioProModule: React.FC = () => {
       return null;
     }
   };
+
   const startBatchGeneration = async () => {
     if (!validateReferences()) return;
     
-    // Deducir créditos para todas las sesiones al inicio
     let deductedCount = 0;
     for (let i = 0; i < batchCount; i++) {
       const ok = await checkAndDeduct(CREDIT_COSTS.UGC_PER_SHOT);
@@ -267,14 +275,14 @@ const ContentStudioProModule: React.FC = () => {
       
       const plan = await contentStudioService.buildSessionPlan(
         focus,
-        { productRef, outfitRef, sceneRef, sceneText } as any,
+        { productRef, outfitRef, sceneRef, sceneText },
         focus === 'PRODUCT' ? productSize : undefined,
         useProduct
       );
       setSessionPlan(plan);
 
       setLoadingMsg('Generando imagen base (REF0)...');
-      const approvedRef0 = await contentStudioService.generateImage0(
+      const { imageUrl: approvedRef0, analysis } = await contentStudioService.generateImage0(
         faceRefs[0],
         productRef,
         outfitRef,
@@ -297,14 +305,13 @@ const ContentStudioProModule: React.FC = () => {
           totalShots: shotCount,
           shotUrls: new Array(shotCount).fill(null),
           progress: 0,
-          ref0Url: approvedRef0
+          ref0Url: approvedRef0,
+          ref0Analysis: analysis
         });
       }
       setBatchSessions(initialSessions);
 
-      // Función para procesar UNA sesión individual
       const processSingleSession = async (session: BatchSession, sessionIndex: number) => {
-        // Actualizar estado a "generando"
         setBatchSessions(prev => prev.map((s, idx) => 
           idx === sessionIndex ? { ...s, status: 'generating_shots', progress: 10 } : s
         ));
@@ -324,7 +331,7 @@ const ContentStudioProModule: React.FC = () => {
           }));
         };
         
-        const completedSet = await generateSingleBatchSession(session, useProduct, plan, approvedRef0, updateProgress);
+        const completedSet = await generateSingleBatchSession(session, useProduct, plan, approvedRef0, analysis, updateProgress);
         
         if (completedSet && !cancelBatch) {
           setBatchSessions(prev => prev.map(s => 
@@ -337,23 +344,11 @@ const ContentStudioProModule: React.FC = () => {
         }
       };
 
-      // 🔥 LO NUEVO: Procesar en GRUPOS DE 2 en paralelo
       for (let i = 0; i < initialSessions.length; i += 2) {
-        // Tomar el grupo de 2 (o menos si es el último)
         const group = initialSessions.slice(i, i + 2);
-        
-        // Actualizar la UI para mostrar qué sesión(es) se están generando
         setBatchCurrentSessionIndex(i);
-        
-        // Crear un array de promesas para las sesiones del grupo
-        const promises = group.map((session, groupIdx) => 
-          processSingleSession(session, i + groupIdx)
-        );
-        
-        // Ejecutar TODAS las del grupo en PARALELO
+        const promises = group.map((session, groupIdx) => processSingleSession(session, i + groupIdx));
         await Promise.all(promises);
-        
-        // Pequeña pausa entre grupos para no saturar la API
         if (i + 2 < initialSessions.length) {
           await delay(2000);
         }
@@ -398,14 +393,14 @@ const ContentStudioProModule: React.FC = () => {
       
       const plan = await contentStudioService.buildSessionPlan(
         focus,
-        { productRef, outfitRef, sceneRef, sceneText } as any,
+        { productRef, outfitRef, sceneRef, sceneText },
         focus === 'PRODUCT' ? productSize : undefined,
         useProduct
       );
       setSessionPlan(plan);
 
       setLoadingMsg('Sincronizando identidad y generando Master...');
-      const image0 = await contentStudioService.generateImage0(
+      const { imageUrl: image0, analysis } = await contentStudioService.generateImage0(
         faceRefs[0],
         productRef,
         outfitRef,
@@ -416,6 +411,7 @@ const ContentStudioProModule: React.FC = () => {
         focus === 'PRODUCT' ? productSize : undefined,
         useProduct
       );
+      setRef0Analysis(analysis);
 
       const shotKeys = getShotKeys(shotCount);
       const initialShots = shotKeys.map((key, idx) => ({
@@ -441,13 +437,13 @@ const ContentStudioProModule: React.FC = () => {
         sceneRef,
         sceneText,
         image0Url: image0,
+        ref0Analysis: analysis,
         attemptsImage0: 1,
         shots: initialShots
       };
 
       setCurrentSet(newSet);
 
-      // Guardar Master en historial
       generationHistoryService.save({
         imageUrl: image0,
         module: 'content_studio_pro',
@@ -473,7 +469,7 @@ const ContentStudioProModule: React.FC = () => {
         ? (currentSet.productRef !== null) 
         : true;
         
-      const image0 = await contentStudioService.generateImage0(
+      const { imageUrl: image0, analysis } = await contentStudioService.generateImage0(
         currentSet.faceRefs[0],
         currentSet.productRef || null,
         currentSet.outfitRef || null,
@@ -488,9 +484,11 @@ const ContentStudioProModule: React.FC = () => {
       setCurrentSet({
         ...currentSet,
         image0Url: image0,
+        ref0Analysis: analysis,
         attemptsImage0: currentSet.attemptsImage0 + 1,
         style: FIXED_STYLE as any
       });
+      setRef0Analysis(analysis);
       setStep('checkpoint');
     } catch (e: any) {
       setErrorStatus(`Error: ${e.message}`);
@@ -516,7 +514,7 @@ const ContentStudioProModule: React.FC = () => {
     const updatedShots = [...producingSet.shots];
 
     for (let i = 0; i < updatedShots.length; i++) {
-      const shot = updatedShots[i] as any;
+      const shot = updatedShots[i];
       setLoadingMsg(`Capturando Shot ${i + 1}/${updatedShots.length}...`);
 
       shot.status = 'generating';
@@ -528,13 +526,16 @@ const ContentStudioProModule: React.FC = () => {
         const url = await contentStudioService.generateDerivedShot(
           producingSet.image0Url!,
           producingSet.faceRefs[0],
-          focusRef || null,
+          producingSet.outfitRef,
+          focusRef,
+          producingSet.sceneRef,
           FIXED_STYLE,
           focus,
           shot.key,
           producingSet.productSize,
           sessionPlan,
-          useProduct
+          useProduct,
+          producingSet.ref0Analysis
         );
 
         shot.imageUrl = url;
@@ -542,7 +543,6 @@ const ContentStudioProModule: React.FC = () => {
         shot.attempts = 1;
         shot.errorMsg = null;
 
-        // Guardar en historial (background)
         generationHistoryService.save({
           imageUrl: url,
           module: 'content_studio_pro',
@@ -591,13 +591,16 @@ const ContentStudioProModule: React.FC = () => {
       const url = await contentStudioService.generateDerivedShot(
         targetSet.image0Url,
         targetSet.faceRefs[0],
-        focusRef || null,
+        targetSet.outfitRef,
+        focusRef,
+        targetSet.sceneRef,
         FIXED_STYLE,
         targetSet.focus,
         key,
         targetSet.productSize,
         sessionPlan,
-        useProduct
+        useProduct,
+        targetSet.ref0Analysis
       );
 
       updatedShots[shotIndex] = {
@@ -611,7 +614,7 @@ const ContentStudioProModule: React.FC = () => {
       updatedShots[shotIndex] = {
         ...shot,
         status: 'error',
-        errorMsg: e?.message || 'Error desconocido'
+        errorMsg: e?.message || 'Error desconocido al regenerar'
       };
     }
 
@@ -646,7 +649,7 @@ const ContentStudioProModule: React.FC = () => {
 
   const downloadSelectedSets = async () => {
     if (selectedSets.size === 0) {
-      alert('Selecciona al menos una sesión');
+      alert('Selecciona al menos una sesión para descargar');
       return;
     }
 
@@ -841,7 +844,7 @@ const ContentStudioProModule: React.FC = () => {
           </div>
         </header>
 
-        {/* SETUP */}
+        {/* SETUP - se mantiene igual, pero el botón de generación ya usa la nueva lógica */}
         {step === 'setup' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10 px-4 md:px-0">
             <div className="lg:col-span-5">
@@ -1125,7 +1128,7 @@ const ContentStudioProModule: React.FC = () => {
           </div>
         )}
 
-        {/* GENERACIÓN EN MASA - UI DE PROGRESO */}
+        {/* GENERACIÓN EN MASA - UI DE PROGRESO (se mantiene) */}
         {step === 'batch_generating' && (
           <div className="min-h-[600px] bg-slate-900 rounded-[40px] border-8 border-slate-800 shadow-2xl p-6 md:p-10 mx-4 animate-in zoom-in">
             <div className="flex justify-between items-center mb-6">
@@ -1164,7 +1167,6 @@ const ContentStudioProModule: React.FC = () => {
                     <span className="text-[8px] text-slate-400">{getStatusText(session.status, session.currentShotIndex, session.totalShots)}</span>
                   </div>
 
-                  {/* REF0 - más grande */}
                   <div
                     className="aspect-[3/4] bg-slate-800 rounded-xl overflow-hidden cursor-pointer mb-3 relative group"
                     onClick={() => session.ref0Url && openBatchImage(session, 'ref0')}
@@ -1188,7 +1190,6 @@ const ContentStudioProModule: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Shots - grid de miniaturas */}
                   <div className="grid grid-cols-4 gap-1 mb-3">
                     {Array.from({ length: session.totalShots }).map((_, idx) => (
                       <div
@@ -1214,15 +1215,10 @@ const ContentStudioProModule: React.FC = () => {
                     ))}
                   </div>
 
-                  {/* Barra de progreso */}
                   <div className="w-full bg-slate-700 rounded-full h-1.5 mb-3">
-                    <div
-                      className="bg-brand-500 h-1.5 rounded-full transition-all duration-300"
-                      style={{ width: `${session.progress}%` }}
-                    />
+                    <div className="bg-brand-500 h-1.5 rounded-full transition-all duration-300" style={{ width: `${session.progress}%` }} />
                   </div>
 
-                  {/* Botón de descarga (solo si está completada) */}
                   {session.status === 'completed' && session.set && (
                     <button
                       onClick={() => downloadSingleSet(session.set!)}
@@ -1254,7 +1250,7 @@ const ContentStudioProModule: React.FC = () => {
           </div>
         )}
 
-        {/* CHECKPOINT */}
+        {/* CHECKPOINT (se mantiene, pero ahora currentSet tiene ref0Analysis) */}
         {step === 'checkpoint' && currentSet && (
           <div className="max-w-7xl mx-auto space-y-6 md:space-y-10 animate-in zoom-in px-4 md:px-0">
             <div className="bg-white p-6 md:p-12 rounded-[32px] md:rounded-[48px] border border-slate-100 shadow-2xl grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12">
@@ -1373,232 +1369,222 @@ const ContentStudioProModule: React.FC = () => {
           </div>
         )}
 
-        {/* LIBRARY */}
+        {/* LIBRARY - se mantiene igual */}
         {step === 'library' && (
-          <div className="space-y-8 md:space-y-12 animate-in fade-in duration-700 px-4 md:px-0">
+          <div className="space-y-6 md:space-y-8 animate-in fade-in duration-700 px-4 md:px-0">
             
-            {/* TABS OPTIMIZADOS - ESTILO MÓDULO */}
-            <div className="flex justify-center">
-              <div className="inline-flex bg-white p-1 rounded-2xl md:rounded-3xl border border-slate-100 shadow-sm">
-                {TAB_ORDER.map((tab) => {
-                  const count = tab === 'TODAS' ? sets.length : sets.filter(s => s.focus === tab).length;
-                  const isActive = activeTab === tab;
-                  return (
-                    <button
-                      key={tab}
-                      onClick={() => {
-                        setActiveTab(tab);
-                        setSelectionMode(false);
-                        setSelectedSets(new Set());
-                      }}
-                      className={`px-4 md:px-8 py-2 md:py-3 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
-                        isActive
-                          ? 'bg-brand-600 text-white shadow-lg'
-                          : 'text-slate-400 hover:text-slate-600'
-                      }`}
-                    >
-                      <span>{tab === 'TODAS' ? 'Todas' : FOCUS_LABELS[tab as Focus].split(' / ')[0]}</span>
-                      <span className={`text-[8px] px-2 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                        {count}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+            {/* Pestañas de filtrado */}
+            <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-2">
+              {TAB_ORDER.map((tab) => {
+                const count = tab === 'TODAS' 
+                  ? sets.length 
+                  : sets.filter(s => s.focus === tab).length;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => {
+                      setActiveTab(tab);
+                      setSelectionMode(false);
+                      setSelectedSets(new Set());
+                    }}
+                    className={`px-4 md:px-6 py-2 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all ${
+                      activeTab === tab
+                        ? 'bg-brand-600 text-white shadow-md'
+                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}
+                  >
+                    {tab === 'TODAS' ? 'Todas' : FOCUS_LABELS[tab as Focus].split(' / ')[0]}
+                    <span className="ml-1 text-[8px] opacity-70">({count})</span>
+                  </button>
+                );
+              })}
             </div>
 
-            {/* CONTROLES DE SELECCIÓN OPTIMIZADOS - ESTILO MÓDULO */}
+            {/* Barra de herramientas de selección múltiple */}
             {showSelectionTools && (
-              <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-50/50 p-4 md:p-6 rounded-[32px] border border-slate-100">
-                <div className="flex flex-wrap items-center gap-2 md:gap-3">
+              <div className="flex flex-wrap justify-between items-center gap-3 bg-slate-50 p-3 rounded-xl">
+                <div className="flex gap-2">
                   {!selectionMode ? (
                     <button
                       onClick={() => setSelectionMode(true)}
-                      className="px-6 py-3 bg-white border border-slate-200 text-slate-900 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm"
+                      className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-slate-100 transition-all"
                     >
-                      <i className="fa-solid fa-list-check text-brand-600"></i> Gestión múltiple
+                      <i className="fa-solid fa-check-square mr-1"></i> Seleccionar múltiple
                     </button>
                   ) : (
-                    <div className="flex items-center gap-2 bg-white p-1 rounded-2xl border border-slate-200 shadow-sm">
+                    <>
                       <button
                         onClick={selectAllFiltered}
-                        className="px-4 py-2 hover:bg-slate-50 text-slate-900 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2"
+                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-slate-100 transition-all"
                       >
-                        <i className="fa-solid fa-check-double text-brand-600"></i> Todo
+                        <i className="fa-solid fa-square-check mr-1"></i> Seleccionar todo
                       </button>
                       <button
                         onClick={clearSelection}
-                        className="px-4 py-2 hover:bg-slate-50 text-slate-900 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2"
+                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-slate-100 transition-all"
                       >
-                        <i className="fa-solid fa-eraser text-slate-400"></i> Limpiar
+                        <i className="fa-solid fa-square mr-1"></i> Limpiar
                       </button>
-                      <div className="w-px h-4 bg-slate-200 mx-1"></div>
                       <button
-                        onClick={() => {
-                          setSelectionMode(false);
-                          setSelectedSets(new Set());
-                        }}
-                        className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-red-100 transition-all flex items-center gap-2"
+                        onClick={() => setSelectionMode(false)}
+                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-slate-100 transition-all"
                       >
-                        <i className="fa-solid fa-xmark"></i> Cancelar
+                        <i className="fa-solid fa-times mr-1"></i> Salir
                       </button>
-                    </div>
+                    </>
                   )}
                 </div>
                 
                 {selectedSets.size > 0 && (
                   <button
                     onClick={downloadSelectedSets}
-                    className="w-full md:w-auto px-10 py-5 bg-brand-600 text-white rounded-[24px] text-[10px] font-black uppercase tracking-[0.2em] shadow-[0_15px_30px_rgba(247,44,91,0.25)] hover:bg-brand-700 active:scale-95 transition-all flex items-center justify-center gap-3"
+                    className="px-4 py-2 bg-brand-600 text-white rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-brand-700 transition-all flex items-center gap-2"
                   >
-                    <i className="fa-solid fa-cloud-arrow-down text-sm"></i> 
-                    Descargar Pack ({selectedSets.size})
+                    <i className="fa-solid fa-download"></i> Descargar seleccionadas ({selectedSets.size})
                   </button>
                 )}
               </div>
             )}
 
+            {/* Grid de sesiones - se mantiene igual */}
             {filteredSets.length === 0 ? (
-              <div className="text-center py-24 bg-slate-50 rounded-[48px] border-2 border-dashed border-slate-200">
-                <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <i className="fa-solid fa-folder-open text-slate-300 text-3xl"></i>
-                </div>
-                <h4 className="text-slate-900 text-lg font-black uppercase italic tracking-tighter">Historial vacío</h4>
-                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-2">
-                  No hay sesiones en la categoría {activeTab === 'TODAS' ? 'seleccionada' : FOCUS_LABELS[activeTab as Focus].split(' / ')[0]}
+              <div className="text-center py-12 bg-slate-50 rounded-2xl">
+                <i className="fa-solid fa-folder-open text-slate-300 text-4xl mb-3"></i>
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">
+                  No hay sesiones en esta categoría
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-12 md:gap-16">
+              <div className="grid grid-cols-1 gap-8 md:gap-12">
                 {filteredSets.map((set) => (
                   <section
                     key={set.id}
-                    className={`relative bg-white p-6 md:p-10 rounded-[32px] md:rounded-[48px] border shadow-xl space-y-8 md:space-y-10 group transition-all hover:shadow-2xl ${
-                      selectedSets.has(set.id) ? 'border-brand-600 ring-4 ring-brand-600/10' : 'border-slate-100'
+                    className={`bg-white p-6 md:p-10 rounded-[32px] md:rounded-[56px] border shadow-sm space-y-6 md:space-y-10 group transition-all hover:shadow-2xl ${
+                      selectedSets.has(set.id) ? 'border-brand-600 ring-2 ring-brand-600/30' : 'border-slate-100'
                     }`}
                   >
-                    {/* CHECKBOX CUSTOM */}
-                    {selectionMode && (
-                      <div 
-                        className="absolute -top-3 -left-3 z-20 cursor-pointer"
-                        onClick={() => toggleSelectSet(set.id)}
-                      >
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-xl transition-all ${
-                          selectedSets.has(set.id) ? 'bg-brand-600 text-white scale-110' : 'bg-white text-slate-200 border-2 border-slate-100'
-                        }`}>
-                          <i className={`fa-solid ${selectedSets.has(set.id) ? 'fa-check' : 'fa-square'} text-lg`}></i>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex flex-col md:flex-row justify-between items-center gap-8 border-b border-slate-50 pb-8 md:pb-10">
-                      <div className="flex items-center gap-6 md:gap-8">
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-6 md:gap-8 border-b border-slate-50 pb-6 md:pb-8">
+                      <div className="flex items-center gap-4 md:gap-6">
+                        {selectionMode && (
+                          <input
+                            type="checkbox"
+                            checked={selectedSets.has(set.id)}
+                            onChange={() => toggleSelectSet(set.id)}
+                            className="w-5 h-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                          />
+                        )}
                         <div
-                          className="w-16 h-16 md:w-24 md:h-24 rounded-[24px] md:rounded-[32px] overflow-hidden bg-slate-50 shadow-2xl border-4 border-white cursor-pointer transform group-hover:rotate-3 transition-transform"
+                          className="w-12 h-12 md:w-16 md:h-16 rounded-[16px] md:rounded-[24px] overflow-hidden bg-slate-50 shadow-inner cursor-pointer"
                           onClick={() => openGallery(set)}
                         >
                           <img src={set.image0Url!} className="w-full h-full object-cover" />
                         </div>
                         <div>
-                          <div className="flex items-center gap-3 mb-2">
-                            <span className="text-[8px] md:text-[9px] font-black text-brand-600 uppercase tracking-[0.3em] italic">
+                          <h3 className="text-xl md:text-2xl font-black text-slate-900 uppercase italic leading-none">
+                            {set.focus === 'PRODUCT' && '📦 '}
+                            {set.focus === 'OUTFIT' && '👔 '}
+                            {set.focus === 'SCENE' && '🏞️ '}
+                            {set.focus === 'AVATAR' && '😊 '}
+                            Sesión #{set.id.slice(-4)}
+                          </h3>
+                          <div className="flex flex-wrap gap-2 mt-2 md:mt-3">
+                            <span className="px-3 md:px-4 py-1 md:py-1.5 bg-slate-900 text-white text-[7px] md:text-[9px] font-black uppercase rounded-full tracking-widest">
+                              UGC
+                            </span>
+                            <span className="px-3 md:px-4 py-1 md:py-1.5 bg-brand-600 text-white text-[7px] md:text-[9px] font-black uppercase rounded-full tracking-widest">
                               {FOCUS_LABELS[set.focus].split(' / ')[0]}
                             </span>
-                            <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                            <span className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                              ID: {set.id.slice(-6).toUpperCase()}
-                            </span>
-                          </div>
-                          <h3 className="text-2xl md:text-3xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">
-                            Sesión <span className="text-slate-300">UGC</span>
-                          </h3>
-                          <div className="flex flex-wrap gap-2 mt-4">
-                            <span className="px-4 py-1.5 bg-slate-100 text-slate-600 text-[8px] md:text-[9px] font-black uppercase rounded-full tracking-widest border border-slate-200">
-                              {set.productCategory && set.productCategory !== 'GENERIC' 
-                                ? CATEGORY_LABELS[set.productCategory] 
-                                : FOCUS_LABELS[set.focus].split(' / ')[0]}
-                            </span>
-                            <span className="px-4 py-1.5 bg-slate-900 text-white text-[8px] md:text-[9px] font-black uppercase rounded-full tracking-widest">
-                              {set.shots.length} Shots
-                            </span>
+                            {set.productCategory && (
+                              <span className="px-3 md:px-4 py-1 md:py-1.5 bg-slate-200 text-slate-700 text-[7px] md:text-[9px] font-black uppercase rounded-full">
+                                {set.productCategory}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex gap-3 w-full md:w-auto">
+                      <div className="flex gap-2 w-full md:w-auto">
                         <button
                           onClick={() => downloadSingleSet(set)}
-                          className="flex-1 md:flex-none px-8 md:px-10 py-4 md:py-5 bg-white border-2 border-slate-100 rounded-[20px] md:rounded-[28px] text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-sm hover:border-brand-600 hover:text-brand-600 active:scale-95 transition-all group/btn"
+                          className="flex-1 md:flex-none px-6 md:px-10 py-3 md:py-5 bg-white border border-slate-200 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase flex items-center justify-center gap-2 md:gap-3 shadow-sm hover:bg-slate-50 active:scale-95 transition-all"
                         >
-                          <i className="fa-solid fa-file-zipper text-lg group-hover/btn:animate-bounce"></i> Pack
+                          <i className="fa-solid fa-file-zipper"></i> Pack
                         </button>
                         <button
                           onClick={() => contentStudioStorage.deleteSet(set.id).then(() => { loadSets(); setSelectedSets(new Set()); })}
-                          className="w-14 h-14 md:w-16 md:h-16 bg-red-50 text-red-500 rounded-[20px] md:rounded-[28px] flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                          className="w-12 h-12 md:w-16 md:h-16 bg-red-50 text-red-500 rounded-xl md:rounded-2xl flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"
                         >
-                          <i className="fa-solid fa-trash-can text-lg"></i>
+                          <i className="fa-solid fa-trash-can"></i>
                         </button>
                         <button
                           onClick={() => openGallery(set)}
-                          className="w-14 h-14 md:w-16 md:h-16 bg-slate-900 text-white rounded-[20px] md:rounded-[28px] flex items-center justify-center hover:bg-brand-600 transition-all shadow-xl"
+                          className="w-12 h-12 md:w-16 md:h-16 bg-slate-100 text-slate-600 rounded-xl md:rounded-2xl flex items-center justify-center hover:bg-brand-600 hover:text-white transition-all"
                         >
-                          <i className="fa-solid fa-expand text-lg"></i>
+                          <i className="fa-solid fa-images"></i>
                         </button>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-6 md:gap-8">
+                    <div className={`grid grid-cols-2 lg:grid-cols-${Math.min(set.shots.length + 1, 5)} gap-4 md:gap-6`}>
                       <div
-                        className="aspect-[3/4] rounded-[24px] md:rounded-[32px] overflow-hidden border-4 md:border-8 border-brand-600 relative group cursor-pointer shadow-2xl transform hover:-translate-y-2 transition-all"
+                        className="aspect-[3/4] rounded-[24px] md:rounded-[40px] overflow-hidden border-2 md:border-4 border-brand-600 relative group cursor-pointer shadow-xl"
                         onClick={() => openGallery(set)}
                       >
                         <img src={set.image0Url!} className="w-full h-full object-cover" />
                         <div className="absolute top-4 left-4 md:top-6 md:left-6">
-                          <span className="px-4 md:px-6 py-2 md:py-2.5 bg-brand-600 text-white text-[8px] md:text-[10px] font-black rounded-full uppercase italic shadow-xl tracking-widest">
+                          <span className="px-3 md:px-4 py-1 md:py-1.5 bg-brand-600 text-white text-[7px] md:text-[8px] font-black rounded-full uppercase italic shadow-lg">
                             Master
                           </span>
                         </div>
-                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity backdrop-blur-[2px]">
-                          <i className="fa-solid fa-expand text-white text-4xl"></i>
+                        <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                          <i className="fa-solid fa-expand text-white text-2xl md:text-3xl"></i>
                         </div>
                       </div>
 
                       {set.shots.map((s, idx) => (
                         <div
                           key={idx}
-                          className="aspect-[3/4] bg-slate-50 rounded-[24px] md:rounded-[32px] overflow-hidden relative group cursor-pointer flex flex-col shadow-xl transform hover:-translate-y-2 transition-all"
+                          className="aspect-[3/4] bg-slate-50 rounded-[24px] md:rounded-[40px] overflow-hidden relative group cursor-pointer flex flex-col shadow-lg"
                           onClick={() => s.imageUrl && openGallery(set)}
                         >
                           <div className="flex-1 relative overflow-hidden">
                             {s.status === 'generating' ? (
-                              <div className="flex h-full items-center justify-center bg-slate-900">
-                                <div className="flex flex-col items-center gap-4">
-                                  <div className="w-10 h-10 border-4 border-white/10 border-t-brand-500 rounded-full animate-spin"></div>
-                                  <span className="text-[8px] font-black uppercase text-brand-400 tracking-[0.3em]">
-                                    Rendering
+                              <div className="flex h-full items-center justify-center text-slate-200 bg-slate-900/10 backdrop-blur-sm">
+                                <div className="flex flex-col items-center gap-2 md:gap-3">
+                                  <i className="fa-solid fa-spinner animate-spin text-xl md:text-2xl text-brand-500"></i>
+                                  <span className="text-[7px] md:text-[8px] font-black uppercase text-brand-400 tracking-widest">
+                                    Render...
                                   </span>
                                 </div>
                               </div>
                             ) : s.imageUrl ? (
-                              <img src={s.imageUrl} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" />
+                              <img
+                                src={s.imageUrl}
+                                className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
+                              />
                             ) : (
-                              <div className="flex h-full items-center justify-center bg-slate-100 p-6 text-center">
-                                <div className="flex flex-col items-center gap-3">
-                                  <i className="fa-solid fa-circle-exclamation text-red-400 text-2xl"></i>
-                                  <span className="text-[9px] font-black uppercase text-red-500 tracking-widest">Error</span>
+                              <div className="flex h-full items-center justify-center bg-slate-50 p-3 text-center">
+                                <div className="flex flex-col items-center gap-2">
+                                  <i className="fa-solid fa-circle-exclamation text-red-400 text-lg"></i>
+                                  <span className="text-[10px] font-black uppercase text-red-500">Falló</span>
+                                  {s.status === 'error' && s.errorMsg && (
+                                    <span className="text-[10px] text-slate-500 leading-snug" title={s.errorMsg}>
+                                      {s.errorMsg.length > 60 ? s.errorMsg.slice(0, 60) + '…' : s.errorMsg}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             )}
 
                             <div className="absolute top-4 left-4 md:top-6 md:left-6">
-                              <span className="px-4 py-2 bg-black/60 backdrop-blur-xl text-white text-[8px] md:text-[9px] font-black rounded-full uppercase border border-white/10 italic tracking-widest">
+                              <span className="px-3 md:px-4 py-1 md:py-1.5 bg-black/40 backdrop-blur-md text-white text-[7px] md:text-[8px] font-black rounded-full uppercase border border-white/10 italic">
                                 Shot {idx + 1}
                               </span>
                             </div>
 
                             {s.imageUrl && s.status !== 'generating' && (
-                              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity backdrop-blur-[2px]">
-                                <i className="fa-solid fa-expand text-white text-3xl"></i>
+                              <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                <i className="fa-solid fa-expand text-white text-2xl md:text-3xl"></i>
                               </div>
                             )}
                           </div>
@@ -1609,9 +1595,9 @@ const ContentStudioProModule: React.FC = () => {
                                 e.stopPropagation();
                                 regenerateShot(set, s.key);
                               }}
-                              className="absolute bottom-6 inset-x-6 py-3 md:py-4 bg-white/95 backdrop-blur-xl text-slate-900 text-[9px] font-black uppercase rounded-2xl md:rounded-3xl border border-slate-200 shadow-2xl opacity-0 group-hover:opacity-100 transition-all hover:bg-white active:scale-95 tracking-widest"
+                              className="absolute bottom-4 md:bottom-6 inset-x-4 md:inset-x-6 py-2 md:py-3 bg-white/90 backdrop-blur-md text-slate-900 text-[8px] md:text-[9px] font-black uppercase rounded-xl md:rounded-2xl border border-slate-200 shadow-xl opacity-0 group-hover:opacity-100 transition-all hover:bg-white active:scale-95"
                             >
-                              <i className="fa-solid fa-rotate mr-2"></i> Regenerar
+                              Regenerar ({s.attempts}/{MAX_REGEN_ATTEMPTS})
                             </button>
                           )}
                         </div>
@@ -1624,7 +1610,7 @@ const ContentStudioProModule: React.FC = () => {
           </div>
         )}
 
-        {/* GALERÍA MODAL */}
+        {/* GALERÍA MODAL - se mantiene igual */}
         {galleryOpen && galleryImages.length > 0 && (
           <div
             className="fixed inset-0 z-[10000] bg-black/95 backdrop-blur-3xl flex flex-col items-center justify-center p-4 md:p-10 animate-in fade-in"
