@@ -41,8 +41,37 @@ export function detectProductCategory(sceneText?: string, productRef?: string | 
 }
 
 // ===================================================================
-// FUNCIONES DE UTILIDAD
+// FUNCIONES DE UTILIDAD CON COMPRESIÓN DE IMÁGENES
 // ===================================================================
+
+// Comprimir imagen base64 a calidad específica para evitar error 413
+async function compressImage(base64: string, maxWidth: number = 1024, quality: number = 0.7): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+      
+      if (width > maxWidth) {
+        height = (height * maxWidth) / width;
+        width = maxWidth;
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0, width, height);
+      
+      // Comprimir a JPEG con calidad reducida
+      const compressed = canvas.toDataURL('image/jpeg', quality);
+      resolve(compressed);
+    };
+    img.onerror = reject;
+    img.src = base64;
+  });
+}
+
 function extractImageData(img: string | null | undefined): { data: string; mimeType: string } | null {
   if (!img) return null;
   
@@ -60,11 +89,22 @@ function extractImageData(img: string | null | undefined): { data: string; mimeT
   return null;
 }
 
-function prepareReferenceImages(refs: (string | null | undefined)[]): Array<{ data: string; mimeType: string }> {
+// Preparar referencias CON compresión para evitar 413
+async function prepareReferenceImagesCompressed(refs: (string | null | undefined)[]): Promise<Array<{ data: string; mimeType: string }>> {
   const result: Array<{ data: string; mimeType: string }> = [];
   
   for (const ref of refs) {
-    const extracted = extractImageData(ref);
+    if (!ref) continue;
+    
+    // Comprimir la imagen antes de procesar
+    let compressedRef = ref;
+    try {
+      compressedRef = await compressImage(ref, 1024, 0.7);
+    } catch (e) {
+      console.warn("[UGC] Error compressing image, using original:", e);
+    }
+    
+    const extracted = extractImageData(compressedRef);
     if (extracted && extracted.data.length > 64) {
       result.push(extracted);
     }
@@ -691,14 +731,15 @@ async function generateNeutralOutfit(focus: Focus, productCategory?: ProductCate
 }
 
 // ===================================================================
-// MOTOR DE GENERACIÓN (usa ugcApiService)
+// MOTOR DE GENERACIÓN (usa ugcApiService con compresión)
 // ===================================================================
 async function generateWithResilience(
   prompt: string,
   refs: (string | null)[],
   systemInstructions: string
 ): Promise<string> {
-  const referenceImages = prepareReferenceImages(refs);
+  // USAR COMPRESIÓN para evitar error 413
+  const referenceImages = await prepareReferenceImagesCompressed(refs);
   
   const fullPrompt = `${systemInstructions}\n\nTASK:\n${prompt}\n\nNEGATIVE:\n${NEGATIVE}`;
   
