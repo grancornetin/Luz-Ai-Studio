@@ -1,11 +1,12 @@
 // api/gemini/ugc.ts
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from '@google/genai';
+import { Redis } from '@upstash/redis';
 
 const RETRY_DELAY_MS = 3000;
 
 // ===================================================================
-// JOB STORE (en memoria - para producción usar Redis/Upstash)
+// Tipos y configuraciones
 // ===================================================================
 type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
 interface Job {
@@ -19,17 +20,8 @@ interface Job {
   totalShots?: number;
 }
 
-const jobStore = new Map<string, Job>();
-
-// Limpiar jobs viejos cada hora
-setInterval(() => {
-  const oneHourAgo = Date.now() - 60 * 60 * 1000;
-  for (const [id, job] of jobStore.entries()) {
-    if (job.createdAt < oneHourAgo) {
-      jobStore.delete(id);
-    }
-  }
-}, 60 * 60 * 1000);
+// Inicializar Redis usando las variables de entorno de Vercel
+const redis = Redis.fromEnv();
 
 function generateJobId(): string {
   return `${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
@@ -55,50 +47,68 @@ function cleanBase64(b64: string): string {
   return b64.replace(/^data:image\/(png|jpeg|webp);base64,/, '').replace(/\s/g, '');
 }
 
-// Procesar job en background
+// ===================================================================
+// Funciones de persistencia con Redis
+// ===================================================================
+async function saveJob(job: Job): Promise<void> {
+  // Guardar con expiración de 1 hora (3600 segundos)
+  await redis.set(`job:${job.id}`, JSON.stringify(job), { ex: 3600 });
+}
+
+async function getJob(jobId: string): Promise<Job | null> {
+  const data = await redis.get<string>(`job:${jobId}`);
+  if (!data) return null;
+  return JSON.parse(data);
+}
+
+// ===================================================================
+// Procesamiento en background
+// ===================================================================
 async function processGenerationJob(
   jobId: string,
   parts: any[],
   aspectRatio: string
 ): Promise<void> {
-  const job = jobStore.get(jobId);
+  // Obtener el job actualizado
+  let job = await getJob(jobId);
   if (!job) return;
-  
+
   job.status = 'processing';
   job.updatedAt = Date.now();
-  jobStore.set(jobId, job);
-  
+  await saveJob(job);
+
   try {
+    // Modelos en orden de prioridad
     const models = [
       { name: 'gemini-3.1-flash-image-preview', location: 'global' },
       { name: 'gemini-3-pro-image-preview', location: 'global' },
       { name: 'gemini-2.5-flash-image', location: 'us-central1' },
     ];
-    
+
     let lastError: Error | null = null;
-    
+
     for (const model of models) {
       try {
         console.log(`[UGC Job ${jobId}] Trying model: ${model.name}`);
         const ai = getGenAIClient(model.location);
-        
+
         const response = await ai.models.generateContent({
           model: model.name,
           contents: [{ role: 'user', parts }],
           config: { responseModalities: ['TEXT', 'IMAGE'] },
         });
-        
+
         const candidates = response.candidates || [];
         for (const candidate of candidates) {
           for (const part of (candidate.content?.parts || [])) {
             if (part.inlineData?.data) {
               const mime = part.inlineData.mimeType || 'image/png';
               const imageData = `data:${mime};base64,${part.inlineData.data}`;
-              
+
               job.status = 'completed';
               job.result = imageData;
               job.updatedAt = Date.now();
-              jobStore.set(jobId, job);
+              await saveJob(job);
               console.log(`[UGC Job ${jobId}] Completed with ${model.name}`);
               return;
             }
@@ -110,18 +120,20 @@ async function processGenerationJob(
         console.warn(`[UGC Job ${jobId}] Model ${model.name} failed:`, e.message);
       }
     }
-    
+
     throw lastError || new Error('All models failed');
-    
   } catch (error: any) {
     job.status = 'failed';
     job.error = error.message;
     job.updatedAt = Date.now();
-    jobStore.set(jobId, job);
+    await saveJob(job);
     console.error(`[UGC Job ${jobId}] Failed:`, error.message);
   }
 }
 
+// ===================================================================
+// Handler principal
+// ===================================================================
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -134,9 +146,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { action, payload } = req.body;
     if (!action) return res.status(400).json({ error: 'Missing action' });
 
-    // ═══════════════════════════════════════════════════════════
-    // generateImageAsync - Generación asíncrona con polling
-    // ═══════════════════════════════════════════════════════════
+    // ================================================================
+    // generateImageAsync - Iniciar generación asíncrona
+    // ================================================================
     if (action === 'generateImageAsync') {
       const { prompt, referenceImages, aspectRatio = '3:4', shotIndex, totalShots } = payload;
       if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
@@ -169,32 +181,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         shotIndex,
         totalShots,
       };
-      jobStore.set(jobId, job);
+      await saveJob(job);
 
-      // Procesar en background
+      // Procesar en segundo plano (sin esperar)
       processGenerationJob(jobId, parts, aspectRatio).catch(console.error);
 
-      return res.status(202).json({ 
-        success: true, 
-        jobId, 
+      return res.status(202).json({
+        success: true,
+        jobId,
         status: 'pending',
         shotIndex,
         totalShots,
       });
     }
 
-    // ═══════════════════════════════════════════════════════════
+    // ================================================================
     // getJobStatus - Consultar estado de un job
-    // ═══════════════════════════════════════════════════════════
+    // ================================================================
     if (action === 'getJobStatus') {
       const { jobId } = payload;
       if (!jobId) return res.status(400).json({ error: 'Missing jobId' });
-      
-      const job = jobStore.get(jobId);
+
+      const job = await getJob(jobId);
       if (!job) {
         return res.status(404).json({ error: 'Job not found' });
       }
-      
+
       const response: any = {
         jobId: job.id,
         status: job.status,
@@ -203,21 +215,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         shotIndex: job.shotIndex,
         totalShots: job.totalShots,
       };
-      
+
       if (job.status === 'completed') {
         response.image = job.result;
       }
-      
       if (job.status === 'failed') {
         response.error = job.error;
       }
-      
+
       return res.status(200).json(response);
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // analyzeREF0 - Análisis de luz/espacio/pose (síncrono, es rápido)
-    // ═══════════════════════════════════════════════════════════
+    // ================================================================
+    // analyzeREF0 - análisis de luz/espacio/pose (síncrono)
+    // ================================================================
     if (action === 'analyzeREF0') {
       const { imageData, mimeType } = payload;
       const ai = getGenAIClient('us-central1');
@@ -239,9 +250,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(JSON.parse(clean));
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // analyzeProductRelevance, analyzeOutfit, analyzeScene (síncronos)
-    // ═══════════════════════════════════════════════════════════
+    // ================================================================
+    // analyzeProductRelevance
+    // ================================================================
     if (action === 'analyzeProductRelevance') {
       const { productRef, focus, outfitRef, sceneRef, sceneText } = payload;
       const parts: any[] = [];
@@ -275,6 +286,9 @@ Respond ONLY with JSON: { "isRelevant": boolean, "suggestion": "string", "produc
       return res.status(200).json(JSON.parse(clean));
     }
 
+    // ================================================================
+    // analyzeOutfit
+    // ================================================================
     if (action === 'analyzeOutfit') {
       const { imageData, mimeType } = payload;
       const ai = getGenAIClient('us-central1');
@@ -292,6 +306,9 @@ Respond ONLY with JSON: { "isRelevant": boolean, "suggestion": "string", "produc
       return res.status(200).json(JSON.parse(clean));
     }
 
+    // ================================================================
+    // analyzeScene
+    // ================================================================
     if (action === 'analyzeScene') {
       const { imageData, mimeType } = payload;
       const ai = getGenAIClient('us-central1');
