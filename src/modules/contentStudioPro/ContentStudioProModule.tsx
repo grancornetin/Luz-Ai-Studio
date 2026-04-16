@@ -24,7 +24,8 @@ import {
   ROLE_LABELS,
   COMPOSITION_LABELS,
   CATEGORY_LABELS,
-  REF0Analysis
+  REF0Analysis,
+  ShotStatus
 } from './types';
 import { contentStudioService } from './service';
 import { contentStudioStorage } from './storage';
@@ -52,6 +53,7 @@ interface BatchSession {
   ref0Url?: string;
   ref0Analysis?: REF0Analysis;
   shotUrls: (string | null)[];
+  shotStatuses: ShotStatus[];
   progress: number;
 }
 
@@ -94,7 +96,10 @@ const ContentStudioProModule: React.FC = () => {
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-  const [shotCount, setShotCount] = useState(6); // Ahora siempre 6
+  const [shotCount, setShotCount] = useState(6);
+  
+  // Estado para generación con polling - UI dinámica
+  const [generatingShots, setGeneratingShots] = useState<{ [key: string]: { status: string; imageUrl?: string; error?: string } }>({});
 
   const { checkAndDeduct, showNoCredits, requiredCredits, closeModal, refundCredits } = useCreditGuard();
 
@@ -162,221 +167,6 @@ const ContentStudioProModule: React.FC = () => {
     return true;
   };
 
-  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-  const generateSingleBatchSession = async (
-    session: BatchSession,
-    useProduct: boolean,
-    plan: any,
-    approvedRef0: string,
-    analysis: REF0Analysis,
-    onProgress: (sessionId: string, shotIndex: number, shotUrl: string) => void
-  ): Promise<ContentStudioProSet | null> => {
-    try {
-      const shotKeys = getShotKeys(shotCount);
-      const shots = shotKeys.map((key, idx) => ({
-        key,
-        name: `Shot ${idx + 1}`,
-        promptUsed: '',
-        negativeUsed: '',
-        status: 'idle' as const,
-        attempts: 0,
-        errorMsg: null
-      }));
-
-      const newSet: ContentStudioProSet = {
-        id: session.id,
-        createdAt: Date.now(),
-        style: FIXED_STYLE as any,
-        focus,
-        productSize: focus === 'PRODUCT' ? productSize : undefined,
-        productCategory: plan.productCategory,
-        faceRefs,
-        productRef: useProduct ? productRef : null,
-        outfitRef,
-        sceneRef,
-        sceneText,
-        image0Url: approvedRef0,
-        ref0Analysis: analysis,
-        attemptsImage0: 1,
-        shots
-      };
-
-      for (let i = 0; i < shots.length; i++) {
-        if (cancelBatch) return null;
-        
-        const shot = shots[i];
-        const focusRef = useProduct ? productRef : null;
-        
-        const url = await contentStudioService.generateDerivedShot(
-          approvedRef0,
-          faceRefs[0],
-          outfitRef,
-          focusRef,
-          sceneRef,
-          FIXED_STYLE,
-          focus,
-          shot.key,
-          productSize,
-          plan,
-          useProduct,
-          analysis
-        );
-
-        shot.imageUrl = url;
-        shot.status = 'done';
-        shot.attempts = 1;
-
-        // Guardar en historial (background)
-        generationHistoryService.save({
-          imageUrl: url,
-          module: 'content_studio_pro',
-          moduleLabel: `UGC Pro (${FOCUS_LABELS[focus].split(' / ')[0]} - ${shot.name})`,
-          creditsUsed: 0,
-          promptText: `Shot ${shot.key} for ${focus}`
-        }).catch(console.error);
-
-        onProgress(session.id, i, url);
-        await delay(1000);
-      }
-
-      await contentStudioStorage.saveSet(newSet);
-      await loadSets();
-      return newSet;
-    } catch (error: any) {
-      console.error(`[Batch] Session ${session.index} failed:`, error);
-      refundCredits(CREDIT_COSTS.UGC_PER_SHOT);
-      return null;
-    }
-  };
-
-  const startBatchGeneration = async () => {
-    if (!validateReferences()) return;
-    
-    let deductedCount = 0;
-    for (let i = 0; i < batchCount; i++) {
-      const ok = await checkAndDeduct(CREDIT_COSTS.UGC_PER_SHOT);
-      if (!ok) {
-        alert(`No hay suficientes créditos para ${batchCount} sesiones. Se generarán ${deductedCount} sesiones.`);
-        break;
-      }
-      deductedCount++;
-    }
-    
-    if (deductedCount === 0) return;
-    
-    setCancelBatch(false);
-    setErrorStatus(null);
-    setLoadingMsg('Preparando sesión base...');
-    setStep('batch_generating');
-
-    try {
-      const useProduct = (focus === 'OUTFIT' || focus === 'SCENE') ? isProductComplement : true;
-      
-      const plan = await contentStudioService.buildSessionPlan(
-        focus,
-        { productRef, outfitRef, sceneRef, sceneText },
-        focus === 'PRODUCT' ? productSize : undefined,
-        useProduct
-      );
-      setSessionPlan(plan);
-
-      setLoadingMsg('Generando imagen base (REF0)...');
-      const { imageUrl: approvedRef0, analysis } = await contentStudioService.generateImage0(
-        faceRefs[0],
-        productRef,
-        outfitRef,
-        sceneRef,
-        sceneText,
-        FIXED_STYLE,
-        focus,
-        focus === 'PRODUCT' ? productSize : undefined,
-        useProduct
-      );
-
-      // Inicializar sesiones del lote
-      const initialSessions: BatchSession[] = [];
-      for (let i = 0; i < deductedCount; i++) {
-        initialSessions.push({
-          id: `${Date.now()}_${i}`,
-          index: i + 1,
-          status: 'pending',
-          currentShotIndex: 0,
-          totalShots: shotCount,
-          shotUrls: new Array(shotCount).fill(null),
-          progress: 0,
-          ref0Url: approvedRef0,
-          ref0Analysis: analysis
-        });
-      }
-      setBatchSessions(initialSessions);
-
-      const processSingleSession = async (session: BatchSession, sessionIndex: number) => {
-        setBatchSessions(prev => prev.map((s, idx) => 
-          idx === sessionIndex ? { ...s, status: 'generating_shots', progress: 10 } : s
-        ));
-        
-        const updateProgress = (sessionId: string, shotIndex: number, shotUrl: string) => {
-          setBatchSessions(prev => prev.map(s => {
-            if (s.id !== sessionId) return s;
-            const newShotUrls = [...s.shotUrls];
-            newShotUrls[shotIndex] = shotUrl;
-            const progress = ((shotIndex + 1) / s.totalShots) * 100;
-            return {
-              ...s,
-              currentShotIndex: shotIndex + 1,
-              shotUrls: newShotUrls,
-              progress
-            };
-          }));
-        };
-        
-        const completedSet = await generateSingleBatchSession(session, useProduct, plan, approvedRef0, analysis, updateProgress);
-        
-        if (completedSet && !cancelBatch) {
-          setBatchSessions(prev => prev.map(s => 
-            s.id === session.id ? { ...s, status: 'completed', progress: 100, set: completedSet } : s
-          ));
-        } else if (!cancelBatch) {
-          setBatchSessions(prev => prev.map(s => 
-            s.id === session.id ? { ...s, status: 'failed', error: 'Error en la generación' } : s
-          ));
-        }
-      };
-
-      for (let i = 0; i < initialSessions.length; i += 2) {
-        const group = initialSessions.slice(i, i + 2);
-        setBatchCurrentSessionIndex(i);
-        const promises = group.map((session, groupIdx) => processSingleSession(session, i + groupIdx));
-        await Promise.all(promises);
-        if (i + 2 < initialSessions.length) {
-          await delay(2000);
-        }
-      }
-
-      if (!cancelBatch) {
-        const completedCount = batchSessions.filter(s => s.status === 'completed').length;
-        setLoadingMsg(`Lote completado: ${completedCount} de ${deductedCount} sesiones exitosas`);
-        await delay(2000);
-      }
-      
-      setBatchMode(false);
-      setStep('library');
-      
-    } catch (e: any) {
-      setErrorStatus(`Error en lote: ${e.message}`);
-      setStep('setup');
-    }
-  };
-
-  const cancelBatchGeneration = () => {
-    if (window.confirm('¿Estás seguro? Al detener la generación NO se reembolsarán los créditos de las sesiones en progreso.')) {
-      setCancelBatch(true);
-      setBatchMode(false);
-      setStep('setup');
-    }
-  };
-
   const startMasterGeneration = async () => {
     if (!validateReferences()) return;
     
@@ -400,6 +190,7 @@ const ContentStudioProModule: React.FC = () => {
       setSessionPlan(plan);
 
       setLoadingMsg('Sincronizando identidad y generando Master...');
+      
       const { imageUrl: image0, analysis } = await contentStudioService.generateImage0(
         faceRefs[0],
         productRef,
@@ -409,7 +200,11 @@ const ContentStudioProModule: React.FC = () => {
         FIXED_STYLE,
         focus,
         focus === 'PRODUCT' ? productSize : undefined,
-        useProduct
+        useProduct,
+        (status, image) => {
+          if (status === 'processing') setLoadingMsg('Generando imagen base (puede tomar hasta 2 minutos)...');
+          if (status === 'completed') setLoadingMsg('Master generado exitosamente');
+        }
       );
       setRef0Analysis(analysis);
 
@@ -478,7 +273,10 @@ const ContentStudioProModule: React.FC = () => {
         FIXED_STYLE,
         currentSet.focus,
         currentSet.productSize,
-        useProduct
+        useProduct,
+        (status) => {
+          if (status === 'processing') setLoadingMsg('Regenerando Master...');
+        }
       );
 
       setCurrentSet({
@@ -507,23 +305,48 @@ const ContentStudioProModule: React.FC = () => {
     };
 
     setStep('producing');
+    setCurrentSet(producingSet);
+    
+    // Inicializar estados de generación para UI dinámica
+    const initialGenState: { [key: string]: { status: string; imageUrl?: string; error?: string } } = {};
+    producingSet.shots.forEach((shot, idx) => {
+      initialGenState[shot.key] = { status: 'pending' };
+    });
+    setGeneratingShots(initialGenState);
 
     const useProduct = (focus === 'OUTFIT' || focus === 'SCENE') ? isProductComplement : true;
     const focusRef = useProduct ? producingSet.productRef : null;
-
     const updatedShots = [...producingSet.shots];
+    
+    // Actualizar UI para un shot específico
+    const updateShotStatus = (shotKey: ShotKey, status: string, imageUrl?: string, errorMsg?: string) => {
+      setGeneratingShots(prev => ({
+        ...prev,
+        [shotKey]: { status, imageUrl, error: errorMsg }
+      }));
+      
+      // También actualizar el shot en el set
+      const shotIndex = updatedShots.findIndex(s => s.key === shotKey);
+      if (shotIndex !== -1) {
+        if (status === 'completed' && imageUrl) {
+          updatedShots[shotIndex].imageUrl = imageUrl;
+          updatedShots[shotIndex].status = 'done';
+        } else if (status === 'failed') {
+          updatedShots[shotIndex].status = 'error';
+          updatedShots[shotIndex].errorMsg = errorMsg;
+        } else if (status === 'processing') {
+          updatedShots[shotIndex].status = 'generating';
+        }
+        setCurrentSet({ ...producingSet, shots: [...updatedShots] });
+      }
+    };
 
-    for (let i = 0; i < updatedShots.length; i++) {
-      const shot = updatedShots[i];
-      setLoadingMsg(`Capturando Shot ${i + 1}/${updatedShots.length}...`);
-
-      shot.status = 'generating';
-      shot.errorMsg = null;
-
-      setCurrentSet({ ...producingSet, shots: [...updatedShots] });
-
+    // Generar todos los shots en paralelo con polling
+    const shotPromises = updatedShots.map(async (shot, idx) => {
+      updateShotStatus(shot.key, 'processing');
+      
       try {
-        const url = await contentStudioService.generateDerivedShot(
+        const url = await contentStudioService.generateDerivedShotAsync(
           producingSet.image0Url!,
           producingSet.faceRefs[0],
           producingSet.outfitRef,
@@ -535,14 +358,21 @@ const ContentStudioProModule: React.FC = () => {
           producingSet.productSize,
           sessionPlan,
           useProduct,
-          producingSet.ref0Analysis
+          producingSet.ref0Analysis,
+          idx, // shot index
+          updatedShots.length, // total shots
+          (status, imageUrl) => {
+            if (status === 'completed' && imageUrl) {
+              updateShotStatus(shot.key, 'completed', imageUrl);
+            } else if (status === 'failed') {
+              updateShotStatus(shot.key, 'failed', undefined, 'Error en generación');
+            } else if (status === 'processing') {
+              updateShotStatus(shot.key, 'processing');
+            }
+          }
         );
-
-        shot.imageUrl = url;
-        shot.status = 'done';
-        shot.attempts = 1;
-        shot.errorMsg = null;
-
+        
+        // Guardar en historial
         generationHistoryService.save({
           imageUrl: url,
           module: 'content_studio_pro',
@@ -550,21 +380,20 @@ const ContentStudioProModule: React.FC = () => {
           creditsUsed: 0,
           promptText: `Shot ${shot.key} for ${focus}`
         }).catch(console.error);
-
+        
       } catch (e: any) {
-        shot.status = 'error';
-        shot.errorMsg = e?.message || 'Error desconocido';
+        updateShotStatus(shot.key, 'failed', undefined, e?.message || 'Error desconocido');
       }
+    });
 
-      setCurrentSet({ ...producingSet, shots: [...updatedShots] });
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-
+    // Esperar a que todos los shots terminen
+    await Promise.all(shotPromises);
+    
+    // Guardar sesión completa
     await contentStudioStorage.saveSet({ ...producingSet, shots: updatedShots });
     await loadSets();
     setStep('library');
-    setSelectionMode(false);
-    setSelectedSets(new Set());
+    setGeneratingShots({});
   };
 
   const regenerateShot = async (targetSet: ContentStudioProSet, key: ShotKey) => {
@@ -588,7 +417,7 @@ const ContentStudioProModule: React.FC = () => {
     const focusRef = useProduct ? targetSet.productRef : null;
 
     try {
-      const url = await contentStudioService.generateDerivedShot(
+      const url = await contentStudioService.generateDerivedShotAsync(
         targetSet.image0Url,
         targetSet.faceRefs[0],
         targetSet.outfitRef,
@@ -600,16 +429,30 @@ const ContentStudioProModule: React.FC = () => {
         targetSet.productSize,
         sessionPlan,
         useProduct,
-        targetSet.ref0Analysis
+        targetSet.ref0Analysis,
+        shotIndex,
+        updatedShots.length,
+        (status, imageUrl) => {
+          if (status === 'completed' && imageUrl) {
+            updatedShots[shotIndex] = {
+              ...shot,
+              imageUrl: url,
+              status: 'done',
+              attempts: shot.attempts + 1,
+              errorMsg: null
+            };
+          } else if (status === 'failed') {
+            updatedShots[shotIndex] = {
+              ...shot,
+              status: 'error',
+              errorMsg: 'Error al regenerar'
+            };
+          }
+          const finalSet = { ...targetSet, shots: updatedShots };
+          if (currentSet?.id === targetSet.id) setCurrentSet(finalSet);
+          setSets((prev) => prev.map((s) => (s.id === targetSet.id ? finalSet : s)));
+        }
       );
-
-      updatedShots[shotIndex] = {
-        ...shot,
-        imageUrl: url,
-        status: 'done',
-        attempts: shot.attempts + 1,
-        errorMsg: null
-      };
     } catch (e: any) {
       updatedShots[shotIndex] = {
         ...shot,
@@ -722,29 +565,6 @@ const ContentStudioProModule: React.FC = () => {
     setGalleryOpen(true);
   };
 
-  const openBatchImage = (session: BatchSession, type: 'ref0' | 'shot', shotIndex?: number) => {
-    const images: GalleryImage[] = [];
-    
-    if (session.ref0Url) {
-      images.push({ url: session.ref0Url, type: 'master' });
-    }
-    
-    session.shotUrls.forEach((url, idx) => {
-      if (url) {
-        images.push({ url, type: 'shot', shotIndex: idx });
-      }
-    });
-    
-    let startIndex = 0;
-    if (type === 'shot' && shotIndex !== undefined) {
-      startIndex = shotIndex + 1;
-    }
-    
-    setGalleryImages(images);
-    setCurrentImageIndex(startIndex);
-    setGalleryOpen(true);
-  };
-
   const navigateGallery = (direction: 'next' | 'prev') => {
     if (direction === 'next') {
       setCurrentImageIndex((prev) => (prev + 1) % galleryImages.length);
@@ -779,26 +599,59 @@ const ContentStudioProModule: React.FC = () => {
   });
   const showSelectionTools = filteredSets.length > 0;
 
-  const getStatusIcon = (status: BatchSession['status']) => {
-    switch (status) {
-      case 'pending': return <i className="fa-regular fa-clock text-slate-400"></i>;
-      case 'generating_ref0': return <i className="fa-solid fa-spinner animate-spin text-brand-500"></i>;
-      case 'generating_shots': return <i className="fa-solid fa-spinner animate-spin text-brand-500"></i>;
-      case 'completed': return <i className="fa-solid fa-circle-check text-green-500"></i>;
-      case 'failed': return <i className="fa-solid fa-circle-exclamation text-red-500"></i>;
-      default: return null;
-    }
-  };
-
-  const getStatusText = (status: BatchSession['status'], currentShot?: number, totalShots?: number) => {
-    switch (status) {
-      case 'pending': return 'Pendiente';
-      case 'generating_ref0': return 'Generando REF0...';
-      case 'generating_shots': return `Generando shot ${currentShot || 0}/${totalShots || 0}`;
-      case 'completed': return 'Completada';
-      case 'failed': return 'Fallida';
-      default: return '';
-    }
+  // Renderizar estado de un shot en producción
+  const renderShotStatus = (shotKey: ShotKey, idx: number) => {
+    const genState = generatingShots[shotKey];
+    if (!genState) return null;
+    
+    const getStatusIcon = () => {
+      switch (genState.status) {
+        case 'pending': return <i className="fa-regular fa-clock text-slate-400 text-xl"></i>;
+        case 'processing': return <i className="fa-solid fa-spinner animate-spin text-brand-500 text-xl"></i>;
+        case 'completed': return <i className="fa-solid fa-circle-check text-green-500 text-xl"></i>;
+        case 'failed': return <i className="fa-solid fa-circle-exclamation text-red-500 text-xl"></i>;
+        default: return null;
+      }
+    };
+    
+    const getStatusText = () => {
+      switch (genState.status) {
+        case 'pending': return 'En cola';
+        case 'processing': return 'Generando...';
+        case 'completed': return 'Completado';
+        case 'failed': return 'Error';
+        default: return '';
+      }
+    };
+    
+    return (
+      <div
+        key={idx}
+        className="aspect-[3/4] bg-slate-50 rounded-[24px] overflow-hidden relative group cursor-pointer flex flex-col shadow-lg"
+        onClick={() => genState.imageUrl && openGallery(currentSet!)}
+      >
+        <div className="flex-1 relative overflow-hidden bg-slate-100">
+          {genState.imageUrl ? (
+            <img src={genState.imageUrl} className="w-full h-full object-cover" />
+          ) : (
+            <div className="flex h-full items-center justify-center flex-col gap-3">
+              {getStatusIcon()}
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                {getStatusText()}
+              </span>
+              {genState.status === 'failed' && genState.error && (
+                <span className="text-[8px] text-red-400 px-2 text-center">{genState.error}</span>
+              )}
+            </div>
+          )}
+          <div className="absolute top-4 left-4">
+            <span className="px-3 py-1 bg-black/40 backdrop-blur-md text-white text-[8px] font-black rounded-full uppercase border border-white/10 italic">
+              Shot {idx + 1}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -844,7 +697,7 @@ const ContentStudioProModule: React.FC = () => {
           </div>
         </header>
 
-        {/* SETUP - se mantiene igual, pero el botón de generación ya usa la nueva lógica */}
+        {/* SETUP */}
         {step === 'setup' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10 px-4 md:px-0">
             <div className="lg:col-span-5">
@@ -1052,55 +905,11 @@ const ContentStudioProModule: React.FC = () => {
                   </div>
                 )}
 
-                {/* Modo múltiple - SOLO PARA ADMINISTRADORES */}
-                {isAdmin && (
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">
-                        Modo múltiple (dev)
-                      </span>
-                      <div className="group relative">
-                        <i className="fa-solid fa-circle-info text-slate-400 text-[10px] cursor-help"></i>
-                        <div className="absolute bottom-full left-0 mb-2 w-64 p-2 bg-slate-900 text-white text-[9px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                          Herramienta de desarrollo. Genera varias sesiones a la vez para pruebas.
-                          Solo visible para administradores.
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => setBatchMode(!batchMode)}
-                        className={`relative w-10 h-5 rounded-full transition-colors ${batchMode ? 'bg-brand-600' : 'bg-slate-300'}`}
-                      >
-                        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${batchMode ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                      </button>
-                      {batchMode && (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setBatchCount(Math.max(MIN_BATCH_SIZE, batchCount - 1))}
-                            className="w-6 h-6 rounded-full bg-white border border-slate-200 text-slate-600 text-xs font-black"
-                          >
-                            -
-                          </button>
-                          <span className="text-sm font-black text-slate-700 w-8 text-center">{batchCount}</span>
-                          <button
-                            onClick={() => setBatchCount(Math.min(MAX_BATCH_SIZE, batchCount + 1))}
-                            className="w-6 h-6 rounded-full bg-white border border-slate-200 text-slate-600 text-xs font-black"
-                          >
-                            +
-                          </button>
-                          <span className="text-[8px] text-slate-400 ml-1">sesiones</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
                 <button
-                  onClick={batchMode && isAdmin ? startBatchGeneration : startMasterGeneration}
+                  onClick={startMasterGeneration}
                   className="w-full py-5 md:py-7 bg-brand-600 text-white rounded-[24px] md:rounded-[32px] font-black text-[10px] md:text-xs uppercase tracking-[0.2em] shadow-[0_20px_40px_rgba(247,44,91,0.3)] hover:bg-brand-700 active:scale-95 transition-all"
                 >
-                  {batchMode && isAdmin ? `Generar ${batchCount} sesiones en masa` : 'Sintetizar Master Anchor (UGC)'}
+                  Sintetizar Master Anchor (UGC)
                 </button>
 
                 {errorStatus && (
@@ -1128,117 +937,8 @@ const ContentStudioProModule: React.FC = () => {
           </div>
         )}
 
-        {/* GENERACIÓN EN MASA - UI DE PROGRESO (se mantiene) */}
-        {step === 'batch_generating' && (
-          <div className="min-h-[600px] bg-slate-900 rounded-[40px] border-8 border-slate-800 shadow-2xl p-6 md:p-10 mx-4 animate-in zoom-in">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h2 className="text-white text-xl md:text-2xl font-black uppercase italic tracking-tighter">
-                  Generando lote de {batchSessions.length} sesiones...
-                </h2>
-                <p className="text-slate-400 text-[10px] mt-1">
-                  Sesión {batchCurrentSessionIndex + 1} de {batchSessions.length} en progreso
-                </p>
-              </div>
-              <button
-                onClick={cancelBatchGeneration}
-                className="px-4 py-2 bg-red-500/20 text-red-400 rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-red-500/30 transition-all"
-              >
-                <i className="fa-solid fa-ban mr-1"></i> Cancelar lote
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {batchSessions.map((session) => (
-                <div
-                  key={session.id}
-                  className={`bg-white/10 backdrop-blur-sm rounded-2xl p-4 border transition-all ${
-                    session.status === 'completed' ? 'border-green-500/50' :
-                    session.status === 'failed' ? 'border-red-500/50' :
-                    session.status === 'generating_shots' ? 'border-brand-500/50' :
-                    'border-white/10'
-                  }`}
-                >
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex items-center gap-2">
-                      {getStatusIcon(session.status)}
-                      <span className="text-white font-black text-sm">Sesión #{session.index}</span>
-                    </div>
-                    <span className="text-[8px] text-slate-400">{getStatusText(session.status, session.currentShotIndex, session.totalShots)}</span>
-                  </div>
-
-                  <div
-                    className="aspect-[3/4] bg-slate-800 rounded-xl overflow-hidden cursor-pointer mb-3 relative group"
-                    onClick={() => session.ref0Url && openBatchImage(session, 'ref0')}
-                  >
-                    {session.ref0Url ? (
-                      <img src={session.ref0Url} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        {session.status === 'generating_ref0' ? (
-                          <i className="fa-solid fa-spinner animate-spin text-slate-500 text-3xl"></i>
-                        ) : (
-                          <i className="fa-solid fa-image text-slate-600 text-3xl"></i>
-                        )}
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                      <i className="fa-solid fa-expand text-white text-2xl"></i>
-                    </div>
-                    <div className="absolute top-2 left-2">
-                      <span className="text-[8px] bg-brand-600 px-2 py-0.5 rounded-full text-white">REF0</span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-4 gap-1 mb-3">
-                    {Array.from({ length: session.totalShots }).map((_, idx) => (
-                      <div
-                        key={idx}
-                        className="aspect-[3/4] bg-slate-800 rounded-lg cursor-pointer overflow-hidden relative group"
-                        onClick={() => session.shotUrls[idx] && openBatchImage(session, 'shot', idx)}
-                      >
-                        {session.shotUrls[idx] ? (
-                          <img src={session.shotUrls[idx]!} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            {session.status === 'generating_shots' && session.currentShotIndex === idx + 1 ? (
-                              <i className="fa-solid fa-spinner animate-spin text-slate-500 text-sm"></i>
-                            ) : (
-                              <i className="fa-regular fa-image text-slate-600 text-sm"></i>
-                            )}
-                          </div>
-                        )}
-                        <div className="absolute bottom-1 left-1">
-                          <span className="text-[6px] bg-black/60 px-1 py-0.5 rounded text-white">S{idx + 1}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="w-full bg-slate-700 rounded-full h-1.5 mb-3">
-                    <div className="bg-brand-500 h-1.5 rounded-full transition-all duration-300" style={{ width: `${session.progress}%` }} />
-                  </div>
-
-                  {session.status === 'completed' && session.set && (
-                    <button
-                      onClick={() => downloadSingleSet(session.set!)}
-                      className="w-full py-2 bg-brand-600 text-white rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-brand-700 transition-all flex items-center justify-center gap-2"
-                    >
-                      <i className="fa-solid fa-download"></i> Descargar sesión
-                    </button>
-                  )}
-
-                  {session.status === 'failed' && (
-                    <div className="text-center text-red-400 text-[8px]">{session.error || 'Error en la generación'}</div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* LOADING NORMAL */}
-        {(step === 'generating_master' || step === 'producing') && step !== 'batch_generating' && (
+        {(step === 'generating_master') && (
           <div className="min-h-[500px] md:min-h-[600px] flex flex-col items-center justify-center space-y-8 md:space-y-12 bg-slate-900 rounded-[40px] md:rounded-[64px] border-8 border-slate-800 shadow-2xl p-6 md:p-10 text-center animate-in zoom-in mx-4">
             <div className="w-16 h-16 md:w-20 md:h-20 border-4 border-white/5 border-t-brand-500 rounded-full animate-spin shadow-[0_0_30px_rgba(247,44,91,0.3)]"></div>
             <div className="space-y-4">
@@ -1250,7 +950,48 @@ const ContentStudioProModule: React.FC = () => {
           </div>
         )}
 
-        {/* CHECKPOINT (se mantiene, pero ahora currentSet tiene ref0Analysis) */}
+        {/* PRODUCING - UI CON MINI-GALERÍA Y ESTADOS DINÁMICOS */}
+        {step === 'producing' && currentSet && (
+          <div className="min-h-[600px] bg-white rounded-[40px] border border-slate-100 shadow-2xl p-6 md:p-10 mx-4 animate-in zoom-in">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-xl md:text-2xl font-black text-slate-900 uppercase italic tracking-tighter">
+                  Generando sesión {focus}...
+                </h2>
+                <p className="text-slate-400 text-[10px] mt-1">
+                  {Object.values(generatingShots).filter(s => s.status === 'completed').length} de {shotCount} shots completados
+                </p>
+              </div>
+              <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-brand-500 transition-all duration-300"
+                  style={{ width: `${(Object.values(generatingShots).filter(s => s.status === 'completed').length / shotCount) * 100}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Master image arriba */}
+            <div className="mb-8">
+              <div className="aspect-[3/4] max-w-xs mx-auto rounded-[24px] overflow-hidden border-4 border-brand-600 shadow-xl relative">
+                <img src={currentSet.image0Url!} className="w-full h-full object-cover" />
+                <div className="absolute top-4 left-4">
+                  <span className="px-3 py-1 bg-brand-600 text-white text-[8px] font-black rounded-full uppercase">Master</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Grid de shots con estados dinámicos */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {currentSet.shots.map((shot, idx) => renderShotStatus(shot.key, idx))}
+            </div>
+
+            <p className="text-center text-[10px] text-slate-400 mt-6 animate-pulse">
+              Generando imágenes... El proceso puede tomar hasta 2 minutos por imagen
+            </p>
+          </div>
+        )}
+
+        {/* CHECKPOINT */}
         {step === 'checkpoint' && currentSet && (
           <div className="max-w-7xl mx-auto space-y-6 md:space-y-10 animate-in zoom-in px-4 md:px-0">
             <div className="bg-white p-6 md:p-12 rounded-[32px] md:rounded-[48px] border border-slate-100 shadow-2xl grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12">
@@ -1446,7 +1187,7 @@ const ContentStudioProModule: React.FC = () => {
               </div>
             )}
 
-            {/* Grid de sesiones - se mantiene igual */}
+            {/* Grid de sesiones */}
             {filteredSets.length === 0 ? (
               <div className="text-center py-12 bg-slate-50 rounded-2xl">
                 <i className="fa-solid fa-folder-open text-slate-300 text-4xl mb-3"></i>
@@ -1610,7 +1351,7 @@ const ContentStudioProModule: React.FC = () => {
           </div>
         )}
 
-        {/* GALERÍA MODAL - se mantiene igual */}
+        {/* GALERÍA MODAL */}
         {galleryOpen && galleryImages.length > 0 && (
           <div
             className="fixed inset-0 z-[10000] bg-black/95 backdrop-blur-3xl flex flex-col items-center justify-center p-4 md:p-10 animate-in fade-in"

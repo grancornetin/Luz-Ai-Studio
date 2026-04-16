@@ -114,9 +114,9 @@ async function prepareReferenceImagesCompressed(refs: (string | null | undefined
 }
 
 // ===================================================================
-// NEGATIVE PROMPT - REFORZADO CON ANTI-BEAUTIFICATION, ANTI-EDITORIAL, ANTI-DRIFT
+// NEGATIVE PROMPT - VERSIÓN COMPLETA PARA MASTER, CORTA PARA SHOTS
 // ===================================================================
-const NEGATIVE = `
+const NEGATIVE_FULL = `
 🔴🔴🔴 CRITICAL NEGATIVES - VIOLATION WILL INVALIDATE THE IMAGE 🔴🔴🔴
 
 IDENTITY DRIFT (ABSOLUTELY FORBIDDEN):
@@ -162,6 +162,15 @@ ROLE MIXING (FORBIDDEN):
 detail shot with face visible, hero shot without proper framing,
 selfie as third-person portrait, interaction without action,
 expression without face dominance, context with person too large
+`;
+
+// Negative prompt corto para shots derivados (evita timeout)
+const NEGATIVE_SHORT = `
+face replacement, identity change, different person,
+beautification, skin smoothing, editorial look, studio lighting,
+luxury redesign, walking, motion blur, outfit invention,
+fake fabric, extra clothing, phone visible in selfie,
+third-person selfie, different background, scene redesign
 `;
 
 // ===================================================================
@@ -731,22 +740,29 @@ async function generateNeutralOutfit(focus: Focus, productCategory?: ProductCate
 }
 
 // ===================================================================
-// MOTOR DE GENERACIÓN (usa ugcApiService con compresión)
+// MOTOR DE GENERACIÓN CON POLLING (asíncrono)
 // ===================================================================
-async function generateWithResilience(
+async function generateWithPolling(
   prompt: string,
   refs: (string | null)[],
-  systemInstructions: string
+  systemInstructions: string,
+  isDerivedShot: boolean = false,
+  shotIndex?: number,
+  totalShots?: number,
+  onStatusChange?: (status: string, image?: string) => void
 ): Promise<string> {
-  // USAR COMPRESIÓN para evitar error 413
   const referenceImages = await prepareReferenceImagesCompressed(refs);
+  const negativePrompt = isDerivedShot ? NEGATIVE_SHORT : NEGATIVE_FULL;
+  const fullPrompt = `${systemInstructions}\n\nTASK:\n${prompt}\n\nNEGATIVE:\n${negativePrompt}`;
   
-  const fullPrompt = `${systemInstructions}\n\nTASK:\n${prompt}\n\nNEGATIVE:\n${NEGATIVE}`;
-  
-  return ugcApiService.generateImage0({
+  // Usar método asíncrono con polling
+  return ugcApiService.generateImageAsync({
     prompt: fullPrompt,
     referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
     aspectRatio: '3:4',
+    shotIndex,
+    totalShots,
+    onStatusChange,
   });
 }
 
@@ -807,7 +823,7 @@ export const contentStudioService = {
   },
 
   // ──────────────────────────────────────────────────────────────
-  // generateImage0 - GENERA REF0 Y ANALIZA LUZ/ESPACIO
+  // generateImage0 - GENERA REF0 (usa polling)
   // ──────────────────────────────────────────────────────────────
   async generateImage0(
     faceRef: string,
@@ -818,7 +834,8 @@ export const contentStudioService = {
     _style: any,
     focus: Focus = 'AVATAR',
     productSize?: ProductSize,
-    productIsRelevant?: boolean
+    productIsRelevant?: boolean,
+    onStatusChange?: (status: string, image?: string) => void
   ): Promise<{ imageUrl: string; analysis: REF0Analysis }> {
     await this.ensureAccess();
 
@@ -870,7 +887,7 @@ ${focus === 'AVATAR' ? '- 3rd person perspective. MEDIUM shot (waist up). Face i
 - NO editorial softening, NO luxury redesign.
 - The face MUST look like a real person, not a filtered model.`;
 
-    const imageUrl = await generateWithResilience(prompt, refsToPass, system);
+    const imageUrl = await generateWithPolling(prompt, refsToPass, system, false, undefined, undefined, onStatusChange);
     
     // Analizar REF0 para congelar luz, espacio y acciones
     const imageData = extractImageData(imageUrl);
@@ -902,9 +919,9 @@ ${focus === 'AVATAR' ? '- 3rd person perspective. MEDIUM shot (waist up). Face i
   },
 
   // ──────────────────────────────────────────────────────────────
-  // generateDerivedShot - RECIBE TODAS LAS REFERENCIAS Y USA REF0Analysis
+  // generateDerivedShotAsync - GENERA SHOT DERIVADO CON POLLING
   // ──────────────────────────────────────────────────────────────
-  async generateDerivedShot(
+  async generateDerivedShotAsync(
     image0: string,
     faceRef: string,
     outfitRef: string | null,
@@ -916,7 +933,10 @@ ${focus === 'AVATAR' ? '- 3rd person perspective. MEDIUM shot (waist up). Face i
     productSize?: ProductSize,
     sessionPlan?: SessionPlan,
     productIsRelevant?: boolean,
-    ref0Analysis?: REF0Analysis
+    ref0Analysis?: REF0Analysis,
+    shotIndex?: number,
+    totalShots?: number,
+    onStatusChange?: (status: string, imageUrl?: string) => void
   ): Promise<string> {
     await this.ensureAccess();
 
@@ -934,12 +954,12 @@ CREATE A NEW PHOTO from the same session as REF0 for ${shotKey}.
 
 Natural UGC aesthetic. NO beautification.`;
 
-      const refs = [image0, faceRef, faceRef]; // faceRef duplicado para reforzar
+      const refs = [image0, faceRef, faceRef];
       if (outfitRef) refs.push(outfitRef);
       if (productRef && productIsRelevant !== false) refs.push(productRef);
       if (sceneRef) refs.push(sceneRef);
       
-      return generateWithResilience(fallbackPrompt, refs, '');
+      return generateWithPolling(fallbackPrompt, refs, '', true, shotIndex, totalShots, onStatusChange);
     }
 
     const directivePrompt = translateDirectiveToPrompt(directive, focus, ref0Analysis);
@@ -983,12 +1003,36 @@ CRITICAL REMINDERS:
 - ⚠️ NO ROLE MIXING - Each image serves ONE role only
 - ⚠️ LOCK SYSTEM ACTIVE - NO IDENTITY DRIFT, NO SCENE REDESIGN, NO FABRIC INVENTION`;
 
-    // Duplicar faceRef para reforzar el lock de identidad
     const refs: (string | null)[] = [image0, faceRef, faceRef];
     if (outfitRef) refs.push(outfitRef);
     if (productRef && productIsRelevant !== false) refs.push(productRef);
     if (sceneRef) refs.push(sceneRef);
     
-    return generateWithResilience(prompt, refs, system);
+    return generateWithPolling(prompt, refs, system, true, shotIndex, totalShots, onStatusChange);
+  },
+
+  // ──────────────────────────────────────────────────────────────
+  // generateDerivedShot - Versión síncrona legacy (usa async internamente)
+  // ──────────────────────────────────────────────────────────────
+  async generateDerivedShot(
+    image0: string,
+    faceRef: string,
+    outfitRef: string | null,
+    productRef: string | null,
+    sceneRef: string | null,
+    _style: any,
+    focus: Focus,
+    shotKey: ShotKey,
+    productSize?: ProductSize,
+    sessionPlan?: SessionPlan,
+    productIsRelevant?: boolean,
+    ref0Analysis?: REF0Analysis
+  ): Promise<string> {
+    return this.generateDerivedShotAsync(
+      image0, faceRef, outfitRef, productRef, sceneRef,
+      _style, focus, shotKey, productSize,
+      sessionPlan, productIsRelevant, ref0Analysis,
+      undefined, undefined, undefined
+    );
   },
 };
