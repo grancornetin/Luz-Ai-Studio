@@ -1,13 +1,10 @@
-// api/gemini/ugc.ts
+// api/gemini/ugc.ts - Usando @upstash/redis con variables KV_REST_API_*
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from '@google/genai';
 import { Redis } from '@upstash/redis';
 
 const RETRY_DELAY_MS = 3000;
 
-// ===================================================================
-// Tipos y configuraciones
-// ===================================================================
 type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
 interface Job {
   id: string;
@@ -20,8 +17,11 @@ interface Job {
   totalShots?: number;
 }
 
-// Inicializar Redis usando las variables de entorno de Vercel
-const redis = Redis.fromEnv();
+// Usar variables KV_REST_API_* que Vercel inyecta automáticamente
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL!,
+  token: process.env.KV_REST_API_TOKEN!,
+});
 
 function generateJobId(): string {
   return `${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
@@ -47,11 +47,8 @@ function cleanBase64(b64: string): string {
   return b64.replace(/^data:image\/(png|jpeg|webp);base64,/, '').replace(/\s/g, '');
 }
 
-// ===================================================================
-// Funciones de persistencia con Redis
-// ===================================================================
+// Guardar job en Redis con TTL de 1 hora
 async function saveJob(job: Job): Promise<void> {
-  // Guardar con expiración de 1 hora (3600 segundos)
   await redis.set(`job:${job.id}`, JSON.stringify(job), { ex: 3600 });
 }
 
@@ -61,15 +58,11 @@ async function getJob(jobId: string): Promise<Job | null> {
   return JSON.parse(data);
 }
 
-// ===================================================================
-// Procesamiento en background
-// ===================================================================
 async function processGenerationJob(
   jobId: string,
   parts: any[],
   aspectRatio: string
 ): Promise<void> {
-  // Obtener el job actualizado
   let job = await getJob(jobId);
   if (!job) return;
 
@@ -78,33 +71,27 @@ async function processGenerationJob(
   await saveJob(job);
 
   try {
-    // Modelos en orden de prioridad
     const models = [
       { name: 'gemini-3.1-flash-image-preview', location: 'global' },
       { name: 'gemini-3-pro-image-preview', location: 'global' },
       { name: 'gemini-2.5-flash-image', location: 'us-central1' },
     ];
 
-    let lastError: Error | null = null;
-
     for (const model of models) {
       try {
         console.log(`[UGC Job ${jobId}] Trying model: ${model.name}`);
         const ai = getGenAIClient(model.location);
-
         const response = await ai.models.generateContent({
           model: model.name,
           contents: [{ role: 'user', parts }],
           config: { responseModalities: ['TEXT', 'IMAGE'] },
         });
 
-        const candidates = response.candidates || [];
-        for (const candidate of candidates) {
+        for (const candidate of (response.candidates || [])) {
           for (const part of (candidate.content?.parts || [])) {
             if (part.inlineData?.data) {
               const mime = part.inlineData.mimeType || 'image/png';
               const imageData = `data:${mime};base64,${part.inlineData.data}`;
-
               job.status = 'completed';
               job.result = imageData;
               job.updatedAt = Date.now();
@@ -114,14 +101,11 @@ async function processGenerationJob(
             }
           }
         }
-        lastError = new Error(`No image in response from ${model.name}`);
       } catch (e: any) {
-        lastError = e;
         console.warn(`[UGC Job ${jobId}] Model ${model.name} failed:`, e.message);
       }
     }
-
-    throw lastError || new Error('All models failed');
+    throw new Error('All models failed');
   } catch (error: any) {
     job.status = 'failed';
     job.error = error.message;
@@ -131,9 +115,6 @@ async function processGenerationJob(
   }
 }
 
-// ===================================================================
-// Handler principal
-// ===================================================================
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -146,30 +127,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { action, payload } = req.body;
     if (!action) return res.status(400).json({ error: 'Missing action' });
 
-    // ================================================================
-    // generateImageAsync - Iniciar generación asíncrona
-    // ================================================================
+    // Iniciar generación asíncrona
     if (action === 'generateImageAsync') {
       const { prompt, referenceImages, aspectRatio = '3:4', shotIndex, totalShots } = payload;
       if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
 
       const parts: any[] = [];
-
-      if (referenceImages && referenceImages.length > 0) {
-        for (let i = 0; i < referenceImages.length; i++) {
-          const ref = referenceImages[i];
+      if (referenceImages?.length) {
+        for (const ref of referenceImages) {
           if (ref.data && ref.data.length > 64) {
-            parts.push({ text: `REF${i}:` });
-            parts.push({
-              inlineData: {
-                mimeType: ref.mimeType || 'image/jpeg',
-                data: cleanBase64(ref.data),
-              },
-            });
+            parts.push({ text: 'REF:' });
+            parts.push({ inlineData: { mimeType: ref.mimeType || 'image/jpeg', data: cleanBase64(ref.data) } });
           }
         }
       }
-
       parts.push({ text: prompt });
 
       const jobId = generateJobId();
@@ -182,30 +153,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         totalShots,
       };
       await saveJob(job);
-
-      // Procesar en segundo plano (sin esperar)
       processGenerationJob(jobId, parts, aspectRatio).catch(console.error);
 
-      return res.status(202).json({
-        success: true,
-        jobId,
-        status: 'pending',
-        shotIndex,
-        totalShots,
-      });
+      return res.status(202).json({ success: true, jobId, status: 'pending', shotIndex, totalShots });
     }
 
-    // ================================================================
-    // getJobStatus - Consultar estado de un job
-    // ================================================================
+    // Consultar estado
     if (action === 'getJobStatus') {
       const { jobId } = payload;
       if (!jobId) return res.status(400).json({ error: 'Missing jobId' });
 
       const job = await getJob(jobId);
-      if (!job) {
-        return res.status(404).json({ error: 'Job not found' });
-      }
+      if (!job) return res.status(404).json({ error: 'Job not found' });
 
       const response: any = {
         jobId: job.id,
@@ -215,20 +174,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         shotIndex: job.shotIndex,
         totalShots: job.totalShots,
       };
-
-      if (job.status === 'completed') {
-        response.image = job.result;
-      }
-      if (job.status === 'failed') {
-        response.error = job.error;
-      }
-
+      if (job.status === 'completed') response.image = job.result;
+      if (job.status === 'failed') response.error = job.error;
       return res.status(200).json(response);
     }
 
-    // ================================================================
-    // analyzeREF0 - análisis de luz/espacio/pose (síncrono)
-    // ================================================================
+    // ==================== ANÁLISIS (síncronos) ====================
     if (action === 'analyzeREF0') {
       const { imageData, mimeType } = payload;
       const ai = getGenAIClient('us-central1');
@@ -241,18 +192,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   "lighting": { "primarySource": "string", "direction": "string", "colorTemperature": "string", "shadowType": "string", "intensity": "string" },
   "spatial": { "elements": ["string"], "walls": "string", "floor": "string", "geometry": "string" },
   "poseContext": { "hasSeating": "boolean", "hasLeaningSurface": "boolean", "hasTable": "boolean", "availableActions": ["string"] }
-}` },
+}` }
         ],
-        config: { responseMimeType: 'application/json' },
+        config: { responseMimeType: 'application/json' }
       });
       const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
       const clean = text.replace(/```json|```/g, '').trim();
       return res.status(200).json(JSON.parse(clean));
     }
 
-    // ================================================================
-    // analyzeProductRelevance
-    // ================================================================
     if (action === 'analyzeProductRelevance') {
       const { productRef, focus, outfitRef, sceneRef, sceneText } = payload;
       const parts: any[] = [];
@@ -279,16 +227,13 @@ Respond ONLY with JSON: { "isRelevant": boolean, "suggestion": "string", "produc
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: [{ role: 'user', parts }],
-        config: { responseMimeType: 'application/json' },
+        config: { responseMimeType: 'application/json' }
       });
       const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
       const clean = text.replace(/```json|```/g, '').trim();
       return res.status(200).json(JSON.parse(clean));
     }
 
-    // ================================================================
-    // analyzeOutfit
-    // ================================================================
     if (action === 'analyzeOutfit') {
       const { imageData, mimeType } = payload;
       const ai = getGenAIClient('us-central1');
@@ -297,18 +242,15 @@ Respond ONLY with JSON: { "isRelevant": boolean, "suggestion": "string", "produc
         contents: [
           { text: "Analyze this outfit. Respond ONLY with JSON." },
           { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
-          { text: `{ "hasJacket": "boolean", "hasPants": "boolean", "hasShoes": "boolean", "hasAccessories": "boolean", "hasDetail": "boolean", "fabricType": "string", "colors": ["string"], "hasTop": "boolean", "hasBottom": "boolean", "hasBelt": "boolean", "hasBag": "boolean", "hasHat": "boolean", "hasNecklace": "boolean", "bottomType": "shorts|pants|skirt|unknown" }` },
+          { text: `{ "hasJacket": "boolean", "hasPants": "boolean", "hasShoes": "boolean", "hasAccessories": "boolean", "hasDetail": "boolean", "fabricType": "string", "colors": ["string"], "hasTop": "boolean", "hasBottom": "boolean", "hasBelt": "boolean", "hasBag": "boolean", "hasHat": "boolean", "hasNecklace": "boolean", "bottomType": "shorts|pants|skirt|unknown" }` }
         ],
-        config: { responseMimeType: 'application/json' },
+        config: { responseMimeType: 'application/json' }
       });
       const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
       const clean = text.replace(/```json|```/g, '').trim();
       return res.status(200).json(JSON.parse(clean));
     }
 
-    // ================================================================
-    // analyzeScene
-    // ================================================================
     if (action === 'analyzeScene') {
       const { imageData, mimeType } = payload;
       const ai = getGenAIClient('us-central1');
@@ -317,9 +259,9 @@ Respond ONLY with JSON: { "isRelevant": boolean, "suggestion": "string", "produc
         contents: [
           { text: "Analyze this scene. Respond ONLY with JSON." },
           { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
-          { text: `{ "hasFurniture": "boolean", "hasNature": "boolean", "hasEquipment": "boolean", "hasTable": "boolean", "hasSeating": "boolean", "hasWindows": "boolean", "hasProps": "boolean", "sceneType": "string" }` },
+          { text: `{ "hasFurniture": "boolean", "hasNature": "boolean", "hasEquipment": "boolean", "hasTable": "boolean", "hasSeating": "boolean", "hasWindows": "boolean", "hasProps": "boolean", "sceneType": "string" }` }
         ],
-        config: { responseMimeType: 'application/json' },
+        config: { responseMimeType: 'application/json' }
       });
       const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
       const clean = text.replace(/```json|```/g, '').trim();
