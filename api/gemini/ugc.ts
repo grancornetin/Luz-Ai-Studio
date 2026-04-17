@@ -53,9 +53,10 @@ async function saveJob(job: Job): Promise<void> {
 }
 
 async function getJob(jobId: string): Promise<Job | null> {
-  const data = await redis.get<string>(`job:${jobId}`);
+  const data = await redis.get(`job:${jobId}`);
   if (!data) return null;
-  return JSON.parse(data);
+  if (typeof data === 'string') return JSON.parse(data);
+  return data as Job;
 }
 
 async function processGenerationJob(
