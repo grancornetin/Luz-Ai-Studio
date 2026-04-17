@@ -2,6 +2,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from '@google/genai';
 import { Redis } from '@upstash/redis';
+import { Client as QStashClient } from '@upstash/qstash';
 
 const RETRY_DELAY_MS = 3000;
 
@@ -154,9 +155,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         totalShots,
       };
       await saveJob(job);
-      processGenerationJob(jobId, parts, aspectRatio).catch(console.error);
 
-      return res.status(202).json({ success: true, jobId, status: 'pending', shotIndex, totalShots });
+const qstash = new QStashClient({ token: process.env.QSTASH_TOKEN! });
+const workerUrl = `https://${process.env.VERCEL_URL}/api/gemini/ugc-worker`;
+
+await qstash.publishJSON({
+  url: workerUrl,
+  body: { jobId, parts },
+  retries: 2,
+});
+
+console.log(`[UGC] Job ${jobId} enqueued → ${workerUrl}`);
+return res.status(202).json({ success: true, jobId, status: 'pending', shotIndex, totalShots });
     }
 
     // Consultar estado
