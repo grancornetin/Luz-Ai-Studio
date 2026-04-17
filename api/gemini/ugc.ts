@@ -157,7 +157,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await saveJob(job);
 
 const qstash = new QStashClient({ token: process.env.QSTASH_TOKEN! });
-const workerUrl = `https://${process.env.VERCEL_URL}/api/gemini/ugc-worker`;
+const workerUrl = `${process.env.WORKER_BASE_URL}/api/gemini/ugc-worker`;
 
 await qstash.publishJSON({
   url: workerUrl,
