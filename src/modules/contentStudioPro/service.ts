@@ -139,7 +139,11 @@ OUTFIT INVENTION (FORBIDDEN IN DETAIL SHOTS):
 inventing fabric continuation, fake hem, imaginary pants length, non-existent shorts to pants transition,
 adding fabric where none exists, reconstructing garment structure beyond visible reference,
 inventing shoes, inventing accessories, changing fabric texture, changing color,
-altering garment length, adding folds that don't exist, changing silhouette
+altering garment length, adding folds that don't exist, changing silhouette,
+changing shoe design, different number of straps, different strap routing,
+simplified heel, different heel shape or height, different toe box shape,
+changing tights color or opacity, changing hosiery from black to any other color,
+changing accessory hardware, reinterpreting product design
 
 SCENE REDESIGN (FORBIDDEN):
 different background, different location, relocated furniture, different walls, different floor,
@@ -157,6 +161,8 @@ mannequin stiffness, symmetric catalog stance
 TECHNICAL ARTIFACTS:
 watermark, signature, text overlay, logos without being the product itself,
 collage, multiple images, grid, side by side, before/after,
+composite image, face pasted over body, face reference used as overlay layer,
+reference image inserted as collage element, photomontage, multiple exposures,
 phone visible in selfie, camera visible, third-person selfie framed as first-person,
 extra limbs, duplicated arms, phantom hands, broken joints, impossible limb positions,
 color drift between shots, different color temperature, different white balance,
@@ -175,9 +181,14 @@ face replacement, identity change, different person, different face,
 different hair color, different hair texture, different eye color,
 different bone structure, averaging face with other references,
 using REF0 person instead of face reference person,
+composite image, face pasted over body, face reference used as overlay,
+collage artifact, photomontage, reference image inserted as layer,
 beautification, skin smoothing, editorial look, studio lighting,
 luxury redesign, mannequin pose, catalog stance, walking blur,
 outfit invention, fake fabric, extra clothing,
+different shoe design, different shoe straps, different heel shape,
+different heel height, simplified shoe, reinterpreted shoe,
+different tights color, different tights opacity, different hosiery,
 phone visible in selfie, third-person selfie,
 different background, scene redesign,
 person floating over background, lighting mismatch person vs scene,
@@ -223,6 +234,14 @@ const LOCK_SYSTEM = `
 - NO face replacement, NO identity drift, NO different person.
 - NO beautification, NO skin smoothing.
 - The face reference OVERRIDES every other image — including REF0 — for who the person is.
+
+⚠️ ANTI-COLLAGE / ANTI-COMPOSITE RULE (CRITICAL):
+- The face reference is a VISUAL GUIDE for identity ONLY — NOT an element to be placed into the image.
+- DO NOT paste, overlay, composite, or layer the face reference into the generated image.
+- DO NOT treat any reference image as a collage layer to be inserted.
+- The result must be a SINGLE SEAMLESS PHOTOGRAPH generated from scratch.
+- If the face reference is a close-up headshot: use it to understand who the person is, then generate the full scene naturally with that person in it.
+- A composite image (person's body + pasted face reference) is a HARD FAILURE.
 
 🔒🔒 VISUAL CONTINUITY LOCK (PREVENTS DRIFT BETWEEN SHOTS):
 - Same color temperature across all shots — do NOT shift warm/cool.
@@ -759,6 +778,14 @@ Expression: ${variation || 'genuine, clearly different from other shots in the s
 Natural skin texture MUST be visible — pores, fine lines, subtle imperfections are CORRECT.
 This is a REAL person with REAL skin, NOT a beauty filter output.
 
+⚠️ CRITICAL ANTI-COLLAGE RULE:
+The face reference is a GUIDE for identity ONLY.
+DO NOT insert, paste, overlay, or composite the face reference as a layer into this image.
+DO NOT treat the face reference as an image element to be placed into the scene.
+The face must be GENERATED as part of this photograph from scratch, using the reference ONLY to know what the person looks like.
+If the face reference is a close-up headshot: use it to understand identity, then generate the full shot naturally.
+RESULT: a single seamless photograph — NOT a composite, NOT a collage, NOT a face pasted over a body.
+
 NO beautification. NO skin smoothing. NO softbox. NO retouching.
 This face must be IDENTICAL to face reference.
 The emotion must be PERCEIVABLE at a glance.`);
@@ -1042,6 +1069,14 @@ UGC product review photo. Product and face both clearly visible.
 Product is the visual hero. Person shows GENUINE enthusiasm — NOT neutral.
 Person holds or presents the product naturally, as if recommending it.
 Real lifestyle environment (not studio). Person and product feel authentic.
+
+⚠️ PRODUCT PRIORITY DISAMBIGUATION:
+The PRODUCT reference is the item being reviewed/featured. It OVERRIDES the outfit.
+If the product reference shows footwear AND the outfit reference also shows footwear:
+→ The person WEARS and SHOWS the PRODUCT footwear. The outfit's footwear is IGNORED.
+→ The product is what the person is actively presenting, holding, wearing, or demonstrating.
+→ The outfit provides clothing context ONLY — it does NOT determine what product is shown.
+The product reference is the single source of truth for what object appears as hero.
 ${promptExtra}`,
       
       SCENE: `
@@ -1066,7 +1101,8 @@ ${ref0PromptByFocus[focus]}
 🔒 LOCK SYSTEM:
 - FACE: IDENTICAL to face reference (refs 1 and 2). Non-negotiable.
 ${finalOutfitRef ? '- OUTFIT: IDENTICAL to outfit reference. Same garments, same fit, same color, same fabric.' : ''}
-${finalProductRef ? '- PRODUCT: IDENTICAL to product reference. Same shape, color, material, details.' : ''}
+${finalProductRef ? `- PRODUCT: IDENTICAL to product reference. Same exact shape, color, material, design details.
+  ${focus === 'PRODUCT' ? '  ⚠️ PRODUCT OVERRIDES OUTFIT: If product and outfit both contain footwear, the person wears and shows the PRODUCT footwear — not the outfit footwear.' : ''}` : ''}
 ${finalSceneRef ? '- SCENE: IDENTICAL to scene reference. Person shares the scene\'s light.' : ''}
 
 UNIVERSAL RULES:
@@ -1189,8 +1225,19 @@ VISUAL CONTINUITY LOCK (PREVENTS DRIFT):
 - Same ambient light quality — do NOT add/remove light sources.
 - Same contrast range — do NOT add HDR, drama, or filters.
 
-${outfitRef ? `OUTFIT LOCK:\n- The outfit MUST be IDENTICAL to outfitRef.\n- For DETAIL shoe shots: ONLY shoe, ankle, floor. NO pant leg. NO invented fabric.` : ''}
-${productRef ? `PRODUCT LOCK:\n- The product MUST be IDENTICAL to productRef.` : ''}
+${outfitRef ? `OUTFIT LOCK:
+- The outfit MUST be IDENTICAL to outfitRef. Same garments, same fit, same color, same fabric.
+- SHOE SPECIFICITY LOCK: Reproduce the exact shoe design from the outfit reference.
+  Same number of straps, same strap routing, same heel shape and height, same toe shape,
+  same hardware (buckles, clasps), same material finish (patent, suede, matte), same color.
+  Do NOT simplify, reinterpret, or generalize the shoe. It must be recognizably the same shoe.
+- For DETAIL shoe shots: ONLY shoe, ankle, floor. NO pant leg. NO invented fabric.
+- Tight/opaque/sheer level of hosiery must match outfit reference. Do NOT change color or opacity of tights/stockings.` : ''}
+${productRef ? `PRODUCT LOCK:
+- The product MUST be IDENTICAL to productRef. Same exact shape, color, material, all design details.
+- PRODUCT OVERRIDES OUTFIT for the featured item: if both contain the same item type (e.g. footwear),
+  the PRODUCT reference is what the person presents/wears/features. The outfit provides clothing context only.
+- Do NOT substitute, reinterpret, or generalize the product. It must be recognizably the same item.` : ''}
 ${sceneRef ? `SCENE LOCK:\n- The scene MUST be IDENTICAL to sceneRef. NO redesign.\n- Person SHARES the scene's lighting — same direction, same color temp.\n- Person at correct scale relative to scene elements.` : ''}
 
 ${ref0AnalysisBlock}
