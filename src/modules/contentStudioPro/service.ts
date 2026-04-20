@@ -120,7 +120,13 @@ IDENTITY DRIFT (ABSOLUTELY FORBIDDEN):
 different person, different face, different features, different bone structure,
 face replacement, identity change, person swap, different ethnicity, different age,
 woman replacing man, man replacing woman, different facial structure,
-face that does NOT match the face reference EXACTLY
+different hair color, different hair texture, straight hair replacing wavy hair,
+dark hair replacing blonde hair, blonde hair replacing dark hair,
+different eye color, different eye shape, different nose shape,
+different jaw shape, different lip shape,
+face that does NOT match the face reference EXACTLY,
+averaging the face with other references,
+using REF0's person instead of the face reference person
 
 BEAUTIFICATION & EDITORIAL (FORBIDDEN):
 beautification, skin smoothing, beauty filter, airbrushed, retouched, perfect skin,
@@ -165,7 +171,10 @@ person floating or appearing pasted onto the background
 
 // Negative prompt corto para shots derivados (evita timeout)
 const NEGATIVE_SHORT = `
-face replacement, identity change, different person,
+face replacement, identity change, different person, different face,
+different hair color, different hair texture, different eye color,
+different bone structure, averaging face with other references,
+using REF0 person instead of face reference person,
 beautification, skin smoothing, editorial look, studio lighting,
 luxury redesign, mannequin pose, catalog stance, walking blur,
 outfit invention, fake fabric, extra clothing,
@@ -203,12 +212,17 @@ const LOCK_SYSTEM = `
 ║              LOCK SYSTEM (NON-NEGOTIABLE — NEVER CHANGES)        ║
 ╚═══════════════════════════════════════════════════════════════════╝
 
-🔒🔒🔒 IDENTITY LOCK (HARD — ABSOLUTE PRIORITY):
-- The person's FACE MUST be EXACTLY the same as face reference.
-- Same face, same features, same bone structure, same person.
+🔒🔒🔒 IDENTITY LOCK (HARD — ABSOLUTE PRIORITY — READ BEFORE ANYTHING ELSE):
+- The face reference appears MULTIPLE TIMES in this request. That is intentional.
+  It means: this face is the non-negotiable ground truth. Do not average it. Do not override it.
+- The person's FACE MUST be EXACTLY the same as face reference in every single shot.
+- Same bone structure, same eye shape and color, same nose, same lips, same jaw, same chin.
+- Same hair: color, length, texture, wave/straight/curly pattern.
+- Same skin tone: undertone, warmth, complexion depth.
+- Same person. Every shot. Zero exceptions.
 - NO face replacement, NO identity drift, NO different person.
 - NO beautification, NO skin smoothing.
-- The face reference OVERRIDES any other image for identity.
+- The face reference OVERRIDES every other image — including REF0 — for who the person is.
 
 🔒🔒 VISUAL CONTINUITY LOCK (PREVENTS DRIFT BETWEEN SHOTS):
 - Same color temperature across all shots — do NOT shift warm/cool.
@@ -973,7 +987,9 @@ export const contentStudioService = {
     await this.ensureAccess();
 
     const useProduct = productIsRelevant !== false;
-    const refsToPass: (string | null)[] = [faceRef];
+    // IDENTITY-FIRST: faceRef en posición 0 y 1 para máximo peso de identidad.
+    // El modelo siempre leerá las primeras referencias con mayor peso.
+    const refsToPass: (string | null)[] = [faceRef, faceRef];
     let promptExtra = '';
 
     let finalOutfitRef = outfitRef;
@@ -1039,13 +1055,19 @@ ${promptExtra}`
     };
 
     const prompt = `
+⚠️⚠️⚠️ REFERENCE IMAGE 1 AND 2 ARE THE FACE IDENTITY LOCK. ⚠️⚠️⚠️
+The person in THIS IMAGE is the ONLY person allowed in this generation.
+Copy their face, bone structure, skin tone, hair color and texture, eye color, and all facial features EXACTLY.
+Do NOT substitute this person for any other. Do NOT average with other references.
+The face in references 1 and 2 is the GROUND TRUTH identity. NEVER override it.
+
 ${ref0PromptByFocus[focus]}
 
-🔒 CRITICAL LOCK SYSTEM ACTIVE:
-- FACE MUST be IDENTICAL to face reference. NO face replacement. NO identity drift.
-${finalOutfitRef ? '- OUTFIT MUST be IDENTICAL to outfit reference.' : ''}
-${finalProductRef ? '- PRODUCT MUST be IDENTICAL to product reference.' : ''}
-${finalSceneRef ? '- SCENE MUST be IDENTICAL to scene reference. Person SHARES the scene\'s light.' : ''}
+🔒 LOCK SYSTEM:
+- FACE: IDENTICAL to face reference (refs 1 and 2). Non-negotiable.
+${finalOutfitRef ? '- OUTFIT: IDENTICAL to outfit reference. Same garments, same fit, same color, same fabric.' : ''}
+${finalProductRef ? '- PRODUCT: IDENTICAL to product reference. Same shape, color, material, details.' : ''}
+${finalSceneRef ? '- SCENE: IDENTICAL to scene reference. Person shares the scene\'s light.' : ''}
 
 UNIVERSAL RULES:
 - Natural iPhone quality. UGC feel. NO studio polish.
@@ -1112,17 +1134,20 @@ UNIVERSAL RULES:
     if (!directive) {
       console.warn(`[UGC] No directive found for ${shotKey}, usando fallback`);
       const fallbackPrompt = `
+⚠️⚠️⚠️ IDENTITY LOCK — ABSOLUTE PRIORITY ⚠️⚠️⚠️
+References 2, 3, and 4 are the FACE IDENTITY. This is the ONLY person allowed.
+Copy their face EXACTLY: bone structure, eye color/shape, hair color/texture, skin tone.
+Do NOT substitute, average, or replace this person for any reason.
+
 CREATE A NEW PHOTO from the same session as REF0 for ${shotKey}.
 
-🔒 CRITICAL — SAME SESSION:
-- Keep PERSON'S FACE IDENTICAL to faceRef (NO face replacement, NO identity drift)
-- Keep OUTFIT, SCENE, PRODUCT IDENTICAL to REF0
-- Only change: framing, distance, angle, interaction, expression
+ONLY change: framing, distance, angle, interaction, expression.
+Keep everything else identical to REF0 and the references.
 
 Same color temperature as REF0. Same ambient light. Same environment.
 Natural UGC aesthetic. NO beautification. NO studio polish.`;
 
-      const refs = [image0, faceRef, faceRef];
+      const refs = [image0, faceRef, faceRef, faceRef];
       if (outfitRef) refs.push(outfitRef);
       if (productRef && productIsRelevant !== false) refs.push(productRef);
       if (sceneRef) refs.push(sceneRef);
@@ -1136,21 +1161,33 @@ Natural UGC aesthetic. NO beautification. NO studio polish.`;
     const system = `${PARADIGM_RULE}\n${REF0_ANCHOR_RULE}\n${getModeDominance(focus)}`;
 
     const prompt = `
+⚠️⚠️⚠️ IDENTITY LOCK — READ THIS FIRST BEFORE ANYTHING ELSE ⚠️⚠️⚠️
+
+References 2 and 3 in this request are the FACE IDENTITY.
+This is the ONLY person permitted in this image.
+- Copy their face EXACTLY: bone structure, eye shape, eye color, nose, lips, jaw, chin, brow shape.
+- Copy their hair EXACTLY: color, texture, length, wave pattern.
+- Copy their skin tone EXACTLY: undertone, warmth, complexion.
+- Do NOT average their face with REF0 or any other reference.
+- Do NOT substitute a different person even if it seems to "fit" the shot better.
+- If the shot role requires a different angle, expression, or distance — keep SAME FACE, change ONLY the angle/expression/distance.
+- This constraint has ABSOLUTE priority over every other instruction in this prompt.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CREATE A NEW PHOTO FROM THE SAME SESSION AS REF0.
 
-🔒🔒🔒 LOCK SYSTEM ACTIVE (NON-NEGOTIABLE):
+REFERENCE GUIDE:
+- REF0 (ref 1): establishes the environment, lighting, and visual world of the session.
+- FACE REF (refs 2 and 3): establishes the IDENTITY. This OVERRIDES REF0 for who the person is.
+${outfitRef ? '- OUTFIT REF: establishes the exact garments. Must be reproduced identically.' : ''}
+${productRef ? '- PRODUCT REF: establishes the exact product. Must be reproduced identically.' : ''}
+${sceneRef ? '- SCENE REF: establishes the exact environment. Must be reproduced identically.' : ''}
 
-IDENTITY LOCK:
-- The person's FACE MUST be IDENTICAL to faceRef.
-- The faceRef OVERRIDES any other image for identity.
-- NO face drift, NO face replacement, NO different person.
-
-VISUAL CONTINUITY LOCK (PREVENTS COLOR/LIGHT DRIFT):
+VISUAL CONTINUITY LOCK (PREVENTS DRIFT):
 - Same color temperature as REF0 — do NOT shift warm/cool.
 - Same skin tone rendering as REF0 — do NOT lighten or darken.
 - Same ambient light quality — do NOT add/remove light sources.
 - Same contrast range — do NOT add HDR, drama, or filters.
-- Every shot must look like it was taken in the SAME session, SAME day.
 
 ${outfitRef ? `OUTFIT LOCK:\n- The outfit MUST be IDENTICAL to outfitRef.\n- For DETAIL shoe shots: ONLY shoe, ankle, floor. NO pant leg. NO invented fabric.` : ''}
 ${productRef ? `PRODUCT LOCK:\n- The product MUST be IDENTICAL to productRef.` : ''}
@@ -1160,19 +1197,20 @@ ${ref0AnalysisBlock}
 
 ${directivePrompt}
 
-CRITICAL REMINDERS:
-- The ${focus.toUpperCase()} must be the VISUAL HERO according to MODE DOMINANCE.
-- Keep PERSON'S FACE, PRODUCT, OUTFIT, SCENE identical to references.
-- Only change: framing, distance, angle, interaction, expression.
-- NO beautification, NO skin smoothing, NO studio polish, NO editorial softening.
-- NO face replacement, NO identity drift.
-- Natural UGC aesthetic — iPhone quality, organic lighting, slight imperfections ALLOWED.
-- ⚠️ ROLE ENFORCEMENT IS MANDATORY — each shot serves ONE role only.
-- ⚠️ NO ROLE MIXING — hero shots don't become closeups, selfies stay selfies.
-- ⚠️ VISUAL CONTINUITY LOCK — same session feel across ALL shots.
-- ⚠️ SCENE INTEGRATION — if scene exists, person BELONGS in it physically.`;
+FINAL CHECKLIST (apply before finalizing):
+✓ The person's face matches face references (refs 2 and 3) exactly.
+✓ The outfit matches outfit reference (if provided) exactly.
+✓ The product matches product reference (if provided) exactly.
+✓ The scene matches scene/REF0 exactly — no redesign.
+✓ Color temperature matches REF0.
+✓ NO beautification, NO skin smoothing, NO editorial softening.
+✓ Natural UGC iPhone quality — real skin texture, organic lighting.
+✓ The shot role is correctly executed (no role mixing).`;
 
-    const refs: (string | null)[] = [image0, faceRef, faceRef];
+    // IDENTITY-FIRST refs: REF0 primero (establece el mundo visual),
+    // luego faceRef TRES veces para que el modelo lo priorice sobre cualquier otra referencia.
+    // El número de repeticiones del faceRef compensa el peso que el modelo da a REF0.
+    const refs: (string | null)[] = [image0, faceRef, faceRef, faceRef];
     if (outfitRef) refs.push(outfitRef);
     if (productRef && productIsRelevant !== false) refs.push(productRef);
     if (sceneRef) refs.push(sceneRef);
