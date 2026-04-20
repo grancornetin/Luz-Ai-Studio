@@ -258,28 +258,22 @@ const getModeDominance = (focus: Focus): string => {
 
 CRITICAL RULES:
 - FACE is the ABSOLUTE HERO in EVERY shot.
-- MAXIMUM 1 full body shot per session.
-- SELFIE is MANDATORY (at least 1, with physical arm evidence).
+- MAXIMUM 1 full body shot per session (S4 puede ser full body).
+- SELFIE is MANDATORY (S2, with physical arm evidence).
 - Outfit, accessories, product are SECONDARY background only.
 - No detail shot of outfit as main subject.
 
 COMPOSITION LIMITS:
-- At least 2 face-led shots (expression, close-up, selfie)
-- SELFIE must show: arm extended, shoulder visible, handheld feel
-- HERO: medium shot (waist up), face dominant
-- LIFESTYLE: person visible, but face remains clear
-- FORBIDDEN: outfit detail shots, accessory-led shots, full-body hero
-
-PRIORITY ORDER:
-1. FACE (dominant, expressive, alive, identical to faceRef)
-2. Expression (clear, varied, authentic)
-3. SELFIE (mandatory, with arm evidence)
-4. Product/Outfit (secondary, background only)
+- At least 2 face-led shots (S3 expression, S5 interaction).
+- SELFIE must show: arm extended, shoulder visible, handheld feel.
+- HERO (S1): medium shot (waist up), face dominant.
+- LIFESTYLE (S6): person visible, face clear.
+- MODEL POSE (S4): full body natural pose.
 
 FORBIDDEN in AVATAR mode:
 - Detail shots of belt, bag, shoes as main subject
 - Outfit dominating the frame
-- More than 1 full-body wide shot
+- More than 2 full-body wide shots
 - Face not clearly visible in expression/selfie shots
 - Any shot where outfit competes with face for attention
 `;
@@ -554,12 +548,17 @@ The environment must look exactly as in REF0.
 };
 
 // ===================================================================
-// TRADUCIR SHOT DIRECTIVE A PROMPT - VERSIÓN REFORZADA
+// TRADUCIR SHOT DIRECTIVE A PROMPT - VERSIÓN DINÁMICA
 // ===================================================================
 function translateDirectiveToPrompt(directive: ShotDirective, focus: Focus, ref0Analysis?: REF0Analysis): string {
   const parts: string[] = [];
   
-  // SELFIE - física real, no selfie bonita
+  // Selección aleatoria de variación (si existe)
+  const variation = directive.variationSpace && directive.variationSpace.length > 0
+    ? directive.variationSpace[Math.floor(Math.random() * directive.variationSpace.length)]
+    : '';
+  
+  // Construcción dinámica según rol y enfoque
   if (directive.role === 'SELFIE') {
     parts.push(`
 🔴🔴🔴 THIS IS AN AUTHENTIC SELFIE - PHYSICAL RULES 🔴🔴🔴
@@ -570,10 +569,9 @@ function translateDirectiveToPrompt(directive: ShotDirective, focus: Focus, ref0
 - NO third-person view. NO full body. NO professional portrait.
 - The arm extending from bottom/side of frame MUST be visible.
 - Shoulder visible at bottom edge.
-- This feels like a real person taking a selfie, not a staged photo.
+- ${variation || 'Natural selfie pose.'}
 - NO beautification, NO skin smoothing, NO studio lighting.`);
   } 
-  // DETAIL - extremo, sin invención de geometría
   else if (directive.role === 'DETAIL') {
     const target = directive.detailTarget || 'texture';
     if (target === 'shoe') {
@@ -583,8 +581,7 @@ function translateDirectiveToPrompt(directive: ShotDirective, focus: Focus, ref0
 - ONLY visible: shoe, ankle, floor/ground.
 - FORBIDDEN: pant leg, hem, shorts, fabric continuation, fake clothing.
 - DO NOT invent tela, DO NOT add pants where none exist.
-- If reference shows shorts, the shoe detail shows shorts ending above shoe - NO pant leg added.
-- The shoe fills 85-90% of frame.
+- ${variation || 'Shoe fills 85-90% of frame.'}
 - NO face. NO full body. NO upper body.
 - This is a PRODUCT/SHOE detail, not a clothing detail.`);
     } else if (target === 'fabric' || target === 'texture') {
@@ -593,7 +590,7 @@ function translateDirectiveToPrompt(directive: ShotDirective, focus: Focus, ref0
 - Camera distance: 10-15cm from the fabric.
 - ONLY texture, weave, material surface visible.
 - NO garment silhouette, NO full clothing item, NO face, NO body.
-- The fabric fills 85-90% of frame.
+- ${variation || 'The fabric fills 85-90% of frame.'}
 - Background completely blurred or absent.
 - This is MATERIAL texture, not clothing styling.`);
     } else {
@@ -603,22 +600,20 @@ function translateDirectiveToPrompt(directive: ShotDirective, focus: Focus, ref0
 - ONLY the target (${target}) fills 85-90% of frame.
 - NO face. NO full body. NO surrounding elements.
 - NO invention of non-existent geometry.
-- Background blurred or absent.`);
+- ${variation || 'Background blurred or absent.'}`);
     }
   } 
-  // EXPRESSION - cara domina, sin beautification
   else if (directive.role === 'EXPRESSION') {
     parts.push(`
 🔴🔴🔴 AUTHENTIC FACE EXPRESSION - NO BEAUTIFICATION 🔴🔴🔴
 - Face fills 70-80% of frame.
-- Expression must be clearly different from other shots.
+- Expression: ${variation || 'clearly different from other shots'}.
 - Natural skin texture, pores, imperfections visible and ALLOWED.
 - NO beautification, NO skin smoothing, NO retouching.
 - NO studio lighting, NO softbox.
 - This is a REAL PERSON expressing genuine emotion.
 - The face MUST be IDENTICAL to face reference.`);
   } 
-  // HERO según modo
   else if (directive.role === 'HERO') {
     if (focus === 'AVATAR') {
       parts.push(`
@@ -626,7 +621,7 @@ function translateDirectiveToPrompt(directive: ShotDirective, focus: Focus, ref0
 - MEDIUM shot (waist up). NOT full body.
 - Face takes 40-50% of frame - CLEAR, DOMINANT, EXPRESSIVE.
 - Outfit is secondary background only.
-- Person's expression and presence are the focus.
+- ${variation || 'Person\'s expression and presence are the focus.'}
 - NO outfit competition, NO accessory focus.
 - The face MUST be IDENTICAL to face reference.`);
     } else if (focus === 'OUTFIT') {
@@ -635,7 +630,7 @@ function translateDirectiveToPrompt(directive: ShotDirective, focus: Focus, ref0
 - FULL BODY visible head to toe.
 - The outfit is the ONLY visual hero.
 - Face may be visible but secondary (max 15% of frame).
-- Show complete silhouette, fit, drape.
+- ${variation || 'Show complete silhouette, fit, drape.'}
 - The outfit MUST be IDENTICAL to outfit reference.`);
     } else if (focus === 'PRODUCT') {
       parts.push(`
@@ -643,10 +638,10 @@ function translateDirectiveToPrompt(directive: ShotDirective, focus: Focus, ref0
 - Product and face both visible.
 - Product is visually dominant (40-50% of frame).
 - Avatar's face shows positive expression (20-30% of frame).
+- ${variation || 'Presenting gesture, holding product naturally.'}
 - The product MUST be IDENTICAL to product reference.`);
     }
   }
-  // INTERACTION
   else if (directive.role === 'INTERACTION') {
     parts.push(`
 🔴🔴🔴 INTERACTION SHOT - HANDS IN ACTION 🔴🔴🔴
@@ -654,10 +649,9 @@ function translateDirectiveToPrompt(directive: ShotDirective, focus: Focus, ref0
 - Clear action: adjusting, holding, touching, using, demonstrating.
 - Mid shot framing: upper body + hands visible.
 - Face visible and engaged with the action.
-- Static pose without interaction is FORBIDDEN.
+- ${variation || 'Static pose without interaction is FORBIDDEN.'}
 - NO frozen hands, NO purposeless hand placement.`);
   }
-  // LIFESTYLE
   else if (directive.role === 'LIFESTYLE') {
     parts.push(`
 🔴🔴🔴 LIFESTYLE SHOT - AUTHENTIC MOMENT 🔴🔴🔴
@@ -666,9 +660,8 @@ function translateDirectiveToPrompt(directive: ShotDirective, focus: Focus, ref0
 - Context/environment visible around the person.
 - Authentic, candid feel - NOT editorial.
 - Face visible with natural expression.
-- Person occupies 40-50% of frame, environment the rest.`);
+- ${variation || 'Person occupies 40-50% of frame, environment the rest.'}`);
   }
-  // ALT_ANGLE
   else if (directive.role === 'ALT_ANGLE') {
     parts.push(`
 🔴🔴🔴 ALTERNATE ANGLE - SIGNIFICANTLY DIFFERENT 🔴🔴🔴
@@ -676,7 +669,16 @@ function translateDirectiveToPrompt(directive: ShotDirective, focus: Focus, ref0
 - Valid options: side angle (45-90°), low angle (from below), high angle (from above), 3/4 profile.
 - Eye-level alone is NOT sufficient (needs ≥30° difference).
 - Same subject, different perspective.
-- This is NOT a micro-adjustment.`);
+- ${variation || 'This is NOT a micro-adjustment.'}`);
+  }
+  else if (directive.role === 'CONTEXT') {
+    parts.push(`
+🔴🔴🔴 CONTEXT SHOT - ENVIRONMENT DOMINANT 🔴🔴🔴
+- Environment is the hero (65-75% of frame).
+- Person visible as visitor (25-35% of frame).
+- NO redesign, NO added furniture, NO idealization.
+- ${variation || 'Wide shot showing place beauty.'}
+- Person enjoying/experiencing the space.`);
   }
   
   // Agregar reglas base
@@ -687,11 +689,13 @@ function translateDirectiveToPrompt(directive: ShotDirective, focus: Focus, ref0
   parts.push(`INTENTION: ${directive.purpose}`);
   
   if (directive.requiredElements.length > 0) {
-    parts.push(`REQUIRED ELEMENTS: ${directive.requiredElements.join(', ')}`);
+    const requiredText = directive.requiredElements.map(e => e.replace(/_/g, ' ')).join(', ');
+    parts.push(`REQUIRED ELEMENTS: ${requiredText}`);
   }
   
   if (directive.forbiddenElements.length > 0) {
-    parts.push(`FORBIDDEN ELEMENTS: ${directive.forbiddenElements.join(', ')}`);
+    const forbiddenText = directive.forbiddenElements.map(e => e.replace(/_/g, ' ')).join(', ');
+    parts.push(`FORBIDDEN ELEMENTS: ${forbiddenText}`);
   }
   
   if (directive.exclusion.length > 0) {
@@ -699,7 +703,7 @@ function translateDirectiveToPrompt(directive: ShotDirective, focus: Focus, ref0
     parts.push(`EXCLUSIONS: ${exclusionText}`);
   }
   
-  // Face lock adicional para todos los shots
+  // Face lock adicional
   parts.push(`
 🔒🔒🔒 FACE IDENTITY LOCK 🔒🔒🔒
 - The person's face MUST be EXACTLY the same as the face reference.
@@ -711,32 +715,30 @@ function translateDirectiveToPrompt(directive: ShotDirective, focus: Focus, ref0
 }
 
 // ===================================================================
-// GENERAR FONDO NEUTRO
+// GENERAR FONDO NEUTRO (REALISTA, NUNCA ESTUDIO)
 // ===================================================================
 async function generateNeutralScene(focus: Focus, productCategory?: ProductCategory): Promise<string> {
   if (focus === 'PRODUCT') {
-    if (productCategory === 'JEWELRY') return 'Elegant vanity with mirror, soft natural window light, warm and cozy atmosphere, UGC style';
-    if (productCategory === 'MAKEUP') return 'Clean bathroom vanity with natural light, modern minimalist style, UGC beauty content';
-    if (productCategory === 'TECH') return 'Modern desk with natural window light, clean organized workspace, UGC tech lifestyle';
-    if (productCategory === 'SPORTS') return 'Gym or sports environment, natural lighting, dynamic but calm atmosphere, UGC sports content';
-    if (productCategory === 'FASHION') return 'Walk-in closet with mirror, natural light, stylish and organized, UGC fashion content';
-    return 'Clean lifestyle space, natural window light, cozy atmosphere, UGC content style';
+    if (productCategory === 'JEWELRY') return 'Elegant bedroom with natural light, wooden vanity, cozy atmosphere';
+    if (productCategory === 'MAKEUP') return 'Modern bathroom with natural window light, clean and fresh';
+    if (productCategory === 'TECH') return 'Home office desk with natural light, plants, modern workspace';
+    if (productCategory === 'SPORTS') return 'Living room with yoga mat, natural light, relaxed sports environment';
+    return 'Cozy living room with natural window light, casual lifestyle setting';
   }
-  if (focus === 'OUTFIT') return 'Modern walk-in closet or dressing room with natural light, clean background, UGC fashion content';
-  if (focus === 'AVATAR') return 'Cozy living space with natural window light, relaxed atmosphere, UGC lifestyle content';
-  return 'Clean lifestyle space, natural light, UGC content style';
+  if (focus === 'OUTFIT') return 'Modern living room with large windows, natural light, comfortable home setting';
+  if (focus === 'AVATAR') return 'Cozy cafe with natural light, wooden tables, relaxed atmosphere';
+  return 'Bright living space with natural window light, home environment';
 }
 
 async function generateNeutralOutfit(focus: Focus, productCategory?: ProductCategory): Promise<string> {
   if (focus === 'PRODUCT') {
-    if (productCategory === 'JEWELRY') return 'Elegant casual outfit that complements jewelry, neutral colors, soft fabrics, UGC style';
-    if (productCategory === 'MAKEUP') return 'Clean natural look, simple top, neutral colors, UGC beauty style';
-    if (productCategory === 'TECH') return 'Casual modern outfit, comfortable style, UGC tech lifestyle';
-    if (productCategory === 'SPORTS') return 'Athletic casual wear, comfortable and sporty, UGC sports style';
-    return 'Casual comfortable outfit, neutral colors, UGC lifestyle style';
+    if (productCategory === 'JEWELRY') return 'Casual elegant outfit: simple blouse, neutral colors, comfortable style';
+    if (productCategory === 'MAKEUP') return 'Natural look: basic t-shirt, relaxed fit, everyday style';
+    if (productCategory === 'TECH') return 'Casual modern outfit: comfortable hoodie, jeans, relaxed tech lifestyle';
+    return 'Casual comfortable outfit, everyday style, neutral colors';
   }
-  if (focus === 'SCENE') return 'Casual outfit appropriate for the scene, natural and comfortable, UGC style';
-  return 'Casual comfortable outfit, neutral colors, UGC lifestyle style';
+  if (focus === 'SCENE') return 'Casual outfit appropriate for the scene, natural and comfortable, everyday clothing';
+  return 'Casual comfortable outfit, everyday style, natural fabrics';
 }
 
 // ===================================================================
