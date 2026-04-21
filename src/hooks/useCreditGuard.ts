@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useAuth } from '../src/modules/auth/AuthContext';
-import { userService } from '../src/services/userService';
+import { useAuth } from '../modules/auth/AuthContext';
+import { userService } from '../services/userService';
 
 // ──────────────────────────────────────────
 // useCreditGuard
