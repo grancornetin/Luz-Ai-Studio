@@ -248,13 +248,11 @@ const ContentStudioProModule: React.FC = () => {
 
       setCurrentSet(newSet);
 
-      generationHistoryService.save({
+      saveToHistorySafe({
         imageUrl: image0,
-        module: 'content_studio_pro',
         moduleLabel: `UGC Pro (${FOCUS_LABELS[focus].split(' / ')[0]} - Master)`,
-        creditsUsed: CREDIT_COSTS.UGC_PER_SHOT,
-        promptText: `Master image for ${focus}`
-      }).catch(console.error);
+        promptText: `Master image for ${focus}`,
+      });
 
       setStep('checkpoint');
     } catch (e: any) {
@@ -309,6 +307,54 @@ const ContentStudioProModule: React.FC = () => {
   // silenciosa antes de marcar el shot como fallido y mostrar el botón
   // manual al usuario. El usuario nunca ve estos reintentos intermedios.
   // ─────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────
+  // saveToHistorySafe — guarda en el historial sin nunca lanzar excepción.
+  // Si localStorage está lleno (QuotaExceededError), elimina las entradas
+  // más antiguas hasta liberar espacio y reintenta una vez.
+  // La imagen completa en base64 NO se guarda — solo metadatos + thumbnail
+  // recortado a 200 chars para evitar llenar el storage.
+  // ─────────────────────────────────────────────────────────────────────
+  const saveToHistorySafe = (params: {
+    imageUrl: string;
+    moduleLabel: string;
+    promptText: string;
+  }) => {
+    try {
+      generationHistoryService.save({
+        imageUrl: params.imageUrl.substring(0, 200), // solo header, no la imagen completa
+        module: 'content_studio_pro',
+        moduleLabel: params.moduleLabel,
+        creditsUsed: 0,
+        promptText: params.promptText,
+      });
+    } catch (e: any) {
+      if (e?.name === 'QuotaExceededError' || e?.message?.includes('quota')) {
+        // localStorage lleno — limpiar entradas antiguas del historial y reintentar
+        try {
+          const historyKey = Object.keys(localStorage).find(k => k.includes('luz_history'));
+          if (historyKey) {
+            const existing = JSON.parse(localStorage.getItem(historyKey) || '[]');
+            // Conservar solo las últimas 20 entradas
+            const trimmed = existing.slice(-20);
+            localStorage.setItem(historyKey, JSON.stringify(trimmed));
+            // Reintentar el save
+            generationHistoryService.save({
+              imageUrl: params.imageUrl.substring(0, 200),
+              module: 'content_studio_pro',
+              moduleLabel: params.moduleLabel,
+              creditsUsed: 0,
+              promptText: params.promptText,
+            });
+          }
+        } catch {
+          // Si falla de nuevo, simplemente ignorar — no afecta la generación
+          console.warn('[UGC] History save skipped: localStorage still full after cleanup');
+        }
+      }
+      // Cualquier otro error: silenciar completamente
+    }
+  };
+
   const generateShotWithAutoRetry = async (
     producingSet: ContentStudioProSet,
     shot: { key: ShotKey; [k: string]: any },
@@ -432,13 +478,11 @@ const ContentStudioProModule: React.FC = () => {
         
         updateShotStatus(shot.key, 'completed', url);
         
-        generationHistoryService.save({
+        saveToHistorySafe({
           imageUrl: url,
-          module: 'content_studio_pro',
           moduleLabel: `UGC Pro (${FOCUS_LABELS[focus].split(' / ')[0]} - ${shot.name})`,
-          creditsUsed: 0,
-          promptText: `Shot ${shot.key} for ${focus}`
-        }).catch(console.error);
+          promptText: `Shot ${shot.key} for ${focus}`,
+        });
         
       } catch (e: any) {
         // Todos los reintentos automáticos fallaron → marcar para reintento manual
@@ -543,13 +587,11 @@ const ContentStudioProModule: React.FC = () => {
         );
         updateShotStatus(shot.key, 'completed', url);
 
-        generationHistoryService.save({
+        saveToHistorySafe({
           imageUrl: url,
-          module: 'content_studio_pro',
           moduleLabel: `UGC Pro (${FOCUS_LABELS[targetSet.focus].split(' / ')[0]} - ${shot.name})`,
-          creditsUsed: 0,
-          promptText: `Shot ${shot.key} retry for ${targetSet.focus}`
-        }).catch(console.error);
+          promptText: `Shot ${shot.key} retry for ${targetSet.focus}`,
+        });
 
       } catch (e: any) {
         updateShotStatus(shot.key, 'failed', undefined, e?.message || 'Error desconocido');
