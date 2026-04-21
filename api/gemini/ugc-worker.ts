@@ -72,10 +72,14 @@ async function processGenerationJob(jobId: string, parts: any[]): Promise<void> 
   job.updatedAt = Date.now();
   await saveJob(job);
 
+  // IMPORTANT: Only Gemini 3 models are allowed for image generation.
+  // Gemini 2.5 is intentionally excluded — it produces identity/style drift
+  // that breaks the UGC consistency guarantees of this module.
+  // If all Gemini 3 attempts fail, the job fails cleanly and the client-side
+  // auto-retry system (3 silent retries) handles the recovery.
   const models = [
     { name: 'gemini-3.1-flash-image-preview', location: 'global' },
     { name: 'gemini-3-pro-image-preview',      location: 'global' },
-    { name: 'gemini-2.5-flash-image',           location: 'us-central1' },
   ];
 
   for (const model of models) {

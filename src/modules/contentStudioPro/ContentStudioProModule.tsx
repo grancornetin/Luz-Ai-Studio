@@ -42,6 +42,10 @@ const TAB_ORDER: FilterTab[] = ['TODAS', 'AVATAR', 'PRODUCT', 'OUTFIT', 'SCENE']
 const MAX_BATCH_SIZE = 5;
 const MIN_BATCH_SIZE = 2;
 
+// Reintentos automáticos silenciosos antes de mostrar error al usuario
+const AUTO_RETRY_ATTEMPTS = 3;
+const AUTO_RETRY_DELAY_MS = 2000; // pausa entre reintentos automáticos
+
 interface BatchSession {
   id: string;
   index: number;
@@ -99,7 +103,12 @@ const ContentStudioProModule: React.FC = () => {
   const [shotCount, setShotCount] = useState(6);
   
   // Estado para generación con polling - UI dinámica
-  const [generatingShots, setGeneratingShots] = useState<{ [key: string]: { status: string; imageUrl?: string; error?: string } }>({});
+  const [generatingShots, setGeneratingShots] = useState<{ [key: string]: { status: string; imageUrl?: string; error?: string; autoRetryCount?: number } }>({});
+
+  // Estado para modal de sesión incompleta al intentar guardar
+  const [showIncompleteModal, setShowIncompleteModal] = useState(false);
+  // Set producido pendiente de guardar (lo guardamos aquí para usarlo después del modal)
+  const [pendingProducedSet, setPendingProducedSet] = useState<ContentStudioProSet | null>(null);
 
   const { checkAndDeduct, showNoCredits, requiredCredits, closeModal, refundCredits } = useCreditGuard();
 
@@ -294,6 +303,62 @@ const ContentStudioProModule: React.FC = () => {
     }
   };
 
+  // ─────────────────────────────────────────────────────────────────────
+  // generateShotWithAutoRetry
+  // Intenta generar un shot hasta AUTO_RETRY_ATTEMPTS veces de forma
+  // silenciosa antes de marcar el shot como fallido y mostrar el botón
+  // manual al usuario. El usuario nunca ve estos reintentos intermedios.
+  // ─────────────────────────────────────────────────────────────────────
+  const generateShotWithAutoRetry = async (
+    producingSet: ContentStudioProSet,
+    shot: { key: ShotKey; [k: string]: any },
+    idx: number,
+    totalShots: number,
+    useProduct: boolean,
+    focusRef: string | null,
+    currentSessionPlan: any,
+    onAttemptUpdate: (attempt: number) => void
+  ): Promise<string> => {
+    let lastError: any = null;
+
+    for (let attempt = 1; attempt <= AUTO_RETRY_ATTEMPTS; attempt++) {
+      try {
+        if (attempt > 1) {
+          // Pausa corta entre reintentos para no saturar la API
+          await new Promise(resolve => setTimeout(resolve, AUTO_RETRY_DELAY_MS));
+          onAttemptUpdate(attempt);
+        }
+
+        const url = await contentStudioService.generateDerivedShotAsync(
+          producingSet.image0Url!,
+          producingSet.faceRefs[0],
+          producingSet.outfitRef,
+          focusRef,
+          producingSet.sceneRef,
+          FIXED_STYLE,
+          producingSet.focus,
+          shot.key,
+          producingSet.productSize,
+          currentSessionPlan,
+          useProduct,
+          producingSet.ref0Analysis,
+          idx,
+          totalShots,
+          () => {} // callbacks silenciosos durante reintentos
+        );
+
+        // Éxito — devolver la URL
+        return url;
+      } catch (e: any) {
+        lastError = e;
+        // Continuar al siguiente intento
+      }
+    }
+
+    // Todos los intentos fallaron
+    throw lastError;
+  };
+
   const approveAndProduce = async () => {
     if (!currentSet || !currentSet.image0Url || !currentSet.faceRefs[0]) return;
 
@@ -308,9 +373,9 @@ const ContentStudioProModule: React.FC = () => {
     setCurrentSet(producingSet);
     
     // Inicializar estados de generación para UI dinámica
-    const initialGenState: { [key: string]: { status: string; imageUrl?: string; error?: string } } = {};
-    producingSet.shots.forEach((shot, idx) => {
-      initialGenState[shot.key] = { status: 'pending' };
+    const initialGenState: { [key: string]: { status: string; imageUrl?: string; error?: string; autoRetryCount?: number } } = {};
+    producingSet.shots.forEach((shot) => {
+      initialGenState[shot.key] = { status: 'pending', autoRetryCount: 0 };
     });
     setGeneratingShots(initialGenState);
 
@@ -319,60 +384,54 @@ const ContentStudioProModule: React.FC = () => {
     const updatedShots = [...producingSet.shots];
     
     // Actualizar UI para un shot específico
-    const updateShotStatus = (shotKey: ShotKey, status: string, imageUrl?: string, errorMsg?: string) => {
+    const updateShotStatus = (shotKey: ShotKey, status: string, imageUrl?: string, errorMsg?: string, autoRetryCount?: number) => {
       setGeneratingShots(prev => ({
         ...prev,
-        [shotKey]: { status, imageUrl, error: errorMsg }
+        [shotKey]: { 
+          status, 
+          imageUrl: imageUrl ?? prev[shotKey]?.imageUrl, 
+          error: errorMsg,
+          autoRetryCount: autoRetryCount ?? prev[shotKey]?.autoRetryCount ?? 0
+        }
       }));
       
-      // También actualizar el shot en el set
       const shotIndex = updatedShots.findIndex(s => s.key === shotKey);
       if (shotIndex !== -1) {
         if (status === 'completed' && imageUrl) {
           updatedShots[shotIndex].imageUrl = imageUrl;
           updatedShots[shotIndex].status = 'done';
+          updatedShots[shotIndex].errorMsg = null;
         } else if (status === 'failed') {
           updatedShots[shotIndex].status = 'error';
           updatedShots[shotIndex].errorMsg = errorMsg;
-        } else if (status === 'processing') {
+        } else if (status === 'processing' || status === 'retrying') {
           updatedShots[shotIndex].status = 'generating';
         }
-        setCurrentSet({ ...producingSet, shots: [...updatedShots] });
+        setCurrentSet(prev => prev ? { ...prev, shots: [...updatedShots] } : prev);
       }
     };
 
-    // Generar todos los shots en paralelo con polling
+    // Generar todos los shots en paralelo, cada uno con reintentos automáticos silenciosos
     const shotPromises = updatedShots.map(async (shot, idx) => {
       updateShotStatus(shot.key, 'processing');
       
       try {
-        const url = await contentStudioService.generateDerivedShotAsync(
-          producingSet.image0Url!,
-          producingSet.faceRefs[0],
-          producingSet.outfitRef,
-          focusRef,
-          producingSet.sceneRef,
-          FIXED_STYLE,
-          focus,
-          shot.key,
-          producingSet.productSize,
-          sessionPlan,
+        const url = await generateShotWithAutoRetry(
+          producingSet,
+          shot,
+          idx,
+          updatedShots.length,
           useProduct,
-          producingSet.ref0Analysis,
-          idx, // shot index
-          updatedShots.length, // total shots
-          (status, imageUrl) => {
-            if (status === 'completed' && imageUrl) {
-              updateShotStatus(shot.key, 'completed', imageUrl);
-            } else if (status === 'failed') {
-              updateShotStatus(shot.key, 'failed', undefined, 'Error en generación');
-            } else if (status === 'processing') {
-              updateShotStatus(shot.key, 'processing');
-            }
+          focusRef,
+          sessionPlan,
+          (attempt) => {
+            // Mostrar en la UI que se está reintentando (silencioso pero visible en el thumbnail)
+            updateShotStatus(shot.key, 'retrying', undefined, undefined, attempt - 1);
           }
         );
         
-        // Guardar en historial
+        updateShotStatus(shot.key, 'completed', url);
+        
         generationHistoryService.save({
           imageUrl: url,
           module: 'content_studio_pro',
@@ -382,16 +441,147 @@ const ContentStudioProModule: React.FC = () => {
         }).catch(console.error);
         
       } catch (e: any) {
+        // Todos los reintentos automáticos fallaron → marcar para reintento manual
         updateShotStatus(shot.key, 'failed', undefined, e?.message || 'Error desconocido');
       }
     });
 
-    // Esperar a que todos los shots terminen
+    // Esperar a que todos los shots terminen (éxito o fallo definitivo)
     await Promise.all(shotPromises);
     
-    // Guardar sesión completa
-    await contentStudioStorage.saveSet({ ...producingSet, shots: updatedShots });
+    // Construir el set final con el estado real de los shots
+    const finalSet = { ...producingSet, shots: updatedShots };
+    
+    // Verificar si hay shots fallidos
+    const failedShots = updatedShots.filter(s => s.status === 'error');
+    
+    if (failedShots.length > 0) {
+      // Hay incompletos → guardar estado y mostrar modal de decisión
+      setPendingProducedSet(finalSet);
+      setShowIncompleteModal(true);
+      // No guardamos todavía ni pasamos a library
+    } else {
+      // Todo correcto → guardar y pasar a library
+      await contentStudioStorage.saveSet(finalSet);
+      await loadSets();
+      setStep('library');
+      setGeneratingShots({});
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────
+  // retryFailedShots — reintenta SÓLO los shots con status 'error'
+  // Se llama cuando el usuario elige "Reintentar" en el modal.
+  // ─────────────────────────────────────────────────────────────────────
+  const retryFailedShots = async () => {
+    if (!pendingProducedSet) return;
+    setShowIncompleteModal(false);
+
+    const targetSet = pendingProducedSet;
+    const failedShots = targetSet.shots.filter(s => s.status === 'error');
+    if (failedShots.length === 0) return;
+
+    // Restaurar la vista de producción para mostrar progreso
+    setStep('producing');
+    setCurrentSet(targetSet);
+
+    const useProduct = (targetSet.focus === 'OUTFIT' || targetSet.focus === 'SCENE')
+      ? (targetSet.productRef !== null)
+      : true;
+    const focusRef = useProduct ? targetSet.productRef : null;
+    const updatedShots = [...targetSet.shots];
+
+    // Resetear estado de UI sólo para los shots fallidos
+    setGeneratingShots(prev => {
+      const next = { ...prev };
+      failedShots.forEach(s => { next[s.key] = { status: 'processing', autoRetryCount: 0 }; });
+      return next;
+    });
+
+    const updateShotStatus = (shotKey: ShotKey, status: string, imageUrl?: string, errorMsg?: string, autoRetryCount?: number) => {
+      setGeneratingShots(prev => ({
+        ...prev,
+        [shotKey]: { 
+          status, 
+          imageUrl: imageUrl ?? prev[shotKey]?.imageUrl, 
+          error: errorMsg,
+          autoRetryCount: autoRetryCount ?? prev[shotKey]?.autoRetryCount ?? 0
+        }
+      }));
+      const shotIndex = updatedShots.findIndex(s => s.key === shotKey);
+      if (shotIndex !== -1) {
+        if (status === 'completed' && imageUrl) {
+          updatedShots[shotIndex].imageUrl = imageUrl;
+          updatedShots[shotIndex].status = 'done';
+          updatedShots[shotIndex].errorMsg = null;
+        } else if (status === 'failed') {
+          updatedShots[shotIndex].status = 'error';
+          updatedShots[shotIndex].errorMsg = errorMsg;
+        } else if (status === 'processing' || status === 'retrying') {
+          updatedShots[shotIndex].status = 'generating';
+        }
+        setCurrentSet(prev => prev ? { ...prev, shots: [...updatedShots] } : prev);
+      }
+    };
+
+    const retryPromises = failedShots.map(async (shot) => {
+      const idx = updatedShots.findIndex(s => s.key === shot.key);
+      updateShotStatus(shot.key, 'processing');
+
+      try {
+        const url = await generateShotWithAutoRetry(
+          targetSet,
+          shot,
+          idx,
+          updatedShots.length,
+          useProduct,
+          focusRef,
+          sessionPlan,
+          (attempt) => {
+            updateShotStatus(shot.key, 'retrying', undefined, undefined, attempt - 1);
+          }
+        );
+        updateShotStatus(shot.key, 'completed', url);
+
+        generationHistoryService.save({
+          imageUrl: url,
+          module: 'content_studio_pro',
+          moduleLabel: `UGC Pro (${FOCUS_LABELS[targetSet.focus].split(' / ')[0]} - ${shot.name})`,
+          creditsUsed: 0,
+          promptText: `Shot ${shot.key} retry for ${targetSet.focus}`
+        }).catch(console.error);
+
+      } catch (e: any) {
+        updateShotStatus(shot.key, 'failed', undefined, e?.message || 'Error desconocido');
+      }
+    });
+
+    await Promise.all(retryPromises);
+
+    const finalSet = { ...targetSet, shots: updatedShots };
+    const stillFailed = updatedShots.filter(s => s.status === 'error');
+
+    if (stillFailed.length > 0) {
+      // Aún hay fallos → volver a mostrar el modal
+      setPendingProducedSet(finalSet);
+      setShowIncompleteModal(true);
+    } else {
+      // Todo resuelto
+      setPendingProducedSet(null);
+      await contentStudioStorage.saveSet(finalSet);
+      await loadSets();
+      setStep('library');
+      setGeneratingShots({});
+    }
+  };
+
+  // Guardar la sesión incompleta tal cual (el usuario elige no reintentar)
+  const saveIncompleteSession = async () => {
+    if (!pendingProducedSet) return;
+    setShowIncompleteModal(false);
+    await contentStudioStorage.saveSet(pendingProducedSet);
     await loadSets();
+    setPendingProducedSet(null);
     setStep('library');
     setGeneratingShots({});
   };
@@ -606,21 +796,32 @@ const ContentStudioProModule: React.FC = () => {
     
     const getStatusIcon = () => {
       switch (genState.status) {
-        case 'pending': return <i className="fa-regular fa-clock text-slate-400 text-xl"></i>;
+        case 'pending':    return <i className="fa-regular fa-clock text-slate-400 text-xl"></i>;
         case 'processing': return <i className="fa-solid fa-spinner animate-spin text-brand-500 text-xl"></i>;
-        case 'completed': return <i className="fa-solid fa-circle-check text-green-500 text-xl"></i>;
-        case 'failed': return <i className="fa-solid fa-circle-exclamation text-red-500 text-xl"></i>;
+        case 'retrying':   return <i className="fa-solid fa-arrows-rotate animate-spin text-amber-500 text-xl"></i>;
+        case 'completed':  return <i className="fa-solid fa-circle-check text-green-500 text-xl"></i>;
+        case 'failed':     return <i className="fa-solid fa-circle-exclamation text-red-500 text-xl"></i>;
         default: return null;
       }
     };
     
     const getStatusText = () => {
       switch (genState.status) {
-        case 'pending': return 'En cola';
+        case 'pending':    return 'En cola';
         case 'processing': return 'Generando...';
-        case 'completed': return 'Completado';
-        case 'failed': return 'Error';
+        case 'retrying':   return `Reintento ${genState.autoRetryCount ?? 1}/${AUTO_RETRY_ATTEMPTS}`;
+        case 'completed':  return 'Completado';
+        case 'failed':     return 'Falló';
         default: return '';
+      }
+    };
+
+    const getStatusColor = () => {
+      switch (genState.status) {
+        case 'retrying': return 'text-amber-500';
+        case 'failed':   return 'text-red-500';
+        case 'completed': return 'text-green-500';
+        default: return 'text-slate-500';
       }
     };
     
@@ -634,13 +835,15 @@ const ContentStudioProModule: React.FC = () => {
           {genState.imageUrl ? (
             <img src={genState.imageUrl} className="w-full h-full object-cover" />
           ) : (
-            <div className="flex h-full items-center justify-center flex-col gap-3">
+            <div className="flex h-full items-center justify-center flex-col gap-3 p-3">
               {getStatusIcon()}
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+              <span className={`text-[10px] font-black uppercase tracking-wider ${getStatusColor()}`}>
                 {getStatusText()}
               </span>
               {genState.status === 'failed' && genState.error && (
-                <span className="text-[8px] text-red-400 px-2 text-center">{genState.error}</span>
+                <span className="text-[8px] text-red-400 px-2 text-center leading-snug">
+                  {genState.error.length > 50 ? genState.error.slice(0, 50) + '…' : genState.error}
+                </span>
               )}
             </div>
           )}
@@ -649,6 +852,14 @@ const ContentStudioProModule: React.FC = () => {
               Shot {idx + 1}
             </span>
           </div>
+          {/* Badge de reintento automático */}
+          {genState.status === 'retrying' && (
+            <div className="absolute top-4 right-4">
+              <span className="px-2 py-1 bg-amber-500/90 backdrop-blur-md text-white text-[7px] font-black rounded-full uppercase">
+                Auto-retry
+              </span>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1304,16 +1515,25 @@ const ContentStudioProModule: React.FC = () => {
                                 className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
                               />
                             ) : (
-                              <div className="flex h-full items-center justify-center bg-slate-50 p-3 text-center">
-                                <div className="flex flex-col items-center gap-2">
-                                  <i className="fa-solid fa-circle-exclamation text-red-400 text-lg"></i>
-                                  <span className="text-[10px] font-black uppercase text-red-500">Falló</span>
-                                  {s.status === 'error' && s.errorMsg && (
-                                    <span className="text-[10px] text-slate-500 leading-snug" title={s.errorMsg}>
-                                      {s.errorMsg.length > 60 ? s.errorMsg.slice(0, 60) + '…' : s.errorMsg}
-                                    </span>
-                                  )}
-                                </div>
+                              <div className="flex h-full items-center justify-center bg-slate-50 p-3 text-center flex-col gap-3">
+                                <i className="fa-solid fa-circle-exclamation text-red-400 text-2xl"></i>
+                                <span className="text-[10px] font-black uppercase text-red-500">Falló</span>
+                                {s.status === 'error' && s.errorMsg && (
+                                  <span className="text-[9px] text-slate-400 leading-snug px-1" title={s.errorMsg}>
+                                    {s.errorMsg.length > 50 ? s.errorMsg.slice(0, 50) + '…' : s.errorMsg}
+                                  </span>
+                                )}
+                                {/* Botón de reintento manual — sólo visible en shots con error */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    regenerateShot(set, s.key);
+                                  }}
+                                  className="mt-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-[9px] font-black uppercase rounded-xl transition-all active:scale-95 flex items-center gap-1.5 shadow-md"
+                                >
+                                  <i className="fa-solid fa-rotate-right text-[10px]"></i>
+                                  Reintentar
+                                </button>
                               </div>
                             )}
 
@@ -1420,6 +1640,73 @@ const ContentStudioProModule: React.FC = () => {
             </div>
           </div>
         )}
+        {/* MODAL SESIÓN INCOMPLETA */}
+        {showIncompleteModal && pendingProducedSet && (() => {
+          const failedCount = pendingProducedSet.shots.filter(s => s.status === 'error').length;
+          const completedCount = pendingProducedSet.shots.filter(s => s.status === 'done').length;
+          return (
+            <div className="fixed inset-0 z-[20000] bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+              <div className="bg-white rounded-[32px] md:rounded-[40px] shadow-2xl max-w-md w-full p-8 md:p-10 space-y-6 animate-in zoom-in">
+                {/* Icono y título */}
+                <div className="text-center space-y-3">
+                  <div className="w-16 h-16 rounded-full bg-amber-50 border-2 border-amber-200 flex items-center justify-center mx-auto">
+                    <i className="fa-solid fa-triangle-exclamation text-amber-500 text-2xl"></i>
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tight leading-tight">
+                    Sesión incompleta
+                  </h3>
+                  <p className="text-slate-500 text-[11px] leading-relaxed">
+                    <span className="font-black text-red-500">{failedCount} {failedCount === 1 ? 'shot falló' : 'shots fallaron'}</span>
+                    {' '}después de {AUTO_RETRY_ATTEMPTS} intentos automáticos.{' '}
+                    <span className="text-slate-400">{completedCount} de {pendingProducedSet.shots.length} shots completados correctamente.</span>
+                  </p>
+                </div>
+
+                {/* Preview de shots fallidos */}
+                <div className="flex gap-2 justify-center flex-wrap">
+                  {pendingProducedSet.shots.map((s, idx) => (
+                    <div
+                      key={s.key}
+                      className={`w-10 h-12 rounded-xl flex items-center justify-center text-[8px] font-black uppercase border-2 ${
+                        s.status === 'error'
+                          ? 'bg-red-50 border-red-300 text-red-500'
+                          : 'bg-green-50 border-green-200 text-green-600'
+                      }`}
+                    >
+                      {s.status === 'error'
+                        ? <i className="fa-solid fa-xmark"></i>
+                        : <i className="fa-solid fa-check"></i>
+                      }
+                    </div>
+                  ))}
+                </div>
+
+                {/* Botones */}
+                <div className="space-y-3">
+                  <button
+                    onClick={retryFailedShots}
+                    className="w-full py-4 bg-brand-600 hover:bg-brand-700 text-white rounded-[20px] font-black text-[10px] uppercase tracking-[0.2em] shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    <i className="fa-solid fa-rotate-right"></i>
+                    Reintentar shots fallidos ({failedCount})
+                  </button>
+                  <button
+                    onClick={saveIncompleteSession}
+                    className="w-full py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-[20px] font-black text-[10px] uppercase tracking-[0.2em] transition-all active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    <i className="fa-solid fa-floppy-disk"></i>
+                    Guardar sesión como está
+                  </button>
+                </div>
+
+                <p className="text-center text-[9px] text-slate-400 leading-relaxed">
+                  Si reintenta, el sistema usará {AUTO_RETRY_ATTEMPTS} intentos automáticos nuevamente antes de pedir otra acción.
+                </p>
+              </div>
+            </div>
+          );
+        })()}
+
       </div>
     </>
   );

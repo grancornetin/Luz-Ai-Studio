@@ -46,12 +46,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Missing action or prompt' });
     }
 
-    // Texto siempre en us-central1 con gemini-2.5-flash
     const modelName = body.model || 'gemini-2.5-flash';
     const ai = getGenAIClient('us-central1');
 
-    // Construir config
+    // Configuración base
     const config: Record<string, unknown> = {};
+
+    // Si se pasa un schema o es generateText, forzamos JSON
     if (body.schema) {
       config.responseMimeType = 'application/json';
       config.responseSchema = body.schema;
@@ -75,6 +76,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     parts.push({ text: body.prompt });
 
+    // ─── ACCIÓN ESPECÍFICA: analyzeOutfit ─────────────────────────────
+    if (body.action === 'analyzeOutfit') {
+      // Forzar JSON incluso sin schema explícito
+      config.responseMimeType = 'application/json';
+      
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents: [{ role: 'user', parts }],
+        config,
+      });
+
+      const rawText = response.candidates?.[0]?.content?.parts
+        ?.map((p: any) => p.text || '').filter(Boolean).join('') || '{}';
+      
+      // Limpiar markdown o basura que a veces devuelve el modelo
+      const cleanText = rawText.replace(/```json\s*|\s*```/g, '').trim();
+      
+      let parsedJson: unknown = null;
+      try {
+        parsedJson = JSON.parse(cleanText);
+      } catch (e) {
+        console.error('Failed to parse analyzeOutfit JSON:', cleanText);
+        return res.status(422).json({ 
+          success: false, 
+          error: 'Invalid JSON response from model', 
+          raw: cleanText 
+        });
+      }
+
+      return res.status(200).json({ success: true, text: cleanText, json: parsedJson });
+    }
+
+    // ─── RESTO DE ACCIONES ───────────────────────────────────────────
     const response = await ai.models.generateContent({
       model: modelName,
       contents: [{ role: 'user', parts }],
@@ -85,7 +119,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ?.map((p: any) => p.text || '').filter(Boolean).join('') || '';
 
     let parsedJson: unknown = null;
-    try { parsedJson = JSON.parse(textContent); } catch { /* not json */ }
+    if (config.responseMimeType === 'application/json' || body.action === 'generateText') {
+      try {
+        const clean = textContent.replace(/```json\s*|\s*```/g, '').trim();
+        parsedJson = JSON.parse(clean);
+      } catch { /* not json */ }
+    }
 
     return res.status(200).json({ success: true, text: textContent, json: parsedJson });
   } catch (error: any) {

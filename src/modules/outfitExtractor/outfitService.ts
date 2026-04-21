@@ -1,5 +1,5 @@
 // modules/outfitExtractor/outfitService.ts
-import { OutfitKit, OutfitItem } from "./types";
+import { OutfitKit, OutfitItem, SavedOutfitItem } from "./types";
 
 const API_BASE = '/api/gemini';
 
@@ -16,7 +16,20 @@ async function callContentAPI(action: string, prompt: string, images?: string[])
   });
   const data = await res.json();
   if (!data.success) throw new Error(data.error || 'Content API error');
-  return data.json || JSON.parse(data.text);
+  
+  // Si ya viene parseado, lo usamos
+  if (data.json) return data.json;
+  
+  // Si no, intentamos parsear data.text limpiando
+  if (data.text) {
+    const cleanText = data.text.replace(/```json\s*|\s*```/g, '').trim();
+    try {
+      return JSON.parse(cleanText);
+    } catch {
+      throw new Error('Invalid JSON response from API');
+    }
+  }
+  throw new Error('No data in response');
 }
 
 async function callImageAPI(
@@ -48,22 +61,33 @@ async function callImageAPI(
 
 export const outfitService = {
   async extractOutfitKit(image: string): Promise<OutfitKit> {
-    const analysis = await callContentAPI('analyzeOutfit', 
-      'Extract all clothing items from this outfit image. For each item provide: name, category (main_garment|top|bottom|footwear|bag|accessory), visual_description, ghost_mannequin_prompt, confidence_score, and coordinates (x,y normalized 0-1000). Return JSON array.',
-      [image]
-    );
+    const prompt = `Analyze this outfit image. Identify all visible clothing items.
+Return a JSON object with an "items" array. Each item must have:
+- name (string)
+- category (one of: main_garment, top, bottom, footwear, bag, accessory)
+- visual_description (detailed description for rendering)
+- ghost_mannequin_prompt (how to render as isolated ghost mannequin)
+- confidence_score (number 0-1)
+- coordinates: { x: number (0-1000), y: number (0-1000) }
+
+Return ONLY valid JSON, no markdown formatting.`;
+
+    const analysis = await callContentAPI('analyzeOutfit', prompt, [image]);
+
+    // Asegurar que items sea un array
+    const itemsArray = Array.isArray(analysis.items) ? analysis.items : [];
 
     return {
       id: Date.now().toString(),
       originalImage: image,
-      items: (analysis.items || []).map((item: any) => ({
+      items: itemsArray.map((item: any) => ({
         id: Math.random().toString(36).substr(2, 9),
-        name: item.name,
-        category: item.category,
-        description: item.visual_description,
-        visualDescription: item.visual_description,
-        ghostPrompt: item.ghost_mannequin_prompt,
-        confidenceScore: item.confidence_score || 0.95,
+        name: item.name || 'Prenda',
+        category: item.category || 'accessory',
+        description: item.visual_description || '',
+        visualDescription: item.visual_description || '',
+        ghostPrompt: item.ghost_mannequin_prompt || '',
+        confidenceScore: item.confidence_score || 0.8,
         coordinates: item.coordinates || { x: 500, y: 500 },
         selected: true,
         status: 'pending' as const
@@ -83,9 +107,9 @@ Studio lighting, soft shadow at base.`;
 
     return await callImageAPI(
       prompt,
-      [originalImage], // REF0 = imagen original de la persona
+      [originalImage],
       '3:4',
-      'gemini-2.5-flash-image' // modelo rápido y económico
+      'gemini-2.5-flash-image'
     );
   },
 
@@ -101,6 +125,22 @@ Arrange the following isolated ghost mannequin garments on a pure white backgrou
 Items: ${itemList}
 Consistent lighting, soft shadows, no humans, no mannequins.`;
 
+    return await callImageAPI(prompt, refs.slice(0, 4), '1:1', 'gemini-3.1-flash-image-preview');
+  },
+
+  // Nuevo método para combinaciones personalizadas
+  async generateCombinationComposition(items: SavedOutfitItem[]): Promise<string> {
+    if (items.length === 0) throw new Error("No hay elementos seleccionados.");
+    
+    const refs = items.map(i => i.imageUrl);
+    const itemList = items.map(i => `${i.name} (${i.category})`).join(', ');
+    
+    const prompt = `[CUSTOM OUTFIT COMPOSITION]
+Arrange the following garments on a pure white background in an aesthetically pleasing catalog layout.
+Items: ${itemList}
+All items must appear as isolated ghost mannequin products with 3D volume.
+Consistent lighting, soft shadows, no humans.`;
+    
     return await callImageAPI(prompt, refs.slice(0, 4), '1:1', 'gemini-3.1-flash-image-preview');
   }
 };

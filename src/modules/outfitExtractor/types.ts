@@ -1,4 +1,3 @@
-
 export interface OutfitItem {
   id: string;
   name: string;
@@ -25,7 +24,8 @@ export interface OutfitKit {
   finalCompositionUrl?: string | null;
   finalKitUrl?: string | null;
   inputType: 'COLLAGE' | 'REAL_PHOTO';
-  
+} // <--- Faltaba esta llave
+
 export interface SavedOutfitItem {
   id: string;
   kitId: string;
