@@ -167,7 +167,6 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
     referenceImages: refObjects.length > 0 ? refObjects : undefined,
     aspectRatio:     '3:4',
     module:          'ProductGeneratorModule',
-    );
   };
 
   const startGeneratingHero = async () => {
