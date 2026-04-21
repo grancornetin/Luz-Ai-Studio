@@ -1,4 +1,3 @@
-// src/modules/contentStudioPro/ContentStudioProModule.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';

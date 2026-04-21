@@ -10,10 +10,10 @@ import PromptHistory from './components/PromptHistory';
 import PromptVariations from './components/PromptVariations';
 import CampaignGenerator from './components/CampaignGenerator';
 import PhotodumpMode from './components/PhotodumpMode';
-import NoCreditsModal from '../../../components/shared/NoCreditsModal';
+import NoCreditsModal from '../../components/shared/NoCreditsModal';
 
-import { usePromptComposer } from '../hooks/usePromptComposer';
-import { PromptDNA } from '../types/promptTypes';
+import { usePromptComposer } from './hooks/usePromptComposer';
+import { PromptDNA } from './types/promptTypes';
 
 import { AlertCircle, Sparkles, ChevronDown, Zap, Megaphone, Images, Info } from 'lucide-react';
 

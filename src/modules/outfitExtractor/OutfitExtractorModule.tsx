@@ -1,4 +1,3 @@
-// modules/outfitExtractor/OutfitExtractorModule.tsx
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
@@ -96,7 +95,7 @@ const OutfitExtractorModule: React.FC = () => {
     setStep('detecting');
     setLoadingMsg('Iniciando Escaneo Biométrico...');
     try {
-      const result = await outfitService.extractOutfitKit(sourceImage);
+      const result = await outfitService.analyzeOutfit(sourceImage);
       setCurrentKit(result);
       setStep('scan_overlay');
     } catch (e: any) {
