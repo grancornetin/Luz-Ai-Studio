@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { generationHistoryService } from '../../../services/generationHistoryService';
 import { PromptDNA } from '../types/promptTypes';
 import { generationService } from '../services/generationService';
 import { usePromptParser } from './usePromptParser';
@@ -123,7 +124,7 @@ export const usePromptComposer = () => {
       const image = await generationService.generateImage(
         finalPrompt,
         references,
-        negativePrompt // 👈 nuevo
+        negativePrompt
       );
 
       // 🧠 Guardamos metadata de generación
@@ -136,6 +137,16 @@ export const usePromptComposer = () => {
       });
 
       setGeneratedImages(prev => [image, ...prev]);
+
+      // Guardar en historial automáticamente
+      const hasPersonRef = slots.persons && slots.persons.length > 0;
+      generationHistoryService.save({
+        imageUrl:    image,
+        module:      'prompt_studio',
+        moduleLabel: 'AI Generator',
+        creditsUsed: hasPersonRef ? CREDIT_COSTS.PROMPT_WITH_PERSON : CREDIT_COSTS.PROMPT_NO_PERSON,
+        promptText:  finalPrompt,
+      }).catch(console.error);
 
     } catch (err: any) {
       setError(err?.message || 'Generation failed');

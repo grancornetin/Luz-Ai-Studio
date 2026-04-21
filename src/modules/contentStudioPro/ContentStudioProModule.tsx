@@ -312,45 +312,21 @@ const ContentStudioProModule: React.FC = () => {
   // La imagen completa en base64 NO se guarda — solo metadatos + thumbnail
   // recortado a 200 chars para evitar llenar el storage.
   // ─────────────────────────────────────────────────────────────────────
+  // saveToHistorySafe — guarda la imagen completa en el historial via API.
+  // Ya no usa localStorage — el historial vive en Redis (api/history.ts).
+  // Nunca lanza excepción para no interrumpir el flujo de generación.
   const saveToHistorySafe = (params: {
     imageUrl: string;
     moduleLabel: string;
     promptText: string;
   }) => {
-    try {
-      generationHistoryService.save({
-        imageUrl: params.imageUrl.substring(0, 200), // solo header, no la imagen completa
-        module: 'content_studio_pro',
-        moduleLabel: params.moduleLabel,
-        creditsUsed: 0,
-        promptText: params.promptText,
-      });
-    } catch (e: any) {
-      if (e?.name === 'QuotaExceededError' || e?.message?.includes('quota')) {
-        // localStorage lleno — limpiar entradas antiguas del historial y reintentar
-        try {
-          const historyKey = Object.keys(localStorage).find(k => k.includes('luz_history'));
-          if (historyKey) {
-            const existing = JSON.parse(localStorage.getItem(historyKey) || '[]');
-            // Conservar solo las últimas 20 entradas
-            const trimmed = existing.slice(-20);
-            localStorage.setItem(historyKey, JSON.stringify(trimmed));
-            // Reintentar el save
-            generationHistoryService.save({
-              imageUrl: params.imageUrl.substring(0, 200),
-              module: 'content_studio_pro',
-              moduleLabel: params.moduleLabel,
-              creditsUsed: 0,
-              promptText: params.promptText,
-            });
-          }
-        } catch {
-          // Si falla de nuevo, simplemente ignorar — no afecta la generación
-          console.warn('[UGC] History save skipped: localStorage still full after cleanup');
-        }
-      }
-      // Cualquier otro error: silenciar completamente
-    }
+    generationHistoryService.save({
+      imageUrl:    params.imageUrl,   // imagen completa, no truncada
+      module:      'content_studio_pro',
+      moduleLabel: params.moduleLabel,
+      creditsUsed: CREDIT_COSTS.UGC_PER_SHOT,
+      promptText:  params.promptText,
+    }).catch(e => console.warn('[UGC] History save failed (non-blocking):', e?.message));
   };
 
   const generateShotWithAutoRetry = async (

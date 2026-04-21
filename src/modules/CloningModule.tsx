@@ -9,6 +9,7 @@ import { readAndCompressFile } from '../utils/imageUtils';
 import JSZip from 'jszip';
 import ModuleTutorial from '../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../components/shared/tutorialConfigs';
+import { generationHistoryService } from '../services/generationHistoryService';
 
 interface CloningModuleProps {
   onSave: (avatar: AvatarProfile) => void;
@@ -86,6 +87,19 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
         createdAt: Date.now(),
       };
       onSave(newAvatar);
+
+      // Guardar las 4 vistas en historial (body master, rear, side, face)
+      const viewLabels = ['Body Master', 'Vista Trasera', 'Vista Lateral', 'Face Master'];
+      images.forEach((img, idx) => {
+        generationHistoryService.save({
+          imageUrl:    img,
+          module:      'model_dna',
+          moduleLabel: `Model DNA — Por Imagen (${viewLabels[idx] || `Vista ${idx + 1}`})`,
+          creditsUsed: idx === 0 ? CREDIT_COSTS.CREATE_MODEL_CLONE : 0,
+          promptText:  `Clonación desde imagen — ${name}`,
+        }).catch(console.error);
+      });
+
       setStatus('Completado');
     } catch (err: any) {
       alert("Error en clonación: " + err.message);

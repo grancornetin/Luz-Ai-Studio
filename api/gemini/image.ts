@@ -112,7 +112,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (negative) instruction += `\nNEGATIVE: ${negative}`;
       parts.push({ text: instruction });
 
-      // Crear job en Redis
+      // Crear job en Redis — las imágenes (parts) se guardan en Redis, NO en QStash
+      // QStash tiene límite de 1MB por mensaje; las imágenes en base64 lo exceden fácilmente.
       const jobId = generateJobId();
       const job: ImageJob = {
         id:        jobId,
@@ -123,13 +124,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         totalShots,
         module: moduleName,
       };
-      await saveJob(job);
 
-      // Encolar en QStash → image-worker
+      // Guardar job y parts por separado en Redis
+      await Promise.all([
+        saveJob(job),
+        redis.set(`img_parts:${jobId}`, JSON.stringify(parts), { ex: 3600 }),
+      ]);
+
+      // Encolar en QStash → image-worker — solo el jobId, sin imágenes
       const workerUrl = `${process.env.WORKER_BASE_URL}/api/gemini/image-worker`;
       await qstash.publishJSON({
         url:     workerUrl,
-        body:    { jobId, parts },
+        body:    { jobId },   // ← solo jobId, el worker lee parts desde Redis
         retries: 2,
       });
 

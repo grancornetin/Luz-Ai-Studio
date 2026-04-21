@@ -147,13 +147,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Invalid signature' });
   }
 
-  const { jobId, parts } = req.body;
-  if (!jobId || !parts) {
-    return res.status(400).json({ error: 'Missing jobId or parts' });
+  const { jobId } = req.body;
+  if (!jobId) return res.status(400).json({ error: 'Missing jobId' });
+
+  // Leer parts desde Redis — no vienen en el body de QStash para evitar el límite de 1MB
+  const rawParts = await redis.get(`img_parts:${jobId}`);
+  if (!rawParts) {
+    console.error(`[ImageWorker] Parts not found in Redis for job ${jobId}`);
+    return res.status(404).json({ error: 'Parts not found for job' });
   }
+  const parts = typeof rawParts === 'string' ? JSON.parse(rawParts) : rawParts;
 
   try {
     await processJob(jobId, parts);
+    // Limpiar parts de Redis una vez completado el job (el job en sí se mantiene 1h)
+    await redis.del(`img_parts:${jobId}`);
     return res.status(200).json({ ok: true, jobId });
   } catch (err: any) {
     console.error(`[ImageWorker] Unhandled error for ${jobId}:`, err.message);

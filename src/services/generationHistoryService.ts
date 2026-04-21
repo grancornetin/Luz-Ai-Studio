@@ -1,15 +1,17 @@
-// ──────────────────────────────────────────
-// generationHistoryService - MOCKED FOR LOCAL TESTING
-// ──────────────────────────────────────────
+// src/services/generationHistoryService.ts
+// Llama a /api/history (servidor) para guardar y leer el historial.
+// Redis y @upstash/redis viven únicamente en el servidor — nunca aquí.
+
+import { getAuth } from 'firebase/auth';
 
 export interface GenerationRecord {
-  id: string;
-  imageUrl: string;           // base64 data URL
-  module: string;             // 'prompt_studio' | 'scene_clone' | 'model_dna' | 'content_studio' | 'outfit_kit' | 'catalog'
-  moduleLabel: string;        // Nombre legible para mostrar en UI
-  promptText?: string;        // Prompt usado (opcional)
-  creditsUsed: number;        // Cuántos créditos costó
-  createdAt: string;          // ISO string
+  id:           string;
+  imageUrl:     string;
+  module:       string;
+  moduleLabel:  string;
+  promptText?:  string;
+  creditsUsed:  number;
+  createdAt:    string;
 }
 
 export const MODULE_LABELS: Record<string, string> = {
@@ -25,56 +27,64 @@ export const MODULE_LABELS: Record<string, string> = {
   photodump:          'Photodump',
 };
 
-const MAX_HISTORY = 500;
-const getUid = () => 'local-admin-uid';
+const API = '/api/history';
 
-const getLocal = (key: string) => {
-  try { return JSON.parse(localStorage.getItem(`luz_${key}`) || '[]'); } catch { return []; }
-};
-const setLocal = (key: string, data: any) => {
-  localStorage.setItem(`luz_${key}`, JSON.stringify(data));
-};
+function getUid(): string {
+  // Intenta obtener el uid de Firebase Auth; fallback al uid de mock para dev
+  try {
+    const user = getAuth().currentUser;
+    if (user?.uid) return user.uid;
+  } catch { /* ignorar si firebase no está listo */ }
+  return 'local-admin-uid';
+}
+
+async function call(action: string, payload: Record<string, unknown> = {}): Promise<any> {
+  const uid = getUid();
+  const res = await fetch(API, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ action, payload: { uid, ...payload } }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `History API error: ${res.status}`);
+  }
+  return res.json();
+}
 
 export const generationHistoryService = {
 
   async save(record: Omit<GenerationRecord, 'id' | 'createdAt'>): Promise<void> {
-    const uid = getUid();
     const id = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    const newRecord = {
+    const newRecord: GenerationRecord = {
       ...record,
       id,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     };
-    
-    const history = getLocal(`history_${uid}`);
-    history.unshift(newRecord);
-    
-    if (history.length > MAX_HISTORY) {
-      history.length = MAX_HISTORY;
-    }
-    
-    setLocal(`history_${uid}`, history);
+    await call('save', { record: newRecord });
   },
 
-  async getAll(): Promise<GenerationRecord[]> {
-    const uid = getUid();
-    return getLocal(`history_${uid}`);
+  async getAll(limit = 100, offset = 0): Promise<GenerationRecord[]> {
+    const data = await call('list', { limit, offset });
+    return data.entries ?? [];
   },
 
   async delete(id: string): Promise<void> {
-    const uid = getUid();
-    const history = getLocal(`history_${uid}`);
-    setLocal(`history_${uid}`, history.filter((r: any) => r.id !== id));
+    await call('delete', { id });
   },
 
   async deleteBatch(ids: string[]): Promise<void> {
-    const uid = getUid();
-    const history = getLocal(`history_${uid}`);
-    setLocal(`history_${uid}`, history.filter((r: any) => !ids.includes(r.id)));
+    await call('deleteBatch', { ids });
   },
 
-  async trimHistory(uid: string): Promise<void> {
-    // Handled in save
-  }
+  async clear(): Promise<void> {
+    await call('clear');
+  },
 
+  async stats(): Promise<any> {
+    return call('stats');
+  },
+
+  // Mantenido por compatibilidad con código que lo llama
+  async trimHistory(_uid: string): Promise<void> { /* manejado en el servidor */ },
 };

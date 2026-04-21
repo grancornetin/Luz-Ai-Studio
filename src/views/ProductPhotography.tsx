@@ -4,6 +4,9 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ProductProfile } from '../types';
 import { geminiService } from '../services/geminiService';
+import { generationHistoryService } from '../services/generationHistoryService';
+import { CREDIT_COSTS } from '../services/creditConfig';
+import { imageApiService, extractImageRef } from '../services/imageApiService';
 import { 
   PRODUCT_HARD_RULES, 
   PRODUCT_NEGATIVE_PROMPT, 
@@ -150,14 +153,18 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
   const generateImageWithAllRules = async (intent: string, refs: string[]) => {
     const baseStylePrompt = PRODUCT_BASE_STYLES[style];
     const finalPrompt = `${baseStylePrompt}\n${intent}\n${PRODUCT_HARD_RULES}\nPRODUCT ANCHOR: ${productAnchor}`;
-    
-    return geminiService.generateImage(
-      finalPrompt,
-      PRODUCT_NEGATIVE_PROMPT,
-      true, // usePro
-      '1K',
-      refs
-    );
+
+    const refObjects = refs.map((img, i) => {
+      try { return extractImageRef(img, `productRef[${i}]`); } catch { return null; }
+    }).filter(Boolean) as Array<{ data: string; mimeType: string }>;
+
+    return imageApiService.generateImage({
+      prompt:          finalPrompt,
+      negative:        PRODUCT_NEGATIVE_PROMPT,
+      referenceImages: refObjects.length > 0 ? refObjects : undefined,
+      aspectRatio:     '3:4',
+      module:          'ProductPhotography',
+    });
   };
 
   const startGeneratingHero = async () => {
@@ -183,6 +190,15 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
       const heroImage = await generateImageWithAllRules(heroIntent, files);
       
       setGeneratedShots([heroImage]);
+
+      generationHistoryService.save({
+        imageUrl:    heroImage,
+        module:      'catalog',
+        moduleLabel: 'Product Studio (Hero)',
+        creditsUsed: CREDIT_COSTS.PRODUCT_GENERATION,
+        promptText:  heroIntent,
+      }).catch(console.error);
+
       setHeroAttempts(0);
       setCurrentStep('checkpoint_hero');
 
@@ -227,22 +243,30 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
     setCurrentStep('generating_remaining');
     setProcessingStatus('Generando el resto del set (2-5)...');
 
-    const shotsProgress = [...generatedShots]; // Start with the approved hero image
-    
-    for (let i = 2; i <= 5; i++) {
-      setProcessingStatus(`Renderizando ángulo ${i}/5...`);
-      try {
+    const shotsProgress = [...generatedShots]; // comienza con el hero aprobado
+
+    await Promise.allSettled(
+      [2, 3, 4, 5].map(async (i) => {
         const intent = getShotIntent(i, category, style);
-        const img = await generateImageWithAllRules(intent, files);
-        shotsProgress.push(img);
-        setGeneratedShots([...shotsProgress]); // Update state to show progress
-      } catch (e: any) {
-        console.error(`Error generating shot ${i}:`, e);
-        shotsProgress.push('error'); // Mark as error or a placeholder
-        setGeneratedShots([...shotsProgress]);
-      }
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Small delay to prevent API exhaustion
-    }
+        try {
+          const img = await generateImageWithAllRules(intent, files);
+          shotsProgress[i - 1] = img;
+          setGeneratedShots([...shotsProgress]);
+
+          generationHistoryService.save({
+            imageUrl:    img,
+            module:      'catalog',
+            moduleLabel: `Product Studio (Shot ${i})`,
+            creditsUsed: CREDIT_COSTS.PRODUCT_GENERATION,
+            promptText:  intent,
+          }).catch(console.error);
+        } catch (e: any) {
+          console.error(`Error generating shot ${i}:`, e);
+          shotsProgress[i - 1] = 'error';
+          setGeneratedShots([...shotsProgress]);
+        }
+      })
+    );
     setCurrentStep('completed_session');
     setProcessingStatus('Producción completada.');
   };
