@@ -7,9 +7,9 @@ import { CREDIT_COSTS } from '../services/creditConfig';
 import { useNavigate } from 'react-router-dom';
 import { ProductProfile } from '../types';
 import { geminiService } from '../services/geminiService';
+import { imageApiService, extractImageRef } from '../services/imageApiService';
 import { generationHistoryService } from '../services/generationHistoryService';
 import { readAndCompressFile } from '../utils/imageUtils';
-import { imageApiService, extractImageRef } from '../services/imageApiService';
 import { 
   PRODUCT_HARD_RULES, 
   PRODUCT_NEGATIVE_PROMPT, 
@@ -154,20 +154,22 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
   };
 
   const generateImageWithAllRules = async (intent: string, refs: string[]) => {
-  const baseStylePrompt = PRODUCT_BASE_STYLES[style];
-  const finalPrompt     = `${baseStylePrompt}\n${intent}\n${PRODUCT_HARD_RULES}\nPRODUCT ANCHOR: ${productAnchor}`;
+    const baseStylePrompt = PRODUCT_BASE_STYLES[style];
+    const finalPrompt = `${baseStylePrompt}\n${intent}\n${PRODUCT_HARD_RULES}\nPRODUCT ANCHOR: ${productAnchor}`;
 
-  const refObjects = refs.map((img, i) => {
-    try { return extractImageRef(img, `productRef[${i}]`); } catch { return null; }
-  }).filter(Boolean) as Array<{ data: string; mimeType: string }>;
+    const refObjects = refs.map((img, i) => {
+      try { return extractImageRef(img, `productRef[${i}]`); } catch { return null; }
+    }).filter(Boolean) as Array<{ data: string; mimeType: string }>;
 
-  return imageApiService.generateImage({
-    prompt:          finalPrompt,
-    negative:        PRODUCT_NEGATIVE_PROMPT,
-    referenceImages: refObjects.length > 0 ? refObjects : undefined,
-    aspectRatio:     '3:4',
-    module:          'ProductGeneratorModule',
+    return imageApiService.generateImage({
+      prompt:          finalPrompt,
+      negative:        PRODUCT_NEGATIVE_PROMPT,
+      referenceImages: refObjects.length > 0 ? refObjects : undefined,
+      aspectRatio:     '3:4',
+      module:          'ProductGeneratorModule',
+    });
   };
+
 
   const startGeneratingHero = async () => {
     if (!name || files.length === 0) {
@@ -243,47 +245,42 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
   };
 
   const generateRemainingShots = async () => {
-  if (!generatedShots[0] || !analyzedData) return;
-  const ok = await checkAndDeduct(CREDIT_COSTS.PRODUCT_GENERATION * 4);
-  if (!ok) return;
+    if (!generatedShots[0] || !analyzedData) return;
+    const ok = await checkAndDeduct(CREDIT_COSTS.PRODUCT_GENERATION * 4);
+    if (!ok) return;
+    setHeroApproved(true);
+    setCurrentStep('generating_remaining');
+    setProcessingStatus('Generando el resto del set (2-5)...');
 
-  setHeroApproved(true);
-  setCurrentStep('generating_remaining');
-  setProcessingStatus('Generando el resto del set (2-5)...');
+    // Los 4 shots restantes corren en paralelo — cada uno tiene su propio job en Redis.
+    // El delay manual ya no es necesario porque cada llamada es async (no bloquea Vercel).
+    const shotsProgress = [...generatedShots]; // comienza con el hero aprobado
 
-  // Preparar los 4 jobs en paralelo
-  const shotsProgress = [...generatedShots]; // comienza con el hero aprobado
-  const shotJobs = [2, 3, 4, 5].map(i => ({
-    index:  i,
-    intent: getShotIntent(i, category, style),
-  }));
+    await Promise.allSettled(
+      [2, 3, 4, 5].map(async (i) => {
+        const intent = getShotIntent(i, category, style);
+        try {
+          const img = await generateImageWithAllRules(intent, files);
+          shotsProgress[i - 1] = img;
+          setGeneratedShots([...shotsProgress]);
 
-  await Promise.allSettled(
-    shotJobs.map(async ({ index, intent }) => {
-      setProcessingStatus(`Renderizando ángulos (${index}/5 en progreso)...`);
-      try {
-        const img = await generateImageWithAllRules(intent, files);
-        // Insertar en la posición correcta
-        shotsProgress[index - 1] = img;
-        setGeneratedShots([...shotsProgress]);
+          generationHistoryService.save({
+            imageUrl:    img,
+            module:      'catalog',
+            moduleLabel: `Product Studio (Shot ${i})`,
+            creditsUsed: CREDIT_COSTS.PRODUCT_GENERATION,
+            promptText:  intent,
+          }).catch(console.error);
+        } catch (e: any) {
+          console.error(`Error generating shot ${i}:`, e);
+          shotsProgress[i - 1] = 'error';
+          setGeneratedShots([...shotsProgress]);
+        }
+      })
+    );
 
-        generationHistoryService.save({
-          imageUrl:     img,
-          module:       'catalog',
-          moduleLabel:  `Product Studio (Shot ${index})`,
-          creditsUsed:  CREDIT_COSTS.PRODUCT_GENERATION,
-          promptText:   intent,
-        }).catch(console.error);
-      } catch (e: any) {
-        console.error(`Error generating shot ${index}:`, e);
-        shotsProgress[index - 1] = 'error';
-        setGeneratedShots([...shotsProgress]);
-      }
-    })
-  );
-
-  setCurrentStep('completed_session');
-  setProcessingStatus('Producción completada.');
+    setCurrentStep('completed_session');
+    setProcessingStatus('Producción completada.');
   };
 
   const handleSaveToCatalog = () => {
