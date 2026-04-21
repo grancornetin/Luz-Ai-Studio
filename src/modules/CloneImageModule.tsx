@@ -16,13 +16,10 @@ import { CREDIT_COSTS } from "../services/creditConfig";
 
 type Step = 1 | 2 | 3 | 4;
 
+import { readAndCompressFile } from '../utils/imageUtils';
+
 function readFileAsDataURL(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result || ""));
-    r.onerror = reject;
-    r.readAsDataURL(file);
-  });
+  return readAndCompressFile(file);
 }
 
 function isDataUrl(s: string) {

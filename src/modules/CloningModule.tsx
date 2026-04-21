@@ -9,6 +9,7 @@ import { TUTORIAL_CONFIGS } from '../components/shared/tutorialConfigs';
 import { useCreditGuard } from '../../hooks/useCreditGuard';
 import NoCreditsModal from '../components/shared/NoCreditsModal';
 import { CREDIT_COSTS } from '../services/creditConfig';
+import { readAndCompressFile } from '../utils/imageUtils';
 
 interface CloningModuleProps {
   onSave: (avatar: AvatarProfile) => void;
@@ -39,10 +40,9 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files) as File[];
-      newFiles.forEach(file => {
-        const reader = new FileReader();
-        reader.onloadend = () => setFiles(prev => [...prev, reader.result as string].slice(0, 3));
-        reader.readAsDataURL(file);
+      newFiles.forEach(async (file) => {
+        const compressed = await readAndCompressFile(file);
+        setFiles(prev => [...prev, compressed].slice(0, 3));
       });
     }
   };

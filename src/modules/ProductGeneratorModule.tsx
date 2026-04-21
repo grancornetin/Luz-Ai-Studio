@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { ProductProfile } from '../types';
 import { geminiService } from '../services/geminiService';
 import { generationHistoryService } from '../services/generationHistoryService';
+import { readAndCompressFile } from '../utils/imageUtils';
 import { 
   PRODUCT_HARD_RULES, 
   PRODUCT_NEGATIVE_PROMPT, 
@@ -92,10 +93,9 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files) as File[];
-      newFiles.forEach(file => {
-        const reader = new FileReader();
-        reader.onloadend = () => setFiles(prev => [...prev, reader.result as string].slice(0, 4));
-        reader.readAsDataURL(file);
+      newFiles.forEach(async (file) => {
+        const compressed = await readAndCompressFile(file);
+        setFiles(prev => [...prev, compressed].slice(0, 4));
       });
     }
   };

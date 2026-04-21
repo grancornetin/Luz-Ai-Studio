@@ -7,7 +7,7 @@ import NoCreditsModal from '../../components/shared/NoCreditsModal';
 import { CREDIT_COSTS } from '../../services/creditConfig';
 import { generationHistoryService } from '../../services/generationHistoryService';
 import { outfitService } from './outfitService';
-import { outfitStorage } from './outfitStorage';
+import { outfitStorage } from './outfitStorage';e
 import { OutfitKit, OutfitItem, SavedOutfitItem, OutfitCombination } from './types';
 import JSZip from 'jszip';
 
@@ -72,11 +72,11 @@ const OutfitExtractorModule: React.FC = () => {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const reader = new FileReader();
-      reader.onload = () => { setSourceImage(reader.result as string); };
-      reader.readAsDataURL(e.target.files[0]);
+      const { readAndCompressFile } = await import('../../utils/imageUtils');
+      const compressed = await readAndCompressFile(e.target.files[0]);
+      setSourceImage(compressed);
     }
   };
 

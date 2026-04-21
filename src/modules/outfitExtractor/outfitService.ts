@@ -1,5 +1,6 @@
 // modules/outfitExtractor/outfitService.ts
 import { OutfitKit, OutfitItem, SavedOutfitItem } from "./types";
+import { compressImageForUpload } from '../../../utils/imageUtils';
 
 const API_BASE = '/api/gemini';
 
@@ -38,10 +39,14 @@ async function callImageAPI(
   aspectRatio: '1:1' | '3:4' = '3:4',
   model: string = 'gemini-2.5-flash-image'
 ): Promise<string> {
-  const refs = referenceImages?.map(img => ({
+  const compressed = referenceImages
+    ? await Promise.all(referenceImages.map(img => compressImageForUpload(img)))
+    : [];
+
+  const refs = compressed.map(img => ({
     data: img.replace(/^data:image\/\w+;base64,/, ''),
     mimeType: 'image/jpeg'
-  })) || [];
+  }));
 
   const res = await fetch(`${API_BASE}/image`, {
     method: 'POST',

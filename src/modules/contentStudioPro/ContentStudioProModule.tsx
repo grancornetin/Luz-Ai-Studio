@@ -32,6 +32,7 @@ import { contentStudioStorage } from './storage';
 import { analyzeProductRelevance } from './ugcDirectorService';
 import { generationHistoryService } from '../../services/generationHistoryService';
 import JSZip from 'jszip';
+import { readAndCompressFile } from '../../utils/imageUtils';
 
 type Step = 'setup' | 'generating_master' | 'checkpoint' | 'producing' | 'library' | 'batch_generating';
 type FilterTab = 'TODAS' | 'AVATAR' | 'PRODUCT' | 'OUTFIT' | 'SCENE';
@@ -145,13 +146,10 @@ const ContentStudioProModule: React.FC = () => {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files) {
         const newFiles = Array.from(e.target.files) as File[];
-        newFiles.forEach((file) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            if (multiple) setter((prev: string[]) => [...prev, reader.result as string].slice(0, 1));
-            else setter(reader.result as string);
-          };
-          reader.readAsDataURL(file);
+        newFiles.forEach(async (file) => {
+          const compressed = await readAndCompressFile(file);
+          if (multiple) setter((prev: string[]) => [...prev, compressed].slice(0, 1));
+          else setter(compressed);
         });
       }
     };

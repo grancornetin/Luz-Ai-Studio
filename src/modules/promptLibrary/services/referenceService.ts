@@ -1,4 +1,5 @@
 import { ReferenceSlot, PromptDNA, ReferencePriority } from '../types/promptTypes';
+import { readAndCompressFile } from '../../../utils/imageUtils';
 
 export const referenceService = {
 
@@ -107,27 +108,7 @@ export const referenceService = {
   },
 
   async processFile(file: File): Promise<string> {
-
-    return new Promise((resolve, reject) => {
-
-      const reader = new FileReader();
-
-      reader.onload = () => {
-
-        if (typeof reader.result === 'string') {
-          resolve(reader.result);
-        } else {
-          reject('Invalid file result');
-        }
-
-      };
-
-      reader.onerror = reject;
-
-      reader.readAsDataURL(file);
-
-    });
-
+    return readAndCompressFile(file);
   },
 
   buildReferenceDNA(slots: ReferenceSlot[]) {
