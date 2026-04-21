@@ -1,116 +1,140 @@
-// src/services/generationHistoryService.ts
-// Historial de generaciones — mismo contrato de interfaz que el original,
-// pero almacenado en Vercel/Upstash Redis en lugar de localStorage.
+// api/history.ts
+// Historial de generaciones por usuario, almacenado en Upstash Redis.
+// Reemplaza el localStorage que se llenaba con imágenes base64.
 //
-// Ventajas sobre localStorage:
-//   - Sin QuotaExceededError (localStorage tenía límite de ~5MB total)
-//   - Persiste entre dispositivos y navegadores
-//   - Escala a múltiples usuarios sin problema
-//   - Usa el mismo Redis que ya tienes en ugc.ts (mismas env vars KV_REST_API_*)
+// Actions: save · list · delete · deleteBatch · clear · stats
+//
+// Estructura en Redis:
+//   history:{uid}  →  array JSON de GenerationRecord (últimas 100 entradas)
+//
+// Usa las mismas env vars que ugc.ts: KV_REST_API_URL + KV_REST_API_TOKEN
 
-// ── Tipos públicos (IDÉNTICOS al original — GenerationHistory.tsx los importa) ──
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { Redis } from '@upstash/redis';
 
-export interface GenerationRecord {
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL!,
+  token: process.env.KV_REST_API_TOKEN!,
+});
+
+const MAX_ENTRIES_PER_USER = 100;
+const HISTORY_TTL_SECONDS  = 90 * 24 * 60 * 60; // 90 días
+
+interface GenerationRecord {
   id: string;
-  imageUrl: string;       // base64 data URL completo
+  imageUrl: string;
   module: string;
   moduleLabel: string;
   promptText?: string;
   creditsUsed: number;
-  createdAt: string;      // ISO string — igual que antes
+  createdAt: string;
 }
 
-export const MODULE_LABELS: Record<string, string> = {
-  prompt_studio:      'AI Generator',
-  scene_clone:        'Scene Clone',
-  model_dna:          'Model DNA',
-  content_studio:     'Content Studio',
-  content_studio_pro: 'Content Studio Pro',
-  outfit_extractor:   'Outfit Extractor',
-  outfit_kit:         'Outfit Kit',
-  catalog:            'Catálogo',
-  campaign:           'Campaign',
-  photodump:          'Photodump',
-};
+function historyKey(uid: string): string {
+  return `history:${uid}`;
+}
 
-// ── Configuración ────────────────────────────────────────────────────────
+async function getHistory(uid: string): Promise<GenerationRecord[]> {
+  const data = await redis.get<GenerationRecord[]>(historyKey(uid));
+  return data ?? [];
+}
 
-const API_URL = '/api/history';
-const MAX_HISTORY = 100;
+async function setHistory(uid: string, records: GenerationRecord[]): Promise<void> {
+  await redis.set(historyKey(uid), records, { ex: HISTORY_TTL_SECONDS });
+}
 
-// ── Obtener uid del usuario actual ───────────────────────────────────────
-// Firebase Auth guarda el usuario bajo claves que empiezan con "firebase:authUser"
-// en localStorage. Si no lo encuentra, genera un id anónimo persistente.
-function getUid(): string {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST')   return res.status(405).json({ error: 'Method not allowed' });
+
+  const { action, payload } = req.body || {};
+  if (!action)  return res.status(400).json({ error: 'Missing action' });
+
+  const uid: string | undefined = payload?.uid;
+  if (!uid) return res.status(400).json({ error: 'Missing uid' });
+
   try {
-    for (const key of Object.keys(localStorage)) {
-      if (key.startsWith('firebase:authUser') || key.includes(':firebaseLocalStorage')) {
-        try {
-          const val = localStorage.getItem(key);
-          if (!val) continue;
-          const parsed = JSON.parse(val);
-          const uid = parsed?.uid || parsed?.localId;
-          if (uid && typeof uid === 'string' && uid.length > 4) return uid;
-        } catch { /* no era JSON */ }
-      }
+
+    // ── save ────────────────────────────────────────────────────────────
+    if (action === 'save') {
+      const record: GenerationRecord | undefined = payload.record;
+      if (!record?.id) return res.status(400).json({ error: 'Missing record' });
+
+      const existing = await getHistory(uid);
+      const updated  = [record, ...existing].slice(0, MAX_ENTRIES_PER_USER);
+      await setHistory(uid, updated);
+
+      return res.status(200).json({ success: true, total: updated.length });
     }
-    // Fallback: id anónimo persistente
-    let anonId = localStorage.getItem('_luz_anon_uid');
-    if (!anonId) {
-      anonId = `anon_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-      try { localStorage.setItem('_luz_anon_uid', anonId); } catch { /* storage lleno, igual funciona */ }
+
+    // ── list ────────────────────────────────────────────────────────────
+    if (action === 'list') {
+      const limit:  number = Math.min(payload?.limit  || 100, 100);
+      const offset: number = payload?.offset || 0;
+
+      const all  = await getHistory(uid);
+      const page = all.slice(offset, offset + limit);
+
+      return res.status(200).json({
+        entries: page,
+        total:   all.length,
+        hasMore: offset + limit < all.length,
+      });
     }
-    return anonId || 'unknown';
-  } catch {
-    return 'unknown';
+
+    // ── delete ──────────────────────────────────────────────────────────
+    if (action === 'delete') {
+      const id: string | undefined = payload.id;
+      if (!id) return res.status(400).json({ error: 'Missing id' });
+
+      const all     = await getHistory(uid);
+      const updated = all.filter(r => r.id !== id);
+      await setHistory(uid, updated);
+
+      return res.status(200).json({ success: true, removed: all.length - updated.length });
+    }
+
+    // ── deleteBatch ─────────────────────────────────────────────────────
+    if (action === 'deleteBatch') {
+      const ids: string[] | undefined = payload.ids;
+      if (!ids?.length) return res.status(400).json({ error: 'Missing ids array' });
+
+      const idSet   = new Set(ids);
+      const all     = await getHistory(uid);
+      const updated = all.filter(r => !idSet.has(r.id));
+      await setHistory(uid, updated);
+
+      return res.status(200).json({ success: true, removed: all.length - updated.length });
+    }
+
+    // ── clear ───────────────────────────────────────────────────────────
+    if (action === 'clear') {
+      await redis.del(historyKey(uid));
+      return res.status(200).json({ success: true });
+    }
+
+    // ── stats ───────────────────────────────────────────────────────────
+    if (action === 'stats') {
+      const all = await getHistory(uid);
+      const byModule: Record<string, number> = {};
+      all.forEach(e => { byModule[e.module] = (byModule[e.module] || 0) + 1; });
+
+      return res.status(200).json({
+        totalEntries: all.length,
+        byModule,
+        oldest: all.length ? all[all.length - 1].createdAt : null,
+        newest: all.length ? all[0].createdAt : null,
+      });
+    }
+
+    return res.status(400).json({ error: `Unknown action: ${action}` });
+
+  } catch (error: any) {
+    console.error('[History API] Error:', error.message);
+    return res.status(500).json({ error: error.message });
   }
 }
-
-// ── Helper fetch silencioso ──────────────────────────────────────────────
-async function apiCall<T>(action: string, extraPayload: Record<string, unknown> = {}): Promise<T | null> {
-  try {
-    const uid = getUid();
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, payload: { uid, ...extraPayload } }),
-    });
-    if (!response.ok) return null;
-    return response.json() as Promise<T>;
-  } catch {
-    return null;
-  }
-}
-
-// ── Servicio público — MISMA INTERFAZ QUE EL ORIGINAL ───────────────────
-
-export const generationHistoryService = {
-
-  async save(record: Omit<GenerationRecord, 'id' | 'createdAt'>): Promise<void> {
-    const id = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    const newRecord: GenerationRecord = {
-      ...record,
-      id,
-      createdAt: new Date().toISOString(),
-    };
-    // Fire-and-forget — nunca bloquea el flujo de generación
-    apiCall('save', { record: newRecord }).catch(() => {});
-  },
-
-  async getAll(): Promise<GenerationRecord[]> {
-    const result = await apiCall<{ entries: GenerationRecord[] }>('list', { limit: MAX_HISTORY });
-    return result?.entries ?? [];
-  },
-
-  async delete(id: string): Promise<void> {
-    await apiCall('delete', { id });
-  },
-
-  async deleteBatch(ids: string[]): Promise<void> {
-    await apiCall('deleteBatch', { ids });
-  },
-
-  async trimHistory(_uid: string): Promise<void> {
-    // No-op: el límite lo maneja Redis automáticamente en cada save
-  },
-};
