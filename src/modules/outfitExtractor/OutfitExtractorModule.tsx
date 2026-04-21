@@ -7,7 +7,7 @@ import NoCreditsModal from '../../components/shared/NoCreditsModal';
 import { CREDIT_COSTS } from '../../services/creditConfig';
 import { generationHistoryService } from '../../services/generationHistoryService';
 import { outfitService } from './outfitService';
-import { outfitStorage } from './outfitStorage';e
+import { outfitStorage } from './outfitStorage';
 import { OutfitKit, OutfitItem, SavedOutfitItem, OutfitCombination } from './types';
 import JSZip from 'jszip';
 

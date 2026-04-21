@@ -1,6 +1,6 @@
 // modules/outfitExtractor/outfitService.ts
 import { OutfitKit, OutfitItem, SavedOutfitItem } from "./types";
-import { compressImageForUpload } from '../../../utils/imageUtils';
+import { compressImageForUpload } from '../../utils/imageUtils';
 
 const API_BASE = '/api/gemini';
 
