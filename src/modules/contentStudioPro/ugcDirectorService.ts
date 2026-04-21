@@ -1037,7 +1037,7 @@ export async function buildUGCSessionPlanFromAnchor(
   } else if (focus === 'OUTFIT') {
     // Outfit sin referencia — usar defaults razonables
     directives = buildOutfitShotDirectives({
-      hasShoes: true, hasPants: true, hasShoes: true, hasAccessories: false,
+      hasShoes: true, hasPants: true, hasAccessories: false,
       hasDetail: true, fabricType: 'unknown', colors: [], hasTop: true,
       hasBottom: true, hasBelt: false, hasBag: false, hasHat: false,
       hasNecklace: false, bottomType: 'unknown'
