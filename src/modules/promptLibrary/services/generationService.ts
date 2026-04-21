@@ -1,162 +1,180 @@
-import { geminiService } from '../../../services/geminiService';
-import { MODELS, getModelForPrompt } from '../../../services/creditConfig';
-
-// ──────────────────────────────────────────
-// generationService — Prompt Library
-// Enruta cada generación al modelo correcto:
+// src/modules/promptLibrary/services/generationService.ts
+// ─────────────────────────────────────────────────────────────────────────────
+// Enruta cada generación al flujo correcto:
 //
-//   PRO   → con referencias de persona (fidelidad facial)
-//   FLASH → con persona pero sin fidelidad crítica / Campaign
-//   FAST  → sin persona, volumen alto (Photodump, Outfit, Product)
-//   TEXT  → análisis y variaciones
-// ──────────────────────────────────────────
+//   Imágenes  → imageApiService (async, QStash, Gemini 3 @ global)
+//   Texto     → geminiService.generateText (síncrono, gemini-2.5-flash)
+//
+// La distinción PRO/FLASH/FAST de modelos ya no aplica para selección de
+// modelo: todos usan Gemini 3. Se mantiene la semántica de los métodos
+// para no romper los módulos que los llaman.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { imageApiService, extractImageRef, type GenerateImageParams } from '../../../services/imageApiService';
+import { geminiService } from '../../../services/geminiService';
 
 const DEFAULT_NEGATIVE = [
   'blurry', 'distorted', 'low quality', 'bad anatomy',
   'extra fingers', 'deformed hands', 'mutated body',
   'bad lighting', 'low resolution', 'overexposed',
   'underexposed', 'ugly', 'poor composition',
-  'identity mixing', 'face distortion'
+  'identity mixing', 'face distortion',
 ].join(', ');
 
 export type GenerationProgress = {
-  total: number;
+  total:     number;
   completed: number;
-  current: number;
+  current:   number;
 };
+
+// ─── Helper: convierte (string|null)[] a refs válidos ────────────────────────
+
+function toRefs(
+  referenceImages?: (string | null)[],
+): Array<{ data: string; mimeType: string }> {
+  if (!referenceImages) return [];
+  return referenceImages
+    .filter((img): img is string => !!img && img.trim().length > 0)
+    .map((img, i) => {
+      try { return extractImageRef(img, `promptLibRef[${i}]`); } catch { return null; }
+    })
+    .filter(Boolean) as Array<{ data: string; mimeType: string }>;
+}
+
+// ─── API pública ──────────────────────────────────────────────────────────────
 
 export const generationService = {
 
-  // ── AUTO-SELECCIÓN según persona ─────────────────────────────────────
-  // hasPersonReference: true  → Pro  ($0.134 — fidelidad facial)
-  // hasPersonReference: false → Flash ($0.067 — generación creativa)
+  // Auto-selección según persona (la semántica se mantiene, el modelo no cambia)
   async generateImage(
     prompt: string,
     references: (string | null)[],
     negativePrompt?: string,
-    hasPersonReference: boolean = false
+    _hasPersonReference: boolean = false,
+    params?: Partial<GenerateImageParams>,
   ): Promise<string> {
-    const model = getModelForPrompt(hasPersonReference);
-    const cleanRefs = references.filter(Boolean) as string[];
-    return geminiService.generateImageWithModel(
+    return imageApiService.generateImage({
       prompt,
-      negativePrompt || DEFAULT_NEGATIVE,
-      model,
-      '1K',
-      cleanRefs,
-      '3:4'
-    );
+      negative:        negativePrompt || DEFAULT_NEGATIVE,
+      referenceImages: toRefs(references),
+      aspectRatio:     '3:4',
+      module:          'promptLibrary.generateImage',
+      ...params,
+    });
   },
 
-  // ── PRO explícito ────────────────────────────────────────────────────
-  // Para módulos donde la identidad facial siempre es crítica:
-  // Crear Modelo, Clonar Imagen, Studio UGC
+  // Fidelidad facial crítica (PRO en el nombre por compatibilidad)
   async generateImagePro(
     prompt: string,
     references: (string | null)[],
     negativePrompt?: string,
-    aspectRatio: "1:1" | "3:4" | "4:3" | "9:16" | "16:9" = "3:4"
+    aspectRatio: '1:1' | '3:4' | '4:3' | '9:16' | '16:9' = '3:4',
+    params?: Partial<GenerateImageParams>,
   ): Promise<string> {
-    const cleanRefs = references.filter(Boolean) as string[];
-    return geminiService.generateImageWithModel(
+    return imageApiService.generateImage({
       prompt,
-      negativePrompt || DEFAULT_NEGATIVE,
-      MODELS.PRO,
-      '1K',
-      cleanRefs,
-      aspectRatio
-    );
+      negative:        negativePrompt || DEFAULT_NEGATIVE,
+      referenceImages: toRefs(references),
+      aspectRatio,
+      module:          'promptLibrary.generateImagePro',
+      ...params,
+    });
   },
 
-  // ── FLASH explícito ──────────────────────────────────────────────────
-  // Para Campaign Generator — consistencia entre escenas con persona
+  // Consistencia entre escenas con persona
   async generateImageFlash(
     prompt: string,
     references: (string | null)[],
     negativePrompt?: string,
-    aspectRatio: "1:1" | "3:4" | "4:3" | "9:16" | "16:9" = "3:4"
+    aspectRatio: '1:1' | '3:4' | '4:3' | '9:16' | '16:9' = '3:4',
+    params?: Partial<GenerateImageParams>,
   ): Promise<string> {
-    const cleanRefs = references.filter(Boolean) as string[];
-    return geminiService.generateImageWithModel(
+    return imageApiService.generateImage({
       prompt,
-      negativePrompt || DEFAULT_NEGATIVE,
-      MODELS.FLASH,
-      '1K',
-      cleanRefs,
-      aspectRatio
-    );
+      negative:        negativePrompt || DEFAULT_NEGATIVE,
+      referenceImages: toRefs(references),
+      aspectRatio,
+      module:          'promptLibrary.generateImageFlash',
+      ...params,
+    });
   },
 
-  // ── IMAGEN 4 FAST ────────────────────────────────────────────────────
-  // Para Photodump, Outfit prendas, Product shots.
-  // No soporta imágenes de referencia — solo texto → imagen.
-  // Más rápido y 7x más barato que Pro.
+  // Volumen sin persona (antes usaba FAST/gemini-2.5; ahora Gemini 3 también)
   async generateImageFast(
     prompt: string,
-    aspectRatio: "1:1" | "3:4" | "4:3" | "9:16" | "16:9" = "3:4"
+    aspectRatio: '1:1' | '3:4' | '4:3' | '9:16' | '16:9' = '3:4',
+    params?: Partial<GenerateImageParams>,
   ): Promise<string> {
-    return geminiService.generateImageFast(prompt, aspectRatio);
+    return imageApiService.generateImage({
+      prompt,
+      aspectRatio,
+      module: 'promptLibrary.generateImageFast',
+      ...params,
+    });
   },
 
-  // ── BATCH FLASH ──────────────────────────────────────────────────────
-  // Campaign Generator — N imágenes en secuencia con persona
+  // Campaign Generator — N imágenes en paralelo con persona
   async generateBatchFlash(
     prompts: string[],
     references: (string | null)[],
     negativePrompt?: string,
-    onProgress?: (p: GenerationProgress) => void
+    onProgress?: (p: GenerationProgress) => void,
   ): Promise<string[]> {
-    const cleanRefs = references.filter(Boolean) as string[];
-    const neg = negativePrompt || DEFAULT_NEGATIVE;
-    const results: string[] = [];
-    const total = prompts.length;
+    const refs = toRefs(references);
+    const neg  = negativePrompt || DEFAULT_NEGATIVE;
+    let completed = 0;
+    const total   = prompts.length;
 
-    for (let i = 0; i < total; i++) {
-      onProgress?.({ total, completed: i, current: i });
-      try {
-        const img = await geminiService.generateImageWithModel(
-          prompts[i], neg, MODELS.FLASH, '1K', cleanRefs, '3:4'
-        );
-        results.push(img);
-      } catch (err) {
-        console.error(`Campaign batch error at index ${i}:`, err);
-      }
-      onProgress?.({ total, completed: i + 1, current: i });
-    }
-    return results;
+    const jobs: GenerateImageParams[] = prompts.map((prompt, i) => ({
+      prompt,
+      negative:        neg,
+      referenceImages: refs,
+      aspectRatio:     '3:4' as const,
+      shotIndex:       i,
+      totalShots:      total,
+      module:          'promptLibrary.batchFlash',
+    }));
+
+    const results = await imageApiService.generateBatch(jobs, (done, t) => {
+      completed = done;
+      onProgress?.({ total: t, completed: done, current: done - 1 });
+    });
+
+    // Filtrar nulls — shots fallidos quedan como string vacío para no romper la UI
+    return results.map(r => r ?? '');
   },
 
-  // ── BATCH FAST ───────────────────────────────────────────────────────
   // Photodump Mode — N variaciones sin persona, máximo volumen
   async generateBatchFast(
     prompts: string[],
-    onProgress?: (p: GenerationProgress) => void
+    onProgress?: (p: GenerationProgress) => void,
   ): Promise<string[]> {
-    const results: string[] = [];
-    const total = prompts.length;
+    let completed = 0;
+    const total   = prompts.length;
 
-    for (let i = 0; i < total; i++) {
-      onProgress?.({ total, completed: i, current: i });
-      try {
-        const img = await geminiService.generateImageFast(prompts[i], '3:4');
-        results.push(img);
-      } catch (err) {
-        console.error(`Photodump batch error at index ${i}:`, err);
-      }
-      onProgress?.({ total, completed: i + 1, current: i });
-    }
-    return results;
+    const jobs: GenerateImageParams[] = prompts.map((prompt, i) => ({
+      prompt,
+      aspectRatio: '3:4' as const,
+      shotIndex:   i,
+      totalShots:  total,
+      module:      'promptLibrary.batchFast',
+    }));
+
+    const results = await imageApiService.generateBatch(jobs, (done, t) => {
+      completed = done;
+      onProgress?.({ total: t, completed: done, current: done - 1 });
+    });
+
+    return results.map(r => r ?? '');
   },
 
-  // ── BATCH genérico (retrocompatibilidad) ─────────────────────────────
-  // Mantiene la firma original para no romper módulos existentes
+  // Retrocompatibilidad
   async generateBatch(
     prompts: string[],
     references: (string | null)[],
     negativePrompt?: string,
-    onProgress?: (p: GenerationProgress) => void
+    onProgress?: (p: GenerationProgress) => void,
   ): Promise<string[]> {
     return this.generateBatchFlash(prompts, references, negativePrompt, onProgress);
-  }
-
+  },
 };

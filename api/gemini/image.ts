@@ -1,136 +1,174 @@
 // api/gemini/image.ts
-// ═══════════════════════════════════════════════════════════════
-// MODELOS VERIFICADOS (diagnostic 2026-04-14):
-//   PRO:   gemini-3-pro-image-preview     @ global
-//   FLASH: gemini-3.1-flash-image-preview @ global
-//   FAST:  gemini-2.5-flash-image         @ us-central1
-// ═══════════════════════════════════════════════════════════════
+// Orchestrator asíncrono para generación de imágenes.
+// Recibe la petición, encola en QStash, responde 202 inmediatamente.
+// El cliente hace polling a getJobStatus cada 2 s (ver imageApiService.ts).
+//
+// ─── MODELOS PERMITIDOS ───────────────────────────────────────────────────────
+//   gemini-3.1-flash-image-preview  @ global  ← primario
+//   gemini-3-pro-image-preview       @ global  ← fallback
+//
+// gemini-2.5-flash-image está EXCLUIDO: región us-central1 incompatible
+// con las referencias de identidad y causa drift en todos los módulos.
+// ─────────────────────────────────────────────────────────────────────────────
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenAI } from '@google/genai';
+import { Redis } from '@upstash/redis';
+import { Client as QStashClient } from '@upstash/qstash';
 
-// ── Ubicación correcta según modelo ──
-const MODEL_LOCATIONS: Record<string, string> = {
-  'gemini-3-pro-image-preview':     'global',
-  'gemini-3.1-flash-image-preview': 'global',
-  'gemini-2.5-flash-image':         'us-central1',
-};
+// ─── Redis ────────────────────────────────────────────────────────────────────
+const redis = new Redis({
+  url:   process.env.KV_REST_API_URL!,
+  token: process.env.KV_REST_API_TOKEN!,
+});
 
-function getLocationForModel(model: string): string {
-  return MODEL_LOCATIONS[model] || 'us-central1';
+// ─── QStash ───────────────────────────────────────────────────────────────────
+const qstash = new QStashClient({ token: process.env.QSTASH_TOKEN! });
+
+// ─── Tipos ────────────────────────────────────────────────────────────────────
+type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+interface ImageJob {
+  id: string;
+  status: JobStatus;
+  result?: string;
+  error?: string;
+  createdAt: number;
+  updatedAt: number;
+  shotIndex?: number;
+  totalShots?: number;
+  module?: string;
 }
 
-function getCredentials(): Record<string, unknown> {
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '';
-  const decoded = raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf-8');
-  return JSON.parse(decoded);
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function generateJobId(): string {
+  return `img_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
 }
 
-function getGenAIClient(location: string): GoogleGenAI {
-  return new GoogleGenAI({
-    vertexai: true,
-    project: process.env.GCP_PROJECT_ID!,
-    location,
-    googleAuthOptions: { credentials: getCredentials() },
-  });
+function cleanBase64(b64: string): string {
+  if (!b64) return '';
+  return b64.replace(/^data:image\/(png|jpeg|webp|gif);base64,/, '').replace(/\s/g, '');
 }
 
-interface ImageRequest {
-  action: 'generateImage' | 'generateImageFast';
-  prompt: string;
-  negative?: string;
-  referenceImages?: Array<{ data: string; mimeType: string }>;
-  model?: string;
-  aspectRatio?: '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
+async function saveJob(job: ImageJob): Promise<void> {
+  await redis.set(`img_job:${job.id}`, JSON.stringify(job), { ex: 3600 });
 }
 
-function corsHeaders(res: any) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+async function getJob(jobId: string): Promise<ImageJob | null> {
+  const data = await redis.get(`img_job:${jobId}`);
+  if (!data) return null;
+  if (typeof data === 'string') return JSON.parse(data);
+  return data as ImageJob;
+}
+
+function setCors(res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Origin',  '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }
 
+// ─── Handler ──────────────────────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  corsHeaders(res);
+  setCors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'POST')    return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const body = req.body as ImageRequest;
-    if (!body.prompt) return res.status(400).json({ error: 'Missing prompt' });
+    const { action, payload } = req.body;
+    if (!action) return res.status(400).json({ error: 'Missing action' });
 
-    if (body.action === 'generateImage') {
-      return await handleImageGeneration(body, res);
-    }
-    if (body.action === 'generateImageFast') {
-      return await handleImageGeneration({ ...body, model: 'gemini-3.1-flash-image-preview' }, res);
-    }
+    // ── Iniciar generación ────────────────────────────────────────────────────
+    if (action === 'generateImageAsync') {
+      const {
+        prompt,
+        negative,
+        referenceImages,
+        aspectRatio = '3:4',
+        shotIndex,
+        totalShots,
+        module: moduleName,
+      } = payload;
 
-    return res.status(400).json({ error: `Unknown action: ${body.action}` });
-  } catch (error: any) {
-    console.error('Image error:', error);
-    return res.status(500).json({ success: false, error: error.message || 'Image generation failed' });
-  }
-}
+      if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
 
-async function handleImageGeneration(body: ImageRequest, res: VercelResponse) {
-  const modelName = body.model || 'gemini-3.1-flash-image-preview';
-  const location = getLocationForModel(modelName);
-  const ai = getGenAIClient(location);
+      // Construir parts para el worker (igual que ugc-worker)
+      const parts: any[] = [];
 
-  const parts: Array<any> = [];
-
-  // Agregar imágenes de referencia
-  if (body.referenceImages && body.referenceImages.length > 0) {
-    for (let i = 0; i < body.referenceImages.length; i++) {
-      const ref = body.referenceImages[i];
-      if (ref.data && ref.data.length > 64) {
-        parts.push({ text: `REF${i}:` });
-        parts.push({
-          inlineData: {
-            mimeType: ref.mimeType || 'image/jpeg',
-            data: ref.data,
-          },
-        });
+      if (Array.isArray(referenceImages)) {
+        for (let i = 0; i < referenceImages.length; i++) {
+          const ref = referenceImages[i];
+          if (ref?.data && ref.data.length > 64) {
+            parts.push({ text: `REF${i}:` });
+            parts.push({
+              inlineData: {
+                mimeType: ref.mimeType || 'image/jpeg',
+                data:     cleanBase64(ref.data),
+              },
+            });
+          }
+        }
       }
+
+      let instruction = prompt;
+      if (negative) instruction += `\nNEGATIVE: ${negative}`;
+      parts.push({ text: instruction });
+
+      // Crear job en Redis
+      const jobId = generateJobId();
+      const job: ImageJob = {
+        id:        jobId,
+        status:    'pending',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        shotIndex,
+        totalShots,
+        module: moduleName,
+      };
+      await saveJob(job);
+
+      // Encolar en QStash → image-worker
+      const workerUrl = `${process.env.WORKER_BASE_URL}/api/gemini/image-worker`;
+      await qstash.publishJSON({
+        url:     workerUrl,
+        body:    { jobId, parts },
+        retries: 2,
+      });
+
+      console.log(`[Image] Job ${jobId} enqueued (module: ${moduleName || 'unknown'}) → ${workerUrl}`);
+      return res.status(202).json({
+        success: true,
+        jobId,
+        status: 'pending',
+        shotIndex,
+        totalShots,
+      });
     }
-  }
 
-  // Instrucción
-  let instruction = body.prompt;
-  if (body.negative) {
-    instruction += `\nNEGATIVE: ${body.negative}`;
-  }
-  parts.push({ text: instruction });
+    // ── Consultar estado ──────────────────────────────────────────────────────
+    if (action === 'getJobStatus') {
+      const { jobId } = payload;
+      if (!jobId) return res.status(400).json({ error: 'Missing jobId' });
 
-  const response = await ai.models.generateContent({
-    model: modelName,
-    contents: [{ role: 'user', parts }],
-    config: {
-      responseModalities: ['TEXT', 'IMAGE'],
-    },
-  });
+      const job = await getJob(jobId);
+      if (!job) return res.status(404).json({ error: 'Job not found' });
 
-  // Buscar imagen en respuesta
-  const candidates = response.candidates || [];
-  for (const candidate of candidates) {
-    for (const part of (candidate.content?.parts || [])) {
-      if (part.inlineData?.data) {
-        const mimeType = part.inlineData.mimeType || 'image/png';
-        return res.status(200).json({
-          success: true,
-          image: `data:${mimeType};base64,${part.inlineData.data}`,
-        });
-      }
+      const response: any = {
+        jobId:     job.id,
+        status:    job.status,
+        createdAt: job.createdAt,
+        updatedAt: job.updatedAt,
+        shotIndex: job.shotIndex,
+        totalShots: job.totalShots,
+      };
+      if (job.status === 'completed') response.image = job.result;
+      if (job.status === 'failed')    response.error = job.error;
+
+      return res.status(200).json(response);
     }
+
+    return res.status(400).json({ error: `Unknown action: ${action}` });
+
+  } catch (err: any) {
+    console.error('[Image] Handler error:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Internal error' });
   }
-
-  const textContent = candidates[0]?.content?.parts
-    ?.map((p: any) => p.text || '').filter(Boolean).join('') || '';
-
-  return res.status(422).json({
-    success: false,
-    error: 'Model did not return an image',
-    text: textContent,
-  });
 }
