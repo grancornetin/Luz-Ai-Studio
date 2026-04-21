@@ -1,7 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Megaphone, Plus, Trash2, Loader2, Download, Zap, Image } from 'lucide-react';
 import { generationService, GenerationProgress } from '../services/generationService';
 import { PromptDNA } from '../types/promptTypes';
+import { downloadAsZip } from '../../../utils/imageUtils';
+import { ImageLightbox } from '../../../components/shared/ImageLightbox';
+import { FloatingActionBar } from '../../../components/shared/FloatingActionBar';
+import { useScrollFAB } from '../../../hooks/useScrollFAB';
 
 interface CampaignGeneratorProps {
   basePrompt: string;
@@ -24,11 +28,14 @@ const CampaignGenerator: React.FC<CampaignGeneratorProps> = ({
   references
 }) => {
 
-  const [scenes, setScenes]         = React.useState<string[]>(DEFAULT_SCENES);
-  const [results, setResults]       = React.useState<string[]>([]);
-  const [isGenerating, setIsGenerating] = React.useState(false);
-  const [progress, setProgress]     = React.useState<GenerationProgress | null>(null);
-  const [error, setError]           = React.useState<string | null>(null);
+  const [scenes, setScenes] = useState<string[]>(DEFAULT_SCENES);
+  const [results, setResults] = useState<string[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [progress, setProgress] = useState<GenerationProgress | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const { isVisible: fabVisible } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: false });
 
   const addScene = () => {
     if (scenes.length >= MAX_SCENES) return;
@@ -56,7 +63,6 @@ const CampaignGenerator: React.FC<CampaignGeneratorProps> = ({
     setProgress({ total: validScenes.length, completed: 0, current: 0 });
 
     try {
-      // Construir prompts: base + escena para mantener identidad consistente
       const campaignPrompts = validScenes.map(scene =>
         `${basePrompt}, ${scene}, same person same identity same face, consistent character`
       );
@@ -84,10 +90,14 @@ const CampaignGenerator: React.FC<CampaignGeneratorProps> = ({
     link.click();
   };
 
-  const downloadAll = () => {
-    results.forEach((img, i) => {
-      setTimeout(() => downloadImage(img, i), i * 300);
-    });
+  const downloadAllZip = async () => {
+    if (results.length === 0) return;
+    await downloadAsZip(results, `campaign_${Date.now()}.zip`, 'campaign');
+  };
+
+  const openLightbox = (index: number) => {
+    setLightboxIndex(index);
+    setLightboxOpen(true);
   };
 
   const canGenerate = basePrompt.trim().length > 0 &&
@@ -110,16 +120,6 @@ const CampaignGenerator: React.FC<CampaignGeneratorProps> = ({
             Mismo sujeto · Múltiples escenas
           </p>
         </div>
-
-        {results.length > 0 && (
-          <button
-            onClick={downloadAll}
-            className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
-          >
-            <Download className="w-3.5 h-3.5" />
-            Descargar todo
-          </button>
-        )}
       </div>
 
       {/* BASE PROMPT PREVIEW */}
@@ -134,7 +134,6 @@ const CampaignGenerator: React.FC<CampaignGeneratorProps> = ({
 
       {/* SCENES */}
       <div className="space-y-3">
-
         <div className="flex items-center justify-between">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
             Escenas ({scenes.length}/{MAX_SCENES})
@@ -152,11 +151,9 @@ const CampaignGenerator: React.FC<CampaignGeneratorProps> = ({
 
         {scenes.map((scene, index) => (
           <div key={index} className="flex gap-2 items-start">
-
             <div className="flex-shrink-0 w-6 h-6 mt-3 flex items-center justify-center">
               <span className="text-[9px] font-black text-slate-600 uppercase">{index + 1}</span>
             </div>
-
             <input
               type="text"
               value={scene}
@@ -164,7 +161,6 @@ const CampaignGenerator: React.FC<CampaignGeneratorProps> = ({
               placeholder={`Escena ${index + 1}: descripción del ambiente...`}
               className="flex-1 bg-white/5 border border-white/10 focus:border-brand-500/50 rounded-xl px-4 py-3 text-xs font-medium text-slate-300 placeholder-slate-600 outline-none transition-all"
             />
-
             {scenes.length > MIN_SCENES && (
               <button
                 onClick={() => removeScene(index)}
@@ -173,10 +169,8 @@ const CampaignGenerator: React.FC<CampaignGeneratorProps> = ({
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             )}
-
           </div>
         ))}
-
       </div>
 
       {/* GENERATE BUTTON */}
@@ -229,29 +223,23 @@ const CampaignGenerator: React.FC<CampaignGeneratorProps> = ({
       {/* RESULTS GRID */}
       {results.length > 0 && (
         <div className="space-y-4">
-
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
             {results.length} imágenes generadas
           </p>
-
           <div className="grid grid-cols-2 gap-3">
             {results.map((img, i) => (
-              <div key={i} className="group relative aspect-[3/4] rounded-2xl overflow-hidden bg-slate-800">
-                <img
-                  src={img}
-                  className="w-full h-full object-cover"
-                  alt={`Campaign ${i + 1}`}
-                />
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3">
-                  <p className="text-[9px] font-black text-white uppercase tracking-widest">
-                    Escena {i + 1}
-                  </p>
+              <div
+                key={i}
+                className="group relative aspect-[3/4] rounded-2xl overflow-hidden bg-slate-800 cursor-pointer"
+                onClick={() => openLightbox(i)}
+              >
+                <img src={img} className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   <button
-                    onClick={() => downloadImage(img, i)}
-                    className="flex items-center gap-1.5 bg-white/20 backdrop-blur-md text-white px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/30 transition-colors"
+                    onClick={(e) => { e.stopPropagation(); downloadImage(img, i); }}
+                    className="bg-white/20 backdrop-blur-md text-white p-2 rounded-xl hover:bg-white/30"
                   >
-                    <Download className="w-3 h-3" />
-                    Descargar
+                    <Download className="w-4 h-4" />
                   </button>
                 </div>
                 <div className="absolute top-2 left-2 bg-black/50 text-white text-[8px] font-black px-2 py-1 rounded-lg uppercase">
@@ -259,8 +247,6 @@ const CampaignGenerator: React.FC<CampaignGeneratorProps> = ({
                 </div>
               </div>
             ))}
-
-            {/* PLACEHOLDER SLOTS while generating */}
             {isGenerating && progress && Array.from({
               length: Math.max(0, progress.total - results.length)
             }).map((_, i) => (
@@ -277,10 +263,33 @@ const CampaignGenerator: React.FC<CampaignGeneratorProps> = ({
               </div>
             ))}
           </div>
-
         </div>
       )}
 
+      {/* LIGHTBOX */}
+      {lightboxOpen && results.length > 0 && (
+        <ImageLightbox
+          images={results}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxOpen(false)}
+          onDownload={(url, idx) => downloadImage(url, idx)}
+          metadata={{ label: 'Campaña' }}
+        />
+      )}
+
+      {/* FLOATING ACTION BAR */}
+      {results.length > 0 && fabVisible && (
+        <FloatingActionBar
+          isVisible={true}
+          primaryAction={{
+            label: 'Descargar ZIP',
+            icon: <Download className="w-4 h-4" />,
+            onClick: downloadAllZip,
+          }}
+          onClearSelection={() => setResults([])}
+          selectedCount={0}
+        />
+      )}
     </div>
   );
 };

@@ -1,3 +1,4 @@
+// src/modules/contentStudioPro/ContentStudioProModule.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
@@ -31,8 +32,13 @@ import { contentStudioService } from './service';
 import { contentStudioStorage } from './storage';
 import { analyzeProductRelevance } from './ugcDirectorService';
 import { generationHistoryService } from '../../services/generationHistoryService';
-import JSZip from 'jszip';
-import { readAndCompressFile } from '../../utils/imageUtils';
+import { readAndCompressFile, downloadAsZip } from '../../utils/imageUtils';
+
+// Nuevos componentes base
+import { ImageSlot } from '../../components/shared/ImageSlot';
+import { ImageLightbox } from '../../components/shared/ImageLightbox';
+import { FloatingActionBar } from '../../components/shared/FloatingActionBar';
+import { useScrollFAB } from '../../hooks/useScrollFAB';
 
 type Step = 'setup' | 'generating_master' | 'checkpoint' | 'producing' | 'library' | 'batch_generating';
 type FilterTab = 'TODAS' | 'AVATAR' | 'PRODUCT' | 'OUTFIT' | 'SCENE';
@@ -43,9 +49,9 @@ const TAB_ORDER: FilterTab[] = ['TODAS', 'AVATAR', 'PRODUCT', 'OUTFIT', 'SCENE']
 const MAX_BATCH_SIZE = 5;
 const MIN_BATCH_SIZE = 2;
 
-// Reintentos automáticos silenciosos antes de mostrar error al usuario
+// Reintentos automáticos
 const AUTO_RETRY_ATTEMPTS = 3;
-const AUTO_RETRY_DELAY_MS = 2000; // pausa entre reintentos automáticos
+const AUTO_RETRY_DELAY_MS = 2000;
 
 interface BatchSession {
   id: string;
@@ -61,6 +67,23 @@ interface BatchSession {
   shotStatuses: ShotStatus[];
   progress: number;
 }
+
+// Componente custom checkbox con touch target mínimo
+const CustomCheckbox: React.FC<{ checked: boolean; onChange: () => void; label?: string }> = ({ checked, onChange, label }) => (
+  <button
+    onClick={onChange}
+    className="flex items-center gap-2 group"
+    style={{ minHeight: 44, minWidth: 44 }}
+    aria-label={label || 'Seleccionar'}
+  >
+    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+      checked ? 'bg-brand-600 border-brand-600' : 'border-slate-300 bg-white group-hover:border-brand-400'
+    }`}>
+      {checked && <i className="fa-solid fa-check text-white text-[10px]"></i>}
+    </div>
+    {label && <span className="text-[10px] font-bold text-slate-600">{label}</span>}
+  </button>
+);
 
 const ContentStudioProModule: React.FC = () => {
   const [step, setStep] = useState<Step>('setup');
@@ -97,19 +120,21 @@ const ContentStudioProModule: React.FC = () => {
   const [sessionPlan, setSessionPlan] = useState<any>(null);
   const [ref0Analysis, setRef0Analysis] = useState<REF0Analysis | undefined>(undefined);
   
-  const [galleryOpen, setGalleryOpen] = useState(false);
-  const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  // Lightbox state
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lightboxMetadata, setLightboxMetadata] = useState<{ label: string }>({ label: '' });
 
   const [shotCount, setShotCount] = useState(6);
   
-  // Estado para generación con polling - UI dinámica
   const [generatingShots, setGeneratingShots] = useState<{ [key: string]: { status: string; imageUrl?: string; error?: string; autoRetryCount?: number } }>({});
 
-  // Estado para modal de sesión incompleta al intentar guardar
   const [showIncompleteModal, setShowIncompleteModal] = useState(false);
-  // Set producido pendiente de guardar (lo guardamos aquí para usarlo después del modal)
   const [pendingProducedSet, setPendingProducedSet] = useState<ContentStudioProSet | null>(null);
+
+  // FAB para selección múltiple en library
+  const { isVisible: fabVisible } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: true });
 
   const { checkAndDeduct, showNoCredits, requiredCredits, closeModal, refundCredits } = useCreditGuard();
 
@@ -142,17 +167,13 @@ const ContentStudioProModule: React.FC = () => {
     checkProductRelevance();
   }, [productRef, outfitRef, sceneRef, sceneText, focus, isProductComplement]);
 
-  const handleFileUpload = (setter: React.Dispatch<React.SetStateAction<any>>, multiple: boolean = false) =>
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files) {
-        const newFiles = Array.from(e.target.files) as File[];
-        newFiles.forEach(async (file) => {
-          const compressed = await readAndCompressFile(file);
-          if (multiple) setter((prev: string[]) => [...prev, compressed].slice(0, 1));
-          else setter(compressed);
-        });
-      }
-    };
+  // Handlers para slots
+  const updateFaceRef = (base64: string | null) => {
+    setFaceRefs(base64 ? [base64] : []);
+  };
+  const updateProductRef = (base64: string | null) => setProductRef(base64);
+  const updateOutfitRef = (base64: string | null) => setOutfitRef(base64);
+  const updateSceneRef = (base64: string | null) => setSceneRef(base64);
 
   const validateReferences = (): boolean => {
     if (faceRefs.length === 0) {
@@ -299,29 +320,13 @@ const ContentStudioProModule: React.FC = () => {
     }
   };
 
-  // ─────────────────────────────────────────────────────────────────────
-  // generateShotWithAutoRetry
-  // Intenta generar un shot hasta AUTO_RETRY_ATTEMPTS veces de forma
-  // silenciosa antes de marcar el shot como fallido y mostrar el botón
-  // manual al usuario. El usuario nunca ve estos reintentos intermedios.
-  // ─────────────────────────────────────────────────────────────────────
-  // ─────────────────────────────────────────────────────────────────────
-  // saveToHistorySafe — guarda en el historial sin nunca lanzar excepción.
-  // Si localStorage está lleno (QuotaExceededError), elimina las entradas
-  // más antiguas hasta liberar espacio y reintenta una vez.
-  // La imagen completa en base64 NO se guarda — solo metadatos + thumbnail
-  // recortado a 200 chars para evitar llenar el storage.
-  // ─────────────────────────────────────────────────────────────────────
-  // saveToHistorySafe — guarda la imagen completa en el historial via API.
-  // Ya no usa localStorage — el historial vive en Redis (api/history.ts).
-  // Nunca lanza excepción para no interrumpir el flujo de generación.
   const saveToHistorySafe = (params: {
     imageUrl: string;
     moduleLabel: string;
     promptText: string;
   }) => {
     generationHistoryService.save({
-      imageUrl:    params.imageUrl,   // imagen completa, no truncada
+      imageUrl:    params.imageUrl,
       module:      'content_studio_pro',
       moduleLabel: params.moduleLabel,
       creditsUsed: CREDIT_COSTS.UGC_PER_SHOT,
@@ -344,7 +349,6 @@ const ContentStudioProModule: React.FC = () => {
     for (let attempt = 1; attempt <= AUTO_RETRY_ATTEMPTS; attempt++) {
       try {
         if (attempt > 1) {
-          // Pausa corta entre reintentos para no saturar la API
           await new Promise(resolve => setTimeout(resolve, AUTO_RETRY_DELAY_MS));
           onAttemptUpdate(attempt);
         }
@@ -364,18 +368,15 @@ const ContentStudioProModule: React.FC = () => {
           producingSet.ref0Analysis,
           idx,
           totalShots,
-          () => {} // callbacks silenciosos durante reintentos
+          () => {}
         );
 
-        // Éxito — devolver la URL
         return url;
       } catch (e: any) {
         lastError = e;
-        // Continuar al siguiente intento
       }
     }
 
-    // Todos los intentos fallaron
     throw lastError;
   };
 
@@ -392,7 +393,6 @@ const ContentStudioProModule: React.FC = () => {
     setStep('producing');
     setCurrentSet(producingSet);
     
-    // Inicializar estados de generación para UI dinámica
     const initialGenState: { [key: string]: { status: string; imageUrl?: string; error?: string; autoRetryCount?: number } } = {};
     producingSet.shots.forEach((shot) => {
       initialGenState[shot.key] = { status: 'pending', autoRetryCount: 0 };
@@ -403,7 +403,6 @@ const ContentStudioProModule: React.FC = () => {
     const focusRef = useProduct ? producingSet.productRef : null;
     const updatedShots = [...producingSet.shots];
     
-    // Actualizar UI para un shot específico
     const updateShotStatus = (shotKey: ShotKey, status: string, imageUrl?: string, errorMsg?: string, autoRetryCount?: number) => {
       setGeneratingShots(prev => ({
         ...prev,
@@ -431,7 +430,6 @@ const ContentStudioProModule: React.FC = () => {
       }
     };
 
-    // Generar todos los shots en paralelo, cada uno con reintentos automáticos silenciosos
     const shotPromises = updatedShots.map(async (shot, idx) => {
       updateShotStatus(shot.key, 'processing');
       
@@ -445,7 +443,6 @@ const ContentStudioProModule: React.FC = () => {
           focusRef,
           sessionPlan,
           (attempt) => {
-            // Mostrar en la UI que se está reintentando (silencioso pero visible en el thumbnail)
             updateShotStatus(shot.key, 'retrying', undefined, undefined, attempt - 1);
           }
         );
@@ -459,27 +456,19 @@ const ContentStudioProModule: React.FC = () => {
         });
         
       } catch (e: any) {
-        // Todos los reintentos automáticos fallaron → marcar para reintento manual
         updateShotStatus(shot.key, 'failed', undefined, e?.message || 'Error desconocido');
       }
     });
 
-    // Esperar a que todos los shots terminen (éxito o fallo definitivo)
     await Promise.all(shotPromises);
     
-    // Construir el set final con el estado real de los shots
     const finalSet = { ...producingSet, shots: updatedShots };
-    
-    // Verificar si hay shots fallidos
     const failedShots = updatedShots.filter(s => s.status === 'error');
     
     if (failedShots.length > 0) {
-      // Hay incompletos → guardar estado y mostrar modal de decisión
       setPendingProducedSet(finalSet);
       setShowIncompleteModal(true);
-      // No guardamos todavía ni pasamos a library
     } else {
-      // Todo correcto → guardar y pasar a library
       await contentStudioStorage.saveSet(finalSet);
       await loadSets();
       setStep('library');
@@ -487,10 +476,6 @@ const ContentStudioProModule: React.FC = () => {
     }
   };
 
-  // ─────────────────────────────────────────────────────────────────────
-  // retryFailedShots — reintenta SÓLO los shots con status 'error'
-  // Se llama cuando el usuario elige "Reintentar" en el modal.
-  // ─────────────────────────────────────────────────────────────────────
   const retryFailedShots = async () => {
     if (!pendingProducedSet) return;
     setShowIncompleteModal(false);
@@ -499,7 +484,6 @@ const ContentStudioProModule: React.FC = () => {
     const failedShots = targetSet.shots.filter(s => s.status === 'error');
     if (failedShots.length === 0) return;
 
-    // Restaurar la vista de producción para mostrar progreso
     setStep('producing');
     setCurrentSet(targetSet);
 
@@ -509,7 +493,6 @@ const ContentStudioProModule: React.FC = () => {
     const focusRef = useProduct ? targetSet.productRef : null;
     const updatedShots = [...targetSet.shots];
 
-    // Resetear estado de UI sólo para los shots fallidos
     setGeneratingShots(prev => {
       const next = { ...prev };
       failedShots.forEach(s => { next[s.key] = { status: 'processing', autoRetryCount: 0 }; });
@@ -578,11 +561,9 @@ const ContentStudioProModule: React.FC = () => {
     const stillFailed = updatedShots.filter(s => s.status === 'error');
 
     if (stillFailed.length > 0) {
-      // Aún hay fallos → volver a mostrar el modal
       setPendingProducedSet(finalSet);
       setShowIncompleteModal(true);
     } else {
-      // Todo resuelto
       setPendingProducedSet(null);
       await contentStudioStorage.saveSet(finalSet);
       await loadSets();
@@ -591,7 +572,6 @@ const ContentStudioProModule: React.FC = () => {
     }
   };
 
-  // Guardar la sesión incompleta tal cual (el usuario elige no reintentar)
   const saveIncompleteSession = async () => {
     if (!pendingProducedSet) return;
     setShowIncompleteModal(false);
@@ -674,26 +654,11 @@ const ContentStudioProModule: React.FC = () => {
   };
 
   const downloadSingleSet = async (set: ContentStudioProSet) => {
-    const zip = new JSZip();
-    const folderName = `${set.focus}_${set.id.slice(-8)}`;
-    const folder = zip.folder(folderName);
-    
-    if (set.image0Url) {
-      folder?.file('00_Master.png', set.image0Url.split(',')[1], { base64: true });
-    }
-    set.shots.forEach((s, i) => {
-      if (s.imageUrl) {
-        folder?.file(`Shot_${i + 1}.png`, s.imageUrl.split(',')[1], { base64: true });
-      }
-    });
-    
-    const blob = await zip.generateAsync({ type: 'blob' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `UGC_${set.focus}_${set.id.slice(-8)}.zip`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const images: string[] = [];
+    if (set.image0Url) images.push(set.image0Url);
+    set.shots.forEach(s => { if (s.imageUrl) images.push(s.imageUrl); });
+    if (images.length === 0) return;
+    await downloadAsZip(images, `UGC_${set.focus}_${set.id.slice(-8)}.zip`, `ugc_${set.id.slice(-4)}`);
   };
 
   const downloadSelectedSets = async () => {
@@ -701,31 +666,13 @@ const ContentStudioProModule: React.FC = () => {
       alert('Selecciona al menos una sesión para descargar');
       return;
     }
-
-    const zip = new JSZip();
+    const allImages: string[] = [];
     const setsToDownload = sets.filter(s => selectedSets.has(s.id));
-    
     for (const set of setsToDownload) {
-      const folderName = `${set.focus}_${set.id.slice(-8)}`;
-      const folder = zip.folder(folderName);
-      
-      if (set.image0Url) {
-        folder?.file('00_Master.png', set.image0Url.split(',')[1], { base64: true });
-      }
-      set.shots.forEach((s, i) => {
-        if (s.imageUrl) {
-          folder?.file(`Shot_${i + 1}.png`, s.imageUrl.split(',')[1], { base64: true });
-        }
-      });
+      if (set.image0Url) allImages.push(set.image0Url);
+      set.shots.forEach(s => { if (s.imageUrl) allImages.push(s.imageUrl); });
     }
-    
-    const blob = await zip.generateAsync({ type: 'blob' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `UGC_Selected_${selectedSets.size}_Sessions.zip`;
-    a.click();
-    URL.revokeObjectURL(url);
+    await downloadAsZip(allImages, `UGC_Selected_${selectedSets.size}_Sessions.zip`, 'ugc');
   };
 
   const toggleSelectSet = (setId: string) => {
@@ -748,54 +695,24 @@ const ContentStudioProModule: React.FC = () => {
     setSelectedSets(new Set());
   };
 
-  const openGallery = (set: ContentStudioProSet) => {
-    const images: GalleryImage[] = [];
-    
+  const openLightbox = (set: ContentStudioProSet, initialIndex: number = 0) => {
+    const images: string[] = [];
+    const labels: string[] = [];
     if (set.image0Url) {
-      images.push({ url: set.image0Url, type: 'master' });
+      images.push(set.image0Url);
+      labels.push('Master');
     }
-    
     set.shots.forEach((shot, idx) => {
       if (shot.imageUrl) {
-        images.push({ 
-          url: shot.imageUrl, 
-          type: 'shot', 
-          shotKey: shot.key, 
-          shotIndex: idx 
-        });
+        images.push(shot.imageUrl);
+        labels.push(`Shot ${idx + 1}`);
       }
     });
-    
-    setGalleryImages(images);
-    setCurrentImageIndex(0);
-    setGalleryOpen(true);
-  };
-
-  const navigateGallery = (direction: 'next' | 'prev') => {
-    if (direction === 'next') {
-      setCurrentImageIndex((prev) => (prev + 1) % galleryImages.length);
-    } else {
-      setCurrentImageIndex((prev) => (prev - 1 + galleryImages.length) % galleryImages.length);
-    }
-  };
-
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && galleryOpen) {
-        setGalleryOpen(false);
-      }
-    };
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
-  }, [galleryOpen]);
-
-  const downloadCurrentImage = () => {
-    if (galleryImages[currentImageIndex]) {
-      const a = document.createElement('a');
-      a.href = galleryImages[currentImageIndex].url;
-      a.download = `UGC_${galleryImages[currentImageIndex].type === 'master' ? 'Master' : `Shot_${currentImageIndex}`}.png`;
-      a.click();
-    }
+    if (images.length === 0) return;
+    setLightboxImages(images);
+    setLightboxIndex(initialIndex);
+    setLightboxMetadata({ label: `${FOCUS_LABELS[set.focus].split(' / ')[0]} · ${set.id.slice(-4)}` });
+    setLightboxOpen(true);
   };
 
   const showComplementCheckbox = (focus === 'OUTFIT' || focus === 'SCENE') && productRef;
@@ -805,7 +722,6 @@ const ContentStudioProModule: React.FC = () => {
   });
   const showSelectionTools = filteredSets.length > 0;
 
-  // Renderizar estado de un shot en producción
   const renderShotStatus = (shotKey: ShotKey, idx: number) => {
     const genState = generatingShots[shotKey];
     if (!genState) return null;
@@ -845,7 +761,7 @@ const ContentStudioProModule: React.FC = () => {
       <div
         key={idx}
         className="aspect-[3/4] bg-slate-50 rounded-[24px] overflow-hidden relative group cursor-pointer flex flex-col shadow-lg"
-        onClick={() => genState.imageUrl && openGallery(currentSet!)}
+        onClick={() => genState.imageUrl && currentSet && openLightbox(currentSet, idx + 1)}
       >
         <div className="flex-1 relative overflow-hidden bg-slate-100">
           {genState.imageUrl ? (
@@ -857,21 +773,20 @@ const ContentStudioProModule: React.FC = () => {
                 {getStatusText()}
               </span>
               {genState.status === 'failed' && genState.error && (
-                <span className="text-[8px] text-red-400 px-2 text-center leading-snug">
-                  {genState.error.length > 50 ? genState.error.slice(0, 50) + '…' : genState.error}
+                <span className="text-[10px] text-red-400 px-2 text-center leading-snug">
+                  {genState.error.length > 60 ? genState.error.slice(0, 60) + '…' : genState.error}
                 </span>
               )}
             </div>
           )}
           <div className="absolute top-4 left-4">
-            <span className="px-3 py-1 bg-black/40 backdrop-blur-md text-white text-[8px] font-black rounded-full uppercase border border-white/10 italic">
+            <span className="px-3 py-1 bg-black/40 backdrop-blur-md text-white text-[10px] font-black rounded-full uppercase border border-white/10 italic">
               Shot {idx + 1}
             </span>
           </div>
-          {/* Badge de reintento automático */}
           {genState.status === 'retrying' && (
             <div className="absolute top-4 right-4">
-              <span className="px-2 py-1 bg-amber-500/90 backdrop-blur-md text-white text-[7px] font-black rounded-full uppercase">
+              <span className="px-2 py-1 bg-amber-500/90 backdrop-blur-md text-white text-[10px] font-black rounded-full uppercase">
                 Auto-retry
               </span>
             </div>
@@ -891,7 +806,7 @@ const ContentStudioProModule: React.FC = () => {
               UGC <span className="text-brand-600">Studio</span>
             </h1>
             <div className="flex items-center justify-center md:justify-start gap-2 mt-2">
-              <p className="text-slate-500 font-bold uppercase text-[8px] md:text-[9px] tracking-[0.4em] italic">
+              <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.4em] italic">
                 Sesiones orgánicas • Motor Gemini
               </p>
               <ModuleTutorial moduleId="contentStudio" steps={TUTORIAL_CONFIGS.contentStudio} />
@@ -906,7 +821,7 @@ const ContentStudioProModule: React.FC = () => {
                 setSelectedSets(new Set());
                 setBatchMode(false);
               }}
-              className={`px-6 md:px-8 py-2 md:py-3 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase transition-all ${step !== 'library' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400'}`}
+              className={`px-6 md:px-8 py-2 md:py-3 rounded-xl md:rounded-2xl text-[10px] font-black uppercase transition-all ${step !== 'library' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400'}`}
             >
               Laboratorio
             </button>
@@ -917,19 +832,20 @@ const ContentStudioProModule: React.FC = () => {
                 setSelectedSets(new Set());
                 setBatchMode(false);
               }}
-              className={`px-6 md:px-8 py-2 md:py-3 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase transition-all ${step === 'library' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400'}`}
+              className={`px-6 md:px-8 py-2 md:py-3 rounded-xl md:rounded-2xl text-[10px] font-black uppercase transition-all ${step === 'library' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400'}`}
             >
               Historial ({sets.length})
             </button>
           </div>
         </header>
 
-        {/* SETUP */}
+        {/* SETUP - con ImageSlots */}
         {step === 'setup' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10 px-4 md:px-0">
             <div className="lg:col-span-5">
               <section className="bg-white p-6 md:p-10 rounded-[32px] md:rounded-[48px] border border-slate-100 shadow-xl space-y-8 md:space-y-10">
                 
+                {/* Enfoque de sesión */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Enfoque de sesión</label>
@@ -950,17 +866,18 @@ const ContentStudioProModule: React.FC = () => {
                         <i className={`fa-solid ${
                           k === 'AVATAR' ? 'fa-user-circle' : k === 'PRODUCT' ? 'fa-gem' : k === 'OUTFIT' ? 'fa-shirt' : 'fa-image'
                         } text-xl md:text-2xl`}></i>
-                        <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest leading-none text-center">
+                        <span className="text-[10px] font-black uppercase tracking-widest leading-none text-center">
                           {FOCUS_LABELS[k as Focus].split(' / ')[0]}
                         </span>
                       </button>
                     ))}
                   </div>
-                  <p className="text-[8px] text-slate-500 text-center mt-1">
+                  <p className="text-[10px] text-slate-500 text-center mt-1">
                     {getFocusDescription(focus)}
                   </p>
                 </div>
 
+                {/* Slot de rostro (obligatorio) */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -972,129 +889,60 @@ const ContentStudioProModule: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                    <span className="text-[9px] font-black text-red-500 uppercase tracking-tighter">* Obligatorio</span>
+                    <span className="text-[10px] font-black text-red-500 uppercase tracking-tighter">* Obligatorio</span>
                   </div>
-                  <div className="aspect-[3/4] w-full max-w-sm mx-auto md:max-w-none">
-                    {faceRefs.length > 0 ? (
-                      <div className="w-full h-full rounded-[24px] md:rounded-[32px] overflow-hidden border-4 border-brand-600 relative group shadow-2xl">
-                        <img src={faceRefs[0]} className="w-full h-full object-cover" />
-                        <button
-                          onClick={() => setFaceRefs([])}
-                          className="absolute inset-0 bg-red-500/80 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
-                        >
-                          <i className="fa-solid fa-trash text-2xl"></i>
-                        </button>
-                      </div>
-                    ) : (
-                      <label className="w-full h-full bg-slate-50 border-2 border-dashed border-slate-200 rounded-[24px] md:rounded-[32px] flex flex-col items-center justify-center cursor-pointer hover:bg-slate-100 transition-all">
-                        <i className="fa-solid fa-camera text-slate-300 text-3xl md:text-4xl mb-4"></i>
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Cargar Rostro</span>
-                        <input type="file" hidden onChange={handleFileUpload(setFaceRefs, true)} />
-                      </label>
-                    )}
-                  </div>
+                  <ImageSlot
+                    value={faceRefs[0] || null}
+                    onChange={updateFaceRef}
+                    label="Rostro ADN"
+                    aspectRatio="portrait"
+                    required
+                  />
                 </div>
 
+                {/* Slots de contexto */}
                 <div className="space-y-4">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">2. Referencias de Contexto</label>
                   <div className="grid grid-cols-3 gap-2 md:gap-4">
-                    <div className="relative">
-                      <div className="flex items-center justify-center mb-1 gap-1">
-                        <span className="text-[7px] font-bold text-slate-400 uppercase">{getSlotLabel('product', focus)}</span>
-                        <div className="group relative">
-                          <i className="fa-solid fa-circle-info text-slate-300 text-[8px] cursor-help"></i>
-                          <div className="absolute bottom-full left-0 mb-1 w-48 p-1.5 bg-slate-900 text-white text-[8px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                            {getTooltip('product', focus)}
-                          </div>
-                        </div>
-                        {isSlotRequired('product', focus) && <span className="text-[8px] text-red-400 ml-1">*</span>}
-                      </div>
-                      <label className={`aspect-[3/4] rounded-2xl md:rounded-3xl border-2 flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all ${productRef ? 'border-brand-600 bg-white shadow-md' : 'border-dashed border-slate-100 bg-slate-50/50'}`}>
-                        {productRef ? (
-                          <img src={productRef} className="w-full h-full object-cover" />
-                        ) : (
-                          <>
-                            <i className="fa-solid fa-gem text-slate-200 text-xl md:text-2xl mb-2"></i>
-                            <span className="text-[7px] md:text-[8px] font-black text-slate-300 uppercase text-center px-1">
-                              {getSlotLabel('product', focus)}
-                            </span>
-                          </>
-                        )}
-                        <input type="file" hidden onChange={handleFileUpload(setProductRef)} />
-                      </label>
-                      {showComplementCheckbox && (
-                        <div className="mt-2 flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            id="productComplement"
-                            checked={isProductComplement}
-                            onChange={(e) => setIsProductComplement(e.target.checked)}
-                            className="w-3 h-3 rounded border-slate-300"
-                          />
-                          <label htmlFor="productComplement" className="text-[8px] text-slate-500">
-                            ¿Es complemento del {focus === 'OUTFIT' ? 'outfit' : 'contexto'}?
-                          </label>
-                        </div>
-                      )}
-                      {showProductWarning && (
-                        <div className="mt-1 text-[8px] text-amber-600 bg-amber-50 p-1 rounded">
-                          {productWarningMsg}
-                        </div>
-                      )}
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-center mb-1 gap-1">
-                        <span className="text-[7px] font-bold text-slate-400 uppercase">{getSlotLabel('scene', focus)}</span>
-                        <div className="group relative">
-                          <i className="fa-solid fa-circle-info text-slate-300 text-[8px] cursor-help"></i>
-                          <div className="absolute bottom-full left-0 mb-1 w-48 p-1.5 bg-slate-900 text-white text-[8px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                            {getTooltip('scene', focus)}
-                          </div>
-                        </div>
-                        {isSlotRequired('scene', focus) && <span className="text-[8px] text-red-400 ml-1">*</span>}
-                      </div>
-                      <label className={`aspect-[3/4] rounded-2xl md:rounded-3xl border-2 flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all ${sceneRef ? 'border-brand-600 bg-white shadow-md' : 'border-dashed border-slate-100 bg-slate-50/50'}`}>
-                        {sceneRef ? (
-                          <img src={sceneRef} className="w-full h-full object-cover" />
-                        ) : (
-                          <>
-                            <i className="fa-solid fa-image text-slate-200 text-xl md:text-2xl mb-2"></i>
-                            <span className="text-[7px] md:text-[8px] font-black text-slate-300 uppercase text-center px-1">
-                              {getSlotLabel('scene', focus)}
-                            </span>
-                          </>
-                        )}
-                        <input type="file" hidden onChange={handleFileUpload(setSceneRef)} />
-                      </label>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-center mb-1 gap-1">
-                        <span className="text-[7px] font-bold text-slate-400 uppercase">{getSlotLabel('outfit', focus)}</span>
-                        <div className="group relative">
-                          <i className="fa-solid fa-circle-info text-slate-300 text-[8px] cursor-help"></i>
-                          <div className="absolute bottom-full left-0 mb-1 w-48 p-1.5 bg-slate-900 text-white text-[8px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                            {getTooltip('outfit', focus)}
-                          </div>
-                        </div>
-                        {isSlotRequired('outfit', focus) && <span className="text-[8px] text-red-400 ml-1">*</span>}
-                      </div>
-                      <label className={`aspect-[3/4] rounded-2xl md:rounded-3xl border-2 flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all ${outfitRef ? 'border-brand-600 bg-white shadow-md' : 'border-dashed border-slate-100 bg-slate-50/50'}`}>
-                        {outfitRef ? (
-                          <img src={outfitRef} className="w-full h-full object-cover" />
-                        ) : (
-                          <>
-                            <i className="fa-solid fa-shirt text-slate-200 text-xl md:text-2xl mb-2"></i>
-                            <span className="text-[7px] md:text-[8px] font-black text-slate-300 uppercase text-center px-1">
-                              {getSlotLabel('outfit', focus)}
-                            </span>
-                          </>
-                        )}
-                        <input type="file" hidden onChange={handleFileUpload(setOutfitRef)} />
-                      </label>
-                    </div>
+                    <ImageSlot
+                      value={productRef}
+                      onChange={updateProductRef}
+                      label={getSlotLabel('product', focus)}
+                      hint={getTooltip('product', focus)}
+                      aspectRatio="square"
+                      required={isSlotRequired('product', focus)}
+                    />
+                    <ImageSlot
+                      value={sceneRef}
+                      onChange={updateSceneRef}
+                      label={getSlotLabel('scene', focus)}
+                      hint={getTooltip('scene', focus)}
+                      aspectRatio="square"
+                      required={isSlotRequired('scene', focus)}
+                    />
+                    <ImageSlot
+                      value={outfitRef}
+                      onChange={updateOutfitRef}
+                      label={getSlotLabel('outfit', focus)}
+                      hint={getTooltip('outfit', focus)}
+                      aspectRatio="square"
+                      required={isSlotRequired('outfit', focus)}
+                    />
                   </div>
+                  {showComplementCheckbox && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <CustomCheckbox
+                        checked={isProductComplement}
+                        onChange={() => setIsProductComplement(!isProductComplement)}
+                        label="¿Es complemento del contexto?"
+                      />
+                    </div>
+                  )}
+                  {showProductWarning && (
+                    <div className="text-[10px] text-amber-600 bg-amber-50 p-2 rounded">
+                      {productWarningMsg}
+                    </div>
+                  )}
                 </div>
 
                 {focus === 'SCENE' && (
@@ -1118,13 +966,13 @@ const ContentStudioProModule: React.FC = () => {
                         <button
                           key={k}
                           onClick={() => setProductSize(k as ProductSize)}
-                          className={`flex-1 py-3 md:py-4 px-1 md:px-2 rounded-[12px] md:rounded-[16px] text-[7px] md:text-[8px] font-black uppercase tracking-tighter transition-all ${productSize === k ? 'bg-brand-600 text-white shadow-md' : 'text-slate-400'}`}
+                          className={`flex-1 py-3 md:py-4 px-1 md:px-2 rounded-[12px] md:rounded-[16px] text-[10px] font-black uppercase tracking-tighter transition-all ${productSize === k ? 'bg-brand-600 text-white shadow-md' : 'text-slate-400'}`}
                         >
                           {v.split(' ')[0]}
                         </button>
                       ))}
                     </div>
-                    <p className="text-[8px] text-slate-400 text-center">
+                    <p className="text-[10px] text-slate-400 text-center">
                       {productSize === 'SMALL' && '🔍 Producto pequeño → macro close-ups, selfie con producto cerca del rostro'}
                       {productSize === 'MEDIUM' && '📦 Producto mediano → producto en mano, selfie a altura pecho, contexto'}
                       {productSize === 'LARGE' && '🪑 Producto grande → persona junto al producto, tomas amplias'}
@@ -1170,14 +1018,14 @@ const ContentStudioProModule: React.FC = () => {
             <div className="w-16 h-16 md:w-20 md:h-20 border-4 border-white/5 border-t-brand-500 rounded-full animate-spin shadow-[0_0_30px_rgba(247,44,91,0.3)]"></div>
             <div className="space-y-4">
               <h2 className="text-white text-xl md:text-3xl font-black uppercase italic tracking-tighter leading-none">{loadingMsg}</h2>
-              <p className="text-slate-500 text-[8px] md:text-[9px] font-black uppercase tracking-[0.5em] animate-pulse">
+              <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.5em] animate-pulse">
                 UGC SYSTEM • Gemini ACTIVE
               </p>
             </div>
           </div>
         )}
 
-        {/* PRODUCING - UI CON MINI-GALERÍA Y ESTADOS DINÁMICOS */}
+        {/* PRODUCING */}
         {step === 'producing' && currentSet && (
           <div className="min-h-[600px] bg-white rounded-[40px] border border-slate-100 shadow-2xl p-6 md:p-10 mx-4 animate-in zoom-in">
             <div className="flex justify-between items-center mb-6">
@@ -1197,17 +1045,15 @@ const ContentStudioProModule: React.FC = () => {
               </div>
             </div>
 
-            {/* Master image arriba */}
             <div className="mb-8">
               <div className="aspect-[3/4] max-w-xs mx-auto rounded-[24px] overflow-hidden border-4 border-brand-600 shadow-xl relative">
                 <img src={currentSet.image0Url!} className="w-full h-full object-cover" />
                 <div className="absolute top-4 left-4">
-                  <span className="px-3 py-1 bg-brand-600 text-white text-[8px] font-black rounded-full uppercase">Master</span>
+                  <span className="px-3 py-1 bg-brand-600 text-white text-[10px] font-black rounded-full uppercase">Master</span>
                 </div>
               </div>
             </div>
 
-            {/* Grid de shots con estados dinámicos */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               {currentSet.shots.map((shot, idx) => renderShotStatus(shot.key, idx))}
             </div>
@@ -1225,18 +1071,14 @@ const ContentStudioProModule: React.FC = () => {
               <div className="lg:col-span-7 flex flex-col items-center space-y-6">
                 <div
                   className="w-full aspect-[3/4] bg-slate-50 rounded-[24px] md:rounded-[40px] overflow-hidden shadow-2xl border-4 md:border-8 border-white relative group cursor-pointer"
-                  onClick={() => {
-                    setGalleryImages([{ url: currentSet.image0Url!, type: 'master' }]);
-                    setCurrentImageIndex(0);
-                    setGalleryOpen(true);
-                  }}
+                  onClick={() => currentSet && openLightbox(currentSet, 0)}
                 >
                   <img src={currentSet.image0Url!} className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                     <i className="fa-solid fa-expand text-white text-3xl md:text-4xl"></i>
                   </div>
                   <div className="absolute top-4 left-4 md:top-6 md:left-6">
-                    <span className="px-3 md:px-5 py-1.5 md:py-2 bg-brand-600 text-white text-[8px] md:text-[9px] font-black rounded-full uppercase tracking-widest shadow-xl">
+                    <span className="px-3 md:px-5 py-1.5 md:py-2 bg-brand-600 text-white text-[10px] font-black rounded-full uppercase tracking-widest shadow-xl">
                       Master Anchor (UGC)
                     </span>
                   </div>
@@ -1266,7 +1108,7 @@ const ContentStudioProModule: React.FC = () => {
                   </div>
                   <button
                     onClick={regenerateMaster}
-                    className="text-brand-400 font-black text-[9px] md:text-[10px] uppercase tracking-widest hover:text-white transition-all italic flex items-center gap-2"
+                    className="text-brand-400 font-black text-[10px] uppercase tracking-widest hover:text-white transition-all italic flex items-center gap-2"
                   >
                     <i className="fa-solid fa-rotate"></i> Regenerar Master ({currentSet.attemptsImage0}/3)
                   </button>
@@ -1292,7 +1134,7 @@ const ContentStudioProModule: React.FC = () => {
                         <p className="text-[11px] md:text-[13px] font-black text-slate-900 uppercase tracking-wider">
                           {FOCUS_LABELS[focus].split(' / ')[0]}
                         </p>
-                        <p className="text-[8px] text-slate-500">
+                        <p className="text-[10px] text-slate-500">
                           {focus === 'PRODUCT' && '🎯 El producto es el héroe de esta sesión'}
                           {focus === 'OUTFIT' && '👔 El outfit es el héroe de esta sesión'}
                           {focus === 'SCENE' && '🏞️ La escena es el héroe de esta sesión'}
@@ -1337,12 +1179,12 @@ const ContentStudioProModule: React.FC = () => {
           </div>
         )}
 
-        {/* LIBRARY - se mantiene igual */}
+        {/* LIBRARY - con FAB y checkboxes custom */}
         {step === 'library' && (
           <div className="space-y-6 md:space-y-8 animate-in fade-in duration-700 px-4 md:px-0">
             
-            {/* Pestañas de filtrado */}
-            <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-2">
+            {/* Pestañas de filtrado con scroll horizontal en mobile */}
+            <div className="flex overflow-x-auto scrollbar-hide gap-2 border-b border-slate-200 pb-2">
               {TAB_ORDER.map((tab) => {
                 const count = tab === 'TODAS' 
                   ? sets.length 
@@ -1355,27 +1197,27 @@ const ContentStudioProModule: React.FC = () => {
                       setSelectionMode(false);
                       setSelectedSets(new Set());
                     }}
-                    className={`px-4 md:px-6 py-2 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all ${
+                    className={`px-4 md:px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all ${
                       activeTab === tab
                         ? 'bg-brand-600 text-white shadow-md'
                         : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                     }`}
                   >
                     {tab === 'TODAS' ? 'Todas' : FOCUS_LABELS[tab as Focus].split(' / ')[0]}
-                    <span className="ml-1 text-[8px] opacity-70">({count})</span>
+                    <span className="ml-1 text-[10px] opacity-70">({count})</span>
                   </button>
                 );
               })}
             </div>
 
-            {/* Barra de herramientas de selección múltiple */}
+            {/* Barra de herramientas simplificada */}
             {showSelectionTools && (
               <div className="flex flex-wrap justify-between items-center gap-3 bg-slate-50 p-3 rounded-xl">
                 <div className="flex gap-2">
                   {!selectionMode ? (
                     <button
                       onClick={() => setSelectionMode(true)}
-                      className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-slate-100 transition-all"
+                      className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-slate-100 transition-all"
                     >
                       <i className="fa-solid fa-check-square mr-1"></i> Seleccionar múltiple
                     </button>
@@ -1383,38 +1225,28 @@ const ContentStudioProModule: React.FC = () => {
                     <>
                       <button
                         onClick={selectAllFiltered}
-                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-slate-100 transition-all"
+                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-slate-100 transition-all"
                       >
                         <i className="fa-solid fa-square-check mr-1"></i> Seleccionar todo
                       </button>
                       <button
                         onClick={clearSelection}
-                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-slate-100 transition-all"
+                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-slate-100 transition-all"
                       >
                         <i className="fa-solid fa-square mr-1"></i> Limpiar
                       </button>
                       <button
                         onClick={() => setSelectionMode(false)}
-                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-slate-100 transition-all"
+                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-slate-100 transition-all"
                       >
                         <i className="fa-solid fa-times mr-1"></i> Salir
                       </button>
                     </>
                   )}
                 </div>
-                
-                {selectedSets.size > 0 && (
-                  <button
-                    onClick={downloadSelectedSets}
-                    className="px-4 py-2 bg-brand-600 text-white rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-brand-700 transition-all flex items-center gap-2"
-                  >
-                    <i className="fa-solid fa-download"></i> Descargar seleccionadas ({selectedSets.size})
-                  </button>
-                )}
               </div>
             )}
 
-            {/* Grid de sesiones */}
             {filteredSets.length === 0 ? (
               <div className="text-center py-12 bg-slate-50 rounded-2xl">
                 <i className="fa-solid fa-folder-open text-slate-300 text-4xl mb-3"></i>
@@ -1434,16 +1266,14 @@ const ContentStudioProModule: React.FC = () => {
                     <div className="flex flex-col md:flex-row justify-between items-center gap-6 md:gap-8 border-b border-slate-50 pb-6 md:pb-8">
                       <div className="flex items-center gap-4 md:gap-6">
                         {selectionMode && (
-                          <input
-                            type="checkbox"
+                          <CustomCheckbox
                             checked={selectedSets.has(set.id)}
                             onChange={() => toggleSelectSet(set.id)}
-                            className="w-5 h-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                           />
                         )}
                         <div
                           className="w-12 h-12 md:w-16 md:h-16 rounded-[16px] md:rounded-[24px] overflow-hidden bg-slate-50 shadow-inner cursor-pointer"
-                          onClick={() => openGallery(set)}
+                          onClick={() => openLightbox(set, 0)}
                         >
                           <img src={set.image0Url!} className="w-full h-full object-cover" />
                         </div>
@@ -1456,14 +1286,14 @@ const ContentStudioProModule: React.FC = () => {
                             Sesión #{set.id.slice(-4)}
                           </h3>
                           <div className="flex flex-wrap gap-2 mt-2 md:mt-3">
-                            <span className="px-3 md:px-4 py-1 md:py-1.5 bg-slate-900 text-white text-[7px] md:text-[9px] font-black uppercase rounded-full tracking-widest">
+                            <span className="px-3 md:px-4 py-1 md:py-1.5 bg-slate-900 text-white text-[10px] font-black uppercase rounded-full tracking-widest">
                               UGC
                             </span>
-                            <span className="px-3 md:px-4 py-1 md:py-1.5 bg-brand-600 text-white text-[7px] md:text-[9px] font-black uppercase rounded-full tracking-widest">
+                            <span className="px-3 md:px-4 py-1 md:py-1.5 bg-brand-600 text-white text-[10px] font-black uppercase rounded-full tracking-widest">
                               {FOCUS_LABELS[set.focus].split(' / ')[0]}
                             </span>
                             {set.productCategory && (
-                              <span className="px-3 md:px-4 py-1 md:py-1.5 bg-slate-200 text-slate-700 text-[7px] md:text-[9px] font-black uppercase rounded-full">
+                              <span className="px-3 md:px-4 py-1 md:py-1.5 bg-slate-200 text-slate-700 text-[10px] font-black uppercase rounded-full">
                                 {set.productCategory}
                               </span>
                             )}
@@ -1474,7 +1304,7 @@ const ContentStudioProModule: React.FC = () => {
                       <div className="flex gap-2 w-full md:w-auto">
                         <button
                           onClick={() => downloadSingleSet(set)}
-                          className="flex-1 md:flex-none px-6 md:px-10 py-3 md:py-5 bg-white border border-slate-200 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase flex items-center justify-center gap-2 md:gap-3 shadow-sm hover:bg-slate-50 active:scale-95 transition-all"
+                          className="flex-1 md:flex-none px-6 md:px-10 py-3 md:py-5 bg-white border border-slate-200 rounded-xl md:rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 md:gap-3 shadow-sm hover:bg-slate-50 active:scale-95 transition-all"
                         >
                           <i className="fa-solid fa-file-zipper"></i> Pack
                         </button>
@@ -1485,7 +1315,7 @@ const ContentStudioProModule: React.FC = () => {
                           <i className="fa-solid fa-trash-can"></i>
                         </button>
                         <button
-                          onClick={() => openGallery(set)}
+                          onClick={() => openLightbox(set, 0)}
                           className="w-12 h-12 md:w-16 md:h-16 bg-slate-100 text-slate-600 rounded-xl md:rounded-2xl flex items-center justify-center hover:bg-brand-600 hover:text-white transition-all"
                         >
                           <i className="fa-solid fa-images"></i>
@@ -1493,14 +1323,14 @@ const ContentStudioProModule: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className={`grid grid-cols-2 lg:grid-cols-${Math.min(set.shots.length + 1, 5)} gap-4 md:gap-6`}>
+                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
                       <div
                         className="aspect-[3/4] rounded-[24px] md:rounded-[40px] overflow-hidden border-2 md:border-4 border-brand-600 relative group cursor-pointer shadow-xl"
-                        onClick={() => openGallery(set)}
+                        onClick={() => openLightbox(set, 0)}
                       >
                         <img src={set.image0Url!} className="w-full h-full object-cover" />
                         <div className="absolute top-4 left-4 md:top-6 md:left-6">
-                          <span className="px-3 md:px-4 py-1 md:py-1.5 bg-brand-600 text-white text-[7px] md:text-[8px] font-black rounded-full uppercase italic shadow-lg">
+                          <span className="px-3 md:px-4 py-1 md:py-1.5 bg-brand-600 text-white text-[10px] font-black rounded-full uppercase italic shadow-lg">
                             Master
                           </span>
                         </div>
@@ -1513,14 +1343,14 @@ const ContentStudioProModule: React.FC = () => {
                         <div
                           key={idx}
                           className="aspect-[3/4] bg-slate-50 rounded-[24px] md:rounded-[40px] overflow-hidden relative group cursor-pointer flex flex-col shadow-lg"
-                          onClick={() => s.imageUrl && openGallery(set)}
+                          onClick={() => s.imageUrl && openLightbox(set, idx + 1)}
                         >
                           <div className="flex-1 relative overflow-hidden">
                             {s.status === 'generating' ? (
                               <div className="flex h-full items-center justify-center text-slate-200 bg-slate-900/10 backdrop-blur-sm">
                                 <div className="flex flex-col items-center gap-2 md:gap-3">
                                   <i className="fa-solid fa-spinner animate-spin text-xl md:text-2xl text-brand-500"></i>
-                                  <span className="text-[7px] md:text-[8px] font-black uppercase text-brand-400 tracking-widest">
+                                  <span className="text-[10px] font-black uppercase text-brand-400 tracking-widest">
                                     Render...
                                   </span>
                                 </div>
@@ -1535,17 +1365,16 @@ const ContentStudioProModule: React.FC = () => {
                                 <i className="fa-solid fa-circle-exclamation text-red-400 text-2xl"></i>
                                 <span className="text-[10px] font-black uppercase text-red-500">Falló</span>
                                 {s.status === 'error' && s.errorMsg && (
-                                  <span className="text-[9px] text-slate-400 leading-snug px-1" title={s.errorMsg}>
-                                    {s.errorMsg.length > 50 ? s.errorMsg.slice(0, 50) + '…' : s.errorMsg}
+                                  <span className="text-[10px] text-slate-400 leading-snug px-1" title={s.errorMsg}>
+                                    {s.errorMsg.length > 60 ? s.errorMsg.slice(0, 60) + '…' : s.errorMsg}
                                   </span>
                                 )}
-                                {/* Botón de reintento manual — sólo visible en shots con error */}
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     regenerateShot(set, s.key);
                                   }}
-                                  className="mt-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-[9px] font-black uppercase rounded-xl transition-all active:scale-95 flex items-center gap-1.5 shadow-md"
+                                  className="mt-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-[10px] font-black uppercase rounded-xl transition-all active:scale-95 flex items-center gap-1.5 shadow-md"
                                 >
                                   <i className="fa-solid fa-rotate-right text-[10px]"></i>
                                   Reintentar
@@ -1554,7 +1383,7 @@ const ContentStudioProModule: React.FC = () => {
                             )}
 
                             <div className="absolute top-4 left-4 md:top-6 md:left-6">
-                              <span className="px-3 md:px-4 py-1 md:py-1.5 bg-black/40 backdrop-blur-md text-white text-[7px] md:text-[8px] font-black rounded-full uppercase border border-white/10 italic">
+                              <span className="px-3 md:px-4 py-1 md:py-1.5 bg-black/40 backdrop-blur-md text-white text-[10px] font-black rounded-full uppercase border border-white/10 italic">
                                 Shot {idx + 1}
                               </span>
                             </div>
@@ -1572,7 +1401,7 @@ const ContentStudioProModule: React.FC = () => {
                                 e.stopPropagation();
                                 regenerateShot(set, s.key);
                               }}
-                              className="absolute bottom-4 md:bottom-6 inset-x-4 md:inset-x-6 py-2 md:py-3 bg-white/90 backdrop-blur-md text-slate-900 text-[8px] md:text-[9px] font-black uppercase rounded-xl md:rounded-2xl border border-slate-200 shadow-xl opacity-0 group-hover:opacity-100 transition-all hover:bg-white active:scale-95"
+                              className="absolute bottom-4 md:bottom-6 inset-x-4 md:inset-x-6 py-2 md:py-3 bg-white/90 backdrop-blur-md text-slate-900 text-[10px] font-black uppercase rounded-xl md:rounded-2xl border border-slate-200 shadow-xl md:opacity-0 md:group-hover:opacity-100 transition-all hover:bg-white active:scale-95"
                             >
                               Regenerar ({s.attempts}/{MAX_REGEN_ATTEMPTS})
                             </button>
@@ -1587,75 +1416,42 @@ const ContentStudioProModule: React.FC = () => {
           </div>
         )}
 
-        {/* GALERÍA MODAL */}
-        {galleryOpen && galleryImages.length > 0 && (
-          <div
-            className="fixed inset-0 z-[10000] bg-black/95 backdrop-blur-3xl flex flex-col items-center justify-center p-4 md:p-10 animate-in fade-in"
-            onClick={() => setGalleryOpen(false)}
-          >
-            <div
-              className="relative max-w-6xl w-full h-full flex flex-col items-center justify-center gap-4 md:gap-6"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="absolute top-0 right-0 flex gap-2 z-10">
-                <button
-                  onClick={downloadCurrentImage}
-                  className="w-10 h-10 md:w-12 md:h-12 bg-white/20 backdrop-blur-md text-white rounded-full flex items-center justify-center hover:bg-white/40 transition-all border border-white/20"
-                >
-                  <i className="fa-solid fa-download text-lg md:text-xl"></i>
-                </button>
-                <button
-                  onClick={() => setGalleryOpen(false)}
-                  className="w-10 h-10 md:w-12 md:h-12 bg-white/20 backdrop-blur-md text-white rounded-full flex items-center justify-center hover:bg-white/40 transition-all border border-white/20"
-                >
-                  <i className="fa-solid fa-xmark text-xl md:text-2xl"></i>
-                </button>
-              </div>
-
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-md px-4 py-2 rounded-full text-white text-xs font-mono">
-                {currentImageIndex + 1} / {galleryImages.length}
-                <span className="ml-2 text-white/60">
-                  {galleryImages[currentImageIndex].type === 'master' ? 'Master' : `Shot ${galleryImages[currentImageIndex].shotIndex! + 1}`}
-                </span>
-              </div>
-
-              <div className="relative max-w-5xl w-full h-full flex items-center justify-center">
-                <img
-                  src={galleryImages[currentImageIndex].url}
-                  className="max-w-full max-h-[85vh] object-contain rounded-[24px] md:rounded-[48px] shadow-2xl border-4 md:border-8 border-white/10"
-                  alt="Gallery"
-                />
-              </div>
-
-              {galleryImages.length > 1 && (
-                <>
-                  <button
-                    onClick={() => navigateGallery('prev')}
-                    className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 w-12 h-12 md:w-16 md:h-16 bg-white/20 backdrop-blur-md text-white rounded-full flex items-center justify-center hover:bg-white/40 transition-all border border-white/20"
-                  >
-                    <i className="fa-solid fa-chevron-left text-xl md:text-2xl"></i>
-                  </button>
-                  <button
-                    onClick={() => navigateGallery('next')}
-                    className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 w-12 h-12 md:w-16 md:h-16 bg-white/20 backdrop-blur-md text-white rounded-full flex items-center justify-center hover:bg-white/40 transition-all border border-white/20"
-                  >
-                    <i className="fa-solid fa-chevron-right text-xl md:text-2xl"></i>
-                  </button>
-
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 bg-black/50 backdrop-blur-md px-4 py-2 rounded-full">
-                    {galleryImages.map((_, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setCurrentImageIndex(idx)}
-                        className={`w-2 h-2 rounded-full transition-all ${idx === currentImageIndex ? 'bg-white w-4' : 'bg-white/40'}`}
-                      />
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+        {/* LIGHTBOX UNIVERSAL */}
+        {lightboxOpen && lightboxImages.length > 0 && (
+          <ImageLightbox
+            images={lightboxImages}
+            initialIndex={lightboxIndex}
+            onClose={() => setLightboxOpen(false)}
+            onDownload={(url, idx) => {
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `ugc_image_${idx + 1}.png`;
+              link.click();
+            }}
+            metadata={lightboxMetadata}
+          />
         )}
+
+        {/* FLOATING ACTION BAR PARA SELECCIÓN MÚLTIPLE EN LIBRARY */}
+        {step === 'library' && selectionMode && selectedSets.size > 0 && fabVisible && (
+          <FloatingActionBar
+            isVisible={true}
+            selectedCount={selectedSets.size}
+            onDownload={downloadSelectedSets}
+            onDelete={() => {
+              if (confirm(`¿Eliminar ${selectedSets.size} sesiones seleccionadas?`)) {
+                const deletePromises = Array.from(selectedSets).map(id => contentStudioStorage.deleteSet(id));
+                Promise.all(deletePromises).then(() => {
+                  loadSets();
+                  setSelectedSets(new Set());
+                  setSelectionMode(false);
+                });
+              }
+            }}
+            onClearSelection={clearSelection}
+          />
+        )}
+
         {/* MODAL SESIÓN INCOMPLETA */}
         {showIncompleteModal && pendingProducedSet && (() => {
           const failedCount = pendingProducedSet.shots.filter(s => s.status === 'error').length;
@@ -1663,7 +1459,6 @@ const ContentStudioProModule: React.FC = () => {
           return (
             <div className="fixed inset-0 z-[20000] bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
               <div className="bg-white rounded-[32px] md:rounded-[40px] shadow-2xl max-w-md w-full p-8 md:p-10 space-y-6 animate-in zoom-in">
-                {/* Icono y título */}
                 <div className="text-center space-y-3">
                   <div className="w-16 h-16 rounded-full bg-amber-50 border-2 border-amber-200 flex items-center justify-center mx-auto">
                     <i className="fa-solid fa-triangle-exclamation text-amber-500 text-2xl"></i>
@@ -1678,12 +1473,11 @@ const ContentStudioProModule: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Preview de shots fallidos */}
                 <div className="flex gap-2 justify-center flex-wrap">
                   {pendingProducedSet.shots.map((s, idx) => (
                     <div
                       key={s.key}
-                      className={`w-10 h-12 rounded-xl flex items-center justify-center text-[8px] font-black uppercase border-2 ${
+                      className={`w-10 h-12 rounded-xl flex items-center justify-center text-[10px] font-black uppercase border-2 ${
                         s.status === 'error'
                           ? 'bg-red-50 border-red-300 text-red-500'
                           : 'bg-green-50 border-green-200 text-green-600'
@@ -1697,7 +1491,6 @@ const ContentStudioProModule: React.FC = () => {
                   ))}
                 </div>
 
-                {/* Botones */}
                 <div className="space-y-3">
                   <button
                     onClick={retryFailedShots}
@@ -1715,7 +1508,7 @@ const ContentStudioProModule: React.FC = () => {
                   </button>
                 </div>
 
-                <p className="text-center text-[9px] text-slate-400 leading-relaxed">
+                <p className="text-center text-[10px] text-slate-400 leading-relaxed">
                   Si reintenta, el sistema usará {AUTO_RETRY_ATTEMPTS} intentos automáticos nuevamente antes de pedir otra acción.
                 </p>
               </div>

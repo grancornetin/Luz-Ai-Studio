@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
-// Iconos necesarios
 import { LogOut, User as UserIcon, Zap, Menu, X, ChevronDown, History } from 'lucide-react';
 
 // Vistas y Módulos
@@ -12,11 +11,14 @@ import AvatarLibrary from './components/AvatarLibrary';
 import ContentStudioProModule from './modules/contentStudioPro/ContentStudioProModule';
 import OutfitExtractorModule from './modules/outfitExtractor/OutfitExtractorModule';
 import CloneImageModule from './modules/CloneImageModule';
-import PromptLibraryModule from './modules/promptLibrary/PromptLibraryModule';
 import GenerationHistory from './views/GenerationHistory';
 import PoliticaPrivacidad from './views/PoliticaPrivacidad';
 import TerminosUso from './views/TerminosUso';
 import Descargo from './views/Descargo';
+
+// NUEVAS VISTAS PARA PROMPT LIBRARY
+import PromptGalleryView from './views/PromptGalleryView';
+import PromptStudioView from './views/PromptStudioView';
 
 // Servicios y Contexto
 import { dbService } from './services/dbService';
@@ -47,9 +49,10 @@ const MENU_GROUPS = [
     label: 'Generar Contenido',
     icon: 'fa-wand-magic-sparkles',
     items: [
-      { path: '/prompt-library', label: 'AI Generator',   icon: 'fa-wand-magic-sparkles' },
-      { path: '/studio-pro',     label: 'Content Studio', icon: 'fa-mobile-screen-button' },
-      { path: '/clonar',         label: 'Scene Clone',    icon: 'fa-clone' },
+      { path: '/prompt-studio',   label: 'AI Generator',      icon: 'fa-wand-magic-sparkles' },
+      { path: '/prompt-gallery',  label: 'Prompt Gallery',    icon: 'fa-images' },
+      { path: '/studio-pro',      label: 'Content Studio',    icon: 'fa-mobile-screen-button' },
+      { path: '/clonar',          label: 'Scene Clone',       icon: 'fa-clone' },
     ]
   },
   {
@@ -64,7 +67,7 @@ const MENU_GROUPS = [
 
 const mobileMainItems = [
   { path: '/',             label: 'Inicio',    icon: 'fa-house' },
-  { path: '/prompt-library', label: 'Generator', icon: 'fa-wand-magic-sparkles' },
+  { path: '/prompt-studio', label: 'Generator', icon: 'fa-wand-magic-sparkles' },
   { path: '/modelos',         label: 'Modelos',   icon: 'fa-user-astronaut' },
   { path: '/historial',      label: 'Historial', icon: 'fa-clock-rotate-left' },
 ];
@@ -207,7 +210,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   );
 };
 
-// ── OTROS COMPONENTES (MobileNav, MobileHeader, etc) SIMPLIFICADOS PARA LÓGICA ──
+// ── OTROS COMPONENTES (MobileNav) ──────────────────────────────────────────────
 const MobileNav: React.FC = () => {
     const location = useLocation();
     if (location.pathname === '/') return null;
@@ -278,10 +281,13 @@ const AppContent: React.FC = () => {
                         <Route path="/crear/clonar" element={<CloningModule onSave={saveAvatar} />} />
                         <Route path="/crear/manual" element={<ManualCreatorModule onSave={saveAvatar} />} />
                         <Route path="/productos" element={<ProductGeneratorModule saveProduct={saveProduct} products={products} />} />
-                        <Route path="/prompt-library" element={<PromptLibraryModule />} />
+                        <Route path="/prompt-studio" element={<PromptStudioView />} />
+                        <Route path="/prompt-gallery" element={<PromptGalleryView />} />
                         <Route path="/studio-pro" element={<ContentStudioProModule />} />
                         <Route path="/outfit-extractor" element={<OutfitExtractorModule />} />
                         <Route path="/clonar" element={<CloneImageModule />} />
+                        {/* Redirigir la antigua ruta a la nueva galería */}
+                        <Route path="/prompt-library" element={<Navigate to="/prompt-gallery" replace />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                 </main>

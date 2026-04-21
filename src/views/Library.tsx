@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GenerationSet, AvatarProfile } from '../types';
 import { dbService } from '../services/dbService';
-import JSZip from 'jszip';
+import { downloadAsZip } from '../utils/imageUtils';
+import { ImageLightbox } from '../components/shared/ImageLightbox';
 
 interface LibraryProps {
   sets: GenerationSet[];
@@ -14,6 +14,12 @@ const Library: React.FC<LibraryProps> = ({ sets: initialSets }) => {
   const [sets, setSets] = useState<GenerationSet[]>(initialSets);
   const [avatars, setAvatars] = useState<AvatarProfile[]>([]);
   const [isZipping, setIsZipping] = useState<string | null>(null);
+  
+  // Lightbox state
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lightboxMetadata, setLightboxMetadata] = useState<{ label: string }>({ label: '' });
 
   useEffect(() => {
     setSets(initialSets);
@@ -29,18 +35,19 @@ const Library: React.FC<LibraryProps> = ({ sets: initialSets }) => {
   const handleZip = async (set: GenerationSet) => {
     setIsZipping(set.id);
     try {
-      const zip = new JSZip();
+      const imagesToZip: string[] = [];
       for (let i = 0; i < set.shots.length; i++) {
         if (set.shots[i].imageUrl) {
-          const base64 = set.shots[i].imageUrl!.split(',')[1];
-          zip.file(`${set.shots[i].name}.png`, base64, { base64: true });
+          imagesToZip.push(set.shots[i].imageUrl!);
         }
       }
-      const blob = await zip.generateAsync({ type: "blob" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a'); link.href = url; link.download = `Campaña_${set.id.slice(-4)}.zip`; link.click();
-    } catch (e) { alert("Error al crear ZIP"); }
-    finally { setIsZipping(null); }
+      if (imagesToZip.length === 0) return;
+      await downloadAsZip(imagesToZip, `Campaña_${set.id.slice(-4)}.zip`, `shot_${set.id.slice(-4)}`);
+    } catch (e) { 
+      alert("Error al crear ZIP"); 
+    } finally { 
+      setIsZipping(null); 
+    }
   };
 
   const handleReRun = (set: GenerationSet) => {
@@ -49,6 +56,19 @@ const Library: React.FC<LibraryProps> = ({ sets: initialSets }) => {
       preSelectedProductId: set.productId,
       reRun: { scenePrompt: set.scenePrompt }
     }});
+  };
+
+  // Abrir lightbox con todas las imágenes del set
+  const openLightbox = (set: GenerationSet, initialIndex: number) => {
+    const images: string[] = [];
+    set.shots.forEach(shot => {
+      if (shot.imageUrl) images.push(shot.imageUrl);
+    });
+    if (images.length === 0) return;
+    setLightboxImages(images);
+    setLightboxIndex(initialIndex);
+    setLightboxMetadata({ label: `Set #${set.id.slice(-4)}` });
+    setLightboxOpen(true);
   };
 
   return (
@@ -80,7 +100,7 @@ const Library: React.FC<LibraryProps> = ({ sets: initialSets }) => {
                         <div>
                            <div className="flex items-center gap-3">
                               <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tighter">Set #{set.id.slice(-4)}</h3>
-                              <span className="px-3 py-1 bg-brand-50 text-brand-500 text-[8px] font-black rounded-full border border-brand-100 uppercase">DNA Lock Validado</span>
+                              <span className="px-3 py-1 bg-brand-50 text-brand-500 text-[10px] font-black rounded-full border border-brand-100 uppercase">DNA Lock Validado</span>
                            </div>
                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
                               Model: {avatar?.name || 'Manual'} • {new Date(set.createdAt).toLocaleDateString()}
@@ -98,31 +118,49 @@ const Library: React.FC<LibraryProps> = ({ sets: initialSets }) => {
 
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
                      {set.shots.map((shot, idx) => (
-                       <div key={shot.id} className="relative aspect-[3/4] rounded-[32px] overflow-hidden shadow-sm bg-slate-50 group/shot">
+                       <div 
+                         key={shot.id} 
+                         className="relative aspect-[3/4] rounded-[32px] overflow-hidden shadow-sm bg-slate-50 group/shot cursor-zoom-in"
+                         onClick={() => openLightbox(set, idx)}
+                       >
                           {shot.imageUrl ? (
                             <>
                               <img src={shot.imageUrl} className="w-full h-full object-cover group-hover/shot:scale-110 transition-transform duration-700" />
-                              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/shot:opacity-100 flex items-center justify-center text-white transition-opacity p-6 text-center">
+                              {/* Overlay hover (desktop) con acciones */}
+                              <div className="absolute inset-0 bg-black/60 opacity-0 md:group-hover/shot:opacity-100 flex items-center justify-center text-white transition-opacity p-6 text-center">
                                  <div>
-                                    <p className="text-[9px] font-black uppercase mb-4 tracking-widest">{shot.name}</p>
+                                    <p className="text-[10px] font-black uppercase mb-4 tracking-widest">{shot.name}</p>
                                     <div className="flex gap-2">
-                                       <button onClick={() => { const link = document.createElement('a'); link.href = shot.imageUrl!; link.download = `${shot.name}.png`; link.click(); }} className="w-10 h-10 bg-white text-slate-900 rounded-full flex items-center justify-center shadow-xl hover:scale-110 transition-transform"><i className="fa-solid fa-download"></i></button>
-                                       <button onClick={() => navigate('/modelos')} className="w-10 h-10 bg-white text-slate-900 rounded-full flex items-center justify-center shadow-xl hover:scale-110 transition-transform"><i className="fa-solid fa-user-tag text-[10px]"></i></button>
+                                       <button 
+                                         onClick={(e) => { e.stopPropagation(); const link = document.createElement('a'); link.href = shot.imageUrl!; link.download = `${shot.name}.png`; link.click(); }} 
+                                         className="w-10 h-10 bg-white text-slate-900 rounded-full flex items-center justify-center shadow-xl hover:scale-110 transition-transform"
+                                       ><i className="fa-solid fa-download"></i></button>
+                                       <button 
+                                         onClick={(e) => { e.stopPropagation(); navigate('/modelos'); }} 
+                                         className="w-10 h-10 bg-white text-slate-900 rounded-full flex items-center justify-center shadow-xl hover:scale-110 transition-transform"
+                                       ><i className="fa-solid fa-user-tag text-[10px]"></i></button>
                                     </div>
                                  </div>
                               </div>
+                              {/* Botones de acción siempre visibles en mobile */}
+                              <div className="absolute bottom-4 right-4 flex gap-2 md:hidden">
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); const link = document.createElement('a'); link.href = shot.imageUrl!; link.download = `${shot.name}.png`; link.click(); }} 
+                                  className="w-8 h-8 bg-white/90 text-slate-900 rounded-full flex items-center justify-center shadow-md"
+                                ><i className="fa-solid fa-download text-[10px]"></i></button>
+                              </div>
                             </>
                           ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center text-slate-200"><i className="fa-solid fa-triangle-exclamation text-2xl mb-2"></i><span className="text-[8px] font-black uppercase">Error de Render</span></div>
+                            <div className="w-full h-full flex flex-col items-center justify-center text-slate-200"><i className="fa-solid fa-triangle-exclamation text-2xl mb-2"></i><span className="text-[10px] font-black uppercase">Error de Render</span></div>
                           )}
-                          <div className="absolute top-4 left-4"><span className="px-3 py-1 bg-black/40 backdrop-blur-sm text-white text-[7px] font-black rounded-full border border-white/10">PLANO {idx+1}</span></div>
+                          <div className="absolute top-4 left-4"><span className="px-3 py-1 bg-black/40 backdrop-blur-sm text-white text-[10px] font-black rounded-full border border-white/10">PLANO {idx+1}</span></div>
                        </div>
                      ))}
                   </div>
 
                   {set.scenePrompt && (
                     <div className="p-6 bg-slate-50 rounded-[32px] border border-slate-100">
-                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Prompt de Escenario Archivada</p>
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Prompt de Escenario Archivada</p>
                        <p className="text-xs font-bold text-slate-700 italic">"{set.scenePrompt}"</p>
                     </div>
                   )}
@@ -130,6 +168,22 @@ const Library: React.FC<LibraryProps> = ({ sets: initialSets }) => {
              );
            })}
         </div>
+      )}
+
+      {/* LIGHTBOX UNIVERSAL */}
+      {lightboxOpen && lightboxImages.length > 0 && (
+        <ImageLightbox
+          images={lightboxImages}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxOpen(false)}
+          onDownload={(url, idx) => {
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `shot_${idx + 1}.png`;
+            link.click();
+          }}
+          metadata={lightboxMetadata}
+        />
       )}
     </div>
   );

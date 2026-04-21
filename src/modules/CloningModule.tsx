@@ -2,14 +2,19 @@
 import React, { useState } from 'react';
 import { AvatarProfile } from '../types';
 import { startClone, waitForCloneComplete } from '../services/avatarCloneService';
-import { useCreditGuard } from '../../hooks/useCreditGuard';
+import { useCreditGuard } from '../hooks/useCreditGuard';
 import NoCreditsModal from '../components/shared/NoCreditsModal';
 import { CREDIT_COSTS } from '../services/creditConfig';
-import { readAndCompressFile } from '../utils/imageUtils';
-import JSZip from 'jszip';
+import { readAndCompressFile, downloadAsZip } from '../utils/imageUtils';
 import ModuleTutorial from '../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../components/shared/tutorialConfigs';
 import { generationHistoryService } from '../services/generationHistoryService';
+
+// Nuevos componentes base
+import { ImageSlot } from '../components/shared/ImageSlot';
+import { ImageLightbox } from '../components/shared/ImageLightbox';
+import { FloatingActionBar } from '../components/shared/FloatingActionBar';
+import { useScrollFAB } from '../hooks/useScrollFAB';
 
 interface CloningModuleProps {
   onSave: (avatar: AvatarProfile) => void;
@@ -17,27 +22,37 @@ interface CloningModuleProps {
 
 const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
   const [name, setName] = useState('');
-  const [files, setFiles] = useState<string[]>([]);
+  const [files, setFiles] = useState<string[]>([]); // hasta 3 imágenes en base64
   const [status, setStatus] = useState('');
   const [previews, setPreviews] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isZipping, setIsZipping] = useState(false);
-  const [zoomedImageIndex, setZoomedImageIndex] = useState<number | null>(null);
   const [gender, setGender] = useState<'hombre' | 'mujer'>('mujer');
+
+  // Lightbox state
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+
+  // FAB scroll detection
+  const { isVisible: fabVisible } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: false });
 
   const { checkAndDeduct, showNoCredits, requiredCredits, closeModal } = useCreditGuard();
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newFiles = Array.from(e.target.files);
-      const compressed = await Promise.all(newFiles.map(f => readAndCompressFile(f)));
-      setFiles(prev => [...prev, ...compressed].slice(0, 3));
+  // Handlers para los 3 slots de imagen
+  const updateFile = (index: number, base64: string | null) => {
+    const newFiles = [...files];
+    if (base64 === null) {
+      newFiles[index] = undefined as any;
+    } else {
+      newFiles[index] = base64;
     }
+    // Filtrar undefined y mantener máximo 3
+    const cleaned = newFiles.filter((f): f is string => f !== undefined).slice(0, 3);
+    setFiles(cleaned);
   };
 
   const startCloning = async () => {
     if (!name || files.length === 0) {
-      alert("Nombre y fotos de referencia requeridos.");
+      alert("Nombre y al menos una foto de referencia son requeridos.");
       return;
     }
     const ok = await checkAndDeduct(CREDIT_COSTS.CREATE_MODEL_CLONE);
@@ -88,15 +103,15 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
       };
       onSave(newAvatar);
 
-      // Guardar las 4 vistas en historial (body master, rear, side, face)
+      // Guardar las 4 vistas en historial
       const viewLabels = ['Body Master', 'Vista Trasera', 'Vista Lateral', 'Face Master'];
       images.forEach((img, idx) => {
         generationHistoryService.save({
-          imageUrl:    img,
-          module:      'model_dna',
+          imageUrl: img,
+          module: 'model_dna',
           moduleLabel: `Model DNA — Por Imagen (${viewLabels[idx] || `Vista ${idx + 1}`})`,
           creditsUsed: idx === 0 ? CREDIT_COSTS.CREATE_MODEL_CLONE : 0,
-          promptText:  `Clonación desde imagen — ${name}`,
+          promptText: `Clonación desde imagen — ${name}`,
         }).catch(console.error);
       });
 
@@ -109,51 +124,32 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
     }
   };
 
-  const downloadFullSetZip = async () => {
-    if (previews.length < 4) return;
-    setIsZipping(true);
-    try {
-      const zip = new JSZip();
-      zip.file(`P1_BODYMASTER_${name}.png`, previews[0].split(',')[1], { base64: true });
-      zip.file(`P2_REAR_${name}.png`, previews[1].split(',')[1], { base64: true });
-      zip.file(`P3_SIDE_${name}.png`, previews[2].split(',')[1], { base64: true });
-      zip.file(`P4_FACEMASTER_${name}.png`, previews[3].split(',')[1], { base64: true });
-      const content = await zip.generateAsync({ type: 'blob' });
-      const url = URL.createObjectURL(content);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Avatar_DNA_Set_${name}.zip`;
-      link.click();
-      URL.revokeObjectURL(url);
-    } finally {
-      setIsZipping(false);
-    }
-  };
-
   const reset = () => {
     setName('');
     setFiles([]);
     setPreviews([]);
     setStatus('');
     setIsLoading(false);
-    setZoomedImageIndex(null);
+    setLightboxOpen(false);
   };
 
-  const openZoomModal = (index: number) => setZoomedImageIndex(index);
-  const closeZoomModal = () => setZoomedImageIndex(null);
-  const navigateZoom = (direction: 'prev' | 'next') => {
-    if (zoomedImageIndex === null) return;
-    let newIndex = zoomedImageIndex;
-    if (direction === 'prev') newIndex = (zoomedImageIndex - 1 + previews.length) % previews.length;
-    else newIndex = (zoomedImageIndex + 1) % previews.length;
-    setZoomedImageIndex(newIndex);
+  const handleDownloadZip = async () => {
+    if (previews.length === 0) return;
+    await downloadAsZip(previews, `Avatar_DNA_Set_${name || 'avatar'}.zip`, `${name || 'vista'}`);
+  };
+
+  const openLightbox = (index: number) => {
+    setLightboxIndex(index);
+    setLightboxOpen(true);
   };
 
   return (
     <>
       <NoCreditsModal isOpen={showNoCredits} onClose={closeModal} required={requiredCredits} available={0} />
+
       <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Panel izquierdo: configuración */}
           <div className="lg:col-span-4 space-y-6">
             <section className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-6">
               <header className="border-b pb-4">
@@ -176,18 +172,19 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                   className="w-full px-6 py-4 rounded-2xl border bg-slate-50 font-bold text-slate-800 outline-none focus:bg-white transition-all text-base md:text-sm disabled:opacity-50"
                 />
 
+                {/* Slots de carga con ImageSlot (3 posiciones) */}
                 <div className="grid grid-cols-3 gap-3">
-                  {files.map((f, i) => (
-                    <div key={i} className="aspect-square rounded-xl overflow-hidden border border-slate-200">
-                      <img src={f} className="w-full h-full object-cover" />
-                    </div>
+                  {[0, 1, 2].map(i => (
+                    <ImageSlot
+                      key={i}
+                      value={files[i] || null}
+                      onChange={(base64) => updateFile(i, base64)}
+                      label={i === 0 ? "Frontal" : i === 1 ? "Lateral" : "Extra"}
+                      hint="JPG o PNG"
+                      aspectRatio="square"
+                      disabled={isLoading}
+                    />
                   ))}
-                  {files.length < 3 && !isLoading && (
-                    <label className="aspect-square bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center cursor-pointer hover:bg-slate-100 transition-all">
-                      <i className="fa-solid fa-camera text-slate-300"></i>
-                      <input type="file" hidden multiple onChange={handleFileChange} />
-                    </label>
-                  )}
                 </div>
               </div>
 
@@ -217,9 +214,6 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                     <i className="fa-solid fa-circle-check text-accent-500 text-2xl mb-2"></i>
                     <p className="text-[10px] font-black text-accent-600 uppercase">Avatar Guardado en Biblioteca</p>
                   </div>
-                  <button onClick={downloadFullSetZip} disabled={isZipping} className="w-full py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg">
-                    {isZipping ? 'Comprimiendo...' : 'Descargar ZIP Completo'}
-                  </button>
                   <button onClick={reset} className="w-full py-4 text-slate-400 text-[10px] font-black uppercase tracking-widest hover:text-slate-600">
                     Crear Otro Avatar
                   </button>
@@ -228,6 +222,7 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
             </section>
           </div>
 
+          {/* Panel derecho: resultados */}
           <div className="lg:col-span-8">
             <div className="bg-slate-900 rounded-[56px] p-8 md:p-12 min-h-[750px] flex flex-col shadow-2xl relative">
               {previews.length === 0 && !isLoading && (
@@ -251,8 +246,9 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                       <h3 className="text-white font-black text-3xl uppercase italic tracking-tighter">{name}</h3>
                       <p className="text-brand-400 text-[10px] font-black uppercase tracking-widest">Master Digital Twin Identity Set</p>
                     </div>
-                    <button onClick={downloadFullSetZip} className="px-6 py-4 bg-white/10 text-white rounded-2xl text-[10px] font-black uppercase border border-white/10 hover:bg-white/20">
-                      Pre‑visualizar Set
+                    {/* Botón de descarga rápida (además del FAB) */}
+                    <button onClick={handleDownloadZip} className="px-6 py-4 bg-white/10 text-white rounded-2xl text-[10px] font-black uppercase border border-white/10 hover:bg-white/20">
+                      Descargar Set ZIP
                     </button>
                   </header>
 
@@ -265,8 +261,8 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                     ].map((p, i) => (
                       <div
                         key={i}
-                        className="group relative aspect-[3/4] rounded-[48px] overflow-hidden bg-white shadow-2xl border-4 border-transparent cursor-pointer"
-                        onClick={() => openZoomModal(i)}
+                        className="group relative aspect-[3/4] rounded-[48px] overflow-hidden bg-white shadow-2xl border-4 border-transparent cursor-zoom-in"
+                        onClick={() => openLightbox(i)}
                       >
                         <img src={p.img} className="w-full h-full object-cover transition-all duration-700" />
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -309,48 +305,33 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
           </div>
         </div>
 
-        {zoomedImageIndex !== null && (
-          <div
-            className="fixed inset-0 z-[10000] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300"
-            onClick={closeZoomModal}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') closeZoomModal();
-              if (e.key === 'ArrowLeft') navigateZoom('prev');
-              if (e.key === 'ArrowRight') navigateZoom('next');
+        {/* Lightbox universal */}
+        {lightboxOpen && previews.length > 0 && (
+          <ImageLightbox
+            images={previews}
+            initialIndex={lightboxIndex}
+            onClose={() => setLightboxOpen(false)}
+            onDownload={(url, idx) => {
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `${name}_vista_${idx + 1}.png`;
+              link.click();
             }}
-            tabIndex={0}
-          >
-            <div className="relative max-w-5xl w-full h-full flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-              <img
-                src={previews[zoomedImageIndex]}
-                alt={`Avatar Preview ${zoomedImageIndex + 1}`}
-                className="max-w-full max-h-[90vh] object-contain rounded-[40px] md:rounded-[56px] shadow-2xl animate-in zoom-in-50 transition-transform duration-300"
-                style={{ cursor: 'zoom-in' }}
-              />
-              <button
-                onClick={closeZoomModal}
-                className="absolute top-4 right-4 md:top-8 md:right-8 w-10 h-10 md:w-12 md:h-12 rounded-full bg-red-600 text-white flex items-center justify-center shadow-lg hover:bg-red-700 transition-all z-10"
-                aria-label="Cerrar galería"
-              >
-                <i className="fa-solid fa-xmark text-lg md:text-xl"></i>
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); navigateZoom('prev'); }}
-                className="absolute left-4 md:left-8 w-12 h-12 md:w-16 md:h-16 rounded-full bg-white/10 backdrop-blur-sm text-white flex items-center justify-center text-xl md:text-2xl opacity-80 hover:opacity-100 transition-all hover:scale-110"
-                aria-label="Imagen anterior"
-              >
-                <i className="fa-solid fa-chevron-left"></i>
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); navigateZoom('next'); }}
-                className="absolute right-4 md:right-8 w-12 h-12 md:w-16 md:h-16 rounded-full bg-white/10 backdrop-blur-sm text-white flex items-center justify-center text-xl md:text-2xl opacity-80 hover:opacity-100 transition-all hover:scale-110"
-                aria-label="Imagen siguiente"
-              >
-                <i className="fa-solid fa-chevron-right"></i>
-              </button>
-            </div>
-          </div>
+            metadata={{ label: `Digital Twin: ${name}` }}
+          />
         )}
+
+        {/* Floating Action Bar (FAB) contextual */}
+        <FloatingActionBar
+          isVisible={previews.length === 4 && fabVisible && !isLoading}
+          primaryAction={{
+            label: 'Descargar ZIP',
+            icon: <i className="fa-solid fa-download text-sm"></i>,
+            onClick: handleDownloadZip,
+          }}
+          onClearSelection={reset}
+          selectedCount={0}
+        />
       </div>
     </>
   );

@@ -1,7 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Images, Loader2, Download, Zap, Image, Shuffle } from 'lucide-react';
 import { generationService, GenerationProgress } from '../services/generationService';
 import { PromptDNA } from '../types/promptTypes';
+import { downloadAsZip } from '../../../utils/imageUtils';
+import { ImageLightbox } from '../../../components/shared/ImageLightbox';
+import { FloatingActionBar } from '../../../components/shared/FloatingActionBar';
+import { useScrollFAB } from '../../../hooks/useScrollFAB';
 
 interface PhotodumpModeProps {
   basePrompt: string;
@@ -62,12 +66,15 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({
   references
 }) => {
 
-  const [count, setCount]           = React.useState(4);
-  const [intensity, setIntensity]   = React.useState<Intensity>('media');
-  const [results, setResults]       = React.useState<string[]>([]);
-  const [isGenerating, setIsGenerating] = React.useState(false);
-  const [progress, setProgress]     = React.useState<GenerationProgress | null>(null);
-  const [error, setError]           = React.useState<string | null>(null);
+  const [count, setCount] = useState(4);
+  const [intensity, setIntensity] = useState<Intensity>('media');
+  const [results, setResults] = useState<string[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [progress, setProgress] = useState<GenerationProgress | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const { isVisible: fabVisible } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: false });
 
   const handleGenerate = async () => {
     if (!basePrompt.trim()) return;
@@ -79,22 +86,13 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({
 
     try {
       const config = INTENSITY_CONFIG[intensity];
-
-      // Selecciona N suffixes al azar sin repetir
       const shuffled = [...config.suffixes].sort(() => Math.random() - 0.5);
       const selected = shuffled.slice(0, count);
-
       const prompts = selected.map(suffix =>
         `${basePrompt}, ${suffix}, same person same identity same face`
       );
 
-      const images = await generationService.generateBatch(
-        prompts,
-        references,
-        undefined,
-        (p) => setProgress(p)
-      );
-
+      const images = await generationService.generateBatchFast(prompts, (p) => setProgress(p));
       setResults(images);
     } catch (err: any) {
       setError(err?.message || 'Error generando el photodump.');
@@ -111,10 +109,14 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({
     link.click();
   };
 
-  const downloadAll = () => {
-    results.forEach((img, i) => {
-      setTimeout(() => downloadImage(img, i), i * 300);
-    });
+  const downloadAllZip = async () => {
+    if (results.length === 0) return;
+    await downloadAsZip(results, `photodump_${Date.now()}.zip`, 'dump');
+  };
+
+  const openLightbox = (index: number) => {
+    setLightboxIndex(index);
+    setLightboxOpen(true);
   };
 
   const canGenerate = basePrompt.trim().length > 0 && !isGenerating;
@@ -135,16 +137,6 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({
             Generación masiva · Variaciones automáticas
           </p>
         </div>
-
-        {results.length > 0 && (
-          <button
-            onClick={downloadAll}
-            className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
-          >
-            <Download className="w-3.5 h-3.5" />
-            Todo
-          </button>
-        )}
       </div>
 
       {/* BASE PROMPT */}
@@ -158,11 +150,8 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({
       {/* CONTROLS ROW */}
       <div className="grid grid-cols-2 gap-4">
 
-        {/* COUNT */}
         <div className="space-y-2">
-          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-            Cantidad
-          </p>
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Cantidad</p>
           <div className="flex gap-2">
             {COUNT_OPTIONS.map(n => (
               <button
@@ -180,11 +169,8 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({
           </div>
         </div>
 
-        {/* INTENSITY */}
         <div className="space-y-2">
-          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-            Intensidad
-          </p>
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Intensidad</p>
           <div className="flex gap-2">
             {(Object.keys(INTENSITY_CONFIG) as Intensity[]).map(level => (
               <button
@@ -206,7 +192,6 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({
 
       </div>
 
-      {/* INTENSITY DESCRIPTION */}
       <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest -mt-4">
         {INTENSITY_CONFIG[intensity].description}
       </p>
@@ -258,37 +243,30 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({
         </div>
       )}
 
-      {/* RESULTS — masonry-style 2-col */}
+      {/* RESULTS */}
       {results.length > 0 && (
         <div className="space-y-3">
-
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
             {results.length} imágenes · Photodump completo
           </p>
-
           <div className="columns-2 gap-3 space-y-3">
             {results.map((img, i) => (
               <div
                 key={i}
-                className="group relative rounded-2xl overflow-hidden bg-slate-800 break-inside-avoid"
+                className="group relative rounded-2xl overflow-hidden bg-slate-800 break-inside-avoid cursor-pointer"
+                onClick={() => openLightbox(i)}
               >
-                <img
-                  src={img}
-                  className="w-full object-cover"
-                  alt={`Photodump ${i + 1}`}
-                />
+                <img src={img} className="w-full object-cover" alt={`Photodump ${i + 1}`} />
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   <button
-                    onClick={() => downloadImage(img, i)}
-                    className="bg-white/20 backdrop-blur-md text-white p-3 rounded-xl hover:bg-white/30 transition-colors"
+                    onClick={(e) => { e.stopPropagation(); downloadImage(img, i); }}
+                    className="bg-white/20 backdrop-blur-md text-white p-2 rounded-xl hover:bg-white/30"
                   >
                     <Download className="w-4 h-4" />
                   </button>
                 </div>
               </div>
             ))}
-
-            {/* PLACEHOLDERS */}
             {isGenerating && progress && Array.from({
               length: Math.max(0, progress.total - results.length)
             }).map((_, i) => (
@@ -305,10 +283,33 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({
               </div>
             ))}
           </div>
-
         </div>
       )}
 
+      {/* LIGHTBOX */}
+      {lightboxOpen && results.length > 0 && (
+        <ImageLightbox
+          images={results}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxOpen(false)}
+          onDownload={(url, idx) => downloadImage(url, idx)}
+          metadata={{ label: 'Photodump' }}
+        />
+      )}
+
+      {/* FLOATING ACTION BAR */}
+      {results.length > 0 && fabVisible && (
+        <FloatingActionBar
+          isVisible={true}
+          primaryAction={{
+            label: 'Descargar ZIP',
+            icon: <Download className="w-4 h-4" />,
+            onClick: downloadAllZip,
+          }}
+          onClearSelection={() => setResults([])}
+          selectedCount={0}
+        />
+      )}
     </div>
   );
 };

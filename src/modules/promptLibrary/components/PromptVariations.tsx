@@ -1,5 +1,5 @@
 import React from 'react';
-import { Wand2, Lock, Unlock, Sparkles, Loader2, AlertCircle, Check, ChevronDown } from 'lucide-react';
+import { Wand2, Lock, Unlock, Sparkles, Loader2, AlertCircle, Check, ChevronDown, Info } from 'lucide-react';
 import { PromptDNA } from '../types/promptTypes';
 import { variationsService, PromptVariation, MODIFIABLE_LAYERS, LAYER_LABELS, LAYER_COLORS } from '../services/variationsService';
 
@@ -9,7 +9,6 @@ interface PromptVariationsProps {
   onApply: (promptText: string, dna: PromptDNA) => void;
 }
 
-// ── Color map for layer badges ──
 const BADGE_CLASSES: Record<string, string> = {
   styles:      'bg-brand-100 text-brand-700 border-brand-200',
   lighting:    'bg-amber-100 text-amber-700 border-amber-200',
@@ -71,7 +70,7 @@ const PromptVariations: React.FC<PromptVariationsProps> = ({
   return (
     <div>
 
-      {/* ── TOGGLE HEADER ── */}
+      {/* TOGGLE HEADER */}
       <button
         onClick={() => setIsOpen(prev => !prev)}
         className="flex items-center justify-between w-full group"
@@ -81,26 +80,33 @@ const PromptVariations: React.FC<PromptVariationsProps> = ({
           <span className="text-xs font-black uppercase tracking-widest text-slate-500 group-hover:text-slate-700 transition-colors">
             Variaciones IA
           </span>
-          <span className="bg-brand-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
-            Sprint 4
-          </span>
+          <div className="group relative">
+            <Info className="w-3.5 h-3.5 text-slate-400 cursor-help" />
+            <div className="absolute bottom-full left-0 mb-2 w-64 p-2 bg-slate-900 text-white text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+              Genera hasta 3 variaciones creativas del prompt modificando capas específicas (estilo, iluminación, fondo, composición o detalles). Bloquea las capas que quieras mantener intactas.
+            </div>
+          </div>
         </div>
         <ChevronDown
           className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
         />
       </button>
 
-      {/* ── PANEL ── */}
+      {/* PANEL */}
       {isOpen && (
         <div className="mt-6 space-y-6">
 
-          {/* ── STYLE LOCK ── */}
-          <div className="space-y-3">
+          {/* EXPLANATION TEXT */}
+          <div className="bg-brand-50 border border-brand-100 rounded-xl p-3 text-[10px] font-medium text-brand-800">
+            💡 <strong>¿Cómo funciona?</strong> Puedes bloquear las capas que quieras conservar (ej. estilo, iluminación). La IA generará 3 variaciones creativas modificando SOLO las capas desbloqueadas. Aplica una variación y luego genera la imagen en el compositor.
+          </div>
 
+          {/* STYLE LOCK */}
+          <div className="space-y-3">
             <div className="flex items-center gap-2">
               <Lock className="w-3.5 h-3.5 text-slate-400" />
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                Style Lock — Bloquear capas
+                Bloquear capas
               </span>
             </div>
 
@@ -133,12 +139,11 @@ const PromptVariations: React.FC<PromptVariationsProps> = ({
                 {availableCount} disponible{availableCount !== 1 ? 's' : ''} para variar
               </p>
             )}
-
           </div>
 
           <div className="h-px bg-slate-100" />
 
-          {/* ── GENERATE BUTTON ── */}
+          {/* GENERATE BUTTON */}
           <button
             onClick={handleGenerate}
             disabled={!canGenerate}
@@ -161,7 +166,7 @@ const PromptVariations: React.FC<PromptVariationsProps> = ({
             )}
           </button>
 
-          {/* ── ERROR ── */}
+          {/* ERROR */}
           {error && (
             <div className="flex items-start gap-3 bg-red-50 border border-red-100 p-4 rounded-2xl text-red-600">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -169,10 +174,9 @@ const PromptVariations: React.FC<PromptVariationsProps> = ({
             </div>
           )}
 
-          {/* ── VARIATIONS CARDS ── */}
+          {/* VARIATIONS CARDS */}
           {variations.length > 0 && (
             <div className="space-y-4">
-
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                 3 variaciones generadas — click para aplicar
               </p>
@@ -191,22 +195,15 @@ const PromptVariations: React.FC<PromptVariationsProps> = ({
                         : 'bg-slate-50 border-slate-100 hover:bg-white hover:border-brand-200 hover:shadow-md'
                     }`}
                   >
-
-                    {/* HEADER ROW */}
                     <div className="flex items-start justify-between gap-3 mb-3">
-
                       <div className="flex items-center gap-2 flex-wrap">
-                        {/* NUMBER */}
                         <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
                           #{idx + 1}
                         </span>
-                        {/* CHANGED LAYER BADGE */}
                         <span className={`text-[9px] font-black px-2.5 py-1 rounded-lg border uppercase tracking-widest ${badgeClass}`}>
                           {variation.changedLayerLabel}
                         </span>
                       </div>
-
-                      {/* APPLY INDICATOR */}
                       <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex-shrink-0 ${
                         isApplied
                           ? 'bg-brand-600 text-white'
@@ -217,19 +214,13 @@ const PromptVariations: React.FC<PromptVariationsProps> = ({
                           : 'Aplicar'
                         }
                       </div>
-
                     </div>
-
-                    {/* DESCRIPTION */}
                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2">
                       {variation.description}
                     </p>
-
-                    {/* PROMPT PREVIEW */}
                     <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed italic">
                       "{variation.promptText}"
                     </p>
-
                   </div>
                 );
               })}
@@ -237,10 +228,8 @@ const PromptVariations: React.FC<PromptVariationsProps> = ({
               <p className="text-center text-[9px] font-bold text-slate-300 uppercase tracking-widest">
                 Aplica una variación y genera en el compositor
               </p>
-
             </div>
           )}
-
         </div>
       )}
     </div>
