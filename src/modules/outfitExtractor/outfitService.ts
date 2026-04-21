@@ -1,22 +1,59 @@
-import { geminiService } from "../../services/geminiService";
-import { MODELS } from "../../services/creditConfig";
+// modules/outfitExtractor/outfitService.ts
 import { OutfitKit, OutfitItem } from "./types";
 
-// ──────────────────────────────────────────
-// outfitService — Outfit Kit
-//
-// extractOutfitKit → geminiService.analyzeOutfit (texto, gratis)
-// generateItemRender → Imagen 4 Fast ($0.02) — prendas ghost SIN persona
-// generateFinalComposition → Imagen 4 Fast ($0.02) — composición sin persona
-// ──────────────────────────────────────────
+const API_BASE = '/api/gemini';
+
+async function callContentAPI(action: string, prompt: string, images?: string[]): Promise<any> {
+  const payload: any = { action, prompt };
+  if (images?.length) {
+    payload.images = images.map(img => img.replace(/^data:image\/\w+;base64,/, ''));
+    payload.mimeTypes = images.map(() => 'image/jpeg');
+  }
+  const res = await fetch(`${API_BASE}/content`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || 'Content API error');
+  return data.json || JSON.parse(data.text);
+}
+
+async function callImageAPI(
+  prompt: string,
+  referenceImages?: string[],
+  aspectRatio: '1:1' | '3:4' = '3:4',
+  model: string = 'gemini-2.5-flash-image'
+): Promise<string> {
+  const refs = referenceImages?.map(img => ({
+    data: img.replace(/^data:image\/\w+;base64,/, ''),
+    mimeType: 'image/jpeg'
+  })) || [];
+
+  const res = await fetch(`${API_BASE}/image`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'generateImage',
+      prompt,
+      referenceImages: refs,
+      aspectRatio,
+      model
+    })
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || 'Image API error');
+  return data.image;
+}
 
 export const outfitService = {
-
   async extractOutfitKit(image: string): Promise<OutfitKit> {
-    // Análisis con texto — gratis
-    const analysis = await geminiService.analyzeOutfit(image);
+    const analysis = await callContentAPI('analyzeOutfit', 
+      'Extract all clothing items from this outfit image. For each item provide: name, category (main_garment|top|bottom|footwear|bag|accessory), visual_description, ghost_mannequin_prompt, confidence_score, and coordinates (x,y normalized 0-1000). Return JSON array.',
+      [image]
+    );
 
-    const kit: OutfitKit = {
+    return {
       id: Date.now().toString(),
       originalImage: image,
       items: (analysis.items || []).map((item: any) => ({
@@ -34,53 +71,36 @@ export const outfitService = {
       createdAt: Date.now(),
       inputType: 'REAL_PHOTO'
     };
-
-    return kit;
   },
 
   async generateItemRender(item: OutfitItem, originalImage: string): Promise<string> {
-    const prompt = `
-[ULTRA-TECHNICAL GHOST MANNEQUIN RENDER]
-ITEM: ${item.name} (${item.category})
-VISUAL DATA: ${item.visualDescription}
+    const prompt = `[GHOST MANNEQUIN PRODUCT RENDER]
+Render the "${item.name}" (${item.category}) from REF0 as a standalone e-commerce product.
+Preserve EXACT fabric, color, and details from the reference image.
+Create realistic 3D volume (shoulders/torso curve) as if worn by an invisible person.
+Pure white background (#FFFFFF). No human skin, face, or mannequin parts.
+Studio lighting, soft shadow at base.`;
 
-STRICT EXECUTION RULES:
-1. VOLUME: The garment MUST appear filled with a 3D human shape. It should NOT look flat.
-2. ANATOMY: Capture the realistic curvature of shoulders, torso, or limbs as if an invisible person is wearing it.
-3. SHADOWS: Include soft internal shadows where the garment meets the "invisible skin" to emphasize depth and thickness of the fabric.
-4. TEXTURE: Preserve 1:1 material fidelity from the reference image.
-5. BACKGROUND: Pure #FFFFFF white background.
-6. NO HUMAN: No skin, no hands, no face, no hair, no visible mannequin parts.
-    `;
-
-    // Imagen 4 Fast — prendas ghost no necesitan identidad facial
-    // No soporta imágenes de referencia, usamos el prompt descriptivo detallado
-    return await geminiService.generateImageFast(prompt, '3:4');
+    return await callImageAPI(
+      prompt,
+      [originalImage], // REF0 = imagen original de la persona
+      '3:4',
+      'gemini-2.5-flash-image' // modelo rápido y económico
+    );
   },
 
   async generateFinalComposition(kit: OutfitKit): Promise<string> {
-    const approvedItems = kit.items.filter(i => !!i.imageUrl && i.selected);
+    const approvedItems = kit.items.filter(i => i.selected && i.imageUrl);
     if (approvedItems.length === 0) throw new Error("No hay elementos seleccionados.");
 
-    // Describir cada prenda en el prompt para la composición final
-    const itemDescriptions = approvedItems
-      .map((item, i) => `Item ${i + 1}: ${item.name} — ${item.visualDescription}`)
-      .join('\n');
+    const refs = approvedItems.map(i => i.imageUrl!);
+    const itemList = approvedItems.map(i => `${i.name} (${i.category})`).join(', ');
 
-    const prompt = `
-[PROFESSIONAL OUTFIT KIT CATALOG COMPOSITION]
-LAYOUT: Balanced commercial grid of fashion items on pure white background.
-ITEMS TO INCLUDE:
-${itemDescriptions}
+    const prompt = `[CATALOG COMPOSITION]
+Arrange the following isolated ghost mannequin garments on a pure white background in a professional e-commerce catalog layout.
+Items: ${itemList}
+Consistent lighting, soft shadows, no humans, no mannequins.`;
 
-STYLE: All items must show the GHOST MANNEQUIN 3D effect — filled with invisible body shape.
-AESTHETIC: High-end e-commerce photography. Seamless pure white background.
-CONSISTENCY: Uniform lighting and shadows across all assets.
-NO HUMANS, NO MODELS, NO VISIBLE MANNEQUIN.
-    `;
-
-    // Imagen 4 Fast — composición de catálogo sin persona
-    return await geminiService.generateImageFast(prompt, '1:1');
+    return await callImageAPI(prompt, refs.slice(0, 4), '1:1', 'gemini-3.1-flash-image-preview');
   }
-
 };
