@@ -37,7 +37,7 @@ async function callImageAPI(
   prompt: string,
   referenceImages?: string[],
   aspectRatio: '1:1' | '3:4' = '3:4',
-  model: string = 'gemini-2.5-flash-image'
+  model: string = 'gemini-3.1-flash-image-preview'
 ): Promise<string> {
   const compressed = referenceImages
     ? await Promise.all(referenceImages.map(img => compressImageForUpload(img)))
@@ -114,7 +114,7 @@ Studio lighting, soft shadow at base.`;
       prompt,
       [originalImage],
       '3:4',
-      'gemini-2.5-flash-image'
+      'gemini-3.1-flash-image-preview'
     );
   },
 

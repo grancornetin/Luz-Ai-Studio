@@ -63,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return await handleImageGeneration(body, res);
     }
     if (body.action === 'generateImageFast') {
-      return await handleImageGeneration({ ...body, model: 'gemini-2.5-flash-image' }, res);
+      return await handleImageGeneration({ ...body, model: 'gemini-3.1-flash-image-preview' }, res);
     }
 
     return res.status(400).json({ error: `Unknown action: ${body.action}` });
@@ -74,7 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 
 async function handleImageGeneration(body: ImageRequest, res: VercelResponse) {
-  const modelName = body.model || 'gemini-3-pro-image-preview';
+  const modelName = body.model || 'gemini-3.1-flash-image-preview';
   const location = getLocationForModel(modelName);
   const ai = getGenAIClient(location);
 

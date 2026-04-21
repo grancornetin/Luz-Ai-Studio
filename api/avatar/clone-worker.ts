@@ -51,6 +51,13 @@ async function extractAvatarProfile(files: string[]): Promise<any> {
 }
 
 // ─── Generar imagen con modelo específico (reutilizable) ───
+// ─── Tabla de ubicaciones por modelo (igual que api/gemini/image.ts) ───
+const MODEL_LOCATIONS: Record<string, string> = {
+  'gemini-3-pro-image-preview':     'global',
+  'gemini-3.1-flash-image-preview': 'global',
+  'gemini-2.5-flash-image':         'us-central1',
+};
+
 async function generateImageWithModel(
   prompt: string,
   negative: string,
@@ -58,7 +65,7 @@ async function generateImageWithModel(
   referenceImages: string[],
   aspectRatio: '1:1' | '3:4' | '4:3' | '9:16' | '16:9' = '3:4'
 ): Promise<string> {
-  const location = modelName.includes('global') ? 'global' : 'us-central1';
+  const location = MODEL_LOCATIONS[modelName] ?? 'global';
   const ai = getGenAIClient(location);
   const parts: any[] = [];
 
@@ -120,17 +127,17 @@ async function generateFullSet(
   const strictNegative = `${negativePrompt}, fashion, casual clothes, jewelry, shoes, cropped feet, cropped head, artistic lighting, decorative background, wrinkles in fabric, 3/4 view, medium shot, stylized face`;
 
   const bodyMaster = await generateImageWithModel(
-    technicalPrompt, strictNegative, 'gemini-3-pro-image-preview', referenceImages, '3:4'
+    technicalPrompt, strictNegative, 'gemini-3.1-flash-image-preview', referenceImages, '3:4'
   );
 
   const rear = await generateImageWithModel(
     `[TECHNICAL VIEW: REAR 180 DEGREES]. FULL BODY HEAD-TO-TOE. Exact 180° rotation from BODYMASTER. ${outfitOverride ? `Wearing ${outfitOverride}.` : 'Same technical bodysuit.'} Maintain ${gender === 'mujer' ? '90-60-90 silhouette' : 'gym-toned build'}.`,
-    'face, frontal view', 'gemini-3-pro-image-preview', [bodyMaster], '3:4'
+    'face, frontal view', 'gemini-3.1-flash-image-preview', [bodyMaster], '3:4'
   );
 
   const side = await generateImageWithModel(
     `[TECHNICAL VIEW: SIDE PROFILE 90 DEGREES]. FULL BODY HEAD-TO-TOE. Exact 90° rotation from BODYMASTER. ${outfitOverride ? `Wearing ${outfitOverride}.` : 'Same technical bodysuit.'} Maintain ${gender === 'mujer' ? '90-60-90 silhouette' : 'gym-toned build'}.`,
-    'frontal view, rear view', 'gemini-3-pro-image-preview', [bodyMaster], '3:4'
+    'frontal view, rear view', 'gemini-3.1-flash-image-preview', [bodyMaster], '3:4'
   );
 
   const faceMaster = await generateImageWithModel(
@@ -140,7 +147,7 @@ async function generateFullSet(
      [STRICT FIDELITY: 1:1 BIOMETRIC DNA CLONE. DO NOT EMBELLISH. DO NOT STYLIZE. NO MAKEUP UNLESS PRESENT.]
      [PRIORITY: FIDELITY OVER AESTHETICS. MUST BE IDENTICAL TO BODYMASTER FACE.]
      [OUTFIT: ${outfitOverride ? `Outfit visible at neck only, matching ${outfitOverride}.` : 'Technical bodysuit visible at neck only.'}]`,
-    'full body, distant view, accessories, blur', 'gemini-3-pro-image-preview', [bodyMaster], '3:4'
+    'full body, distant view, accessories, blur', 'gemini-3.1-flash-image-preview', [bodyMaster], '3:4'
   );
 
   return [bodyMaster, rear, side, faceMaster];
