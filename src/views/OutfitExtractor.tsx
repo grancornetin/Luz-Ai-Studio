@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { OutfitKit, OutfitItem } from '../modules/outfitExtractor/types';
 import { outfitService } from '../modules/outfitExtractor/outfitService';
 import JSZip from 'jszip';
+import { readAndCompressFile } from '../utils/imageUtils';
 
 type ExtractorStep = 'idle' | 'extracting_items' | 'selection_checkpoint' | 'composing_final' | 'completed';
 
@@ -15,11 +16,12 @@ const OutfitExtractor: React.FC = () => {
   const [isZipping, setIsZipping] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const reader = new FileReader();
-      reader.onloadend = () => setSourceImage(reader.result as string);
-      reader.readAsDataURL(e.target.files[0]);
+      const compressed = await readAndCompressFile(e.target.files[0]);
+      setSourceImage(compressed);
+    }
+  };
     }
   };
 

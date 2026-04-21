@@ -12,6 +12,7 @@ import {
   ORGANIC_PROPS_BY_CATEGORY 
 } from '../constants';
 import JSZip from 'jszip';
+import { readAndCompressFile } from '../utils/imageUtils';
 
 interface ProductPhotographyProps {
   saveProduct: (product: ProductProfile) => void;
@@ -87,10 +88,9 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files) as File[];
-      newFiles.forEach(file => {
-        const reader = new FileReader();
-        reader.onloadend = () => setFiles(prev => [...prev, reader.result as string].slice(0, 4));
-        reader.readAsDataURL(file);
+      newFiles.forEach(async (file) => {
+        const compressed = await readAndCompressFile(file);
+        setFiles(prev => [...prev, compressed].slice(0, 4));
       });
     }
   };

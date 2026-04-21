@@ -5,6 +5,7 @@ import { GenerationSet, Shot, FocusType, AvatarProfile, ProductProfile } from '.
 import { geminiService } from '../services/geminiService';
 import { generationHistoryService } from '../services/generationHistoryService';
 import JSZip from 'jszip';
+import { readAndCompressFile } from '../utils/imageUtils';
 
 // Sesión optimizada a 4 disparos derivados + 1 Maestro (Total 5) según Instrucción Maestra
 const UGC_SESSION_SHOTS: Record<FocusType, { name: string, prompt: string, focusRule: string }[]> = {
@@ -66,15 +67,12 @@ const ContentCreator: React.FC<{ avatars: AvatarProfile[], products: ProductProf
     }
   }, [location.state, avatars, products]);
 
-  const handleFileUpload = (key: string, file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      setRefs(prev => ({ ...prev, [key]: reader.result as string }));
-      if (workflowStep === 'preview_master') {
-        setIsModifiedInCheckpoint(true);
-      }
-    };
-    reader.readAsDataURL(file);
+  const handleFileUpload = async (key: string, file: File) => {
+    const compressed = await readAndCompressFile(file);
+    setRefs(prev => ({ ...prev, [key]: compressed }));
+    if (workflowStep === 'preview_master') {
+      setIsModifiedInCheckpoint(true);
+    }
   };
 
   const clearSlot = (key: string) => {
