@@ -6,6 +6,9 @@
     "api/gemini/ugc-worker.ts": {
       "maxDuration": 60
     },
+    "api/avatar/clone-worker.ts": {
+      "maxDuration": 300
+    },
     "api/**/*.ts": {
       "maxDuration": 60
     }
