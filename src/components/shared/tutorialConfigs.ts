@@ -2,9 +2,9 @@ import { TutorialStep } from './ModuleTutorial';
 
 // ──────────────────────────────────────────
 // tutorialConfigs
-// Contenido de los tutoriales de cada módulo.
-// Editar aquí para cambiar textos sin tocar
-// los componentes de UI.
+// Punto 3: sceneClone ahora menciona detección de productos/elementos
+// Punto 6: textos honestos sobre integración manual de avatares
+//          (no hay conexión automática — la integración es manual)
 // ──────────────────────────────────────────
 
 export const TUTORIAL_CONFIGS: Record<string, TutorialStep[]> = {
@@ -16,7 +16,6 @@ export const TUTORIAL_CONFIGS: Record<string, TutorialStep[]> = {
       color: 'bg-indigo-600 text-white',
       title: 'Tu biblioteca de modelos',
       description: 'Aquí se guardan todos los modelos digitales que has creado. Cada modelo tiene un set de imágenes técnicas: vista frontal, trasera, lateral y close-up de rostro.',
-      tip: 'Los modelos guardados aquí se pueden usar en todos los demás módulos como referencia de identidad.',
     },
     {
       icon: 'fa-camera',
@@ -32,11 +31,12 @@ export const TUTORIAL_CONFIGS: Record<string, TutorialStep[]> = {
       description: 'Si necesitas una identidad completamente nueva, "Model DNA · Manual" te permite configurar género, etnia, edad, complexión y personalidad para crear un avatar desde cero.',
     },
     {
-      icon: 'fa-wand-magic-sparkles',
+      // PUNTO 6 FIXED: texto honesto sobre integración manual
+      icon: 'fa-arrow-up-right-from-square',
       color: 'bg-emerald-600 text-white',
-      title: 'Usa tus modelos en otros módulos',
-      description: 'Una vez creados, tus modelos son la base para: AI Generator (con referencias), Scene Clone, Content Studio y más.',
-      tip: 'Cuantos más modelos tengas, más variedad de contenido puedes producir sin perder consistencia de identidad.',
+      title: 'Cómo usar tus modelos en otros módulos',
+      description: 'Para usar un modelo en AI Generator, Scene Clone u otros módulos: abre el modelo aquí, descarga o copia la imagen que necesitas, y súbela manualmente como referencia en el módulo destino.',
+      tip: 'En AI Generator usa el slot "Persona 1". En Scene Clone usa "Foto de rostro" o "Foto de cuerpo". La conexión es manual para que tú elijas exactamente qué imagen del set usar.',
     },
   ],
 
@@ -53,7 +53,7 @@ export const TUTORIAL_CONFIGS: Record<string, TutorialStep[]> = {
       color: 'bg-indigo-600 text-white',
       title: 'Paso 1 — Rostro Maestro',
       description: 'Sube una foto clara del rostro de la persona que protagonizará el contenido. Esta imagen es el ADN de identidad — el modelo la usará como ancla facial en todas las generaciones.',
-      tip: 'Una sola foto de buena calidad es suficiente. Mejor con fondo limpio y luz natural.',
+      tip: 'Si tienes un modelo en tu Biblioteca, abre la biblioteca, copia el close-up facial y súbelo aquí.',
     },
     {
       icon: 'fa-gem',
@@ -145,11 +145,12 @@ export const TUTORIAL_CONFIGS: Record<string, TutorialStep[]> = {
       description: 'La IA genera primero un "Bodymaster" (vista frontal completa), luego vistas trasera y lateral, y finalmente un close-up facial de alta fidelidad. Todo el proceso tarda 1-2 minutos.',
     },
     {
+      // PUNTO 6 FIXED: honesto sobre cómo reusar en otros módulos
       icon: 'fa-save',
       color: 'bg-emerald-600 text-white',
-      title: 'Guarda y reutiliza',
-      description: 'Dale un nombre al modelo y guárdalo en tu biblioteca. Desde ahí estará disponible como referencia de identidad en AI Generator, Content Studio, Scene Clone y más.',
-      tip: 'Puedes regenerar el FaceMaster si el close-up no quedó a tu gusto sin repetir todo el proceso.',
+      title: 'Guarda y reutiliza manualmente',
+      description: 'Dale un nombre al modelo y guárdalo en tu biblioteca. Para usarlo en otro módulo (AI Generator, Scene Clone), ve a la biblioteca, descarga la imagen que necesitas y súbela como referencia en ese módulo.',
+      tip: 'Para identidad facial usa el close-up. Para identidad de cuerpo usa la vista frontal. Tú controlas qué imagen del set usar en cada contexto.',
     },
   ],
 
@@ -184,30 +185,40 @@ export const TUTORIAL_CONFIGS: Record<string, TutorialStep[]> = {
   ],
 
   // ── SCENE CLONE ──────────────────────────
+  // PUNTO 3: Ahora incluye paso de detección de elementos (productos, accesorios)
   sceneClone: [
     {
       icon: 'fa-clone',
       color: 'bg-blue-600 text-white',
       title: '¿Qué hace Scene Clone?',
-      description: 'Toma una foto existente (la "escena target") y replica exactamente la composición, pose, iluminación y fondo, pero reemplazando la identidad de la persona con la que tú elijas.',
+      description: 'Toma una foto existente (la "escena target") y replica exactamente la composición, pose, iluminación y fondo, pero reemplazando la identidad de la persona y/o los productos que elijas.',
     },
     {
       icon: 'fa-image',
       color: 'bg-slate-700 text-white',
       title: 'Paso 1 — Foto target',
-      description: 'Sube la foto que quieres clonar. Esta será la referencia de escena: la IA copiará fielmente el encuadre, la iluminación y el fondo.',
+      description: 'Sube la foto que quieres clonar. La IA analizará automáticamente los elementos presentes: persona, prendas, productos, accesorios y fondo.',
       tip: 'Funciona mejor con fotos de buena calidad. Evita imágenes muy oscuras o con mucho ruido.',
     },
     {
       icon: 'fa-user',
       color: 'bg-indigo-600 text-white',
-      title: 'Paso 2 — Identidad nueva',
+      title: 'Paso 2 — Nueva identidad',
       description: 'Sube las referencias de la nueva persona: foto de rostro y foto de cuerpo. Puedes activar el modo "Segundo Sujeto" para reemplazar dos personas en la misma escena.',
+      tip: 'Para usar un modelo de tu biblioteca: ábrelo en la Biblioteca, descarga el close-up facial y la vista frontal, y súbelos aquí.',
+    },
+    {
+      // PUNTO 3: Nuevo paso — detección y reemplazo de elementos/productos
+      icon: 'fa-box-open',
+      color: 'bg-amber-600 text-white',
+      title: 'Paso 3 — Reemplaza elementos detectados',
+      description: 'La IA detecta los productos y accesorios presentes en la escena (bolsos, calzado, gadgets, etc.). Puedes subir tu propio producto para reemplazar cualquiera de los elementos detectados, igual que funciona el cambio de identidad.',
+      tip: 'Sube la foto de tu producto en el slot correspondiente. La IA lo integrará respetando la iluminación y la posición del elemento original.',
     },
     {
       icon: 'fa-mobile-screen-button',
       color: 'bg-emerald-600 text-white',
-      title: 'Paso 3 — Estilo de cámara',
+      title: 'Paso 4 — Estilo de cámara y outfit',
       description: 'Elige el estilo de cámara: iPhone 1x (natural), 0.5x (gran angular) o selfie frontal. También puedes cambiar el outfit del sujeto subiendo una referencia de ropa.',
       tip: 'El modo 0.5x añade una ligera distorsión de ojo de pez realista, perfecta para contenido urbano.',
     },
@@ -219,33 +230,33 @@ export const TUTORIAL_CONFIGS: Record<string, TutorialStep[]> = {
       icon: 'fa-wand-magic-sparkles',
       color: 'bg-indigo-600 text-white',
       title: '¿Qué es AI Generator?',
-      description: 'El centro de creación de la plataforma. Tiene tres modos: Standard para generación individual, Campaign para crear sets de imágenes coherentes, y Photodump para variaciones masivas rápidas.',
+      description: 'El centro de creación de la plataforma. Tiene tres modos: Standard para generación individual, Campaign para crear sets de imágenes coherentes, y Photodump para un set de escenas tipo lifestyle.',
     },
     {
       icon: 'fa-palette',
       color: 'bg-purple-600 text-white',
       title: 'Modo Standard — Una imagen',
-      description: 'Construye tu prompt con el DNA visual: persona, producto, estilo, iluminación, fondo y composición. Puedes subir referencias de persona y producto para anclar la identidad.',
-      tip: 'Los slots de DNA son opcionales. Cuantos más rellenes, más control tienes sobre el resultado.',
+      description: 'Construye tu prompt con el DNA visual: persona, producto, estilo, iluminación, fondo y composición. Sube referencias en los slots para anclar identidad y productos.',
+      tip: 'Para usar un modelo de tu Biblioteca: descárgalo desde allí y súbelo en el slot "Persona 1".',
     },
     {
       icon: 'fa-film',
       color: 'bg-blue-600 text-white',
       title: 'Modo Campaign — Set coherente',
-      description: 'Define el concepto de la campaña y describe cada escena por separado. La IA genera todas las imágenes manteniendo coherencia de identidad y estilo entre ellas.',
+      description: 'Define el concepto de la campaña y describe cada escena. La IA genera todas las imágenes manteniendo coherencia de identidad y estilo entre ellas.',
     },
     {
-      icon: 'fa-bolt',
-      color: 'bg-amber-600 text-white',
-      title: 'Modo Photodump — Volumen rápido',
-      description: 'Genera múltiples variaciones de un mismo concepto a máxima velocidad. Ideal para crear contenido en cantidad para A/B testing o redes sociales.',
-      tip: 'Photodump usa Imagen 4 Fast — el modelo más rápido y económico, perfecto para variaciones sin persona.',
+      icon: 'fa-images',
+      color: 'bg-violet-600 text-white',
+      title: 'Modo Photodump — Set de escenas',
+      description: 'Escribe un prompt con el contexto general (ej: "@persona1 visitando Nueva York") y sube tu referencia de persona. La IA genera un set de escenas variadas y coherentes con ese contexto.',
+      tip: 'Elige la "Variación de escena": Sutil (mismo lugar, ángulos distintos), Media (diferentes sub-locaciones), Bold (escenas y momentos completamente distintos).',
     },
     {
       icon: 'fa-users',
       color: 'bg-emerald-600 text-white',
       title: 'Galería comunitaria',
-      description: 'Explora los prompts publicados por la comunidad, guarda los que te gusten como base y publica los tuyos para que otros puedan inspirarse.',
+      description: 'Explora los prompts publicados por la comunidad, guárdalos en tus tableros y publica los tuyos para inspirar a otros creadores.',
     },
   ],
 

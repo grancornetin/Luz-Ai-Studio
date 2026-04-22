@@ -1,11 +1,17 @@
+/**
+ * PhotodumpMode.tsx — FIXED
+ * Fix: geminiService.generateText() acepta solo 1 argumento.
+ * El system prompt se concatena dentro del prompt único.
+ */
 import React, { useState } from 'react';
-import { Images, Loader2, Download, Zap, Image, Shuffle } from 'lucide-react';
+import { Images, Loader2, Download, Shuffle, Image } from 'lucide-react';
 import { generationService, GenerationProgress } from '../services/generationService';
 import { PromptDNA } from '../types/promptTypes';
 import { downloadAsZip } from '../../../utils/imageUtils';
 import { ImageLightbox } from '../../../components/shared/ImageLightbox';
 import { FloatingActionBar } from '../../../components/shared/FloatingActionBar';
 import { useScrollFAB } from '../../../hooks/useScrollFAB';
+import { geminiService } from '../../../services/geminiService';
 
 interface PhotodumpModeProps {
   basePrompt: string;
@@ -15,85 +21,104 @@ interface PhotodumpModeProps {
 
 type Intensity = 'sutil' | 'media' | 'bold';
 
-const INTENSITY_CONFIG: Record<Intensity, {
-  label: string;
-  description: string;
-  suffixes: string[];
-}> = {
+const INTENSITY_CONFIG: Record<Intensity, { label: string; description: string; color: string; instruction: string }> = {
   sutil: {
     label: 'Sutil',
-    description: 'Cambios mínimos de ángulo y luz',
-    suffixes: [
-      'slightly different angle',
-      'soft variation, same mood',
-      'minimal change, consistent style',
-      'gentle lighting shift',
-      'subtle framing variation',
-      'same scene, small adjustment',
-    ]
+    description: 'Mismo lugar, ángulos y luz distintos',
+    color: 'bg-sky-600',
+    instruction: 'Create subtle scene variations: same location but different camera angles (eye level, high angle, low angle), different framing (close-up, medium, wide), and slight lighting changes (golden hour, overcast, midday). Keep the same environment and activity.',
   },
   media: {
     label: 'Media',
-    description: 'Variaciones de composición y ambiente',
-    suffixes: [
-      'different composition, same subject',
-      'varied lighting mood',
-      'alternative framing and angle',
-      'different time of day atmosphere',
-      'compositional variation, same style',
-      'shifted perspective, consistent identity',
-    ]
+    description: 'Sub-locaciones y actividades variadas',
+    color: 'bg-violet-600',
+    instruction: 'Create moderate scene variations: change specific sub-locations within the same context (e.g. if NYC: Times Square, Central Park, Brooklyn Bridge, a diner, subway station). Mix indoor and outdoor. Vary the activity slightly (walking, sitting, eating, looking). Change camera angle significantly.',
   },
   bold: {
     label: 'Bold',
-    description: 'Cambios creativos de estilo y escena',
-    suffixes: [
-      'bold artistic reinterpretation, same identity',
-      'dramatic lighting change, strong contrast',
-      'completely different scene, same subject',
-      'experimental color grading, same person',
-      'strong mood shift, cinematic style',
-      'creative visual storytelling, consistent character',
-    ]
-  }
+    description: 'Escenas y momentos completamente distintos',
+    color: 'bg-rose-600',
+    instruction: 'Create bold creative variations: different iconic locations, different times of day (sunrise, midday, night), different activities (exploring, eating local food, candid street moment, selfie). Mix cinematic, candid, and detail shots.',
+  },
 };
 
 const COUNT_OPTIONS = [3, 4, 5, 6];
 
-const PhotodumpMode: React.FC<PhotodumpModeProps> = ({
-  basePrompt,
-  dna,
-  references
-}) => {
+async function buildContextualPrompts(
+  basePrompt: string,
+  count: number,
+  intensity: Intensity,
+): Promise<string[]> {
+  // FIX: geminiService.generateText acepta solo 1 argumento
+  // El system prompt va embebido en el único string que se pasa
+  const fullPrompt = `You are a UGC photo director. Given a base prompt, generate ${count} unique image prompts for a coherent lifestyle/photodump set.
 
-  const [count, setCount] = useState(4);
+Rules:
+- ${INTENSITY_CONFIG[intensity].instruction}
+- Always preserve identity tokens like @persona1, @product1 from the base prompt
+- Each prompt is 1-2 sentences, in English
+- Output ONLY a JSON array of strings: ["prompt1", "prompt2", ...]
+- No markdown, no explanation, just the JSON array
+
+Base prompt: "${basePrompt}"
+Generate ${count} prompts now.`;
+
+  try {
+    const raw = await geminiService.generateText(fullPrompt);
+    const cleaned = raw.replace(/```json|```/g, '').trim();
+    // Find JSON array in response
+    const match = cleaned.match(/\[[\s\S]*\]/);
+    if (match) {
+      const parsed = JSON.parse(match[0]);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.slice(0, count).map(p => typeof p === 'string' ? p : String(p));
+      }
+    }
+  } catch (err) {
+    console.warn('[PhotodumpMode] Gemini prompt generation failed, using fallback:', err);
+  }
+
+  // Fallback: simple scene variations
+  const fallbackScenes = [
+    'wide establishing shot, natural lighting, photorealistic UGC style',
+    'close-up portrait, golden hour light, photorealistic UGC style',
+    'candid mid-shot, street level, photorealistic UGC style',
+    'detail shot, shallow depth of field, photorealistic UGC style',
+    'environmental wide shot, dusk lighting, photorealistic UGC style',
+    'overhead perspective, bright midday light, photorealistic UGC style',
+  ];
+  return fallbackScenes.slice(0, count).map(scene => `${basePrompt}, ${scene}`);
+}
+
+const PhotodumpMode: React.FC<PhotodumpModeProps> = ({ basePrompt, dna, references }) => {
+  const [count, setCount]         = useState(4);
   const [intensity, setIntensity] = useState<Intensity>('media');
-  const [results, setResults] = useState<string[]>([]);
+  const [results, setResults]     = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [progress, setProgress] = useState<GenerationProgress | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress]   = useState<GenerationProgress | null>(null);
+  const [error, setError]         = useState<string | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const { isVisible: fabVisible } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: false });
 
+  const hasReferences = references.length > 0;
+
   const handleGenerate = async () => {
     if (!basePrompt.trim()) return;
-
     setIsGenerating(true);
     setError(null);
     setResults([]);
     setProgress({ total: count, completed: 0, current: 0 });
 
     try {
-      const config = INTENSITY_CONFIG[intensity];
-      const shuffled = [...config.suffixes].sort(() => Math.random() - 0.5);
-      const selected = shuffled.slice(0, count);
-      const prompts = selected.map(suffix =>
-        `${basePrompt}, ${suffix}, same person same identity same face`
+      const prompts = await buildContextualPrompts(basePrompt, count, intensity);
+      const images = await generationService.generateBatchFlash(
+        prompts,
+        references,
+        undefined,
+        (p) => setProgress(p),
       );
-
-      const images = await generationService.generateBatchFast(prompts, (p) => setProgress(p));
-      setResults(images);
+      setResults(images.filter(Boolean));
     } catch (err: any) {
       setError(err?.message || 'Error generando el photodump.');
     } finally {
@@ -114,11 +139,6 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({
     await downloadAsZip(results, `photodump_${Date.now()}.zip`, 'dump');
   };
 
-  const openLightbox = (index: number) => {
-    setLightboxIndex(index);
-    setLightboxOpen(true);
-  };
-
   const canGenerate = basePrompt.trim().length > 0 && !isGenerating;
 
   return (
@@ -134,22 +154,27 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({
             </h3>
           </div>
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-            Generación masiva · Variaciones automáticas
+            Genera un set coherente de escenas · IA como director creativo
           </p>
         </div>
       </div>
 
-      {/* BASE PROMPT */}
-      <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Prompt base</p>
+      {/* BASE PROMPT PREVIEW */}
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-2">
+        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Contexto base</p>
         <p className="text-xs text-slate-400 italic line-clamp-2 leading-relaxed">
           "{basePrompt || 'Escribe un prompt en el compositor primero...'}"
         </p>
+        <div className={`flex items-center gap-2 text-[9px] font-black uppercase tracking-widest ${hasReferences ? 'text-emerald-400' : 'text-slate-600'}`}>
+          <div className={`w-1.5 h-1.5 rounded-full ${hasReferences ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+          {hasReferences
+            ? `${references.length} referencia${references.length > 1 ? 's' : ''} activa${references.length > 1 ? 's' : ''} · identidad preservada`
+            : 'Sin referencias — sube imágenes en los slots para preservar identidad'}
+        </div>
       </div>
 
-      {/* CONTROLS ROW */}
+      {/* CONTROLS */}
       <div className="grid grid-cols-2 gap-4">
-
         <div className="space-y-2">
           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Cantidad</p>
           <div className="flex gap-2">
@@ -170,7 +195,7 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({
         </div>
 
         <div className="space-y-2">
-          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Intensidad</p>
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Variación de escena</p>
           <div className="flex gap-2">
             {(Object.keys(INTENSITY_CONFIG) as Intensity[]).map(level => (
               <button
@@ -178,9 +203,7 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({
                 onClick={() => setIntensity(level)}
                 className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${
                   intensity === level
-                    ? level === 'sutil'   ? 'bg-sky-600 text-white shadow-lg'
-                    : level === 'media'   ? 'bg-violet-600 text-white shadow-lg'
-                    :                       'bg-rose-600 text-white shadow-lg'
+                    ? `${INTENSITY_CONFIG[level].color} text-white shadow-lg`
                     : 'bg-white/5 text-slate-500 hover:bg-white/10 hover:text-slate-300'
                 }`}
               >
@@ -189,7 +212,6 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({
             ))}
           </div>
         </div>
-
       </div>
 
       <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest -mt-4">
@@ -209,14 +231,12 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({
         {isGenerating ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />
-            {progress
-              ? `${progress.completed} / ${progress.total} generadas...`
-              : 'Iniciando photodump...'}
+            {progress ? `${progress.completed} / ${progress.total} generadas...` : 'IA creando contexto...'}
           </>
         ) : (
           <>
             <Shuffle className="w-4 h-4" />
-            Generar {count} imágenes
+            Generar {count} imágenes del set
           </>
         )}
       </button>
@@ -254,7 +274,7 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({
               <div
                 key={i}
                 className="group relative rounded-2xl overflow-hidden bg-slate-800 break-inside-avoid cursor-pointer"
-                onClick={() => openLightbox(i)}
+                onClick={() => { setLightboxIndex(i); setLightboxOpen(true); }}
               >
                 <img src={img} className="w-full object-cover" alt={`Photodump ${i + 1}`} />
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -297,7 +317,7 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({
         />
       )}
 
-      {/* FLOATING ACTION BAR */}
+      {/* FAB */}
       {results.length > 0 && fabVisible && (
         <FloatingActionBar
           isVisible={true}
@@ -313,5 +333,7 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({
     </div>
   );
 };
+
+
 
 export default PhotodumpMode;

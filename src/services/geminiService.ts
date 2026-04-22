@@ -117,6 +117,23 @@ export const geminiService = {
     } catch (e) { return this.handleApiError(e); }
   },
 
+  // ── NUEVO: Análisis de imagen con texto personalizado (para Scene Clone) ──
+  async analyzeImageWithText(imageBase64: string, prompt: string): Promise<string> {
+    try {
+      const extracted = extractImageRef(imageBase64, 'analyzeImageWithText');
+      const result = await callContentApi({
+        action:    'analyzeImageWithText',
+        images:    [extracted.data],
+        mimeTypes: [extracted.mimeType],
+        prompt,
+        model:     'gemini-2.5-flash', // modelo de visión + texto
+      });
+      // El resultado puede venir como JSON o texto plano
+      if (result.json) return JSON.stringify(result.json);
+      return result.text || '';
+    } catch (e) { return this.handleApiError(e); }
+  },
+
   // ── Generación de imágenes — wrappers sobre imageApiService ──────────────
   // Todos delegan a imageApiService para garantizar:
   //   • Flujo async con QStash + Redis

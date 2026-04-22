@@ -1,5 +1,5 @@
-// CloneImageModule.tsx
-import React, { useMemo, useState } from "react";
+// CloneImageModule.tsx - VERSIÓN FINAL SIN ERRORES DE TIPO
+import React, { useMemo, useState, useEffect } from "react";
 import {
   cloneImageService,
   type AspectRatio,
@@ -14,11 +14,11 @@ import { useCreditGuard } from "../../hooks/useCreditGuard";
 import NoCreditsModal from "../components/shared/NoCreditsModal";
 import { CREDIT_COSTS } from "../services/creditConfig";
 import { readAndCompressFile, downloadAsZip } from '../utils/imageUtils';
-
-// Nuevos componentes base
 import { ImageLightbox } from '../components/shared/ImageLightbox';
 import { FloatingActionBar } from '../components/shared/FloatingActionBar';
 import { useScrollFAB } from '../hooks/useScrollFAB';
+import { analyzeScene, DetectedObject } from '../services/sceneAnalysisService';
+import { ImageSlot } from '../components/shared/ImageSlot';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -37,8 +37,16 @@ function normalizeImageInput(input: string | null | undefined): string | null {
   return `data:image/png;base64,${raw}`;
 }
 
-// --- COMPONENTS UI PRO (mantenidos sin cambios) ---
+// Función auxiliar para convertir null/undefined a string (lanza error si es null)
+function toBase64OrThrow(input: string | null | undefined, fieldName: string): string {
+  const result = normalizeImageInput(input);
+  if (!result) {
+    throw new Error(`La referencia "${fieldName}" es obligatoria y no puede estar vacía.`);
+  }
+  return result;
+}
 
+// --- COMPONENTS UI PRO (definidos aquí para que el archivo sea autocontenido) ---
 const ProHeader: React.FC<{ title: string; subtitle: string; icon: string }> = ({ title, subtitle, icon }) => (
   <div className="flex items-center gap-4 mb-6">
     <div className="w-12 h-12 rounded-2xl bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 shadow-sm">
@@ -202,6 +210,10 @@ export default function CloneImageModule() {
   const [replaceOutfit2, setReplaceOutfit2] = useState(false);
   const [outfit2, setOutfit2] = useState<string | null>(null);
 
+  // NUEVO: Productos detectados
+  const [detectedProducts, setDetectedProducts] = useState<DetectedObject[]>([]);
+  const [analyzingTarget, setAnalyzingTarget] = useState(false);
+
   // Outputs
   const [baseComposition, setBaseComposition] = useState<string | null>(null);
   const [finalImage, setFinalImage] = useState<string | null>(null);
@@ -217,7 +229,26 @@ export default function CloneImageModule() {
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
   // FAB scroll detection
-  const { isVisible: fabVisible } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: false });
+  const { isVisible: fabVisibleRaw } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: false });
+  const fabVisible = !!fabVisibleRaw;
+
+  // --- Lógica de análisis de productos ---
+  useEffect(() => {
+    if (!targetImage) return;
+    setAnalyzingTarget(true);
+    analyzeScene(targetImage)
+      .then(products => {
+        setDetectedProducts(products);
+      })
+      .catch(err => console.warn("Error analyzing scene:", err))
+      .finally(() => setAnalyzingTarget(false));
+  }, [targetImage]);
+
+  const updateProductReplacement = (productId: string, imageBase64: string | null) => {
+    setDetectedProducts(prev =>
+      prev.map(p => p.id === productId ? { ...p, replacementImage: imageBase64 } : p)
+    );
+  };
 
   // --- Logic Helpers ---
 
@@ -258,10 +289,15 @@ export default function CloneImageModule() {
     setStatusMsg("Analizando escena y geometría...");
     
     try {
+      // Convertir a base64 y lanzar error si falta alguna obligatoria
+      const safeTarget = toBase64OrThrow(targetImage, "imagen target");
+      const safeFace = toBase64OrThrow(face1, "cara del sujeto 1");
+      const safeBody = toBase64OrThrow(body1, "cuerpo del sujeto 1");
+
       const payload: CloneImageParams = {
-        targetImage: normalizeImageInput(targetImage)!,
-        faceImage: normalizeImageInput(face1)!,
-        bodyImage: normalizeImageInput(body1)!,
+        targetImage: safeTarget,
+        faceImage: safeFace,
+        bodyImage: safeBody,
         replaceOutfit: false,
         cameraStyle,
         aspectRatio,
@@ -295,17 +331,24 @@ export default function CloneImageModule() {
     }
   }
 
-  async function handleApplyOutfits() {
+  async function handleApplyOutfitsAndProducts() {
     if (!baseComposition) return;
     setError(null);
     setLoading(true);
-    setStatusMsg("Mapeando prendas sobre la composición...");
+    setStatusMsg("Aplicando cambios de vestuario y productos...");
 
     try {
+      const safeTarget = toBase64OrThrow(baseComposition, "composición base");
+      const safeFace = toBase64OrThrow(face1, "cara del sujeto 1");
+      const safeBody = toBase64OrThrow(body1, "cuerpo del sujeto 1");
+
+      // Filtrar solo los productos que tienen imagen de reemplazo
+      const activeProductOverrides = detectedProducts.filter(p => p.replacementImage);
+
       const payload: CloneImageParams = {
-        targetImage: normalizeImageInput(baseComposition)!,
-        faceImage: normalizeImageInput(face1)!,
-        bodyImage: normalizeImageInput(body1)!,
+        targetImage: safeTarget,
+        faceImage: safeFace,
+        bodyImage: safeBody,
         
         replaceOutfit: !!replaceOutfit1,
         outfitOverrideImage: replaceOutfit1 ? normalizeImageInput(outfit1) : null,
@@ -320,6 +363,8 @@ export default function CloneImageModule() {
         
         replaceOutfit2: enableSecondSubject ? !!replaceOutfit2 : false,
         outfitOverrideImage2: enableSecondSubject && replaceOutfit2 ? normalizeImageInput(outfit2) : null,
+
+        productOverrides: activeProductOverrides,
       };
 
       const img = await cloneImageService.cloneImage(payload);
@@ -330,10 +375,10 @@ export default function CloneImageModule() {
         module: 'scene_clone',
         moduleLabel: 'Scene Clone (Final)',
         creditsUsed: 0,
-        promptText: `Clonación final con aplicación de outfits`
+        promptText: `Clonación final con aplicación de outfits y productos`
       }).catch(console.error);
     } catch (e: any) {
-      setError(e?.message || "Error al aplicar outfit.");
+      setError(e?.message || "Error al aplicar cambios.");
     } finally {
       setLoading(false);
       setStatusMsg("");
@@ -345,7 +390,6 @@ export default function CloneImageModule() {
                       : step === 4 ? (finalImage || baseComposition) 
                       : null;
 
-  // Función para abrir lightbox con todas las imágenes generadas disponibles
   const openLightbox = () => {
     const images: string[] = [];
     if (targetImage) images.push(targetImage);
@@ -353,7 +397,6 @@ export default function CloneImageModule() {
     if (finalImage) images.push(finalImage);
     if (images.length === 0) return;
     
-    // Determinar índice inicial: priorizar la imagen activa
     let startIndex = 0;
     if (activePreview === finalImage) startIndex = images.indexOf(finalImage);
     else if (activePreview === baseComposition) startIndex = images.indexOf(baseComposition);
@@ -364,17 +407,14 @@ export default function CloneImageModule() {
     setLightboxOpen(true);
   };
 
-  // Función para descargar ZIP con todas las imágenes generadas
   const handleDownloadZip = async () => {
     const imagesToZip: string[] = [];
     if (baseComposition) imagesToZip.push(baseComposition);
     if (finalImage) imagesToZip.push(finalImage);
     if (imagesToZip.length === 0) return;
-    
     await downloadAsZip(imagesToZip, `clone_images_${Date.now()}.zip`, 'clone');
   };
 
-  // Reset completo
   const fullReset = () => {
     setStep(1);
     setTargetImage(null);
@@ -389,6 +429,7 @@ export default function CloneImageModule() {
     setEnableSecondSubject(false);
     setReplaceOutfit1(false);
     setReplaceOutfit2(false);
+    setDetectedProducts([]);
     setError(null);
     setMaxStep(1);
   };
@@ -399,7 +440,6 @@ export default function CloneImageModule() {
       
       <div className="max-w-7xl mx-auto space-y-8 pb-24 animate-in fade-in duration-500">
         
-        {/* HEADER */}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-4 pt-2">
           <div className="text-center md:text-left">
             <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">Clone <span className="text-brand-600">Master</span></h1>
@@ -415,12 +455,10 @@ export default function CloneImageModule() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 px-4 md:px-0">
           
-          {/* LEFT CONTROL PANEL */}
           <div className="lg:col-span-4 space-y-6">
             <section className="bg-white p-6 md:p-8 rounded-[40px] border border-slate-100 shadow-sm">
               <ProStepIndicator current={step} setStep={setStep} maxStep={maxStep} />
 
-              {/* STEP 1: TARGET */}
               {step === 1 && (
                 <div className="space-y-6 animate-in slide-in-from-left-4">
                   <ProHeader title="Target Blueprint" subtitle="La escena a replicar" icon="fa-bullseye" />
@@ -468,7 +506,6 @@ export default function CloneImageModule() {
                 </div>
               )}
 
-              {/* STEP 2: IDENTITIES */}
               {step === 2 && (
                 <div className="space-y-6 animate-in slide-in-from-left-4">
                   <ProHeader title="Identidades" subtitle="Sujetos a inyectar" icon="fa-user-group" />
@@ -528,7 +565,6 @@ export default function CloneImageModule() {
                 </div>
               )}
 
-              {/* STEP 3: GENERATE BASE */}
               {step === 3 && (
                 <div className="space-y-6 animate-in slide-in-from-left-4">
                   <ProHeader title="Generar Base" subtitle="Fusión de Escena + Identidad" icon="fa-wand-magic-sparkles" />
@@ -564,10 +600,9 @@ export default function CloneImageModule() {
                 </div>
               )}
 
-              {/* STEP 4: OUTFIT (OPTIONAL) */}
               {step === 4 && (
                 <div className="space-y-6 animate-in slide-in-from-left-4">
-                  <ProHeader title="Outfit Swap" subtitle="Personalización de vestuario" icon="fa-shirt" />
+                  <ProHeader title="Outfit & Productos" subtitle="Personalización de elementos" icon="fa-shirt" />
                   
                   <div className="space-y-4">
                     <div className={`p-4 rounded-[24px] border transition-all ${replaceOutfit1 ? 'bg-brand-50 border-brand-200' : 'bg-white border-slate-200'}`}>
@@ -591,19 +626,49 @@ export default function CloneImageModule() {
                          )}
                       </div>
                     )}
+
+                    {analyzingTarget && targetImage && (
+                      <div className="p-4 bg-slate-50 rounded-2xl text-center text-[10px] text-slate-500">
+                        <i className="fa-solid fa-spinner animate-spin mr-2"></i> Analizando productos en la imagen...
+                      </div>
+                    )}
+
+                    {detectedProducts.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <i className="fa-solid fa-box-open text-brand-500"></i>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-700">Productos detectados (opcional)</label>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          {detectedProducts.map((product) => (
+                            <div key={product.id} className="border border-slate-200 rounded-xl p-2 bg-white">
+                              <p className="text-[9px] font-black uppercase text-slate-600 mb-2 truncate">{product.name}</p>
+                              <ImageSlot
+                                value={product.replacementImage || null}
+                                onChange={(base64) => updateProductReplacement(product.id, base64)}
+                                label="Reemplazar"
+                                hint="Subir imagen"
+                                aspectRatio="square"
+                                slotType="product"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 pt-4">
-                     <button onClick={() => setStep(3)} className="py-4 bg-white border border-slate-200 text-slate-600 rounded-[20px] font-black text-[10px] uppercase hover:bg-slate-50">
-                        Volver a Base
-                     </button>
-                     <button 
-                       onClick={handleApplyOutfits} 
-                       disabled={loading}
-                       className="py-4 bg-accent-600 text-white rounded-[20px] font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-accent-700 active:scale-95 transition-all"
-                     >
-                       {loading ? "Aplicando..." : "Aplicar Cambios"}
-                     </button>
+                    <button onClick={() => setStep(3)} className="py-4 bg-white border border-slate-200 text-slate-600 rounded-[20px] font-black text-[10px] uppercase hover:bg-slate-50">
+                      Volver a Base
+                    </button>
+                    <button 
+                      onClick={handleApplyOutfitsAndProducts} 
+                      disabled={loading}
+                      className="py-4 bg-accent-600 text-white rounded-[20px] font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-accent-700 active:scale-95 transition-all"
+                    >
+                      {loading ? "Aplicando..." : "Aplicar Cambios"}
+                    </button>
                   </div>
                 </div>
               )}
@@ -617,7 +682,6 @@ export default function CloneImageModule() {
             </section>
           </div>
 
-          {/* RIGHT PREVIEW PANEL */}
           <div className="lg:col-span-8">
             <div className="bg-slate-900 rounded-[48px] p-8 md:p-12 min-h-[600px] md:min-h-[800px] flex flex-col shadow-2xl border-8 border-slate-800 relative overflow-hidden">
               
@@ -679,7 +743,6 @@ export default function CloneImageModule() {
           </div>
         </div>
 
-        {/* LIGHTBOX UNIVERSAL */}
         {lightboxOpen && lightboxImages.length > 0 && (
           <ImageLightbox
             images={lightboxImages}
@@ -695,9 +758,8 @@ export default function CloneImageModule() {
           />
         )}
 
-        {/* FLOATING ACTION BAR */}
         <FloatingActionBar
-          isVisible={(baseComposition || finalImage) && fabVisible && !loading}
+          isVisible={!!((baseComposition || finalImage) && fabVisible && !loading)}
           primaryAction={{
             label: 'Descargar ZIP',
             icon: <i className="fa-solid fa-file-zipper text-sm"></i>,
