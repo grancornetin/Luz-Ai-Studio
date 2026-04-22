@@ -37,7 +37,8 @@ import {
   startAfter,
   DocumentSnapshot,
 } from 'firebase/firestore';
-import { db } from '../../../firebase';
+import { db, storage } from '../../../firebase';
+import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage';
 import {
   Prompt,
   PromptDNA,
@@ -109,6 +110,33 @@ export const normalizePrompt = (data: any, id?: string): Prompt => ({
   reportedBy:     Array.isArray(data?.reportedBy) ? data.reportedBy : [],
   isFlagged:      data?.isFlagged || false,
 });
+
+// ── Image Upload Helper ─────────────────────────────────────
+//
+// Si imageUrl es un base64 (data:image/...) lo sube a Firebase Storage
+// y devuelve la URL pública de descarga. Si ya es una URL http/https,
+// la devuelve sin cambios.
+//
+async function uploadPromptImageIfNeeded(
+  imageUrl: string,
+  authorId: string
+): Promise<string> {
+  // Ya es una URL remota → nada que hacer
+  if (!imageUrl || !imageUrl.startsWith('data:')) return imageUrl;
+
+  // Parsear el base64
+  const match = imageUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s);
+  if (!match) throw new Error('Invalid base64 image format');
+
+  const mimeType  = match[1];                         // e.g. "image/jpeg"
+  const ext       = mimeType.split('/')[1] || 'jpg'; // e.g. "jpeg"
+  const filename  = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+  const path      = `globalPrompts/${authorId}/${filename}`;
+
+  const imgRef = storageRef(storage, path);
+  await uploadString(imgRef, imageUrl, 'data_url');
+  return await getDownloadURL(imgRef);
+}
 
 // ── Public Gallery ──────────────────────────────────────────
 
@@ -186,6 +214,13 @@ export const promptService = {
    * Assigns authorId, isPublic, createdAt if new.
    */
   async savePrompt(prompt: Partial<Prompt> & { authorId: string; authorName?: string }): Promise<string> {
+    // 🔥 Subir imagen si es base64 antes de guardar en Firestore
+    if (prompt.imageUrl?.startsWith('data:')) {
+      prompt = {
+        ...prompt,
+        imageUrl: await uploadPromptImageIfNeeded(prompt.imageUrl, prompt.authorId),
+      };
+    }
     const normalized = normalizePrompt(prompt, prompt.id);
 
     if (normalized.id) {
@@ -233,10 +268,14 @@ export const promptService = {
     }
   ): Promise<string> {
     const {
-      imageUrl, promptText, promptDNA,
+      promptText, promptDNA,
       title, tags, authorId, authorName,
       authorPhotoURL, originPromptId,
     } = payload;
+
+    // 🔥 CORRECCIÓN: subir imagen a Firebase Storage si es base64
+    // Firestore tiene límite de 1MB por documento — nunca guardar base64 ahí
+    const imageUrl = await uploadPromptImageIfNeeded(payload.imageUrl, authorId);
 
     // Check if origin prompt already exists → add as variation
     if (originPromptId) {

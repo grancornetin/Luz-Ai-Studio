@@ -1,0 +1,27 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── Global Prompt Gallery images ───────────────────────────
+    // Path: globalPrompts/{authorId}/{filename}
+    // - Write: solo el propio usuario autenticado puede subir en su carpeta
+    // - Read:  cualquiera puede leer (imágenes públicas de la galería)
+    match /globalPrompts/{authorId}/{filename} {
+      allow read:  if true;
+      allow write: if request.auth != null
+                   && request.auth.uid == authorId
+                   && request.resource.size < 10 * 1024 * 1024   // máx 10 MB
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // ── Otros archivos del usuario (avatars, products, etc.) ───
+    match /users/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Denegar todo lo demás por defecto
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
