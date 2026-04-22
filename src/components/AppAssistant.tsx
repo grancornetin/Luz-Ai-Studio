@@ -2,15 +2,8 @@
  * AppAssistant.tsx
  * ─────────────────────────────────────────────────────────────
  * Asistente flotante tipo chat con contexto completo de la app.
- * Usa claude-haiku-4-5 (modelo de texto, gratuito relativo,
- * sin generación de imágenes) vía la API de Anthropic.
- *
- * Features:
- *  - Botón flotante entre módulos (bottom-right)
- *  - Colapsable en PC y móvil
- *  - Contexto completo de todos los módulos
- *  - Guías paso a paso
- *  - No genera imágenes, solo texto
+ * Usa gemini-2.5-flash vía el endpoint /api/gemini/content
+ * (ya existente en el proyecto, sin costo adicional).
  * ─────────────────────────────────────────────────────────────
  */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
@@ -159,25 +152,34 @@ const SUGGESTIONS = [
 ];
 
 // ── API call ─────────────────────────────────────────────────
+// Usa /api/gemini/content (gemini-2.5-flash) — sin costo adicional.
+// El historial se concatena en el prompt porque el endpoint no
+// mantiene sesión; Gemini entiende el formato "Usuario:/Asistente:".
 async function callAssistant(messages: { role: 'user' | 'assistant'; content: string }[]): Promise<string> {
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const history = messages
+    .map(m => `${m.role === 'user' ? 'Usuario' : 'Asistente'}: ${m.content}`)
+    .join('\n\n');
+
+  const fullPrompt = `${SYSTEM_PROMPT}\n\n---\n\n${history}\n\nAsistente:`;
+
+  const response = await fetch('/api/gemini/content', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 600,
-      system: SYSTEM_PROMPT,
-      messages,
+      action: 'generateText',
+      prompt: fullPrompt,
+      model:  'gemini-2.5-flash',
     }),
   });
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `API error ${response.status}`);
+    throw new Error(err?.error || `API error ${response.status}`);
   }
 
   const data = await response.json();
-  return data.content?.[0]?.text || 'No pude generar una respuesta.';
+  if (!data.success) throw new Error(data.error || 'Error en el asistente');
+  return data.text || 'No pude generar una respuesta.';
 }
 
 // ── Markdown-lite renderer ───────────────────────────────────

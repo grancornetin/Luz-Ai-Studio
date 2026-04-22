@@ -25,6 +25,7 @@ import { dbService } from './services/dbService';
 import { AuthProvider, useAuth } from './modules/auth/AuthContext';
 import AuthModal from './modules/auth/components/AuthModal';
 import OnboardingModal from './modules/auth/components/OnboardingModal';
+import AppAssistant from './components/AppAssistant';
 import { AvatarProfile, ProductProfile } from './types';
 
 const PLAN_STYLES: Record<string, { label: string; className: string }> = {
@@ -295,6 +296,7 @@ const AppContent: React.FC = () => {
             </div>
           </div>
           <OnboardingModal isOpen={isNewUser} onClose={markOnboardingDone} />
+          <AppAssistant />
         </ProtectedRoute>
       } />
     </Routes>
