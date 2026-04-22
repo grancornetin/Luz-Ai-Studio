@@ -210,6 +210,9 @@ export const promptService = {
     }
   },
 
+  // src/modules/promptLibrary/services/promptService.ts
+// ... (todo el inicio igual hasta la línea donde está publishPrompt)
+
   /**
    * Publish a prompt to the global gallery.
    * If there's an existing prompt with the same originPromptId,
@@ -271,7 +274,8 @@ export const promptService = {
       saves: 0,
       commentsCount: 0,
       createdAt: new Date().toISOString(),
-      originPromptId,
+      // 🔥 CORRECCIÓN: si originPromptId es undefined, lo convertimos a null
+      originPromptId: originPromptId,
       generations: [],
       isPublic: true,
       isPrivate: false,
@@ -288,6 +292,7 @@ export const promptService = {
     return ref.id;
   },
 
+// ... el resto del archivo igual
   /**
    * Delete a prompt. Only author or admin can call this.
    */
