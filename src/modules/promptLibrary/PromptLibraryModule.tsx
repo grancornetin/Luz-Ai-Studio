@@ -55,21 +55,15 @@ const PromptLibraryModule: React.FC = () => {
 
     const isRecreated = !!publishData.originPromptId;
 
-    const newPrompt: Prompt = {
-      id: Date.now().toString(),
-      title: isRecreated ? '' : title || 'Untitled',
-      promptText: publishData.promptText,
-      promptDNA: publishData.promptDNA,
-      imageUrl: publishData.imageUrl,
-      authorId: user.uid,
-      likes: 0,
-      tags: isRecreated ? [] : (tags || []),
-      createdAt: new Date().toISOString(),
-      originPromptId: publishData.originPromptId,
-      generations: []
-    };
+    await publishPrompt(
+      publishData.imageUrl,
+      publishData.promptText,
+      publishData.promptDNA,
+      isRecreated ? '' : (title || 'Untitled'),
+      isRecreated ? [] : (tags || []),
+      publishData.originPromptId
+    );
 
-    await publishPrompt(newPrompt);
     setPublishData(null);
     setRecreateOriginId(undefined);
     setActiveTab('gallery');
@@ -180,13 +174,24 @@ const PromptLibraryModule: React.FC = () => {
                 initialDNA={recreateDNA}
                 onPublish={(imageUrl, promptText, promptDNA) => {
 
-                  // 🔥 SI ES RECREATE → PUBLICAR DIRECTO
+                  // 🔥 SI ES RECREATE → publicar directo sin modal
                   if (recreateOriginId) {
-                    handlePublish(undefined, undefined);
+                    setPublishData({
+                      imageUrl,
+                      promptText,
+                      promptDNA,
+                      originPromptId: recreateOriginId,
+                    });
+                    // Publicar inmediatamente (sin modal de título/tags)
+                    publishPrompt(imageUrl, promptText, promptDNA, '', [], recreateOriginId)
+                      .then(() => {
+                        setRecreateOriginId(undefined);
+                        setActiveTab('gallery');
+                      });
                     return;
                   }
 
-                  // 🆕 SI ES NUEVO → abrir modal
+                  // 🆕 SI ES NUEVO → abrir modal para título y tags
                   setPublishData({
                     imageUrl,
                     promptText,

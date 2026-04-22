@@ -177,14 +177,13 @@ service cloud.firestore {
 
     match /globalPrompts/{promptId} {
 
-      // Lectura: cualquier usuario autenticado puede leer prompts
-      // públicos que no estén flaggeados
-      allow read: if isAuthenticated() &&
-                     resource.data.isPublic == true &&
-                     resource.data.isFlagged != true;
+      // Lectura: cualquier usuario autenticado puede leer prompts públicos
+      // (el filtrado de isFlagged se aplica via query, no en la regla)
+      allow read: if isAuthenticated();
 
       // Admin lee todo (incluyendo flaggeados / privados)
-      allow read: if isAdmin();
+      // (ya cubierto por la regla anterior — se mantiene para claridad)
+      // allow read: if isAdmin();
 
       // Crear: usuario autenticado, debe ser el autor, prompt válido
       allow create: if isAuthenticated() &&

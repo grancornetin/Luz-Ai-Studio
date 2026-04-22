@@ -101,7 +101,8 @@ export const normalizePrompt = (data: any, id?: string): Prompt => ({
   createdAt:      data?.createdAt instanceof Timestamp
     ? data.createdAt.toDate().toISOString()
     : (data?.createdAt || new Date().toISOString()),
-  originPromptId: data?.originPromptId,
+  // 🔥 Solo incluir originPromptId si tiene valor — Firestore rechaza undefined
+  ...(data?.originPromptId ? { originPromptId: data.originPromptId } : {}),
   generations:    Array.isArray(data?.generations) ? data.generations.map(normalizeGeneration) : [],
   isPublic:       data?.isPublic !== false, // default true
   isPrivate:      data?.isPrivate || false,
@@ -274,8 +275,8 @@ export const promptService = {
       saves: 0,
       commentsCount: 0,
       createdAt: new Date().toISOString(),
-      // 🔥 CORRECCIÓN: si originPromptId es undefined, lo convertimos a null
-      originPromptId: originPromptId,
+      // 🔥 CORRECCIÓN: Firestore no acepta undefined — usar null o excluir el campo
+      ...(originPromptId ? { originPromptId } : {}),
       generations: [],
       isPublic: true,
       isPrivate: false,
