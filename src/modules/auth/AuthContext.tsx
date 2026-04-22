@@ -8,6 +8,7 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
 import { userService, UserCredits, UserStats, PLAN_CREDITS } from '../../services/userService';
 import { handleFirestoreError, OperationType } from '../../services/firestoreUtils';
+import { runMigration } from '../../utils/migratePrompts';
 
 export interface UserProfile {
   id: string;
@@ -25,7 +26,7 @@ interface AuthContextType {
   loading: boolean;
   isAdmin: boolean;
   hasCredits: boolean;
-  isNewUser: boolean;           // true si es la primera vez que entra
+  isNewUser: boolean;
   markOnboardingDone: () => Promise<void>;
   deductCredit: () => Promise<boolean>;
   deductCredits: (amount: number) => Promise<boolean>;
@@ -43,50 +44,111 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
-  const [user, setUser]         = useState<FirebaseUser | null>(null);
-  const [profile, setProfile]   = useState<UserProfile | null>(null);
-  const [credits, setCredits]   = useState<UserCredits>(DEFAULT_CREDITS);
-  const [stats, setStats]       = useState<UserStats>(DEFAULT_STATS);
-  const [loading, setLoading]   = useState(true);
+  const [user, setUser]           = useState<FirebaseUser | null>(null);
+  const [profile, setProfile]     = useState<UserProfile | null>(null);
+  const [credits, setCredits]     = useState<UserCredits>(DEFAULT_CREDITS);
+  const [stats, setStats]         = useState<UserStats>(DEFAULT_STATS);
+  const [loading, setLoading]     = useState(true);
   const [isNewUser, setIsNewUser] = useState(false);
 
   useEffect(() => {
-    // BYPASS FIREBASE AUTH FOR TESTING
-    const mockUser = {
-      uid: 'local-admin-uid',
-      email: 'admin@local.test',
-      displayName: 'Admin (Local Mode)',
-    } as FirebaseUser;
-    
-    setUser(mockUser);
-    setProfile({
-      id: mockUser.uid,
-      email: mockUser.email!,
-      displayName: mockUser.displayName!,
-      photoURL: '',
-      role: 'admin'
-    });
-    setCredits({ available: 9999, used: 0, plan: 'admin' });
-    setStats(DEFAULT_STATS);
-    setIsNewUser(false);
-    setLoading(false);
-
-    /*
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      // ... original code ...
+      if (!firebaseUser) {
+        // Usuario no autenticado — limpiar todo
+        setUser(null);
+        setProfile(null);
+        setCredits(DEFAULT_CREDITS);
+        setStats(DEFAULT_STATS);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setUser(firebaseUser);
+
+        // ── Cargar perfil desde Firestore ──
+        const userRef  = doc(db, 'users', firebaseUser.uid);
+        const userSnap = await getDoc(userRef);
+
+        let userProfile: UserProfile;
+
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          userProfile = {
+            id:          firebaseUser.uid,
+            email:       firebaseUser.email       || '',
+            displayName: firebaseUser.displayName || data.displayName || 'Usuario',
+            photoURL:    firebaseUser.photoURL    || data.photoURL    || '',
+            role:        data.role                || 'user',
+          };
+          setIsNewUser(false);
+        } else {
+          // Primera vez — crear perfil
+          userProfile = {
+            id:          firebaseUser.uid,
+            email:       firebaseUser.email       || '',
+            displayName: firebaseUser.displayName || 'Usuario',
+            photoURL:    firebaseUser.photoURL    || '',
+            role:        'user',
+          };
+          setIsNewUser(true);
+          // El userService se encargará de crear el doc en Firestore
+          await userService.initializeUser(firebaseUser.uid, userProfile.email, userProfile.displayName);
+        }
+
+        setProfile(userProfile);
+
+        // ── Cargar créditos y stats en paralelo ──
+        const [userCredits, userStats] = await Promise.all([
+          userService.getCredits(firebaseUser.uid),
+          userService.getStats(firebaseUser.uid),
+        ]);
+        setCredits(userCredits);
+        setStats(userStats);
+
+        // ── Migración localStorage → Firestore (fire-and-forget) ──
+        // Se ejecuta una sola vez por usuario gracias al flag en Firestore.
+        // No bloquea el login si falla.
+        runMigration(
+          firebaseUser.uid,
+          firebaseUser.displayName || userProfile.displayName || 'Anonymous'
+        ).catch(err => console.warn('[AuthContext] Migration warning:', err));
+
+      } catch (err) {
+        console.error('[AuthContext] Error loading user data:', err);
+        // Aunque falle la carga de datos, el usuario sigue autenticado
+        setUser(firebaseUser);
+        setProfile({
+          id:          firebaseUser.uid,
+          email:       firebaseUser.email       || '',
+          displayName: firebaseUser.displayName || 'Usuario',
+          photoURL:    firebaseUser.photoURL    || '',
+          role:        'user',
+        });
+      } finally {
+        setLoading(false);
+      }
     });
+
     return () => unsubscribe();
-    */
   }, []);
 
   const signOut = async () => {
-    // await firebaseSignOut(auth);
-    console.log("Sign out disabled in local mode");
+    await firebaseSignOut(auth);
+    setUser(null);
+    setProfile(null);
+    setCredits(DEFAULT_CREDITS);
+    setStats(DEFAULT_STATS);
   };
 
-  // Marca el onboarding como visto en Firestore
   const markOnboardingDone = async () => {
+    if (!user) return;
     setIsNewUser(false);
+    try {
+      await updateDoc(doc(db, 'users', user.uid), { onboardingDone: true });
+    } catch (err) {
+      console.error('[AuthContext] markOnboardingDone error:', err);
+    }
   };
 
   const deductCredit = async (): Promise<boolean> => {
@@ -107,7 +169,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
     const [newCredits, newStats] = await Promise.all([
       userService.getCredits(user.uid),
-      userService.getStats(user.uid)
+      userService.getStats(user.uid),
     ]);
     setCredits(newCredits);
     setStats(newStats);
@@ -123,7 +185,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       user, profile, credits, stats, loading,
       isAdmin, hasCredits, isNewUser,
       markOnboardingDone, deductCredit, deductCredits,
-      refreshCredits, signOut
+      refreshCredits, signOut,
     }}>
       {children}
     </AuthContext.Provider>

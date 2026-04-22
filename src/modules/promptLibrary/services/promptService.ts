@@ -1,103 +1,121 @@
-import { Prompt, PromptDNA, PromptGeneration } from '../types/promptTypes';
+// ==============================
+// 🧬 PROMPT DNA
+// ==============================
+export type PersonLayer = {
+  role?: string
+  base: string
+  attributes: string[]
+}
 
-const COLLECTION_NAME = 'prompts';
-const MAX_PROMPTS = 50;
+export type PromptDNA = {
+  persons?: string[]
+  personLayers?: PersonLayer[]
+  products?: string[]
+  styles?: string[]
+  lighting?: string[]
+  background?: string[]
+  composition?: string[]
+  details?: string[]
+}
 
-const emptyDNA = (): PromptDNA => ({
-  persons: [],
-  personLayers: [],
-  products: [],
-  styles: [],
-  lighting: [],
-  background: [],
-  composition: [],
-  details: []
-});
+// ==============================
+// 🖼️ PROMPT GENERATION
+// ==============================
+export type PromptGeneration = {
+  id: string
+  imageUrl: string
+  promptText: string
+  promptDNA: PromptDNA
+  authorId: string
+  createdAt: string
+}
 
-const normalizeDNA = (dna: any): PromptDNA => {
-  if (!dna) return emptyDNA();
+// ==============================
+// 💬 COMMENT
+// ==============================
+export type PromptComment = {
+  id: string
+  promptId: string
+  authorId: string
+  authorName: string
+  authorPhotoURL?: string
+  text: string
+  createdAt: string
+}
 
-  return {
-    persons: Array.isArray(dna.persons) ? dna.persons : Array.isArray(dna.person) ? dna.person : [],
-    personLayers: Array.isArray(dna.personLayers) ? dna.personLayers : [],
-    products: Array.isArray(dna.products) ? dna.products : Array.isArray(dna.product) ? dna.product : [],
-    styles: Array.isArray(dna.styles) ? dna.styles : Array.isArray(dna.style) ? dna.style : [],
-    lighting: Array.isArray(dna.lighting) ? dna.lighting : [],
-    background: Array.isArray(dna.background) ? dna.background : [],
-    composition: Array.isArray(dna.composition) ? dna.composition : [],
-    details: Array.isArray(dna.details) ? dna.details : []
-  };
-};
+// ==============================
+// 📌 BOARD (like Pinterest boards)
+// ==============================
+export type PromptBoard = {
+  id: string
+  ownerId: string
+  name: string
+  description?: string
+  coverImageUrl?: string
+  promptIds: string[]
+  isPublic: boolean
+  createdAt: string
+  updatedAt: string
+}
 
-const normalizeGeneration = (generation: any): PromptGeneration => ({
-  id: generation?.id || Date.now().toString(),
-  imageUrl: generation?.imageUrl || '',
-  promptText: generation?.promptText || '',
-  promptDNA: normalizeDNA(generation?.promptDNA || generation?.dna),
-  authorId: generation?.authorId || 'anonymous',
-  createdAt: generation?.createdAt || new Date().toISOString()
-});
+// ==============================
+// 📦 PROMPT ENTITY (Global)
+// ==============================
+export type Prompt = {
+  id: string
+  title: string
+  promptText: string
+  promptDNA: PromptDNA
+  imageUrl: string
+  authorId: string
+  authorName?: string
+  authorPhotoURL?: string
+  tags: string[]
+  likes: number
+  likedBy: string[]          // UIDs that have liked — prevents double-like
+  saves: number              // how many users saved/bookmarked it
+  commentsCount: number
+  createdAt: string
 
-const normalizePrompt = (prompt: any): Prompt => ({
-  id: prompt?.id,
-  title: prompt?.title || 'Untitled Prompt',
-  promptText: prompt?.promptText || '',
-  promptDNA: normalizeDNA(prompt?.promptDNA),
-  imageUrl: prompt?.imageUrl || '',
-  authorId: prompt?.authorId || 'anonymous',
-  tags: Array.isArray(prompt?.tags) ? prompt.tags : [],
-  likes: typeof prompt?.likes === 'number' ? prompt.likes : 0,
-  createdAt: prompt?.createdAt || new Date().toISOString(),
-  originPromptId: prompt?.originPromptId || prompt?.id,
-  generations: Array.isArray(prompt?.generations)
-    ? prompt.generations.map(normalizeGeneration)
-    : []
-});
+  // Variations / lineage
+  originPromptId?: string
+  generations?: PromptGeneration[]
 
-const getLocal = (key: string) => {
-  try { return JSON.parse(localStorage.getItem(`luz_${key}`) || '[]'); } catch { return []; }
-};
-const setLocal = (key: string, data: any) => {
-  localStorage.setItem(`luz_${key}`, JSON.stringify(data));
-};
+  // Visibility
+  isPublic: boolean          // true = appears in global gallery
+  isPrivate?: boolean        // true = only visible to owner
 
-export const promptService = {
-  subscribeToPrompts(callback: (prompts: Prompt[]) => void) {
-    const prompts = getLocal(COLLECTION_NAME);
-    callback(prompts);
-    return () => {}; // Mock unsubscribe
-  },
+  // Moderation
+  reportedBy?: string[]      // UIDs that reported
+  isFlagged?: boolean        // admin-set
+}
 
-  async getPrompts(): Promise<Prompt[]> {
-    return getLocal(COLLECTION_NAME);
-  },
+// ==============================
+// 🔖 SAVED PROMPT (user's personal saves)
+// Collection: users/{uid}/savedPrompts/{promptId}
+// ==============================
+export type SavedPrompt = {
+  promptId: string
+  boardId?: string           // optional: which board it belongs to
+  savedAt: string
+}
 
-  async savePrompt(prompt: Prompt): Promise<void> {
-    const normalized = normalizePrompt(prompt);
-    const prompts = getLocal(COLLECTION_NAME);
-    const index = prompts.findIndex((p: any) => p.id === normalized.id);
-    if (index >= 0) prompts[index] = normalized;
-    else prompts.unshift(normalized);
-    
-    if (prompts.length > MAX_PROMPTS) prompts.length = MAX_PROMPTS;
-    setLocal(COLLECTION_NAME, prompts);
-  },
+// ==============================
+// 🧩 REFERENCES
+// ==============================
+export type ReferenceType = 'product' | 'person' | 'style'
+export type ReferencePriority = 'low' | 'medium' | 'high'
+export type ReferenceRole =
+  | 'person1' | 'person2' | 'person3' | 'person4'
+  | 'product1' | 'product2' | 'product3' | 'product4'
+  | 'style1'
 
-  async deletePrompt(id: string): Promise<void> {
-    const prompts = getLocal(COLLECTION_NAME);
-    setLocal(COLLECTION_NAME, prompts.filter((p: any) => p.id !== id));
-  },
-
-  async likePrompt(id: string): Promise<void> {
-    const prompts = getLocal(COLLECTION_NAME);
-    const prompt = prompts.find((p: any) => p.id === id);
-    if (prompt) {
-      prompt.likes = (prompt.likes || 0) + 1;
-      setLocal(COLLECTION_NAME, prompts);
-    }
-  },
-
-  toggleLike(id: string): Promise<void> {
-    return this.likePrompt(id);
-  }
-};
+export interface ReferenceSlot {
+  id: string
+  type: ReferenceType
+  role?: ReferenceRole
+  imageUrl: string | null
+  label: string
+  priority?: ReferencePriority
+  locked?: boolean
+}

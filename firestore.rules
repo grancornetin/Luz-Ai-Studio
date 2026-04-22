@@ -2,35 +2,20 @@
 // Assumed Data Model
 // ===============================================================
 //
-// Collection: users
-// Document ID: {userId} (matches Firebase Auth UID)
-// Fields:
-//   - id: string (required) - UID
-//   - email: string (required, format: email)
-//   - displayName: string (optional)
-//   - photoURL: string (optional)
-//   - role: string (enum: ['admin', 'user'])
-//   - credits: map
-//     - available: number
-//     - used: number
-//     - plan: string (enum: ['free', 'starter', 'pro', 'studio', 'admin'])
-//   - stats: map
-//     - totalGenerations: number
-//     - totalAvatars: number
-//     - totalProducts: number
-//     - creditsUsed: number
-//     - lastActiveAt: string (ISO 8601)
-//   - onboardingDone: boolean (optional)
-//   - createdAt: string (ISO 8601)
+// Collection: users/{userId}
+//   - id, email, displayName, photoURL, role, credits, stats,
+//     onboardingDone, createdAt
+//   Subcollections:
+//     - avatars, products, sets, outfits     (existentes)
+//     - savedPrompts/{promptId}              (NUEVO — bookmarks)
+//     - boards/{boardId}                     (NUEVO — tableros Pinterest)
+//     - meta/{docId}                         (NUEVO — flags internos, ej: migración)
 //
-// Collection: prompts
-// Document ID: {promptId}
-// Fields:
-//   - id: string (required)
-//   - authorId: string (required) - UID of the creator
-//   - promptText: string (required, max 2000 chars)
-//   - likes: number (default 0)
-//   - createdAt: string (ISO 8601)
+// Collection: prompts/{promptId}            (existente, local/legacy)
+//
+// Collection: globalPrompts/{promptId}      (NUEVO — galería comunitaria)
+//   Subcollections:
+//     - comments/{commentId}                (NUEVO — comentarios)
 //
 // ===============================================================
 
@@ -38,9 +23,9 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ═══════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════
     // HELPER FUNCTIONS
-    // ═══════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════
 
     function isAuthenticated() {
       return request.auth != null;
@@ -53,32 +38,35 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && (
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-        (request.auth.token.email == 'grancornetin@gmail.com' && request.auth.token.email_verified == true)
+        (request.auth.token.email == 'grancornetin@gmail.com' &&
+         request.auth.token.email_verified == true)
       );
     }
 
+    function isPromptAuthor(resource) {
+      return isAuthenticated() && request.auth.uid == resource.data.authorId;
+    }
+
     function isValidEmail(email) {
-      return email is string && email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
+      return email is string &&
+             email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
     }
 
     function isValidDateString(dateStr) {
-      return dateStr is string && dateStr.matches('^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$');
+      return dateStr is string &&
+             dateStr.matches('^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$');
     }
 
-    function hasOnlyAllowedFields(fields) {
-      return request.resource.data.keys().hasOnly(fields);
-    }
-
-    // ═══════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════
     // DOMAIN VALIDATORS
-    // ═══════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════
 
     function isValidUser(data) {
       return data.id is string &&
              data.email is string && isValidEmail(data.email) &&
              (data.role in ['admin', 'user']) &&
              (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
-             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1000)) &&
+             (!('photoURL' in data)    || (data.photoURL is string    && data.photoURL.size() <= 1000)) &&
              data.credits is map &&
              data.credits.available is number &&
              data.credits.used is number &&
@@ -87,53 +75,156 @@ service cloud.firestore {
              isValidDateString(data.createdAt);
     }
 
-    function isValidPrompt(data) {
+    // Validator para la colección legacy /prompts
+    function isValidLegacyPrompt(data) {
       return data.id is string &&
              data.authorId is string &&
-             data.promptText is string && data.promptText.size() > 0 && data.promptText.size() <= 2000 &&
+             data.promptText is string &&
+             data.promptText.size() > 0 &&
+             data.promptText.size() <= 2000 &&
              data.likes is number &&
              isValidDateString(data.createdAt);
     }
 
-    // ═══════════════════════════════════════
-    // RULES
-    // ═══════════════════════════════════════
+    // Validator para la nueva galería comunitaria /globalPrompts
+    function isValidGlobalPrompt(data) {
+      return data.authorId is string &&
+             data.authorId == request.auth.uid &&
+             data.promptText is string &&
+             data.promptText.size() > 0 &&
+             data.promptText.size() <= 5000 &&
+             data.title is string &&
+             data.title.size() > 0 &&
+             data.title.size() <= 120 &&
+             data.isPublic is bool &&
+             data.likes is number &&
+             data.likes >= 0;
+    }
+
+    // Solo campos de engagement permitidos para updates anónimos
+    function isEngagementOnlyUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['likes', 'likedBy', 'saves', 'reportedBy', 'isFlagged', 'commentsCount']);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // USERS
+    // ═══════════════════════════════════════════════════════════
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      
-      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) &&
-                      (request.resource.data.role == 'user' || isAdmin());
-      
+
+      allow create: if isAuthenticated() &&
+                       isOwner(userId) &&
+                       isValidUser(request.resource.data) &&
+                       (request.resource.data.role == 'user' || isAdmin());
+
       allow update: if isAuthenticated() && (
-                      (isOwner(userId) && isValidUser(request.resource.data) && 
-                       request.resource.data.role == resource.data.role) || 
-                      isAdmin()
+                       (isOwner(userId) &&
+                        isValidUser(request.resource.data) &&
+                        request.resource.data.role == resource.data.role) ||
+                       isAdmin()
                     );
-      
+
       allow delete: if isAdmin();
 
-      // Subcollections (avatars, products, sets, outfits)
+      // Subcollecciones existentes: avatars, products, sets, outfits
       match /{subcollection}/{docId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
+      // NUEVO — Prompts guardados / bookmarks
+      match /savedPrompts/{promptId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
+      // NUEVO — Tableros Pinterest
+      match /boards/{boardId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
+      // NUEVO — Flags internos (ej: migración)
+      match /meta/{docId} {
         allow read, write: if isOwner(userId) || isAdmin();
       }
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // PROMPTS — colección legacy (conservada tal cual)
+    // ═══════════════════════════════════════════════════════════
+
     match /prompts/{promptId} {
       allow read: if true;
-      
-      allow create: if isAuthenticated() && 
-                      request.resource.data.authorId == request.auth.uid && 
-                      isValidPrompt(request.resource.data);
-      
+
+      allow create: if isAuthenticated() &&
+                       request.resource.data.authorId == request.auth.uid &&
+                       isValidLegacyPrompt(request.resource.data);
+
       allow update: if isAuthenticated() && (
-                      (isOwner(resource.data.authorId) && isValidPrompt(request.resource.data)) ||
-                      (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']) &&
-                       request.resource.data.likes == resource.data.likes + 1) ||
-                      isAdmin()
+                       (isOwner(resource.data.authorId) &&
+                        isValidLegacyPrompt(request.resource.data)) ||
+                       (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']) &&
+                        request.resource.data.likes == resource.data.likes + 1) ||
+                       isAdmin()
                     );
-      
+
       allow delete: if isAdmin() || isOwner(resource.data.authorId);
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // GLOBAL PROMPTS — nueva galería comunitaria (NUEVO)
+    // ═══════════════════════════════════════════════════════════
+
+    match /globalPrompts/{promptId} {
+
+      // Lectura: cualquier usuario autenticado puede leer prompts
+      // públicos que no estén flaggeados
+      allow read: if isAuthenticated() &&
+                     resource.data.isPublic == true &&
+                     resource.data.isFlagged != true;
+
+      // Admin lee todo (incluyendo flaggeados / privados)
+      allow read: if isAdmin();
+
+      // Crear: usuario autenticado, debe ser el autor, prompt válido
+      allow create: if isAuthenticated() &&
+                       isValidGlobalPrompt(request.resource.data);
+
+      // Actualizar:
+      //   - Autor o admin: actualización completa
+      //   - Cualquier usuario autenticado: solo campos de engagement
+      //     (likes, saves, reportedBy, etc.)
+      allow update: if isAuthenticated() && (
+                       isPromptAuthor(resource) ||
+                       isAdmin() ||
+                       isEngagementOnlyUpdate()
+                    );
+
+      // Eliminar: solo autor o admin
+      allow delete: if isPromptAuthor(resource) || isAdmin();
+
+      // ── Sub-colección: Comentarios ──────────────────────────
+      match /comments/{commentId} {
+        // Cualquier usuario autenticado puede leer comentarios
+        allow read: if isAuthenticated();
+
+        // Crear: autenticado, debe ser el autor del comentario
+        allow create: if isAuthenticated() &&
+                         request.resource.data.authorId == request.auth.uid &&
+                         request.resource.data.text is string &&
+                         request.resource.data.text.size() > 0 &&
+                         request.resource.data.text.size() <= 1000;
+
+        // Eliminar: autor del comentario o admin
+        allow delete: if isAuthenticated() && (
+                         resource.data.authorId == request.auth.uid ||
+                         isAdmin()
+                      );
+
+        // Comentarios son inmutables
+        allow update: if false;
+      }
+    }
+
   }
 }

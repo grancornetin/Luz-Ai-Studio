@@ -1,172 +1,257 @@
+/**
+ * PublishPromptModal.tsx
+ * Collect title, tags, optional board, then call onPublish.
+ */
 import React, { useState } from 'react';
-import { X, Share2, Tag } from 'lucide-react';
-import { PromptDNA } from '../types/promptTypes';
+import { X, Share2, Tag, FolderPlus, ChevronDown } from 'lucide-react';
+import { PromptDNA, PromptBoard } from '../types/promptTypes';
 
 interface PublishPromptModalProps {
   imageUrl: string;
   promptText: string;
   promptDNA: PromptDNA;
+  boards?: PromptBoard[];
   onClose: () => void;
-  onPublish: (title: string, tags: string[]) => void;
+  onPublish: (title: string, tags: string[], boardId?: string) => void | Promise<void>;
+  onCreateBoard?: (name: string) => Promise<string | null>;
 }
 
-const PublishPromptModal: React.FC<PublishPromptModalProps> = ({ imageUrl, promptText, promptDNA, onClose, onPublish }) => {
-  const [title, setTitle] = useState('');
-  const [tagInput, setTagInput] = useState('');
-  const [tags, setTags] = useState<string[]>([]);
+const PublishPromptModal: React.FC<PublishPromptModalProps> = ({
+  imageUrl,
+  promptText,
+  promptDNA,
+  boards = [],
+  onClose,
+  onPublish,
+  onCreateBoard,
+}) => {
+  const [title, setTitle]           = useState('');
+  const [tagInput, setTagInput]     = useState('');
+  const [tags, setTags]             = useState<string[]>([]);
+  const [selectedBoard, setBoard]   = useState<string | undefined>(undefined);
+  const [showBoardMenu, setShowMenu] = useState(false);
+  const [newBoardName, setNewBoard]  = useState('');
+  const [creatingBoard, setCreating] = useState(false);
+  const [publishing, setPublishing]  = useState(false);
 
   const addTag = () => {
-    if (tagInput.trim() && !tags.includes(tagInput.trim())) {
-      setTags([...tags, tagInput.trim()]);
-      setTagInput('');
+    const t = tagInput.trim().toLowerCase().replace(/\s+/g, '-');
+    if (t && !tags.includes(t)) setTags(prev => [...prev, t]);
+    setTagInput('');
+  };
+
+  const removeTag = (tag: string) => setTags(tags.filter(t => t !== tag));
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(); }
+  };
+
+  const handleCreateBoard = async () => {
+    if (!newBoardName.trim() || !onCreateBoard) return;
+    setCreating(true);
+    const id = await onCreateBoard(newBoardName.trim());
+    if (id) {
+      setBoard(id);
+      setNewBoard('');
+      setShowMenu(false);
+    }
+    setCreating(false);
+  };
+
+  const handlePublish = async () => {
+    if (!title.trim()) return;
+    setPublishing(true);
+    try {
+      await onPublish(title.trim(), tags, selectedBoard);
+    } finally {
+      setPublishing(false);
     }
   };
 
-  const removeTag = (tag: string) => {
-    setTags(tags.filter(t => t !== tag));
-  };
+  const selectedBoardName = boards.find(b => b.id === selectedBoard)?.name;
 
   return (
     <div className="fixed inset-0 z-[2000] bg-black/90 backdrop-blur-xl flex items-start justify-center p-4 md:p-8 overflow-y-auto animate-in fade-in">
       <div
-        className="bg-white w-full max-w-lg md:max-w-2xl rounded-[32px] md:rounded-[48px] overflow-hidden shadow-2xl animate-in zoom-in duration-300 my-4 md:my-auto"
+        className="bg-white w-full max-w-2xl rounded-[40px] overflow-hidden shadow-2xl animate-in zoom-in duration-300 my-4 md:my-12"
         onClick={e => e.stopPropagation()}
       >
-
-        <div className="p-6 md:p-12 space-y-6 md:space-y-8">
+        <div className="p-6 md:p-10 space-y-7">
 
           {/* HEADER */}
-
           <header className="flex justify-between items-start gap-4">
-            <div className="min-w-0">
-              <h2 className="text-xl md:text-2xl font-black text-slate-900 uppercase tracking-tighter italic leading-tight">
-                Publicar en la Comunidad
+            <div>
+              <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter italic leading-tight">
+                Publicar en Comunidad
               </h2>
-
-              <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
-                Comparte tu Prompt DNA con otros creadores
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
+                Comparte tu creación con todos los usuarios
               </p>
             </div>
-
             <button
               onClick={onClose}
               className="w-10 h-10 bg-slate-100 text-slate-400 rounded-2xl flex items-center justify-center hover:bg-slate-200 transition-all flex-shrink-0"
-              aria-label="Cerrar"
             >
               <X className="w-5 h-5" />
             </button>
           </header>
 
-          {/* CONTENIDO */}
-
-          <div className="flex flex-col md:flex-row gap-6 md:gap-8">
-
-            {/* IMAGEN */}
-
-            <div className="w-full md:w-1/3 aspect-[3/4] rounded-2xl overflow-hidden shadow-lg border border-slate-100 flex-shrink-0">
-              <img src={imageUrl} className="w-full h-full object-cover" alt="To publish" referrerPolicy="no-referrer" />
+          {/* BODY */}
+          <div className="flex flex-col md:flex-row gap-7">
+            {/* IMAGE PREVIEW */}
+            <div className="w-full md:w-[160px] aspect-[3/4] rounded-2xl overflow-hidden shadow-md border border-slate-100 flex-shrink-0">
+              <img src={imageUrl} className="w-full h-full object-cover" alt="preview" />
             </div>
 
             {/* FORM */}
-
             <div className="flex-1 space-y-5">
 
               {/* TITLE */}
-
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                  Título de la Obra
+                  Título *
                 </label>
-
                 <input
                   type="text"
                   value={title}
-                  onChange={(e) => setTitle(e.target.value)}
+                  onChange={e => setTitle(e.target.value)}
                   placeholder="Ej: Luxury Lipstick Campaign"
+                  maxLength={80}
                   className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                 />
               </div>
 
               {/* TAGS */}
-
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                  Etiquetas (Tags)
+                  Tags
                 </label>
-
                 <div className="flex gap-2">
-
                   <div className="relative flex-1">
-
                     <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-
                     <input
                       type="text"
                       value={tagInput}
-                      onChange={(e) => setTagInput(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && addTag()}
+                      onChange={e => setTagInput(e.target.value)}
+                      onKeyDown={handleKeyDown}
                       placeholder="belleza, minimal..."
                       className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-11 pr-4 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                     />
-
                   </div>
-
                   <button
                     onClick={addTag}
                     className="px-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors"
                   >
-                    Añadir
+                    Add
                   </button>
-
                 </div>
-
-                {/* TAG LIST */}
-
-                <div className="flex flex-wrap gap-2 mt-2">
-
-                  {tags.map(tag => (
-                    <span
-                      key={tag}
-                      className="bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-2"
-                    >
-                      #{tag}
-
-                      <button onClick={() => removeTag(tag)}>
-                        <X className="w-3 h-3" />
-                      </button>
-
-                    </span>
-                  ))}
-
-                </div>
-
+                {tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {tags.map(tag => (
+                      <span
+                        key={tag}
+                        className="bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-2"
+                      >
+                        #{tag}
+                        <button onClick={() => removeTag(tag)}>
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
+
+              {/* BOARD (optional) */}
+              {(boards.length > 0 || onCreateBoard) && (
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    Tablero (opcional)
+                  </label>
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowMenu(p => !p)}
+                      className="w-full flex items-center justify-between bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-sm font-bold text-slate-700 hover:bg-slate-100 transition-colors"
+                    >
+                      <span className={selectedBoardName ? 'text-slate-700' : 'text-slate-400'}>
+                        {selectedBoardName || 'Selecciona un tablero...'}
+                      </span>
+                      <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${showBoardMenu ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showBoardMenu && (
+                      <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-50 max-h-48 overflow-y-auto">
+                        {/* No board option */}
+                        <button
+                          onClick={() => { setBoard(undefined); setShowMenu(false); }}
+                          className="w-full px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400 hover:bg-slate-50 transition-colors"
+                        >
+                          Sin tablero
+                        </button>
+
+                        {/* Existing boards */}
+                        {boards.map(board => (
+                          <button
+                            key={board.id}
+                            onClick={() => { setBoard(board.id); setShowMenu(false); }}
+                            className={`w-full px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest transition-colors ${
+                              selectedBoard === board.id
+                                ? 'bg-indigo-50 text-indigo-600'
+                                : 'text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            {board.name}
+                          </button>
+                        ))}
+
+                        {/* Create new board */}
+                        {onCreateBoard && (
+                          <div className="border-t border-slate-100 p-3 space-y-2">
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={newBoardName}
+                                onChange={e => setNewBoard(e.target.value)}
+                                placeholder="Nuevo tablero..."
+                                className="flex-1 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none"
+                              />
+                              <button
+                                onClick={handleCreateBoard}
+                                disabled={creatingBoard || !newBoardName.trim()}
+                                className="flex items-center gap-1 px-3 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                              >
+                                <FolderPlus className="w-3 h-3" />
+                                {creatingBoard ? '...' : 'Crear'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
             </div>
           </div>
 
-          {/* ACTIONS */}
-
+          {/* CTA */}
           <div className="space-y-3">
             <button
-              onClick={() => onPublish(title, tags)}
-              disabled={!title || tags.length === 0}
-              className={`w-full py-5 md:py-6 rounded-2xl font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all shadow-xl ${
-                !title || tags.length === 0
+              onClick={handlePublish}
+              disabled={!title.trim() || publishing}
+              className={`w-full py-5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all shadow-xl ${
+                !title.trim() || publishing
                   ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
                   : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100'
               }`}
             >
               <Share2 className="w-5 h-5" />
-              Publicar Prompt
+              {publishing ? 'Publicando...' : 'Publicar Prompt'}
             </button>
-
-            <button
-              onClick={onClose}
-              className="w-full py-4 md:hidden text-slate-400 font-black text-[10px] uppercase tracking-widest hover:text-slate-600 transition-colors"
-            >
-              Cancelar y Volver
-            </button>
+            <p className="text-center text-[9px] font-bold text-slate-300 uppercase tracking-widest">
+              Visible para toda la comunidad · Puedes eliminar después
+            </p>
           </div>
 
         </div>
