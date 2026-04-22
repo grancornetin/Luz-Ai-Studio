@@ -37,7 +37,7 @@ import {
   startAfter,
   DocumentSnapshot,
 } from 'firebase/firestore';
-import { db } from '../../../../firebase';
+import { db } from '../../../firebase';
 import {
   Prompt,
   PromptDNA,
