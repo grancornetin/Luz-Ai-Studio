@@ -35,6 +35,7 @@ import { readAndCompressFile, downloadAsZip } from '../../utils/imageUtils';
 
 // Nuevos componentes base
 import { ImageSlot } from '../../components/shared/ImageSlot';
+import UploadDisclaimer from '../../components/shared/UploadDisclaimer';
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
 import { FloatingActionBar } from '../../components/shared/FloatingActionBar';
 import { useScrollFAB } from '../../hooks/useScrollFAB';
@@ -978,6 +979,8 @@ const ContentStudioProModule: React.FC = () => {
                     </p>
                   </div>
                 )}
+
+                <UploadDisclaimer />
 
                 <button
                   onClick={startMasterGeneration}

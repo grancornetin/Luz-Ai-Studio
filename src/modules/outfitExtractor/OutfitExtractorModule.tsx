@@ -12,6 +12,7 @@ import { downloadAsZip } from '../../utils/imageUtils';
 
 // Nuevos componentes base
 import { ImageSlot } from '../../components/shared/ImageSlot';
+import UploadDisclaimer from '../../components/shared/UploadDisclaimer';
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
 import { FloatingActionBar } from '../../components/shared/FloatingActionBar';
 import { useScrollFAB } from '../../hooks/useScrollFAB';
@@ -375,6 +376,7 @@ const OutfitExtractorModule: React.FC = () => {
                         aspectRatio="portrait"
                       />
                     </div>
+                    <UploadDisclaimer />
                     <button onClick={startDetection} disabled={!sourceImage} className="w-full py-5 md:py-6 bg-brand-600 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.3em] shadow-xl hover:bg-brand-700 transition-all active:scale-95 disabled:opacity-50">Analizar Outfit</button>
                   </section>
                 </div>

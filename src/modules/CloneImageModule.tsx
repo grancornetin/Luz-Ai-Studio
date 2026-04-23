@@ -19,6 +19,7 @@ import { FloatingActionBar } from '../components/shared/FloatingActionBar';
 import { useScrollFAB } from '../hooks/useScrollFAB';
 import { analyzeScene, DetectedObject } from '../services/sceneAnalysisService';
 import { ImageSlot } from '../components/shared/ImageSlot';
+import UploadDisclaimer from '../components/shared/UploadDisclaimer';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -93,48 +94,63 @@ const ProStepIndicator: React.FC<{ current: Step; setStep: (s: Step) => void; ma
   </div>
 );
 
+type ProSlotType = 'target' | 'face' | 'body' | 'outfit' | 'generic';
+
+const PRO_SLOT_CONFIGS: Record<ProSlotType, { icon: string; color: string; bg: string; border: string; hint: string }> = {
+  target:  { icon: 'fa-bullseye',    color: 'text-brand-400',   bg: 'bg-brand-50/60 hover:bg-brand-50',   border: 'hover:border-brand-300',   hint: 'Foto de la escena a replicar' },
+  face:    { icon: 'fa-face-smile',  color: 'text-rose-400',    bg: 'bg-rose-50/60 hover:bg-rose-50',     border: 'hover:border-rose-300',     hint: 'Close-up claro del rostro' },
+  body:    { icon: 'fa-person',      color: 'text-violet-400',  bg: 'bg-violet-50/60 hover:bg-violet-50', border: 'hover:border-violet-300',   hint: 'Foto de cuerpo completo' },
+  outfit:  { icon: 'fa-shirt',       color: 'text-purple-400',  bg: 'bg-purple-50/60 hover:bg-purple-50', border: 'hover:border-purple-300',   hint: 'Foto del outfit a aplicar' },
+  generic: { icon: 'fa-image',       color: 'text-slate-400',   bg: 'bg-slate-50/60 hover:bg-slate-50',   border: 'hover:border-slate-300',    hint: 'Click o arrastra una imagen' },
+};
+
 const ProUploadCard: React.FC<{
   label: string;
   value: string | null;
   onChange: (v: string | null) => void;
   hint?: string;
   height?: string;
-  icon?: string;
-}> = ({ label, value, onChange, hint, height = "h-48", icon = "fa-image" }) => (
-  <div className="group relative w-full">
-    <div className={`relative w-full ${height} bg-slate-50 rounded-[24px] border-2 border-dashed border-slate-200 overflow-hidden transition-all hover:border-brand-300 hover:bg-brand-50/30`}>
-      {value ? (
-        <>
-          <img src={value} alt="Preview" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-             <label className="cursor-pointer w-10 h-10 bg-white rounded-full flex items-center justify-center text-slate-900 shadow-lg hover:scale-110 transition-transform">
+  slotType?: ProSlotType;
+}> = ({ label, value, onChange, hint, height = "h-48", slotType = 'generic' }) => {
+  const cfg = PRO_SLOT_CONFIGS[slotType];
+  return (
+    <div className="group relative w-full">
+      <div className={`relative w-full ${height} rounded-[24px] border-2 border-dashed border-slate-200 overflow-hidden transition-all ${cfg.bg} ${cfg.border}`}>
+        {value ? (
+          <>
+            <img src={value} alt="Preview" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+              <label className="cursor-pointer w-10 h-10 bg-white rounded-full flex items-center justify-center text-slate-900 shadow-lg hover:scale-110 transition-transform">
                 <i className="fa-solid fa-rotate-right text-xs"></i>
                 <input type="file" className="hidden" accept="image/*" onChange={async (e) => {
                   const f = e.target.files?.[0];
                   if (f) onChange(await readFileAsDataURL(f));
                 }} />
-             </label>
-             <button onClick={() => onChange(null)} className="w-10 h-10 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform">
+              </label>
+              <button onClick={() => onChange(null)} className="w-10 h-10 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform">
                 <i className="fa-solid fa-trash text-xs"></i>
-             </button>
-          </div>
-        </>
-      ) : (
-        <label className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer">
-          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm mb-3 group-hover:scale-110 transition-transform">
-             <i className={`fa-solid ${icon} text-slate-300 text-lg group-hover:text-brand-400 transition-colors`}></i>
-          </div>
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
-          <input type="file" className="hidden" accept="image/*" onChange={async (e) => {
-            const f = e.target.files?.[0];
-            if (f) onChange(await readFileAsDataURL(f));
-          }} />
-        </label>
-      )}
+              </button>
+            </div>
+          </>
+        ) : (
+          <label className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer gap-2 p-3 text-center">
+            <div className={`w-10 h-10 bg-white rounded-2xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform`}>
+              <i className={`fa-solid ${cfg.icon} ${cfg.color} text-base transition-colors`}></i>
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest leading-tight">{label}</p>
+              <p className="text-[9px] font-medium text-slate-400">{hint || cfg.hint}</p>
+            </div>
+            <input type="file" className="hidden" accept="image/*" onChange={async (e) => {
+              const f = e.target.files?.[0];
+              if (f) onChange(await readFileAsDataURL(f));
+            }} />
+          </label>
+        )}
+      </div>
     </div>
-    {hint && <p className="mt-2 text-[9px] font-bold text-slate-400 uppercase tracking-wide text-center">{hint}</p>}
-  </div>
-);
+  );
+};
 
 const ProSelect: React.FC<{
   label: string;
@@ -462,12 +478,13 @@ export default function CloneImageModule() {
               {step === 1 && (
                 <div className="space-y-6 animate-in slide-in-from-left-4">
                   <ProHeader title="Target Blueprint" subtitle="La escena a replicar" icon="fa-bullseye" />
-                  <ProUploadCard 
-                    label="Subir Target" 
-                    value={targetImage} 
-                    onChange={(v) => { setTargetImage(v); resetDownstream(1); }} 
-                    hint="Esta imagen define la pose, iluminación y encuadre."
+                  <ProUploadCard
+                    label="Escena Target"
+                    value={targetImage}
+                    onChange={(v) => { setTargetImage(v); resetDownstream(1); }}
+                    hint="Define la pose, iluminación y encuadre a replicar"
                     height="h-64"
+                    slotType="target"
                   />
                   
                   <div className="grid grid-cols-2 gap-3 pt-2">
@@ -494,9 +511,11 @@ export default function CloneImageModule() {
                     />
                   </div>
 
-                  <div className="pt-4">
-                    <button 
-                      onClick={() => canGoToIdentity && setStep(2)} 
+                  <UploadDisclaimer />
+
+                  <div className="pt-2">
+                    <button
+                      onClick={() => canGoToIdentity && setStep(2)}
                       disabled={!canGoToIdentity}
                       className="w-full py-5 bg-brand-600 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-brand-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -528,8 +547,8 @@ export default function CloneImageModule() {
                       )}
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                      <ProUploadCard label="Cara" value={face1} onChange={(v) => { setFace1(v); resetDownstream(2); }} height="h-32" icon="fa-face-smile" />
-                      <ProUploadCard label="Cuerpo" value={body1} onChange={(v) => { setBody1(v); resetDownstream(2); }} height="h-32" icon="fa-person" />
+                      <ProUploadCard label="Rostro" value={face1} onChange={(v) => { setFace1(v); resetDownstream(2); }} height="h-36" slotType="face" />
+                      <ProUploadCard label="Cuerpo" value={body1} onChange={(v) => { setBody1(v); resetDownstream(2); }} height="h-36" slotType="body" />
                     </div>
                   </div>
 
@@ -544,8 +563,8 @@ export default function CloneImageModule() {
                     <div className="space-y-3 animate-in fade-in">
                       <label className="text-[10px] font-black text-purple-900 uppercase tracking-widest">Sujeto 2</label>
                       <div className="grid grid-cols-2 gap-3">
-                        <ProUploadCard label="Cara S2" value={face2} onChange={(v) => { setFace2(v); resetDownstream(2); }} height="h-32" icon="fa-face-smile" />
-                        <ProUploadCard label="Cuerpo S2" value={body2} onChange={(v) => { setBody2(v); resetDownstream(2); }} height="h-32" icon="fa-person" />
+                        <ProUploadCard label="Rostro S2" value={face2} onChange={(v) => { setFace2(v); resetDownstream(2); }} height="h-36" slotType="face" />
+                        <ProUploadCard label="Cuerpo S2" value={body2} onChange={(v) => { setBody2(v); resetDownstream(2); }} height="h-36" slotType="body" />
                       </div>
                     </div>
                   )}
@@ -593,7 +612,7 @@ export default function CloneImageModule() {
                   </div>
                   
                   {baseComposition && !loading && (
-                     <button onClick={() => setStep(4)} className="w-full py-4 bg-accent-50 text-accent-600 border border-accent-100 rounded-[20px] font-black text-xs uppercase tracking-widest hover:bg-accent-100 transition-all">
+                     <button onClick={() => setStep(4)} className="w-full py-4 bg-brand-50 text-brand-600 border border-brand-100 rounded-[20px] font-black text-xs uppercase tracking-widest hover:bg-brand-100 transition-all">
                         Continuar a Outfit <i className="fa-solid fa-arrow-right ml-2"></i>
                      </button>
                   )}
@@ -611,7 +630,7 @@ export default function CloneImageModule() {
                           <input type="checkbox" checked={replaceOutfit1} onChange={(e) => setReplaceOutfit1(e.target.checked)} className="w-5 h-5 accent-brand-600 cursor-pointer" />
                        </div>
                        {replaceOutfit1 && (
-                          <ProUploadCard label="Ref. Outfit S1" value={outfit1} onChange={setOutfit1} height="h-32" icon="fa-shirt" />
+                          <ProUploadCard label="Outfit S1" value={outfit1} onChange={setOutfit1} height="h-36" slotType="outfit" />
                        )}
                     </div>
 
@@ -622,7 +641,7 @@ export default function CloneImageModule() {
                             <input type="checkbox" checked={replaceOutfit2} onChange={(e) => setReplaceOutfit2(e.target.checked)} className="w-5 h-5 accent-purple-600 cursor-pointer" />
                          </div>
                          {replaceOutfit2 && (
-                            <ProUploadCard label="Ref. Outfit S2" value={outfit2} onChange={setOutfit2} height="h-32" icon="fa-shirt" />
+                            <ProUploadCard label="Outfit S2" value={outfit2} onChange={setOutfit2} height="h-36" slotType="outfit" />
                          )}
                       </div>
                     )}
@@ -662,10 +681,10 @@ export default function CloneImageModule() {
                     <button onClick={() => setStep(3)} className="py-4 bg-white border border-slate-200 text-slate-600 rounded-[20px] font-black text-[10px] uppercase hover:bg-slate-50">
                       Volver a Base
                     </button>
-                    <button 
-                      onClick={handleApplyOutfitsAndProducts} 
+                    <button
+                      onClick={handleApplyOutfitsAndProducts}
                       disabled={loading}
-                      className="py-4 bg-accent-600 text-white rounded-[20px] font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-accent-700 active:scale-95 transition-all"
+                      className="py-4 bg-brand-600 text-white rounded-[20px] font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-brand-700 active:scale-95 transition-all disabled:opacity-50"
                     >
                       {loading ? "Aplicando..." : "Aplicar Cambios"}
                     </button>

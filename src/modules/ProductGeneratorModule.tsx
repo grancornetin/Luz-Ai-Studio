@@ -21,6 +21,7 @@ import {
 
 // Nuevos componentes base
 import { ImageSlot } from '../components/shared/ImageSlot';
+import UploadDisclaimer from '../components/shared/UploadDisclaimer';
 import { ImageLightbox } from '../components/shared/ImageLightbox';
 import { FloatingActionBar } from '../components/shared/FloatingActionBar';
 import { useScrollFAB } from '../hooks/useScrollFAB';
@@ -407,12 +408,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
                     </div>
                   </div>
 
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
-                      <i className="fa-solid fa-scale-balanced mr-1"></i>
-                      Disclaimer: El usuario es responsable total por los derechos, permisos y uso comercial del contenido subido (incluyendo marcas y cualquier elemento presente). La app procesa únicamente el material proporcionado por el usuario.
-                    </p>
-                  </div>
+                  <UploadDisclaimer />
 
                   <button onClick={startGeneratingHero} disabled={isGenerating || files.filter(f => f !== null).length === 0 || !name} className="w-full py-4 md:py-5 bg-brand-600 text-white rounded-2xl md:rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-brand-100 hover:bg-brand-700 active:scale-95 transition-all disabled:opacity-50">
                     {isGenerating ? processingStatus : 'Generar Set de 5 Fotos'}

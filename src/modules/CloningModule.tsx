@@ -12,6 +12,7 @@ import { generationHistoryService } from '../services/generationHistoryService';
 
 // Nuevos componentes base
 import { ImageSlot } from '../components/shared/ImageSlot';
+import UploadDisclaimer from '../components/shared/UploadDisclaimer';
 import { ImageLightbox } from '../components/shared/ImageLightbox';
 import { FloatingActionBar } from '../components/shared/FloatingActionBar';
 import { useScrollFAB } from '../hooks/useScrollFAB';
@@ -188,12 +189,7 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                 </div>
               </div>
 
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
-                  <i className="fa-solid fa-scale-balanced mr-1"></i>
-                  Descargo de Responsabilidad: Al subir imágenes, garantizas poseer los derechos legales. El usuario es responsable único del uso comercial y legal del contenido clonado generado por IA.
-                </p>
-              </div>
+              <UploadDisclaimer />
 
               {!isLoading && previews.length === 0 && (
                 <button onClick={startCloning} className="w-full py-5 bg-brand-600 text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl hover:bg-brand-700 active:scale-95 transition-all">
