@@ -17,10 +17,11 @@ export interface GenerationRecord {
 export const MODULE_LABELS: Record<string, string> = {
   prompt_studio:      'AI Generator',
   scene_clone:        'Scene Clone',
-  model_dna:          'Model DNA',
+  model_dna:          'Model DNA · From Photos',
+  model_dna_manual:   'Model DNA · From Scratch',
   content_studio:     'Content Studio',
-  content_studio_pro: 'Content Studio Pro',
-  outfit_extractor:   'Outfit Extractor',
+  content_studio_pro: 'Content Studio',
+  outfit_extractor:   'Outfit Kit',
   outfit_kit:         'Outfit Kit',
   catalog:            'Catálogo',
   campaign:           'Campaign',
@@ -29,21 +30,24 @@ export const MODULE_LABELS: Record<string, string> = {
 
 const API = '/api/history';
 
-function getUid(): string {
-  // Intenta obtener el uid de Firebase Auth; fallback al uid de mock para dev
+// Obtiene el ID token de Firebase para autenticar las llamadas al servidor
+async function getAuthToken(): Promise<string | null> {
   try {
     const user = getAuth().currentUser;
-    if (user?.uid) return user.uid;
-  } catch { /* ignorar si firebase no está listo */ }
-  return 'local-admin-uid';
+    if (!user) return null;
+    return await user.getIdToken();
+  } catch { return null; }
 }
 
 async function call(action: string, payload: Record<string, unknown> = {}): Promise<any> {
-  const uid = getUid();
+  const token = await getAuthToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   const res = await fetch(API, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ action, payload: { uid, ...payload } }),
+    headers,
+    body:    JSON.stringify({ action, payload }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

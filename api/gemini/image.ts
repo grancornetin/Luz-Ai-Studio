@@ -60,16 +60,12 @@ async function getJob(jobId: string): Promise<ImageJob | null> {
   return data as ImageJob;
 }
 
-function setCors(res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin',  '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-}
+import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, checkRateLimit, sanitizeUid } from '../_middleware';
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  setCors(res);
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  setSecurityHeaders(res);
+  if (setCorsHeaders(req, res)) return;
   if (req.method !== 'POST')    return res.status(405).json({ error: 'Method not allowed' });
 
   try {
@@ -86,9 +82,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         shotIndex,
         totalShots,
         module: moduleName,
+        uid: rawUid,
       } = payload;
 
       if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
+      const promptErr = validatePrompt(prompt);
+      if (promptErr) return res.status(400).json({ error: promptErr });
+
+      // Rate limiting por uid (si viene) o por IP como fallback
+      const rlKey = rawUid ? sanitizeUid(rawUid) : (req.headers['x-forwarded-for'] as string || 'unknown');
+      const allowed = await checkRateLimit(getImageRatelimit(), rlKey, res);
+      if (!allowed) return;
 
       // Construir parts para el worker (igual que ugc-worker)
       const parts: any[] = [];
@@ -97,6 +101,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         for (let i = 0; i < referenceImages.length; i++) {
           const ref = referenceImages[i];
           if (ref?.data && ref.data.length > 64) {
+            // Validar imagen
+            const imgErr = validateBase64Image(ref.data, ref.mimeType || 'image/jpeg');
+            if (imgErr) return res.status(400).json({ error: `Reference image ${i + 1}: ${imgErr}` });
             parts.push({ text: `REF${i}:` });
             parts.push({
               inlineData: {

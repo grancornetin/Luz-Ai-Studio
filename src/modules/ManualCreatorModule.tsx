@@ -162,9 +162,9 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
         <div className="space-y-6">
           <section className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-6">
             <header className="border-b pb-4">
-              <h2 className="text-xl font-black text-slate-900 uppercase italic">Diseñador de ADN Maestro</h2>
+              <h2 className="text-xl font-black text-slate-900 uppercase italic">Model DNA <span className="text-brand-600">· From Scratch</span></h2>
               <div className="flex items-center gap-3 mt-1">
-                <p className="text-slate-400 text-xs font-medium">Configura cada rasgo para crear una identidad digital 100% nueva.</p>
+                <p className="text-slate-400 text-xs font-medium">Crea una identidad digital 100% nueva desde cero.</p>
                 <ModuleTutorial moduleId="modelDnaManual" steps={TUTORIAL_CONFIGS.modelDnaManual} compact />
               </div>
             </header>

@@ -154,9 +154,9 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
           <div className="lg:col-span-4 space-y-6">
             <section className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-6">
               <header className="border-b pb-4">
-                <h2 className="text-xl font-black text-slate-900 uppercase italic">Clonación DNA</h2>
+                <h2 className="text-xl font-black text-slate-900 uppercase italic">Model DNA <span className="text-brand-600">· From Photos</span></h2>
                 <div className="flex items-center gap-3 mt-1">
-                  <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Industrial 1:1 Fidelity</p>
+                  <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Clona una identidad real desde fotos</p>
                   <ModuleTutorial moduleId="modelDnaPhotos" steps={TUTORIAL_CONFIGS.modelDnaPhotos} compact />
                 </div>
               </header>

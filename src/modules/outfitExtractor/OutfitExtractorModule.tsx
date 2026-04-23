@@ -325,10 +325,10 @@ const OutfitExtractorModule: React.FC = () => {
         <header className="flex flex-col md:flex-row items-center justify-between gap-4 px-4 pt-2">
           <div className="text-center md:text-left">
             <button onClick={reset} className="group">
-              <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none hover:text-brand-600 transition-colors">Outfit <span className="text-brand-600 group-hover:text-slate-900">Extractor</span></h1>
+              <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none hover:text-brand-600 transition-colors">Outfit <span className="text-brand-600 group-hover:text-slate-900">Kit</span></h1>
             </button>
             <div className="flex items-center justify-center md:justify-start gap-2 mt-1">
-              <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em] italic">PRODUCCIÓN GHOST MANNEQUIN 3D</p>
+              <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em] italic">Extractor de prendas · Ghost Render</p>
               <ModuleTutorial moduleId="outfitKit" steps={TUTORIAL_CONFIGS.outfitKit} />
             </div>
           </div>

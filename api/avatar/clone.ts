@@ -2,6 +2,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Redis } from '@upstash/redis';
 import { Client as QStashClient } from '@upstash/qstash';
+import { setCorsHeaders, setSecurityHeaders, validateBase64Image, getImageRatelimit, checkRateLimit, sanitizeUid } from '../_middleware';
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL!,
@@ -26,15 +27,9 @@ function generateJobId(): string {
   return `clone_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
 }
 
-function setCors(res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  setCors(res);
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  setSecurityHeaders(res);
+  if (setCorsHeaders(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { action, payload } = req.body;
@@ -44,9 +39,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Acción: startClone (modo imagen o manual)
   // ──────────────────────────────────────────────
   if (action === 'startClone') {
-    const { mode, name, files, identityPrompt, negativePrompt, gender, personality, expression } = payload;
+    const { mode, name, files, identityPrompt, negativePrompt, gender, personality, expression, uid: rawUid } = payload;
     if (!name || !mode) {
       return res.status(400).json({ error: 'Missing name or mode' });
+    }
+
+    // Rate limiting — clonación es la operación más costosa (4 imágenes)
+    const rlKey = rawUid ? sanitizeUid(rawUid) : (req.headers['x-forwarded-for'] as string || 'unknown');
+    const allowed = await checkRateLimit(getImageRatelimit(), rlKey, res);
+    if (!allowed) return;
+
+    // Validar imágenes si vienen en el payload
+    if (Array.isArray(files)) {
+      for (let i = 0; i < files.length; i++) {
+        if (!files[i]) continue;
+        const imgErr = validateBase64Image(files[i], 'image/jpeg');
+        if (imgErr) return res.status(400).json({ error: `File ${i + 1}: ${imgErr}` });
+      }
     }
     if (mode === 'image' && (!files || files.length === 0)) {
       return res.status(400).json({ error: 'Missing files for image mode' });

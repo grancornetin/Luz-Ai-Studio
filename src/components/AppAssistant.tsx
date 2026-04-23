@@ -365,11 +365,30 @@ function cleanResponse(text: string): string {
     .trim();
 }
 
+// ── Sanitizador anti-XSS ─────────────────────────────────────
+// Elimina tags y atributos peligrosos del texto antes de renderizar.
+// Solo conserva el texto plano — los tags seguros los agrega renderContent.
+function sanitizeText(raw: string): string {
+  return raw
+    // Elimina cualquier tag HTML que venga en el texto del asistente
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    // Elimina atributos de evento inline (onclick, onerror, etc.)
+    .replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '')
+    .replace(/\s+on\w+\s*=\s*[^\s>]*/gi, '')
+    // Elimina tags que no deberían venir del modelo
+    .replace(/<(?!br\s*\/?>)[a-z][^>]*>/gi, '')
+    .replace(/<\/(?!br)[a-z][^>]*>/gi, '');
+}
+
 // ── Renderer ─────────────────────────────────────────────────
 // Convierte rutas internas como /prompt-studio en links clicleables.
 // Usa data-nav para que el componente los intercepte con useNavigate.
+// SIEMPRE sanitiza el texto antes de construir el HTML.
 function renderContent(text: string): string {
-  return text
+  const safe = sanitizeText(text);
+  return safe
     .replace(/^\d+\.\s(.*)$/gm, '<div class="flex gap-2 my-1"><span class="text-indigo-500 font-black flex-shrink-0 mt-0.5">•</span><span>$1</span></div>')
     .replace(/^-\s(.*)$/gm, '<div class="flex gap-2 my-0.5"><span class="text-slate-400 flex-shrink-0">·</span><span>$1</span></div>')
     .replace(

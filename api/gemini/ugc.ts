@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from '@google/genai';
 import { Redis } from '@upstash/redis';
 import { Client as QStashClient } from '@upstash/qstash';
+import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, checkRateLimit, sanitizeUid } from '../_middleware';
 
 const RETRY_DELAY_MS = 3000;
 
@@ -122,16 +123,26 @@ async function processGenerationJob(
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  setSecurityHeaders(res);
+  if (setCorsHeaders(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
     const { action, payload } = req.body;
     if (!action) return res.status(400).json({ error: 'Missing action' });
+
+    // Rate limiting en generaciones
+    if (action === 'generateImageAsync') {
+      const rlKey = payload?.uid ? sanitizeUid(payload.uid) : (req.headers['x-forwarded-for'] as string || 'unknown');
+      const allowed = await checkRateLimit(getImageRatelimit(), rlKey, res);
+      if (!allowed) return;
+
+      // Validar prompt
+      if (payload?.prompt) {
+        const promptErr = validatePrompt(payload.prompt);
+        if (promptErr) return res.status(400).json({ error: promptErr });
+      }
+    }
 
     // Iniciar generación asíncrona
     if (action === 'generateImageAsync') {

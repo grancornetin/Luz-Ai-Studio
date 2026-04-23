@@ -61,7 +61,7 @@ const AvatarLibrary: React.FC<AvatarLibraryProps> = ({ avatars }) => {
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 pb-10">
       <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 px-1">
         <div>
-          <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">Biblioteca de <span className="text-brand-600">Identidades</span></h2>
+          <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">Biblioteca <span className="text-brand-600">· Modelos guardados</span></h2>
           <div className="flex items-center gap-2 mt-2">
             <p className="text-slate-400 font-medium italic text-xs md:text-sm">Gestiona tus modelos digitales.</p>
             <ModuleTutorial moduleId="avatarLibrary" steps={TUTORIAL_CONFIGS.avatarLibrary} />

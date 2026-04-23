@@ -527,9 +527,9 @@ export default function CloneImageModule() {
         
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-4 pt-2">
           <div className="text-center md:text-left">
-            <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">Clone <span className="text-brand-600">Master</span></h1>
+            <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">Scene <span className="text-brand-600">Clone</span></h1>
             <div className="flex items-center justify-center md:justify-start gap-2 mt-1">
-              <p className="text-slate-500 font-bold uppercase text-[8px] md:text-[10px] tracking-[0.3em] italic">Identity & Scene Lock Protocol</p>
+              <p className="text-slate-500 font-bold uppercase text-[8px] md:text-[10px] tracking-[0.3em] italic">Clonación de escenas · Identity Lock</p>
               <ModuleTutorial moduleId="sceneClone" steps={TUTORIAL_CONFIGS.sceneClone} />
             </div>
           </div>

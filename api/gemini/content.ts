@@ -29,21 +29,29 @@ interface ContentRequest {
   model?: string;
 }
 
-function corsHeaders(res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-}
+import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt } from '../_middleware';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  corsHeaders(res);
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  setSecurityHeaders(res);
+  if (setCorsHeaders(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
     const body = req.body as ContentRequest;
     if (!body.action || !body.prompt) {
       return res.status(400).json({ error: 'Missing action or prompt' });
+    }
+
+    // Validar prompt
+    const promptErr = validatePrompt(body.prompt);
+    if (promptErr) return res.status(400).json({ error: promptErr });
+
+    // Validar imágenes si las hay
+    if (body.images?.length) {
+      for (let i = 0; i < body.images.length; i++) {
+        const imgErr = validateBase64Image(body.images[i], body.mimeTypes?.[i] || 'image/jpeg');
+        if (imgErr) return res.status(400).json({ error: `Image ${i + 1}: ${imgErr}` });
+      }
     }
 
     const modelName = body.model || 'gemini-2.5-flash';

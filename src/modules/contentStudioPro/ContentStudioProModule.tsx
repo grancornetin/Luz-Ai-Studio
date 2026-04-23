@@ -803,11 +803,11 @@ const ContentStudioProModule: React.FC = () => {
         <header className="flex flex-col md:flex-row items-center justify-between gap-6 px-4">
           <div className="text-center md:text-left">
             <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">
-              UGC <span className="text-brand-600">Studio</span>
+              Content <span className="text-brand-600">Studio</span>
             </h1>
             <div className="flex items-center justify-center md:justify-start gap-2 mt-2">
               <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.4em] italic">
-                Sesiones orgánicas • Motor Gemini
+                UGC & Social · Sesiones orgánicas
               </p>
               <ModuleTutorial moduleId="contentStudio" steps={TUTORIAL_CONFIGS.contentStudio} />
             </div>
