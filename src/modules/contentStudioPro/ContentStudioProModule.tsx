@@ -911,6 +911,7 @@ const ContentStudioProModule: React.FC = () => {
                       hint={getTooltip('product', focus)}
                       aspectRatio="square"
                       required={isSlotRequired('product', focus)}
+                      iconless
                     />
                     <ImageSlot
                       value={sceneRef}
@@ -919,6 +920,7 @@ const ContentStudioProModule: React.FC = () => {
                       hint={getTooltip('scene', focus)}
                       aspectRatio="square"
                       required={isSlotRequired('scene', focus)}
+                      iconless
                     />
                     <ImageSlot
                       value={outfitRef}
@@ -927,6 +929,7 @@ const ContentStudioProModule: React.FC = () => {
                       hint={getTooltip('outfit', focus)}
                       aspectRatio="square"
                       required={isSlotRequired('outfit', focus)}
+                      iconless
                     />
                   </div>
                   {showComplementCheckbox && (

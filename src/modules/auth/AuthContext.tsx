@@ -27,6 +27,8 @@ interface AuthContextType {
   isAdmin: boolean;
   hasCredits: boolean;
   isNewUser: boolean;
+  previewPlan: string | null;          // solo admin: plan que está simulando
+  setPreviewPlan: (p: string | null) => void;
   markOnboardingDone: () => Promise<void>;
   deductCredit: () => Promise<boolean>;
   deductCredits: (amount: number) => Promise<boolean>;
@@ -50,6 +52,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [stats, setStats]         = useState<UserStats>(DEFAULT_STATS);
   const [loading, setLoading]     = useState(true);
   const [isNewUser, setIsNewUser] = useState(false);
+  const [previewPlan, setPreviewPlanState] = useState<string | null>(null);
+
+  const setPreviewPlan = (p: string | null) => setPreviewPlanState(p);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -178,12 +183,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isAdmin = profile?.role === 'admin' ||
                   profile?.email === 'grancornetin@gmail.com';
 
-  const hasCredits = isAdmin || credits.available > 0;
+  // Cuando el admin simula un plan, los créditos visibles cambian pero isAdmin se mantiene
+  const effectiveCredits: UserCredits = (isAdmin && previewPlan)
+    ? { ...credits, plan: previewPlan as UserCredits['plan'], available: previewPlan === 'free' ? 10 : previewPlan === 'weekly' ? 60 : previewPlan === 'starter' ? 200 : previewPlan === 'pro' ? 500 : 1200 }
+    : credits;
+
+  const hasCredits = (isAdmin && !previewPlan) || effectiveCredits.available > 0;
 
   return (
     <AuthContext.Provider value={{
-      user, profile, credits, stats, loading,
+      user, profile, credits: effectiveCredits, stats, loading,
       isAdmin, hasCredits, isNewUser,
+      previewPlan, setPreviewPlan,
       markOnboardingDone, deductCredit, deductCredits,
       refreshCredits, signOut,
     }}>

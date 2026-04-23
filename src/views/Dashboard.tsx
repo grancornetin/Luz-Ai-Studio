@@ -130,12 +130,14 @@ const NAV_TABS: { id: DashTab; label: string; icon: React.ReactNode; route?: str
   { id: 'account',  label: 'Cuenta',        icon: <CreditCard className="w-3.5 h-3.5" /> },
   { id: 'settings', label: 'Configuración', icon: <Settings className="w-3.5 h-3.5" /> },
   { id: 'terms',    label: 'Términos',      icon: <FileText className="w-3.5 h-3.5" />,  route: '/terminos' },
-  { id: 'contact',  label: 'Contacto',      icon: <Mail className="w-3.5 h-3.5" />,      route: '/descargo' },
+  { id: 'contact',  label: 'Contacto',      icon: <Mail className="w-3.5 h-3.5" />,      route: '/contacto' },
 ];
+
+const PREVIEW_PLANS = ['free', 'weekly', 'starter', 'pro', 'studio'] as const;
 
 const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) => {
   const navigate = useNavigate();
-  const { profile, credits, stats, isAdmin, user } = useAuth();
+  const { profile, credits, stats, isAdmin, user, previewPlan, setPreviewPlan } = useAuth();
   const [activeTab, setActiveTab]     = useState<DashTab>('home');
   const [missions, setMissions]       = useState<UserMissions>({});
   const [completing, setCompleting]   = useState<string | null>(null);
@@ -260,11 +262,46 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
             <p className="text-[10px] text-slate-400">Cambiar plan, recargar créditos y gestionar suscripción — disponible próximamente.</p>
           </div>
           <button
-            onClick={() => navigate('/descargo')}
+            onClick={() => navigate('/contacto')}
             className="w-full py-4 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
           >
             Contactar para cambio de plan
           </button>
+
+          {/* Admin: simular vista de usuario por plan */}
+          {isAdmin && (
+            <div className="border-t border-slate-100 pt-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <i className="fa-solid fa-eye text-rose-400 text-xs"></i>
+                <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest">Vista de admin — Simular plan</p>
+              </div>
+              <p className="text-[10px] text-slate-400">Cambia temporalmente cómo ves la app como si fueras un usuario con ese plan. No afecta tu cuenta real.</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setPreviewPlan(null)}
+                  className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${!previewPlan ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                >
+                  Admin (real)
+                </button>
+                {PREVIEW_PLANS.map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setPreviewPlan(previewPlan === p ? null : p)}
+                    className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${previewPlan === p ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+              {previewPlan && (
+                <div className="bg-amber-50 border border-amber-200 px-4 py-2 rounded-xl">
+                  <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest">
+                    Simulando plan: {previewPlan.toUpperCase()} · La app se muestra como la vería ese usuario
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </section>
       )}
 

@@ -23,6 +23,7 @@ import PromptStudioView from './views/PromptStudioView';
 // PRECIOS Y CRÉDITOS
 import Pricing from './views/Pricing';
 import BuyCredits from './views/BuyCredits';
+import Contacto from './views/Contacto';
 
 // Servicios y Contexto
 import { dbService } from './services/dbService';
@@ -188,6 +189,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
                 {[
                   { path: '/pricing',     label: 'Planes',          icon: 'fa-tag' },
                   { path: '/buy-credits', label: 'Recargar',         icon: 'fa-bolt' },
+                  { path: '/contacto',    label: 'Contacto',         icon: 'fa-envelope' },
                 ].map(item => (
                     <Link key={item.path} to={item.path} className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${isActive(item.path) ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
                         <i className={`fa-solid ${item.icon} text-xs`}></i>
@@ -283,6 +285,7 @@ const AppContent: React.FC = () => {
       <Route path="/privacidad" element={<PoliticaPrivacidad />} />
       <Route path="/terminos" element={<TerminosUso />} />
       <Route path="/descargo" element={<Descargo />} />
+      <Route path="/contacto" element={<Contacto />} />
       <Route path="/login" element={
         <>
           <LoginWall onOpen={() => setIsAuthModalOpen(true)} />

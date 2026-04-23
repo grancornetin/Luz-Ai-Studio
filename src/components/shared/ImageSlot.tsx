@@ -6,6 +6,30 @@
 import React, { useRef, useState } from 'react';
 import { Upload, X, RefreshCw, User, Package, Shirt, Palette, Image as ImageIcon, Camera, Layers } from 'lucide-react';
 import { readAndCompressFile } from '../../utils/imageUtils';
+import UploadConsentModal from './UploadConsentModal';
+import { getAuth } from 'firebase/auth';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../firebase';
+
+const CONSENT_LS_KEY = 'luz_upload_consent_v1';
+
+function hasConsented(): boolean {
+  try { return !!localStorage.getItem(CONSENT_LS_KEY); } catch { return false; }
+}
+
+async function saveConsentToFirestore() {
+  try {
+    const user = getAuth().currentUser;
+    if (!user) return;
+    await setDoc(doc(db, 'users', user.uid, 'consents', 'uploadTerms'), {
+      accepted:   true,
+      acceptedAt: serverTimestamp(),
+      version:    'v1',
+      userAgent:  navigator.userAgent,
+    }, { merge: true });
+    localStorage.setItem(CONSENT_LS_KEY, new Date().toISOString());
+  } catch { /* no bloquear la UI si falla */ }
+}
 
 export type SlotType =
   | 'person'      // foto de persona / modelo
@@ -94,6 +118,7 @@ interface ImageSlotProps {
   required?: boolean;
   disabled?: boolean;
   className?: string;
+  iconless?: boolean;   // oculta el ícono y muestra solo texto centrado (para slots pequeños)
 }
 
 const aspectClasses = {
@@ -113,16 +138,17 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
   required = false,
   disabled = false,
   className = '',
+  iconless = false,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
+  const pendingFileRef = useRef<File | null>(null);
+  const [isLoading, setIsLoading]       = useState(false);
+  const [isDragging, setIsDragging]     = useState(false);
+  const [showConsent, setShowConsent]   = useState(false);
 
   const config = SLOT_CONFIGS[slotType];
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const processFile = async (file: File) => {
     setIsLoading(true);
     try {
       const compressed = await readAndCompressFile(file);
@@ -135,17 +161,43 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
     }
   };
 
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (hasConsented()) {
+      await processFile(file);
+    } else {
+      pendingFileRef.current = file;
+      setShowConsent(true);
+    }
+  };
+
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
     if (!file || !file.type.startsWith('image/')) return;
-    setIsLoading(true);
-    try {
-      const compressed = await readAndCompressFile(file);
-      onChange(compressed);
-    } catch { /* ignore */ }
-    finally { setIsLoading(false); }
+    if (hasConsented()) {
+      await processFile(file);
+    } else {
+      pendingFileRef.current = file;
+      setShowConsent(true);
+    }
+  };
+
+  const handleConsentAccept = async () => {
+    setShowConsent(false);
+    await saveConsentToFirestore();
+    if (pendingFileRef.current) {
+      await processFile(pendingFileRef.current);
+      pendingFileRef.current = null;
+    }
+  };
+
+  const handleConsentCancel = () => {
+    setShowConsent(false);
+    pendingFileRef.current = null;
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleClear = (e: React.MouseEvent) => {
@@ -154,6 +206,10 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
   };
 
   return (
+    <>
+    {showConsent && (
+      <UploadConsentModal onAccept={handleConsentAccept} onCancel={handleConsentCancel} />
+    )}
     <div className={`w-full ${className}`}>
       {label && (
         <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
@@ -216,9 +272,19 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
             )}
           </>
         ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-3 text-center select-none">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 p-2 text-center select-none">
             {isLoading ? (
-              <div className="w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
+              <div className="w-6 h-6 border-4 border-brand-600 border-t-transparent rounded-full animate-spin" />
+            ) : iconless ? (
+              // Modo solo texto — para slots pequeños como los del Content Studio
+              <>
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-wide leading-tight px-1">
+                  {label || hint || config.hint}
+                </p>
+                <p className="text-[8px] text-slate-300 font-medium">
+                  {isDragging ? 'Suelta ↓' : 'Click'}
+                </p>
+              </>
             ) : (
               <>
                 {/* Contextual icon */}
@@ -250,6 +316,7 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
         disabled={disabled}
       />
     </div>
+    </>
   );
 };
 

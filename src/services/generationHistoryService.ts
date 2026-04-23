@@ -30,24 +30,22 @@ export const MODULE_LABELS: Record<string, string> = {
 
 const API = '/api/history';
 
-// Obtiene el ID token de Firebase para autenticar las llamadas al servidor
-async function getAuthToken(): Promise<string | null> {
+function getUid(): string {
   try {
     const user = getAuth().currentUser;
-    if (!user) return null;
-    return await user.getIdToken();
-  } catch { return null; }
+    if (user?.uid) return user.uid;
+  } catch { /* ignorar */ }
+  return '';
 }
 
 async function call(action: string, payload: Record<string, unknown> = {}): Promise<any> {
-  const token = await getAuthToken();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const uid = getUid();
+  if (!uid) throw new Error('Usuario no autenticado');
 
   const res = await fetch(API, {
     method:  'POST',
-    headers,
-    body:    JSON.stringify({ action, payload }),
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ action, payload: { uid, ...payload } }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
