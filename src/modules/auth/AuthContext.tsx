@@ -4,11 +4,32 @@ import {
   User as FirebaseUser,
   signOut as firebaseSignOut
 } from 'firebase/auth';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
 import { userService, UserCredits, UserStats, PLAN_CREDITS } from '../../services/userService';
 import { handleFirestoreError, OperationType } from '../../services/firestoreUtils';
 import { runMigration } from '../../utils/migratePrompts';
+
+export interface UserInterests {
+  categories: string[];
+  tags: string[];
+  preferredModules: string[];
+}
+
+export interface UserSocials {
+  personal?: { instagram?: string; twitter?: string; tiktok?: string; linkedin?: string };
+  business?: { website?: string; instagram?: string; facebook?: string; linkedin?: string };
+}
+
+export interface UserPreferences {
+  emailNotifications: boolean;
+  feedSortBy: 'recent' | 'likes' | 'personalized' | 'variations';
+  theme: 'light' | 'dark';
+}
+
+export const DEFAULT_INTERESTS: UserInterests = { categories: [], tags: [], preferredModules: [] };
+export const DEFAULT_SOCIALS: UserSocials = {};
+export const DEFAULT_PREFERENCES: UserPreferences = { emailNotifications: true, feedSortBy: 'recent', theme: 'light' };
 
 export interface UserProfile {
   id: string;
@@ -16,6 +37,14 @@ export interface UserProfile {
   displayName: string;
   photoURL: string;
   role: 'admin' | 'user';
+  // Perfil público extendido
+  username?: string;
+  bio?: string;
+  realName?: string;
+  showRealName?: boolean;
+  interests: UserInterests;
+  socials: UserSocials;
+  preferences: UserPreferences;
 }
 
 interface AuthContextType {
@@ -30,6 +59,7 @@ interface AuthContextType {
   previewPlan: string | null;          // solo admin: plan que está simulando
   setPreviewPlan: (p: string | null) => void;
   markOnboardingDone: () => Promise<void>;
+  updateProfile: (data: Partial<Omit<UserProfile, 'id' | 'email' | 'role'>>) => Promise<void>;
   deductCredit: () => Promise<boolean>;
   deductCredits: (amount: number) => Promise<boolean>;
   refreshCredits: () => Promise<void>;
@@ -85,6 +115,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             displayName: firebaseUser.displayName || data.displayName || 'Usuario',
             photoURL:    firebaseUser.photoURL    || data.photoURL    || '',
             role:        data.role                || 'user',
+            username:    data.username,
+            bio:         data.bio,
+            realName:    data.realName,
+            showRealName: data.showRealName ?? false,
+            interests:   data.interests   || DEFAULT_INTERESTS,
+            socials:     data.socials     || DEFAULT_SOCIALS,
+            preferences: data.preferences || DEFAULT_PREFERENCES,
           };
           setIsNewUser(false);
         } else {
@@ -95,9 +132,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             displayName: firebaseUser.displayName || 'Usuario',
             photoURL:    firebaseUser.photoURL    || '',
             role:        'user',
+            interests:   DEFAULT_INTERESTS,
+            socials:     DEFAULT_SOCIALS,
+            preferences: DEFAULT_PREFERENCES,
           };
           setIsNewUser(true);
-          // El userService se encargará de crear el doc en Firestore
           await userService.initializeUser(firebaseUser.uid, userProfile.email, userProfile.displayName);
         }
 
@@ -129,6 +168,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           displayName: firebaseUser.displayName || 'Usuario',
           photoURL:    firebaseUser.photoURL    || '',
           role:        'user',
+          interests:   DEFAULT_INTERESTS,
+          socials:     DEFAULT_SOCIALS,
+          preferences: DEFAULT_PREFERENCES,
         });
       } finally {
         setLoading(false);
@@ -144,6 +186,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setProfile(null);
     setCredits(DEFAULT_CREDITS);
     setStats(DEFAULT_STATS);
+  };
+
+  const updateProfile = async (data: Partial<Omit<UserProfile, 'id' | 'email' | 'role'>>) => {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), { ...data, updatedAt: serverTimestamp() });
+      setProfile(prev => prev ? { ...prev, ...data } : prev);
+    } catch (err) {
+      console.error('[AuthContext] updateProfile error:', err);
+      throw err;
+    }
   };
 
   const markOnboardingDone = async () => {
@@ -195,7 +248,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       user, profile, credits: effectiveCredits, stats, loading,
       isAdmin, hasCredits, isNewUser,
       previewPlan, setPreviewPlan,
-      markOnboardingDone, deductCredit, deductCredits,
+      markOnboardingDone, updateProfile, deductCredit, deductCredits,
       refreshCredits, signOut,
     }}>
       {children}

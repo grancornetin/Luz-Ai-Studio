@@ -21,17 +21,46 @@ import { Prompt, PromptDNA, PromptBoard, PromptComment } from '../types/promptTy
 import { promptService } from '../services/promptService';
 import { useAuth } from '../../auth/AuthContext';
 
-export type SortOption = 'recent' | 'likes' | 'variations';
+export type SortOption = 'recent' | 'likes' | 'variations' | 'personalized';
+
+function computeRelevance(prompt: Prompt, tags: string[], categories: string[]): number {
+  let score = 0;
+  const matchedTags = prompt.tags.filter(t => tags.includes(t));
+  score += matchedTags.length * 2;
+  score += (prompt.likes / 10) + ((prompt.saves || 0) / 5);
+  const daysSince = (Date.now() - new Date(prompt.createdAt).getTime()) / (1000 * 3600 * 24);
+  score += Math.max(0, 5 - daysSince);
+  return score;
+}
 
 export const usePromptLibrary = () => {
-  const { user, profile, isAdmin } = useAuth();
+  const { user, profile, isAdmin, updateProfile } = useAuth();
 
   // ── Gallery state ───────────────────────────────────────
   const [prompts, setPrompts]         = useState<Prompt[]>([]);
   const [loading, setLoading]         = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTag, setActiveTag]     = useState<string | null>(null);
-  const [sortBy, setSortBy]           = useState<SortOption>('recent');
+  // Inicializa desde preferencias del perfil
+  const [sortBy, setSortByState]      = useState<SortOption>(
+    (profile?.preferences?.feedSortBy as SortOption) || 'recent'
+  );
+
+  // Sincroniza sortBy con perfil cuando carga
+  useEffect(() => {
+    if (profile?.preferences?.feedSortBy) {
+      setSortByState(profile.preferences.feedSortBy as SortOption);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.preferences?.feedSortBy]);
+
+  const setSortBy = useCallback((opt: SortOption) => {
+    setSortByState(opt);
+    // Persiste en Firestore (excepto 'variations' que es local)
+    if (opt !== 'variations' && profile) {
+      updateProfile({ preferences: { ...profile.preferences, feedSortBy: opt === 'personalized' ? 'personalized' : opt as 'recent' | 'likes' } }).catch(() => {});
+    }
+  }, [profile, updateProfile]);
 
   // ── Saves & boards ──────────────────────────────────────
   const [savedIds, setSavedIds]   = useState<Set<string>>(new Set());
@@ -48,7 +77,7 @@ export const usePromptLibrary = () => {
         setPrompts(data);
         setLoading(false);
       },
-      { tag: activeTag || undefined, sortBy: sortBy === 'variations' ? 'recent' : sortBy }
+      { tag: activeTag || undefined, sortBy: (sortBy === 'variations' || sortBy === 'personalized') ? 'recent' : sortBy as 'recent' | 'likes' }
     );
     return () => unsub();
   }, [activeTag, sortBy]);
@@ -86,6 +115,14 @@ export const usePromptLibrary = () => {
         const bc = (b.generations?.length || 0) + 1;
         return bc - ac;
       });
+    }
+
+    if (sortBy === 'personalized') {
+      const userTags       = profile?.interests?.tags       || [];
+      const userCategories = profile?.interests?.categories || [];
+      return [...filtered].sort((a, b) =>
+        computeRelevance(b, userTags, userCategories) - computeRelevance(a, userTags, userCategories)
+      );
     }
 
     return filtered; // Firestore already sorted by likes or createdAt
@@ -282,7 +319,7 @@ export const usePromptLibrary = () => {
     setSearchQuery,
     activeTag,
     setActiveTag,
-    sortBy,
+    sortBy: sortBy,
     setSortBy,
 
     // Actions

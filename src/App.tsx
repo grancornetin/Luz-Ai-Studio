@@ -25,6 +25,7 @@ import PromptStudioView from './views/PromptStudioView';
 import Pricing from './views/Pricing';
 import BuyCredits from './views/BuyCredits';
 import Contacto from './views/Contacto';
+import AccountSettings from './views/AccountSettings';
 
 // Servicios y Contexto
 import { dbService } from './services/dbService';
@@ -188,7 +189,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
             <div className="space-y-1">
                 <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4 px-2">Cuenta</p>
                 {[
-                  { path: '/pricing',     label: 'Planes',          icon: 'fa-tag' },
+                  { path: '/cuenta',      label: 'Mi perfil',        icon: 'fa-user-pen' },
+                  { path: '/pricing',     label: 'Planes',           icon: 'fa-tag' },
                   { path: '/buy-credits', label: 'Recargar',         icon: 'fa-bolt' },
                   { path: '/contacto',    label: 'Contacto',         icon: 'fa-envelope' },
                 ].map(item => (
@@ -336,6 +338,7 @@ const AppContent: React.FC = () => {
                         <Route path="/clonar" element={<CloneImageModule />} />
                         <Route path="/pricing"      element={<Pricing />} />
                         <Route path="/buy-credits"  element={<BuyCredits />} />
+                        <Route path="/cuenta"       element={<AccountSettings />} />
                         <Route path="/prompt-library" element={<Navigate to="/prompt-gallery" replace />} />
                         <Route path="*" element={<Navigate to="/dashboard" replace />} />
                     </Routes>

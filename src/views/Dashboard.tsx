@@ -126,9 +126,9 @@ type DashTab = 'home' | 'missions' | 'profile' | 'account' | 'settings' | 'terms
 const NAV_TABS: { id: DashTab; label: string; icon: React.ReactNode; route?: string }[] = [
   { id: 'home',     label: 'Inicio',        icon: <i className="fa-solid fa-house text-xs" /> },
   { id: 'missions', label: 'Misiones',      icon: <Gift className="w-3.5 h-3.5" /> },
-  { id: 'profile',  label: 'Perfil',        icon: <UserCircle className="w-3.5 h-3.5" /> },
+  { id: 'profile',  label: 'Perfil',        icon: <UserCircle className="w-3.5 h-3.5" />, route: '/cuenta' },
   { id: 'account',  label: 'Cuenta',        icon: <CreditCard className="w-3.5 h-3.5" /> },
-  { id: 'settings', label: 'Configuración', icon: <Settings className="w-3.5 h-3.5" /> },
+  { id: 'settings', label: 'Configuración', icon: <Settings className="w-3.5 h-3.5" />, route: '/cuenta' },
   { id: 'terms',    label: 'Términos',      icon: <FileText className="w-3.5 h-3.5" />,  route: '/terminos' },
   { id: 'contact',  label: 'Contacto',      icon: <Mail className="w-3.5 h-3.5" />,      route: '/contacto' },
 ];
