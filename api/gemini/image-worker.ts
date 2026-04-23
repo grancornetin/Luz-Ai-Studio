@@ -72,8 +72,7 @@ function getGenAIClient(): GoogleGenAI {
 }
 
 // ─── Lógica de generación ─────────────────────────────────────────────────────
-// Intenta Flash primero (más rápido), luego Pro como fallback.
-// Si ambos fallan, el job queda en 'failed' y el cliente maneja el reintento.
+// Solo usa gemini-3.1-flash-image-preview. Sin fallback a Pro para controlar costos.
 async function processJob(jobId: string, parts: any[]): Promise<void> {
   const job = await getJob(jobId);
   if (!job) {
@@ -85,48 +84,38 @@ async function processJob(jobId: string, parts: any[]): Promise<void> {
   job.updatedAt = Date.now();
   await saveJob(job);
 
-  const models = [
-    'gemini-3.1-flash-image-preview',
-    'gemini-3-pro-image-preview',
-  ];
+  const MODEL = 'gemini-3.1-flash-image-preview';
+  const ai    = getGenAIClient();
 
-  const ai = getGenAIClient();
+  try {
+    console.log(`[ImageWorker ${jobId}] Using ${MODEL}`);
+    const response = await ai.models.generateContent({
+      model:    MODEL,
+      contents: [{ role: 'user', parts }],
+      config:   { responseModalities: ['TEXT', 'IMAGE'] },
+    });
 
-  for (const modelName of models) {
-    try {
-      console.log(`[ImageWorker ${jobId}] Trying ${modelName}`);
-      const response = await ai.models.generateContent({
-        model:    modelName,
-        contents: [{ role: 'user', parts }],
-        config:   { responseModalities: ['TEXT', 'IMAGE'] },
-      });
-
-      for (const candidate of (response.candidates || [])) {
-        for (const part of (candidate.content?.parts || [])) {
-          if (part.inlineData?.data) {
-            const mime = part.inlineData.mimeType || 'image/png';
-            job.status    = 'completed';
-            job.result    = `data:${mime};base64,${part.inlineData.data}`;
-            job.updatedAt = Date.now();
-            await saveJob(job);
-            console.log(`[ImageWorker ${jobId}] Completed with ${modelName}`);
-            return;
-          }
+    for (const candidate of (response.candidates || [])) {
+      for (const part of (candidate.content?.parts || [])) {
+        if (part.inlineData?.data) {
+          const mime = part.inlineData.mimeType || 'image/png';
+          job.status    = 'completed';
+          job.result    = `data:${mime};base64,${part.inlineData.data}`;
+          job.updatedAt = Date.now();
+          await saveJob(job);
+          console.log(`[ImageWorker ${jobId}] Completed`);
+          return;
         }
       }
-      // El modelo respondió pero sin imagen — intentar el siguiente
-      console.warn(`[ImageWorker ${jobId}] ${modelName} returned no image`);
-    } catch (err: any) {
-      console.warn(`[ImageWorker ${jobId}] ${modelName} error: ${err.message}`);
     }
+    throw new Error('Model returned no image');
+  } catch (err: any) {
+    job.status    = 'failed';
+    job.error     = err.message || 'Flash model failed';
+    job.updatedAt = Date.now();
+    await saveJob(job);
+    console.error(`[ImageWorker ${jobId}] Failed: ${err.message}`);
   }
-
-  // Todos los modelos fallaron
-  job.status    = 'failed';
-  job.error     = 'All Gemini 3 models failed to return an image';
-  job.updatedAt = Date.now();
-  await saveJob(job);
-  console.error(`[ImageWorker ${jobId}] All models failed`);
 }
 
 // ─── Handler principal ────────────────────────────────────────────────────────

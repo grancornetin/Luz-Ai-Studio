@@ -72,50 +72,39 @@ async function processGenerationJob(jobId: string, parts: any[]): Promise<void> 
   job.updatedAt = Date.now();
   await saveJob(job);
 
-  // IMPORTANT: Only Gemini 3 models are allowed for image generation.
-  // Gemini 2.5 is intentionally excluded — it produces identity/style drift
-  // that breaks the UGC consistency guarantees of this module.
-  // If all Gemini 3 attempts fail, the job fails cleanly and the client-side
-  // auto-retry system (3 silent retries) handles the recovery.
-  const models = [
-    { name: 'gemini-3.1-flash-image-preview', location: 'global' },
-    { name: 'gemini-3-pro-image-preview',      location: 'global' },
-  ];
+  // Solo Flash — sin fallback a Pro para controlar costos.
+  const MODEL    = 'gemini-3.1-flash-image-preview';
+  const ai       = getGenAIClient('global');
 
-  for (const model of models) {
-    try {
-      console.log(`[Worker Job ${jobId}] Trying model: ${model.name}`);
-      const ai = getGenAIClient(model.location);
-      const response = await ai.models.generateContent({
-        model: model.name,
-        contents: [{ role: 'user', parts }],
-        config: { responseModalities: ['TEXT', 'IMAGE'] },
-      });
+  try {
+    console.log(`[Worker Job ${jobId}] Using ${MODEL}`);
+    const response = await ai.models.generateContent({
+      model:    MODEL,
+      contents: [{ role: 'user', parts }],
+      config:   { responseModalities: ['TEXT', 'IMAGE'] },
+    });
 
-      for (const candidate of response.candidates || []) {
-        for (const part of candidate.content?.parts || []) {
-          if (part.inlineData?.data) {
-            const mime = part.inlineData.mimeType || 'image/png';
-            job.status = 'completed';
-            job.result = `data:${mime};base64,${part.inlineData.data}`;
-            job.updatedAt = Date.now();
-            await saveJob(job);
-            console.log(`[Worker Job ${jobId}] Completed with ${model.name}`);
-            return;
-          }
+    for (const candidate of response.candidates || []) {
+      for (const part of candidate.content?.parts || []) {
+        if (part.inlineData?.data) {
+          const mime = part.inlineData.mimeType || 'image/png';
+          job.status    = 'completed';
+          job.result    = `data:${mime};base64,${part.inlineData.data}`;
+          job.updatedAt = Date.now();
+          await saveJob(job);
+          console.log(`[Worker Job ${jobId}] Completed`);
+          return;
         }
       }
-    } catch (e: any) {
-      console.warn(`[Worker Job ${jobId}] Model ${model.name} failed:`, e.message);
     }
+    throw new Error('Model returned no image');
+  } catch (e: any) {
+    job.status    = 'failed';
+    job.error     = e.message || 'Flash model failed';
+    job.updatedAt = Date.now();
+    await saveJob(job);
+    console.error(`[Worker Job ${jobId}] Failed: ${e.message}`);
   }
-
-  // Todos los modelos fallaron
-  job.status = 'failed';
-  job.error = 'All models failed to generate an image';
-  job.updatedAt = Date.now();
-  await saveJob(job);
-  console.error(`[Worker Job ${jobId}] All models failed`);
 }
 
 // ─── Handler principal ────────────────────────────────────────────────────────

@@ -28,6 +28,9 @@ import { Prompt, PromptBoard } from '../types/promptTypes';
 import PromptDNAViewer from './PromptDNAViewer';
 import { usePromptComments } from '../hooks/usePromptLibrary';
 import { useAuth } from '../../auth/AuthContext';
+import { revealPrompt, isPromptRevealed } from '../../../services/promptRevealService';
+import { isPromptRevealFree, CREDIT_COSTS } from '../../../services/creditConfig';
+import { Eye, EyeOff } from 'lucide-react';
 
 // ══════════════════════════════════════════════════════════════
 // 🔬 WORD-LEVEL DIFF ENGINE (LCS-based, preserved from original)
@@ -401,7 +404,37 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
   onAddToBoard,
   onCreateBoard,
 }) => {
-  const { user } = useAuth();
+  const { user, credits } = useAuth();
+  const planId = credits?.plan || 'free';
+
+  // ── REVEAL STATE ─────────────────────────────────────────────
+  const [revealed,       setRevealed]       = useState(false);
+  const [revealLoading,  setRevealLoading]  = useState(false);
+  const [revealError,    setRevealError]    = useState<string | null>(null);
+  const [showRevealModal, setShowRevealModal] = useState(false);
+  const isFreeReveal = isPromptRevealFree(planId);
+
+  // Comprobar si ya reveló este prompt al abrir el modal
+  useEffect(() => {
+    if (!user?.uid) return;
+    if (isFreeReveal) { setRevealed(true); return; }
+    isPromptRevealed(user.uid, prompt.id).then(setRevealed).catch(() => {});
+  }, [user?.uid, prompt.id, isFreeReveal]);
+
+  const handleReveal = async () => {
+    if (!user?.uid) return;
+    if (isFreeReveal) { setRevealed(true); return; }
+    setRevealLoading(true);
+    setRevealError(null);
+    const result = await revealPrompt(user.uid, prompt.id, planId);
+    if (result.success) {
+      setRevealed(true);
+      setShowRevealModal(false);
+    } else {
+      setRevealError(result.message || 'No se pudo revelar el prompt');
+    }
+    setRevealLoading(false);
+  };
 
   // ── ALL IMAGES (base + variations) ─────────────────────────
   const allImages = useMemo(() => [
@@ -727,16 +760,83 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
                         {activeIndex > 0 ? 'Diferencias vs Original' : 'Prompt Completo'}
                       </p>
-                      {activeIndex > 0 && (
-                        <span className="text-[8px] font-black uppercase tracking-widest text-indigo-400 bg-indigo-50 px-2 py-1 rounded-lg">Visual Diff</span>
+                      <div className="flex items-center gap-2">
+                        {activeIndex > 0 && (
+                          <span className="text-[8px] font-black uppercase tracking-widest text-indigo-400 bg-indigo-50 px-2 py-1 rounded-lg">Visual Diff</span>
+                        )}
+                        {!isFreeReveal && (
+                          <span className="text-[8px] font-black uppercase tracking-widest text-amber-500 bg-amber-50 px-2 py-1 rounded-lg flex items-center gap-1">
+                            <i className="fa-solid fa-coins text-[8px]"></i> {CREDIT_COSTS.REVEAL_PROMPT} crédito
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Texto borroso o revelado */}
+                    <div className="relative">
+                      {activeIndex > 0 ? (
+                        <div className={revealed ? '' : 'blur-sm select-none pointer-events-none'}>
+                          <PromptDiff baseText={allImages[0].promptText} variantText={active.promptText} />
+                        </div>
+                      ) : (
+                        <p className={`text-sm text-slate-600 italic leading-relaxed transition-all duration-300 ${revealed ? '' : 'blur-sm select-none'}`}>
+                          "{active.promptText}"
+                        </p>
+                      )}
+
+                      {/* Overlay de reveal */}
+                      {!revealed && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-50/80 rounded-xl">
+                          <EyeOff className="w-5 h-5 text-slate-400" />
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center px-4">
+                            {isFreeReveal ? 'Cargando...' : `Revela el prompt completo por ${CREDIT_COSTS.REVEAL_PROMPT} crédito`}
+                          </p>
+                          {!isFreeReveal && (
+                            <button
+                              onClick={() => setShowRevealModal(true)}
+                              className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
+                            >
+                              <Eye className="w-3 h-3 inline mr-1" /> Revelar
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
-                    {activeIndex > 0 ? (
-                      <PromptDiff baseText={allImages[0].promptText} variantText={active.promptText} />
-                    ) : (
-                      <p className="text-sm text-slate-600 italic leading-relaxed">"{active.promptText}"</p>
-                    )}
                   </div>
+
+                  {/* Modal de confirmación de reveal */}
+                  {showRevealModal && (
+                    <div className="fixed inset-0 z-[3000] bg-black/60 flex items-center justify-center p-6" onClick={() => setShowRevealModal(false)}>
+                      <div className="bg-white rounded-[28px] p-8 max-w-sm w-full space-y-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="text-center space-y-2">
+                          <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto">
+                            <Eye className="w-7 h-7 text-indigo-600" />
+                          </div>
+                          <h3 className="text-lg font-black text-slate-900 uppercase italic tracking-tighter">Revelar prompt</h3>
+                          <p className="text-sm text-slate-500">
+                            Esto usará <span className="font-black text-indigo-600">{CREDIT_COSTS.REVEAL_PROMPT} crédito</span> de tu cuenta.<br />
+                            Créditos disponibles: <span className="font-black">{credits?.available ?? 0}</span>
+                          </p>
+                        </div>
+                        {revealError && (
+                          <div className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-3 rounded-xl text-xs font-bold">
+                            {revealError}
+                            <button onClick={() => window.location.href = '/buy-credits'} className="block mt-1 underline text-rose-700">Comprar créditos →</button>
+                          </div>
+                        )}
+                        <div className="flex gap-3">
+                          <button onClick={() => setShowRevealModal(false)} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-200">Cancelar</button>
+                          <button
+                            onClick={handleReveal}
+                            disabled={revealLoading}
+                            className="flex-1 py-3 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 transition-all"
+                          >
+                            {revealLoading ? 'Procesando...' : 'Confirmar'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* DOT INDICATOR */}
                   {hasMultiple && (

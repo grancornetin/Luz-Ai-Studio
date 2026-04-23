@@ -1,72 +1,45 @@
 // src/services/creditConfig.ts
 // ─────────────────────────────────────────────────────────────────────────────
-// Fuente única de verdad para créditos, modelos y planes.
+// Fuente única de verdad para créditos, modelos, planes, top-ups y helpers.
 //
-// MODELOS PERMITIDOS (verificados 2026-04):
-//   PRO   → gemini-3-pro-image-preview      @ global   → imagen, fidelidad alta
-//   FLASH → gemini-3.1-flash-image-preview  @ global   → imagen, uso general
-//   TEXT  → gemini-2.5-flash                @ us-central1 → análisis/texto únicamente
-//
-// gemini-2.5-flash-image (FAST) está ELIMINADO:
-//   • Solo disponible en us-central1 — incompatible con referencias de identidad
-//   • Causa drift de identidad/estilo en generaciones con REFs
-//   • Reemplazado por gemini-3.1-flash-image-preview en todos los módulos
+// Regla de precio: 1 crédito = $0.10 USD = $100 CLP
+// Regla de generación: 2 créditos por imagen generada (solo Flash)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const MODELS = {
-  PRO:   'gemini-3-pro-image-preview',      // Imagen con fidelidad facial crítica
-  FLASH: 'gemini-3.1-flash-image-preview',  // Imagen general (location: global)
-  TEXT:  'gemini-2.5-flash',                // Solo análisis y texto (location: us-central1)
+  FLASH: 'gemini-3.1-flash-image-preview',  // único modelo de imagen permitido
+  TEXT:  'gemini-2.5-flash',                // análisis y texto (us-central1)
 } as const;
 
 export type ModelKey   = keyof typeof MODELS;
 export type ModelValue = typeof MODELS[ModelKey];
 
-// ── UBICACIONES ───────────────────────────────────────────────────────────────
-// Gestionadas server-side en api/gemini/image-worker.ts y api/gemini/content.ts
-// Este mapa es solo referencia documental para el frontend.
 export const MODEL_LOCATIONS: Record<string, string> = {
-  [MODELS.PRO]:   'global',
   [MODELS.FLASH]: 'global',
   [MODELS.TEXT]:  'us-central1',
 };
 
 // ── CRÉDITOS POR ACCIÓN ───────────────────────────────────────────────────────
-// Base: 1 crédito = $0.05 USD
-// Todos los módulos de imagen usan Gemini 3 Flash como base (~$0.067/img = 2 créditos).
-// Los flujos con fidelidad facial crítica usan Pro (~$0.134/img = 4 créditos).
+// Regla base: 2 créditos = 1 imagen con gemini-3.1-flash-image-preview
+// Model DNA genera 4 imágenes → 4 × 2 = 8 créditos
 
 export const CREDIT_COSTS = {
-  // ── Módulo Clonar Imagen (identidad facial 1:1)
-  CLONE_IMAGE:            4,
-
-  // ── Módulo Crear Modelo
-  CREATE_MODEL_CLONE:     4,   // clonar desde fotos reales
-  CREATE_MODEL_MANUAL:    4,   // identidad desde scratch
-
-  // ── Prompt Studio
-  PROMPT_WITH_PERSON:     4,   // slots de persona activos → Pro
-  PROMPT_NO_PERSON:       2,   // solo estilo/producto/escena → Flash
-
-  // ── Campaign Generator (por imagen)
-  CAMPAIGN_PER_IMAGE:     2,   // Flash — consistencia entre escenas
-
-  // ── Photodump Mode (por imagen)
-  PHOTODUMP_PER_IMAGE:    2,   // Flash — antes era 1 (FAST), ahora Gemini 3
-
-  // ── Studio UGC (por shot)
-  UGC_PER_SHOT:           4,   // Pro — persona específica
-
-  // ── Outfit Kit
-  OUTFIT_ANALYSIS:        0,   // Texto — gratis
-  OUTFIT_PER_GARMENT:     2,   // Flash — antes era 1 (FAST), ahora Gemini 3
-
-  // ── Catálogo / Productos
-  PRODUCT_ANALYSIS:       0,   // Texto — gratis
-  PRODUCT_GENERATION:     2,   // Flash — antes era 1 (FAST), ahora Gemini 3
-
-  // ── Variaciones IA
-  VARIATIONS_AI:          0,   // Solo texto — gratis
+  // Módulos de imagen
+  CLONE_IMAGE:            2,   // 1 imagen
+  CREATE_MODEL_CLONE:     8,   // 4 imágenes × 2 créditos
+  CREATE_MODEL_MANUAL:    8,   // 4 imágenes × 2 créditos
+  PROMPT_WITH_PERSON:     2,   // 1 imagen
+  PROMPT_NO_PERSON:       2,   // 1 imagen
+  CAMPAIGN_PER_IMAGE:     2,   // 1 imagen por escena
+  PHOTODUMP_PER_IMAGE:    2,   // 1 imagen por shot
+  UGC_PER_SHOT:           2,   // 1 imagen por shot (sesión 7 shots = 14 créditos total)
+  OUTFIT_ANALYSIS:        0,   // texto — gratis
+  OUTFIT_PER_GARMENT:     2,   // 1 imagen por prenda
+  PRODUCT_ANALYSIS:       0,   // texto — gratis
+  PRODUCT_GENERATION:     2,   // 1 imagen
+  VARIATIONS_AI:          0,   // texto — gratis
+  // Galería de prompts
+  REVEAL_PROMPT:          1,   // revelar prompt completo
 } as const;
 
 export type CreditCostKey = keyof typeof CREDIT_COSTS;
@@ -77,63 +50,82 @@ export const PLANS = {
   free: {
     id: 'free',
     label: 'Free',
-    credits: 20,
+    credits: 10,
     priceMonthly: 0,
+    priceAnchor: null,
     renews: false,
     color: 'slate',
-    approxImages: '~10 imágenes de prueba',
+    approxImages: '~5 imágenes',
     description: 'Para explorar la plataforma',
     features: [
-      '20 créditos (única vez)',
+      '10 créditos (única vez)',
       'Acceso a todos los módulos',
-      'Galería comunitaria',
+      'Misiones para ganar créditos gratis',
+    ],
+  },
+  weekly: {
+    id: 'weekly',
+    label: 'Semanal',
+    credits: 60,
+    priceMonthly: 4.99,
+    priceAnchor: 6.99,
+    renews: true,
+    color: 'brand',
+    approxImages: '~30 imágenes/semana',
+    description: 'Para uso casual semanal',
+    features: [
+      '60 créditos/semana',
+      'Acceso a todos los módulos',
+      'Revelado de prompts con costo (1 crédito)',
     ],
   },
   starter: {
     id: 'starter',
     label: 'Starter',
-    credits: 240,
-    priceMonthly: 9.99,
+    credits: 200,
+    priceMonthly: 14.99,
+    priceAnchor: 19.99,
     renews: true,
     color: 'brand',
-    approxImages: '~80 imágenes/mes',
+    approxImages: '~100 imágenes/mes',
     description: 'Para creadores independientes',
     features: [
-      '240 créditos/mes',
+      '200 créditos/mes',
       'Acceso a todos los módulos',
-      'Galería comunitaria',
+      'Revelado de prompts con costo (1 crédito)',
       'Soporte por email',
     ],
   },
   pro: {
     id: 'pro',
     label: 'Pro',
-    credits: 600,
-    priceMonthly: 19.99,
+    credits: 500,
+    priceMonthly: 39.99,
+    priceAnchor: 49.99,
     renews: true,
     color: 'brand',
-    approxImages: '~200 imágenes/mes',
+    approxImages: '~250 imágenes/mes',
     description: 'Para agencias y equipos creativos',
     features: [
-      '600 créditos/mes',
-      'Acceso a todos los módulos',
+      '500 créditos/mes',
+      'Revelado de prompts GRATIS',
       'Campaign Generator ilimitado',
-      'Photodump Mode ilimitado',
       'Soporte prioritario',
     ],
   },
   studio: {
     id: 'studio',
     label: 'Studio',
-    credits: 1500,
-    priceMonthly: 39.99,
+    credits: 1200,
+    priceMonthly: 99.99,
+    priceAnchor: 129.99,
     renews: true,
     color: 'violet',
-    approxImages: '~500 imágenes/mes',
+    approxImages: '~600 imágenes/mes',
     description: 'Para producción a escala',
     features: [
-      '1500 créditos/mes',
-      'Todo lo de Pro',
+      '1200 créditos/mes',
+      'Revelado de prompts GRATIS',
       'Prioridad de generación',
       'Soporte chat dedicado',
     ],
@@ -143,35 +135,71 @@ export const PLANS = {
     label: 'Admin',
     credits: 999999,
     priceMonthly: 0,
+    priceAnchor: null,
     renews: false,
     color: 'rose',
     approxImages: 'Ilimitado',
     description: 'Acceso total',
-    features: ['Créditos ilimitados', 'Panel de administración'],
+    features: [
+      'Créditos ilimitados',
+      'Revelado de prompts gratis',
+      'Panel de administración',
+    ],
   },
 } as const;
 
 export type PlanKey = keyof typeof PLANS;
 
-// ── HELPERS ───────────────────────────────────────────────────────────────────
+// ── TOP-UP PACKAGES ───────────────────────────────────────────────────────────
 
-// Mantenido por compatibilidad — ambas rutas usan Gemini 3 ahora
-export const getModelForPrompt = (_hasPersonReference: boolean): string => MODELS.FLASH;
+export const TOP_UP_PACKAGES = [
+  { id: 'topup_30',   credits: 30,   priceUSD: 3.29,  priceCLP: 3290  },
+  { id: 'topup_80',   credits: 80,   priceUSD: 7.99,  priceCLP: 7990  },
+  { id: 'topup_200',  credits: 200,  priceUSD: 18.99, priceCLP: 18990 },
+  { id: 'topup_500',  credits: 500,  priceUSD: 45.99, priceCLP: 45990 },
+  { id: 'topup_1200', credits: 1200, priceUSD: 99.99, priceCLP: 99990 },
+] as const;
 
-export const getCampaignCredits  = (n: number): number => n * CREDIT_COSTS.CAMPAIGN_PER_IMAGE;
-export const getPhotodumpCredits = (n: number): number => n * CREDIT_COSTS.PHOTODUMP_PER_IMAGE;
-export const getOutfitCredits    = (n: number): number => n * CREDIT_COSTS.OUTFIT_PER_GARMENT;
-export const getUGCCredits       = (n: number): number => n * CREDIT_COSTS.UGC_PER_SHOT;
+export type TopUpPackage = typeof TOP_UP_PACKAGES[number];
+
+// ── HELPERS DE ACCESO ─────────────────────────────────────────────────────────
+
+export const isPromptRevealFree = (planId: string): boolean =>
+  ['pro', 'studio', 'admin'].includes(planId);
 
 export const canAfford = (available: number, plan: string, required: number): boolean => {
   if (plan === 'admin') return true;
   return available >= required;
 };
 
+// ── HELPERS DE FORMATO ────────────────────────────────────────────────────────
+
+export const formatUSD = (usd: number): string =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(usd);
+
+export const formatCLP = (usd: number): string => {
+  const clp = Math.round(usd * 1000);
+  return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(clp);
+};
+
+export const formatPrice = (usd: number, currency: 'USD' | 'CLP'): string =>
+  currency === 'CLP' ? formatCLP(usd) : formatUSD(usd);
+
+// ── HELPERS DE CÁLCULO ────────────────────────────────────────────────────────
+
+export const getCampaignCredits  = (n: number): number => n * CREDIT_COSTS.CAMPAIGN_PER_IMAGE;
+export const getPhotodumpCredits = (n: number): number => n * CREDIT_COSTS.PHOTODUMP_PER_IMAGE;
+export const getOutfitCredits    = (n: number): number => n * CREDIT_COSTS.OUTFIT_PER_GARMENT;
+export const getUGCCredits       = (n: number): number => n * CREDIT_COSTS.UGC_PER_SHOT;
+
 export const PLAN_CREDITS: Record<string, number> = {
   free:    PLANS.free.credits,
+  weekly:  PLANS.weekly.credits,
   starter: PLANS.starter.credits,
   pro:     PLANS.pro.credits,
   studio:  PLANS.studio.credits,
   admin:   PLANS.admin.credits,
 };
+
+// Mantenido por compatibilidad — ahora solo usa Flash
+export const getModelForPrompt = (_hasPersonReference: boolean): string => MODELS.FLASH;

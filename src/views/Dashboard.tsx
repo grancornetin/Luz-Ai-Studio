@@ -3,7 +3,7 @@
  * Punto 5: Añade Prompt Gallery e Historial como cards visibles
  * en el dashboard principal, no solo en el menú lateral.
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AvatarProfile, ProductProfile } from '../../types';
 // @ts-ignore
 import { useNavigate } from 'react-router-dom';
@@ -11,8 +11,9 @@ import { useAuth } from '../modules/auth/AuthContext';
 import {
   Zap, TrendingUp, User, Package, AlertCircle,
   Crown, ArrowRight, Sparkles, Clock, Images,
-  Settings, FileText, Mail, CreditCard, UserCircle
+  Settings, FileText, Mail, CreditCard, UserCircle, Gift, ShoppingCart, Tag
 } from 'lucide-react';
+import { MISSIONS, getUserMissions, completeMission, type UserMissions } from '../services/missionsService';
 
 const MODULE_GROUPS = [
   {
@@ -120,10 +121,11 @@ interface DashboardProps {
   products?: ProductProfile[];
 }
 
-type DashTab = 'home' | 'profile' | 'account' | 'settings' | 'terms' | 'contact';
+type DashTab = 'home' | 'missions' | 'profile' | 'account' | 'settings' | 'terms' | 'contact';
 
 const NAV_TABS: { id: DashTab; label: string; icon: React.ReactNode; route?: string }[] = [
   { id: 'home',     label: 'Inicio',        icon: <i className="fa-solid fa-house text-xs" /> },
+  { id: 'missions', label: 'Misiones',      icon: <Gift className="w-3.5 h-3.5" /> },
   { id: 'profile',  label: 'Perfil',        icon: <UserCircle className="w-3.5 h-3.5" /> },
   { id: 'account',  label: 'Cuenta',        icon: <CreditCard className="w-3.5 h-3.5" /> },
   { id: 'settings', label: 'Configuración', icon: <Settings className="w-3.5 h-3.5" /> },
@@ -133,8 +135,25 @@ const NAV_TABS: { id: DashTab; label: string; icon: React.ReactNode; route?: str
 
 const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) => {
   const navigate = useNavigate();
-  const { profile, credits, stats, isAdmin } = useAuth();
-  const [activeTab, setActiveTab] = useState<DashTab>('home');
+  const { profile, credits, stats, isAdmin, user } = useAuth();
+  const [activeTab, setActiveTab]     = useState<DashTab>('home');
+  const [missions, setMissions]       = useState<UserMissions>({});
+  const [completing, setCompleting]   = useState<string | null>(null);
+  const [missionMsg, setMissionMsg]   = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.uid) getUserMissions(user.uid).then(setMissions).catch(() => {});
+  }, [user?.uid]);
+
+  const handleCompleteMission = async (missionId: string) => {
+    if (!user?.uid || completing) return;
+    setCompleting(missionId);
+    const result = await completeMission(user.uid, missionId);
+    setMissionMsg(result.message || null);
+    if (result.success) getUserMissions(user.uid).then(setMissions).catch(() => {});
+    setCompleting(null);
+    setTimeout(() => setMissionMsg(null), 3000);
+  };
 
   const displayName      = profile?.displayName?.split(' ')[0] || 'Creador';
   const availableCredits = credits?.available || 0;
@@ -161,11 +180,19 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
             Tu ecosistema de producción publicitaria está listo.
           </p>
         </div>
-        <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-2xl border border-slate-100 shadow-sm">
-          <Crown className="w-4 h-4 text-amber-500" />
-          <span className="text-xs font-black text-slate-600 uppercase tracking-widest">
-            {isAdmin ? 'Admin' : (planName.charAt(0).toUpperCase() + planName.slice(1))}
-          </span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={() => navigate('/pricing')} className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-indigo-600 hover:border-indigo-200 transition-all shadow-sm">
+            <Tag className="w-3.5 h-3.5" /> Planes
+          </button>
+          <button onClick={() => navigate('/buy-credits')} className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-sm">
+            <ShoppingCart className="w-3.5 h-3.5" /> Recargar
+          </button>
+          <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-2xl border border-slate-100 shadow-sm">
+            <Crown className="w-4 h-4 text-amber-500" />
+            <span className="text-xs font-black text-slate-600 uppercase tracking-widest">
+              {isAdmin ? 'Admin' : (planName.charAt(0).toUpperCase() + planName.slice(1))}
+            </span>
+          </div>
         </div>
       </header>
 
@@ -256,25 +283,86 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
         </section>
       )}
 
+      {/* TAB: MISIONES */}
+      {activeTab === 'missions' && (
+        <section className="space-y-4 animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <Gift className="w-5 h-5 text-indigo-500" />
+            <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Misiones · Gana créditos gratis</h2>
+          </div>
+          {missionMsg && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-widest animate-in fade-in">
+              ✓ {missionMsg}
+            </div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {MISSIONS.map(m => {
+              const status   = missions[m.id] || { completed: false, count: 0 };
+              const maxed    = status.count >= (m.maxCompletions ?? 1);
+              const isLoading = completing === m.id;
+              return (
+                <div key={m.id} className={`bg-white rounded-[24px] border p-5 flex items-start gap-4 transition-all ${maxed ? 'border-emerald-100 bg-emerald-50/40' : 'border-slate-100 hover:border-indigo-200'}`}>
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${maxed ? 'bg-emerald-100' : 'bg-indigo-50'}`}>
+                    <i className={`fa-solid ${m.icon} text-lg ${maxed ? 'text-emerald-500' : 'text-indigo-500'}`}></i>
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-black text-slate-800 uppercase tracking-tight">{m.label}</p>
+                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full flex-shrink-0 ${maxed ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-50 text-indigo-600'}`}>
+                        +{m.credits} créditos
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-medium">{m.description}</p>
+                    {m.maxCompletions && m.maxCompletions > 1 && (
+                      <p className="text-[9px] text-slate-300 font-bold uppercase tracking-widest">{status.count}/{m.maxCompletions} completadas</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleCompleteMission(m.id)}
+                    disabled={maxed || isLoading}
+                    className={`flex-shrink-0 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                      maxed ? 'bg-emerald-100 text-emerald-500 cursor-default' :
+                      isLoading ? 'bg-slate-100 text-slate-400 cursor-wait' :
+                      'bg-indigo-600 text-white hover:bg-indigo-700'
+                    }`}
+                  >
+                    {maxed ? '✓ Hecho' : isLoading ? '...' : 'Completar'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* HOME TAB CONTENT */}
       {activeTab === 'home' && (<>
 
       {/* ALERTS */}
       {isOutOfCredits && (
-        <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 text-rose-700 px-5 py-4 rounded-2xl">
-          <AlertCircle className="w-5 h-5 flex-shrink-0" />
-          <div>
-            <p className="text-xs font-black uppercase tracking-tight">Sin créditos disponibles</p>
-            <p className="text-xs font-bold text-rose-500 uppercase tracking-widest">Suscríbete para continuar generando</p>
+        <div className="flex items-center justify-between gap-3 bg-rose-50 border border-rose-200 text-rose-700 px-5 py-4 rounded-2xl">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <div>
+              <p className="text-xs font-black uppercase tracking-tight">Sin créditos disponibles</p>
+              <p className="text-xs font-bold text-rose-500 mt-0.5">Recarga créditos o suscríbete para continuar generando.</p>
+            </div>
+          </div>
+          <div className="flex gap-2 flex-shrink-0">
+            <button onClick={() => navigate('/buy-credits')} className="px-3 py-2 bg-rose-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-700 transition-all">Recargar</button>
+            <button onClick={() => navigate('/pricing')} className="px-3 py-2 bg-white border border-rose-200 text-rose-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-50 transition-all">Planes</button>
           </div>
         </div>
       )}
       {isLowCredits && (
-        <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-700 px-5 py-4 rounded-2xl">
-          <AlertCircle className="w-5 h-5 flex-shrink-0" />
-          <p className="text-sm font-black uppercase tracking-tight">
-            Te queda{availableCredits > 1 ? 'n' : ''} {availableCredits} crédito{availableCredits > 1 ? 's' : ''} — considera suscribirte
-          </p>
+        <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 text-amber-700 px-5 py-4 rounded-2xl">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <p className="text-xs font-black uppercase tracking-tight">
+              Te queda{availableCredits > 1 ? 'n' : ''} {availableCredits} crédito{availableCredits > 1 ? 's' : ''} — recarga para no interrumpir tu flujo
+            </p>
+          </div>
+          <button onClick={() => navigate('/buy-credits')} className="flex-shrink-0 px-3 py-2 bg-amber-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all">Recargar</button>
         </div>
       )}
 

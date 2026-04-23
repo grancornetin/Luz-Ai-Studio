@@ -20,6 +20,10 @@ import Descargo from './views/Descargo';
 import PromptGalleryView from './views/PromptGalleryView';
 import PromptStudioView from './views/PromptStudioView';
 
+// PRECIOS Y CRÉDITOS
+import Pricing from './views/Pricing';
+import BuyCredits from './views/BuyCredits';
+
 // Servicios y Contexto
 import { dbService } from './services/dbService';
 import { AuthProvider, useAuth } from './modules/auth/AuthContext';
@@ -168,8 +172,24 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
         </div>
         <div className="flex-1 overflow-y-auto px-6 space-y-8">
             <div className="space-y-1">
-                {[{ path: '/', label: 'Dashboard', icon: 'fa-house' }, { path: '/historial', label: 'Mis Generaciones', icon: 'fa-clock-rotate-left' }].map(item => (
+                {[
+                  { path: '/',           label: 'Dashboard',       icon: 'fa-house' },
+                  { path: '/historial',  label: 'Mis Generaciones', icon: 'fa-clock-rotate-left' },
+                ].map(item => (
                     <Link key={item.path} to={item.path} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all ${isActive(item.path) ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
+                        <i className={`fa-solid ${item.icon} text-xs`}></i>
+                        <span className="text-xs font-black uppercase tracking-widest">{item.label}</span>
+                    </Link>
+                ))}
+            </div>
+            {/* Planes y créditos */}
+            <div className="space-y-1">
+                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4 px-2">Cuenta</p>
+                {[
+                  { path: '/pricing',     label: 'Planes',          icon: 'fa-tag' },
+                  { path: '/buy-credits', label: 'Recargar',         icon: 'fa-bolt' },
+                ].map(item => (
+                    <Link key={item.path} to={item.path} className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${isActive(item.path) ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
                         <i className={`fa-solid ${item.icon} text-xs`}></i>
                         <span className="text-xs font-black uppercase tracking-widest">{item.label}</span>
                     </Link>
@@ -288,6 +308,8 @@ const AppContent: React.FC = () => {
                         <Route path="/outfit-extractor" element={<OutfitExtractorModule />} />
                         <Route path="/clonar" element={<CloneImageModule />} />
                         {/* Redirigir la antigua ruta a la nueva galería */}
+                        <Route path="/pricing"        element={<Pricing />} />
+                        <Route path="/buy-credits"   element={<BuyCredits />} />
                         <Route path="/prompt-library" element={<Navigate to="/prompt-gallery" replace />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>

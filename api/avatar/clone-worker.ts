@@ -52,21 +52,18 @@ async function extractAvatarProfile(files: string[]): Promise<any> {
 
 // ─── Generar imagen con modelo específico (reutilizable) ───
 // ─── Tabla de ubicaciones por modelo (igual que api/gemini/image.ts) ───
-const MODEL_LOCATIONS: Record<string, string> = {
-  'gemini-3-pro-image-preview':     'global',
-  'gemini-3.1-flash-image-preview': 'global',
-  'gemini-2.5-flash-image':         'us-central1',
-};
+// Solo Flash — sin fallback a Pro para controlar costos.
+const FLASH_MODEL    = 'gemini-3.1-flash-image-preview';
+const FLASH_LOCATION = 'global';
 
 async function generateImageWithModel(
   prompt: string,
   negative: string,
-  modelName: string,
+  _modelName: string,   // ignorado — siempre Flash
   referenceImages: string[],
   aspectRatio: '1:1' | '3:4' | '4:3' | '9:16' | '16:9' = '3:4'
 ): Promise<string> {
-  const location = MODEL_LOCATIONS[modelName] ?? 'global';
-  const ai = getGenAIClient(location);
+  const ai = getGenAIClient(FLASH_LOCATION);
   const parts: any[] = [];
 
   for (let i = 0; i < referenceImages.length; i++) {
@@ -82,9 +79,9 @@ async function generateImageWithModel(
   parts.push({ text: instruction });
 
   const response = await ai.models.generateContent({
-    model: modelName,
+    model:    FLASH_MODEL,
     contents: [{ role: 'user', parts }],
-    config: { responseModalities: ['TEXT', 'IMAGE'] },
+    config:   { responseModalities: ['TEXT', 'IMAGE'] },
   });
 
   for (const candidate of response.candidates || []) {

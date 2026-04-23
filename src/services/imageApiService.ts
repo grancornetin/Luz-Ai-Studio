@@ -16,7 +16,7 @@
 const API_URL     = '/api/gemini/image';
 const POLL_INTERVAL_MS   = 2000;   // 2 s entre polls
 const MAX_POLL_ATTEMPTS  = 90;     // 90 × 2 s = 3 minutos máximo
-const MAX_SILENT_RETRIES = 3;      // reintentos silenciosos antes de propagar error
+const MAX_SILENT_RETRIES = 1;      // 1 reintento — solo Flash, sin fallback a Pro
 
 export type ImageJobStatus = 'pending' | 'processing' | 'retrying' | 'completed' | 'failed';
 
