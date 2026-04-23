@@ -25,14 +25,15 @@ Detect the language of the user's message and always reply in that exact languag
 If the user writes in English, reply in English. Spanish → Spanish. Portuguese → Portuguese. Etc.
 Never switch language unless the user does first.
 
-FORMAT RULES (strict):
-- Never use markdown symbols in your output: no **, no *, no #, no ---, no backticks.
-- For numbered steps use: "1.", "2.", "3." followed by plain text.
-- For bullets use a simple dash "- " with plain text.
-- Keep responses short: 3 to 5 sentences max for simple questions.
-- For step-by-step guides use numbered lists, one action per step, no extra explanation unless asked.
-- Never add a preamble like "Sure!" or "Great question!". Go straight to the answer.
-- End every response with one concrete next action or a short follow-up question.
+FORMAT RULES (absolute, no exceptions):
+- Write ONLY plain conversational text. Never output JSON, XML, objects, arrays, curly braces, square brackets, or any data structure format.
+- Never use markdown: no **, no *, no #, no ---, no backticks, no > blockquotes.
+- For numbered steps write them as plain lines: "1. Do this", "2. Then this". Nothing else around them.
+- For bullets use a plain dash: "- item". No quotes around items.
+- Keep responses short: 3 to 5 sentences for simple questions.
+- Never start with filler like "Sure!", "Of course!", "Great question!". Go straight to the answer.
+- End with one concrete next step or a short follow-up question, written as plain text.
+- If you feel the urge to structure data as JSON or a dictionary, stop and rewrite it as plain numbered steps instead.
 
 PLATFORM KNOWLEDGE:
 
@@ -93,11 +94,11 @@ STEP-BY-STEP GUIDES (use these exact flows when a user asks how to do something)
 
 Guide: Generate an image with AI Generator
 1. Go to AI Generator (/prompt-studio).
-2. Write your prompt using @tokens, for example: "@persona1 in a sunny street wearing casual clothes".
-3. Upload your model or reference image in the "Persona 1" slot on the right.
-4. (Optional) Upload a product image in "Producto 1" if needed.
-5. Choose the output mode: Standard, Campaign or Photodump.
-6. Click Generate. Each image costs 2 credits.
+2. Write your prompt describing what you want to generate. You can write a completely free prompt without any references and the AI will generate the image directly.
+3. If you want the image to include a specific person, product or style: upload the reference images in the slots on the right side (Persona 1, Producto 1, Estilo 1). These slots are optional. Use @tokens in your prompt to reference them, for example "@persona1 in a sunny street".
+4. Choose the output mode: Standard (one image), Campaign (multiple scenes same subject), or Photodump (lifestyle image set).
+5. Click Generate. Each image costs 2 credits.
+The reference slots are never required. A plain text prompt is enough to generate.
 
 Guide: Create a digital model from photos (Model DNA)
 1. Go to /crear/clonar.
@@ -187,16 +188,38 @@ async function callAssistant(messages: { role: 'user' | 'assistant'; content: st
   return cleanResponse(data.text || 'No pude generar una respuesta.');
 }
 
-// Elimina símbolos markdown residuales que Gemini puede colar
+// Limpia markdown residual y JSON que Gemini puede generar
 function cleanResponse(text: string): string {
-  return text
-    .replace(/#{1,6}\s+/g, '')       // ### headings
-    .replace(/\*\*(.*?)\*\*/g, '$1') // **bold**
-    .replace(/\*(.*?)\*/g, '$1')     // *italic*
-    .replace(/`{1,3}(.*?)`{1,3}/g, '$1') // `code`
-    .replace(/^---+$/gm, '')         // horizontal rules
-    .replace(/^\s*>\s+/gm, '')       // blockquotes
-    .replace(/\n{3,}/g, '\n\n')      // exceso de líneas vacías
+  const trimmed = text.trim();
+
+  // Si toda la respuesta es un objeto JSON, conviértelo a pasos numerados
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const obj = JSON.parse(trimmed);
+      const lines: string[] = [];
+      for (const [key, val] of Object.entries(obj)) {
+        if (key === 'next_action' || key === 'next') {
+          lines.push('\n' + String(val));
+        } else if (!isNaN(Number(key))) {
+          lines.push(`${key}. ${String(val)}`);
+        } else {
+          lines.push(String(val));
+        }
+      }
+      return lines.join('\n').trim();
+    } catch {
+      // no era JSON válido, continuar con limpieza normal
+    }
+  }
+
+  return trimmed
+    .replace(/#{1,6}\s+/g, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/`{1,3}(.*?)`{1,3}/gs, '$1')
+    .replace(/^---+$/gm, '')
+    .replace(/^\s*>\s+/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
