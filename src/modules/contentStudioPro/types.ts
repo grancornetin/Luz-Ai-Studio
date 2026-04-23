@@ -76,7 +76,9 @@ export type ShotExclusion =
   | 'beautification'
   | 'editorial_softening'
   | 'studio_polish'
-  | 'luxury_redesign';
+  | 'luxury_redesign'
+  | 'invented_clothing'
+  | 'full_body_mannequin';
 
 export type ShotIntensity = 'normal' | 'aggressive' | 'extreme';
 

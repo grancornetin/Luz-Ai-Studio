@@ -33,7 +33,7 @@ const OutfitExtractor: React.FC = () => {
 
     try {
       // 1. Extraer ítems detectados vía IA
-      const kit = await outfitService.extractOutfitKit(sourceImage);
+      const kit = await outfitService.analyzeOutfit(sourceImage);
       setCurrentKit(kit);
 
       // 2. Generación secuencial con DELAY de seguridad para cuota

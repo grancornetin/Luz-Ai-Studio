@@ -175,8 +175,10 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
       {/* HEADER */}
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 px-1">
         <div>
-          <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter uppercase italic leading-tight">
-            Hola, <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-indigo-600">{displayName}</span> 👋
+          <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter uppercase italic leading-tight flex flex-wrap items-baseline gap-x-2 gap-y-0">
+            <span>Hola,</span>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-indigo-600 break-words">{displayName}</span>
+            <span>👋</span>
           </h1>
           <p className="text-slate-500 font-medium italic mt-1 text-xs md:text-base">
             Tu ecosistema de producción publicitaria está listo.

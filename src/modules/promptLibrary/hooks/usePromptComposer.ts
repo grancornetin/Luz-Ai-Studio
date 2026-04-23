@@ -139,7 +139,7 @@ export const usePromptComposer = () => {
       setGeneratedImages(prev => [image, ...prev]);
 
       // Guardar en historial automáticamente
-      const hasPersonRef = slots.persons && slots.persons.length > 0;
+      const hasPersonRef = slots.some((s: any) => s.type === 'person' && s.imageUrl);
       generationHistoryService.save({
         imageUrl:    image,
         module:      'prompt_studio',

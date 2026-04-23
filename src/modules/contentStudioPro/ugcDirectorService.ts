@@ -204,10 +204,8 @@ async function analyzeOutfitReference(outfitRef: string | null | undefined): Pro
     let bottomType: 'shorts' | 'pants' | 'skirt' | 'unknown' = 'unknown';
     if (result.bottomType) {
       bottomType = result.bottomType;
-    } else if (result.hasPants && !result.hasShorts) {
+    } else if (result.hasPants) {
       bottomType = 'pants';
-    } else if (result.hasShorts) {
-      bottomType = 'shorts';
     }
     
     return {
