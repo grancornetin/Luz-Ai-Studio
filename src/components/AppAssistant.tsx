@@ -26,15 +26,16 @@ LANGUAGE RULE (top priority):
 Always detect the language the user is writing in and reply in that exact same language. If they write in English, answer in English. Spanish → Spanish. Portuguese → Portuguese. Never switch unless the user does first.
 
 FORMAT RULES (absolute, no exceptions):
-- Write only plain conversational text. Never output JSON, objects, arrays, curly braces {}, square brackets [], key-value pairs, or any data structure.
-- Never use markdown syntax: no **, no *, no #, no ---, no backticks, no blockquotes.
-- For numbered steps write plain lines like: 1. Do this. 2. Then this.
-- For bullet points use a plain dash like: - item text. No quotes around the text.
+- Write only plain conversational text. No exceptions.
+- NEVER output HTML tags of any kind: no <div>, no <span>, no <br>, no <a>, no <p>, no <b>, no <strong>, no <ul>, no <li>. Not even partial tags.
+- NEVER output JSON, objects, arrays, curly braces {}, square brackets [], or any data structure format.
+- NEVER use markdown syntax: no **, no *, no #, no ---, no backticks, no blockquotes, no underscores for emphasis.
+- For numbered steps write plain lines like: 1. Do this. 2. Then this. Each on its own line.
+- For bullet points use a plain dash: - item text. Each on its own line.
 - Keep answers short for simple questions: 2 to 4 sentences maximum.
-- For step-by-step guides use the numbered format above, one clear action per step.
 - Never open with filler phrases like "Sure!", "Of course!", "Great question!". Start directly with the answer.
 - End every response with one concrete next action or a brief follow-up question in plain text.
-- If you feel the urge to format as JSON or a dictionary, stop and rewrite as plain numbered steps.
+- If you feel the urge to use any tag, symbol, or structure other than plain text and numbers, stop and rewrite as plain sentences.
 
 PLATFORM OVERVIEW:
 LUZ IA Studio is a platform to create professional advertising content using AI. It has modules for creating digital identities (models/avatars), generating images with advanced prompts, producing organic UGC-style content, cloning scenes, extracting outfits, and generating product photography.
@@ -366,37 +367,75 @@ function cleanResponse(text: string): string {
 }
 
 // ── Sanitizador anti-XSS ─────────────────────────────────────
-// Elimina tags y atributos peligrosos del texto antes de renderizar.
-// Solo conserva el texto plano — los tags seguros los agrega renderContent.
+// Elimina TODOS los tags HTML del texto crudo del modelo.
+// El renderer construye los únicos tags HTML permitidos después.
 function sanitizeText(raw: string): string {
   return raw
-    // Elimina cualquier tag HTML que venga en el texto del asistente
+    // Primero elimina bloques completos peligrosos
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
     .replace(/<style[\s\S]*?<\/style>/gi, '')
-    // Elimina atributos de evento inline (onclick, onerror, etc.)
-    .replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '')
-    .replace(/\s+on\w+\s*=\s*[^\s>]*/gi, '')
-    // Elimina tags que no deberían venir del modelo
-    .replace(/<(?!br\s*\/?>)[a-z][^>]*>/gi, '')
-    .replace(/<\/(?!br)[a-z][^>]*>/gi, '');
+    // Elimina CUALQUIER tag HTML (apertura, cierre o auto-cerrado)
+    // Esto incluye </span>, </div>, <span>, <div class="...">, etc.
+    .replace(/<\/?[a-zA-Z][^>]*\/?>/g, '')
+    // Elimina entidades HTML que podrían esconder XSS
+    .replace(/&lt;script/gi, '')
+    .replace(/javascript:/gi, '');
+}
+
+// Escapa caracteres HTML especiales en texto plano para evitar
+// que el contenido de $1 inyecte HTML en los templates del renderer.
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 // ── Renderer ─────────────────────────────────────────────────
-// Convierte rutas internas como /prompt-studio en links clicleables.
-// Usa data-nav para que el componente los intercepte con useNavigate.
-// SIEMPRE sanitiza el texto antes de construir el HTML.
+// Convierte texto plano sanitizado en HTML seguro para mostrar.
+// Usa data-nav para links internos interceptados por useNavigate.
 function renderContent(text: string): string {
+  // 1. Elimina cualquier HTML que venga del modelo
   const safe = sanitizeText(text);
-  return safe
-    .replace(/^\d+\.\s(.*)$/gm, '<div class="flex gap-2 my-1"><span class="text-indigo-500 font-black flex-shrink-0 mt-0.5">•</span><span>$1</span></div>')
-    .replace(/^-\s(.*)$/gm, '<div class="flex gap-2 my-0.5"><span class="text-slate-400 flex-shrink-0">·</span><span>$1</span></div>')
-    .replace(
-      /\(?(\/[\w\-/]+)\)?/g,
-      '<a data-nav="$1" class="inline-flex items-center gap-0.5 text-indigo-600 font-semibold underline underline-offset-2 cursor-pointer hover:text-indigo-800">$1</a>',
-    )
-    .replace(/\n\n/g, '<br/><br/>')
-    .replace(/\n/g, '<br/>');
+
+  // 2. Procesa línea a línea para mayor control
+  const lines = safe.split('\n');
+  const rendered = lines.map(line => {
+    const trimmed = line.trimEnd();
+
+    // Línea numerada: "1. texto"
+    const numberedMatch = trimmed.match(/^\d+\.\s+(.+)$/);
+    if (numberedMatch) {
+      const content = linkifyRoutes(escapeHtml(numberedMatch[1]));
+      return `<div class="flex gap-2 my-1"><span class="text-indigo-500 font-black flex-shrink-0 mt-0.5">•</span><span>${content}</span></div>`;
+    }
+
+    // Línea con guión: "- texto"
+    const bulletMatch = trimmed.match(/^[-•]\s+(.+)$/);
+    if (bulletMatch) {
+      const content = linkifyRoutes(escapeHtml(bulletMatch[1]));
+      return `<div class="flex gap-2 my-0.5"><span class="text-slate-400 flex-shrink-0">·</span><span>${content}</span></div>`;
+    }
+
+    // Línea vacía
+    if (trimmed === '') return '<br/>';
+
+    // Línea normal
+    return `<span class="block">${linkifyRoutes(escapeHtml(trimmed))}</span>`;
+  });
+
+  return rendered.join('');
+}
+
+// Convierte rutas internas (/prompt-studio) en links clicleables.
+// Se aplica DESPUÉS de escapeHtml, sobre texto ya seguro.
+function linkifyRoutes(safeText: string): string {
+  return safeText.replace(
+    /\(?(\/[\w\-/]+)\)?/g,
+    '<a data-nav="$1" class="inline-flex items-center gap-0.5 text-indigo-600 font-semibold underline underline-offset-2 cursor-pointer hover:text-indigo-800">$1</a>',
+  );
 }
 
 // ── Main Component ───────────────────────────────────────────
