@@ -7,13 +7,15 @@
  * ─────────────────────────────────────────────────────────────
  */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { MessageCircle, X, Send, Loader2, ChevronDown, Sparkles, RotateCcw } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { MessageCircle, X, Send, Loader2, ChevronDown, Sparkles, RotateCcw, ImagePlus, XCircle } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  image?: string; // base64 comprimida para mostrar en el chat
   timestamp: Date;
 }
 
@@ -187,9 +189,20 @@ Guide: Create UGC content (UGC Studio)
 4. Add any optional elements (outfit, accessories, scene, contextual description).
 5. Click Generate. You will get a session of 7 realistic organic-looking images. Cost: 4 credits.
 
+NAVIGATION LINKS:
+When mentioning a module or section, always include its route in parentheses so the user can tap it to navigate. Examples:
+- "Go to AI Generator (/prompt-studio)"
+- "Open your Model Library (/modelos)"
+- "Check your history (/historial)"
+- "Visit the Prompt Gallery (/prompt-gallery)"
+Routes available: /, /crear/clonar, /crear/manual, /modelos, /prompt-studio, /prompt-gallery, /studio-pro, /clonar, /outfit-extractor, /productos, /historial, /privacidad, /terminos, /descargo
+
+IMAGE ANALYSIS:
+If the user sends an image, analyze it and describe what you see in relation to the platform. For example: if they show an error or a screen, explain what is happening and how to fix it. If they show a result they don't like, suggest what they could change in the prompt or settings. If they show a reference photo, suggest which module is best suited for what they want to achieve.
+
 BEHAVIOR RULES:
 - If the user asks about something that does not exist in the platform, say so clearly and briefly.
-- Never claim capabilities you do not have. You cannot generate images, you cannot see the user's account or files.
+- Never claim capabilities you do not have. You cannot generate images, you cannot access the user's account data or saved files.
 - When guiding step by step, give the full guide if they ask how to do something. If they seem stuck on a specific step, focus only on that step.
 - Be direct. No filler words. No unnecessary affirmations. No padding.`;
 
@@ -202,25 +215,61 @@ const SUGGESTIONS = [
   '¿Cuántos créditos necesito para cada módulo?',
 ];
 
+// ── Image compression ────────────────────────────────────────
+// Redimensiona y comprime a JPEG antes de base64.
+// Max 1024px en el lado mayor, calidad 0.75 → ~100-200KB típico,
+// bien por debajo del límite de 4.5MB de Vercel.
+async function compressImage(file: File): Promise<{ data: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX = 1024;
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        if (width > height) { height = Math.round((height * MAX) / width); width = MAX; }
+        else { width = Math.round((width * MAX) / height); height = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+      const base64 = dataUrl.split(',')[1];
+      resolve({ data: base64, mimeType: 'image/jpeg' });
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
 // ── API call ─────────────────────────────────────────────────
-// Usa /api/gemini/content (gemini-2.5-flash) — sin costo adicional.
-// El historial se concatena en el prompt porque el endpoint no
-// mantiene sesión; Gemini entiende el formato "Usuario:/Asistente:".
-async function callAssistant(messages: { role: 'user' | 'assistant'; content: string }[]): Promise<string> {
+async function callAssistant(
+  messages: { role: 'user' | 'assistant'; content: string }[],
+  imageData?: { data: string; mimeType: string },
+): Promise<string> {
   const history = messages
     .map(m => `${m.role === 'user' ? 'Usuario' : 'Asistente'}: ${m.content}`)
     .join('\n\n');
 
   const fullPrompt = `${SYSTEM_PROMPT}\n\n---\n\n${history}\n\nAsistente:`;
 
+  const body: Record<string, unknown> = {
+    action: 'assistantChat',
+    prompt: fullPrompt,
+    model:  'gemini-2.5-flash',
+  };
+
+  if (imageData) {
+    body.images   = [imageData.data];
+    body.mimeTypes = [imageData.mimeType];
+  }
+
   const response = await fetch('/api/gemini/content', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: 'generateText',
-      prompt: fullPrompt,
-      model:  'gemini-2.5-flash',
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -268,28 +317,37 @@ function cleanResponse(text: string): string {
     .trim();
 }
 
-// ── Markdown-lite renderer ───────────────────────────────────
-function renderMarkdown(text: string): string {
+// ── Renderer ─────────────────────────────────────────────────
+// Convierte rutas internas como /prompt-studio en links clicleables.
+// Usa data-nav para que el componente los intercepte con useNavigate.
+function renderContent(text: string): string {
   return text
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/^### (.*$)/gm, '<p class="font-black text-slate-800 uppercase tracking-tight text-xs mt-3 mb-1">$1</p>')
-    .replace(/^## (.*$)/gm, '<p class="font-black text-slate-900 uppercase tracking-tight text-sm mt-3 mb-1">$1</p>')
-    .replace(/^\d+\. (.*$)/gm, '<div class="flex gap-2 my-0.5"><span class="text-indigo-500 font-black flex-shrink-0">•</span><span>$1</span></div>')
-    .replace(/^- (.*$)/gm, '<div class="flex gap-2 my-0.5"><span class="text-slate-400 flex-shrink-0">·</span><span>$1</span></div>')
-    .replace(/\n\n/g, '<br/>')
+    .replace(/^\d+\.\s(.*)$/gm, '<div class="flex gap-2 my-1"><span class="text-indigo-500 font-black flex-shrink-0 mt-0.5">•</span><span>$1</span></div>')
+    .replace(/^-\s(.*)$/gm, '<div class="flex gap-2 my-0.5"><span class="text-slate-400 flex-shrink-0">·</span><span>$1</span></div>')
+    .replace(
+      /\(?(\/[\w\-/]+)\)?/g,
+      '<a data-nav="$1" class="inline-flex items-center gap-0.5 text-indigo-600 font-semibold underline underline-offset-2 cursor-pointer hover:text-indigo-800">$1</a>',
+    )
+    .replace(/\n\n/g, '<br/><br/>')
     .replace(/\n/g, '<br/>');
 }
 
 // ── Main Component ───────────────────────────────────────────
 const AppAssistant: React.FC = () => {
-  const [isOpen, setIsOpen]       = useState(false);
-  const [messages, setMessages]   = useState<Message[]>([]);
-  const [input, setInput]         = useState('');
-  const [loading, setLoading]     = useState(false);
-  const [hasUnread, setHasUnread] = useState(false);
+  const navigate = useNavigate();
+
+  const [isOpen, setIsOpen]           = useState(false);
+  const [messages, setMessages]       = useState<Message[]>([]);
+  const [input, setInput]             = useState('');
+  const [loading, setLoading]         = useState(false);
+  const [hasUnread, setHasUnread]     = useState(false);
+  const [pendingImage, setPendingImage] = useState<{ file: File; preview: string } | null>(null);
+  const [compressing, setCompressing] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLInputElement>(null);
+  const fileInputRef   = useRef<HTMLInputElement>(null);
+  const messagesBoxRef = useRef<HTMLDivElement>(null);
 
   // Greeting on first open
   useEffect(() => {
@@ -297,7 +355,7 @@ const AppAssistant: React.FC = () => {
       setMessages([{
         id: 'welcome',
         role: 'assistant',
-        content: '¡Hola! Soy el asistente de **LUZ IA Studio**. Puedo guiarte por cualquier módulo, explicarte cómo funciona algo, o ayudarte si algo no funciona como esperabas.\n\n¿En qué te puedo ayudar?',
+        content: 'Hola! Soy el asistente de LUZ IA Studio. Puedo guiarte por cualquier módulo, explicarte cómo funciona algo, o analizar una imagen que me mandes si tienes alguna duda.\n\n¿En qué te puedo ayudar?',
         timestamp: new Date(),
       }]);
     }
@@ -308,11 +366,58 @@ const AppAssistant: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Interceptar clicks en links de navegación interna generados por renderContent
+  const handleMessagesClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    const link = target.closest('[data-nav]') as HTMLElement | null;
+    if (link) {
+      e.preventDefault();
+      const route = link.getAttribute('data-nav');
+      if (route) { navigate(route); setIsOpen(false); }
+    }
+  }, [navigate]);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!fileInputRef.current) return;
+    fileInputRef.current.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return;
+    const preview = URL.createObjectURL(file);
+    setPendingImage({ file, preview });
+  };
+
+  const removePendingImage = () => {
+    if (pendingImage) URL.revokeObjectURL(pendingImage.preview);
+    setPendingImage(null);
+  };
+
   const sendMessage = useCallback(async (text?: string) => {
     const content = (text || input).trim();
-    if (!content || loading) return;
+    if ((!content && !pendingImage) || loading) return;
 
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', content, timestamp: new Date() };
+    setCompressing(true);
+    let compressed: { data: string; mimeType: string } | undefined;
+    let previewUrl: string | undefined;
+
+    if (pendingImage) {
+      try {
+        compressed = await compressImage(pendingImage.file);
+        previewUrl = pendingImage.preview;
+      } catch {
+        // si falla la compresión, continúa sin imagen
+      }
+      setPendingImage(null);
+    }
+    setCompressing(false);
+
+    const userMsg: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: content || '(imagen adjunta)',
+      image: previewUrl,
+      timestamp: new Date(),
+    };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setLoading(true);
@@ -322,7 +427,7 @@ const AppAssistant: React.FC = () => {
         .filter(m => m.id !== 'welcome')
         .map(m => ({ role: m.role, content: m.content }));
 
-      const reply = await callAssistant(history);
+      const reply = await callAssistant(history, compressed);
 
       setMessages(prev => [...prev, {
         id: Date.now().toString() + 'r',
@@ -330,23 +435,29 @@ const AppAssistant: React.FC = () => {
         content: reply,
         timestamp: new Date(),
       }]);
-    } catch (err: any) {
+    } catch {
       setMessages(prev => [...prev, {
         id: Date.now().toString() + 'e',
         role: 'assistant',
-        content: 'Lo siento, no pude conectarme en este momento. Intenta de nuevo en un momento.',
+        content: 'No pude conectarme en este momento. Intenta de nuevo en un momento.',
         timestamp: new Date(),
       }]);
     } finally {
       setLoading(false);
     }
-  }, [input, messages, loading]);
+  }, [input, messages, loading, pendingImage]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   };
 
-  const reset = () => setMessages([]);
+  const reset = () => {
+    if (pendingImage) URL.revokeObjectURL(pendingImage.preview);
+    setPendingImage(null);
+    setMessages([]);
+  };
+
+  const canSend = (input.trim().length > 0 || !!pendingImage) && !loading && !compressing;
 
   return (
     <>
@@ -355,29 +466,24 @@ const AppAssistant: React.FC = () => {
         onClick={() => setIsOpen(p => !p)}
         className={`fixed bottom-6 right-6 z-[900] w-14 h-14 rounded-2xl shadow-2xl flex items-center justify-center transition-all duration-300 ${
           isOpen
-            ? 'bg-slate-800 text-white rotate-0 scale-95'
+            ? 'bg-slate-800 text-white scale-95'
             : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:scale-110 hover:shadow-indigo-200'
         }`}
         aria-label="Asistente"
       >
-        {isOpen
-          ? <X className="w-6 h-6" />
-          : <MessageCircle className="w-6 h-6" />
-        }
+        {isOpen ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
         {hasUnread && !isOpen && (
           <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-pulse" />
         )}
       </button>
 
       {/* ── CHAT PANEL ─────────────────────────────────────── */}
-      <div className={`fixed bottom-24 right-6 z-[890] w-[min(380px,calc(100vw-24px))] bg-white rounded-[28px] shadow-2xl border border-slate-200 flex flex-col overflow-hidden transition-all duration-300 origin-bottom-right ${
-        isOpen
-          ? 'opacity-100 scale-100 pointer-events-auto'
-          : 'opacity-0 scale-95 pointer-events-none'
-      }`}
-        style={{ maxHeight: 'min(560px, calc(100dvh - 120px))' }}
+      <div
+        className={`fixed bottom-24 right-6 z-[890] w-[min(380px,calc(100vw-24px))] bg-white rounded-[28px] shadow-2xl border border-slate-200 flex flex-col overflow-hidden transition-all duration-300 origin-bottom-right ${
+          isOpen ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
+        }`}
+        style={{ maxHeight: 'min(580px, calc(100dvh - 120px))' }}
       >
-
         {/* HEADER */}
         <div className="flex items-center gap-3 px-5 py-4 bg-indigo-600 flex-shrink-0">
           <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -385,35 +491,28 @@ const AppAssistant: React.FC = () => {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-black text-white uppercase tracking-widest leading-none">Asistente LUZ IA</p>
-            <p className="text-[9px] font-bold text-indigo-200 uppercase tracking-widest mt-0.5">Guía inteligente de la app</p>
+            <p className="text-[9px] font-bold text-indigo-200 uppercase tracking-widest mt-0.5">Guía inteligente · Análisis de imágenes</p>
           </div>
           <div className="flex items-center gap-1">
             {messages.length > 1 && (
-              <button
-                onClick={reset}
-                className="w-7 h-7 bg-white/10 text-white/70 rounded-xl flex items-center justify-center hover:bg-white/20 transition-colors"
-                title="Nueva conversación"
-              >
+              <button onClick={reset} className="w-7 h-7 bg-white/10 text-white/70 rounded-xl flex items-center justify-center hover:bg-white/20 transition-colors" title="Nueva conversación">
                 <RotateCcw className="w-3.5 h-3.5" />
               </button>
             )}
-            <button
-              onClick={() => setIsOpen(false)}
-              className="w-7 h-7 bg-white/10 text-white/70 rounded-xl flex items-center justify-center hover:bg-white/20 transition-colors"
-            >
+            <button onClick={() => setIsOpen(false)} className="w-7 h-7 bg-white/10 text-white/70 rounded-xl flex items-center justify-center hover:bg-white/20 transition-colors">
               <ChevronDown className="w-4 h-4" />
             </button>
           </div>
         </div>
 
         {/* MESSAGES */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
-
+        <div
+          ref={messagesBoxRef}
+          className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0"
+          onClick={handleMessagesClick}
+        >
           {messages.map(msg => (
-            <div
-              key={msg.id}
-              className={`flex gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
-            >
+            <div key={msg.id} className={`flex gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
               {msg.role === 'assistant' && (
                 <div className="w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                   <Sparkles className="w-3 h-3 text-indigo-600" />
@@ -424,11 +523,11 @@ const AppAssistant: React.FC = () => {
                   ? 'bg-indigo-600 text-white rounded-tr-sm'
                   : 'bg-slate-50 text-slate-700 rounded-tl-sm border border-slate-100'
               }`}>
+                {msg.image && (
+                  <img src={msg.image} alt="adjunto" className="rounded-xl mb-2 max-h-40 object-cover w-full" />
+                )}
                 {msg.role === 'assistant' ? (
-                  <div
-                    className="text-sm leading-relaxed"
-                    dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }}
-                  />
+                  <div className="text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: renderContent(msg.content) }} />
                 ) : (
                   <p>{msg.content}</p>
                 )}
@@ -436,14 +535,16 @@ const AppAssistant: React.FC = () => {
             </div>
           ))}
 
-          {loading && (
+          {(loading || compressing) && (
             <div className="flex gap-2">
               <div className="w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center flex-shrink-0">
                 <Sparkles className="w-3 h-3 text-indigo-600" />
               </div>
               <div className="bg-slate-50 border border-slate-100 rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-2">
                 <Loader2 className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
-                <span className="text-xs text-slate-400 font-medium">Pensando...</span>
+                <span className="text-xs text-slate-400 font-medium">
+                  {compressing ? 'Procesando imagen...' : 'Pensando...'}
+                </span>
               </div>
             </div>
           )}
@@ -451,7 +552,7 @@ const AppAssistant: React.FC = () => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* SUGGESTIONS (shown when no conversation yet) */}
+        {/* SUGGESTIONS */}
         {messages.length <= 1 && !loading && (
           <div className="px-4 pb-3 flex flex-col gap-1.5 flex-shrink-0">
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Preguntas frecuentes</p>
@@ -467,27 +568,50 @@ const AppAssistant: React.FC = () => {
           </div>
         )}
 
+        {/* IMAGE PREVIEW */}
+        {pendingImage && (
+          <div className="px-4 pt-2 flex-shrink-0">
+            <div className="relative inline-block">
+              <img src={pendingImage.preview} alt="preview" className="h-16 w-16 object-cover rounded-xl border border-slate-200" />
+              <button
+                onClick={removePendingImage}
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-slate-700 text-white rounded-full flex items-center justify-center hover:bg-red-500 transition-colors"
+              >
+                <XCircle className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* INPUT */}
-        <div className="px-4 py-3 border-t border-slate-100 flex-shrink-0 flex gap-2">
+        <div className="px-4 py-3 border-t border-slate-100 flex-shrink-0 flex gap-2 items-center">
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={loading}
+            className="w-9 h-9 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-30 transition-colors flex-shrink-0"
+            title="Adjuntar imagen"
+          >
+            <ImagePlus className="w-4 h-4" />
+          </button>
           <input
             ref={inputRef}
             type="text"
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Escribe tu pregunta..."
+            placeholder="Escribe tu pregunta o adjunta imagen..."
             disabled={loading}
             className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all disabled:opacity-50"
           />
           <button
             onClick={() => sendMessage()}
-            disabled={!input.trim() || loading}
-            className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center hover:bg-indigo-700 disabled:opacity-30 transition-all flex-shrink-0"
+            disabled={!canSend}
+            className="w-9 h-9 bg-indigo-600 text-white rounded-xl flex items-center justify-center hover:bg-indigo-700 disabled:opacity-30 transition-all flex-shrink-0"
           >
             <Send className="w-4 h-4" />
           </button>
         </div>
-
       </div>
     </>
   );
