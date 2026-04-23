@@ -11,9 +11,40 @@ interface PublishPromptModalProps {
   promptText: string;
   promptDNA: PromptDNA;
   boards?: PromptBoard[];
+  existingTags?: string[]; // todas las etiquetas ya en uso en la galería
   onClose: () => void;
   onPublish: (title: string, tags: string[], boardId?: string) => void | Promise<void>;
   onCreateBoard?: (name: string) => Promise<string | null>;
+}
+
+// Normaliza una etiqueta para comparación: minúsculas, sin espacios, sin acentos
+function normalizeTag(raw: string): string {
+  return raw
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '');
+}
+
+// Encuentra la etiqueta existente más similar (distancia Levenshtein simple ≤ 2)
+function findSimilarTag(input: string, existing: string[]): string | null {
+  const norm = normalizeTag(input);
+  for (const tag of existing) {
+    if (normalizeTag(tag) === norm) return tag; // exacto
+  }
+  // Levenshtein ≤ 2
+  for (const tag of existing) {
+    const a = normalizeTag(tag);
+    if (Math.abs(a.length - norm.length) > 2) continue;
+    let diff = 0;
+    for (let i = 0; i < Math.max(a.length, norm.length); i++) {
+      if (a[i] !== norm[i]) diff++;
+      if (diff > 2) break;
+    }
+    if (diff <= 2) return tag;
+  }
+  return null;
 }
 
 const PublishPromptModal: React.FC<PublishPromptModalProps> = ({
@@ -21,22 +52,43 @@ const PublishPromptModal: React.FC<PublishPromptModalProps> = ({
   promptText,
   promptDNA,
   boards = [],
+  existingTags = [],
   onClose,
   onPublish,
   onCreateBoard,
 }) => {
-  const [title, setTitle]           = useState('');
-  const [tagInput, setTagInput]     = useState('');
-  const [tags, setTags]             = useState<string[]>([]);
-  const [selectedBoard, setBoard]   = useState<string | undefined>(undefined);
-  const [showBoardMenu, setShowMenu] = useState(false);
-  const [newBoardName, setNewBoard]  = useState('');
-  const [creatingBoard, setCreating] = useState(false);
-  const [publishing, setPublishing]  = useState(false);
+  const [title, setTitle]             = useState('');
+  const [tagInput, setTagInput]       = useState('');
+  const [tags, setTags]               = useState<string[]>([]);
+  const [tagWarning, setTagWarning]   = useState<string | null>(null);
+  const [selectedBoard, setBoard]     = useState<string | undefined>(undefined);
+  const [showBoardMenu, setShowMenu]  = useState(false);
+  const [newBoardName, setNewBoard]   = useState('');
+  const [creatingBoard, setCreating]  = useState(false);
+  const [publishing, setPublishing]   = useState(false);
 
-  const addTag = () => {
-    const t = tagInput.trim().toLowerCase().replace(/\s+/g, '-');
-    if (t && !tags.includes(t)) setTags(prev => [...prev, t]);
+  // Sugerencias: etiquetas existentes que contienen el texto del input
+  const suggestions = tagInput.trim().length > 0
+    ? existingTags
+        .filter(t => normalizeTag(t).includes(normalizeTag(tagInput)) && !tags.includes(t))
+        .slice(0, 8)
+    : [];
+
+  const addTag = (raw?: string) => {
+    const input = raw || tagInput;
+    const norm  = normalizeTag(input);
+    if (!norm) return;
+
+    // Buscar duplicado exacto o similar
+    const similar = findSimilarTag(norm, existingTags);
+    if (similar && !tags.includes(similar)) {
+      // usar la etiqueta existente normalizada
+      setTags(prev => [...prev, similar]);
+      setTagWarning(similar !== norm ? `Usamos "${similar}" para mantener consistencia.` : null);
+    } else if (!tags.includes(norm)) {
+      setTags(prev => [...prev, norm]);
+      setTagWarning(null);
+    }
     setTagInput('');
   };
 
@@ -126,24 +178,47 @@ const PublishPromptModal: React.FC<PublishPromptModalProps> = ({
                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
                   Tags
                 </label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input
-                      type="text"
-                      value={tagInput}
-                      onChange={e => setTagInput(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      placeholder="belleza, minimal..."
-                      className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-11 pr-4 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                    />
+                <div className="relative">
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        value={tagInput}
+                        onChange={e => { setTagInput(e.target.value); setTagWarning(null); }}
+                        onKeyDown={handleKeyDown}
+                        placeholder="belleza, minimal..."
+                        className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-11 pr-4 py-4 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      />
+                    </div>
+                    <button
+                      onClick={() => addTag()}
+                      className="px-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors"
+                    >
+                      Add
+                    </button>
                   </div>
-                  <button
-                    onClick={addTag}
-                    className="px-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors"
-                  >
-                    Add
-                  </button>
+                  {/* Sugerencias de etiquetas existentes */}
+                  {suggestions.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest w-full">Etiquetas existentes:</span>
+                      {suggestions.map(s => (
+                        <button
+                          key={s}
+                          onClick={() => { addTag(s); }}
+                          className="bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-500 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-colors"
+                        >
+                          #{s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {/* Aviso de normalización */}
+                  {tagWarning && (
+                    <p className="mt-1.5 text-[9px] font-bold text-amber-500 uppercase tracking-widest">
+                      ⚡ {tagWarning}
+                    </p>
+                  )}
                 </div>
                 {tags.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">

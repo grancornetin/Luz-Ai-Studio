@@ -6,7 +6,7 @@ import React from 'react';
 import { Prompt } from '../types/promptTypes';
 import {
   Heart, Copy, Play, Trash2, Bookmark,
-  Flag, Images, MessageCircle, MoreHorizontal
+  Flag, Images, MessageCircle, MoreHorizontal, Pencil, X, Check
 } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 
@@ -19,6 +19,7 @@ interface PromptCardProps {
   onReport?: (e: React.MouseEvent) => void;
   isAdmin?: boolean;
   onDelete?: (e: React.MouseEvent, id: string) => void;
+  onEdit?: (id: string, changes: { title?: string; tags?: string[] }) => Promise<void>;
   isSaved?: boolean;
   isLiked?: boolean;
 }
@@ -32,6 +33,7 @@ const PromptCard: React.FC<PromptCardProps> = ({
   onReport,
   isAdmin = false,
   onDelete,
+  onEdit,
   isSaved = false,
   isLiked = false,
 }) => {
@@ -40,7 +42,12 @@ const PromptCard: React.FC<PromptCardProps> = ({
   const [reported, setReported] = React.useState(
     user ? (prompt.reportedBy || []).includes(user.uid) : false
   );
-  const [showMenu, setShowMenu] = React.useState(false);
+  const [showMenu, setShowMenu]       = React.useState(false);
+  const [editMode, setEditMode]       = React.useState(false);
+  const [editTitle, setEditTitle]     = React.useState(prompt.title);
+  const [editTags, setEditTags]       = React.useState<string[]>(prompt.tags || []);
+  const [editTagInput, setEditTagInput] = React.useState('');
+  const [saving, setSaving]           = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
 
   const generationCount = (prompt.generations?.length || 0) + 1;
@@ -78,6 +85,25 @@ const PromptCard: React.FC<PromptCardProps> = ({
     setReported(true);
     onReport?.(e);
     setShowMenu(false);
+  };
+
+  const canEdit = isAdmin || user?.uid === prompt.authorId;
+
+  const handleSaveEdit = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onEdit || saving) return;
+    setSaving(true);
+    try {
+      await onEdit(prompt.id, { title: editTitle, tags: editTags });
+      setEditMode(false);
+    } catch { /* ignore */ }
+    finally { setSaving(false); }
+  };
+
+  const addEditTag = () => {
+    const t = editTagInput.trim().toLowerCase().replace(/\s+/g, '-');
+    if (t && !editTags.includes(t)) setEditTags(prev => [...prev, t]);
+    setEditTagInput('');
   };
 
   const authorInitial = (prompt.authorName || 'A').charAt(0).toUpperCase();
@@ -186,6 +212,15 @@ const PromptCard: React.FC<PromptCardProps> = ({
               </button>
               {showMenu && (
                 <div className="absolute bottom-full right-0 mb-2 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-50 min-w-[140px]">
+                  {canEdit && onEdit && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setEditMode(true); setShowMenu(false); }}
+                      className="w-full flex items-center gap-2 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:bg-indigo-50 transition-colors"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      Editar
+                    </button>
+                  )}
                   {!reported && !isAuthor && (
                     <button
                       onClick={handleReport}
@@ -207,6 +242,63 @@ const PromptCard: React.FC<PromptCardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* ── EDIT PANEL ── */}
+      {editMode && (
+        <div
+          className="absolute inset-0 bg-white/97 backdrop-blur-sm z-30 p-4 flex flex-col gap-3 rounded-[28px] overflow-y-auto"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Editar publicación</p>
+            <button onClick={(e) => { e.stopPropagation(); setEditMode(false); }} className="w-6 h-6 bg-slate-100 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-200">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {/* Título */}
+          <div className="space-y-1">
+            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Título</label>
+            <input
+              value={editTitle}
+              onChange={e => setEditTitle(e.target.value)}
+              maxLength={80}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+            />
+          </div>
+          {/* Tags */}
+          <div className="space-y-2">
+            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Etiquetas</label>
+            <div className="flex gap-1.5">
+              <input
+                value={editTagInput}
+                onChange={e => setEditTagInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addEditTag(); } }}
+                placeholder="Agregar etiqueta..."
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-400"
+              />
+              <button onClick={(e) => { e.stopPropagation(); addEditTag(); }} className="px-3 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-indigo-700">+</button>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {editTags.map(t => (
+                <span key={t} className="flex items-center gap-1 bg-indigo-50 text-indigo-600 px-2 py-1 rounded-lg text-[9px] font-black uppercase">
+                  #{t}
+                  <button onClick={(e) => { e.stopPropagation(); setEditTags(prev => prev.filter(x => x !== t)); }} className="hover:text-red-500">
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+          {/* Guardar */}
+          <button
+            onClick={handleSaveEdit}
+            disabled={saving || !editTitle.trim()}
+            className="w-full py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {saving ? <><span className="animate-spin">⏳</span> Guardando...</> : <><Check className="w-3.5 h-3.5" /> Guardar cambios</>}
+          </button>
+        </div>
+      )}
 
       {/* ── FOOTER ── */}
       <div className="p-4 space-y-3">

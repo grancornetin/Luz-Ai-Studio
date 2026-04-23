@@ -187,11 +187,16 @@ export const usePromptLibrary = () => {
     if (!user) return;
     try {
       await promptService.deletePrompt(id, user.uid, isAdmin);
-      // Optimistic remove
       setPrompts(prev => prev.filter(p => p.id !== id));
     } catch (err) {
       console.error('[usePromptLibrary] deletePrompt error:', err);
     }
+  }, [user, isAdmin]);
+
+  const editPrompt = useCallback(async (id: string, changes: { title?: string; tags?: string[] }) => {
+    if (!user) return;
+    await promptService.updatePrompt(id, user.uid, isAdmin, changes);
+    setPrompts(prev => prev.map(p => p.id === id ? { ...p, ...changes } : p));
   }, [user, isAdmin]);
 
   /**
@@ -284,6 +289,7 @@ export const usePromptLibrary = () => {
     likePrompt,
     toggleSave,
     deletePrompt,
+    editPrompt,
     publishPrompt,
     reportPrompt,
     createBoard,

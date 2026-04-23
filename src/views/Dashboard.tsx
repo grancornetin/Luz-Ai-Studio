@@ -3,14 +3,15 @@
  * Punto 5: Añade Prompt Gallery e Historial como cards visibles
  * en el dashboard principal, no solo en el menú lateral.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { AvatarProfile, ProductProfile } from '../../types';
 // @ts-ignore
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../modules/auth/AuthContext';
 import {
   Zap, TrendingUp, User, Package, AlertCircle,
-  Crown, ArrowRight, Sparkles, Clock, Images
+  Crown, ArrowRight, Sparkles, Clock, Images,
+  Settings, FileText, Mail, CreditCard, UserCircle
 } from 'lucide-react';
 
 const MODULE_GROUPS = [
@@ -119,9 +120,21 @@ interface DashboardProps {
   products?: ProductProfile[];
 }
 
+type DashTab = 'home' | 'profile' | 'account' | 'settings' | 'terms' | 'contact';
+
+const NAV_TABS: { id: DashTab; label: string; icon: React.ReactNode; route?: string }[] = [
+  { id: 'home',     label: 'Inicio',        icon: <i className="fa-solid fa-house text-xs" /> },
+  { id: 'profile',  label: 'Perfil',        icon: <UserCircle className="w-3.5 h-3.5" /> },
+  { id: 'account',  label: 'Cuenta',        icon: <CreditCard className="w-3.5 h-3.5" /> },
+  { id: 'settings', label: 'Configuración', icon: <Settings className="w-3.5 h-3.5" /> },
+  { id: 'terms',    label: 'Términos',      icon: <FileText className="w-3.5 h-3.5" />,  route: '/terminos' },
+  { id: 'contact',  label: 'Contacto',      icon: <Mail className="w-3.5 h-3.5" />,      route: '/descargo' },
+];
+
 const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) => {
   const navigate = useNavigate();
   const { profile, credits, stats, isAdmin } = useAuth();
+  const [activeTab, setActiveTab] = useState<DashTab>('home');
 
   const displayName      = profile?.displayName?.split(' ')[0] || 'Creador';
   const availableCredits = credits?.available || 0;
@@ -130,8 +143,13 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
   const isOutOfCredits   = !isAdmin && availableCredits === 0;
   const isLowCredits     = !isAdmin && availableCredits > 0 && availableCredits <= 3;
 
+  const handleTab = (tab: typeof NAV_TABS[0]) => {
+    if (tab.route) { navigate(tab.route); return; }
+    setActiveTab(tab.id);
+  };
+
   return (
-    <div className="space-y-10 animate-in fade-in duration-700 pb-24 max-w-full overflow-hidden">
+    <div className="space-y-8 animate-in fade-in duration-700 pb-24 max-w-full overflow-hidden">
 
       {/* HEADER */}
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 px-1">
@@ -150,6 +168,96 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
           </span>
         </div>
       </header>
+
+      {/* NAV TABS */}
+      <nav className="flex gap-1 bg-white border border-slate-100 rounded-2xl p-1 shadow-sm overflow-x-auto scrollbar-hide">
+        {NAV_TABS.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => handleTab(tab)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all flex-shrink-0 ${
+              activeTab === tab.id && !tab.route
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            {tab.icon}
+            <span className="hidden sm:inline">{tab.label}</span>
+          </button>
+        ))}
+      </nav>
+
+      {/* TAB: PERFIL */}
+      {activeTab === 'profile' && (
+        <section className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-8 space-y-6 animate-in fade-in">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-indigo-100 flex items-center justify-center overflow-hidden border-2 border-white shadow">
+              {profile?.photoURL
+                ? <img src={profile.photoURL} alt="" className="w-full h-full object-cover" />
+                : <User className="w-7 h-7 text-indigo-400" />
+              }
+            </div>
+            <div>
+              <p className="text-lg font-black text-slate-900 uppercase tracking-tight">{profile?.displayName || 'Usuario'}</p>
+              <p className="text-xs text-slate-400 font-medium">{profile?.email}</p>
+            </div>
+          </div>
+          <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 text-center space-y-2">
+            <Settings className="w-8 h-8 text-slate-300 mx-auto" />
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Edición de perfil</p>
+            <p className="text-[10px] text-slate-400">Nombre de usuario, foto, descripción e intereses — disponible próximamente.</p>
+          </div>
+        </section>
+      )}
+
+      {/* TAB: CUENTA */}
+      {activeTab === 'account' && (
+        <section className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-8 space-y-6 animate-in fade-in">
+          <div className="flex items-center gap-3 mb-2">
+            <CreditCard className="w-5 h-5 text-indigo-500" />
+            <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Cuenta y suscripción</h2>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Plan actual</p>
+              <p className="text-lg font-black text-slate-800 uppercase">{isAdmin ? 'Admin' : planName}</p>
+            </div>
+            <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 space-y-1">
+              <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Créditos</p>
+              <p className="text-lg font-black text-indigo-700">{isAdmin ? '∞' : availableCredits}</p>
+            </div>
+          </div>
+          <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 text-center space-y-2">
+            <CreditCard className="w-8 h-8 text-slate-300 mx-auto" />
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Gestión de planes</p>
+            <p className="text-[10px] text-slate-400">Cambiar plan, recargar créditos y gestionar suscripción — disponible próximamente.</p>
+          </div>
+          <button
+            onClick={() => navigate('/descargo')}
+            className="w-full py-4 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
+          >
+            Contactar para cambio de plan
+          </button>
+        </section>
+      )}
+
+      {/* TAB: CONFIGURACIÓN */}
+      {activeTab === 'settings' && (
+        <section className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-8 space-y-6 animate-in fade-in">
+          <div className="flex items-center gap-3 mb-2">
+            <Settings className="w-5 h-5 text-slate-500" />
+            <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Configuración</h2>
+          </div>
+          <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 text-center space-y-2">
+            <Settings className="w-8 h-8 text-slate-300 mx-auto" />
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Preferencias</p>
+            <p className="text-[10px] text-slate-400">Cambiar email, contraseña, idioma y notificaciones — disponible próximamente.</p>
+          </div>
+        </section>
+      )}
+
+      {/* HOME TAB CONTENT */}
+      {activeTab === 'home' && (<>
 
       {/* ALERTS */}
       {isOutOfCredits && (
@@ -330,6 +438,7 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
         </div>
       ))}
 
+      </>)}
     </div>
   );
 };

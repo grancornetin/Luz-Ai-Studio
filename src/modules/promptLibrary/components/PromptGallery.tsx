@@ -20,6 +20,7 @@ interface PromptGalleryProps {
   onLike: (id: string) => void;
   onRecreate: (p: Prompt) => void;
   onDelete: (id: string) => void;
+  onEdit?: (id: string, changes: { title?: string; tags?: string[] }) => Promise<void>;
   onSave?: (id: string) => void;
   isAdmin: boolean;
   savedIds?: Set<string>;
@@ -51,7 +52,7 @@ const SkeletonCard = () => (
 const PromptGallery: React.FC<PromptGalleryProps> = ({
   prompts, allTags, searchQuery, setSearchQuery,
   activeTag, setActiveTag, sortBy, setSortBy,
-  onPromptClick, onLike, onRecreate, onDelete, onSave,
+  onPromptClick, onLike, onRecreate, onDelete, onEdit, onSave,
   isAdmin, savedIds = new Set(), likedIds = new Set(),
   loading = false,
 }) => {
@@ -205,6 +206,7 @@ const PromptGallery: React.FC<PromptGalleryProps> = ({
               onSave={onSave ? e => { e.stopPropagation(); onSave(prompt.id); } : undefined}
               isAdmin={isAdmin}
               onDelete={(e, id) => { e.stopPropagation(); onDelete(id); }}
+              onEdit={onEdit}
               isSaved={savedIds.has(prompt.id)}
               isLiked={likedIds.has(prompt.id)}
             />

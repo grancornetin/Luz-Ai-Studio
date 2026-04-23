@@ -20,6 +20,7 @@ import { useScrollFAB } from '../hooks/useScrollFAB';
 import { analyzeScene, DetectedObject } from '../services/sceneAnalysisService';
 import { ImageSlot } from '../components/shared/ImageSlot';
 import UploadDisclaimer from '../components/shared/UploadDisclaimer';
+import { cloneMasterStorage, type CloneMasterSession } from './cloneMaster/storage';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -244,9 +245,19 @@ export default function CloneImageModule() {
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
+  // History
+  const [sessions, setSessions]         = useState<CloneMasterSession[]>([]);
+  const [showHistory, setShowHistory]   = useState(false);
+  const [deletingId, setDeletingId]     = useState<string | null>(null);
+
   // FAB scroll detection
   const { isVisible: fabVisibleRaw } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: false });
   const fabVisible = !!fabVisibleRaw;
+
+  // Carga historial al montar
+  useEffect(() => {
+    cloneMasterStorage.listSessions().then(setSessions).catch(() => {});
+  }, []);
 
   // --- Lógica de análisis de productos ---
   useEffect(() => {
@@ -329,7 +340,7 @@ export default function CloneImageModule() {
 
       const img = await cloneImageService.cloneImage(payload);
       setBaseComposition(img);
-      
+
       generationHistoryService.save({
         imageUrl: img,
         module: 'scene_clone',
@@ -337,6 +348,24 @@ export default function CloneImageModule() {
         creditsUsed: CREDIT_COSTS.CLONE_IMAGE,
         promptText: `Clonación de escena base con estilo ${cameraStyle}`
       }).catch(console.error);
+
+      // Guardar en historial local
+      const session: CloneMasterSession = {
+        id: Date.now().toString(),
+        createdAt: Date.now(),
+        targetImage: safeTarget,
+        baseComposition: img,
+        face1: safeFace,
+        body1: safeBody,
+        face2: enableSecondSubject ? (normalizeImageInput(face2) || undefined) : undefined,
+        body2: enableSecondSubject ? (normalizeImageInput(body2) || undefined) : undefined,
+        cameraStyle,
+        aspectRatio,
+        enableSecondSubject,
+      };
+      cloneMasterStorage.saveSession(session)
+        .then(() => cloneMasterStorage.listSessions().then(setSessions))
+        .catch(console.error);
 
       setStep(4);
     } catch (e: any) {
@@ -393,6 +422,21 @@ export default function CloneImageModule() {
         creditsUsed: 0,
         promptText: `Clonación final con aplicación de outfits y productos`
       }).catch(console.error);
+
+      // Actualizar sesión existente con la imagen final y outfits
+      setSessions(prev => {
+        const updated = [...prev];
+        if (updated.length > 0) {
+          updated[0] = {
+            ...updated[0],
+            finalImage: img,
+            outfit1: replaceOutfit1 ? (normalizeImageInput(outfit1) || undefined) : undefined,
+            outfit2: enableSecondSubject && replaceOutfit2 ? (normalizeImageInput(outfit2) || undefined) : undefined,
+          };
+          cloneMasterStorage.saveSession(updated[0]).catch(console.error);
+        }
+        return updated;
+      });
     } catch (e: any) {
       setError(e?.message || "Error al aplicar cambios.");
     } finally {
@@ -431,6 +475,31 @@ export default function CloneImageModule() {
     await downloadAsZip(imagesToZip, `clone_images_${Date.now()}.zip`, 'clone');
   };
 
+  const deleteSession = async (id: string) => {
+    setDeletingId(id);
+    await cloneMasterStorage.deleteSession(id).catch(console.error);
+    setSessions(prev => prev.filter(s => s.id !== id));
+    setDeletingId(null);
+  };
+
+  const loadSession = (s: CloneMasterSession) => {
+    setTargetImage(s.targetImage);
+    setFace1(s.face1);
+    setBody1(s.body1);
+    setFace2(s.face2 || null);
+    setBody2(s.body2 || null);
+    setOutfit1(s.outfit1 || null);
+    setOutfit2(s.outfit2 || null);
+    setBaseComposition(s.baseComposition);
+    setFinalImage(s.finalImage || null);
+    setEnableSecondSubject(s.enableSecondSubject);
+    setCameraStyle(s.cameraStyle as any);
+    setAspectRatio(s.aspectRatio as any);
+    setMaxStep(s.finalImage ? 4 : 4);
+    setStep(4);
+    setShowHistory(false);
+  };
+
   const fullReset = () => {
     setStep(1);
     setTargetImage(null);
@@ -464,7 +533,17 @@ export default function CloneImageModule() {
               <ModuleTutorial moduleId="sceneClone" steps={TUTORIAL_CONFIGS.sceneClone} />
             </div>
           </div>
-          <div className="flex bg-white p-1 rounded-2xl md:rounded-3xl border border-slate-100 shadow-sm">
+          <div className="flex bg-white p-1 rounded-2xl md:rounded-3xl border border-slate-100 shadow-sm gap-1">
+            {sessions.length > 0 && (
+              <button
+                onClick={() => setShowHistory(p => !p)}
+                className={`px-4 md:px-6 py-2 md:py-3 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase transition-all flex items-center gap-2 ${showHistory ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-slate-900'}`}
+              >
+                <i className="fa-solid fa-clock-rotate-left text-xs"></i>
+                <span className="hidden md:inline">Historial</span>
+                <span className="w-4 h-4 bg-brand-100 text-brand-700 rounded-full text-[8px] font-black flex items-center justify-center">{sessions.length}</span>
+              </button>
+            )}
             <button onClick={fullReset} className="px-6 md:px-8 py-2 md:py-3 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase text-slate-400 hover:text-slate-900 transition-all">Reset</button>
           </div>
         </header>
@@ -761,6 +840,78 @@ export default function CloneImageModule() {
             </div>
           </div>
         </div>
+
+        {/* HISTORIAL */}
+        {showHistory && sessions.length > 0 && (
+          <section className="px-4 md:px-0 space-y-4 animate-in fade-in duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-black text-slate-900 uppercase italic tracking-tighter">Historial</h2>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tus sesiones guardadas</p>
+              </div>
+              <button onClick={() => setShowHistory(false)} className="w-8 h-8 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">
+                <i className="fa-solid fa-xmark text-xs"></i>
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {sessions.map(s => (
+                <div key={s.id} className="bg-white rounded-[28px] border border-slate-100 shadow-sm overflow-hidden group">
+                  {/* Miniaturas */}
+                  <div className="grid grid-cols-3 gap-0.5 h-36 bg-slate-100">
+                    <img src={s.targetImage}      alt="Target"  className="w-full h-full object-cover" />
+                    <img src={s.baseComposition}  alt="Base"    className="w-full h-full object-cover" />
+                    {s.finalImage
+                      ? <img src={s.finalImage}  alt="Final"   className="w-full h-full object-cover" />
+                      : <div className="w-full h-full bg-slate-200 flex items-center justify-center">
+                          <i className="fa-solid fa-ellipsis text-slate-400 text-xs"></i>
+                        </div>
+                    }
+                  </div>
+                  {/* Info */}
+                  <div className="p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-black text-slate-700 uppercase tracking-widest">
+                          {s.enableSecondSubject ? '2 personas' : '1 persona'}
+                          {s.finalImage ? ' · Final' : ' · Base'}
+                        </p>
+                        <p className="text-[9px] text-slate-400 font-medium mt-0.5">
+                          {new Date(s.createdAt).toLocaleDateString()} · {s.cameraStyle.replace('iphone_', 'iPhone ')}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => deleteSession(s.id)}
+                        disabled={deletingId === s.id}
+                        className="w-7 h-7 bg-red-50 text-red-400 rounded-xl flex items-center justify-center hover:bg-red-100 hover:text-red-600 transition-colors disabled:opacity-40"
+                      >
+                        {deletingId === s.id
+                          ? <i className="fa-solid fa-spinner animate-spin text-xs"></i>
+                          : <i className="fa-solid fa-trash text-xs"></i>
+                        }
+                      </button>
+                    </div>
+                    {/* Descargas */}
+                    <div className="flex gap-2">
+                      <a
+                        href={s.finalImage || s.baseComposition}
+                        download={`clone_${s.id}.png`}
+                        className="flex-1 py-2 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-[9px] font-black uppercase tracking-widest text-center hover:bg-slate-100 transition-colors"
+                      >
+                        <i className="fa-solid fa-download mr-1"></i> Descargar
+                      </a>
+                      <button
+                        onClick={() => loadSession(s)}
+                        className="flex-1 py-2 bg-brand-50 border border-brand-100 text-brand-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-brand-100 transition-colors"
+                      >
+                        <i className="fa-solid fa-rotate-right mr-1"></i> Recrear
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {lightboxOpen && lightboxImages.length > 0 && (
           <ImageLightbox

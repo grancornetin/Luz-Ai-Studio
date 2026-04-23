@@ -230,6 +230,7 @@ const PromptLibraryModule: React.FC = () => {
             imageUrl={publishData.imageUrl}
             promptText={publishData.promptText}
             promptDNA={publishData.promptDNA}
+            existingTags={allTags}
             onClose={() => setPublishData(null)}
             onPublish={handlePublish}
           />

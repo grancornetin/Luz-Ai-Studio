@@ -20,7 +20,7 @@ const PromptStudioView: React.FC = () => {
   const location    = useLocation();
   const navigate    = useNavigate();
   const { user, profile } = useAuth();
-  const { boards, createBoard } = usePromptLibrary();
+  const { boards, createBoard, allTags } = usePromptLibrary();
 
   // ── Initial state from navigation (when "Recrear" is clicked) ──
   const [initialPrompt,  setInitialPrompt]  = useState<string | undefined>();
@@ -139,6 +139,7 @@ const PromptStudioView: React.FC = () => {
           promptText={pendingPublish.promptText}
           promptDNA={pendingPublish.promptDNA}
           boards={boards}
+          existingTags={allTags}
           onClose={() => setPendingPublish(null)}
           onPublish={handlePublishConfirm}
           onCreateBoard={createBoard}

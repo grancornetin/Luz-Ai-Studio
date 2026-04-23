@@ -25,7 +25,7 @@ const PromptGalleryView: React.FC = () => {
   const {
     prompts, allTags, searchQuery, setSearchQuery,
     activeTag, setActiveTag, sortBy, setSortBy,
-    likePrompt, deletePrompt, loading,
+    likePrompt, deletePrompt, editPrompt, loading,
     toggleSave, savedIds, boards, createBoard,
     isLiked, isSaved,
   } = usePromptLibrary();
@@ -116,6 +116,7 @@ const PromptGalleryView: React.FC = () => {
             onLike={likePrompt}
             onRecreate={handleRecreate}
             onDelete={deletePrompt}
+            onEdit={editPrompt}
             onSave={(id) => toggleSave(id)}
             isAdmin={isAdmin}
             savedIds={savedIds}

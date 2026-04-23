@@ -349,6 +349,25 @@ export const promptService = {
     await deleteDoc(ref);
   },
 
+  async updatePrompt(
+    id: string,
+    requestingUid: string,
+    isAdmin: boolean,
+    changes: { title?: string; tags?: string[] },
+  ): Promise<void> {
+    const ref  = doc(db, GLOBAL_PROMPTS, id);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return;
+    const data = snap.data();
+    if (!isAdmin && data.authorId !== requestingUid) {
+      throw new Error('No permission to edit this prompt');
+    }
+    const payload: Record<string, unknown> = {};
+    if (changes.title !== undefined) payload.title = changes.title.trim();
+    if (changes.tags  !== undefined) payload.tags  = changes.tags;
+    if (Object.keys(payload).length > 0) await updateDoc(ref, payload);
+  },
+
   /**
    * Toggle like on a prompt. Atomically updates likes counter and likedBy array.
    * Returns true if liked, false if unliked.
