@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Check, ArrowRight, Zap, Sparkles, Camera, Shirt, Package, Clone, Wand2, Star, ChevronDown, ChevronUp } from 'lucide-react';
+import { Check, ArrowRight, Zap, Sparkles, Camera, Shirt, Package, Wand2, Star, ChevronDown, ChevronUp } from 'lucide-react';
 import { PLANS } from '../services/creditConfig';
 import { useCurrency } from '../hooks/useCurrency';
 

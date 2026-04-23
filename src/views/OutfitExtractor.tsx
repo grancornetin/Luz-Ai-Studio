@@ -22,8 +22,6 @@ const OutfitExtractor: React.FC = () => {
       setSourceImage(compressed);
     }
   };
-    }
-  };
 
   const startExtraction = async () => {
     if (!sourceImage) return;

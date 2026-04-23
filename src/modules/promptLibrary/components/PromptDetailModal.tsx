@@ -404,15 +404,18 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
   onAddToBoard,
   onCreateBoard,
 }) => {
-  const { user, credits } = useAuth();
+  const { user, credits, isAdmin, previewPlan } = useAuth();
   const planId = credits?.plan || 'free';
+
+  // Admin sin previewPlan activo: acceso total. Admin con previewPlan: simula ese plan.
+  const effectivelyAdmin = isAdmin && !previewPlan;
+  const isFreeReveal = effectivelyAdmin || isPromptRevealFree(planId);
 
   // ── REVEAL STATE ─────────────────────────────────────────────
   const [revealed,       setRevealed]       = useState(false);
   const [revealLoading,  setRevealLoading]  = useState(false);
   const [revealError,    setRevealError]    = useState<string | null>(null);
   const [showRevealModal, setShowRevealModal] = useState(false);
-  const isFreeReveal = isPromptRevealFree(planId);
 
   // Comprobar si ya reveló este prompt al abrir el modal
   useEffect(() => {
@@ -449,7 +452,10 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showBoardPicker, setShowBoardPicker] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [activeRightTab, setActiveRightTab] = useState<'details' | 'comments'>('details');
+  // Si el prompt no está revelado, la tab inicial es comentarios
+  const [activeRightTab, setActiveRightTab] = useState<'details' | 'comments'>(
+    isFreeReveal ? 'details' : 'comments'
+  );
   const thumbnailsRef = useRef<HTMLDivElement>(null);
 
   const active = allImages[activeIndex];
@@ -682,14 +688,24 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
                 )}
               </div>
 
-              {/* RECREATE */}
-              <button
-                onClick={() => onRecreate({ ...prompt, promptText: active.promptText, promptDNA: active.promptDNA })}
-                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
-              >
-                <Play className="w-3.5 h-3.5 fill-current" />
-                Recrear
-              </button>
+              {/* RECREATE / UNLOCK */}
+              {revealed ? (
+                <button
+                  onClick={() => onRecreate({ ...prompt, promptText: active.promptText, promptDNA: active.promptDNA })}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  Recrear
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowRevealModal(true)}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  Desbloquear
+                </button>
+              )}
 
               {/* COPY */}
               <button
@@ -706,28 +722,38 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
 
             {/* TAB SWITCHER: Details / Comments */}
             <div className="flex px-8 pt-4 gap-6 flex-shrink-0 border-b border-slate-100">
-              {(['details', 'comments'] as const).map(tab => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveRightTab(tab)}
-                  className={`pb-3 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 ${
-                    activeRightTab === tab
-                      ? 'text-indigo-600 border-indigo-600'
-                      : 'text-slate-400 border-transparent hover:text-slate-600'
-                  }`}
-                >
-                  {tab === 'details' ? 'Detalles' : (
-                    <span className="flex items-center gap-1.5">
-                      Comentarios
-                      {prompt.commentsCount > 0 && (
-                        <span className="w-4 h-4 bg-indigo-100 text-indigo-600 rounded-full text-[8px] flex items-center justify-center font-black">
-                          {prompt.commentsCount > 9 ? '9+' : prompt.commentsCount}
-                        </span>
-                      )}
+              {/* Detalles: si no está revelado, sólo clickeable para abrir reveal modal */}
+              <button
+                onClick={() => {
+                  if (!revealed) { setShowRevealModal(true); return; }
+                  setActiveRightTab('details');
+                }}
+                className={`pb-3 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 flex items-center gap-1.5 ${
+                  activeRightTab === 'details'
+                    ? 'text-indigo-600 border-indigo-600'
+                    : 'text-slate-400 border-transparent hover:text-slate-600'
+                }`}
+              >
+                Detalles
+                {!revealed && <EyeOff className="w-3 h-3 text-slate-300" />}
+              </button>
+              <button
+                onClick={() => setActiveRightTab('comments')}
+                className={`pb-3 text-[10px] font-black uppercase tracking-widest transition-all border-b-2 ${
+                  activeRightTab === 'comments'
+                    ? 'text-indigo-600 border-indigo-600'
+                    : 'text-slate-400 border-transparent hover:text-slate-600'
+                }`}
+              >
+                <span className="flex items-center gap-1.5">
+                  Comentarios
+                  {prompt.commentsCount > 0 && (
+                    <span className="w-4 h-4 bg-indigo-100 text-indigo-600 rounded-full text-[8px] flex items-center justify-center font-black">
+                      {prompt.commentsCount > 9 ? '9+' : prompt.commentsCount}
                     </span>
                   )}
-                </button>
-              ))}
+                </span>
+              </button>
             </div>
 
             {/* SCROLLABLE CONTENT */}
@@ -746,13 +772,15 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
                     </div>
                   )}
 
-                  {/* PROMPT DNA */}
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">
-                      Prompt DNA {activeIndex > 0 ? `· ${active.label}` : '· Original'}
-                    </p>
-                    <PromptDNAViewer dna={active.promptDNA} />
-                  </div>
+                  {/* PROMPT DNA — sólo visible si está revelado */}
+                  {revealed && (
+                    <div>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">
+                        Prompt DNA {activeIndex > 0 ? `· ${active.label}` : '· Original'}
+                      </p>
+                      <PromptDNAViewer dna={active.promptDNA} />
+                    </div>
+                  )}
 
                   {/* PROMPT TEXT */}
                   <div className="bg-slate-50 border border-slate-100 p-5 rounded-2xl space-y-3">
