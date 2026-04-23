@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route, Link, useLocation, useNavigate, Navigate } f
 import { LogOut, User as UserIcon, Zap, Menu, X, ChevronDown, History } from 'lucide-react';
 
 // Vistas y Módulos
+import Landing from './views/Landing';
 import Dashboard from './views/Dashboard';
 import CloningModule from './modules/CloningModule';
 import ManualCreatorModule from './modules/ManualCreatorModule';
@@ -72,7 +73,7 @@ const MENU_GROUPS = [
 ];
 
 const mobileMainItems = [
-  { path: '/',             label: 'Inicio',    icon: 'fa-house' },
+  { path: '/dashboard',    label: 'Inicio',    icon: 'fa-house' },
   { path: '/prompt-studio', label: 'Generator', icon: 'fa-wand-magic-sparkles' },
   { path: '/modelos',         label: 'Modelos',   icon: 'fa-user-astronaut' },
   { path: '/historial',      label: 'Historial', icon: 'fa-clock-rotate-left' },
@@ -100,7 +101,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 // ── LOGIN WALL ────────────────────────────────────────────────────────────────
 const LoginWall: React.FC<{ onOpen: () => void }> = ({ onOpen }) => {
   const { user } = useAuth();
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to="/dashboard" replace />;
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
       <div className="max-w-md w-full space-y-8 text-center">
@@ -165,7 +166,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
       )}
       <aside className={`fixed md:sticky top-0 left-0 h-screen bg-white border-r border-slate-100 z-50 transition-all duration-500 overflow-hidden flex flex-col ${collapsed ? 'w-0 border-none' : 'w-80 shadow-2xl'}`}>
         <div className="p-8 pb-6 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-3">
+          <Link to="/dashboard" className="flex items-center gap-3">
             <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white"><i className="fa-solid fa-bolt"></i></div>
             <h1 className="text-xl font-black text-slate-800 italic uppercase">LUZ IA</h1>
           </Link>
@@ -174,7 +175,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
         <div className="flex-1 overflow-y-auto px-6 space-y-8">
             <div className="space-y-1">
                 {[
-                  { path: '/',           label: 'Dashboard',       icon: 'fa-house' },
+                  { path: '/dashboard',  label: 'Dashboard',       icon: 'fa-house' },
                   { path: '/historial',  label: 'Mis Generaciones', icon: 'fa-clock-rotate-left' },
                 ].map(item => (
                     <Link key={item.path} to={item.path} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all ${isActive(item.path) ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
@@ -236,7 +237,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
 // ── OTROS COMPONENTES (MobileNav) ──────────────────────────────────────────────
 const MobileNav: React.FC = () => {
     const location = useLocation();
-    if (location.pathname === '/') return null;
+    if (location.pathname === '/dashboard') return null;
     return (
         <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-4 py-3 z-[100] flex justify-between items-center">
             {mobileMainItems.map(item => (
@@ -258,7 +259,7 @@ const AppContent: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
 
   const location = useLocation();
-  const isDashboard = location.pathname === '/';
+  const isDashboard = location.pathname === '/dashboard';
 
   useEffect(() => {
     if (!user) return;
@@ -280,18 +281,41 @@ const AppContent: React.FC = () => {
     setProducts(prev => [product, ...prev]);
   };
 
+  // Páginas legales públicas (sin auth, con header propio)
+  const legalRoutes = (
+    <>
+      <Route path="/privacidad" element={<PoliticaPrivacidad />} />
+      <Route path="/terminos"   element={<TerminosUso />} />
+      <Route path="/descargo"   element={<Descargo />} />
+      <Route path="/contacto"   element={<Contacto />} />
+    </>
+  );
+
+  // Si el usuario ya está autenticado, la landing redirige al dashboard
+  const landingElement = user
+    ? <Navigate to="/dashboard" replace />
+    : (
+      <>
+        <Landing onOpenAuth={() => setIsAuthModalOpen(true)} />
+        <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      </>
+    );
+
   return (
     <Routes>
-      <Route path="/privacidad" element={<PoliticaPrivacidad />} />
-      <Route path="/terminos" element={<TerminosUso />} />
-      <Route path="/descargo" element={<Descargo />} />
-      <Route path="/contacto" element={<Contacto />} />
+      {/* Rutas públicas */}
+      <Route path="/" element={landingElement} />
       <Route path="/login" element={
-        <>
-          <LoginWall onOpen={() => setIsAuthModalOpen(true)} />
-          <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
-        </>
+        user ? <Navigate to="/dashboard" replace /> : (
+          <>
+            <LoginWall onOpen={() => setIsAuthModalOpen(true)} />
+            <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+          </>
+        )
       } />
+      {legalRoutes}
+
+      {/* App autenticada */}
       <Route path="/*" element={
         <ProtectedRoute>
           <div className="flex min-h-screen bg-slate-50">
@@ -299,7 +323,7 @@ const AppContent: React.FC = () => {
             <div className="flex-1 flex flex-col min-w-0">
                 <main className="flex-1 p-4 md:p-10">
                     <Routes>
-                        <Route path="/" element={<Dashboard />} />
+                        <Route path="/dashboard" element={<Dashboard />} />
                         <Route path="/historial" element={<GenerationHistory />} />
                         <Route path="/modelos" element={<AvatarLibrary avatars={avatars} />} />
                         <Route path="/crear/clonar" element={<CloningModule onSave={saveAvatar} />} />
@@ -310,11 +334,10 @@ const AppContent: React.FC = () => {
                         <Route path="/studio-pro" element={<ContentStudioProModule />} />
                         <Route path="/outfit-extractor" element={<OutfitExtractorModule />} />
                         <Route path="/clonar" element={<CloneImageModule />} />
-                        {/* Redirigir la antigua ruta a la nueva galería */}
-                        <Route path="/pricing"        element={<Pricing />} />
-                        <Route path="/buy-credits"   element={<BuyCredits />} />
+                        <Route path="/pricing"      element={<Pricing />} />
+                        <Route path="/buy-credits"  element={<BuyCredits />} />
                         <Route path="/prompt-library" element={<Navigate to="/prompt-gallery" replace />} />
-                        <Route path="*" element={<Navigate to="/" replace />} />
+                        <Route path="*" element={<Navigate to="/dashboard" replace />} />
                     </Routes>
                 </main>
                 <MobileNav />

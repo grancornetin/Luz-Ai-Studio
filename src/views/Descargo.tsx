@@ -1,4 +1,5 @@
 import React from 'react';
+import LegalPageHeader from '../components/shared/LegalPageHeader';
 
 const FECHA = '26 de marzo de 2026';
 
@@ -11,7 +12,9 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 
 const Descargo: React.FC = () => {
   return (
-    <div className="max-w-3xl mx-auto px-5 py-12 space-y-16 animate-in fade-in duration-500">
+    <div className="min-h-screen bg-white animate-in fade-in duration-500">
+    <LegalPageHeader />
+    <div className="max-w-3xl mx-auto px-5 py-12 space-y-16">
 
       <div className="space-y-10">
         <header className="space-y-3 pb-8 border-b border-slate-100">
@@ -83,6 +86,7 @@ const Descargo: React.FC = () => {
         </p>
       </div>
 
+    </div>
     </div>
   );
 };

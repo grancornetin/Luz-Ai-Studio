@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import LegalPageHeader from '../components/shared/LegalPageHeader';
 
 const CONTACT_EMAIL = 'grancornetin@gmail.com';
 
@@ -25,7 +26,9 @@ const Contacto: React.FC = () => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto px-5 py-12 space-y-8 animate-in fade-in duration-500">
+    <div className="min-h-screen bg-white animate-in fade-in duration-500">
+    <LegalPageHeader />
+    <div className="max-w-2xl mx-auto px-5 py-12 space-y-8">
 
       <header className="space-y-3">
         <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-100">
@@ -109,6 +112,7 @@ const Contacto: React.FC = () => {
           © {new Date().getFullYear()} LUZ IA · Todos los derechos reservados
         </p>
       </div>
+    </div>
     </div>
   );
 };

@@ -32,7 +32,7 @@ export default function Pricing() {
       {/* Header */}
       <header className="flex items-center justify-between px-1 pt-2">
         <div>
-          <button onClick={() => navigate('/')} className="flex items-center gap-2 text-slate-400 hover:text-slate-700 text-xs font-bold uppercase tracking-widest mb-4 transition-colors">
+          <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 text-slate-400 hover:text-slate-700 text-xs font-bold uppercase tracking-widest mb-4 transition-colors">
             <ArrowLeft className="w-3.5 h-3.5" /> Volver
           </button>
           <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter uppercase italic leading-tight">
