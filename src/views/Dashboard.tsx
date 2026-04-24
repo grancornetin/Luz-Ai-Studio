@@ -14,7 +14,10 @@ import {
   Settings, FileText, Mail, CreditCard, UserCircle, Gift, ShoppingCart, Tag
 } from 'lucide-react';
 import { MISSIONS, getUserMissions, completeMission, type UserMissions } from '../services/missionsService';
+import { useModelSelection } from '../hooks/useModelSelection';
 
+// creditsGemini: costo con Nano Banana 2 | creditsSeedream: costo con Seedream
+// null = precio fijo (no varía con el modelo) | 0 = gratis
 const MODULE_GROUPS = [
   {
     groupLabel: 'Crear Identidad',
@@ -28,7 +31,8 @@ const MODULE_GROUPS = [
         icon: 'fa-camera',
         accent: 'text-indigo-600',
         bg: 'bg-indigo-50',
-        credits: 4,
+        creditsGemini: 8,    // 4 imágenes × 2 cr — siempre Gemini
+        creditsSeedream: null, // no aplica — solo Gemini
       },
       {
         path: '/crear/manual',
@@ -38,7 +42,8 @@ const MODULE_GROUPS = [
         icon: 'fa-sliders',
         accent: 'text-violet-600',
         bg: 'bg-violet-50',
-        credits: 4,
+        creditsGemini: 8,
+        creditsSeedream: null,
       },
       {
         path: '/modelos',
@@ -48,7 +53,8 @@ const MODULE_GROUPS = [
         icon: 'fa-user-astronaut',
         accent: 'text-purple-600',
         bg: 'bg-purple-50',
-        credits: 0,
+        creditsGemini: 0,
+        creditsSeedream: 0,
       },
     ]
   },
@@ -64,7 +70,8 @@ const MODULE_GROUPS = [
         icon: 'fa-wand-magic-sparkles',
         accent: 'text-indigo-600',
         bg: 'bg-indigo-50',
-        credits: 2,
+        creditsGemini: 2,
+        creditsSeedream: 1,
       },
       {
         path: '/studio-pro',
@@ -74,7 +81,8 @@ const MODULE_GROUPS = [
         icon: 'fa-mobile-screen-button',
         accent: 'text-emerald-600',
         bg: 'bg-emerald-50',
-        credits: 4,
+        creditsGemini: 4,    // 2 cr × 2 (master + shot)
+        creditsSeedream: 2,
       },
       {
         path: '/clonar',
@@ -84,7 +92,8 @@ const MODULE_GROUPS = [
         icon: 'fa-clone',
         accent: 'text-blue-600',
         bg: 'bg-blue-50',
-        credits: 4,
+        creditsGemini: 2,
+        creditsSeedream: 1,
       },
     ]
   },
@@ -100,7 +109,8 @@ const MODULE_GROUPS = [
         icon: 'fa-shirt',
         accent: 'text-purple-600',
         bg: 'bg-purple-50',
-        credits: 1,
+        creditsGemini: 2,
+        creditsSeedream: 1,
       },
       {
         path: '/productos',
@@ -110,7 +120,8 @@ const MODULE_GROUPS = [
         icon: 'fa-gem',
         accent: 'text-slate-700',
         bg: 'bg-slate-100',
-        credits: 1,
+        creditsGemini: 2,
+        creditsSeedream: 1,
       },
     ]
   },
@@ -157,6 +168,7 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
     setTimeout(() => setMissionMsg(null), 3000);
   };
 
+  const { modelId } = useModelSelection();
   const displayName      = profile?.displayName?.split(' ')[0] || 'Creador';
   const availableCredits = credits?.available || 0;
   const planName         = credits?.plan || 'free';
@@ -536,23 +548,37 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
                     )}
                   </div>
                   <p className="text-xs font-medium text-slate-500 leading-tight md:leading-relaxed line-clamp-2 md:line-clamp-none">{mod.description}</p>
-                  {mod.credits > 0 && (
-                    <div className="flex md:hidden items-center gap-1 mt-1">
-                      <Zap className="w-2.5 h-2.5 text-indigo-400" />
-                      <span className="text-xs font-black text-slate-400 uppercase tracking-wider">
-                        {mod.credits} crédito{mod.credits > 1 ? 's' : ''}
+                  {mod.creditsGemini > 0 && (() => {
+                    const cost = mod.creditsSeedream !== null
+                      ? (modelId === 'seedream' ? mod.creditsSeedream : mod.creditsGemini)
+                      : mod.creditsGemini;
+                    const suffix = mod.creditsSeedream !== null ? ' · según modelo' : ' · solo Gemini';
+                    return (
+                      <div className="flex md:hidden items-center gap-1 mt-1">
+                        <Zap className="w-2.5 h-2.5 text-amber-400" />
+                        <span className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                          {cost} cr{cost > 1 ? '.' : '.'}
+                        </span>
+                      </div>
+                    );
+                  })()}
+                </div>
+                {mod.creditsGemini > 0 && (() => {
+                  const cost = mod.creditsSeedream !== null
+                    ? (modelId === 'seedream' ? mod.creditsSeedream : mod.creditsGemini)
+                    : mod.creditsGemini;
+                  const hasRange = mod.creditsSeedream !== null && mod.creditsSeedream !== mod.creditsGemini;
+                  return (
+                    <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
+                      <Zap className="w-3 h-3 text-amber-400" />
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                        {hasRange
+                          ? `${cost} cr. · desde ${mod.creditsSeedream} con Seedream`
+                          : `${cost} cr. · solo Gemini`}
                       </span>
                     </div>
-                  )}
-                </div>
-                {mod.credits > 0 && (
-                  <div className="hidden md:flex items-center gap-1">
-                    <Zap className="w-2.5 h-2.5 text-indigo-400" />
-                    <span className="text-xs font-black text-slate-400 uppercase tracking-wider">
-                      {mod.credits} crédito{mod.credits > 1 ? 's' : ''} por imagen
-                    </span>
-                  </div>
-                )}
+                  );
+                })()}
                 <div className="hidden md:flex absolute top-7 right-7 w-9 h-9 rounded-full border border-slate-100 items-center justify-center text-slate-300 group-hover:bg-slate-900 group-hover:text-white group-hover:border-slate-900 transition-all">
                   <ArrowRight size={14} className="-rotate-45 group-hover:rotate-0 transition-transform" />
                 </div>

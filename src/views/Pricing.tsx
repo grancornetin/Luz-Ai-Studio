@@ -148,7 +148,7 @@ export default function Pricing() {
       {/* FAQ rápido */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
-          { q: '¿Qué es un crédito?', a: '1 crédito = $0.10 USD. Cada imagen generada cuesta 2 créditos. Crear un modelo digital (Model DNA) cuesta 8 créditos porque genera 4 imágenes.' },
+          { q: '¿Qué es un crédito?', a: '1 crédito = $0.10 USD. Cada imagen cuesta 2 créditos con Nano Banana 2 (Gemini) o 1 crédito con Seedream 4.5. Model DNA cuesta 8 créditos (4 imágenes, siempre Gemini).' },
           { q: '¿Los créditos vencen?', a: 'Los créditos de planes mensuales se renuevan cada ciclo. Los créditos de recargas y misiones no vencen.' },
           { q: '¿Puedo cancelar cuando quiera?', a: 'Sí. Cancelas cuando quieras desde tu panel de cuenta. Tu plan se mantiene activo hasta el fin del período pagado.' },
         ].map((item, i) => (

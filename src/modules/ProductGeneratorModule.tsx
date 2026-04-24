@@ -10,7 +10,7 @@ import { ProductProfile } from '../types';
 import { geminiService } from '../services/geminiService';
 import { imageApiService, extractImageRef } from '../services/imageApiService';
 import { ModelSelector } from '../components/shared/ModelSelector';
-
+import { GenerateButton } from '../components/shared/GenerateButton';
 import { useModelSelection } from '../hooks/useModelSelection';
 import { generationHistoryService } from '../services/generationHistoryService';
 import { readAndCompressFile, downloadAsZip } from '../utils/imageUtils';
@@ -417,9 +417,15 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
 
                   <ModelSelector value={modelId} onChange={setModelId} disabled={isGenerating} />
 
-                  <button onClick={startGeneratingHero} disabled={isGenerating || files.filter(f => f !== null).length === 0 || !name} className="w-full py-4 md:py-5 bg-brand-600 text-white rounded-2xl md:rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-brand-100 hover:bg-brand-700 active:scale-95 transition-all disabled:opacity-50">
-                    {isGenerating ? processingStatus : 'Generar Set de 5 Fotos'}
-                  </button>
+                  <GenerateButton
+                    onClick={startGeneratingHero}
+                    loading={isGenerating}
+                    disabled={files.filter(f => f !== null).length === 0 || !name}
+                    label="Generar Set de 5 Fotos"
+                    loadingLabel={processingStatus || 'Generando...'}
+                    imageCount={5}
+                    className="py-4 md:py-5 rounded-2xl md:rounded-[24px]"
+                  />
                 </div>
               </div>
             </div>

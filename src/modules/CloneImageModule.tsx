@@ -22,6 +22,7 @@ import { ImageSlot } from '../components/shared/ImageSlot';
 import UploadDisclaimer from '../components/shared/UploadDisclaimer';
 import { cloneMasterStorage, type CloneMasterSession } from './cloneMaster/storage';
 import { ModelSelector } from '../components/shared/ModelSelector';
+import { GenerateButton } from '../components/shared/GenerateButton';
 import { useModelSelection } from '../hooks/useModelSelection';
 
 type Step = 1 | 2 | 3 | 4;
@@ -686,14 +687,14 @@ export default function CloneImageModule() {
                   <ModelSelector value={modelId} onChange={setModelId} disabled={loading} />
 
                   <div className="pt-2">
-                    <button
+                    <GenerateButton
                       onClick={handleGenerateBase}
-                      disabled={loading}
-                      className="w-full py-6 bg-brand-600 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-brand-700 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-70"
-                    >
-                      {loading ? <i className="fa-solid fa-spinner animate-spin"></i> : <i className="fa-solid fa-bolt"></i>}
-                      {loading ? "Procesando..." : "Generar Clonación"}
-                    </button>
+                      loading={loading}
+                      label="Generar Clonación"
+                      loadingLabel="Procesando..."
+                      imageCount={1}
+                      className="py-6 rounded-[24px]"
+                    />
                   </div>
                   
                   {baseComposition && !loading && (

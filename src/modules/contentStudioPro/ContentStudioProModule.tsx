@@ -40,6 +40,7 @@ import { ImageLightbox } from '../../components/shared/ImageLightbox';
 import { FloatingActionBar } from '../../components/shared/FloatingActionBar';
 import { useScrollFAB } from '../../hooks/useScrollFAB';
 import { ModelSelector } from '../../components/shared/ModelSelector';
+import { GenerateButton } from '../../components/shared/GenerateButton';
 import { useModelSelection } from '../../hooks/useModelSelection';
 
 type Step = 'setup' | 'generating_master' | 'checkpoint' | 'producing' | 'library' | 'batch_generating';
@@ -996,12 +997,14 @@ const ContentStudioProModule: React.FC = () => {
                   disabled={step !== 'setup'}
                 />
 
-                <button
+                <GenerateButton
                   onClick={startMasterGeneration}
-                  className="w-full py-5 md:py-7 bg-brand-600 text-white rounded-[24px] md:rounded-[32px] font-black text-[10px] md:text-xs uppercase tracking-[0.2em] shadow-[0_20px_40px_rgba(247,44,91,0.3)] hover:bg-brand-700 active:scale-95 transition-all"
-                >
-                  Sintetizar Master Anchor (UGC)
-                </button>
+                  disabled={step !== 'setup'}
+                  label="Sintetizar Master Anchor (UGC)"
+                  loadingLabel="Generando..."
+                  imageCount={2}
+                  className="py-5 md:py-7 rounded-[24px] md:rounded-[32px] text-[10px] md:text-xs"
+                />
 
                 {errorStatus && (
                   <div className="p-4 rounded-2xl bg-red-50 border border-red-100 text-red-600 text-xs font-bold">

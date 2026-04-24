@@ -3,7 +3,9 @@
 // Fuente única de verdad para créditos, modelos, planes, top-ups y helpers.
 //
 // Regla de precio: 1 crédito = $0.10 USD = $100 CLP
-// Regla de generación: 2 créditos por imagen generada (solo Flash)
+// Costo por imagen según modelo:
+//   Nano Banana 2 (Gemini): 2 créditos/imagen
+//   Seedream 4.5:           1 crédito/imagen
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const MODELS = {
@@ -19,27 +21,39 @@ export const MODEL_LOCATIONS: Record<string, string> = {
   [MODELS.TEXT]:  'us-central1',
 };
 
+// ── COSTO POR MODELO ─────────────────────────────────────────────────────────
+export const MODEL_CREDIT_COST: Record<'gemini' | 'seedream', number> = {
+  gemini:   2,   // Nano Banana 2 — 2 créditos/imagen
+  seedream: 1,   // Seedream 4.5  — 1 crédito/imagen
+};
+
+/** Devuelve el costo en créditos de N imágenes según el modelo activo. */
+export function imageCost(images: number, modelId: 'gemini' | 'seedream' = 'gemini'): number {
+  return images * MODEL_CREDIT_COST[modelId];
+}
+
 // ── CRÉDITOS POR ACCIÓN ───────────────────────────────────────────────────────
-// Regla base: 2 créditos = 1 imagen con gemini-3.1-flash-image-preview
-// Model DNA genera 4 imágenes → 4 × 2 = 8 créditos
+// Los costos de imagen son con Gemini (modelo base).
+// Con Seedream estos costos se reducen a la mitad automáticamente.
+// Model DNA siempre usa Gemini (identidad facial crítica).
 
 export const CREDIT_COSTS = {
-  // Módulos de imagen
+  // Módulos de imagen — costos con Gemini (÷2 con Seedream)
   CLONE_IMAGE:            2,   // 1 imagen
-  CREATE_MODEL_CLONE:     8,   // 4 imágenes × 2 créditos
-  CREATE_MODEL_MANUAL:    8,   // 4 imágenes × 2 créditos
-  PROMPT_WITH_PERSON:     2,   // 1 imagen
-  PROMPT_NO_PERSON:       2,   // 1 imagen
-  CAMPAIGN_PER_IMAGE:     2,   // 1 imagen por escena
-  PHOTODUMP_PER_IMAGE:    2,   // 1 imagen por shot
-  UGC_PER_SHOT:           2,   // 1 imagen por shot (sesión 7 shots = 14 créditos total)
+  CREATE_MODEL_CLONE:     8,   // 4 imágenes × 2 cr — siempre Gemini
+  CREATE_MODEL_MANUAL:    8,   // 4 imágenes × 2 cr — siempre Gemini
+  PROMPT_WITH_PERSON:     2,   // 1 imagen (varía según modelo)
+  PROMPT_NO_PERSON:       2,   // 1 imagen (varía según modelo)
+  CAMPAIGN_PER_IMAGE:     2,   // 1 imagen por escena (varía según modelo)
+  PHOTODUMP_PER_IMAGE:    2,   // 1 imagen por shot (varía según modelo)
+  UGC_PER_SHOT:           2,   // 1 imagen por shot (varía según modelo)
   OUTFIT_ANALYSIS:        0,   // texto — gratis
-  OUTFIT_PER_GARMENT:     2,   // 1 imagen por prenda
+  OUTFIT_PER_GARMENT:     2,   // 1 imagen por prenda (varía según modelo)
   PRODUCT_ANALYSIS:       0,   // texto — gratis
-  PRODUCT_GENERATION:     2,   // 1 imagen
+  PRODUCT_GENERATION:     2,   // 1 imagen (varía según modelo)
   VARIATIONS_AI:          0,   // texto — gratis
   // Galería de prompts
-  REVEAL_PROMPT:          1,   // revelar prompt completo
+  REVEAL_PROMPT:          1,   // revelar prompt completo — precio fijo
 } as const;
 
 export type CreditCostKey = keyof typeof CREDIT_COSTS;
@@ -55,7 +69,7 @@ export const PLANS = {
     priceAnchor: null,
     renews: false,
     color: 'slate',
-    approxImages: '~5 imágenes',
+    approxImages: '~5–10 imágenes',
     description: 'Para explorar la plataforma',
     features: [
       '10 créditos (única vez)',
@@ -71,7 +85,7 @@ export const PLANS = {
     priceAnchor: 6.99,
     renews: true,
     color: 'brand',
-    approxImages: '~30 imágenes/semana',
+    approxImages: '~30–60 imágenes/semana',
     description: 'Para uso casual semanal',
     features: [
       '60 créditos/semana',
@@ -87,7 +101,7 @@ export const PLANS = {
     priceAnchor: 19.99,
     renews: true,
     color: 'brand',
-    approxImages: '~100 imágenes/mes',
+    approxImages: '~100–200 imágenes/mes',
     description: 'Para creadores independientes',
     features: [
       '200 créditos/mes',
@@ -104,7 +118,7 @@ export const PLANS = {
     priceAnchor: 49.99,
     renews: true,
     color: 'brand',
-    approxImages: '~250 imágenes/mes',
+    approxImages: '~250–500 imágenes/mes',
     description: 'Para agencias y equipos creativos',
     features: [
       '500 créditos/mes',
@@ -121,7 +135,7 @@ export const PLANS = {
     priceAnchor: 129.99,
     renews: true,
     color: 'violet',
-    approxImages: '~600 imágenes/mes',
+    approxImages: '~600–1200 imágenes/mes',
     description: 'Para producción a escala',
     features: [
       '1200 créditos/mes',

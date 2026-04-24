@@ -82,7 +82,7 @@ const FAQS = [
   },
   {
     q: '¿Qué es un crédito y cuánto cuesta?',
-    a: '1 crédito equivale a $0.10 USD. Cada imagen generada cuesta 2 créditos (~$0.20 USD). Al registrarte recibes 10 créditos gratis para probar la plataforma sin compromiso.',
+    a: '1 crédito = $0.10 USD. Cada imagen cuesta 2 créditos con Nano Banana 2 (Gemini) o 1 crédito con Seedream 4.5. Al registrarte recibes 10 créditos gratis para probar sin compromiso.',
   },
   {
     q: '¿Puedo usar las imágenes para publicidad comercial?',

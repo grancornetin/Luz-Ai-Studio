@@ -54,7 +54,7 @@ export default function BuyCredits() {
         <TrendingDown className="w-5 h-5 text-emerald-500 flex-shrink-0" />
         <p className="text-xs font-bold text-slate-600">
           <span className="font-black text-slate-800">1 crédito = {format(0.10)} · </span>
-          Cada imagen generada cuesta 2 créditos. Los paquetes más grandes tienen mejor precio por crédito.
+          Cada imagen cuesta <strong>2 cr. con Nano Banana 2</strong> o <strong>1 cr. con Seedream 4.5</strong>. Los paquetes más grandes tienen mejor precio por crédito.
         </p>
       </div>
 
@@ -90,7 +90,7 @@ export default function BuyCredits() {
               <div>
                 <p className="text-3xl font-black text-slate-900">{format(pkg.priceUSD)}</p>
                 <p className="text-[10px] text-slate-400 font-bold mt-0.5">
-                  {format(pricePerCredit)} por crédito · ~{Math.floor(pkg.credits / 2)} imágenes
+                  {format(pricePerCredit)} por crédito · ~{Math.floor(pkg.credits / 2)}–{pkg.credits} imágenes
                 </p>
               </div>
 
@@ -114,15 +114,16 @@ export default function BuyCredits() {
         <h3 className="text-sm font-black text-slate-800 uppercase italic tracking-tighter">¿Cuánto me alcanza?</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { label: 'AI Generator', cost: '2 créditos', icon: 'fa-wand-magic-sparkles' },
-            { label: 'Scene Clone', cost: '2 créditos', icon: 'fa-clone' },
-            { label: 'UGC Studio (7 shots)', cost: '14 créditos', icon: 'fa-mobile-screen-button' },
-            { label: 'Model DNA', cost: '8 créditos', icon: 'fa-dna' },
+            { label: 'AI Generator', cost: '1–2 cr.', note: 'según modelo', icon: 'fa-wand-magic-sparkles' },
+            { label: 'Scene Clone',  cost: '1–2 cr.', note: 'según modelo', icon: 'fa-clone' },
+            { label: 'Content Studio (sesión)', cost: '7–14 cr.', note: 'según modelo', icon: 'fa-mobile-screen-button' },
+            { label: 'Model DNA',    cost: '8 cr.',   note: 'solo Gemini',  icon: 'fa-dna' },
           ].map((item, i) => (
             <div key={i} className="bg-white rounded-2xl border border-slate-100 p-4 text-center space-y-1">
               <i className={`fa-solid ${item.icon} text-indigo-500 text-lg`}></i>
               <p className="text-[10px] font-black text-slate-700 uppercase tracking-tight leading-tight">{item.label}</p>
-              <p className="text-xs font-bold text-slate-400">{item.cost}</p>
+              <p className="text-xs font-black text-slate-600">{item.cost}</p>
+              <p className="text-[9px] font-medium text-slate-400">{item.note}</p>
             </div>
           ))}
         </div>
