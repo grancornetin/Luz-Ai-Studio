@@ -56,42 +56,50 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   disabled = false,
   className = '',
 }) => (
-  <div className={`flex gap-2 ${className}`}>
-    {MODELS.map(m => {
-      const active = value === m.id;
-      return (
-        <button
-          key={m.id}
-          type="button"
-          disabled={disabled}
-          onClick={() => onChange(m.id)}
-          className={`flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-2xl border transition-all text-left ${
-            active
-              ? `ring-2 ${m.ring} border-transparent`
-              : 'border-slate-100 bg-white hover:border-slate-200'
-          } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-        >
-          <div className={`flex-shrink-0 ${active ? m.color : 'text-slate-300'}`}>
-            {m.icon}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-1">
-              <span className={`text-[10px] font-black uppercase tracking-wide ${active ? 'text-slate-800' : 'text-slate-400'}`}>
-                {m.label}
-              </span>
-              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-                active ? `${m.color} bg-white` : 'text-slate-300 bg-slate-50'
-              }`}>
-                {m.credits} cr.
-              </span>
+  <div className={`space-y-1.5 ${className}`}>
+    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">
+      Modelo de IA · activo: <span className="text-slate-700">{MODELS.find(m => m.id === value)?.label}</span>
+    </p>
+    <div className="flex gap-2">
+      {MODELS.map(m => {
+        const active = value === m.id;
+        return (
+          <button
+            key={m.id}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(m.id)}
+            className={`flex-1 flex items-center gap-2.5 px-3 py-3 rounded-2xl border-2 transition-all text-left ${
+              active
+                ? `${m.ring} shadow-md`
+                : 'border-slate-100 bg-white hover:border-slate-200'
+            } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+          >
+            <div className={`flex-shrink-0 ${active ? m.color : 'text-slate-300'}`}>
+              {m.icon}
             </div>
-            <p className={`text-[9px] font-medium leading-tight mt-0.5 ${active ? 'text-slate-500' : 'text-slate-300'}`}>
-              {m.desc}
-            </p>
-          </div>
-        </button>
-      );
-    })}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-1">
+                <span className={`text-[10px] font-black uppercase tracking-wide ${active ? 'text-slate-800' : 'text-slate-400'}`}>
+                  {m.label}
+                </span>
+                <span className={`text-[9px] font-black px-2 py-0.5 rounded-full flex-shrink-0 ${
+                  active ? `${m.color} bg-white border border-current` : 'text-slate-300 bg-slate-50'
+                }`}>
+                  {m.credits} cr.
+                </span>
+              </div>
+              <p className={`text-[9px] font-medium leading-tight mt-0.5 ${active ? 'text-slate-500' : 'text-slate-300'}`}>
+                {m.desc}
+              </p>
+            </div>
+            {active && (
+              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${m.id === 'gemini' ? 'bg-yellow-400' : 'bg-emerald-400'} animate-pulse`} />
+            )}
+          </button>
+        );
+      })}
+    </div>
   </div>
 );
 
