@@ -25,7 +25,8 @@ export interface CloneImageParams {
   bodyImage2?:          string | null;
   replaceOutfit2?:      boolean;
   outfitOverrideImage2?: string | null;
-  productOverrides?:    DetectedObject[]; // solo los que tienen replacementImage
+  productOverrides?:    DetectedObject[];
+  modelId?:             'gemini' | 'seedream';
   onStatusChange?:      GenerateImageParams['onStatusChange'];
 }
 
@@ -112,6 +113,7 @@ ${productReplacementsText}
       referenceImages: refObjects,
       aspectRatio:     params.aspectRatio as any,
       module:          'cloneImageService',
+      modelId:         params.modelId || 'gemini',
       onStatusChange:  params.onStatusChange,
     });
   },

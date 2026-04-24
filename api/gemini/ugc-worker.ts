@@ -134,20 +134,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Invalid signature' });
   }
 
-  // Extraer jobId y parts del body enviado por ugc.ts
-  const { jobId, parts } = req.body;
+  const { jobId } = req.body;
+  if (!jobId) return res.status(400).json({ error: 'Missing jobId' });
 
-  if (!jobId || !parts) {
-    return res.status(400).json({ error: 'Missing jobId or parts' });
+  // Leer parts desde Redis — ugc.ts ya no los manda en el body de QStash
+  // para evitar el límite de 1MB cuando hay referencias de imagen pesadas.
+  const rawParts = await redis.get(`img_parts:${jobId}`);
+  if (!rawParts) {
+    console.error(`[UGCWorker] img_parts not found in Redis for job ${jobId}`);
+    return res.status(404).json({ error: 'Parts not found for job' });
   }
+  const parts = typeof rawParts === 'string' ? JSON.parse(rawParts) : rawParts;
 
-  // Ejecutar la generación — aquí puede tardar 30-90 segundos sin problema
-  // porque QStash espera hasta que el worker responda (timeout configurable hasta 2h)
   try {
     await processGenerationJob(jobId, parts);
+    await redis.del(`img_parts:${jobId}`).catch(() => {});
     return res.status(200).json({ ok: true, jobId });
   } catch (error: any) {
-    console.error(`[Worker] Unhandled error for job ${jobId}:`, error.message);
+    console.error(`[UGCWorker] Unhandled error for job ${jobId}:`, error.message);
     return res.status(500).json({ error: error.message });
   }
 }

@@ -12,7 +12,7 @@ interface ModelSelectorProps {
   className?: string;
 }
 
-const BananaIcon: React.FC = () => (
+const BananaIcon: React.FC<{ className?: string }> = () => (
   <span style={{ fontSize: 16, lineHeight: 1 }}>🍌</span>
 );
 

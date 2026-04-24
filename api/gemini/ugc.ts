@@ -146,7 +146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Iniciar generación asíncrona
     if (action === 'generateImageAsync') {
-      const { prompt, referenceImages, aspectRatio = '3:4', shotIndex, totalShots } = payload;
+      const { prompt, referenceImages, aspectRatio = '3:4', shotIndex, totalShots, modelId = 'gemini' } = payload;
       if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
 
       const parts: any[] = [];
@@ -169,19 +169,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         shotIndex,
         totalShots,
       };
-      await saveJob(job);
 
-const qstash = new QStashClient({ token: process.env.QSTASH_TOKEN! });
-const workerUrl = `${process.env.WORKER_BASE_URL}/api/gemini/ugc-worker`;
+      // Siempre guardar parts en Redis — evita superar límite 1MB de QStash
+      // con referencias de imagen pesadas, independiente del modelo.
+      await Promise.all([
+        saveJob(job),
+        redis.set(`img_parts:${jobId}`, JSON.stringify(parts), { ex: 3600 }),
+      ]);
 
-await qstash.publishJSON({
-  url: workerUrl,
-  body: { jobId, parts },
-  retries: 2,
-});
+      const qstash = new QStashClient({ token: process.env.QSTASH_TOKEN! });
+      const isSeedream = modelId === 'seedream';
+      const workerUrl = isSeedream
+        ? `${process.env.WORKER_BASE_URL}/api/gemini/seedream-worker`
+        : `${process.env.WORKER_BASE_URL}/api/gemini/ugc-worker`;
 
-console.log(`[UGC] Job ${jobId} enqueued → ${workerUrl}`);
-return res.status(202).json({ success: true, jobId, status: 'pending', shotIndex, totalShots });
+      // Seedream: pasa prompt y aspectRatio (worker lee parts de Redis)
+      // Gemini ugc-worker: ahora también lee parts de Redis (no vienen en body)
+      const workerBody = isSeedream
+        ? { jobId, prompt, aspectRatio }
+        : { jobId };
+
+      await qstash.publishJSON({ url: workerUrl, body: workerBody, retries: 2 });
+
+      console.log(`[UGC] Job ${jobId} enqueued model=${modelId} → ${workerUrl}`);
+      return res.status(202).json({ success: true, jobId, status: 'pending', shotIndex, totalShots });
     }
 
     // Consultar estado

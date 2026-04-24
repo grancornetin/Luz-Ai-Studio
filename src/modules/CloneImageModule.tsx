@@ -21,6 +21,8 @@ import { analyzeScene, DetectedObject } from '../services/sceneAnalysisService';
 import { ImageSlot } from '../components/shared/ImageSlot';
 import UploadDisclaimer from '../components/shared/UploadDisclaimer';
 import { cloneMasterStorage, type CloneMasterSession } from './cloneMaster/storage';
+import { ModelSelector } from '../components/shared/ModelSelector';
+import { useModelSelection } from '../hooks/useModelSelection';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -252,6 +254,7 @@ export default function CloneImageModule() {
 
   // FAB scroll detection
   const { isVisible: fabVisibleRaw } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: false });
+  const { modelId, setModelId } = useModelSelection();
   const fabVisible = !!fabVisibleRaw;
 
   // Carga historial al montar
@@ -328,6 +331,7 @@ export default function CloneImageModule() {
         replaceOutfit: false,
         cameraStyle,
         aspectRatio,
+        modelId,
         enableSecondSubject,
         subject1Selector,
         faceImage2: enableSecondSubject ? normalizeImageInput(face2) : null,
@@ -679,9 +683,11 @@ export default function CloneImageModule() {
                      </div>
                   </div>
 
+                  <ModelSelector value={modelId} onChange={setModelId} disabled={loading} />
+
                   <div className="pt-2">
-                    <button 
-                      onClick={handleGenerateBase} 
+                    <button
+                      onClick={handleGenerateBase}
                       disabled={loading}
                       className="w-full py-6 bg-brand-600 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-brand-700 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-70"
                     >
