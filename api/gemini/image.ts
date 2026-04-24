@@ -133,27 +133,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         module: moduleName,
       };
 
-      // Guardar job. Parts solo para Gemini (Seedream no los usa)
       const isSeedream = modelId === 'seedream';
-      const saveOps: Promise<any>[] = [saveJob(job)];
-      if (!isSeedream) {
-        saveOps.push(redis.set(`img_parts:${jobId}`, JSON.stringify(parts), { ex: 3600 }));
-      }
-      await Promise.all(saveOps);
+
+      // Guardar parts en Redis para ambos modelos — Seedream también los usa
+      // para extraer las referencias de imagen en formato base64
+      await Promise.all([
+        saveJob(job),
+        redis.set(`img_parts:${jobId}`, JSON.stringify(parts), { ex: 3600 }),
+      ]);
 
       // Enrutar al worker según el modelo seleccionado
-
       let workerUrl: string;
       let workerBody: Record<string, unknown>;
 
       if (isSeedream) {
-        // Seedream: el worker hace su propio polling a EvoLink — solo necesita prompt
-        // No soporta reference images (texto puro solamente)
         workerUrl  = `${process.env.WORKER_BASE_URL}/api/gemini/seedream-worker`;
         workerBody = { jobId, prompt, aspectRatio };
-        // No guardamos img_parts en Redis — Seedream no los usa
       } else {
-        // Gemini: el worker lee parts desde Redis
         workerUrl  = `${process.env.WORKER_BASE_URL}/api/gemini/image-worker`;
         workerBody = { jobId };
       }

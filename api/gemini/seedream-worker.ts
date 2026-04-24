@@ -74,6 +74,21 @@ function toEvolinkSize(aspectRatio: string): string {
   return map[aspectRatio] || '1:1';
 }
 
+// ─── Extrae referencias de imagen desde los parts guardados en Redis ──────────
+// Los parts tienen formato [{text:"REF0:"}, {inlineData:{mimeType,data}}, ...]
+// Devuelve array de data URLs base64 completos para pasar a EvoLink.
+function extractReferenceDataUrls(parts: any[]): string[] {
+  const refs: string[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (part?.inlineData?.data) {
+      const mime = part.inlineData.mimeType || 'image/jpeg';
+      refs.push(`data:${mime};base64,${part.inlineData.data}`);
+    }
+  }
+  return refs;
+}
+
 // ─── Lógica principal ─────────────────────────────────────────────────────────
 async function processSeedreamJob(
   jobId: string,
@@ -100,20 +115,44 @@ async function processSeedreamJob(
     return;
   }
 
+  // Leer referencias de imagen desde Redis (guardadas por image.ts)
+  let referenceDataUrls: string[] = [];
+  try {
+    const rawParts = await redis.get(`img_parts:${jobId}`);
+    if (rawParts) {
+      const parts = typeof rawParts === 'string' ? JSON.parse(rawParts) : rawParts;
+      referenceDataUrls = extractReferenceDataUrls(parts);
+      console.log(`[SeedreamWorker ${jobId}] Found ${referenceDataUrls.length} reference image(s)`);
+    }
+  } catch (e) {
+    console.warn(`[SeedreamWorker ${jobId}] Could not read img_parts from Redis:`, e);
+  }
+
+  // Construir body para EvoLink
+  // Si hay referencias, usar image_url (primera) o image_urls (array)
+  const evolinkBody: Record<string, unknown> = {
+    model:  SEEDREAM_MODEL_ID,
+    prompt,
+    size:   toEvolinkSize(aspectRatio),
+  };
+
+  if (referenceDataUrls.length === 1) {
+    evolinkBody.image_url = referenceDataUrls[0];
+  } else if (referenceDataUrls.length > 1) {
+    evolinkBody.image_url = referenceDataUrls[0];   // primera como principal
+    evolinkBody.image_urls = referenceDataUrls;      // todas como contexto adicional
+  }
+
   let taskId: string;
   try {
-    console.log(`[SeedreamWorker ${jobId}] Using key: ${EVOLINK_API_KEY.slice(0, 8)}...`);
+    console.log(`[SeedreamWorker ${jobId}] Using key: ${EVOLINK_API_KEY.slice(0, 8)}... refs=${referenceDataUrls.length}`);
     const startRes = await fetch(`${EVOLINK_BASE_URL}/images/generations`, {
       method:  'POST',
       headers: {
         'Content-Type':  'application/json',
         'Authorization': `Bearer ${EVOLINK_API_KEY}`,
       },
-      body: JSON.stringify({
-        model:  SEEDREAM_MODEL_ID,
-        prompt,
-        size:   toEvolinkSize(aspectRatio),
-      }),
+      body: JSON.stringify(evolinkBody),
     });
 
     if (!startRes.ok) {
@@ -193,6 +232,8 @@ async function processSeedreamJob(
         job.result    = dataUrl;
         job.updatedAt = Date.now();
         await saveJob(job);
+        // Limpiar parts de Redis — ya no se necesitan
+        await redis.del(`img_parts:${jobId}`).catch(() => {});
         console.log(`[SeedreamWorker ${jobId}] Completed successfully`);
       } catch (err: any) {
         job.status    = 'failed';
