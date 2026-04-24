@@ -4,7 +4,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Redis } from '@upstash/redis';
-import { setSecurityHeaders, sanitizeUid } from './_middleware';
+import { setSecurityHeaders, sanitizeUid } from './_middleware.js';
 
 const redis = new Redis({
   url:   process.env.KV_REST_API_URL!,

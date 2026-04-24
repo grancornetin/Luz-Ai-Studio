@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from '@google/genai';
 import { Redis } from '@upstash/redis';
 import { Client as QStashClient } from '@upstash/qstash';
-import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, checkRateLimit, sanitizeUid } from '../_middleware';
+import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, checkRateLimit, sanitizeUid } from '../_middleware.js';
 
 const RETRY_DELAY_MS = 3000;
 

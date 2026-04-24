@@ -2,7 +2,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Redis } from '@upstash/redis';
 import { Client as QStashClient } from '@upstash/qstash';
-import { setCorsHeaders, setSecurityHeaders, validateBase64Image, getImageRatelimit, checkRateLimit, sanitizeUid } from '../_middleware';
+import { setCorsHeaders, setSecurityHeaders, validateBase64Image, getImageRatelimit, checkRateLimit, sanitizeUid } from '../_middleware.js';
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL!,

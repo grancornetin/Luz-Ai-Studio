@@ -29,7 +29,7 @@ interface ContentRequest {
   model?: string;
 }
 
-import { setSecurityHeaders, validateBase64Image, validatePrompt } from '../_middleware';
+import { setSecurityHeaders, validateBase64Image, validatePrompt } from '../_middleware.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setSecurityHeaders(res);

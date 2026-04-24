@@ -60,7 +60,7 @@ async function getJob(jobId: string): Promise<ImageJob | null> {
   return data as ImageJob;
 }
 
-import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, checkRateLimit, sanitizeUid } from '../_middleware';
+import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, checkRateLimit, sanitizeUid } from '../_middleware.js';
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
