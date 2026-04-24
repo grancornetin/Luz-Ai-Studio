@@ -95,7 +95,9 @@ async function processJob(jobId: string, parts: any[]): Promise<void> {
       config:   { responseModalities: ['TEXT', 'IMAGE'] },
     });
 
-    for (const candidate of (response.candidates || [])) {
+    const candidates = response.candidates || [];
+
+    for (const candidate of candidates) {
       for (const part of (candidate.content?.parts || [])) {
         if (part.inlineData?.data) {
           const mime = part.inlineData.mimeType || 'image/png';
@@ -108,7 +110,24 @@ async function processJob(jobId: string, parts: any[]): Promise<void> {
         }
       }
     }
-    throw new Error('Model returned no image');
+
+    // Sin imagen — inspeccionar por qué (filtro de contenido vs error real)
+    const firstCandidate = candidates[0];
+    const finishReason   = firstCandidate?.finishReason || 'UNKNOWN';
+    const safetyIssues   = firstCandidate?.safetyRatings
+      ?.filter((r: any) => r.blocked || r.probability === 'HIGH' || r.probability === 'MEDIUM')
+      ?.map((r: any) => r.category)
+      ?? [];
+
+    if (finishReason === 'SAFETY' || safetyIssues.length > 0) {
+      throw new Error(
+        `Prompt bloqueado por filtros de contenido de Google` +
+        (safetyIssues.length > 0 ? ` (${safetyIssues.join(', ')})` : '') +
+        `. Intenta suavizar términos como "seductive", "voluptuous" o similares.`
+      );
+    }
+
+    throw new Error(`El modelo no generó imagen (finishReason: ${finishReason}). Reformula el prompt.`);
   } catch (err: any) {
     job.status    = 'failed';
     job.error     = err.message || 'Flash model failed';
