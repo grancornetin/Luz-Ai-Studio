@@ -90,8 +90,18 @@ async function processSeedreamJob(
   await saveJob(job);
 
   // ── Paso 1: iniciar generación en EvoLink ─────────────────────────────────
+  if (!EVOLINK_API_KEY) {
+    job.status    = 'failed';
+    job.error     = 'EVOLINK_API_KEY not configured in environment variables';
+    job.updatedAt = Date.now();
+    await saveJob(job);
+    console.error(`[SeedreamWorker ${jobId}] Missing EVOLINK_API_KEY env var`);
+    return;
+  }
+
   let taskId: string;
   try {
+    console.log(`[SeedreamWorker ${jobId}] Using key: ${EVOLINK_API_KEY.slice(0, 8)}...`);
     const startRes = await fetch(`${EVOLINK_BASE_URL}/images/generations`, {
       method:  'POST',
       headers: {

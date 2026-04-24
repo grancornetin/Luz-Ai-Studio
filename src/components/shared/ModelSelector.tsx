@@ -1,9 +1,8 @@
 // src/components/shared/ModelSelector.tsx
 // Selector de modelo de generación de imágenes.
-// Muestra las dos opciones con costo de créditos y descripción breve.
 
 import React from 'react';
-import { Zap, Sparkles } from 'lucide-react';
+import { Zap } from 'lucide-react';
 import type { ModelId } from '../../services/imageApiService';
 
 interface ModelSelectorProps {
@@ -12,6 +11,15 @@ interface ModelSelectorProps {
   disabled?: boolean;
   className?: string;
 }
+
+// Icono de banana en SVG inline (no está en lucide-react)
+const BananaIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 13c3.5-2 8-2 11 1" />
+    <path d="M4 13C2 10 3 5 8 4c4-1 9 1 10 5" />
+    <path d="M15 14c1.5 2 1.5 4-1 6" />
+  </svg>
+);
 
 const MODELS: {
   id:      ModelId;
@@ -24,17 +32,17 @@ const MODELS: {
 }[] = [
   {
     id:      'gemini',
-    label:   'Gemini Flash',
-    desc:    'Alta calidad con referencias de imagen',
+    label:   'Nano Banana 2',
+    desc:    'Máxima calidad, referencias de imagen',
     credits: 2,
-    icon:    <Sparkles className="w-4 h-4" />,
-    color:   'text-indigo-600',
-    ring:    'ring-indigo-500 bg-indigo-50 border-indigo-200',
+    icon:    <BananaIcon className="w-4 h-4" />,
+    color:   'text-yellow-500',
+    ring:    'ring-yellow-400 bg-yellow-50 border-yellow-200',
   },
   {
     id:      'seedream',
     label:   'Seedream 4.5',
-    desc:    'Rápido y económico, solo texto',
+    desc:    'Rápido y económico',
     credits: 1,
     icon:    <Zap className="w-4 h-4" />,
     color:   'text-emerald-600',

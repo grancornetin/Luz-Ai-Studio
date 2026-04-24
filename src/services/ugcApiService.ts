@@ -84,8 +84,7 @@ class UGCApiService {
         action: 'generateImageAsync',
         payload: {
           prompt: params.prompt,
-          // Seedream solo texto — no enviar referenceImages
-          referenceImages: useSeedream ? undefined : params.referenceImages,
+          referenceImages: params.referenceImages,
           aspectRatio: params.aspectRatio || '3:4',
           shotIndex: params.shotIndex,
           totalShots: params.totalShots,
