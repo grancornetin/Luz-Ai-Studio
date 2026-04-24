@@ -16,6 +16,7 @@ import { usePromptComposer } from './hooks/usePromptComposer';
 import { PromptDNA } from './types/promptTypes';
 
 import { AlertCircle, Sparkles, ChevronDown, Zap, Megaphone, Images, Info } from 'lucide-react';
+import { ModelSelector } from '../../components/shared/ModelSelector';
 
 type OutputMode = 'standard' | 'campaign' | 'photodump';
 
@@ -55,6 +56,8 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
     generate,
     showNoCredits,
     closeNoCredits,
+    modelId,
+    setModelId,
   } = usePromptComposer();
 
   const [showAdvanced, setShowAdvanced] = React.useState(false);
@@ -150,11 +153,18 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
                 <PromptInput value={safePromptText} onChange={setPromptText} />
 
                 {outputMode === 'standard' && (
-                  <GenerateControls
-                    onGenerate={generate}
-                    isGenerating={isGenerating}
-                    disabled={!safePromptText.trim()}
-                  />
+                  <div className="space-y-3">
+                    <ModelSelector
+                      value={modelId}
+                      onChange={setModelId}
+                      disabled={isGenerating}
+                    />
+                    <GenerateControls
+                      onGenerate={generate}
+                      isGenerating={isGenerating}
+                      disabled={!safePromptText.trim()}
+                    />
+                  </div>
                 )}
 
                 {error && outputMode === 'standard' && (

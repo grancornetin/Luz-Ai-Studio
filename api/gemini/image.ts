@@ -83,6 +83,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         totalShots,
         module: moduleName,
         uid: rawUid,
+        modelId = 'gemini',   // 'gemini' | 'seedream'
       } = payload;
 
       if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
@@ -132,21 +133,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         module: moduleName,
       };
 
-      // Guardar job y parts por separado en Redis
-      await Promise.all([
-        saveJob(job),
-        redis.set(`img_parts:${jobId}`, JSON.stringify(parts), { ex: 3600 }),
-      ]);
+      // Guardar job. Parts solo para Gemini (Seedream no los usa)
+      const isSeedream = modelId === 'seedream';
+      const saveOps: Promise<any>[] = [saveJob(job)];
+      if (!isSeedream) {
+        saveOps.push(redis.set(`img_parts:${jobId}`, JSON.stringify(parts), { ex: 3600 }));
+      }
+      await Promise.all(saveOps);
 
-      // Encolar en QStash → image-worker — solo el jobId, sin imágenes
-      const workerUrl = `${process.env.WORKER_BASE_URL}/api/gemini/image-worker`;
+      // Enrutar al worker según el modelo seleccionado
+
+      let workerUrl: string;
+      let workerBody: Record<string, unknown>;
+
+      if (isSeedream) {
+        // Seedream: el worker hace su propio polling a EvoLink — solo necesita prompt
+        // No soporta reference images (texto puro solamente)
+        workerUrl  = `${process.env.WORKER_BASE_URL}/api/gemini/seedream-worker`;
+        workerBody = { jobId, prompt, aspectRatio };
+        // No guardamos img_parts en Redis — Seedream no los usa
+      } else {
+        // Gemini: el worker lee parts desde Redis
+        workerUrl  = `${process.env.WORKER_BASE_URL}/api/gemini/image-worker`;
+        workerBody = { jobId };
+      }
+
       await qstash.publishJSON({
         url:     workerUrl,
-        body:    { jobId },   // ← solo jobId, el worker lee parts desde Redis
+        body:    workerBody,
         retries: 2,
       });
 
-      console.log(`[Image] Job ${jobId} enqueued (module: ${moduleName || 'unknown'}) → ${workerUrl}`);
+      console.log(`[Image] Job ${jobId} enqueued model=${isSeedream ? 'seedream' : 'gemini'} (module: ${moduleName || 'unknown'}) → ${workerUrl}`);
       return res.status(202).json({
         success: true,
         jobId,

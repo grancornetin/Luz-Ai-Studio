@@ -9,6 +9,7 @@ import { promptBuilder } from '../services/promptBuilder';
 import { payloadValidator } from '../services/payloadValidator';
 import { useAuth } from '../../auth/AuthContext';
 import { CREDIT_COSTS } from '../../../services/creditConfig';
+import { useModelSelection } from '../../../hooks/useModelSelection';
 
 const mergeDNA = (baseDNA: PromptDNA, referenceDNA: PromptDNA): PromptDNA => {
   const unique = (arr?: string[]) => Array.from(new Set(arr || []));
@@ -63,6 +64,7 @@ export const usePromptComposer = () => {
   const [showNoCredits, setShowNoCredits] = useState(false);
 
   const { credits, isAdmin, deductCredits } = useAuth();
+  const { modelId, setModelId } = useModelSelection();
 
   const generate = useCallback(async () => {
 
@@ -124,7 +126,9 @@ export const usePromptComposer = () => {
       const image = await generationService.generateImage(
         finalPrompt,
         references,
-        negativePrompt
+        negativePrompt,
+        hasPersonSlot,
+        { modelId },
       );
 
       // 🧠 Guardamos metadata de generación
@@ -195,6 +199,8 @@ export const usePromptComposer = () => {
     reset,
     showNoCredits,
     closeNoCredits: () => setShowNoCredits(false),
+    modelId,
+    setModelId,
   };
 
 };

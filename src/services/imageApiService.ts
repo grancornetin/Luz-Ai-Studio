@@ -20,6 +20,8 @@ const MAX_SILENT_RETRIES = 1;      // 1 reintento — solo Flash, sin fallback a
 
 export type ImageJobStatus = 'pending' | 'processing' | 'retrying' | 'completed' | 'failed';
 
+export type ModelId = 'gemini' | 'seedream';
+
 export interface GenerateImageParams {
   prompt:           string;
   negative?:        string;
@@ -28,6 +30,7 @@ export interface GenerateImageParams {
   shotIndex?:       number;
   totalShots?:      number;
   module?:          string;   // trazabilidad en logs
+  modelId?:         ModelId;  // 'gemini' (default) | 'seedream'
   onStatusChange?:  (status: ImageJobStatus, image?: string, shotIndex?: number) => void;
 }
 
@@ -47,6 +50,7 @@ async function startJob(params: GenerateImageParams): Promise<{ jobId: string; s
         shotIndex:       params.shotIndex,
         totalShots:      params.totalShots,
         module:          params.module,
+        modelId:         params.modelId || 'gemini',
       },
     }),
   });

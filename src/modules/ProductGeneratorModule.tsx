@@ -9,6 +9,9 @@ import { useNavigate } from 'react-router-dom';
 import { ProductProfile } from '../types';
 import { geminiService } from '../services/geminiService';
 import { imageApiService, extractImageRef } from '../services/imageApiService';
+import { ModelSelector } from '../components/shared/ModelSelector';
+
+import { useModelSelection } from '../hooks/useModelSelection';
 import { generationHistoryService } from '../services/generationHistoryService';
 import { readAndCompressFile, downloadAsZip } from '../utils/imageUtils';
 import { 
@@ -72,6 +75,7 @@ const sanitizeProductAnchor = (prompt: string, productCategory: string): string 
 
 const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, products, standalone }) => {
   const navigate = useNavigate();
+  const { modelId, setModelId } = useModelSelection();
   const [activeTab, setActiveTab] = useState<'create' | 'library'>('create');
   const [currentStep, setCurrentStep] = useState<ProductWorkflowStep>('setup');
   const [name, setName] = useState('');
@@ -156,6 +160,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
       referenceImages: refObjects.length > 0 ? refObjects : undefined,
       aspectRatio:     '3:4',
       module:          'ProductGeneratorModule',
+      modelId,
     });
   };
 
@@ -409,6 +414,8 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
                   </div>
 
                   <UploadDisclaimer />
+
+                  <ModelSelector value={modelId} onChange={setModelId} disabled={isGenerating} />
 
                   <button onClick={startGeneratingHero} disabled={isGenerating || files.filter(f => f !== null).length === 0 || !name} className="w-full py-4 md:py-5 bg-brand-600 text-white rounded-2xl md:rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-brand-100 hover:bg-brand-700 active:scale-95 transition-all disabled:opacity-50">
                     {isGenerating ? processingStatus : 'Generar Set de 5 Fotos'}
