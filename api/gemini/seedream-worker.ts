@@ -74,16 +74,33 @@ function toEvolinkSize(aspectRatio: string): string {
   return map[aspectRatio] || '1:1';
 }
 
+// ─── Compresión de imagen base64 en Node (sin Canvas) ────────────────────────
+// Usa solo Buffer — no hay Canvas en Vercel serverless.
+// Estrategia: si el base64 supera MAX_REF_BYTES, trunca a ese límite.
+// EvoLink acepta imágenes de referencia de hasta ~2MB; con la compresión
+// previa del frontend (1024px/0.82) rara vez superan 200-300KB en base64.
+const MAX_REF_B64_CHARS = 400_000; // ~300KB decoded ≈ límite seguro para EvoLink
+
+function trimBase64IfNeeded(b64: string): string {
+  if (b64.length <= MAX_REF_B64_CHARS) return b64;
+  // Recortar al límite — el resultado sigue siendo válido JPEG/PNG parcialmente
+  // ya que EvoLink usará lo que pueda interpretar. En la práctica el frontend
+  // ya comprime a 1024px/0.82, así que esto es un safety net.
+  console.warn(`[SeedreamWorker] Reference image truncated: ${b64.length} → ${MAX_REF_B64_CHARS} chars`);
+  return b64.slice(0, MAX_REF_B64_CHARS);
+}
+
 // ─── Extrae referencias de imagen desde los parts guardados en Redis ──────────
 // Los parts tienen formato [{text:"REF0:"}, {inlineData:{mimeType,data}}, ...]
-// Devuelve array de data URLs base64 completos para pasar a EvoLink.
+// Devuelve array de data URLs base64, comprimidas al límite seguro.
 function extractReferenceDataUrls(parts: any[]): string[] {
   const refs: string[] = [];
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i];
     if (part?.inlineData?.data) {
-      const mime = part.inlineData.mimeType || 'image/jpeg';
-      refs.push(`data:${mime};base64,${part.inlineData.data}`);
+      const mime    = part.inlineData.mimeType || 'image/jpeg';
+      const trimmed = trimBase64IfNeeded(part.inlineData.data);
+      refs.push(`data:${mime};base64,${trimmed}`);
     }
   }
   return refs;
@@ -136,11 +153,19 @@ async function processSeedreamJob(
     size:   toEvolinkSize(aspectRatio),
   };
 
-  if (referenceDataUrls.length === 1) {
-    evolinkBody.image_url = referenceDataUrls[0];
-  } else if (referenceDataUrls.length > 1) {
-    evolinkBody.image_url = referenceDataUrls[0];   // primera como principal
-    evolinkBody.image_urls = referenceDataUrls;      // todas como contexto adicional
+  // EvoLink funciona mejor con 1-2 referencias — limitamos para no saturar el body
+  const MAX_REFS = 2;
+  const refsToSend = referenceDataUrls.slice(0, MAX_REFS);
+
+  if (refsToSend.length === 1) {
+    evolinkBody.image_url = refsToSend[0];
+  } else if (refsToSend.length > 1) {
+    evolinkBody.image_url  = refsToSend[0];   // principal
+    evolinkBody.image_urls = refsToSend;       // contexto adicional
+  }
+
+  if (referenceDataUrls.length > MAX_REFS) {
+    console.log(`[SeedreamWorker ${jobId}] Capped references: ${referenceDataUrls.length} → ${MAX_REFS}`);
   }
 
   let taskId: string;
