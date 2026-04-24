@@ -3,8 +3,6 @@
 // Aplica: CORS restringido, security headers, verificación de Firebase Auth, rate limiting.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 
@@ -68,8 +66,9 @@ export async function checkRateLimit(
   }
 }
 
-// ── Firebase Admin Init ────────────────────────────────────────────────────────
-function initFirebaseAdmin() {
+// ── Firebase Admin Init (lazy — solo si se usa verifyAuth) ────────────────────
+async function initFirebaseAdmin() {
+  const { initializeApp, getApps, cert } = await import('firebase-admin/app' as any);
   if (getApps().length > 0) return;
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '';
   const decoded = raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf-8');
@@ -129,7 +128,8 @@ export async function verifyAuth(req: VercelRequest): Promise<string> {
   }
   const token = authHeader.slice(7);
   try {
-    initFirebaseAdmin();
+    await initFirebaseAdmin();
+    const { getAuth } = await import('firebase-admin/auth' as any);
     const decoded = await getAuth().verifyIdToken(token);
     return decoded.uid;
   } catch {
