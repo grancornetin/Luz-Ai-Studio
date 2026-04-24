@@ -12,13 +12,8 @@ interface ModelSelectorProps {
   className?: string;
 }
 
-// Icono de banana en SVG inline (no está en lucide-react)
-const BananaIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 13c3.5-2 8-2 11 1" />
-    <path d="M4 13C2 10 3 5 8 4c4-1 9 1 10 5" />
-    <path d="M15 14c1.5 2 1.5 4-1 6" />
-  </svg>
+const BananaIcon: React.FC = () => (
+  <span style={{ fontSize: 16, lineHeight: 1 }}>🍌</span>
 );
 
 const MODELS: {

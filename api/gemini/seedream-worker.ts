@@ -61,16 +61,17 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// ─── Mapeo de aspectRatio a tamaño EvoLink ────────────────────────────────────
+// ─── Mapeo de aspectRatio al formato que acepta Seedream ─────────────────────
+// Seedream acepta ratios como string ('3:4'), NO píxeles exactos ('768x1024').
 function toEvolinkSize(aspectRatio: string): string {
   const map: Record<string, string> = {
-    '1:1':  '1024x1024',
-    '3:4':  '768x1024',
-    '4:3':  '1024x768',
-    '9:16': '576x1024',
-    '16:9': '1024x576',
+    '1:1':  '1:1',
+    '3:4':  '3:4',
+    '4:3':  '4:3',
+    '9:16': '9:16',
+    '16:9': '16:9',
   };
-  return map[aspectRatio] || '1024x1024';
+  return map[aspectRatio] || '1:1';
 }
 
 // ─── Lógica principal ─────────────────────────────────────────────────────────
