@@ -374,7 +374,8 @@ const ContentStudioProModule: React.FC = () => {
           producingSet.ref0Analysis,
           idx,
           totalShots,
-          () => {}
+          () => {},
+          modelId,
         );
 
         return url;
@@ -625,6 +626,7 @@ const ContentStudioProModule: React.FC = () => {
         shotIndex,
         updatedShots.length,
         (status, imageUrl) => {
+
           if (status === 'completed' && imageUrl) {
             updatedShots[shotIndex] = {
               ...shot,
@@ -643,7 +645,8 @@ const ContentStudioProModule: React.FC = () => {
           const finalSet = { ...targetSet, shots: updatedShots };
           if (currentSet?.id === targetSet.id) setCurrentSet(finalSet);
           setSets((prev) => prev.map((s) => (s.id === targetSet.id ? finalSet : s)));
-        }
+        },
+        modelId,
       );
     } catch (e: any) {
       updatedShots[shotIndex] = {

@@ -917,6 +917,47 @@ FORBIDDEN: scene redesign, person floating over background,
 // ===================================================================
 // MOTOR DE GENERACIÓN CON POLLING
 // ===================================================================
+// Describe los roles de las referencias en lenguaje natural para Seedream.
+// Gemini interpreta referencias por posición numérica; Seedream necesita
+// que el texto explique qué es cada imagen referenciada.
+function buildSeedreamRefContext(refs: (string | null)[], isDerivedShot: boolean): string {
+  // Para shots derivados: [REF0/image0, face, face?, face?, outfit?, product?, scene?]
+  // Para image0 (master): [face, face, outfit?, product?, scene?]
+  const validRefs = refs.filter(Boolean);
+  if (validRefs.length === 0) return '';
+
+  const lines: string[] = ['[REFERENCE IMAGES PROVIDED — USE EACH ONE AS DESCRIBED:]'];
+
+  if (isDerivedShot) {
+    // Primer ref es el master shot (REF0)
+    lines.push('• Image 1: Master reference shot — establishes the environment, lighting, and visual world.');
+    // Las siguientes hasta 3 son cara (deduplicadas en el worker, pero aquí describimos)
+    lines.push('• Image 2: Face identity reference — copy this person\'s face, hair, and skin tone EXACTLY.');
+    let idx = 3;
+    for (let i = 3; i < refs.length && refs[i]; i++) {
+      // Intentamos inferir el rol por posición (outfit, product, scene en ese orden)
+      const roles = ['Outfit reference — reproduce the garments exactly.',
+                     'Product reference — reproduce the product exactly.',
+                     'Scene/environment reference — match the environment exactly.'];
+      lines.push(`• Image ${idx}: ${roles[i - 3] || 'Additional reference.'}`);
+      idx++;
+    }
+  } else {
+    // Master shot: [face, face, outfit?, product?, scene?]
+    lines.push('• Image 1: Face identity reference — copy this person\'s face, hair, and skin tone EXACTLY.');
+    let idx = 2;
+    for (let i = 2; i < refs.length && refs[i]; i++) {
+      const roles = ['Outfit reference — reproduce the garments exactly.',
+                     'Product reference — reproduce the product exactly.',
+                     'Scene/environment reference — match the environment exactly.'];
+      lines.push(`• Image ${idx}: ${roles[i - 2] || 'Additional reference.'}`);
+      idx++;
+    }
+  }
+
+  return lines.join('\n');
+}
+
 async function generateWithPolling(
   prompt: string,
   refs: (string | null)[],
@@ -929,7 +970,23 @@ async function generateWithPolling(
 ): Promise<string> {
   const referenceImages = await prepareReferenceImagesCompressed(refs);
   const negativePrompt = isDerivedShot ? NEGATIVE_SHORT : NEGATIVE_FULL;
-  const fullPrompt = `${systemInstructions}\n\nTASK:\n${prompt}\n\nNEGATIVE:\n${negativePrompt}`;
+
+  let fullPrompt: string;
+  if (modelId === 'seedream') {
+    // Para Seedream: reemplazar la semántica de refs numeradas por descripción textual
+    const refContext = buildSeedreamRefContext(refs, isDerivedShot);
+    // Limpiar menciones de "Reference Image N" y "refs N and M" del prompt Gemini
+    const cleanedPrompt = prompt
+      .replace(/⚠️⚠️⚠️.*?⚠️⚠️⚠️/gs, '')
+      .replace(/References? \d+[^.]*\./g, '')
+      .replace(/refs? \d+[^.]*\./gi, '')
+      .replace(/REF0 \(ref \d+\)[^.]*\./g, '')
+      .replace(/FACE REF \(refs [^)]+\)[^.]*\./g, '')
+      .trim();
+    fullPrompt = `${refContext}\n\n${cleanedPrompt}\n\nNEGATIVE: ${negativePrompt}`;
+  } else {
+    fullPrompt = `${systemInstructions}\n\nTASK:\n${prompt}\n\nNEGATIVE:\n${negativePrompt}`;
+  }
 
   return ugcApiService.generateImageAsync({
     prompt: fullPrompt,
@@ -1164,7 +1221,8 @@ UNIVERSAL RULES:
     ref0Analysis?: REF0Analysis,
     shotIndex?: number,
     totalShots?: number,
-    onStatusChange?: (status: string, imageUrl?: string) => void
+    onStatusChange?: (status: string, imageUrl?: string) => void,
+    modelId?: 'gemini' | 'seedream',
   ): Promise<string> {
     await this.ensureAccess();
 
@@ -1190,8 +1248,8 @@ Natural UGC aesthetic. NO beautification. NO studio polish.`;
       if (outfitRef) refs.push(outfitRef);
       if (productRef && productIsRelevant !== false) refs.push(productRef);
       if (sceneRef) refs.push(sceneRef);
-      
-      return generateWithPolling(fallbackPrompt, refs, '', true, shotIndex, totalShots, onStatusChange);
+
+      return generateWithPolling(fallbackPrompt, refs, '', true, shotIndex, totalShots, onStatusChange, modelId);
     }
 
     const directivePrompt = translateDirectiveToPrompt(directive, focus, ref0Analysis);
@@ -1264,8 +1322,8 @@ FINAL CHECKLIST (apply before finalizing):
     if (outfitRef) refs.push(outfitRef);
     if (productRef && productIsRelevant !== false) refs.push(productRef);
     if (sceneRef) refs.push(sceneRef);
-    
-    return generateWithPolling(prompt, refs, system, true, shotIndex, totalShots, onStatusChange);
+
+    return generateWithPolling(prompt, refs, system, true, shotIndex, totalShots, onStatusChange, modelId);
   },
 
   // ──────────────────────────────────────────────────────────────

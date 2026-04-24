@@ -92,15 +92,24 @@ function trimBase64IfNeeded(b64: string): string {
 
 // ─── Extrae referencias de imagen desde los parts guardados en Redis ──────────
 // Los parts tienen formato [{text:"REF0:"}, {inlineData:{mimeType,data}}, ...]
-// Devuelve array de data URLs base64, comprimidas al límite seguro.
+// Devuelve array de data URLs base64 deduplicadas (sin repetidas consecutivas).
+// UGC Studio envía face duplicada varias veces para ponderar en Gemini —
+// con Seedream eso no aplica, así que deduplicamos para no desperdiciar refs.
 function extractReferenceDataUrls(parts: any[]): string[] {
   const refs: string[] = [];
+  const seen = new Set<string>();
+
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i];
     if (part?.inlineData?.data) {
       const mime    = part.inlineData.mimeType || 'image/jpeg';
       const trimmed = trimBase64IfNeeded(part.inlineData.data);
-      refs.push(`data:${mime};base64,${trimmed}`);
+      // Usar los primeros 100 chars como fingerprint para deduplicar
+      const fingerprint = trimmed.slice(0, 100);
+      if (!seen.has(fingerprint)) {
+        seen.add(fingerprint);
+        refs.push(`data:${mime};base64,${trimmed}`);
+      }
     }
   }
   return refs;
@@ -153,20 +162,21 @@ async function processSeedreamJob(
     size:   toEvolinkSize(aspectRatio),
   };
 
-  // EvoLink funciona mejor con 1-2 referencias — limitamos para no saturar el body
-  const MAX_REFS = 2;
+  // Seedream acepta hasta 5 referencias de imagen.
+  // Las mandamos todas (ya deduplicadas): face, outfit, product, scene.
+  const MAX_REFS = 5;
   const refsToSend = referenceDataUrls.slice(0, MAX_REFS);
 
   if (refsToSend.length === 1) {
+    // Una sola referencia: campo singular
     evolinkBody.image_url = refsToSend[0];
   } else if (refsToSend.length > 1) {
-    evolinkBody.image_url  = refsToSend[0];   // principal
-    evolinkBody.image_urls = refsToSend;       // contexto adicional
+    // Múltiples referencias: primera como principal + array completo
+    evolinkBody.image_url  = refsToSend[0];
+    evolinkBody.image_urls = refsToSend;
   }
 
-  if (referenceDataUrls.length > MAX_REFS) {
-    console.log(`[SeedreamWorker ${jobId}] Capped references: ${referenceDataUrls.length} → ${MAX_REFS}`);
-  }
+  console.log(`[SeedreamWorker ${jobId}] Sending ${refsToSend.length} refs (${referenceDataUrls.length} after dedup)`);
 
   let taskId: string;
   try {
