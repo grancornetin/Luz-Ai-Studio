@@ -54,7 +54,10 @@ export const cloneImageService = {
       }
     }
 
-    const prompt = `
+    const isSeedream = (params.modelId || 'gemini') === 'seedream';
+
+    // Prompt para Gemini — usa refs numeradas que Gemini interpreta posicionalmente
+    const promptGemini = `
 [PROTOCOL: CLONE IMAGE — SCENE LOCK + IDENTITY LOCK + PRODUCT LOCK]
 [RUN_ID: ${runId}]
 
@@ -76,12 +79,35 @@ ${cameraStylePrompt}
 ${productReplacementsText}
 
 [HARD RULES]
-- Photorealistic iPhone style.
-- No 3D render look.
-- No text or watermarks.
+- Photorealistic iPhone style. No 3D render look. No text or watermarks.
 - Preserve the exact composition and lighting of REF0.
 - The replaced products must integrate naturally into the scene (same lighting, angle, shadows).
 `.trim();
+
+    // Prompt para Seedream — describe cada imagen por su ROL en texto natural
+    const promptSeedream = `
+[REFERENCE IMAGES PROVIDED — USE EACH ONE AS DESCRIBED:]
+• Image 1: Scene reference — the original photo to replicate (same pose, lighting, background, framing).
+• Image 2: Face identity reference — replace the person's face with this one. Copy hair color and style too.
+• Image 3: Body reference — match body proportions and skin tone from this image.
+${params.replaceOutfit ? '• Image 4: Outfit reference — dress the person with these garments.' : ''}
+${productReplacementsText ? productReplacementsText.replace(/REF_P\d+/g, 'the product shown in the corresponding reference image') : ''}
+
+GOAL: Replicate the scene from Image 1 exactly (same pose, lighting, background, framing) but with the face and identity from Image 2, the body from Image 3.
+
+[SCENE LOCK]
+- Pose: identical to the scene reference.
+- Lighting: identical to the scene reference.
+- Background: identical to the scene reference.
+
+${cameraStylePrompt}
+
+[HARD RULES]
+- Photorealistic iPhone style. No 3D render look. No text or watermarks.
+- Replaced products must integrate naturally (same lighting, angle, shadows).
+`.trim();
+
+    const prompt = isSeedream ? promptSeedream : promptGemini;
 
     // Construir array de referencias, filtrando null/undefined
     const refs: (string | null | undefined)[] = [

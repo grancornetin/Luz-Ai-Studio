@@ -15,7 +15,9 @@ import { ImageSlot } from '../../components/shared/ImageSlot';
 import UploadDisclaimer from '../../components/shared/UploadDisclaimer';
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
 import { FloatingActionBar } from '../../components/shared/FloatingActionBar';
+import { ModelSelector } from '../../components/shared/ModelSelector';
 import { useScrollFAB } from '../../hooks/useScrollFAB';
+import { useModelSelection } from '../../hooks/useModelSelection';
 
 type Step = 'idle' | 'detecting' | 'scan_overlay' | 'generating_renders' | 'reviewing_renders' | 'composing' | 'final_kit' | 'library';
 type LibraryView = 'kits' | 'items' | 'combinations' | 'creator';
@@ -43,6 +45,7 @@ const OutfitExtractorModule: React.FC = () => {
 
   // FAB scroll detection
   const { isVisible: fabVisible } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: false });
+  const { modelId, setModelId } = useModelSelection();
 
   const { checkAndDeduct, showNoCredits, requiredCredits, closeModal } = useCreditGuard();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -148,7 +151,7 @@ const OutfitExtractorModule: React.FC = () => {
       setCurrentKit({ ...currentKit, items: [...updatedItems] });
       
       try {
-        const url = await outfitService.generateItemRender(item, currentKit.originalImage);
+        const url = await outfitService.generateItemRender(item, currentKit.originalImage, modelId);
         item.imageUrl = url;
         item.status = 'done';
 
@@ -172,7 +175,7 @@ const OutfitExtractorModule: React.FC = () => {
     setStep('composing');
     setLoadingMsg('Componiendo Kit Comercial...');
     try {
-      const finalUrl = await outfitService.generateFinalComposition(currentKit);
+      const finalUrl = await outfitService.generateFinalComposition(currentKit, modelId);
       
       generationHistoryService.save({
         imageUrl: finalUrl,
@@ -286,7 +289,7 @@ const OutfitExtractorModule: React.FC = () => {
     setStep('composing');
     setLoadingMsg('Sincronizando Capas y Luces...');
     try {
-      const finalUrl = await outfitService.generateCombinationComposition(creatorSelectedItems);
+      const finalUrl = await outfitService.generateCombinationComposition(creatorSelectedItems, modelId);
       const newCombo: OutfitCombination = {
         id: `combo_${Date.now()}`,
         name: creatorName || 'Sin Nombre',
@@ -377,6 +380,7 @@ const OutfitExtractorModule: React.FC = () => {
                       />
                     </div>
                     <UploadDisclaimer />
+                    <ModelSelector value={modelId} onChange={setModelId} disabled={step !== 'idle'} />
                     <button onClick={startDetection} disabled={!sourceImage} className="w-full py-5 md:py-6 bg-brand-600 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.3em] shadow-xl hover:bg-brand-700 transition-all active:scale-95 disabled:opacity-50">Analizar Outfit</button>
                   </section>
                 </div>

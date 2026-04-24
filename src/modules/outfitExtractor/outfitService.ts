@@ -6,7 +6,7 @@
 
 import { OutfitKit, OutfitItem, SavedOutfitItem } from './types';
 import { compressImageForUpload } from '../../utils/imageUtils';
-import { imageApiService, extractImageRef } from '../../services/imageApiService';
+import { imageApiService, extractImageRef, type ModelId } from '../../services/imageApiService';
 
 const CONTENT_API = '/api/gemini/content';
 
@@ -41,6 +41,7 @@ async function generateOutfitImage(
   prompt: string,
   referenceImages: string[],
   aspectRatio: '1:1' | '3:4' = '3:4',
+  modelId: ModelId = 'gemini',
 ): Promise<string> {
   const compressed = await Promise.all(
     referenceImages.map(img => compressImageForUpload(img)),
@@ -56,6 +57,7 @@ async function generateOutfitImage(
     referenceImages: refs.length > 0 ? refs : undefined,
     aspectRatio,
     module: 'outfitService',
+    modelId,
   });
 }
 
@@ -98,18 +100,27 @@ Return ONLY valid JSON, no markdown formatting.`;
     };
   },
 
-  async generateItemRender(item: OutfitItem, originalImage: string): Promise<string> {
-    const prompt = `[GHOST MANNEQUIN PRODUCT RENDER]
+  async generateItemRender(item: OutfitItem, originalImage: string, modelId: ModelId = 'gemini'): Promise<string> {
+    // Gemini interpreta "REF0" posicionalmente; Seedream necesita descripción textual
+    const prompt = modelId === 'seedream'
+      ? `[GHOST MANNEQUIN PRODUCT RENDER]
+Render the "${item.name}" (${item.category}) shown in the reference image as a standalone e-commerce product.
+The reference image shows the garment — extract it and render it isolated.
+Preserve EXACT fabric, color, and details from the reference image.
+Create realistic 3D volume (shoulders/torso curve) as if worn by an invisible person.
+Pure white background (#FFFFFF). No human skin, face, or mannequin parts.
+Studio lighting, soft shadow at base.`
+      : `[GHOST MANNEQUIN PRODUCT RENDER]
 Render the "${item.name}" (${item.category}) from REF0 as a standalone e-commerce product.
 Preserve EXACT fabric, color, and details from the reference image.
 Create realistic 3D volume (shoulders/torso curve) as if worn by an invisible person.
 Pure white background (#FFFFFF). No human skin, face, or mannequin parts.
 Studio lighting, soft shadow at base.`;
 
-    return generateOutfitImage(prompt, [originalImage], '3:4');
+    return generateOutfitImage(prompt, [originalImage], '3:4', modelId);
   },
 
-  async generateFinalComposition(kit: OutfitKit): Promise<string> {
+  async generateFinalComposition(kit: OutfitKit, modelId: ModelId = 'gemini'): Promise<string> {
     const approvedItems = kit.items.filter(i => i.selected && i.imageUrl);
     if (approvedItems.length === 0) throw new Error('No hay elementos seleccionados.');
 
@@ -121,10 +132,10 @@ Arrange the following isolated ghost mannequin garments on a pure white backgrou
 Items: ${itemList}
 Consistent lighting, soft shadows, no humans, no mannequins.`;
 
-    return generateOutfitImage(prompt, refs.slice(0, 4), '1:1');
+    return generateOutfitImage(prompt, refs.slice(0, 4), '1:1', modelId);
   },
 
-  async generateCombinationComposition(items: SavedOutfitItem[]): Promise<string> {
+  async generateCombinationComposition(items: SavedOutfitItem[], modelId: ModelId = 'gemini'): Promise<string> {
     if (items.length === 0) throw new Error('No hay elementos seleccionados.');
 
     const refs     = items.map(i => i.imageUrl);
@@ -136,6 +147,6 @@ Items: ${itemList}
 All items must appear as isolated ghost mannequin products with 3D volume.
 Consistent lighting, soft shadows, no humans.`;
 
-    return generateOutfitImage(prompt, refs.slice(0, 4), '1:1');
+    return generateOutfitImage(prompt, refs.slice(0, 4), '1:1', modelId);
   },
 };
