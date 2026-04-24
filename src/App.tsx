@@ -30,6 +30,7 @@ import AccountSettings from './views/AccountSettings';
 // Servicios y Contexto
 import { dbService } from './services/dbService';
 import { AuthProvider, useAuth } from './modules/auth/AuthContext';
+import { ModelSelectionProvider } from './contexts/ModelSelectionContext';
 import AuthModal from './modules/auth/components/AuthModal';
 import OnboardingModal from './modules/auth/components/OnboardingModal';
 import AppAssistant from './components/AppAssistant';
@@ -357,7 +358,9 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => (
   <HashRouter>
     <AuthProvider>
-      <AppContent />
+      <ModelSelectionProvider>
+        <AppContent />
+      </ModelSelectionProvider>
     </AuthProvider>
   </HashRouter>
 );
