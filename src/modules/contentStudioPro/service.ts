@@ -924,12 +924,13 @@ async function generateWithPolling(
   isDerivedShot: boolean = false,
   shotIndex?: number,
   totalShots?: number,
-  onStatusChange?: (status: string, image?: string) => void
+  onStatusChange?: (status: string, image?: string) => void,
+  modelId?: 'gemini' | 'seedream',
 ): Promise<string> {
   const referenceImages = await prepareReferenceImagesCompressed(refs);
   const negativePrompt = isDerivedShot ? NEGATIVE_SHORT : NEGATIVE_FULL;
   const fullPrompt = `${systemInstructions}\n\nTASK:\n${prompt}\n\nNEGATIVE:\n${negativePrompt}`;
-  
+
   return ugcApiService.generateImageAsync({
     prompt: fullPrompt,
     referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
@@ -937,6 +938,7 @@ async function generateWithPolling(
     shotIndex,
     totalShots,
     onStatusChange,
+    modelId,
   });
 }
 
@@ -1009,7 +1011,8 @@ export const contentStudioService = {
     focus: Focus = 'AVATAR',
     productSize?: ProductSize,
     productIsRelevant?: boolean,
-    onStatusChange?: (status: string, image?: string) => void
+    onStatusChange?: (status: string, image?: string) => void,
+    modelId?: 'gemini' | 'seedream',
   ): Promise<{ imageUrl: string; analysis: REF0Analysis }> {
     await this.ensureAccess();
 
@@ -1112,7 +1115,7 @@ UNIVERSAL RULES:
 - Person must look REAL: natural skin texture, genuine expression.
 - Person is STATIC (standing still, sitting, or leaning — NOT mid-walk).`;
 
-    const imageUrl = await generateWithPolling(prompt, refsToPass, system, false, undefined, undefined, onStatusChange);
+    const imageUrl = await generateWithPolling(prompt, refsToPass, system, false, undefined, undefined, onStatusChange, modelId);
     
     // Analizar REF0 para congelar luz, espacio y acciones
     const imageData = extractImageData(imageUrl);

@@ -39,6 +39,8 @@ import UploadDisclaimer from '../../components/shared/UploadDisclaimer';
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
 import { FloatingActionBar } from '../../components/shared/FloatingActionBar';
 import { useScrollFAB } from '../../hooks/useScrollFAB';
+import { ModelSelector } from '../../components/shared/ModelSelector';
+import { useModelSelection } from '../../hooks/useModelSelection';
 
 type Step = 'setup' | 'generating_master' | 'checkpoint' | 'producing' | 'library' | 'batch_generating';
 type FilterTab = 'TODAS' | 'AVATAR' | 'PRODUCT' | 'OUTFIT' | 'SCENE';
@@ -86,6 +88,7 @@ const CustomCheckbox: React.FC<{ checked: boolean; onChange: () => void; label?:
 );
 
 const ContentStudioProModule: React.FC = () => {
+  const { modelId, setModelId } = useModelSelection();
   const [step, setStep] = useState<Step>('setup');
   const [sets, setSets] = useState<ContentStudioProSet[]>([]);
   const [currentSet, setCurrentSet] = useState<ContentStudioProSet | null>(null);
@@ -232,7 +235,8 @@ const ContentStudioProModule: React.FC = () => {
         (status, image) => {
           if (status === 'processing') setLoadingMsg('Generando imagen base (puede tomar hasta 2 minutos)...');
           if (status === 'completed') setLoadingMsg('Master generado exitosamente');
-        }
+        },
+        modelId,
       );
       setRef0Analysis(analysis);
 
@@ -302,7 +306,8 @@ const ContentStudioProModule: React.FC = () => {
         useProduct,
         (status) => {
           if (status === 'processing') setLoadingMsg('Regenerando Master...');
-        }
+        },
+        modelId,
       );
 
       setCurrentSet({
@@ -984,6 +989,12 @@ const ContentStudioProModule: React.FC = () => {
                 )}
 
                 <UploadDisclaimer />
+
+                <ModelSelector
+                  value={modelId}
+                  onChange={setModelId}
+                  disabled={step !== 'setup'}
+                />
 
                 <button
                   onClick={startMasterGeneration}

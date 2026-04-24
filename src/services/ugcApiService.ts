@@ -69,20 +69,27 @@ class UGCApiService {
     aspectRatio?: string;
     shotIndex?: number;
     totalShots?: number;
+    modelId?: 'gemini' | 'seedream';
     onStatusChange?: (status: string, image?: string, shotIndex?: number) => void;
   }): Promise<string> {
+    // Seedream no soporta reference images — usa el endpoint genérico
+    const useSeedream = params.modelId === 'seedream';
+    const endpoint    = useSeedream ? '/api/gemini/image' : this.baseUrl;
+
     // Iniciar generación asíncrona
-    const startResponse = await fetch(this.baseUrl, {
+    const startResponse = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'generateImageAsync',
         payload: {
           prompt: params.prompt,
-          referenceImages: params.referenceImages,
+          // Seedream solo texto — no enviar referenceImages
+          referenceImages: useSeedream ? undefined : params.referenceImages,
           aspectRatio: params.aspectRatio || '3:4',
           shotIndex: params.shotIndex,
           totalShots: params.totalShots,
+          modelId: params.modelId || 'gemini',
         },
       }),
     });
@@ -106,7 +113,7 @@ class UGCApiService {
     while (attempts < maxAttempts) {
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      const statusResponse = await fetch(this.baseUrl, {
+      const statusResponse = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
