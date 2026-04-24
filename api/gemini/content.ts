@@ -29,7 +29,7 @@ interface ContentRequest {
   model?: string;
 }
 
-import { setSecurityHeaders, validateBase64Image, validatePrompt } from '../_middleware.js';
+import { setSecurityHeaders, validateBase64Image, validatePrompt, validateChatPrompt } from '../_middleware.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setSecurityHeaders(res);
@@ -46,8 +46,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Missing action or prompt' });
     }
 
-    // Validar prompt
-    const promptErr = validatePrompt(body.prompt);
+    // Validar prompt — chat usa límite estricto, análisis de imagen el general
+    const promptErr = body.action === 'assistantChat'
+      ? validateChatPrompt(body.prompt)
+      : validatePrompt(body.prompt);
     if (promptErr) return res.status(400).json({ error: promptErr });
 
     // Validar imágenes si las hay

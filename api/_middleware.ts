@@ -138,9 +138,10 @@ export async function verifyAuth(req: VercelRequest): Promise<string> {
 }
 
 // ── Input Validators ───────────────────────────────────────────────────────────
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB decoded
-const ALLOWED_MIMES   = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
-const MAX_PROMPT_LEN  = 8000;
+const MAX_IMAGE_BYTES     = 5 * 1024 * 1024; // 5MB decoded
+const ALLOWED_MIMES       = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const MAX_PROMPT_LEN      = 32_000; // prompts de imagen pueden ser muy largos
+const MAX_CHAT_PROMPT_LEN = 8_000;  // límite más estricto para el asistente de chat
 
 export function validateBase64Image(data: string, mimeType: string): string | null {
   if (!data || data.length < 64) return 'Image data too short';
@@ -154,10 +155,14 @@ export function validateBase64Image(data: string, mimeType: string): string | nu
   return null; // ok
 }
 
-export function validatePrompt(prompt: string): string | null {
+export function validatePrompt(prompt: string, maxLen = MAX_PROMPT_LEN): string | null {
   if (!prompt || typeof prompt !== 'string') return 'Prompt is required';
-  if (prompt.length > MAX_PROMPT_LEN) return `Prompt too long (max ${MAX_PROMPT_LEN} chars)`;
+  if (prompt.length > maxLen) return `Prompt too long (max ${maxLen} chars)`;
   return null;
+}
+
+export function validateChatPrompt(prompt: string): string | null {
+  return validatePrompt(prompt, MAX_CHAT_PROMPT_LEN);
 }
 
 // ── Redis Key Sanitizer ────────────────────────────────────────────────────────
