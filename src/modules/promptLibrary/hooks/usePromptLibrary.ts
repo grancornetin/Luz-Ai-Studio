@@ -258,7 +258,7 @@ export const usePromptLibrary = () => {
         title,
         tags,
         authorId: user.uid,
-        authorName: profile?.displayName || user.displayName || 'Anonymous',
+        authorName: profile?.username || profile?.displayName || user.displayName || 'Anonymous',
         authorPhotoURL: profile?.photoURL || user.photoURL || '',
         originPromptId,
       });
@@ -363,7 +363,7 @@ export const usePromptComments = (promptId: string | null) => {
       await promptService.addComment(
         promptId,
         user.uid,
-        profile?.displayName || user.displayName || 'Anonymous',
+        profile?.username || profile?.displayName || user.displayName || 'Anonymous',
         text.trim(),
         profile?.photoURL || user.photoURL || ''
       );
