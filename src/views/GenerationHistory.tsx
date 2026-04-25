@@ -1,345 +1,333 @@
-/**
- * GenerationHistory.tsx — FIXED (sin secondaryActions)
- */
-import React, { useEffect, useState, useCallback } from 'react';
-import {
-  generationHistoryService,
-  GenerationRecord,
-  MODULE_LABELS
-} from '../services/generationHistoryService';
-import {
-  Clock, Download, Trash2, Image, Loader2, X,
-  Filter, CheckSquare, Square, DownloadCloud, AlertCircle, RefreshCw
-} from 'lucide-react';
-import { downloadAsZip } from '../utils/imageUtils';
-import { ImageLightbox } from '../components/shared/ImageLightbox';
-import { FloatingActionBar } from '../components/shared/FloatingActionBar';
-import { useScrollFAB } from '../hooks/useScrollFAB';
-
-// localStorage fallback
-const LS_KEY = 'luz_generation_history';
-
-function loadFromLocalStorage(): GenerationRecord[] {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
-}
+import React, { useEffect, useState } from 'react';
+import { generationHistoryService, GenerationRecord, MODULE_LABELS } from '../services/generationHistoryService';
+import { Clock, Download, Trash2, Image, Loader2, X, CheckSquare, Square, DownloadCloud, Zap } from 'lucide-react';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
 const timeAgo = (isoDate: string): string => {
   const diff = Date.now() - new Date(isoDate).getTime();
-  const mins = Math.floor(diff / 60000);
+  const mins  = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-  if (mins < 1) return 'ahora';
-  if (mins < 60) return `hace ${mins}m`;
+  const days  = Math.floor(diff / 86400000);
+  if (mins < 1)   return 'ahora';
+  if (mins < 60)  return `hace ${mins}m`;
   if (hours < 24) return `hace ${hours}h`;
   return `hace ${days}d`;
 };
 
 const downloadImage = (img: string, index: number) => {
   const link = document.createElement('a');
-  link.href = img;
-  link.download = `luzIA_${index + 1}.png`;
-  link.click();
+  link.href = img; link.download = `luzIA_${index + 1}.png`; link.click();
+};
+
+const MODULE_COLORS: Record<string, string> = {
+  prompt_studio:      'text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20',
+  scene_clone:        'text-indigo-400 bg-indigo-500/10 border-indigo-500/20',
+  model_dna:          'text-violet-400 bg-violet-500/10 border-violet-500/20',
+  content_studio:     'text-pink-400 bg-pink-500/10 border-pink-500/20',
+  content_studio_pro: 'text-pink-400 bg-pink-500/10 border-pink-500/20',
+  outfit_extractor:   'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
+  outfit_kit:         'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
+  catalog:            'text-sky-400 bg-sky-500/10 border-sky-500/20',
+  campaign:           'text-amber-400 bg-amber-500/10 border-amber-500/20',
+  photodump:          'text-rose-400 bg-rose-500/10 border-rose-500/20',
 };
 
 const GenerationHistory: React.FC = () => {
-  const [records, setRecords] = useState<GenerationRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [apiError, setApiError] = useState(false);
-  const [usingFallback, setUsingFallback] = useState(false);
+  const [records, setRecords]           = useState<GenerationRecord[]>([]);
+  const [loading, setLoading]           = useState(true);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [zoomedImage, setZoomedImage]   = useState<GenerationRecord | null>(null);
+  const [deletingId, setDeletingId]     = useState<string | null>(null);
+  const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
   const [isBulkLoading, setIsBulkLoading] = useState(false);
+  const [selectMode, setSelectMode]     = useState(false);
 
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
-  const [lightboxMeta, setLightboxMeta] = useState<{ label: string }>({ label: '' });
-
-  const { isVisible: fabVisible } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: false });
-
-  const loadHistory = useCallback(async () => {
-    setLoading(true);
-    setApiError(false);
-    setUsingFallback(false);
-    try {
-      const timeoutPromise = new Promise<GenerationRecord[]>((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 5000)
-      );
-      const apiPromise = generationHistoryService.getAll(200);
-      const data = await Promise.race([apiPromise, timeoutPromise]);
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const data = await generationHistoryService.getAll();
       setRecords(data);
       setLoading(false);
-      return;
-    } catch (err: any) {
-      console.warn('[GenerationHistory] API failed, using localStorage fallback');
-      setApiError(true);
-    }
-    const local = loadFromLocalStorage();
-    setRecords(local);
-    setUsingFallback(true);
-    setLoading(false);
+    };
+    load();
   }, []);
 
-  useEffect(() => { loadHistory(); }, [loadHistory]);
-
-  const filtered = activeFilter
-    ? records.filter(r => r.module === activeFilter)
-    : records;
-
-  const allModules = Array.from(new Set(records.map(r => r.module)));
+  const handleDelete = async (id: string) => {
+    if (!confirm('¿Eliminar esta imagen?')) return;
+    setDeletingId(id);
+    await generationHistoryService.delete(id);
+    setRecords(prev => prev.filter(r => r.id !== id));
+    setDeletingId(null);
+    if (zoomedImage?.id === id) setZoomedImage(null);
+    const newSelected = new Set(selectedIds);
+    newSelected.delete(id);
+    setSelectedIds(newSelected);
+  };
 
   const toggleSelect = (id: string, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    if (e) e.stopPropagation();
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) newSelected.delete(id); else newSelected.add(id);
+    setSelectedIds(newSelected);
   };
 
   const toggleSelectAll = () => {
-    setSelectedIds(selectedIds.size === filtered.length
-      ? new Set()
-      : new Set(filtered.map(r => r.id))
-    );
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('¿Eliminar esta imagen del historial?')) return;
-    setDeletingId(id);
-    if (!usingFallback) {
-      await generationHistoryService.delete(id).catch(console.error);
-    }
-    setRecords(prev => {
-      const updated = prev.filter(r => r.id !== id);
-      if (usingFallback) localStorage.setItem(LS_KEY, JSON.stringify(updated));
-      return updated;
-    });
-    setDeletingId(null);
-    setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filtered.map(r => r.id)));
   };
 
   const handleBulkDelete = async () => {
-    if (selectedIds.size === 0) return;
     if (!confirm(`¿Eliminar ${selectedIds.size} imágenes?`)) return;
     setIsBulkLoading(true);
-    if (!usingFallback) {
-      await generationHistoryService.deleteBatch(Array.from(selectedIds)).catch(console.error);
-    }
-    setRecords(prev => {
-      const updated = prev.filter(r => !selectedIds.has(r.id));
-      if (usingFallback) localStorage.setItem(LS_KEY, JSON.stringify(updated));
-      return updated;
-    });
-    setSelectedIds(new Set());
-    setIsBulkLoading(false);
+    await generationHistoryService.deleteBatch(Array.from(selectedIds) as string[]);
+    setRecords(prev => prev.filter(r => !selectedIds.has(r.id)));
+    setSelectedIds(new Set()); setSelectMode(false); setIsBulkLoading(false);
   };
 
   const handleBulkDownload = async () => {
-    if (selectedIds.size === 0) return;
     setIsBulkLoading(true);
     try {
-      const selected = records.filter(r => selectedIds.has(r.id));
-      await downloadAsZip(selected.map(r => r.imageUrl), `luzIA_${Date.now()}.zip`, 'gen');
-    } catch { alert('Error al crear ZIP. Descarga individualmente.'); }
-    finally { setIsBulkLoading(false); }
+      const zip = new JSZip();
+      const sel = records.filter(r => selectedIds.has(r.id));
+      sel.forEach((record, i) => {
+        const base64Data = record.imageUrl.split(',')[1];
+        zip.file(`luzIA_gen_${i + 1}.png`, base64Data, { base64: true });
+      });
+      const content = await zip.generateAsync({ type: 'blob' });
+      saveAs(content, `luzIA_generaciones_${Date.now()}.zip`);
+    } catch {
+      alert('Error al crear el ZIP. Intenta descargar individualmente.');
+    } finally {
+      setIsBulkLoading(false);
+    }
   };
 
-  const openLightbox = (record: GenerationRecord, idx: number) => {
-    const filteredImages = filtered.map(r => r.imageUrl);
-    setLightboxImages(filteredImages);
-    setLightboxIndex(idx);
-    setLightboxMeta({ label: MODULE_LABELS[record.module] || record.module });
-    setLightboxOpen(true);
-  };
+  const availableModules: string[] = Array.from(new Set(records.map(r => r.module)));
+  const filtered = activeFilter ? records.filter(r => r.module === activeFilter) : records;
 
   return (
-    <div className="space-y-8 pb-32">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-slate-100 rounded-2xl flex items-center justify-center">
-              <Clock className="w-5 h-5 text-slate-600" />
+    <div className="min-h-screen bg-[#0A0A0F] pb-32 md:pb-16">
+      <div className="max-w-7xl mx-auto px-5 md:px-8 py-8 space-y-7">
+
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-5">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-1 h-5 bg-gradient-to-b from-fuchsia-500 to-violet-500 rounded-full" />
+              <span className="text-2xs font-black text-white/25 uppercase tracking-[0.4em]">Historial</span>
             </div>
-            <div>
-              <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter italic leading-none">
-                Mis Generaciones
-              </h1>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                {loading ? 'Cargando...' : `${records.length} imágenes guardadas`}
+            <h1 className="text-3xl md:text-4xl font-black text-white tracking-tighter uppercase italic">
+              Mis <span className="gradient-text-violet">Generaciones</span>
+            </h1>
+            <p className="text-xs text-white/30 font-medium">
+              {records.length} imagen{records.length !== 1 ? 'es' : ''} generada{records.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {filtered.length > 0 && (
+              <>
+                {selectMode && (
+                  <button onClick={toggleSelectAll}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-white/5 border border-white/[0.08] rounded-xl text-2xs font-black text-white/50 hover:text-white/80 uppercase tracking-wider transition-all touch-target"
+                  >
+                    {selectedIds.size === filtered.length
+                      ? <CheckSquare size={13} className="text-violet-400" />
+                      : <Square size={13} />
+                    }
+                    {selectedIds.size === filtered.length ? 'Desmarcar' : 'Todo'}
+                  </button>
+                )}
+                <button
+                  onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
+                  className={`px-4 py-2.5 border rounded-xl text-2xs font-black uppercase tracking-wider transition-all touch-target ${
+                    selectMode ? 'bg-violet-500/15 border-violet-500/30 text-violet-300' : 'bg-white/5 border-white/[0.08] text-white/50 hover:text-white/80'
+                  }`}
+                >
+                  {selectMode ? 'Cancelar' : 'Seleccionar'}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {availableModules.length > 1 && (
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-5 px-5 md:mx-0 md:px-0">
+            <button
+              onClick={() => { setActiveFilter(null); setSelectedIds(new Set()); }}
+              className={`flex-shrink-0 px-4 py-2 rounded-xl text-2xs font-black uppercase tracking-wider transition-all touch-target ${
+                !activeFilter ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-900/30' : 'bg-white/5 text-white/40 border border-white/[0.06] hover:bg-white/[0.08]'
+              }`}
+            >
+              Todos
+            </button>
+            {availableModules.map(mod => (
+              <button key={mod}
+                onClick={() => { setActiveFilter(mod); setSelectedIds(new Set()); }}
+                className={`flex-shrink-0 px-4 py-2 rounded-xl text-2xs font-black uppercase tracking-wider transition-all touch-target ${
+                  activeFilter === mod ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30' : 'bg-white/5 text-white/40 border border-white/[0.06] hover:bg-white/[0.08]'
+                }`}
+              >
+                {(MODULE_LABELS as Record<string, string>)[mod] || mod}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {loading && (
+          <div className="flex flex-col items-center justify-center py-24 gap-4">
+            <div className="w-10 h-10 border-2 border-violet-500/20 border-t-violet-500 rounded-full animate-spin" />
+            <p className="text-2xs font-black text-white/25 uppercase tracking-[0.3em]">Cargando historial...</p>
+          </div>
+        )}
+
+        {!loading && filtered.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-24 gap-5">
+            <div className="w-20 h-20 rounded-3xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center">
+              <Image className="w-8 h-8 text-white/15" />
+            </div>
+            <div className="text-center space-y-1">
+              <p className="text-sm font-black text-white/30 uppercase tracking-widest">
+                {activeFilter ? 'Sin resultados en este módulo' : 'Aún no tienes generaciones'}
+              </p>
+              <p className="text-xs text-white/15">
+                {activeFilter ? 'Prueba otro filtro' : 'Genera tu primera imagen desde cualquier módulo'}
               </p>
             </div>
           </div>
-        </div>
-        <button
-          onClick={loadHistory}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Actualizar
-        </button>
-      </header>
+        )}
 
-      {usingFallback && (
-        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 text-amber-700 px-5 py-4 rounded-2xl">
-          <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-xs font-black uppercase tracking-tight">Historial local</p>
-            <p className="text-xs font-bold text-amber-600 mt-0.5">
-              No se pudo conectar con el servidor. Mostrando historial guardado en este dispositivo.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {loading && (
-        <div className="flex flex-col items-center justify-center py-24 space-y-4">
-          <Loader2 className="w-10 h-10 text-indigo-400 animate-spin" />
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cargando historial...</p>
-        </div>
-      )}
-
-      {!loading && records.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-24 space-y-4 opacity-50">
-          <div className="w-16 h-16 bg-slate-100 rounded-[24px] flex items-center justify-center">
-            <Image className="w-8 h-8 text-slate-300" />
-          </div>
-          <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Sin generaciones aún</p>
-          <p className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-            Las imágenes que generes aparecerán aquí
-          </p>
-        </div>
-      )}
-
-      {!loading && records.length > 0 && (
-        <>
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-              <button
-                onClick={() => setActiveFilter(null)}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
-                  !activeFilter ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                }`}
-              >
-                Todos ({records.length})
-              </button>
-              {allModules.map(mod => (
-                <button
-                  key={mod}
-                  onClick={() => setActiveFilter(mod)}
-                  className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
-                    activeFilter === mod ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                  }`}
-                >
-                  {MODULE_LABELS[mod] || mod} ({records.filter(r => r.module === mod).length})
-                </button>
-              ))}
-            </div>
-
-            {filtered.length > 0 && (
-              <button
-                onClick={toggleSelectAll}
-                className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-colors flex-shrink-0"
-              >
-                {selectedIds.size === filtered.length
-                  ? <CheckSquare className="w-3.5 h-3.5" />
-                  : <Square className="w-3.5 h-3.5" />}
-                {selectedIds.size === filtered.length ? 'Deseleccionar' : 'Seleccionar todo'}
-              </button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {filtered.map((record, idx) => {
+        {!loading && filtered.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+            {filtered.map((record) => {
               const isSelected = selectedIds.has(record.id);
-              const isDeleting = deletingId === record.id;
+              const moduleColor = MODULE_COLORS[record.module] || 'text-white/40 bg-white/5 border-white/10';
+
               return (
                 <div
                   key={record.id}
-                  className={`group relative bg-white rounded-2xl overflow-hidden border-2 shadow-sm hover:shadow-lg transition-all cursor-pointer ${
-                    isSelected ? 'border-indigo-500 shadow-indigo-100' : 'border-transparent'
+                  onClick={() => selectMode ? toggleSelect(record.id) : setZoomedImage(record)}
+                  className={`group relative rounded-2xl overflow-hidden cursor-pointer border transition-all duration-200 ${
+                    isSelected ? 'border-violet-500/60 ring-2 ring-violet-500/30 scale-[0.97]' : 'border-white/[0.06] hover:border-white/[0.15] hover:scale-[1.02]'
                   }`}
-                  onClick={() => openLightbox(record, idx)}
                 >
-                  <div className="aspect-[3/4] bg-slate-100 relative overflow-hidden">
-                    {record.imageUrl ? (
-                      <img
-                        src={record.imageUrl}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                        alt="Generated"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Image className="w-8 h-8 text-slate-200" />
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                      <button
-                        onClick={e => { e.stopPropagation(); downloadImage(record.imageUrl, idx); }}
-                        className="p-2 bg-white/20 backdrop-blur-sm text-white rounded-xl hover:bg-white/30 transition-colors"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={e => { e.stopPropagation(); handleDelete(record.id); }}
-                        className="p-2 bg-red-500/80 text-white rounded-xl hover:bg-red-600 transition-colors"
-                      >
-                        {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                      </button>
-                    </div>
-                    <button
-                      onClick={e => toggleSelect(record.id, e)}
-                      className={`absolute top-2 left-2 w-6 h-6 rounded-lg flex items-center justify-center transition-all ${
-                        isSelected
-                          ? 'bg-indigo-600 text-white opacity-100'
-                          : 'bg-black/40 text-white opacity-0 group-hover:opacity-100'
-                      }`}
-                    >
-                      {isSelected ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
-                    </button>
+                  <div className="aspect-[3/4] bg-white/[0.03]">
+                    <img src={record.imageUrl} alt={record.moduleLabel} className="w-full h-full object-cover" loading="lazy" />
                   </div>
-                  <div className="p-3 space-y-1">
-                    <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded-md">
-                      {MODULE_LABELS[record.module] || record.module}
+
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <div className="absolute bottom-0 inset-x-0 p-2.5 space-y-2">
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); downloadImage(record.imageUrl, 0); }}
+                          className="flex-1 py-2 bg-white/15 backdrop-blur-sm text-white rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1 hover:bg-white/25 transition-all touch-target"
+                        >
+                          <Download size={11} />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDelete(record.id); }}
+                          disabled={deletingId === record.id}
+                          className="flex-1 py-2 bg-rose-500/20 backdrop-blur-sm text-rose-300 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1 hover:bg-rose-500/40 transition-all touch-target"
+                        >
+                          {deletingId === record.id ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectMode && (
+                    <div className={`absolute top-2 left-2 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
+                      isSelected ? 'bg-violet-600 border-violet-600' : 'bg-black/40 border-white/30 backdrop-blur-sm'
+                    }`}>
+                      {isSelected && <CheckSquare size={12} className="text-white" />}
+                    </div>
+                  )}
+
+                  <div className="absolute top-2 right-2">
+                    <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md border ${moduleColor}`}>
+                      {(MODULE_LABELS as Record<string, string>)[record.module]?.split(' ')[0] || record.module}
                     </span>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                      {timeAgo(record.createdAt)}
-                    </p>
+                  </div>
+
+                  <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="text-[8px] font-bold text-white/60 flex items-center gap-0.5">
+                      <Clock size={8} />{timeAgo(record.createdAt)}
+                    </span>
                   </div>
                 </div>
               );
             })}
           </div>
-        </>
+        )}
+      </div>
+
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-[120] w-[calc(100%-2.5rem)] max-w-lg">
+          <div className="bg-[#0D0D14]/95 backdrop-blur-xl border border-white/[0.12] rounded-2xl p-3.5 shadow-2xl shadow-black/60 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-gradient-to-br from-violet-600 to-fuchsia-600 rounded-xl flex items-center justify-center text-white font-black text-sm shadow-lg shadow-violet-900/40 flex-shrink-0">
+                {selectedIds.size}
+              </div>
+              <div>
+                <p className="text-2xs font-black text-white uppercase tracking-widest">Seleccionadas</p>
+                <button onClick={() => { setSelectedIds(new Set()); setSelectMode(false); }}
+                  className="text-[9px] font-bold text-white/30 hover:text-white/60 transition-colors uppercase tracking-wider">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={handleBulkDownload} disabled={isBulkLoading}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-white text-slate-900 rounded-xl text-2xs font-black uppercase tracking-wider hover:bg-white/90 transition-all disabled:opacity-50 touch-target">
+                {isBulkLoading ? <Loader2 size={13} className="animate-spin" /> : <DownloadCloud size={13} />} ZIP
+              </button>
+              <button onClick={handleBulkDelete} disabled={isBulkLoading}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-rose-500 text-white rounded-xl text-2xs font-black uppercase tracking-wider hover:bg-rose-600 transition-all disabled:opacity-50 shadow-lg shadow-rose-900/40 touch-target">
+                {isBulkLoading ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />} Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
-      {lightboxOpen && (
-        <ImageLightbox
-          images={lightboxImages}
-          initialIndex={lightboxIndex}
-          onClose={() => setLightboxOpen(false)}
-          onDownload={(url, idx) => downloadImage(url, idx)}
-          metadata={lightboxMeta}
-        />
-      )}
-
-      {/* FAB — usando onDelete y onDownload directamente */}
-      {selectedIds.size > 0 && fabVisible && (
-        <FloatingActionBar
-          isVisible={true}
-          selectedCount={selectedIds.size}
-          onDownload={handleBulkDownload}
-          onDelete={handleBulkDelete}
-          onClearSelection={() => setSelectedIds(new Set())}
-        />
+      {zoomedImage && (
+        <div className="fixed inset-0 z-[500] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4" onClick={() => setZoomedImage(null)}>
+          <div className="relative w-full max-w-2xl animate-scale-in" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setZoomedImage(null)}
+              className="absolute -top-3 -right-3 z-10 w-10 h-10 bg-[#0D0D14] border border-white/[0.12] rounded-xl flex items-center justify-center text-white/50 hover:text-white transition-all touch-target">
+              <X size={18} />
+            </button>
+            <div className="rounded-2xl overflow-hidden border border-white/[0.08]">
+              <img src={zoomedImage.imageUrl} alt={zoomedImage.moduleLabel} className="w-full max-h-[70dvh] object-contain bg-[#0A0A0F]" />
+            </div>
+            <div className="mt-3 bg-[#0D0D14] border border-white/[0.08] rounded-2xl p-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`text-2xs font-black uppercase px-2 py-0.5 rounded-lg border ${MODULE_COLORS[zoomedImage.module] || 'text-white/40 bg-white/5 border-white/10'}`}>
+                      {zoomedImage.moduleLabel}
+                    </span>
+                    <span className="text-2xs text-white/25 flex items-center gap-1"><Clock size={10} />{timeAgo(zoomedImage.createdAt)}</span>
+                    <span className="text-2xs text-white/25 flex items-center gap-1"><Zap size={10} className="text-violet-400" />{zoomedImage.creditsUsed} cr usados</span>
+                  </div>
+                  {zoomedImage.promptText && (
+                    <p className="text-[10px] text-white/30 leading-relaxed line-clamp-2 max-w-xs">{zoomedImage.promptText}</p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => downloadImage(zoomedImage.imageUrl, 0)}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-xl text-2xs font-black uppercase tracking-wider hover:opacity-90 transition-all touch-target shadow-lg shadow-violet-900/30">
+                    <Download size={13} /> Descargar
+                  </button>
+                  <button onClick={() => handleDelete(zoomedImage.id)} disabled={deletingId === zoomedImage.id}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-white/5 border border-white/[0.08] text-white/40 hover:text-rose-400 hover:border-rose-500/30 hover:bg-rose-500/10 rounded-xl text-2xs font-black uppercase tracking-wider transition-all touch-target">
+                    {deletingId === zoomedImage.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

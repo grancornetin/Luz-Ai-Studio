@@ -3,295 +3,290 @@ import { useNavigate } from 'react-router-dom';
 import { AvatarProfile } from '../types';
 import ModuleTutorial from './shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from './shared/tutorialConfigs';
+import { dbService } from '../services/dbService';
+import { Download, Trash2, X, ChevronLeft, ChevronRight, Plus, User, Zap } from 'lucide-react';
 
 interface AvatarLibraryProps {
   avatars: AvatarProfile[];
+  onSave?: (avatar: AvatarProfile) => void;
 }
+
+const TYPE_STYLES: Record<string, string> = {
+  reference: 'bg-violet-500/15 text-violet-300 border-violet-500/20',
+  scratch:   'bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/20',
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  reference: 'DNA · Fotos',
+  scratch:   'DNA · Manual',
+};
+
+const META_FIELDS = (a: AvatarProfile) => [
+  { label: 'Género',      value: a.metadata?.gender },
+  { label: 'Edad',        value: a.metadata?.age },
+  { label: 'Etnia',       value: a.metadata?.ethnicity },
+  { label: 'Complexión',  value: a.metadata?.build },
+  { label: 'Ojos',        value: a.metadata?.eyes },
+  { label: 'Cabello',     value: `${a.metadata?.hairLength} ${a.metadata?.hairType} ${a.metadata?.hairColor}` },
+];
 
 const AvatarLibrary: React.FC<AvatarLibraryProps> = ({ avatars }) => {
   const navigate = useNavigate();
-  const [selectedAvatar, setSelectedAvatar] = useState<AvatarProfile | null>(null);
-  const [imgIdx, setImgIdx] = useState<Record<string, number>>({});
-  // Tutorial: ahora usa ModuleTutorial
-
-  // States for Zoom Gallery Modal
+  const [selected, setSelected]         = useState<AvatarProfile | null>(null);
+  const [slideIdx, setSlideIdx]         = useState<Record<string, number>>({});
   const [zoomedImages, setZoomedImages] = useState<string[]>([]);
-  const [zoomedImageIndex, setZoomedImageIndex] = useState<number | null>(null);
+  const [zoomedIdx, setZoomedIdx]       = useState<number | null>(null);
+  const [deletingId, setDeletingId]     = useState<string | null>(null);
+  const [confirmId, setConfirmId]       = useState<string | null>(null);
+
+  const getSlide = (id: string) => slideIdx[id] ?? 0;
+
+  const cycleSlide = (id: string, images: string[], dir: 1 | -1, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const len = images.length;
+    setSlideIdx(prev => ({ ...prev, [id]: ((prev[id] ?? 0) + dir + len) % len }));
+  };
+
+  const openZoom = (images: string[], i: number) => { setZoomedImages(images); setZoomedIdx(i); };
+  const closeZoom = () => { setZoomedImages([]); setZoomedIdx(null); };
+
+  const navZoom = (dir: 'prev' | 'next') => {
+    if (zoomedIdx === null) return;
+    const len = zoomedImages.length;
+    setZoomedIdx(dir === 'next' ? (zoomedIdx + 1) % len : (zoomedIdx - 1 + len) % len);
+  };
+
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirmId !== id) { setConfirmId(id); return; }
+    setDeletingId(id);
+    try {
+      await dbService.deleteAvatar?.(id);
+      if (selected?.id === id) setSelected(null);
+    } catch { alert('Error al eliminar el modelo.'); }
+    finally { setDeletingId(null); setConfirmId(null); }
+  };
 
   const downloadImage = (url: string, filename: string) => {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const deleteAvatar = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (confirm("¿Seguro que quieres eliminar este modelo permanentemente?")) {
-      alert("Operación de borrado activada para: " + id);
-      // Implement actual delete logic here with dbService.deleteAvatar(id)
-    }
-  };
-
-  // Zoom Gallery Modal functions
-  const openZoomModal = (images: string[], index: number) => {
-    setZoomedImages(images);
-    setZoomedImageIndex(index);
-  };
-
-  const closeZoomModal = () => {
-    setZoomedImages([]);
-    setZoomedImageIndex(null);
-  };
-
-  const navigateZoom = (direction: 'prev' | 'next') => {
-    if (zoomedImageIndex === null || zoomedImages.length === 0) return;
-    let newIndex = zoomedImageIndex;
-    if (direction === 'prev') {
-      newIndex = (zoomedImageIndex - 1 + zoomedImages.length) % zoomedImages.length;
-    } else {
-      newIndex = (zoomedImageIndex + 1) % zoomedImages.length;
-    }
-    setZoomedImageIndex(newIndex);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
   };
 
   return (
-    <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 pb-10">
-      <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 px-1">
-        <div>
-          <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">Biblioteca <span className="text-brand-600">· Modelos guardados</span></h2>
-          <div className="flex items-center gap-2 mt-2">
-            <p className="text-slate-400 font-medium italic text-xs md:text-sm">Gestiona tus modelos digitales.</p>
+    <div className="min-h-screen bg-[#0A0A0F] pb-28 md:pb-12">
+      <div className="max-w-7xl mx-auto px-5 md:px-8 py-8 space-y-8">
+
+        <header className="flex flex-col md:flex-row items-start md:items-end justify-between gap-5">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-1 h-5 bg-gradient-to-b from-violet-500 to-fuchsia-500 rounded-full" />
+              <span className="text-2xs font-black text-white/25 uppercase tracking-[0.4em]">Identidades</span>
+            </div>
+            <h1 className="text-3xl md:text-4xl font-black text-white tracking-tighter uppercase italic leading-none">
+              Biblioteca <span className="gradient-text-violet">de Identidades</span>
+            </h1>
+            <p className="text-xs text-white/30 font-medium">{avatars.length} modelo{avatars.length !== 1 ? 's' : ''} guardado{avatars.length !== 1 ? 's' : ''}</p>
+          </div>
+
+          <div className="flex items-center gap-2">
             <ModuleTutorial moduleId="avatarLibrary" steps={TUTORIAL_CONFIGS.avatarLibrary} />
+            <button
+              onClick={() => navigate('/crear/clonar')}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-xl text-2xs font-black uppercase tracking-wider shadow-lg shadow-violet-900/30 hover:opacity-90 transition-all touch-target"
+            >
+              <Plus size={13} /> From Photos
+            </button>
+            <button
+              onClick={() => navigate('/crear/manual')}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white/5 border border-white/[0.08] text-white/50 hover:text-white/80 rounded-xl text-2xs font-black uppercase tracking-wider transition-all touch-target"
+            >
+              <Plus size={13} /> From Scratch
+            </button>
+          </div>
+        </header>
+
+        {avatars.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-24 gap-6">
+            <div className="w-24 h-24 rounded-3xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center">
+              <User className="w-10 h-10 text-white/10" />
+            </div>
+            <div className="text-center space-y-2">
+              <p className="text-sm font-black text-white/25 uppercase italic tracking-tight">Biblioteca vacía</p>
+              <p className="text-xs text-white/15 max-w-xs mx-auto leading-relaxed">Crea tu primer modelo digital usando Model DNA · Fotos o Model DNA · Manual</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => navigate('/crear/clonar')} className="px-6 py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-lg hover:opacity-90 transition-all touch-target">
+                Model DNA · Fotos
+              </button>
+              <button onClick={() => navigate('/crear/manual')} className="px-6 py-3 bg-white/5 border border-white/[0.08] text-white/50 rounded-xl text-xs font-black uppercase tracking-wider hover:text-white/80 transition-all touch-target">
+                From Scratch
+              </button>
+            </div>
+          </div>
+        )}
+
+        {avatars.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            {avatars.map(avatar => {
+              const images = avatar.baseImages || [];
+              const slide  = getSlide(avatar.id);
+              const img    = images[slide] || images[0];
+
+              return (
+                <div
+                  key={avatar.id}
+                  onClick={() => setSelected(avatar)}
+                  className="group relative rounded-2xl overflow-hidden border border-white/[0.06] hover:border-white/[0.15] cursor-pointer transition-all duration-200 hover:scale-[1.02]"
+                >
+                  <div className="aspect-[3/4] bg-white/[0.03]">
+                    {img
+                      ? <img src={img} className="w-full h-full object-cover" loading="lazy" alt={avatar.name} />
+                      : <div className="w-full h-full flex items-center justify-center"><User className="w-8 h-8 text-white/10" /></div>
+                    }
+                  </div>
+
+                  {images.length > 1 && (
+                    <>
+                      <button onClick={e => cycleSlide(avatar.id, images, -1, e)}
+                        className="absolute left-1.5 top-1/2 -translate-y-1/2 w-7 h-7 bg-black/50 backdrop-blur-sm text-white rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity touch-target">
+                        <ChevronLeft size={14} />
+                      </button>
+                      <button onClick={e => cycleSlide(avatar.id, images, 1, e)}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 bg-black/50 backdrop-blur-sm text-white rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity touch-target">
+                        <ChevronRight size={14} />
+                      </button>
+                      <div className="absolute bottom-10 inset-x-0 flex justify-center gap-1">
+                        {images.map((_, i) => (
+                          <div key={i} className={`rounded-full transition-all ${i === slide ? 'w-3 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/30'}`} />
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  <div className="absolute top-2 left-2">
+                    <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-lg border ${TYPE_STYLES[avatar.type] || TYPE_STYLES.scratch}`}>
+                      {TYPE_LABELS[avatar.type] || 'DNA'}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={e => handleDelete(avatar.id, e)}
+                    disabled={deletingId === avatar.id}
+                    className={`absolute top-2 right-2 w-7 h-7 backdrop-blur-sm rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all touch-target ${
+                      confirmId === avatar.id ? 'bg-rose-500 text-white opacity-100' : 'bg-black/50 text-white/60 hover:text-white'
+                    }`}
+                  >
+                    <Trash2 size={11} />
+                  </button>
+
+                  <div className="absolute inset-x-0 bottom-0 p-2.5 bg-gradient-to-t from-black/80 to-transparent">
+                    <p className="text-white text-[10px] font-black uppercase tracking-tight truncate">{avatar.name}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {selected && (
+        <div
+          className="fixed inset-0 z-[400] bg-black/75 backdrop-blur-md flex items-end md:items-center justify-center p-0 md:p-6"
+          onClick={() => setSelected(null)}
+        >
+          <div
+            className="relative w-full md:max-w-3xl bg-[#0D0D14] border-t md:border border-white/[0.08] rounded-t-[28px] md:rounded-3xl shadow-2xl shadow-black/80 overflow-hidden animate-slide-up md:animate-scale-in max-h-[92dvh] overflow-y-auto scrollbar-hide"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex justify-center pt-3 md:hidden">
+              <div className="w-10 h-1 bg-white/10 rounded-full" />
+            </div>
+
+            <div className="p-6 md:p-8 space-y-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-lg border ${TYPE_STYLES[selected.type] || TYPE_STYLES.scratch}`}>
+                      {TYPE_LABELS[selected.type]}
+                    </span>
+                  </div>
+                  <h2 className="text-2xl font-black text-white uppercase italic tracking-tight">{selected.name}</h2>
+                  <p className="text-xs text-white/30 mt-0.5">Creado {new Date(selected.createdAt).toLocaleDateString('es-CL')}</p>
+                </div>
+                <button onClick={() => setSelected(null)}
+                  className="w-9 h-9 rounded-xl bg-white/5 border border-white/[0.08] flex items-center justify-center text-white/40 hover:text-white/80 transition-all touch-target flex-shrink-0">
+                  <X size={16} />
+                </button>
+              </div>
+
+              {selected.baseImages?.length > 0 && (
+                <div className="grid grid-cols-4 gap-2">
+                  {selected.baseImages.map((img, i) => (
+                    <div key={i}
+                      className="aspect-[3/4] rounded-xl overflow-hidden border border-white/[0.08] cursor-zoom-in hover:border-white/[0.2] transition-all"
+                      onClick={() => openZoom(selected.baseImages, i)}
+                    >
+                      <img src={img} className="w-full h-full object-cover" loading="lazy" alt={`Vista ${i + 1}`} />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {META_FIELDS(selected).map(field => field.value && (
+                  <div key={field.label} className="bg-white/[0.03] border border-white/[0.05] rounded-xl p-3">
+                    <p className="text-[8px] font-black text-white/20 uppercase tracking-widest">{field.label}</p>
+                    <p className="text-[10px] font-black text-white/70 uppercase mt-0.5 truncate">{field.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {selected.physicalDescription && (
+                <div className="bg-gradient-to-br from-violet-600/8 to-fuchsia-600/5 border border-violet-500/15 rounded-2xl p-4">
+                  <p className="text-[9px] font-black text-violet-300/60 uppercase tracking-widest mb-2">Descripción física IA</p>
+                  <p className="text-xs text-white/40 leading-relaxed italic">"{selected.physicalDescription}"</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => navigate('/prompt-library')}
+                  className="py-3.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-wider hover:opacity-90 transition-all flex items-center justify-center gap-2 touch-target shadow-lg shadow-violet-900/30"
+                >
+                  <Zap size={13} /> Usar en AI Generator
+                </button>
+                <button
+                  onClick={() => selected.baseImages?.[0] && downloadImage(selected.baseImages[0], `${selected.name}_bodymaster.png`)}
+                  className="py-3.5 bg-white/5 border border-white/[0.08] text-white/50 hover:text-white/80 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 touch-target"
+                >
+                  <Download size={13} /> Descargar
+                </button>
+              </div>
+              <div className="h-safe-bottom md:hidden" />
+            </div>
           </div>
         </div>
-        <div className="flex gap-2 w-full md:w-auto">
-          <button onClick={() => navigate('/crear/clonar')} className="flex-1 md:flex-none px-5 md:px-6 py-3 md:py-4 bg-brand-600 text-white rounded-[16px] md:rounded-[20px] text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-xl shadow-brand-100 hover:bg-brand-700 active:scale-95 transition-all">Nueva Clonación</button>
-          <button onClick={() => navigate('/crear/manual')} className="flex-1 md:flex-none px-5 md:px-6 py-3 md:py-4 bg-slate-900 text-white rounded-[16px] md:rounded-[20px] text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-xl shadow-slate-200 hover:bg-slate-800 active:scale-95 transition-all">Crear ADN</button>
-        </div>
-      </header>
-
-
-      {avatars.length === 0 ? (
-        <div className="bg-white p-12 md:p-24 rounded-[40px] md:rounded-[64px] border-2 border-dashed border-slate-100 text-center">
-           <i className="fa-solid fa-user-astronaut text-5xl md:text-7xl text-slate-100 mb-6 md:mb-8"></i>
-           <p className="text-slate-400 font-black uppercase text-xs md:text-sm tracking-[0.2em]">No hay modelos registrados</p>
-           <p className="text-slate-300 text-[10px] md:text-xs mt-3 italic">Usa el laboratorio para crear tu primera identidad digital.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-10">
-          {avatars.map(avatar => (
-            <div 
-              key={avatar.id} 
-              className="bg-white p-5 md:p-6 rounded-[40px] md:rounded-[56px] border border-slate-100 shadow-sm hover:shadow-2xl transition-all group cursor-pointer"
-              onClick={() => setSelectedAvatar(avatar)}
-            >
-              <div 
-                className="aspect-[3/4] rounded-[32px] md:rounded-[44px] overflow-hidden bg-slate-50 mb-6 md:mb-8 relative shadow-inner cursor-zoom-in group-hover:scale-105 transition-transform duration-700"
-                onClick={(e) => { e.stopPropagation(); openZoomModal(avatar.baseImages, imgIdx[avatar.id] || 0); }}
-              >
-                 <img 
-                    src={avatar.baseImages[imgIdx[avatar.id] || 0]} 
-                    alt={avatar.name} 
-                    className="w-full h-full object-contain" 
-                 />
-                 {/* Zoom Overlay on hover */}
-                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                   <i className="fa-solid fa-magnifying-glass-plus text-3xl md:text-4xl"></i>
-                 </div>
-                 {/* Navigation dots */}
-                 <div className="absolute bottom-6 inset-x-6 flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                    {avatar.baseImages.map((_, i) => (
-                      <button 
-                        key={i} 
-                        onClick={(e) => { e.stopPropagation(); setImgIdx({...imgIdx, [avatar.id]: i}); }} 
-                        className={`h-1.5 rounded-full transition-all ${ (imgIdx[avatar.id] || 0) === i ? 'w-8 bg-white' : 'w-2 bg-white/30 hover:bg-white/50'}`} 
-                      />
-                    ))}
-                 </div>
-                 {/* Type badges */}
-                 <div className="absolute top-6 left-6 flex gap-2">
-                   <span className={`px-4 py-1.5 text-[8px] md:text-[9px] font-black rounded-full text-white border border-white/20 backdrop-blur-md ${avatar.type === 'reference' ? 'bg-brand-500/60' : 'bg-accent-500/60'}`}>
-                      {avatar.type === 'reference' ? 'PROT. CLON' : 'ADN MASTER'}
-                   </span>
-                 </div>
-                 {/* Delete button */}
-                 <button onClick={(e) => deleteAvatar(avatar.id, e)} className="absolute top-6 right-6 w-8 h-8 bg-red-50/80 backdrop-blur-md text-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 hover:text-white">
-                   <i className="fa-solid fa-trash-can text-xs"></i>
-                 </button>
-              </div>
-              <div className="px-3 md:px-4 space-y-4 md:space-y-5"> {/* Increased mobile px */}
-                 <div className="flex justify-between items-start">
-                    <div>
-                       <h4 className="text-lg md:text-2xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">{avatar.name}</h4> {/* Adjusted mobile text size */}
-                       <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 italic">{avatar.metadata.personality}</p> {/* Adjusted mobile text size */}
-                    </div>
-                    <div className="w-8 h-8 md:w-10 md:h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 group-hover:bg-brand-50 group-hover:text-brand-500 transition-all">
-                       <i className="fa-solid fa-chevron-right text-xs"></i>
-                    </div>
-                 </div>
-                 <div className="grid grid-cols-2 gap-2 pt-2">
-                    <div className="bg-slate-50 p-2 md:p-3 rounded-xl md:rounded-2xl border border-slate-100 text-center">
-                       <p className="text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest">Etnia</p> {/* Adjusted mobile text size */}
-                       <p className="text-[10px] md:text-sm font-black text-slate-800 uppercase tracking-tighter truncate">{avatar.metadata.ethnicity}</p> {/* Adjusted mobile text size */}
-                    </div>
-                    <div className="bg-slate-50 p-2 md:p-3 rounded-xl md:rounded-2xl border border-slate-100 text-center">
-                       <p className="text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest">Edad Aprox.</p> {/* Adjusted mobile text size */}
-                       <p className="text-[10px] md:text-sm font-black text-slate-800">{avatar.metadata.age}</p> {/* Adjusted mobile text size */}
-                    </div>
-                 </div>
-              </div>
-            </div>
-          ))}
-        </div>
       )}
 
-      {selectedAvatar && (
-        <div className="fixed inset-0 z-[10000] bg-slate-900/98 backdrop-blur-xl flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300">
-           <div className="bg-white w-full max-w-7xl h-full max-h-[90vh] rounded-[40px] md:rounded-[64px] overflow-hidden flex flex-col md:flex-row shadow-2xl relative animate-in zoom-in duration-300">
-              
-              <button 
-                onClick={() => setSelectedAvatar(null)} 
-                className="absolute top-6 right-6 md:top-10 md:right-10 w-10 h-10 md:w-12 md:h-12 rounded-full bg-red-600 text-white flex items-center justify-center z-50 hover:bg-red-700 transition-all"
-              >
-                <i className="fa-solid fa-xmark text-lg md:text-xl"></i>
-              </button>
-
-              <div className="w-full md:w-1/3 bg-slate-50 border-r border-slate-100 flex flex-col p-6 md:p-12 overflow-y-auto custom-scrollbar">
-                 <div className="aspect-[3/4] rounded-[32px] md:rounded-[48px] overflow-hidden shadow-2xl mb-8 md:mb-10 border-4 border-white">
-                    <img 
-                      src={selectedAvatar.baseImages[0]} 
-                      alt={selectedAvatar.name} 
-                      className="w-full h-full object-contain cursor-zoom-in" 
-                      onClick={() => openZoomModal(selectedAvatar.baseImages, 0)}
-                    />
-                 </div>
-                 <div className="space-y-4 md:space-y-6">
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Master Asset Set (Base)</h3>
-                    <div className="grid grid-cols-3 gap-2 md:gap-3">
-                       {selectedAvatar.baseImages.map((img, i) => (
-                         <div key={i} className="group aspect-square rounded-xl md:rounded-2xl overflow-hidden relative border border-slate-200 cursor-pointer shadow-sm">
-                            <img 
-                              src={img} 
-                              alt={`${selectedAvatar.name} plano ${i+1}`} 
-                              className="w-full h-full object-contain" 
-                              onClick={() => openZoomModal(selectedAvatar.baseImages, i)}
-                            />
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); downloadImage(img, `${selectedAvatar.name}_master_${i}.png`); }}
-                              className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity"
-                            >
-                              <i className="fa-solid fa-download"></i>
-                            </button>
-                         </div>
-                       ))}
-                    </div>
-                 </div>
-              </div>
-
-              <div className="flex-1 flex flex-col p-6 md:p-16 overflow-y-auto custom-scrollbar">
-                 <header className="mb-8 md:mb-12">
-                    <div className="flex flex-wrap items-center gap-2 md:gap-4 mb-2">
-                       <span className="px-2 md:px-3 py-1 bg-brand-50 text-brand-500 text-[7px] md:text-[8px] font-black uppercase rounded-full border border-brand-100 tracking-widest">Digital Model ID: {selectedAvatar.id.slice(-6)}</span>
-                       <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 bg-accent-500 rounded-full"></span>
-                        <span className="text-[7px] md:text-[8px] font-black text-slate-400 uppercase tracking-widest">Estado: Activo en Cloud</span>
-                       </div>
-                    </div>
-                    <h2 className="text-3xl md:text-5xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">{selectedAvatar.name}</h2>
-                 </header>
-
-                 <div className="space-y-8 md:space-y-12 animate-in fade-in duration-500">
-                    <section className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-                       {[
-                         { label: 'Etnia / ADN', value: selectedAvatar.metadata.ethnicity, icon: 'fa-dna' },
-                         { label: 'Edad Aparente', value: selectedAvatar.metadata.age, icon: 'fa-user-clock' },
-                         { label: 'Complexión', value: selectedAvatar.metadata.build, icon: 'fa-person' },
-                         { label: 'Ojos / Mirada', value: selectedAvatar.metadata.eyes, icon: 'fa-eye' },
-                         { label: 'Cabello', value: `${selectedAvatar.metadata.hairColor} (${selectedAvatar.metadata.hairType})`, icon: 'fa-scissors' },
-                         { label: 'Personalidad', value: selectedAvatar.metadata.personality, icon: 'fa-brain' },
-                         { label: 'Expresión', value: selectedAvatar.metadata.expression, icon: 'fa-face-smile' },
-                         { label: 'Vibe Sugerido', value: selectedAvatar.metadata.vibe || 'Neutral', icon: 'fa-sparkles' },
-                       ].map((item, i) => (
-                         <div key={i} className="p-3 md:p-5 bg-slate-50 rounded-[20px] md:rounded-[28px] border border-slate-100 space-y-1 md:space-y-2">
-                            <p className="text-[7px] md:text-[8px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                              <i className={`fa-solid ${item.icon} opacity-30`}></i> {item.label}
-                            </p>
-                            <p className="text-[10px] md:text-xs font-bold text-slate-800 uppercase truncate">{item.value}</p>
-                         </div>
-                       ))}
-                    </section>
-
-                    <section className="space-y-4 md:space-y-6">
-                       <h4 className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Descripción Física Narrativa (IA)</h4>
-                       <div className="bg-brand-50/30 p-6 md:p-8 rounded-[32px] md:rounded-[40px] border border-brand-100/50">
-                          <p className="text-xs md:text-base text-slate-700 leading-relaxed font-medium italic">
-                             "{selectedAvatar.physicalDescription}"
-                          </p>
-                       </div>
-                    </section>
-                 </div>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {/* Zoom Gallery Modal - Replicated from other modules */}
-      {zoomedImageIndex !== null && zoomedImages.length > 0 && (
-        <div 
-          className="fixed inset-0 z-[10000] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300"
-          onClick={closeZoomModal}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') closeZoomModal();
-            if (e.key === 'ArrowLeft') navigateZoom('prev');
-            if (e.key === 'ArrowRight') navigateZoom('next');
-          }}
+      {zoomedIdx !== null && zoomedImages.length > 0 && (
+        <div
+          className="fixed inset-0 z-[999] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4"
+          onClick={closeZoom}
+          onKeyDown={e => { if (e.key === 'Escape') closeZoom(); if (e.key === 'ArrowLeft') navZoom('prev'); if (e.key === 'ArrowRight') navZoom('next'); }}
           tabIndex={0}
         >
-          <div className="relative max-w-5xl w-full h-full flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-            <img 
-              src={zoomedImages[zoomedImageIndex]} 
-              alt={`Avatar Preview ${zoomedImageIndex + 1}`} 
-              className="max-w-full max-h-[90vh] object-contain rounded-[40px] md:rounded-[56px] shadow-2xl animate-in zoom-in-50 transition-transform duration-300" 
-              style={{ cursor: 'zoom-in' }}
-            />
-
-            {/* Close Button */}
-            <button 
-              onClick={closeZoomModal} 
-              className="absolute top-4 right-4 md:top-8 md:right-8 w-10 h-10 md:w-12 md:h-12 rounded-full bg-red-600 text-white flex items-center justify-center shadow-lg hover:bg-red-700 transition-all z-10"
-              aria-label="Cerrar galería"
-            >
-              <i className="fa-solid fa-xmark text-lg md:text-xl"></i>
-            </button>
-
-            {/* Download Button */}
-            <button
-                onClick={(e) => { e.stopPropagation(); downloadImage(zoomedImages[zoomedImageIndex], `avatar_plano_ampliado_${zoomedImageIndex + 1}.png`); }}
-                className="absolute bottom-4 left-1/2 -translate-x-1/2 w-auto px-6 py-3 bg-white text-slate-900 rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-all z-10 text-[10px] font-black uppercase"
-                aria-label="Descargar imagen"
-            >
-                <i className="fa-solid fa-download mr-2"></i> Descargar Foto
-            </button>
-
-
-            {/* Navigation Arrows */}
-            <button 
-              onClick={(e) => { e.stopPropagation(); navigateZoom('prev'); }} 
-              className="absolute left-4 md:left-8 w-12 h-12 md:w-16 md:h-16 rounded-full bg-white/10 backdrop-blur-sm text-white flex items-center justify-center text-xl md:text-2xl opacity-80 hover:opacity-100 transition-all hover:scale-110"
-              aria-label="Imagen anterior"
-            >
-              <i className="fa-solid fa-chevron-left"></i>
-            </button>
-            <button 
-              onClick={(e) => { e.stopPropagation(); navigateZoom('next'); }} 
-              className="absolute right-4 md:right-8 w-12 h-12 md:w-16 md:h-16 rounded-full bg-white/10 backdrop-blur-sm text-white flex items-center justify-center text-xl md:text-2xl opacity-80 hover:opacity-100 transition-all hover:scale-110"
-              aria-label="Imagen siguiente"
-            >
-              <i className="fa-solid fa-chevron-right"></i>
-            </button>
+          <div className="relative max-w-xl w-full" onClick={e => e.stopPropagation()}>
+            <div className="rounded-3xl overflow-hidden border border-white/[0.08]">
+              <img src={zoomedImages[zoomedIdx]} className="w-full max-h-[80dvh] object-contain bg-[#0A0A0F]" alt="" />
+            </div>
+            <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-sm border border-white/10 rounded-xl px-3 py-1.5">
+              <span className="text-[10px] font-black text-white/50 uppercase tracking-widest">{zoomedIdx + 1} / {zoomedImages.length}</span>
+            </div>
+            <button onClick={closeZoom} className="absolute top-4 right-4 w-10 h-10 bg-black/60 backdrop-blur-sm border border-white/10 rounded-xl flex items-center justify-center text-white/50 hover:text-white transition-all touch-target"><X size={18} /></button>
+            {zoomedImages.length > 1 && <>
+              <button onClick={e => { e.stopPropagation(); navZoom('prev'); }} className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-black/60 backdrop-blur-sm border border-white/10 rounded-xl flex items-center justify-center text-white/50 hover:text-white transition-all touch-target"><ChevronLeft size={18} /></button>
+              <button onClick={e => { e.stopPropagation(); navZoom('next'); }} className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-black/60 backdrop-blur-sm border border-white/10 rounded-xl flex items-center justify-center text-white/50 hover:text-white transition-all touch-target"><ChevronRight size={18} /></button>
+            </>}
           </div>
         </div>
       )}

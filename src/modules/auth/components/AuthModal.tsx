@@ -7,9 +7,8 @@ import {
   GoogleAuthProvider,
   signInWithPopup
 } from 'firebase/auth';
-// RUTA CORREGIDA: sube 3 niveles para encontrar firebase.ts en /src
-import { auth } from '../../../firebase'; 
-import { X, Mail, Lock, User, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+import { auth } from '../../../firebase';
+import { X, Mail, Lock, User, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -20,6 +19,28 @@ type AuthMode = 'login' | 'signup' | 'reset';
 
 const googleProvider = new GoogleAuthProvider();
 
+const FRIENDLY_ERRORS: Record<string, string> = {
+  'auth/user-not-found':         'No existe una cuenta con ese correo.',
+  'auth/wrong-password':         'Contraseña incorrecta. Intenta de nuevo.',
+  'auth/email-already-in-use':   'Ese correo ya tiene una cuenta. Inicia sesión.',
+  'auth/weak-password':          'La contraseña debe tener al menos 6 caracteres.',
+  'auth/invalid-email':          'El formato del correo no es válido.',
+  'auth/popup-closed-by-user':   'Cerraste la ventana de Google. Intenta de nuevo.',
+  'auth/cancelled-popup-request':'Operación cancelada.',
+  'auth/invalid-credential':     'Correo o contraseña incorrectos.',
+  'auth/too-many-requests':      'Demasiados intentos. Espera un momento.',
+  'auth/network-request-failed': 'Sin conexión. Verifica tu internet.',
+};
+
+const friendlyError = (code: string): string =>
+  FRIENDLY_ERRORS[code] || 'Ocurrió un error inesperado. Intenta de nuevo.';
+
+const MODES = {
+  login:  { title: 'Bienvenido de nuevo',   subtitle: 'Ingresa para continuar creando' },
+  signup: { title: 'Crea tu cuenta',         subtitle: 'Únete a la comunidad de LUZ IA' },
+  reset:  { title: 'Recuperar acceso',       subtitle: 'Te enviamos un enlace de recuperación' },
+};
+
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [mode, setMode]               = useState<AuthMode>('login');
   const [email, setEmail]             = useState('');
@@ -29,36 +50,22 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [loadingGoogle, setLoadingGoogle] = useState(false);
   const [error, setError]             = useState<string | null>(null);
   const [success, setSuccess]         = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   if (!isOpen) return null;
 
   const resetFields = () => {
     setEmail(''); setPassword(''); setDisplayName('');
-    setError(null); setSuccess(null);
+    setError(null); setSuccess(null); setShowPassword(false);
   };
 
   const changeMode = (m: AuthMode) => { resetFields(); setMode(m); };
-
-  const friendlyError = (code: string): string => {
-    const map: Record<string, string> = {
-      'auth/user-not-found':      'Usuario no encontrado.',
-      'auth/wrong-password':      'Contraseña incorrecta.',
-      'auth/email-already-in-use':'El correo ya está en uso.',
-      'auth/weak-password':       'La contraseña debe tener al menos 6 caracteres.',
-      'auth/invalid-email':       'Correo inválido.',
-      'auth/popup-closed-by-user':'Cerraste la ventana de Google. Intenta de nuevo.',
-      'auth/cancelled-popup-request': 'Operación cancelada.',
-      'auth/invalid-credential':  'Correo o contraseña incorrectos.',
-    };
-    return map[code] || 'Ocurrió un error inesperado.';
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     setSuccess(null);
-
     try {
       if (mode === 'login') {
         await signInWithEmailAndPassword(auth, email, password);
@@ -69,7 +76,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         onClose();
       } else if (mode === 'reset') {
         await sendPasswordResetEmail(auth, email);
-        setSuccess('Enviamos un correo de recuperación. Revisa tu bandeja.');
+        setSuccess('Correo enviado. Revisa tu bandeja de entrada.');
         setTimeout(() => changeMode('login'), 3500);
       }
     } catch (err: any) {
@@ -92,45 +99,53 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  const TITLES: Record<AuthMode, string> = {
-    login:  'Bienvenido de nuevo',
-    signup: 'Crea tu cuenta',
-    reset:  'Recuperar acceso',
-  };
-
-  const SUBTITLES: Record<AuthMode, string> = {
-    login:  'Ingresa para continuar creando',
-    signup: 'Únete a la comunidad de LUZ IA',
-    reset:  'Te enviaremos un enlace de recuperación',
-  };
+  const isDisabled = loading || loadingGoogle;
 
   return (
     <div
-      className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[500] flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-md"
       onClick={onClose}
     >
       <div
-        className="bg-white w-full max-w-md rounded-[32px] shadow-2xl overflow-hidden relative animate-in zoom-in-95 fade-in duration-200"
+        className="
+          relative w-full sm:max-w-md
+          bg-[#0D0D14] border border-white/[0.08]
+          rounded-t-[28px] sm:rounded-3xl
+          shadow-2xl shadow-black/80
+          overflow-hidden
+          animate-slide-up sm:animate-scale-in
+          max-h-[95dvh] overflow-y-auto scrollbar-hide
+        "
         onClick={e => e.stopPropagation()}
       >
-        <button
-          onClick={onClose}
-          className="absolute top-5 right-5 z-10 w-9 h-9 bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 rounded-xl flex items-center justify-center transition-all"
-          aria-label="Cerrar"
-        >
-          <X size={18} />
-        </button>
+        <div className="flex justify-center pt-3 sm:hidden">
+          <div className="w-10 h-1 bg-white/15 rounded-full" />
+        </div>
 
-        <div className="p-8 md:p-10">
-          <div className="mb-8 text-center">
-            <div className="w-14 h-14 bg-brand-600 rounded-2xl flex items-center justify-center shadow-xl shadow-brand-200 mx-auto mb-5">
-              <i className="fa-solid fa-bolt text-white text-2xl"></i>
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-72 h-40 bg-violet-600/15 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative px-6 pt-6 pb-4 sm:px-8 sm:pt-8">
+
+          <button
+            onClick={onClose}
+            className="absolute top-5 right-5 sm:top-6 sm:right-6 z-10 w-9 h-9 bg-white/5 hover:bg-white/10 border border-white/[0.08] rounded-xl flex items-center justify-center text-white/40 hover:text-white/80 transition-all touch-target"
+            aria-label="Cerrar"
+          >
+            <X size={16} />
+          </button>
+
+          <div className="mb-7 text-center">
+            <div className="relative inline-flex mb-5">
+              <div className="w-14 h-14 bg-gradient-to-br from-violet-600 to-fuchsia-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-violet-900/60">
+                <i className="fa-solid fa-bolt text-white text-2xl"></i>
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-violet-600 to-fuchsia-600 rounded-2xl opacity-30 blur-lg -z-10" />
             </div>
-            <h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase italic">
-              {TITLES[mode]}
+            <h2 className="text-2xl font-black text-white tracking-tight uppercase italic leading-none">
+              {MODES[mode].title}
             </h2>
-            <p className="text-slate-500 text-sm mt-1.5 font-medium">
-              {SUBTITLES[mode]}
+            <p className="text-xs text-white/35 mt-2 font-medium">
+              {MODES[mode].subtitle}
             </p>
           </div>
 
@@ -138,13 +153,22 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             <>
               <button
                 onClick={handleGoogle}
-                disabled={loadingGoogle || loading}
-                className="w-full flex items-center justify-center gap-3 py-3.5 border-2 border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 rounded-2xl transition-all font-bold text-sm text-slate-700 disabled:opacity-50"
+                disabled={isDisabled}
+                className="
+                  w-full flex items-center justify-center gap-3 py-3.5
+                  bg-white/[0.04] hover:bg-white/[0.08]
+                  border border-white/[0.08] hover:border-white/[0.15]
+                  rounded-2xl transition-all
+                  font-black text-xs text-white/70 hover:text-white
+                  uppercase tracking-widest
+                  disabled:opacity-40 disabled:cursor-not-allowed
+                  touch-target
+                "
               >
                 {loadingGoogle ? (
-                  <Loader2 className="animate-spin w-5 h-5 text-slate-400" />
+                  <Loader2 size={18} className="animate-spin text-white/40" />
                 ) : (
-                  <svg className="w-5 h-5" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                     <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
@@ -153,11 +177,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 )}
                 Continuar con Google
               </button>
-
               <div className="flex items-center gap-3 my-5">
-                <div className="flex-1 h-px bg-slate-100" />
-                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">o</span>
-                <div className="flex-1 h-px bg-slate-100" />
+                <div className="flex-1 h-px bg-white/[0.06]" />
+                <span className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em]">o</span>
+                <div className="flex-1 h-px bg-white/[0.06]" />
               </div>
             </>
           )}
@@ -165,80 +188,99 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           <form onSubmit={handleSubmit} className="space-y-3">
             {mode === 'signup' && (
               <div className="relative">
-                <User size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <User size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/25 pointer-events-none" />
                 <input
                   type="text" placeholder="Nombre completo" required
                   value={displayName} onChange={e => setDisplayName(e.target.value)}
-                  autoComplete="name"
-                  className="w-full pl-11 pr-4 py-4 bg-slate-50 border-2 border-transparent focus:border-brand-500 focus:bg-white rounded-2xl outline-none transition-all text-base md:text-sm font-medium"
+                  autoComplete="name" autoCapitalize="words"
+                  className="w-full pl-11 pr-4 py-3.5 bg-white/[0.04] border border-white/[0.08] focus:border-violet-500/50 focus:bg-white/[0.07] rounded-2xl outline-none transition-all text-base sm:text-sm font-medium text-white/80 placeholder:text-white/20 touch-target"
                 />
               </div>
             )}
 
             <div className="relative">
-              <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <Mail size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/25 pointer-events-none" />
               <input
                 type="email" placeholder="Correo electrónico" required
                 value={email} onChange={e => setEmail(e.target.value)}
-                autoComplete="email"
-                className="w-full pl-11 pr-4 py-4 bg-slate-50 border-2 border-transparent focus:border-brand-500 focus:bg-white rounded-2xl outline-none transition-all text-base md:text-sm font-medium"
+                autoComplete="email" inputMode="email" autoCapitalize="none"
+                className="w-full pl-11 pr-4 py-3.5 bg-white/[0.04] border border-white/[0.08] focus:border-violet-500/50 focus:bg-white/[0.07] rounded-2xl outline-none transition-all text-base sm:text-sm font-medium text-white/80 placeholder:text-white/20 touch-target"
               />
             </div>
 
             {mode !== 'reset' && (
               <div className="relative">
-                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <Lock size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/25 pointer-events-none" />
                 <input
-                  type="password" placeholder="Contraseña" required
+                  type={showPassword ? 'text' : 'password'} placeholder="Contraseña" required
                   value={password} onChange={e => setPassword(e.target.value)}
                   autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                  className="w-full pl-11 pr-4 py-4 bg-slate-50 border-2 border-transparent focus:border-brand-500 focus:bg-white rounded-2xl outline-none transition-all text-base md:text-sm font-medium"
+                  className="w-full pl-11 pr-12 py-3.5 bg-white/[0.04] border border-white/[0.08] focus:border-violet-500/50 focus:bg-white/[0.07] rounded-2xl outline-none transition-all text-base sm:text-sm font-medium text-white/80 placeholder:text-white/20 touch-target"
                 />
+                <button type="button" onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white/20 hover:text-white/50 transition-colors touch-target flex items-center justify-center"
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'} text-sm`} />
+                </button>
               </div>
             )}
 
             {error && (
-              <div className="flex items-center gap-2 text-red-500 text-xs font-bold bg-red-50 p-3 rounded-xl">
-                <AlertCircle size={14} className="flex-shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-            {success && (
-              <div className="flex items-center gap-2 text-accent-600 text-xs font-bold bg-accent-50 p-3 rounded-xl">
-                <ArrowRight size={14} className="flex-shrink-0" />
-                <span>{success}</span>
+              <div className="flex items-start gap-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-300 p-3.5 rounded-2xl">
+                <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                <span className="text-xs font-bold leading-relaxed">{error}</span>
               </div>
             )}
 
-            <button
-              type="submit" disabled={loading || loadingGoogle}
-              className="w-full py-4 bg-brand-600 hover:bg-brand-700 disabled:bg-brand-300 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-brand-100 transition-all flex items-center justify-center gap-2"
+            {success && (
+              <div className="flex items-start gap-2.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 p-3.5 rounded-2xl">
+                <CheckCircle2 size={14} className="flex-shrink-0 mt-0.5" />
+                <span className="text-xs font-bold leading-relaxed">{success}</span>
+              </div>
+            )}
+
+            <button type="submit" disabled={isDisabled}
+              className="w-full py-4 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-violet-900/40 transition-all active:scale-[0.98] flex items-center justify-center gap-2 touch-target"
             >
-              {loading
-                ? <Loader2 className="animate-spin" size={18} />
-                : mode === 'login' ? 'Iniciar Sesión'
-                : mode === 'signup' ? 'Crear Cuenta'
+              {loading ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : mode === 'login' ? 'Iniciar Sesión'
+                : mode === 'signup' ? 'Crear Cuenta Gratis'
                 : 'Enviar Enlace'
               }
             </button>
           </form>
 
-          <div className="mt-6 pt-5 border-t border-slate-100 flex flex-col gap-2.5 text-center">
-            {mode === 'login' ? (
+          <div className="mt-5 pt-5 border-t border-white/[0.06] flex flex-col gap-3 text-center">
+            {mode === 'login' && (
               <>
-                <button onClick={() => changeMode('signup')} className="text-xs font-bold text-slate-500 hover:text-brand-600 transition-colors">
-                  ¿No tienes cuenta? <span className="text-brand-600">Regístrate gratis</span>
+                <button onClick={() => changeMode('signup')} className="text-xs font-bold text-white/30 hover:text-white/70 transition-colors touch-target">
+                  ¿Sin cuenta?{' '}<span className="text-violet-400 font-black">Regístrate gratis · 20 créditos</span>
                 </button>
-                <button onClick={() => changeMode('reset')} className="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors">
+                <button onClick={() => changeMode('reset')} className="text-xs font-bold text-white/20 hover:text-white/50 transition-colors">
                   Olvidé mi contraseña
                 </button>
               </>
-            ) : (
-              <button onClick={() => changeMode('login')} className="text-xs font-bold text-slate-500 hover:text-brand-600 transition-colors">
-                ¿Ya tienes cuenta? <span className="text-brand-600">Inicia sesión</span>
+            )}
+            {mode === 'signup' && (
+              <button onClick={() => changeMode('login')} className="text-xs font-bold text-white/30 hover:text-white/70 transition-colors touch-target">
+                ¿Ya tienes cuenta?{' '}<span className="text-violet-400 font-black">Inicia sesión</span>
+              </button>
+            )}
+            {mode === 'reset' && (
+              <button onClick={() => changeMode('login')} className="text-xs font-bold text-white/30 hover:text-white/70 transition-colors touch-target">
+                ← Volver al inicio de sesión
               </button>
             )}
           </div>
+
+          <p className="text-center text-[9px] text-white/15 font-medium mt-4 leading-relaxed px-4">
+            Al continuar aceptas nuestros{' '}
+            <span className="text-white/30">Términos de Uso</span>{' '}y{' '}
+            <span className="text-white/30">Política de Privacidad</span>
+          </p>
+          <div className="h-4 sm:h-0" />
         </div>
       </div>
     </div>
