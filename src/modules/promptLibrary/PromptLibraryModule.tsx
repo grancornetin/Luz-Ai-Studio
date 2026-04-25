@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, Library, PlusCircle } from 'lucide-react';
 import PromptGallery from './components/PromptGallery';
 import PromptComposer from './components/PromptComposer';
@@ -13,24 +13,33 @@ import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
 
 const PromptLibraryModule: React.FC = () => {
   const { user, isAdmin } = useAuth();
-  const [activeTab, setActiveTab]         = useState<'gallery' | 'composer'>('gallery');
+  const [activeTab, setActiveTab] = useState<'gallery' | 'composer'>('gallery');
   const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
 
   const [publishData, setPublishData] = useState<{
-    imageUrl: string;
-    promptText: string;
-    promptDNA: PromptDNA;
-    originPromptId?: string;
+    imageUrl: string
+    promptText: string
+    promptDNA: PromptDNA
+    originPromptId?: string
   } | null>(null);
 
-  const [recreatePrompt, setRecreatePrompt]   = useState<string | undefined>();
-  const [recreateDNA, setRecreateDNA]         = useState<PromptDNA | undefined>();
+  const [recreatePrompt, setRecreatePrompt] = useState<string | undefined>();
+  const [recreateDNA, setRecreateDNA] = useState<PromptDNA | undefined>();
   const [recreateOriginId, setRecreateOriginId] = useState<string | undefined>();
 
   const {
-    prompts, allTags, searchQuery, setSearchQuery,
-    activeTag, setActiveTag, sortBy, setSortBy,
-    likePrompt, deletePrompt, publishPrompt, loading,
+    prompts,
+    allTags,
+    searchQuery,
+    setSearchQuery,
+    activeTag,
+    setActiveTag,
+    sortBy,
+    setSortBy,
+    likePrompt,
+    deletePrompt,
+    publishPrompt,
+    loading
   } = usePromptLibrary();
 
   const handleRecreate = (prompt: Prompt) => {
@@ -43,90 +52,101 @@ const PromptLibraryModule: React.FC = () => {
 
   const handlePublish = async (title?: string, tags?: string[]) => {
     if (!publishData || !user) return;
+
     const isRecreated = !!publishData.originPromptId;
-    const newPrompt: Prompt = {
-      id: Date.now().toString(),
-      title: isRecreated ? '' : title || 'Untitled',
-      promptText: publishData.promptText,
-      promptDNA: publishData.promptDNA,
-      imageUrl: publishData.imageUrl,
-      authorId: user.uid,
-      likes: 0,
-      tags: isRecreated ? [] : (tags || []),
-      createdAt: new Date().toISOString(),
-      originPromptId: publishData.originPromptId,
-      generations: [],
-    };
-    await publishPrompt(newPrompt);
+
+    await publishPrompt(
+      publishData.imageUrl,
+      publishData.promptText,
+      publishData.promptDNA,
+      isRecreated ? '' : (title || 'Untitled'),
+      isRecreated ? [] : (tags || []),
+      publishData.originPromptId
+    );
+
     setPublishData(null);
     setRecreateOriginId(undefined);
     setActiveTab('gallery');
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0A0F]">
+    <div className="min-h-screen bg-slate-50/50 pb-20 md:pb-0">
 
-      <header className="relative overflow-hidden border-b border-white/[0.06] bg-[#0D0D14]">
-        <div className="absolute top-0 right-0 w-96 h-48 bg-fuchsia-600/8 rounded-full blur-[80px] pointer-events-none" />
-        <div className="absolute top-0 left-1/3 w-64 h-32 bg-violet-600/8 rounded-full blur-[60px] pointer-events-none" />
+      {/* HEADER */}
+      <header className="bg-white border-b border-slate-100 px-6 md:px-12 py-12 md:py-20 relative overflow-hidden">
 
-        <div className="relative max-w-7xl mx-auto px-5 md:px-8 py-8 md:py-12">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-indigo-50/50 to-transparent pointer-events-none" />
 
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="w-1 h-5 bg-gradient-to-b from-fuchsia-500 to-violet-500 rounded-full" />
-                <span className="text-2xs font-black text-white/25 uppercase tracking-[0.4em]">Generar Contenido</span>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-fuchsia-600 to-violet-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-fuchsia-900/40 flex-shrink-0">
-                  <Sparkles className="w-6 h-6 text-white" />
+        <div className="max-w-7xl mx-auto relative z-10">
+
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
+
+            <div className="space-y-4">
+
+              <div className="flex items-center gap-3">
+
+                <div className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-200">
+                  <Sparkles className="w-6 h-6" />
                 </div>
-                <div>
-                  <h1 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter italic leading-none">AI Generator</h1>
-                  <p className="text-xs md:text-sm font-bold text-white/25 uppercase tracking-widest mt-1.5">Visual Prompt Engineering & Community DNA</p>
-                </div>
+
+                <h1 className="text-3xl md:text-6xl font-black text-slate-900 uppercase tracking-tighter italic leading-none">
+                  Prompt Library <span className="text-indigo-600">Studio</span>
+                </h1>
+
               </div>
+
+              <p className="text-sm md:text-lg font-bold text-slate-400 uppercase tracking-widest max-w-2xl leading-relaxed">
+                Visual Prompt Engineering & Community DNA.
+              </p>
+
               <ModuleTutorial moduleId="aiGenerator" steps={TUTORIAL_CONFIGS.aiGenerator} label="¿Cómo funciona?" />
+
             </div>
 
-            <div className="flex bg-white/[0.04] border border-white/[0.06] p-1.5 rounded-2xl w-full md:w-auto shadow-inner">
+            {/* TABS */}
+            <div className="flex bg-slate-100 p-1.5 md:p-2 rounded-[28px] md:rounded-[32px] shadow-inner w-full md:w-auto">
+
               <button
                 onClick={() => setActiveTab('gallery')}
-                className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-5 md:px-8 py-3 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all ${
+                className={`flex-1 md:flex-none flex items-center justify-center gap-2 md:gap-3 px-4 md:px-8 py-3 md:py-4 rounded-[20px] md:rounded-[24px] text-[10px] md:text-xs font-black uppercase tracking-widest transition-all ${
                   activeTab === 'gallery'
-                    ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-900/40'
-                    : 'text-white/30 hover:text-white/60'
+                    ? 'bg-white text-slate-900 shadow-xl'
+                    : 'text-slate-400 hover:text-slate-600'
                 }`}
               >
-                <Library size={13} />
-                Biblioteca
-                {prompts.length > 0 && (
-                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${activeTab === 'gallery' ? 'bg-white/20 text-white' : 'bg-white/5 text-white/30'}`}>
-                    {prompts.length}
-                  </span>
-                )}
+                <Library className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                Explorar
               </button>
+
               <button
                 onClick={() => setActiveTab('composer')}
-                className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-5 md:px-8 py-3 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all ${
+                className={`flex-1 md:flex-none flex items-center justify-center gap-2 md:gap-3 px-4 md:px-8 py-3 md:py-4 rounded-[20px] md:rounded-[24px] text-[10px] md:text-xs font-black uppercase tracking-widest transition-all ${
                   activeTab === 'composer'
-                    ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-900/40'
-                    : 'text-white/30 hover:text-white/60'
+                    ? 'bg-white text-slate-900 shadow-xl'
+                    : 'text-slate-400 hover:text-slate-600'
                 }`}
               >
-                <PlusCircle size={13} />
+                <PlusCircle className="w-3.5 h-3.5 md:w-4 md:h-4" />
                 Crear DNA
               </button>
+
             </div>
+
           </div>
+
         </div>
+
       </header>
 
-      <main className="max-w-7xl mx-auto px-5 md:px-8 py-8 pb-28 md:pb-12">
+      {/* MAIN */}
+      <main className="max-w-7xl mx-auto px-6 md:px-12 py-12">
+
         <AnimatePresence mode="wait">
+
           {activeTab === 'gallery' ? (
-            <div key="gallery">
+
+            <motion.div key="gallery">
+
               <PromptGallery
                 prompts={prompts}
                 allTags={allTags}
@@ -142,41 +162,83 @@ const PromptLibraryModule: React.FC = () => {
                 onDelete={deletePrompt}
                 isAdmin={isAdmin}
               />
-            </div>
+
+            </motion.div>
+
           ) : (
-            <div key="composer">
+
+            <motion.div key="composer">
+
               <PromptComposer
                 initialPrompt={recreatePrompt}
                 initialDNA={recreateDNA}
                 onPublish={(imageUrl, promptText, promptDNA) => {
-                  if (recreateOriginId) { handlePublish(undefined, undefined); return; }
-                  setPublishData({ imageUrl, promptText, promptDNA });
+
+                  // 🔥 SI ES RECREATE → publicar directo sin modal
+                  if (recreateOriginId) {
+                    setPublishData({
+                      imageUrl,
+                      promptText,
+                      promptDNA,
+                      originPromptId: recreateOriginId,
+                    });
+                    // Publicar inmediatamente (sin modal de título/tags)
+                    publishPrompt(imageUrl, promptText, promptDNA, '', [], recreateOriginId)
+                      .then(() => {
+                        setRecreateOriginId(undefined);
+                        setActiveTab('gallery');
+                      });
+                    return;
+                  }
+
+                  // 🆕 SI ES NUEVO → abrir modal para título y tags
+                  setPublishData({
+                    imageUrl,
+                    promptText,
+                    promptDNA
+                  });
+
                 }}
               />
-            </div>
+
+            </motion.div>
+
           )}
+
         </AnimatePresence>
+
       </main>
 
+      {/* MODALS */}
       <AnimatePresence>
+
         {selectedPrompt && (
+
           <PromptDetailModal
             prompt={selectedPrompt}
             onClose={() => setSelectedPrompt(null)}
             onLike={likePrompt}
             onRecreate={handleRecreate}
           />
+
         )}
+
+        {/* 🔴 SOLO PARA NUEVOS PROMPTS */}
         {publishData && !publishData.originPromptId && (
+
           <PublishPromptModal
             imageUrl={publishData.imageUrl}
             promptText={publishData.promptText}
             promptDNA={publishData.promptDNA}
+            existingTags={allTags}
             onClose={() => setPublishData(null)}
             onPublish={handlePublish}
           />
+
         )}
+
       </AnimatePresence>
+
     </div>
   );
 };
