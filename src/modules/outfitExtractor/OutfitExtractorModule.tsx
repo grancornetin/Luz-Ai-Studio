@@ -97,13 +97,19 @@ const OutfitExtractorModule: React.FC = () => {
   const startDetection = async () => {
     if (!sourceImage) return;
     setStep('detecting');
-    setLoadingMsg('Iniciando Escaneo Biométrico...');
+    setLoadingMsg('Analizando prendas...');
     try {
       const result = await outfitService.analyzeOutfit(sourceImage);
+      if (!result.items || result.items.length === 0) {
+        alert("No se detectaron prendas en la imagen. Asegúrate de que la foto muestre claramente el outfit completo.");
+        setStep('idle');
+        return;
+      }
       setCurrentKit(result);
       setStep('scan_overlay');
     } catch (e: any) {
-      alert("Error en el escaneo: " + e.message);
+      console.error('[OutfitKit] analyzeOutfit error:', e);
+      alert("Error al analizar el outfit: " + e.message);
       setStep('idle');
     }
   };

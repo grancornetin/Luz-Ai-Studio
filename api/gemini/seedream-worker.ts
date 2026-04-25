@@ -210,7 +210,7 @@ async function processSeedreamJob(
   }
 
   // ── Paso 2: polling a EvoLink hasta completed ─────────────────────────────
-  const MAX_ATTEMPTS  = 30;
+  const MAX_ATTEMPTS  = 45;   // 45 × 2s = 90s máximo
   const POLL_DELAY_MS = 2000;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {

@@ -77,8 +77,16 @@ For each item return:
 
 Return ONLY valid JSON, no markdown formatting.`;
 
-    const analysis  = await callContentAPI('analyzeOutfit', prompt, [image]);
-    const itemsArray = Array.isArray(analysis.items) ? analysis.items : [];
+    const analysis = await callContentAPI('analyzeOutfit', prompt, [image]);
+    // El modelo puede devolver { items: [...] } o directamente un array
+    const itemsArray: any[] = Array.isArray(analysis)
+      ? analysis
+      : Array.isArray(analysis.items)
+        ? analysis.items
+        : Array.isArray(analysis.garments)
+          ? analysis.garments
+          : [];
+    console.log('[OutfitKit] Items detected:', itemsArray.length);
 
     return {
       id:            Date.now().toString(),

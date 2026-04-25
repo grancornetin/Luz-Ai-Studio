@@ -93,6 +93,17 @@ Realistic product photography. Background: soft neutral textured surface. Lighti
 `
 };
 
+// Versiones para Seedream — sin mencionar equipo fotográfico para evitar
+// que el modelo renderice trípodes, focos o equipo en la imagen.
+export const PRODUCT_BASE_STYLES_SEEDREAM = {
+  comercial: `
+Clean e-commerce product photo. Background: pure white (#FFFFFF), infinite seamless, no visible edges or transitions. Lighting: soft, even, shadowless white light from above. Product appears isolated and crisp. Professional commercial look. Photorealistic.
+`,
+  organico: `
+Natural product photo. Background: soft neutral light grey or off-white surface texture. Lighting: diffused daylight, soft shadows. Clean and minimal. Photorealistic.
+`
+};
+
 export const ORGANIC_PROPS_BY_CATEGORY: { [key: string]: string } = {
   clothing: "a subtle fabric drape or smooth wooden surface as prop.",
   jewelry: "linen, soft paper, or smooth marble slab as prop.",

@@ -81,8 +81,8 @@ const FAQS = [
     a: 'No. La plataforma está diseñada para emprendedores y marketers sin experiencia técnica. Sube fotos, ajusta parámetros simples y obtén resultados profesionales en segundos.',
   },
   {
-    q: '¿Qué es un crédito y cuánto cuesta?',
-    a: '1 crédito = $0.10 USD. Cada imagen cuesta 2 créditos con Nano Banana 2 (Gemini) o 1 crédito con Seedream 4.5. Al registrarte recibes 10 créditos gratis para probar sin compromiso.',
+    q: '¿Cómo funcionan los créditos?',
+    a: 'Los créditos son la moneda interna de LUZ IA. Cada imagen generada consume una pequeña cantidad de créditos dependiendo del modelo de IA elegido. Al registrarte recibes créditos gratis para probar sin compromiso.',
   },
   {
     q: '¿Puedo usar las imágenes para publicidad comercial?',
@@ -218,31 +218,29 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 bg-brand-50 border border-brand-100 px-4 py-2 rounded-full">
               <Zap className="w-3.5 h-3.5 text-brand-600" />
-              <span className="text-[11px] font-black text-brand-600 uppercase tracking-widest">IA Publicitaria para Latinoamérica</span>
+              <span className="text-[11px] font-black text-brand-600 uppercase tracking-widest">Hecho para PyMEs y emprendedores</span>
             </div>
 
             <h1 className="text-4xl md:text-6xl font-black uppercase italic tracking-tighter leading-[0.9] text-slate-900">
-              Contenido<br />
-              publicitario<br />
-              <span className="text-brand-600">profesional</span><br />
-              con IA
+              Haz crecer<br />
+              tu negocio<br />
+              con <span className="text-brand-600">contenido IA</span>
             </h1>
 
             <p className="text-base text-slate-500 leading-relaxed max-w-md">
-              Crea imágenes de campaña, fotos de producto y contenido UGC en segundos.
-              Sin fotógrafo, sin estudio, sin presupuesto de producción.
+              Fotos de producto, campañas publicitarias y contenido para redes sociales — sin fotógrafo, sin estudio ni presupuesto de producción. Tu marca compite con las grandes.
             </p>
 
             {/* Oferta diaria */}
             <div className="bg-slate-900 rounded-[28px] p-6 space-y-4 inline-block w-full max-w-sm">
-              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Genera contenido profesional por solo</p>
+              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Contenido profesional por solo</p>
               <div className="flex items-baseline gap-2">
                 <span className="text-4xl font-black text-white">
                   ${dailyCostCLP.toLocaleString('es-CL')}
                 </span>
                 <span className="text-sm font-bold text-slate-400">CLP / día</span>
               </div>
-              <p className="text-[10px] text-slate-500 font-medium">Plan Starter · {PLANS.starter.credits} créditos mensuales · ~{PLANS.starter.approxImages}</p>
+              <p className="text-[10px] text-slate-500 font-medium">Plan Starter · {PLANS.starter.credits} créditos mensuales · {PLANS.starter.approxImages}</p>
               <button
                 onClick={onOpenAuth}
                 className="w-full py-3.5 bg-brand-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-brand-700 transition-all flex items-center justify-center gap-2"
@@ -332,8 +330,8 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
                 <Sparkles className="w-4 h-4 text-emerald-500" />
               </div>
               <div>
-                <p className="text-[9px] font-black text-slate-700 uppercase tracking-tight">Imagen generada</p>
-                <p className="text-[9px] text-slate-400 font-medium">en 8 segundos</p>
+                <p className="text-[9px] font-black text-slate-700 uppercase tracking-tight">Contenido listo</p>
+                <p className="text-[9px] text-slate-400 font-medium">para publicar</p>
               </div>
             </div>
           </div>
@@ -344,10 +342,10 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
       <section className="bg-slate-900 py-8 px-5 md:px-10">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-10 md:gap-20">
           {[
-            { value: '6', label: 'Módulos de IA' },
-            { value: '~8s', label: 'Por imagen' },
-            { value: '10', label: 'Créditos gratis' },
-            { value: '$0.10', label: 'USD por crédito' },
+            { value: '6',    label: 'Módulos especializados' },
+            { value: '100%', label: 'Contenido comercial' },
+            { value: '10',   label: 'Créditos gratis al inicio' },
+            { value: '0',    label: 'Fotógrafos necesarios' },
           ].map((stat, i) => (
             <div key={i} className="text-center">
               <p className="text-3xl font-black text-white">{stat.value}</p>
@@ -443,7 +441,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
                 icon: <Sparkles className="w-6 h-6" />,
                 color: 'bg-emerald-600',
                 title: 'Genera y descarga',
-                desc: 'La IA genera tu imagen en ~8 segundos. Descarga en alta resolución, listo para publicar.',
+                desc: 'La IA procesa tus referencias y genera contenido profesional listo para publicar. Descarga en alta resolución.',
               },
             ].map((step, i) => (
               <div key={i} className="relative bg-white rounded-[28px] border border-slate-100 p-8 space-y-5">

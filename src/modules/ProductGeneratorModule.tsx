@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { ProductProfile } from '../types';
 import { geminiService } from '../services/geminiService';
 import { imageApiService, extractImageRef } from '../services/imageApiService';
+import { PRODUCT_BASE_STYLES_SEEDREAM } from '../constants';
 import { ModelSelector } from '../components/shared/ModelSelector';
 import { GenerateButton } from '../components/shared/GenerateButton';
 import { useModelSelection } from '../hooks/useModelSelection';
@@ -147,7 +148,10 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
   };
 
   const generateImageWithAllRules = async (intent: string, refs: string[]) => {
-    const baseStylePrompt = PRODUCT_BASE_STYLES[style];
+    // Seedream interpreta literalmente "studio multi-light setup (Key, Fill, Rim)"
+    // y renderiza el equipo. Usamos un prompt sin mencionar equipo fotográfico.
+    const styles = modelId === 'seedream' ? PRODUCT_BASE_STYLES_SEEDREAM : PRODUCT_BASE_STYLES;
+    const baseStylePrompt = styles[style];
     const finalPrompt = `${baseStylePrompt}\n${intent}\n${PRODUCT_HARD_RULES}\nPRODUCT ANCHOR: ${productAnchor}`;
 
     const refObjects = refs.map((img, i) => {
@@ -164,10 +168,16 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
     });
   };
 
+  const MIN_PHOTOS = 2;
+
   const startGeneratingHero = async () => {
     const validFiles = files.filter(f => f !== null) as string[];
-    if (!name || validFiles.length === 0) {
-      alert("Por favor, especifica un nombre y adjunta al menos una foto real.");
+    if (!name) {
+      alert("Por favor, especifica el nombre del producto.");
+      return;
+    }
+    if (validFiles.length < MIN_PHOTOS) {
+      alert(`Sube al menos ${MIN_PHOTOS} fotos del producto (ej: frontal y trasera) para que la IA comprenda todas sus caras.`);
       return;
     }
     const ok = await checkAndDeduct(CREDIT_COSTS.PRODUCT_GENERATION);
@@ -397,20 +407,36 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
                   </div>
 
                   <div>
-                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Fotos de Referencia (Máx 4)</label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                        Fotos del producto <span className="text-brand-600">*mín. 2</span>
+                      </label>
+                      <span className={`text-[9px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full ${files.filter(f=>f).length >= MIN_PHOTOS ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                        {files.filter(f=>f).length}/4 subidas
+                      </span>
+                    </div>
                     <div className="grid grid-cols-4 gap-2 md:gap-3">
-                      {[0, 1, 2, 3].map(idx => (
+                      {[
+                        { label: 'Frontal', hint: 'Vista delantera' },
+                        { label: 'Trasera', hint: 'Vista trasera' },
+                        { label: 'Lateral', hint: 'Vista lateral' },
+                        { label: 'Superior', hint: 'Vista superior' },
+                      ].map((slot, idx) => (
                         <ImageSlot
                           key={idx}
                           value={files[idx]}
                           onChange={(base64) => updateFile(idx, base64)}
-                          label={`Ref ${idx + 1}`}
-                          hint="JPG o PNG"
+                          label={slot.label}
+                          hint={slot.hint}
                           aspectRatio="square"
                           disabled={isGenerating}
+                          iconless
                         />
                       ))}
                     </div>
+                    <p className="text-[9px] font-medium text-slate-400 mt-2 leading-relaxed">
+                      Sube al menos frontal y trasera para que la IA conozca todas las caras del producto. Más vistas = mejor resultado.
+                    </p>
                   </div>
 
                   <UploadDisclaimer />
@@ -420,7 +446,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
                   <GenerateButton
                     onClick={startGeneratingHero}
                     loading={isGenerating}
-                    disabled={files.filter(f => f !== null).length === 0 || !name}
+                    disabled={files.filter(f => f !== null).length < MIN_PHOTOS || !name}
                     label="Generar Set de 5 Fotos"
                     loadingLabel={processingStatus || 'Generando...'}
                     imageCount={5}
