@@ -4,6 +4,7 @@ import { Check, Zap, ArrowLeft, DollarSign } from 'lucide-react';
 import { PLANS, type PlanKey } from '../services/creditConfig';
 import { useCurrency } from '../hooks/useCurrency';
 import { useAuth } from '../modules/auth/AuthContext';
+import { buildCheckoutUrl, PLAN_TO_VARIANT, type VariantKey } from '../services/checkoutService';
 
 const PLAN_ORDER: PlanKey[] = ['free', 'weekly', 'starter', 'pro', 'studio'];
 
@@ -17,13 +18,18 @@ const PLAN_STYLE: Record<string, { badge: string; button: string; card: string }
 
 export default function Pricing() {
   const navigate    = useNavigate();
-  const { credits } = useAuth();
+  const { credits, user } = useAuth();
   const { currency, toggle, format } = useCurrency();
 
   const handleSubscribe = (planId: string) => {
     if (planId === 'free') return;
-    alert('Próximamente disponible. ¡Gracias por tu interés!');
-    // navigate(`/checkout?plan=${planId}`);
+    const variantKey = PLAN_TO_VARIANT[planId] as VariantKey | undefined;
+    if (!variantKey || !user?.uid) {
+      alert('Inicia sesión para suscribirte.');
+      return;
+    }
+    const url = buildCheckoutUrl(variantKey, user.uid);
+    window.open(url, '_blank');
   };
 
   return (

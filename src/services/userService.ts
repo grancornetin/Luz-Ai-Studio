@@ -1,120 +1,182 @@
-import { AvatarProfile, ProductProfile, GenerationSet } from '../types';
-import { PLAN_CREDITS } from './creditConfig';
+// src/services/userService.ts
+// Servicio de usuario — lee y escribe en Firestore (reemplaza el mock anterior).
 
-// ──────────────────────────────────────────
-// userService - MOCKED FOR LOCAL TESTING
-// ──────────────────────────────────────────
+import { db } from '../firebase';
+import {
+  doc, getDoc, setDoc, updateDoc, collection,
+  serverTimestamp, increment, Timestamp,
+} from 'firebase/firestore';
+import { PLAN_CREDITS } from './creditConfig';
+import type { PlanId } from './creditsService';
+import { resetPeriodIfNeeded, getEffectiveCredits } from './creditsService';
+
+// ── Interfaces exportadas ─────────────────────────────────────────────────────
 
 export interface UserStats {
   totalGenerations: number;
-  totalAvatars: number;
-  totalProducts: number;
-  creditsUsed: number;
-  lastActiveAt: string;
+  totalAvatars:     number;
+  totalProducts:    number;
+  creditsUsed:      number;
+  lastActiveAt:     string;
 }
 
 export interface UserCredits {
   available: number;
-  used: number;
-  plan: 'free' | 'starter' | 'pro' | 'studio' | 'admin';
-  resetAt?: string;
+  used:      number;
+  plan:      'free' | 'starter' | 'pro' | 'studio' | 'admin' | 'explorer' | 'weekly';
+  resetAt?:  string;
 }
 
 export { PLAN_CREDITS };
 
-const getLocal = (key: string) => {
-  try { return JSON.parse(localStorage.getItem(`luz_${key}`) || 'null'); } catch { return null; }
-};
-const setLocal = (key: string, data: any) => {
-  localStorage.setItem(`luz_${key}`, JSON.stringify(data));
-};
+// ── Inicializar usuario (primer login) ────────────────────────────────────────
 
 export const userService = {
 
   async initializeUser(uid: string, email: string, displayName: string): Promise<void> {
-    // Mocked
+    const ref  = doc(db, 'users', uid);
+    const snap = await getDoc(ref);
+    if (snap.exists()) return; // ya inicializado
+
+    await setDoc(ref, {
+      uid,
+      email,
+      displayName,
+      plan:                  'free',
+      planValidUntil:        null,
+      creditsUsedThisPeriod: 0,
+      topUpCredits:          0,
+      lastPeriodReset:       serverTimestamp(),
+      // Campo legacy para compatibilidad con missionsService
+      credits: {
+        available: 10,
+        used:      0,
+        plan:      'free',
+      },
+      interests:   { categories: [], tags: [], preferredModules: [] },
+      socials:     {},
+      preferences: { emailNotifications: true, feedSortBy: 'recent', theme: 'light' },
+      createdAt:   serverTimestamp(),
+      updatedAt:   serverTimestamp(),
+    }, { merge: true });
   },
 
   async getCredits(uid: string): Promise<UserCredits> {
-    return { available: 9999, used: 0, plan: 'admin' };
+    try {
+      await resetPeriodIfNeeded(uid);
+      const eff = await getEffectiveCredits(uid);
+      return {
+        available: eff.available,
+        used:      eff.periodUsed,
+        plan:      eff.plan as UserCredits['plan'],
+      };
+    } catch {
+      return { available: 0, used: 0, plan: 'free' };
+    }
   },
 
   async deductCredits(uid: string, amount: number = 1): Promise<boolean> {
-    return true;
+    const { deductCredits: deduct } = await import('./creditsService');
+    return deduct(uid, amount);
   },
 
   async deductCredit(uid: string): Promise<boolean> {
-    return true;
+    return this.deductCredits(uid, 1);
   },
 
   async hasEnoughCredits(uid: string, required: number = 1): Promise<boolean> {
-    return true;
+    const c = await this.getCredits(uid);
+    if (c.plan === 'admin') return true;
+    return c.available >= required;
   },
 
   async updateCredits(uid: string, credits: UserCredits): Promise<void> {
-    // Mocked
+    // No-op: los créditos se gestionan a través de deductCredits/addTopUpCredits
   },
 
   async getStats(uid: string): Promise<UserStats> {
-    return { totalGenerations: 0, totalAvatars: 0, totalProducts: 0, creditsUsed: 0, lastActiveAt: '' };
+    try {
+      const ref  = doc(db, 'users', uid);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return defaultStats();
+      const d = snap.data();
+      return {
+        totalGenerations: d.totalGenerations || 0,
+        totalAvatars:     d.totalAvatars     || 0,
+        totalProducts:    d.totalProducts    || 0,
+        creditsUsed:      d.creditsUsedThisPeriod || 0,
+        lastActiveAt:     d.lastActiveAt?.toDate?.()?.toISOString() || '',
+      };
+    } catch {
+      return defaultStats();
+    }
   },
 
-  // ── AVATARS ──────────────────────────────────────────────────────────
+  // ── Avatars (localStorage — sin cambios) ──────────────────────────────────
 
-  async getAvatars(uid: string): Promise<AvatarProfile[]> {
+  async getAvatars(uid: string) {
     return getLocal(`avatars_${uid}`) || [];
   },
 
-  async saveAvatar(uid: string, avatar: AvatarProfile): Promise<void> {
+  async saveAvatar(uid: string, avatar: any): Promise<void> {
     const avatars = await this.getAvatars(uid);
-    const index = avatars.findIndex(a => a.id === avatar.id);
-    if (index >= 0) avatars[index] = avatar;
-    else avatars.push(avatar);
+    const index   = avatars.findIndex((a: any) => a.id === avatar.id);
+    if (index >= 0) avatars[index] = avatar; else avatars.push(avatar);
     setLocal(`avatars_${uid}`, avatars);
   },
 
   async deleteAvatar(uid: string, avatarId: string): Promise<void> {
     const avatars = await this.getAvatars(uid);
-    setLocal(`avatars_${uid}`, avatars.filter(a => a.id !== avatarId));
+    setLocal(`avatars_${uid}`, avatars.filter((a: any) => a.id !== avatarId));
   },
 
-  // ── PRODUCTS ─────────────────────────────────────────────────────────
+  // ── Products (localStorage — sin cambios) ─────────────────────────────────
 
-  async getProducts(uid: string): Promise<ProductProfile[]> {
+  async getProducts(uid: string) {
     return getLocal(`products_${uid}`) || [];
   },
 
-  async saveProduct(uid: string, product: ProductProfile): Promise<void> {
+  async saveProduct(uid: string, product: any): Promise<void> {
     const products = await this.getProducts(uid);
-    const index = products.findIndex(p => p.id === product.id);
-    if (index >= 0) products[index] = product;
-    else products.push(product);
+    const index    = products.findIndex((p: any) => p.id === product.id);
+    if (index >= 0) products[index] = product; else products.push(product);
     setLocal(`products_${uid}`, products);
   },
 
   async deleteProduct(uid: string, productId: string): Promise<void> {
     const products = await this.getProducts(uid);
-    setLocal(`products_${uid}`, products.filter(p => p.id !== productId));
+    setLocal(`products_${uid}`, products.filter((p: any) => p.id !== productId));
   },
 
-  // ── GENERATION SETS ──────────────────────────────────────────────────
+  // ── Generation Sets (localStorage — sin cambios) ──────────────────────────
 
-  async getSets(uid: string): Promise<GenerationSet[]> {
+  async getSets(uid: string) {
     return getLocal(`sets_${uid}`) || [];
   },
 
-  async saveSet(uid: string, set: GenerationSet): Promise<void> {
-    const sets = await this.getSets(uid);
-    const index = sets.findIndex(s => s.id === set.id);
-    if (index >= 0) sets[index] = set;
-    else sets.push(set);
+  async saveSet(uid: string, set: any): Promise<void> {
+    const sets  = await this.getSets(uid);
+    const index = sets.findIndex((s: any) => s.id === set.id);
+    if (index >= 0) sets[index] = set; else sets.push(set);
     setLocal(`sets_${uid}`, sets);
   },
 
   async deleteSet(uid: string, setId: string): Promise<void> {
     const sets = await this.getSets(uid);
-    setLocal(`sets_${uid}`, sets.filter(s => s.id !== setId));
-  }
-
+    setLocal(`sets_${uid}`, sets.filter((s: any) => s.id !== setId));
+  },
 };
 
+// ── Helpers privados ──────────────────────────────────────────────────────────
+
+function defaultStats(): UserStats {
+  return { totalGenerations: 0, totalAvatars: 0, totalProducts: 0, creditsUsed: 0, lastActiveAt: '' };
+}
+
+function getLocal(key: string) {
+  try { return JSON.parse(localStorage.getItem(`luz_${key}`) || 'null'); } catch { return null; }
+}
+
+function setLocal(key: string, data: any) {
+  try { localStorage.setItem(`luz_${key}`, JSON.stringify(data)); } catch { /* ignore */ }
+}

@@ -26,6 +26,8 @@ import Pricing from './views/Pricing';
 import BuyCredits from './views/BuyCredits';
 import Contacto from './views/Contacto';
 import AccountSettings from './views/AccountSettings';
+import CheckoutSuccess from './views/CheckoutSuccess';
+import CheckoutCancel from './views/CheckoutCancel';
 
 // Servicios y Contexto
 import { dbService } from './services/dbService';
@@ -287,10 +289,12 @@ const AppContent: React.FC = () => {
   // Páginas legales públicas (sin auth, con header propio)
   const legalRoutes = (
     <>
-      <Route path="/privacidad" element={<PoliticaPrivacidad />} />
-      <Route path="/terminos"   element={<TerminosUso />} />
-      <Route path="/descargo"   element={<Descargo />} />
-      <Route path="/contacto"   element={<Contacto />} />
+      <Route path="/privacidad"        element={<PoliticaPrivacidad />} />
+      <Route path="/terminos"          element={<TerminosUso />} />
+      <Route path="/descargo"          element={<Descargo />} />
+      <Route path="/contacto"          element={<Contacto />} />
+      <Route path="/checkout/success"  element={<CheckoutSuccess />} />
+      <Route path="/checkout/cancel"   element={<CheckoutCancel />} />
     </>
   );
 

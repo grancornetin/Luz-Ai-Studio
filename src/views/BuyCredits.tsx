@@ -4,15 +4,21 @@ import { Zap, ArrowLeft, DollarSign, TrendingDown } from 'lucide-react';
 import { TOP_UP_PACKAGES } from '../services/creditConfig';
 import { useCurrency } from '../hooks/useCurrency';
 import { useAuth } from '../modules/auth/AuthContext';
+import { buildCheckoutUrl, TOPUP_TO_VARIANT, type VariantKey } from '../services/checkoutService';
 
 export default function BuyCredits() {
-  const navigate      = useNavigate();
-  const { credits }   = useAuth();
+  const navigate         = useNavigate();
+  const { credits, user } = useAuth();
   const { currency, toggle, format } = useCurrency();
 
   const handleBuy = (pkgId: string) => {
-    alert('Próximamente disponible. ¡Gracias por tu interés!');
-    // navigate(`/checkout?topup=${pkgId}`);
+    const variantKey = TOPUP_TO_VARIANT[pkgId] as VariantKey | undefined;
+    if (!variantKey || !user?.uid) {
+      alert('Inicia sesión para comprar créditos.');
+      return;
+    }
+    const url = buildCheckoutUrl(variantKey, user.uid);
+    window.open(url, '_blank');
   };
 
   return (
