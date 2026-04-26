@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, Zap, ArrowLeft, DollarSign } from 'lucide-react';
 import { PLANS, type PlanKey } from '../services/creditConfig';
@@ -7,6 +7,9 @@ import { useAuth } from '../modules/auth/AuthContext';
 import { buildCheckoutUrl, PLAN_TO_VARIANT, type VariantKey } from '../services/checkoutService';
 
 const PLAN_ORDER: PlanKey[] = ['free', 'weekly', 'starter', 'pro', 'studio'];
+
+// Descuento anual: 20%
+const ANNUAL_DISCOUNT = 0.80;
 
 const PLAN_STYLE: Record<string, { badge: string; button: string; card: string }> = {
   free:    { badge: 'bg-slate-100 text-slate-500',   button: 'bg-slate-900 hover:bg-slate-700 text-white',   card: '' },
@@ -20,6 +23,7 @@ export default function Pricing() {
   const navigate    = useNavigate();
   const { credits, user } = useAuth();
   const { currency, toggle, format } = useCurrency();
+  const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
 
   const handleSubscribe = (planId: string) => {
     if (planId === 'free') return;
@@ -47,14 +51,33 @@ export default function Pricing() {
           <p className="text-slate-500 font-medium mt-2 text-sm">Elige el plan que mejor se adapte a tu flujo de trabajo.</p>
         </div>
 
-        {/* Toggle de moneda */}
-        <button
-          onClick={toggle}
-          className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
-        >
-          <DollarSign className="w-3.5 h-3.5" />
-          {currency === 'USD' ? 'Ver en CLP' : 'Ver en USD'}
-        </button>
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Switch mensual / anual */}
+          <div className="flex bg-slate-100 p-1 rounded-2xl">
+            <button
+              onClick={() => setBilling('monthly')}
+              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${billing === 'monthly' ? 'bg-white text-slate-900 shadow' : 'text-slate-400'}`}
+            >
+              Mensual
+            </button>
+            <button
+              onClick={() => setBilling('annual')}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${billing === 'annual' ? 'bg-white text-slate-900 shadow' : 'text-slate-400'}`}
+            >
+              Anual
+              <span className="bg-emerald-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full">-20%</span>
+            </button>
+          </div>
+
+          {/* Toggle de moneda */}
+          <button
+            onClick={toggle}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
+          >
+            <DollarSign className="w-3.5 h-3.5" />
+            {currency === 'USD' ? 'Ver en CLP' : 'Ver en USD'}
+          </button>
+        </div>
       </header>
 
       {/* Aviso de plan actual */}
@@ -74,6 +97,12 @@ export default function Pricing() {
           const style  = PLAN_STYLE[key];
           const isPro  = key === 'pro';
           const isCurrent = credits?.plan === key;
+
+          // Precio según billing — weekly no tiene anual, free tampoco
+          const isRecurring = plan.priceMonthly > 0 && key !== 'weekly';
+          const displayPrice = (billing === 'annual' && isRecurring)
+            ? plan.priceMonthly * ANNUAL_DISCOUNT
+            : plan.priceMonthly;
 
           return (
             <div
@@ -95,15 +124,18 @@ export default function Pricing() {
                     <p className="text-3xl font-black text-slate-900">Gratis</p>
                   ) : (
                     <>
-                      {(plan as any).priceAnchor && (
-                        <p className="text-sm text-slate-400 line-through font-bold">
-                          {format((plan as any).priceAnchor)}
+                      {billing === 'annual' && isRecurring && (
+                        <p className="text-sm text-slate-400 line-through font-bold">{format(plan.priceMonthly)}</p>
+                      )}
+                      <p className="text-3xl font-black text-slate-900">{format(displayPrice)}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                        {key === 'weekly' ? 'por semana' : billing === 'annual' ? 'por mes · facturado anual' : 'por mes'}
+                      </p>
+                      {billing === 'annual' && isRecurring && (
+                        <p className="text-[9px] text-emerald-600 font-black uppercase">
+                          Ahorras {format(plan.priceMonthly * 12 - displayPrice * 12)}/año
                         </p>
                       )}
-                      <p className="text-3xl font-black text-slate-900">{format(plan.priceMonthly)}</p>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                        {key === 'weekly' ? 'por semana' : 'por mes'}
-                      </p>
                     </>
                   )}
                 </div>

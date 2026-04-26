@@ -11,7 +11,7 @@ import { useAuth } from '../modules/auth/AuthContext';
 import {
   Zap, TrendingUp, User, Package, AlertCircle,
   Crown, ArrowRight, Sparkles, Clock, Images,
-  Settings, FileText, Mail, CreditCard, UserCircle, Gift, ShoppingCart, Tag
+  Settings, FileText, Mail, CreditCard, UserCircle, Gift, ShoppingCart, Tag, LogOut
 } from 'lucide-react';
 import { MISSIONS, getUserMissions, completeMission, isMissionOnCooldown, type UserMissions } from '../services/missionsService';
 import { getReferralStats, redeemSpecialCode } from '../services/referralService';
@@ -133,23 +133,21 @@ interface DashboardProps {
   products?: ProductProfile[];
 }
 
-type DashTab = 'home' | 'missions' | 'profile' | 'account' | 'settings' | 'terms' | 'contact';
+type DashTab = 'home' | 'account' | 'profile' | 'terms' | 'contact';
 
 const NAV_TABS: { id: DashTab; label: string; icon: React.ReactNode; route?: string }[] = [
-  { id: 'home',     label: 'Inicio',        icon: <i className="fa-solid fa-house text-xs" /> },
-  { id: 'missions', label: 'Misiones',      icon: <Gift className="w-3.5 h-3.5" /> },
-  { id: 'profile',  label: 'Perfil',        icon: <UserCircle className="w-3.5 h-3.5" />, route: '/cuenta' },
-  { id: 'account',  label: 'Cuenta',        icon: <CreditCard className="w-3.5 h-3.5" /> },
-  { id: 'settings', label: 'Configuración', icon: <Settings className="w-3.5 h-3.5" />, route: '/cuenta' },
-  { id: 'terms',    label: 'Términos',      icon: <FileText className="w-3.5 h-3.5" />,  route: '/terminos' },
-  { id: 'contact',  label: 'Contacto',      icon: <Mail className="w-3.5 h-3.5" />,      route: '/contacto' },
+  { id: 'home',    label: 'Inicio',   icon: <i className="fa-solid fa-house text-xs" /> },
+  { id: 'account', label: 'Cuenta',   icon: <CreditCard className="w-3.5 h-3.5" /> },
+  { id: 'profile', label: 'Perfil',   icon: <UserCircle className="w-3.5 h-3.5" />, route: '/cuenta' },
+  { id: 'terms',   label: 'Términos', icon: <FileText className="w-3.5 h-3.5" />,   route: '/terminos' },
+  { id: 'contact', label: 'Contacto', icon: <Mail className="w-3.5 h-3.5" />,       route: '/contacto' },
 ];
 
 const PREVIEW_PLANS = ['free', 'weekly', 'starter', 'pro', 'studio'] as const;
 
 const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) => {
   const navigate = useNavigate();
-  const { profile, credits, stats, isAdmin, user, previewPlan, setPreviewPlan } = useAuth();
+  const { profile, credits, stats, isAdmin, user, previewPlan, setPreviewPlan, signOut } = useAuth();
   const [activeTab, setActiveTab]     = useState<DashTab>('home');
   const [missions, setMissions]       = useState<UserMissions>({});
   const [completing, setCompleting]   = useState<string | null>(null);
@@ -232,6 +230,14 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
               {isAdmin ? 'Admin' : (planName.charAt(0).toUpperCase() + planName.slice(1))}
             </span>
           </div>
+          {/* Botón cerrar sesión — visible en desktop y móvil */}
+          <button
+            onClick={signOut}
+            className="flex items-center gap-2 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border border-rose-100"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Salir</span>
+          </button>
         </div>
       </header>
 
@@ -276,73 +282,185 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
         </section>
       )}
 
-      {/* TAB: CUENTA */}
+      {/* TAB: CUENTA — créditos + stats + misiones + planes */}
       {activeTab === 'account' && (
-        <section className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-8 space-y-6 animate-in fade-in">
-          <div className="flex items-center gap-3 mb-2">
-            <CreditCard className="w-5 h-5 text-indigo-500" />
-            <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Cuenta y suscripción</h2>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Plan actual</p>
-              <p className="text-lg font-black text-slate-800 uppercase">{isAdmin ? 'Admin' : planName}</p>
-            </div>
-            <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 space-y-1">
-              <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Créditos</p>
-              <p className="text-lg font-black text-indigo-700">{isAdmin ? '∞' : availableCredits}</p>
-            </div>
-          </div>
-          <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 text-center space-y-2">
-            <CreditCard className="w-8 h-8 text-slate-300 mx-auto" />
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Gestión de planes</p>
-            <p className="text-[10px] text-slate-400">Cambiar plan, recargar créditos y gestionar suscripción — disponible próximamente.</p>
-          </div>
-          <button
-            onClick={() => navigate('/contacto')}
-            className="w-full py-4 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
-          >
-            Contactar para cambio de plan
-          </button>
+        <section className="space-y-6 animate-in fade-in">
 
-          {/* Admin: simular vista de usuario por plan */}
-          {isAdmin && (
-            <div className="border-t border-slate-100 pt-5 space-y-3">
-              <div className="flex items-center gap-2">
-                <i className="fa-solid fa-eye text-rose-400 text-xs"></i>
-                <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest">Vista de admin — Simular plan</p>
+          {/* Créditos y plan */}
+          <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <CreditCard className="w-5 h-5 text-indigo-500" />
+              <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Suscripción y créditos</h2>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Plan</p>
+                <p className="text-lg font-black text-slate-800 uppercase">{isAdmin ? 'Admin' : planName}</p>
               </div>
-              <p className="text-[10px] text-slate-400">Cambia temporalmente cómo ves la app como si fueras un usuario con ese plan. No afecta tu cuenta real.</p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setPreviewPlan(null)}
-                  className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${!previewPlan ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-                >
-                  Admin (real)
-                </button>
-                {PREVIEW_PLANS.map(p => (
-                  <button
-                    key={p}
-                    onClick={() => setPreviewPlan(previewPlan === p ? null : p)}
-                    className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${previewPlan === p ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-                  >
-                    {p}
+              <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 space-y-1">
+                <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Créditos</p>
+                <p className="text-2xl font-black text-indigo-700">{isAdmin ? '∞' : availableCredits}</p>
+              </div>
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Generaciones</p>
+                <p className="text-2xl font-black text-slate-700">{stats?.totalGenerations || 0}</p>
+              </div>
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Modelos</p>
+                <p className="text-2xl font-black text-slate-700">{stats?.totalAvatars || 0}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => navigate('/pricing')}
+                className="py-3.5 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
+              >
+                <Tag className="w-3.5 h-3.5" /> Mejorar plan
+              </button>
+              <button
+                onClick={() => navigate('/buy-credits')}
+                className="py-3.5 bg-white border border-indigo-200 text-indigo-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 transition-all flex items-center justify-center gap-2"
+              >
+                <Zap className="w-3.5 h-3.5" /> Recargar créditos
+              </button>
+            </div>
+
+            {/* Admin: simular plan */}
+            {isAdmin && (
+              <div className="border-t border-slate-100 pt-4 space-y-3">
+                <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest">Admin — Simular plan</p>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => setPreviewPlan(null)}
+                    className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${!previewPlan ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                    Admin (real)
                   </button>
-                ))}
+                  {PREVIEW_PLANS.map(p => (
+                    <button key={p} onClick={() => setPreviewPlan(previewPlan === p ? null : p)}
+                      className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${previewPlan === p ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                      {p}
+                    </button>
+                  ))}
+                </div>
+                {previewPlan && (
+                  <div className="bg-amber-50 border border-amber-200 px-4 py-2 rounded-xl">
+                    <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest">Simulando: {previewPlan.toUpperCase()}</p>
+                  </div>
+                )}
               </div>
-              {previewPlan && (
-                <div className="bg-amber-50 border border-amber-200 px-4 py-2 rounded-xl">
-                  <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest">
-                    Simulando plan: {previewPlan.toUpperCase()} · La app se muestra como la vería ese usuario
-                  </p>
+            )}
+          </div>
+
+          {/* Misiones integradas en Cuenta */}
+          <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-6 space-y-5">
+            <div className="flex items-center gap-3">
+              <Gift className="w-5 h-5 text-indigo-500" />
+              <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Misiones · Gana créditos gratis</h2>
+            </div>
+
+            {missionMsg && (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-widest animate-in fade-in">
+                ✓ {missionMsg}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {MISSIONS.map(m => {
+                const status     = missions[m.id] || { completed: false, count: 0 };
+                const maxed      = status.count >= m.maxCompletions;
+                const onCooldown = isMissionOnCooldown(status, m);
+                const isLoading  = completing === m.id;
+                const blocked    = maxed || onCooldown;
+                const iconClass  = m.icon.startsWith('fa-brands') ? m.icon : `fa-solid ${m.icon}`;
+                let btnLabel = 'Completar';
+                if (maxed) btnLabel = '✓ Hecho';
+                else if (onCooldown) btnLabel = 'Mañana';
+                else if (isLoading) btnLabel = '...';
+
+                return (
+                  <div key={m.id} className={`flex items-start gap-3 p-4 rounded-2xl border transition-all ${
+                    maxed ? 'border-emerald-100 bg-emerald-50/40'
+                    : onCooldown ? 'border-slate-100 opacity-60'
+                    : 'border-slate-100 hover:border-indigo-200'
+                  }`}>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${maxed ? 'bg-emerald-100' : 'bg-indigo-50'}`}>
+                      <i className={`${iconClass} text-sm ${maxed ? 'text-emerald-500' : 'text-indigo-500'}`} />
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-0.5">
+                      <div className="flex items-center justify-between gap-1">
+                        <p className="text-[10px] font-black text-slate-800 uppercase tracking-tight">{m.label}</p>
+                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full flex-shrink-0 ${maxed ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-50 text-indigo-600'}`}>+{m.credits} cr</span>
+                      </div>
+                      <p className="text-[9px] text-slate-400">{m.description}</p>
+                      {m.repeatable && m.maxCompletions > 1 && (
+                        <p className="text-[8px] text-slate-300 font-bold uppercase">{status.count}/{m.maxCompletions}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => !blocked && handleCompleteMission(m.id)}
+                      disabled={blocked || isLoading}
+                      className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${
+                        maxed ? 'bg-emerald-100 text-emerald-500 cursor-default'
+                        : onCooldown ? 'bg-slate-100 text-slate-400 cursor-default'
+                        : isLoading ? 'bg-slate-100 text-slate-400 cursor-wait'
+                        : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      }`}
+                    >{btnLabel}</button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Referidos */}
+            <div className="bg-slate-50 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-[10px] font-black text-slate-700 uppercase tracking-tight">Tu código de referido</p>
+                  <p className="text-[9px] text-slate-400">+10 cr por cada amigo que genere · Máx 5 ({referralCount}/5)</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2">
+                  <p className="text-xs font-black text-slate-700 tracking-widest select-all">{referralCode || '...'}</p>
+                </div>
+                <button
+                  onClick={() => referralCode && navigator.clipboard.writeText(referralCode)}
+                  className="px-3 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
+                >Copiar</button>
+              </div>
+            </div>
+
+            {/* Código especial */}
+            <div className="space-y-2">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <Tag className="w-3.5 h-3.5 text-amber-500" /> Canjear código especial
+              </p>
+              {codeMsg && (
+                <div className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest animate-in fade-in ${
+                  codeMsg.type === 'success' ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-rose-50 border border-rose-200 text-rose-700'
+                }`}>
+                  {codeMsg.type === 'success' ? '✓' : '✗'} {codeMsg.text}
                 </div>
               )}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text" value={specialCode}
+                  onChange={e => setSpecialCode(e.target.value.toUpperCase())}
+                  onKeyDown={e => e.key === 'Enter' && handleRedeemCode()}
+                  placeholder="Ej: LAUNCH2025" maxLength={20}
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-black text-slate-800 uppercase tracking-widest outline-none focus:border-amber-400 transition-all placeholder:text-slate-300 placeholder:font-medium placeholder:normal-case placeholder:tracking-normal"
+                />
+                <button onClick={handleRedeemCode} disabled={redeemingCode || !specialCode.trim()}
+                  className="px-3 py-2.5 bg-amber-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-amber-600 disabled:opacity-40 transition-all">
+                  {redeemingCode ? '...' : 'Canjear'}
+                </button>
+              </div>
             </div>
-          )}
+          </div>
+
         </section>
       )}
 
-      {/* TAB: CONFIGURACIÓN */}
+      {/* TAB: CONFIGURACIÓN — redirige a AccountSettings */}
       {activeTab === 'settings' && (
         <section className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-8 space-y-6 animate-in fade-in">
           <div className="flex items-center gap-3 mb-2">
@@ -354,153 +472,6 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
             <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Preferencias</p>
             <p className="text-[10px] text-slate-400">Cambiar email, contraseña, idioma y notificaciones — disponible próximamente.</p>
           </div>
-        </section>
-      )}
-
-      {/* TAB: MISIONES */}
-      {activeTab === 'missions' && (
-        <section className="space-y-6 animate-in fade-in">
-
-          {/* Header */}
-          <div className="flex items-center gap-3">
-            <Gift className="w-5 h-5 text-indigo-500" />
-            <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Misiones · Gana créditos gratis</h2>
-          </div>
-
-          {/* Mensaje de resultado de misión */}
-          {missionMsg && (
-            <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-widest animate-in fade-in">
-              ✓ {missionMsg}
-            </div>
-          )}
-
-          {/* Grid de misiones */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {MISSIONS.map(m => {
-              const status    = missions[m.id] || { completed: false, count: 0 };
-              const maxed     = status.count >= m.maxCompletions;
-              const onCooldown = isMissionOnCooldown(status, m);
-              const isLoading  = completing === m.id;
-              const blocked    = maxed || onCooldown;
-
-              // Etiqueta del botón
-              let btnLabel = 'Completar';
-              if (maxed)      btnLabel = '✓ Hecho';
-              else if (onCooldown) btnLabel = 'Mañana';
-              else if (isLoading)  btnLabel = '...';
-
-              // Icono con soporte fa-brands
-              const iconClass = m.icon.startsWith('fa-brands')
-                ? m.icon
-                : `fa-solid ${m.icon}`;
-
-              return (
-                <div key={m.id} className={`bg-white rounded-[24px] border p-5 flex items-start gap-4 transition-all ${
-                  maxed ? 'border-emerald-100 bg-emerald-50/40'
-                  : onCooldown ? 'border-slate-100 opacity-60'
-                  : 'border-slate-100 hover:border-indigo-200'
-                }`}>
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${maxed ? 'bg-emerald-100' : 'bg-indigo-50'}`}>
-                    <i className={`${iconClass} text-lg ${maxed ? 'text-emerald-500' : 'text-indigo-500'}`} />
-                  </div>
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-black text-slate-800 uppercase tracking-tight">{m.label}</p>
-                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full flex-shrink-0 ${maxed ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-50 text-indigo-600'}`}>
-                        +{m.credits} cr
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-slate-400 font-medium">{m.description}</p>
-                    {m.repeatable && m.maxCompletions > 1 && (
-                      <p className="text-[9px] text-slate-300 font-bold uppercase tracking-widest">{status.count}/{m.maxCompletions} completadas</p>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => !blocked && handleCompleteMission(m.id)}
-                    disabled={blocked || isLoading}
-                    className={`flex-shrink-0 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
-                      maxed     ? 'bg-emerald-100 text-emerald-500 cursor-default' :
-                      onCooldown? 'bg-slate-100 text-slate-400 cursor-default' :
-                      isLoading ? 'bg-slate-100 text-slate-400 cursor-wait' :
-                      'bg-indigo-600 text-white hover:bg-indigo-700'
-                    }`}
-                  >
-                    {btnLabel}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Panel de referidos */}
-          <div className="bg-white rounded-[28px] border border-slate-100 p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-brand-50 rounded-2xl flex items-center justify-center">
-                <i className="fa-solid fa-user-plus text-brand-600 text-base" />
-              </div>
-              <div>
-                <p className="text-xs font-black text-slate-800 uppercase tracking-tight">Tu código de referido</p>
-                <p className="text-[10px] text-slate-400 font-medium">Ganas 10 cr por cada amigo que se registre y genere · Máx 5</p>
-              </div>
-              <span className="ml-auto text-[9px] font-black text-slate-400 uppercase">{referralCount}/5</span>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3">
-                <p className="text-sm font-black text-slate-800 tracking-widest select-all">{referralCode || '...'}</p>
-              </div>
-              <button
-                onClick={() => { if (referralCode) { navigator.clipboard.writeText(referralCode); } }}
-                className="px-4 py-3 bg-indigo-600 text-white rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
-              >
-                Copiar
-              </button>
-            </div>
-            <p className="text-[9px] text-slate-400 leading-relaxed">
-              Comparte este código con tus amigos. Cuando se registren y hagan su primera generación, ambos ganan créditos automáticamente.
-            </p>
-          </div>
-
-          {/* Canjear código especial */}
-          <div className="bg-white rounded-[28px] border border-slate-100 p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-amber-50 rounded-2xl flex items-center justify-center">
-                <Tag className="w-5 h-5 text-amber-500" />
-              </div>
-              <div>
-                <p className="text-xs font-black text-slate-800 uppercase tracking-tight">Canjear código especial</p>
-                <p className="text-[10px] text-slate-400 font-medium">Códigos de lanzamiento, regalo o promoción</p>
-              </div>
-            </div>
-
-            {codeMsg && (
-              <div className={`px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest animate-in fade-in ${
-                codeMsg.type === 'success' ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-rose-50 border border-rose-200 text-rose-700'
-              }`}>
-                {codeMsg.type === 'success' ? '✓' : '✗'} {codeMsg.text}
-              </div>
-            )}
-
-            <div className="flex items-center gap-3">
-              <input
-                type="text"
-                value={specialCode}
-                onChange={e => setSpecialCode(e.target.value.toUpperCase())}
-                onKeyDown={e => e.key === 'Enter' && handleRedeemCode()}
-                placeholder="Ej: LAUNCH2025"
-                maxLength={20}
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-black text-slate-800 uppercase tracking-widest outline-none focus:border-amber-400 transition-all placeholder:text-slate-300 placeholder:font-medium placeholder:normal-case placeholder:tracking-normal"
-              />
-              <button
-                onClick={handleRedeemCode}
-                disabled={redeemingCode || !specialCode.trim()}
-                className="px-4 py-3 bg-amber-500 text-white rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-              >
-                {redeemingCode ? '...' : 'Canjear'}
-              </button>
-            </div>
-          </div>
-
         </section>
       )}
 

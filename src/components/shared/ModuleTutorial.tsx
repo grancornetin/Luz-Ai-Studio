@@ -12,6 +12,7 @@ export interface TutorialStep {
   title: string;
   description: string;
   tip?: string;
+  tipColor?: string; // color override para el texto del tip (no se usa, el tip siempre es slate/indigo)
 }
 
 interface ModuleTutorialProps {
@@ -128,9 +129,9 @@ const ModuleTutorial: React.FC<ModuleTutorialProps> = ({
               </p>
 
               {step.tip && (
-                <div className="bg-accent-50 border border-accent-100 rounded-2xl p-3.5 flex items-start gap-2.5">
-                  <i className="fa-solid fa-lightbulb text-accent-500 text-sm mt-0.5 flex-shrink-0"></i>
-                  <p className="text-[11px] font-bold text-accent-700 leading-relaxed">{step.tip}</p>
+                <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-3.5 flex items-start gap-2.5">
+                  <i className="fa-solid fa-lightbulb text-indigo-500 text-sm mt-0.5 flex-shrink-0"></i>
+                  <p className="text-[11px] font-bold text-indigo-700 leading-relaxed">{step.tip}</p>
                 </div>
               )}
 

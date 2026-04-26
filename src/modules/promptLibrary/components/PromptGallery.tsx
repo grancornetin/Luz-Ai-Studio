@@ -49,6 +49,8 @@ const SkeletonCard = () => (
   </div>
 );
 
+const ITEMS_PER_PAGE = 20;
+
 const PromptGallery: React.FC<PromptGalleryProps> = ({
   prompts, allTags, searchQuery, setSearchQuery,
   activeTag, setActiveTag, sortBy, setSortBy,
@@ -57,7 +59,12 @@ const PromptGallery: React.FC<PromptGalleryProps> = ({
   loading = false,
 }) => {
   const [showSortMenu, setShowSortMenu] = React.useState(false);
+  const [visibleCount, setVisibleCount] = React.useState(ITEMS_PER_PAGE);
   const sortMenuRef = React.useRef<HTMLDivElement>(null);
+  const topRef = React.useRef<HTMLDivElement>(null);
+
+  // Reset visibleCount cuando cambian filtros/búsqueda
+  React.useEffect(() => { setVisibleCount(ITEMS_PER_PAGE); }, [searchQuery, activeTag, sortBy]);
 
   React.useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -71,8 +78,12 @@ const PromptGallery: React.FC<PromptGalleryProps> = ({
 
   const activeSortLabel = SORT_OPTIONS.find(o => o.value === sortBy)?.label || 'Recientes';
 
+  const visiblePrompts = prompts.slice(0, visibleCount);
+  const hasMore = visibleCount < prompts.length;
+  const isAtEnd = !hasMore && prompts.length > 0 && !loading;
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-8" ref={topRef}>
 
       {/* TOOLBAR */}
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
@@ -195,23 +206,59 @@ const PromptGallery: React.FC<PromptGalleryProps> = ({
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {prompts.map(prompt => (
-            <PromptCard
-              key={prompt.id}
-              prompt={prompt}
-              onClick={() => onPromptClick(prompt)}
-              onLike={e => { e.stopPropagation(); onLike(prompt.id); }}
-              onRecreate={e => { e.stopPropagation(); onRecreate(prompt); }}
-              onSave={onSave ? e => { e.stopPropagation(); onSave(prompt.id); } : undefined}
-              isAdmin={isAdmin}
-              onDelete={(e, id) => { e.stopPropagation(); onDelete(id); }}
-              onEdit={onEdit}
-              isSaved={savedIds.has(prompt.id)}
-              isLiked={likedIds.has(prompt.id)}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {visiblePrompts.map(prompt => (
+              <PromptCard
+                key={prompt.id}
+                prompt={prompt}
+                onClick={() => onPromptClick(prompt)}
+                onLike={e => { e.stopPropagation(); onLike(prompt.id); }}
+                onRecreate={e => { e.stopPropagation(); onRecreate(prompt); }}
+                onSave={onSave ? e => { e.stopPropagation(); onSave(prompt.id); } : undefined}
+                isAdmin={isAdmin}
+                onDelete={(e, id) => { e.stopPropagation(); onDelete(id); }}
+                onEdit={onEdit}
+                isSaved={savedIds.has(prompt.id)}
+                isLiked={likedIds.has(prompt.id)}
+              />
+            ))}
+          </div>
+
+          {/* Cargar más */}
+          {hasMore && (
+            <div className="flex justify-center pt-4">
+              <button
+                onClick={() => setVisibleCount(c => c + ITEMS_PER_PAGE)}
+                className="px-8 py-3.5 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
+              >
+                Ver más ({prompts.length - visibleCount} restantes)
+              </button>
+            </div>
+          )}
+
+          {/* Fin de galería */}
+          {isAtEnd && prompts.length >= ITEMS_PER_PAGE && (
+            <div className="flex flex-col items-center gap-4 py-12 text-center">
+              <div className="w-16 h-16 bg-indigo-50 rounded-[24px] flex items-center justify-center">
+                <Sparkles className="w-8 h-8 text-indigo-300" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-black text-slate-400 uppercase tracking-widest">¡Has llegado al final!</p>
+                <p className="text-xs text-slate-300 font-bold">Has visto todos los prompts publicados</p>
+              </div>
+              <button
+                onClick={() => {
+                  setVisibleCount(ITEMS_PER_PAGE);
+                  topRef.current?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="px-6 py-3 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg"
+              >
+                Volver al inicio
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

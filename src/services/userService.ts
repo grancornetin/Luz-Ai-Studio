@@ -37,8 +37,29 @@ export const userService = {
   async initializeUser(uid: string, email: string, displayName: string): Promise<void> {
     const ref  = doc(db, 'users', uid);
     const snap = await getDoc(ref);
-    if (snap.exists()) return; // ya inicializado
 
+    if (snap.exists()) {
+      const data = snap.data();
+      // Si el doc ya existe pero no tiene créditos iniciales (ej: registro con Google
+      // que crea el doc antes de que se llame initializeUser), los asignamos.
+      const needsCredits = (data.topUpCredits === undefined || data.topUpCredits === null)
+        && (!data.credits?.available || data.credits.available === 0);
+
+      if (!needsCredits) return;
+
+      await updateDoc(ref, {
+        topUpCredits:          20,
+        creditsUsedThisPeriod: 0,
+        plan:                  data.plan || 'free',
+        referralCode:          data.referralCode || generateReferralCode(uid),
+        referralCount:         data.referralCount ?? 0,
+        'credits.available':   20,
+        updatedAt:             serverTimestamp(),
+      });
+      return;
+    }
+
+    // Usuario completamente nuevo
     await setDoc(ref, {
       uid,
       email,
@@ -46,12 +67,11 @@ export const userService = {
       plan:                  'free',
       planValidUntil:        null,
       creditsUsedThisPeriod: 0,
-      topUpCredits:          20, // créditos iniciales Free
+      topUpCredits:          20,
       lastPeriodReset:       serverTimestamp(),
       referralCode:          generateReferralCode(uid),
       referralCount:         0,
       referredBy:            null,
-      // Campo legacy
       credits: {
         available: 20,
         used:      0,

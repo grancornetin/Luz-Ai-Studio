@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { LogOut, User as UserIcon, Zap, Menu, X, ChevronDown, History } from 'lucide-react';
+import { LogOut, User as UserIcon, Zap, Menu, X, ChevronDown, History, ArrowUp, Clock } from 'lucide-react';
 
 // Vistas y Módulos
 import Landing from './views/Landing';
@@ -155,13 +155,26 @@ const LoginWall: React.FC<{ onOpen: () => void }> = ({ onOpen }) => {
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  onNavigate: () => void; // cierra el sidebar al navegar
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
+const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) => {
   const location = useLocation();
   const { profile, credits, isAdmin, signOut } = useAuth();
   const planStyle = PLAN_STYLES[credits.plan] || PLAN_STYLES.free;
   const isActive = (path: string) => location.pathname === path || (path !== '/' && location.pathname.startsWith(path));
+
+  const navLink = (path: string, label: string, icon: string) => (
+    <Link
+      key={path}
+      to={path}
+      onClick={onNavigate}
+      className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${isActive(path) ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}
+    >
+      <i className={`fa-solid ${icon} text-xs`} />
+      <span className="text-xs font-black uppercase tracking-widest">{label}</span>
+    </Link>
+  );
 
   return (
     <>
@@ -169,90 +182,108 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
         <div className="fixed inset-0 bg-slate-900/10 backdrop-blur-[2px] z-40 md:hidden" onClick={onToggle} />
       )}
       <aside className={`fixed md:sticky top-0 left-0 h-screen bg-white border-r border-slate-100 z-50 transition-all duration-500 overflow-hidden flex flex-col ${collapsed ? 'w-0 border-none' : 'w-80 shadow-2xl'}`}>
-        <div className="p-8 pb-6 flex items-center justify-between">
-          <Link to="/dashboard" className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white"><i className="fa-solid fa-bolt"></i></div>
+        <div className="p-8 pb-6 flex items-center justify-between flex-shrink-0">
+          <Link to="/dashboard" onClick={onNavigate} className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white"><i className="fa-solid fa-bolt" /></div>
             <h1 className="text-xl font-black text-slate-800 italic uppercase">LUZ IA</h1>
           </Link>
           <button onClick={onToggle} className="p-2 text-slate-400 hover:text-indigo-600"><X size={20} /></button>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 space-y-8">
-            <div className="space-y-1">
-                {[
-                  { path: '/dashboard',  label: 'Dashboard',       icon: 'fa-house' },
-                  { path: '/historial',  label: 'Mis Generaciones', icon: 'fa-clock-rotate-left' },
-                ].map(item => (
-                    <Link key={item.path} to={item.path} className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all ${isActive(item.path) ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
-                        <i className={`fa-solid ${item.icon} text-xs`}></i>
-                        <span className="text-xs font-black uppercase tracking-widest">{item.label}</span>
-                    </Link>
-                ))}
+
+        <div className="flex-1 overflow-y-auto px-6 space-y-6 pb-4">
+          <div className="space-y-1">
+            {navLink('/dashboard', 'Dashboard', 'fa-house')}
+            {navLink('/historial', 'Mis Generaciones', 'fa-clock-rotate-left')}
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-3 px-2">Cuenta</p>
+            {navLink('/cuenta',      'Mi perfil',  'fa-user-pen')}
+            {navLink('/pricing',     'Planes',     'fa-tag')}
+            {navLink('/buy-credits', 'Recargar',   'fa-bolt')}
+            {navLink('/contacto',    'Contacto',   'fa-envelope')}
+          </div>
+
+          {MENU_GROUPS.map(group => (
+            <div key={group.label} className="space-y-1">
+              <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-3 px-2">{group.label}</p>
+              {group.items.map(item => navLink(item.path, item.label, item.icon))}
             </div>
-            {/* Planes y créditos */}
-            <div className="space-y-1">
-                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4 px-2">Cuenta</p>
-                {[
-                  { path: '/cuenta',      label: 'Mi perfil',        icon: 'fa-user-pen' },
-                  { path: '/pricing',     label: 'Planes',           icon: 'fa-tag' },
-                  { path: '/buy-credits', label: 'Recargar',         icon: 'fa-bolt' },
-                  { path: '/contacto',    label: 'Contacto',         icon: 'fa-envelope' },
-                ].map(item => (
-                    <Link key={item.path} to={item.path} className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${isActive(item.path) ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
-                        <i className={`fa-solid ${item.icon} text-xs`}></i>
-                        <span className="text-xs font-black uppercase tracking-widest">{item.label}</span>
-                    </Link>
-                ))}
-            </div>
-            {MENU_GROUPS.map(group => (
-                <div key={group.label} className="space-y-1">
-                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4 px-2">{group.label}</p>
-                    {group.items.map(item => (
-                        <Link key={item.path} to={item.path} className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${isActive(item.path) ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
-                            <i className={`fa-solid ${item.icon} text-xs`}></i>
-                            <span className="text-xs font-black uppercase tracking-widest">{item.label}</span>
-                        </Link>
-                    ))}
-                </div>
-            ))}
+          ))}
         </div>
-        <div className="p-6 border-t border-slate-100">
-          <div className="bg-slate-50 rounded-3xl p-4 space-y-4">
+
+        {/* Footer con usuario + cerrar sesión siempre visible */}
+        <div className="flex-shrink-0 p-5 border-t border-slate-100">
+          <div className="bg-slate-50 rounded-2xl p-4 space-y-3">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center overflow-hidden border-2 border-white">
-                {profile?.photoURL ? <img src={profile.photoURL} alt="" /> : <UserIcon size={20} />}
+              <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+                {profile?.photoURL
+                  ? <img src={profile.photoURL} alt="" className="w-full h-full object-cover" />
+                  : <UserIcon size={18} className="text-indigo-500" />
+                }
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-black text-slate-800 uppercase truncate">{profile?.displayName || 'Usuario'}</p>
+                <p className="text-xs font-black text-slate-800 uppercase truncate">{profile?.username || profile?.displayName || 'Usuario'}</p>
                 <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${planStyle.className}`}>
                   {isAdmin ? 'Admin' : planStyle.label}
                 </span>
               </div>
             </div>
-            <button onClick={signOut} className="w-full py-3 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-black uppercase">Cerrar Sesión</button>
+            <button
+              onClick={() => { onNavigate(); signOut(); }}
+              className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+            >
+              <LogOut size={13} /> Cerrar Sesión
+            </button>
           </div>
         </div>
       </aside>
-      <div className={`fixed top-6 left-6 z-[60] ${collapsed ? 'block' : 'hidden'}`}>
-        <button onClick={onToggle} className="w-12 h-12 bg-white border border-slate-100 rounded-2xl shadow-xl flex items-center justify-center text-slate-600"><Menu size={24} /></button>
+
+      {/* Botón hamburguesa flotante cuando sidebar está cerrado */}
+      <div className={`fixed top-5 left-5 z-[60] ${collapsed ? 'block' : 'hidden'}`}>
+        <button onClick={onToggle} className="w-11 h-11 bg-white border border-slate-100 rounded-2xl shadow-xl flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-all">
+          <Menu size={20} />
+        </button>
       </div>
     </>
   );
 };
 
-// ── OTROS COMPONENTES (MobileNav) ──────────────────────────────────────────────
-const MobileNav: React.FC = () => {
-    const location = useLocation();
-    if (location.pathname === '/dashboard') return null;
-    return (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-4 py-3 z-[100] flex justify-between items-center">
-            {mobileMainItems.map(item => (
-                <Link key={item.path} to={item.path} className={`flex flex-col items-center gap-1 ${location.pathname === item.path ? 'text-indigo-600' : 'text-slate-400'}`}>
-                    <i className={`fa-solid ${item.icon} text-lg`}></i>
-                    <span className="text-[10px] font-black uppercase">{item.label}</span>
-                </Link>
-            ))}
-        </nav>
-    );
+// ── MOBILE FAB (reemplaza MobileNav) ─────────────────────────────────────────
+const MobileFAB: React.FC = () => {
+  const navigate  = useNavigate();
+  const [open, setOpen] = React.useState(false);
+
+  const scrollToTop = () => { window.scrollTo({ top: 0, behavior: 'smooth' }); setOpen(false); };
+  const goHistory   = () => { navigate('/historial'); setOpen(false); };
+
+  return (
+    <div className="md:hidden fixed bottom-6 right-5 z-[110] flex flex-col items-end gap-2">
+      {open && (
+        <div className="flex flex-col items-end gap-2 animate-in fade-in slide-in-from-bottom-5 duration-200">
+          <button
+            onClick={scrollToTop}
+            className="flex items-center gap-2 px-4 py-3 bg-white border border-slate-100 rounded-2xl shadow-xl text-[10px] font-black text-slate-700 uppercase tracking-widest"
+          >
+            <ArrowUp size={14} className="text-indigo-500" /> Inicio de página
+          </button>
+          <button
+            onClick={goHistory}
+            className="flex items-center gap-2 px-4 py-3 bg-white border border-slate-100 rounded-2xl shadow-xl text-[10px] font-black text-slate-700 uppercase tracking-widest"
+          >
+            <Clock size={14} className="text-indigo-500" /> Mis Generaciones
+          </button>
+        </div>
+      )}
+      <button
+        onClick={() => setOpen(p => !p)}
+        className="w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-xl flex items-center justify-center transition-all active:scale-95"
+        aria-label="Acciones rápidas"
+      >
+        {open ? <X size={22} /> : <Zap size={22} />}
+      </button>
+    </div>
+  );
 };
 
 // ── APP CONTENT PRINCIPAL ──
@@ -265,6 +296,9 @@ const AppContent: React.FC = () => {
 
   const location = useLocation();
   const isDashboard = location.pathname === '/dashboard';
+
+  // Cerrar sidebar automáticamente al cambiar de ruta
+  const handleSidebarNavigate = () => setIsSidebarCollapsed(true);
 
   useEffect(() => {
     if (!user) return;
@@ -325,30 +359,38 @@ const AppContent: React.FC = () => {
       {/* App autenticada */}
       <Route path="/*" element={
         <ProtectedRoute>
-          <div className="flex min-h-screen bg-slate-50">
-            {!isDashboard && <Sidebar collapsed={isSidebarCollapsed} onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} />}
-            <div className="flex-1 flex flex-col min-w-0">
-                <main className="flex-1 p-4 md:p-10">
-                    <Routes>
-                        <Route path="/dashboard" element={<Dashboard />} />
-                        <Route path="/historial" element={<GenerationHistory />} />
-                        <Route path="/modelos" element={<AvatarLibrary avatars={avatars} />} />
-                        <Route path="/crear/clonar" element={<CloningModule onSave={saveAvatar} />} />
-                        <Route path="/crear/manual" element={<ManualCreatorModule onSave={saveAvatar} />} />
-                        <Route path="/productos" element={<ProductGeneratorModule saveProduct={saveProduct} products={products} />} />
-                        <Route path="/prompt-studio" element={<PromptStudioView />} />
-                        <Route path="/prompt-gallery" element={<PromptGalleryView />} />
-                        <Route path="/studio-pro" element={<ContentStudioProModule />} />
-                        <Route path="/outfit-extractor" element={<OutfitExtractorModule />} />
-                        <Route path="/clonar" element={<CloneImageModule />} />
-                        <Route path="/pricing"      element={<Pricing />} />
-                        <Route path="/buy-credits"  element={<BuyCredits />} />
-                        <Route path="/cuenta"       element={<AccountSettings />} />
-                        <Route path="/prompt-library" element={<Navigate to="/prompt-gallery" replace />} />
-                        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-                    </Routes>
-                </main>
-                <MobileNav />
+          {/* overflow-x-hidden en el wrapper raíz elimina el horizontal overflow global */}
+          <div className="flex min-h-screen bg-slate-50 overflow-x-hidden">
+            {!isDashboard && (
+              <Sidebar
+                collapsed={isSidebarCollapsed}
+                onToggle={() => setIsSidebarCollapsed(p => !p)}
+                onNavigate={handleSidebarNavigate}
+              />
+            )}
+            <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
+              <main className="flex-1 p-4 md:p-10 overflow-x-hidden">
+                <Routes>
+                  <Route path="/dashboard"      element={<Dashboard />} />
+                  <Route path="/historial"      element={<GenerationHistory />} />
+                  <Route path="/modelos"        element={<AvatarLibrary avatars={avatars} />} />
+                  <Route path="/crear/clonar"   element={<CloningModule onSave={saveAvatar} />} />
+                  <Route path="/crear/manual"   element={<ManualCreatorModule onSave={saveAvatar} />} />
+                  <Route path="/productos"      element={<ProductGeneratorModule saveProduct={saveProduct} products={products} />} />
+                  <Route path="/prompt-studio"  element={<PromptStudioView />} />
+                  <Route path="/prompt-gallery" element={<PromptGalleryView />} />
+                  <Route path="/studio-pro"     element={<ContentStudioProModule />} />
+                  <Route path="/outfit-extractor" element={<OutfitExtractorModule />} />
+                  <Route path="/clonar"         element={<CloneImageModule />} />
+                  <Route path="/pricing"        element={<Pricing />} />
+                  <Route path="/buy-credits"    element={<BuyCredits />} />
+                  <Route path="/cuenta"         element={<AccountSettings />} />
+                  <Route path="/prompt-library" element={<Navigate to="/prompt-gallery" replace />} />
+                  <Route path="*"               element={<Navigate to="/dashboard" replace />} />
+                </Routes>
+              </main>
+              {/* MobileFAB reemplaza el MobileNav de bottom */}
+              <MobileFAB />
             </div>
           </div>
           <OnboardingModal isOpen={isNewUser} onClose={markOnboardingDone} />

@@ -64,9 +64,10 @@ export const TUTORIAL_CONFIGS: Record<string, TutorialStep[]> = {
     {
       icon: 'fa-sliders',
       color: 'bg-violet-600 text-white',
-      title: 'Paso 3 — Enfoque y shots',
-      description: 'Elige si el foco del contenido es la persona, el producto, o una combinación. Luego define cuántos shots quieres y la IA genera un set coherente de imágenes.',
-      tip: 'El modo "Avatar Focus" genera poses más expresivas. "Product Focus" centra la atención en el artículo.',
+      title: 'Paso 3 — Elige el enfoque',
+      description: 'Selecciona el enfoque del contenido: Avatar (la persona es el protagonista), Producto (el artículo es el héroe visual), Outfit (la ropa domina la escena) o Escena (el lugar cuenta la historia). Cada enfoque define qué referencias son obligatorias.',
+      tip: '"Avatar" genera poses expresivas y naturales. "Producto" centra la atención en el artículo con el modelo como soporte. "Outfit" destaca la ropa. "Escena" prioriza el ambiente.',
+      tipColor: 'text-violet-200',
     },
   ],
 
