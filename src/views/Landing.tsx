@@ -275,7 +275,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
   const activeMod = MODULES.find(m => m.id === activeModule) || MODULES[0];
 
   return (
-    <div className="min-h-screen bg-[#06060D] text-white font-sans" style={{ fontFamily: '"DM Sans", sans-serif', overflowX: 'hidden', maxWidth: '100vw' }}>
+    <div className="min-h-screen bg-[#06060D] text-white font-sans" style={{ fontFamily: '"DM Sans", sans-serif', overflowX: 'clip', width: '100%', maxWidth: '100%', position: 'relative' }}>
 
       {/* Google Fonts */}
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" />
@@ -306,7 +306,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
       </nav>
 
       {/* ══ HERO ═════════════════════════════════════════════════════════════════ */}
-      <section className="relative min-h-[100dvh] flex items-center overflow-hidden" style={{ padding: '0 5vw', maxWidth: '100vw' }}>
+      <section className="relative min-h-[100dvh] flex items-center" style={{ padding: '0 5vw', maxWidth: '100%', overflow: 'hidden', contain: 'layout' }}>
         {/* Ambient glows */}
         <div className="absolute pointer-events-none" style={{ top: '20%', right: '8%', width: 600, height: 700, background: 'radial-gradient(ellipse,rgba(124,58,237,0.14) 0%,rgba(247,44,91,0.07) 40%,transparent 70%)', zIndex: 0 }} />
         <div className="absolute pointer-events-none" style={{ top: '30%', left: '-5%', width: 400, height: 500, background: 'radial-gradient(ellipse,rgba(124,58,237,0.1),transparent 65%)', zIndex: 0 }} />
@@ -321,7 +321,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
           </div>
 
           {/* H1 — each line is nowrap, font-size forces fit */}
-          <h1 style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', textTransform: 'uppercase', lineHeight: 0.94, letterSpacing: '-0.04em', marginBottom: 24, fontSize: 'clamp(32px, 11vw, 72px)', whiteSpace: 'normal', overflowWrap: 'break-word', wordBreak: 'break-word' }}>
+          <h1 className="landing-h1" style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', textTransform: 'uppercase', lineHeight: 0.94, letterSpacing: '-0.04em', marginBottom: 24, whiteSpace: 'nowrap' }}>
             <div>Crea</div>
             <div style={{ background: 'linear-gradient(135deg,#E879F9,#F72C5B)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Contenido</div>
             <div style={{ color: 'rgba(242,240,250,0.28)' }}>Que Vende</div>
@@ -385,7 +385,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
       </section>
 
       {/* ══ MARQUEE ══════════════════════════════════════════════════════════════ */}
-      <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', borderBottom: '1px solid rgba(255,255,255,0.07)', background: '#0D0D18', padding: '18px 0', overflow: 'hidden', maxWidth: '100vw' }}>
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', borderBottom: '1px solid rgba(255,255,255,0.07)', background: '#0D0D18', padding: '18px 0', overflow: 'hidden', width: '100%', maxWidth: '100%' }}>
         <div style={{ display: 'flex', width: 'max-content', animation: 'mq 22s linear infinite' }}>
           {[...Array(2)].map((_, rep) => (
             ['Model DNA','AI Generator','Content Studio Pro','Scene Clone','Outfit Kit · Ghost Mannequin','Product Studio','Identity Lock System','Gemini Imagen 4'].map((item, i) => (
@@ -398,17 +398,26 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
         </div>
         <style>{`
         @keyframes mq{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-        * { box-sizing: border-box; }
-        body, html { overflow-x: hidden; max-width: 100vw; }
-        @media (max-width: 768px) {
-          .module-panel-grid { grid-template-columns: 1fr !important; }
-          .hero-text-box { max-width: 100% !important; }
+        *, *::before, *::after { box-sizing: border-box; }
+        html { overflow-x: clip; }
+        body { overflow-x: clip; width: 100%; max-width: 100%; }
+
+        /* H1 responsive — guaranteed no wrap at any breakpoint */
+        .landing-h1 { font-size: 56px; }
+        @media (max-width: 1024px) { .landing-h1 { font-size: 48px; } }
+        @media (max-width: 768px)  { .landing-h1 { font-size: 36px; } }
+        @media (max-width: 390px)  { .landing-h1 { font-size: 32px; } }
+        @media (max-width: 350px)  { .landing-h1 { font-size: 28px; } }
+
+        /* Prevent ANY element from causing horizontal scroll */
+        section, div, header, nav, footer {
+          max-width: 100%;
         }
       `}</style>
       </div>
 
       {/* ══ MODULES ══════════════════════════════════════════════════════════════ */}
-      <section id="modulos" className="px-6 md:px-10 py-24">
+      <section id="modulos" className="px-6 md:px-10 py-24" style={{ overflow: 'hidden', maxWidth: '100%' }}>
         <div className="max-w-7xl mx-auto">
           <div className="mb-10">
             <div className="flex items-center gap-2.5 mb-4 text-[10px] font-bold uppercase tracking-[0.25em]" style={{ color: '#F72C5B' }}>
@@ -549,7 +558,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
       </div>
 
       {/* ══ GALLERY SCROLL ═══════════════════════════════════════════════════════ */}
-      <section style={{ padding: '80px 6vw', background: '#0D0D18', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+      <section style={{ padding: '80px 6vw', background: '#0D0D18', borderTop: '1px solid rgba(255,255,255,0.07)', overflow: 'hidden', maxWidth: '100%' }}>
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center gap-2.5 mb-3 text-[10px] font-bold uppercase tracking-[0.25em]" style={{ color: '#F72C5B' }}>
             <div style={{ width: 20, height: 1, background: '#F72C5B' }} />
