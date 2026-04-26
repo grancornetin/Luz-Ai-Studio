@@ -1,129 +1,194 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Check, ArrowRight, Zap, Sparkles, Camera, Shirt, Package, Wand2, Star, ChevronDown, ChevronUp } from 'lucide-react';
-import { PLANS } from '../services/creditConfig';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import { Check, ArrowRight, Zap, Star, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { useCurrency } from '../hooks/useCurrency';
 
-// ── DATOS ──────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Landing.tsx v2.0 — Dark AI-Native Theme
+// Props: onOpenAuth() → abre AuthModal
+// Imágenes: /public/images/landing/**  (copiar carpeta v2imgs allí)
+// ─────────────────────────────────────────────────────────────────────────────
 
+const IMG = (path: string) => `/images/landing/${path}`;
+
+// ── HERO IMAGES (portrait ratio 9:16, shown in phone cards) ──────────────────
+const HERO_KEYS = [
+  'hero_h7','hero_u6','hero_h5','hero_u3b','hero_h6',
+  'hero_u2','hero_u6a','hero_h8','hero_u3','hero_h3',
+  'hero_u3a','hero_h9','hero_u7','hero_h4','hero_u7a',
+  'hero_h1','hero_u7b','hero_h2','hero_u7c',
+];
+
+// ── MODULE DATA ───────────────────────────────────────────────────────────────
 const MODULES = [
   {
+    id: 'dna',
     icon: 'fa-dna',
-    color: 'bg-purple-500',
-    lightColor: 'bg-purple-50',
-    textColor: 'text-purple-600',
+    accent: '#A78BFA',
+    accentBg: 'rgba(124,58,237,0.12)',
     name: 'Model DNA',
-    tagline: 'Tu modelo, tu identidad',
-    desc: 'Crea un modelo digital único a partir de fotos reales. Úsalo en cualquier campaña con consistencia visual total.',
-    steps: ['Sube 1–4 fotos de referencia', 'La IA extrae identidad facial y corporal', 'Genera contenido con ese modelo en infinitas poses y escenas'],
-    badge: 'Identidad Visual',
+    sub: 'Identidad Digital',
+    desc: 'Extrae el ADN biométrico de fotos reales y crea un gemelo digital con fidelidad persistente — o diseña un modelo desde cero con parámetros precisos.',
+    features: ['Set de 4 planos técnicos', 'Identidad persistente en todos los módulos', 'From Photos o From Scratch', 'Biblioteca de modelos'],
+    refs:    [{ src: IMG('dna_ref.jpg'), label: 'Referencia' }],
+    results: [{ src: IMG('dna_p1.jpg'), label: 'P1 Bodymaster' }, { src: IMG('dna_p2.jpg'), label: 'P2 Rear' }, { src: IMG('dna_p3.jpg'), label: 'P3 Side' }, { src: IMG('dna_p4.jpg'), label: 'P4 Facemaster' }],
   },
   {
+    id: 'gen',
     icon: 'fa-wand-magic-sparkles',
-    color: 'bg-brand-600',
-    lightColor: 'bg-brand-50',
-    textColor: 'text-brand-600',
+    accent: '#E879F9',
+    accentBg: 'rgba(232,121,249,0.12)',
     name: 'AI Generator',
-    tagline: 'Prompts que venden',
-    desc: 'Genera imágenes publicitarias de alta calidad con prompts inteligentes. Galería de prompts profesionales incluida.',
-    steps: ['Escribe o elige un prompt de la galería', 'Ajusta estilo, modelo y contexto', 'Genera y descarga en segundos'],
-    badge: 'Generación Libre',
+    sub: 'Generación Avanzada',
+    desc: 'Prompts estructurados con identidad persistente. Configura modelo, outfit, producto y escena — resultados con coherencia visual total.',
+    features: ['Prompt Studio con slots de referencia', 'Identidad consistente en cada resultado', 'Biblioteca de prompts comunitarios', 'Múltiples estilos y aspectos'],
+    prompt: 'A studio-style close-up editorial portrait of a person with strong, well-defined facial features and slightly imperfect, natural skin texture. The subject wears a black tailored turtleneck, layered under a high-collared black jacket. Selective color photography — monochrome black-and-white image with only the sunglasses in vivid orange. Mood is calm and confident, direct gaze. Lighting: soft frontal studio light, cinematic contrast. Shot on a professional portrait camera, f/2.0, ISO 100, 1/125s.',
+    refs:    [],
+    results: [{ src: IMG('gen1.jpg'), label: 'Resultado 1' }, { src: IMG('gen2.jpg'), label: 'Resultado 2' }],
   },
   {
+    id: 'studio',
     icon: 'fa-mobile-screen-button',
-    color: 'bg-emerald-500',
-    lightColor: 'bg-emerald-50',
-    textColor: 'text-emerald-600',
-    name: 'Content Studio',
-    tagline: 'Contenido listo para publicar',
-    desc: 'Combina tu producto, escena y outfit en una sola imagen optimizada para redes sociales y publicidad digital.',
-    steps: ['Sube fotos de producto, escena y prenda', 'Elige el enfoque (UGC, editorial, lifestyle)', 'Obtén contenido listo para Instagram o Meta Ads'],
-    badge: 'Redes Sociales',
+    accent: '#F72C5B',
+    accentBg: 'rgba(247,44,91,0.12)',
+    name: 'Content Studio Pro',
+    sub: 'UGC · Identity Lock',
+    desc: 'Sesiones completas de contenido UGC estilo iPhone orgánico. El Lock System mantiene identidad, producto y escena 100% consistentes.',
+    features: ['Master Anchor + shots derivados', 'Modos Avatar, Producto, Outfit, Escena', 'Checkpoint de validación', 'Descarga ZIP o biblioteca'],
+    refs:    [{ src: IMG('cs_avatar.jpg'), label: 'Avatar' }, { src: IMG('cs_product.jpg'), label: 'Producto' }, { src: IMG('cs_scene.jpg'), label: 'Escena' }, { src: IMG('cs_outfit.jpg'), label: 'Outfit' }],
+    results: [{ src: IMG('cs_master.jpg'), label: 'Master Anchor' }, { src: IMG('cs_s1.jpg'), label: 'Shot 1' }, { src: IMG('cs_s2.jpg'), label: 'Shot 2' }],
   },
   {
+    id: 'clone',
     icon: 'fa-clone',
-    color: 'bg-blue-500',
-    lightColor: 'bg-blue-50',
-    textColor: 'text-blue-600',
+    accent: '#63B3ED',
+    accentBg: 'rgba(99,179,237,0.12)',
     name: 'Scene Clone',
-    tagline: 'Recrea cualquier escena',
-    desc: 'Toma una foto de referencia y replícala con tu modelo. Perfecto para mantener consistencia visual entre campañas.',
-    steps: ['Sube la imagen de referencia de escena', 'Agrega tu modelo (rostro + cuerpo)', 'La IA recrea la escena con tu identidad'],
-    badge: 'Escenas',
+    sub: 'Identity Injection',
+    desc: 'Replica cualquier fotografía existente inyectando una nueva identidad digital. Misma escena, misma iluminación — nueva persona.',
+    features: ['Clonación biométrica de precisión', 'Soporte para 1 o 2 sujetos', 'Outfit swap opcional'],
+    refs:    [{ src: IMG('sc_target.jpg'), label: 'Target' }, { src: IMG('sc_ref.jpg'), label: 'Identidad' }],
+    results: [{ src: IMG('sc_result.jpg'), label: 'Resultado' }],
   },
   {
-    icon: 'fa-gem',
-    color: 'bg-amber-500',
-    lightColor: 'bg-amber-50',
-    textColor: 'text-amber-600',
-    name: 'Product Shots',
-    tagline: 'Fotografía de producto con IA',
-    desc: 'Genera fotos de producto profesionales en segundos. Sin estudio, sin fotógrafo, sin presupuesto de producción.',
-    steps: ['Sube la foto de tu producto', 'Describe el fondo y el estilo', 'Obtén fotografías de catálogo profesionales'],
-    badge: 'E-commerce',
-  },
-  {
+    id: 'outfit',
     icon: 'fa-shirt',
-    color: 'bg-rose-500',
-    lightColor: 'bg-rose-50',
-    textColor: 'text-rose-600',
+    accent: '#68D391',
+    accentBg: 'rgba(104,211,145,0.12)',
     name: 'Outfit Kit',
-    tagline: 'Extracción de prendas',
-    desc: 'Extrae outfits completos de cualquier imagen y renderiza en tu modelo o en distintos contextos visuales.',
-    steps: ['Sube una foto con el outfit', 'La IA extrae la prenda automáticamente', 'Renderiza en tu modelo o en nuevas escenas'],
-    badge: 'Moda',
+    sub: 'Ghost Mannequin 3D',
+    desc: 'Extrae automáticamente cada prenda de un outfit completo y genera renders Ghost Mannequin 3D individuales. Activos de nivel fashion en segundos.',
+    features: ['Detección automática por IA', 'Ghost Mannequin 3D por pieza', 'Selección individual de prendas', 'Kit final compuesto + ZIP'],
+    refs:    [{ src: IMG('out_orig.jpg'), label: 'Outfit Original' }],
+    results: [{ src: IMG('out_p1.jpg'), label: 'Prenda 1' }, { src: IMG('out_p2.jpg'), label: 'Prenda 2' }, { src: IMG('out_final.jpg'), label: 'Kit Final' }],
+  },
+  {
+    id: 'product',
+    icon: 'fa-gem',
+    accent: '#F6AD55',
+    accentBg: 'rgba(246,173,85,0.12)',
+    name: 'Product Studio',
+    sub: 'Fotografía Comercial',
+    desc: 'Sube fotos reales de tu producto y genera un set de 5 ángulos comerciales con IA. Fotografía profesional sin estudio físico.',
+    features: ['Análisis automático del producto', '5 ángulos: Hero, 45°, Funcional, Detalle, Lifestyle', 'Estilo Comercial u Orgánico', 'Catálogo guardado'],
+    refs:    [{ src: IMG('prod_ref.jpg'), label: 'Foto Real' }],
+    results: [{ src: IMG('prod_hero.jpg'), label: 'Hero Shot' }, { src: IMG('prod_ang.jpg'), label: 'Ángulo' }, { src: IMG('prod_life.jpg'), label: 'Lifestyle' }],
   },
 ];
 
+// ── PLANS DATA ────────────────────────────────────────────────────────────────
+const LANDING_PLANS = [
+  {
+    id: 'free',
+    name: 'Free',
+    priceMonthly: 0,
+    priceAnnual: null,
+    period: '/siempre',
+    credits: '10 créditos únicos',
+    images: '~10 imágenes',
+    featured: false,
+    features: ['Acceso a todos los módulos', 'Seedream + Gemini', 'Misiones para ganar créditos extra'],
+    negative: ['Sin soporte prioritario'],
+    cta: 'Registrarme',
+  },
+  {
+    id: 'explorer',
+    name: 'Explorer',
+    priceMonthly: 4.99,
+    priceAnnual: null,
+    period: '/semana',
+    credits: '60 créditos/semana',
+    images: '~60 imágenes',
+    featured: false,
+    features: ['Todos los módulos', 'Seedream + Gemini', 'Soporte email básico'],
+    negative: ['Reveal prompts: 1 crédito'],
+    cta: 'Empezar',
+  },
+  {
+    id: 'starter',
+    name: 'Starter',
+    priceMonthly: 14.99,
+    priceAnnual: 11.99,
+    period: '/mes',
+    credits: '200 créditos/mes',
+    images: '~200 imágenes',
+    featured: false,
+    features: ['Todo de Explorer', 'Campaign Generator', 'Photodump ilimitado', 'Soporte email prioritario'],
+    negative: [],
+    cta: 'Empezar',
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    priceMonthly: 39.99,
+    priceAnnual: 31.99,
+    period: '/mes',
+    credits: '500 créditos/mes',
+    images: '~500 imágenes',
+    featured: true,
+    features: ['Todo de Starter', 'Reveal prompts GRATIS', 'Generación prioritaria', 'Soporte <24h'],
+    negative: [],
+    cta: 'Empezar con Pro',
+  },
+  {
+    id: 'studio',
+    name: 'Studio',
+    priceMonthly: 99.99,
+    priceAnnual: 79.99,
+    period: '/mes',
+    credits: '1.200 créditos/mes',
+    images: '~1.200 imágenes',
+    featured: false,
+    features: ['Todo de Pro', 'Lotes de hasta 50 imágenes', 'Máxima prioridad', 'Chat dedicado', 'Estadísticas avanzadas'],
+    negative: [],
+    cta: 'Empezar',
+  },
+];
+
+// ── FAQ DATA ──────────────────────────────────────────────────────────────────
 const FAQS = [
-  {
-    q: '¿Necesito saber de diseño o IA para usar LUZ IA?',
-    a: 'No. La plataforma está diseñada para emprendedores y marketers sin experiencia técnica. Sube fotos, ajusta parámetros simples y obtén resultados profesionales en segundos.',
-  },
-  {
-    q: '¿Cómo funcionan los créditos?',
-    a: 'Los créditos son la moneda interna de LUZ IA. Cada imagen generada consume una pequeña cantidad de créditos dependiendo del modelo de IA elegido. Al registrarte recibes créditos gratis para probar sin compromiso.',
-  },
-  {
-    q: '¿Puedo usar las imágenes para publicidad comercial?',
-    a: 'Sí. Las imágenes generadas son tuyas para uso comercial. Solo debes asegurarte de tener los derechos sobre las imágenes de referencia que subes.',
-  },
-  {
-    q: '¿Funciona en cualquier industria?',
-    a: 'Absolutamente. Moda, gastronomía, belleza, tecnología, retail y más. Cualquier negocio que necesite contenido visual puede usar LUZ IA.',
-  },
-  {
-    q: '¿Puedo cancelar mi suscripción en cualquier momento?',
-    a: 'Sí. Sin permanencia ni penalizaciones. Cancelas cuando quieras y tu plan sigue activo hasta el fin del período pagado.',
-  },
-  {
-    q: '¿Las imágenes de referencia que subo se guardan?',
-    a: 'No. Las imágenes de referencia se procesan en tiempo real por la IA y no se almacenan en nuestros servidores. Tu privacidad está protegida.',
-  },
+  { q: '¿Necesito experiencia en diseño o IA?', a: 'No. LUZ IA está diseñada para emprendedores y marketers. Sube fotos, ajusta parámetros y obtén resultados profesionales en segundos.' },
+  { q: '¿Cómo funcionan los créditos?', a: 'Con tecnología Seedream, 1 crédito = 1 imagen. Módulos más complejos como Content Studio o Model DNA consumen más créditos por el procesamiento multicapa.' },
+  { q: '¿Puedo usar las imágenes para publicidad comercial?', a: 'Sí. Las imágenes generadas son tuyas para uso comercial. Debes tener los derechos sobre las referencias que subes.' },
+  { q: '¿Funciona para cualquier industria?', a: 'Absolutamente. Moda, gastronomía, belleza, tecnología, retail y más. Cualquier negocio que necesite contenido visual puede usar LUZ IA.' },
+  { q: '¿Puedo cancelar mi suscripción?', a: 'Sí. Sin permanencia ni penalizaciones. Cancelas cuando quieras y tu plan sigue activo hasta el fin del período pagado.' },
+  { q: '¿Las imágenes de referencia se guardan?', a: 'No. Las imágenes se procesan en tiempo real y no se almacenan en nuestros servidores. Tu privacidad está protegida.' },
 ];
 
-const TESTIMONIALS = [
-  {
-    name: 'Valentina M.',
-    role: 'Fundadora · Tienda de ropa online',
-    text: 'Antes gastaba $200 USD por sesión de fotos. Con LUZ IA genero el mismo contenido por menos de $15 al mes. Es increíble.',
-    stars: 5,
-  },
-  {
-    name: 'Rodrigo C.',
-    role: 'Agencia de Marketing Digital',
-    text: 'Entregamos campañas completas en 1/3 del tiempo. Los clientes no pueden creer la calidad. LUZ IA nos dio una ventaja brutal.',
-    stars: 5,
-  },
-  {
-    name: 'Camila P.',
-    role: 'Emprendedora · Cosmética natural',
-    text: 'Probé varias herramientas de IA. Ninguna tan enfocada en contenido publicitario latinoamericano como LUZ IA.',
-    stars: 5,
-  },
-];
+// ── SUB-COMPONENTS ────────────────────────────────────────────────────────────
 
-// ── COMPONENTES ────────────────────────────────────────────────────────────────
+const FaqItem: React.FC<{ q: string; a: string }> = ({ q, a }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-b border-white/[0.06] last:border-0">
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between py-5 text-left gap-4">
+        <span className="text-sm font-black text-white/80 uppercase tracking-tight leading-snug">{q}</span>
+        {open ? <ChevronUp className="w-4 h-4 text-white/30 flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-white/30 flex-shrink-0" />}
+      </button>
+      {open && <p className="pb-5 text-sm text-white/45 leading-relaxed">{a}</p>}
+    </div>
+  );
+};
 
 const StarRating: React.FC<{ count: number }> = ({ count }) => (
   <div className="flex gap-0.5">
@@ -133,510 +198,534 @@ const StarRating: React.FC<{ count: number }> = ({ count }) => (
   </div>
 );
 
-const FaqItem: React.FC<{ q: string; a: string }> = ({ q, a }) => {
-  const [open, setOpen] = useState(false);
+// Lightbox
+const Lightbox: React.FC<{ src: string | null; onClose: () => void }> = ({ src, onClose }) => {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  if (!src) return null;
   return (
-    <div className="border-b border-slate-100 last:border-0">
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between py-5 text-left gap-4"
-      >
-        <span className="text-sm font-black text-slate-800 uppercase tracking-tight leading-snug">{q}</span>
-        {open
-          ? <ChevronUp className="w-4 h-4 text-slate-400 flex-shrink-0" />
-          : <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
-        }
-      </button>
-      {open && (
-        <p className="pb-5 text-sm text-slate-500 leading-relaxed">{a}</p>
-      )}
+    <div
+      className="fixed inset-0 z-[999] bg-black/92 backdrop-blur-xl flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div className="relative max-w-3xl w-full" onClick={e => e.stopPropagation()}>
+        <img src={src} alt="" className="w-full max-h-[85dvh] object-contain rounded-2xl border border-white/10" />
+        <button
+          onClick={onClose}
+          className="absolute -top-3 -right-3 w-9 h-9 bg-[#0D0D18] border border-white/15 rounded-xl flex items-center justify-center text-white/50 hover:text-white transition-all"
+        >
+          <X size={16} />
+        </button>
+      </div>
     </div>
   );
 };
 
-// ── MOCK VISUAL CARDS (reemplazan capturas de pantalla) ───────────────────────
-
-const MockGenerationCard: React.FC<{ color: string; icon: string; label: string; time?: string }> = ({ color, icon, label, time = '8s' }) => (
-  <div className="bg-white rounded-2xl border border-slate-100 p-3 shadow-sm flex items-center gap-3">
-    <div className={`w-10 h-10 ${color} rounded-xl flex items-center justify-center flex-shrink-0`}>
-      <i className={`fa-solid ${icon} text-white text-sm`} />
+// Image card (clickable)
+const ImgCard: React.FC<{ src: string; label: string; isResult?: boolean; onClick: () => void; className?: string }> = ({ src, label, isResult, onClick, className = '' }) => (
+  <div
+    onClick={onClick}
+    className={`relative rounded-xl overflow-hidden border cursor-pointer transition-all hover:scale-[1.02] ${isResult ? 'border-[#F72C5B]/40 shadow-lg shadow-[#F72C5B]/10' : 'border-white/[0.08] hover:border-white/20'} ${className}`}
+  >
+    <img src={src} alt={label} className="w-full h-48 object-cover block" loading="lazy" />
+    <div className={`absolute top-2 left-2 px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider ${isResult ? 'bg-[#F72C5B]/80 text-white' : 'bg-black/70 text-white/60'}`}>
+      {label}
     </div>
-    <div className="flex-1 min-w-0">
-      <p className="text-xs font-black text-slate-700 uppercase tracking-tight truncate">{label}</p>
-      <p className="text-[10px] text-slate-400 font-medium">Generado en ~{time}</p>
-    </div>
-    <div className="w-2 h-2 bg-emerald-400 rounded-full flex-shrink-0" />
   </div>
 );
 
-// ── LANDING PAGE PRINCIPAL ─────────────────────────────────────────────────────
+// ── MAIN COMPONENT ────────────────────────────────────────────────────────────
 
 const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
-  const navigate = useNavigate();
   const { currency, toggle, format } = useCurrency();
+  const [activeModule, setActiveModule] = useState<string>('dna');
+  const [billingAnnual, setBillingAnnual] = useState(false);
+  const [lbSrc, setLbSrc] = useState<string | null>(null);
+  const [cardImgs, setCardImgs] = useState([0, 1, 2]);
+  const [scrolled, setScrolled] = useState(false);
 
-  const dailyCostCLP = Math.round((PLANS.starter.priceMonthly * 1000) / 30);
+  // Nav scroll effect
+  useEffect(() => {
+    const handler = () => setScrolled(window.scrollY > 60);
+    window.addEventListener('scroll', handler);
+    return () => window.removeEventListener('scroll', handler);
+  }, []);
+
+  // Phone cards rotator
+  useEffect(() => {
+    let slot = 0;
+    const interval = setInterval(() => {
+      setCardImgs(prev => {
+        const next = [...prev];
+        next[slot] = (prev[slot] + 3) % HERO_KEYS.length;
+        return next;
+      });
+      slot = (slot + 1) % 3;
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const openLB = useCallback((src: string) => setLbSrc(src), []);
+  const closeLB = useCallback(() => setLbSrc(null), []);
+
+  const activeMod = MODULES.find(m => m.id === activeModule) || MODULES[0];
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 font-sans">
+    <div className="min-h-screen bg-[#06060D] text-white font-sans" style={{ fontFamily: '"DM Sans", sans-serif' }}>
 
-      {/* ── NAV ── */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-100">
-        <div className="max-w-7xl mx-auto px-5 md:px-10 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-brand-600 rounded-xl flex items-center justify-center shadow-lg shadow-brand-100">
-              <i className="fa-solid fa-bolt text-white text-sm" />
-            </div>
-            <span className="text-lg font-black text-slate-900 uppercase italic tracking-tighter">LUZ IA</span>
+      {/* Google Fonts */}
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" />
+
+      <Lightbox src={lbSrc} onClose={closeLB} />
+
+      {/* ══ NAV ══════════════════════════════════════════════════════════════════ */}
+      <nav className={`fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-10 transition-all duration-300 ${
+        scrolled ? 'py-3 bg-[#06060D]/96 backdrop-blur-xl border-b border-white/[0.06]' : 'py-5'
+      }`}>
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm" style={{ background: 'linear-gradient(135deg,#7C3AED,#F72C5B)', boxShadow: '0 0 16px rgba(247,44,91,0.3)' }}>
+            <i className="fa-solid fa-bolt" />
           </div>
-          <div className="hidden md:flex items-center gap-6">
-            <a href="#modulos" className="text-[11px] font-black text-slate-500 hover:text-slate-900 uppercase tracking-widest transition-colors">Módulos</a>
-            <a href="#precios" className="text-[11px] font-black text-slate-500 hover:text-slate-900 uppercase tracking-widest transition-colors">Precios</a>
-            <a href="#faq" className="text-[11px] font-black text-slate-500 hover:text-slate-900 uppercase tracking-widest transition-colors">FAQ</a>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onOpenAuth}
-              className="text-[11px] font-black text-slate-500 hover:text-slate-900 uppercase tracking-widest transition-colors hidden md:block"
-            >
-              Ingresar
-            </button>
-            <button
-              onClick={onOpenAuth}
-              className="px-4 py-2.5 bg-brand-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-brand-700 transition-all shadow-lg shadow-brand-100"
-            >
-              Empezar gratis
-            </button>
-          </div>
+          <span style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', letterSpacing: '-0.02em', fontSize: '18px', textTransform: 'uppercase' }}>LUZ IA</span>
+        </div>
+        <div className="hidden md:flex items-center gap-6">
+          {[['#modulos', 'Módulos'], ['#precios', 'Precios'], ['#faq', 'FAQ']].map(([href, label]) => (
+            <a key={href} href={href} className="text-[11px] font-bold text-white/50 hover:text-white uppercase tracking-widest transition-colors">{label}</a>
+          ))}
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={onOpenAuth} className="hidden md:block text-[11px] font-bold text-white/50 hover:text-white uppercase tracking-widest transition-colors">Ingresar</button>
+          <button onClick={onOpenAuth} className="px-4 py-2.5 text-white text-[11px] font-black uppercase tracking-widest rounded-full transition-all hover:opacity-90 hover:scale-105 flex items-center gap-1.5" style={{ background: 'linear-gradient(135deg,#7C3AED,#F72C5B)', boxShadow: '0 0 20px rgba(247,44,91,0.25)' }}>
+            <i className="fa-solid fa-bolt text-[10px]" /> Empezar gratis
+          </button>
         </div>
       </nav>
 
-      {/* ── HERO ── */}
-      <section className="pt-28 pb-20 px-5 md:px-10 max-w-7xl mx-auto">
-        <div className="grid md:grid-cols-2 gap-12 items-center">
-          <div className="space-y-8">
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 bg-brand-50 border border-brand-100 px-4 py-2 rounded-full">
-              <Zap className="w-3.5 h-3.5 text-brand-600" />
-              <span className="text-[11px] font-black text-brand-600 uppercase tracking-widest">Hecho para PyMEs y emprendedores</span>
-            </div>
+      {/* ══ HERO ═════════════════════════════════════════════════════════════════ */}
+      <section className="relative min-h-[100dvh] flex items-center overflow-hidden" style={{ padding: '0 6vw' }}>
+        {/* Ambient glows */}
+        <div className="absolute pointer-events-none" style={{ top: '20%', right: '8%', width: 600, height: 700, background: 'radial-gradient(ellipse,rgba(124,58,237,0.14) 0%,rgba(247,44,91,0.07) 40%,transparent 70%)', zIndex: 0 }} />
+        <div className="absolute pointer-events-none" style={{ top: '30%', left: '-5%', width: 400, height: 500, background: 'radial-gradient(ellipse,rgba(124,58,237,0.1),transparent 65%)', zIndex: 0 }} />
 
-            <h1 className="text-4xl md:text-6xl font-black uppercase italic tracking-tighter leading-[0.9] text-slate-900">
-              Haz crecer<br />
-              tu negocio<br />
-              con <span className="text-brand-600">contenido IA</span>
-            </h1>
+        {/* ─ TEXT BOX (fixed width layer) ─ */}
+        <div className="relative z-10 flex-shrink-0 w-full max-w-[540px]" style={{ padding: '140px 0 100px' }}>
 
-            <p className="text-base text-slate-500 leading-relaxed max-w-md">
-              Fotos de producto, campañas publicitarias y contenido para redes sociales — sin fotógrafo, sin estudio ni presupuesto de producción. Tu marca compite con las grandes.
-            </p>
-
-            {/* Oferta diaria */}
-            <div className="bg-slate-900 rounded-[28px] p-6 space-y-4 inline-block w-full max-w-sm">
-              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Contenido profesional por solo</p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-black text-white">
-                  ${dailyCostCLP.toLocaleString('es-CL')}
-                </span>
-                <span className="text-sm font-bold text-slate-400">CLP / día</span>
-              </div>
-              <p className="text-[10px] text-slate-500 font-medium">Plan Starter · {PLANS.starter.credits} créditos mensuales · {PLANS.starter.approxImages}</p>
-              <button
-                onClick={onOpenAuth}
-                className="w-full py-3.5 bg-brand-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-brand-700 transition-all flex items-center justify-center gap-2"
-              >
-                Ver planes <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Trust signals */}
-            <div className="flex items-center gap-5 flex-wrap">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 bg-emerald-400 rounded-full" />
-                <span className="text-[11px] font-bold text-slate-500">Sin tarjeta para empezar</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 bg-emerald-400 rounded-full" />
-                <span className="text-[11px] font-bold text-slate-500">10 créditos gratis</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 bg-emerald-400 rounded-full" />
-                <span className="text-[11px] font-bold text-slate-500">Cancela cuando quieras</span>
-              </div>
-            </div>
+          {/* Badge */}
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border mb-7" style={{ background: 'rgba(124,58,237,0.12)', borderColor: 'rgba(124,58,237,0.3)', fontSize: 10, fontWeight: 700, color: 'rgba(232,121,249,0.9)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>
+            <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#E879F9' }} />
+            Producción publicitaria con IA
           </div>
 
-          {/* Panel visual derecho */}
-          <div className="relative">
-            {/* Fake dashboard panel */}
-            <div className="bg-slate-50 rounded-[40px] border border-slate-100 p-6 space-y-4 shadow-2xl">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 bg-brand-600 rounded-lg flex items-center justify-center">
-                    <i className="fa-solid fa-bolt text-white text-[10px]" />
-                  </div>
-                  <span className="text-xs font-black text-slate-700 uppercase tracking-tight">LUZ IA · Studio</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-2.5 h-2.5 bg-red-300 rounded-full" />
-                  <div className="w-2.5 h-2.5 bg-amber-300 rounded-full" />
-                  <div className="w-2.5 h-2.5 bg-emerald-300 rounded-full" />
-                </div>
-              </div>
+          {/* H1 — each line is nowrap, font-size forces fit */}
+          <h1 style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', textTransform: 'uppercase', lineHeight: 0.94, letterSpacing: '-0.04em', marginBottom: 24, fontSize: 48, whiteSpace: 'nowrap' }}>
+            <div>Crea</div>
+            <div style={{ background: 'linear-gradient(135deg,#E879F9,#F72C5B)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Contenido</div>
+            <div style={{ color: 'rgba(242,240,250,0.28)' }}>Que Vende</div>
+          </h1>
 
-              {/* Módulos en mini-grid */}
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { color: 'bg-purple-500', icon: 'fa-dna', name: 'Model DNA' },
-                  { color: 'bg-brand-600', icon: 'fa-wand-magic-sparkles', name: 'AI Gen' },
-                  { color: 'bg-emerald-500', icon: 'fa-mobile-screen-button', name: 'Content' },
-                  { color: 'bg-blue-500', icon: 'fa-clone', name: 'Scene Clone' },
-                  { color: 'bg-amber-500', icon: 'fa-gem', name: 'Products' },
-                  { color: 'bg-rose-500', icon: 'fa-shirt', name: 'Outfit Kit' },
-                ].map((m, i) => (
-                  <div key={i} className="bg-white rounded-2xl p-3 flex flex-col items-center gap-2 border border-slate-100">
-                    <div className={`w-8 h-8 ${m.color} rounded-xl flex items-center justify-center`}>
-                      <i className={`fa-solid ${m.icon} text-white text-[10px]`} />
-                    </div>
-                    <span className="text-[9px] font-black text-slate-600 uppercase tracking-tight text-center leading-tight">{m.name}</span>
-                  </div>
-                ))}
-              </div>
+          <p style={{ fontSize: 16, fontWeight: 300, color: 'rgba(242,240,250,0.50)', lineHeight: 1.75, maxWidth: 440, marginBottom: 36 }}>
+            Modelos digitales con identidad persistente, sesiones UGC, catálogos de producto y más — sin fotógrafos, sin estudio, en minutos.
+          </p>
 
-              {/* Generaciones recientes */}
-              <div className="space-y-2">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Generaciones recientes</p>
-                <MockGenerationCard color="bg-brand-600" icon="fa-wand-magic-sparkles" label="Campaña lifestyle editorial" time="6s" />
-                <MockGenerationCard color="bg-purple-500" icon="fa-dna" label="Model DNA · Valentina" time="12s" />
-                <MockGenerationCard color="bg-emerald-500" icon="fa-mobile-screen-button" label="Content Studio · UGC" time="8s" />
-              </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button onClick={onOpenAuth} className="inline-flex items-center gap-2 text-white text-sm font-black uppercase tracking-widest rounded-full transition-all hover:opacity-90 hover:translate-y-[-2px]" style={{ padding: '15px 32px', background: 'linear-gradient(135deg,#7C3AED,#F72C5B)', boxShadow: '0 0 40px rgba(247,44,91,0.25)', border: 'none', cursor: 'pointer' }}>
+              <i className="fa-solid fa-bolt text-sm" /> Crear cuenta gratis
+            </button>
+            <a href="#modulos" className="inline-flex items-center gap-2 text-white text-sm font-black uppercase tracking-widest rounded-full transition-all hover:border-white/30 hover:bg-white/10" style={{ padding: '14px 28px', border: '1px solid rgba(255,255,255,0.14)', background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(8px)' }}>
+              Ver módulos <i className="fa-solid fa-arrow-down text-sm" />
+            </a>
+          </div>
 
-              {/* Créditos mini */}
-              <div className="bg-white rounded-2xl p-3 flex items-center justify-between border border-slate-100">
-                <div>
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Créditos</p>
-                  <p className="text-lg font-black text-slate-800">142 <span className="text-[10px] text-slate-400 font-medium">disponibles</span></p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Plan</p>
-                  <span className="text-[10px] font-black bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full uppercase">Pro</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Floating badge */}
-            <div className="absolute -bottom-4 -left-4 bg-white rounded-2xl border border-slate-100 shadow-xl p-3 flex items-center gap-2">
-              <div className="w-8 h-8 bg-emerald-50 rounded-xl flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-emerald-500" />
-              </div>
-              <div>
-                <p className="text-[9px] font-black text-slate-700 uppercase tracking-tight">Contenido listo</p>
-                <p className="text-[9px] text-slate-400 font-medium">para publicar</p>
-              </div>
-            </div>
+          <div className="flex items-center gap-4 flex-wrap mt-6">
+            {['10 créditos gratis', 'Sin tarjeta', 'En minutos'].map(t => (
+              <span key={t} className="flex items-center gap-1.5 text-xs font-medium" style={{ color: 'rgba(242,240,250,0.55)' }}>
+                <i className="fa-solid fa-check text-[10px]" style={{ color: '#F72C5B' }} />{t}
+              </span>
+            ))}
           </div>
         </div>
-      </section>
 
-      {/* ── SOCIAL PROOF BAR ── */}
-      <section className="bg-slate-900 py-8 px-5 md:px-10">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-10 md:gap-20">
-          {[
-            { value: '6',    label: 'Módulos especializados' },
-            { value: '100%', label: 'Contenido comercial' },
-            { value: '10',   label: 'Créditos gratis al inicio' },
-            { value: '0',    label: 'Fotógrafos necesarios' },
-          ].map((stat, i) => (
-            <div key={i} className="text-center">
-              <p className="text-3xl font-black text-white">{stat.value}</p>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{stat.label}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── MÓDULOS ── */}
-      <section id="modulos" className="py-20 px-5 md:px-10 max-w-7xl mx-auto space-y-16">
-        <div className="text-center space-y-3">
-          <p className="text-[11px] font-black text-brand-600 uppercase tracking-widest">Todo en una sola plataforma</p>
-          <h2 className="text-3xl md:text-5xl font-black uppercase italic tracking-tighter text-slate-900">
-            6 módulos de IA<br />
-            <span className="text-brand-600">especializados</span>
-          </h2>
-          <p className="text-sm text-slate-500 max-w-lg mx-auto">Cada módulo resuelve un problema específico del marketing visual. No pagas por funciones que no usas.</p>
-        </div>
-
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {MODULES.map((mod, i) => (
-            <div key={i} className="group bg-white rounded-[28px] border border-slate-100 p-6 space-y-5 hover:shadow-xl hover:border-slate-200 transition-all duration-300">
-              <div className="flex items-start justify-between">
-                <div className={`w-12 h-12 ${mod.color} rounded-2xl flex items-center justify-center shadow-lg`}>
-                  <i className={`fa-solid ${mod.icon} text-white text-lg`} />
+        {/* ─ PHONE CARDS (right side, desktop only) ─ */}
+        <div className="hidden lg:flex items-center gap-4 absolute right-[6vw] top-1/2 -translate-y-1/2 z-10" style={{ padding: '0 0 0 40px' }}>
+          {[0, 1, 2].map(idx => {
+            const isMain = idx === 1;
+            const key = HERO_KEYS[cardImgs[idx]];
+            const labels = ['Content Studio · UGC', 'AI Generator · Resultado', 'Model DNA · Facemaster'];
+            return (
+              <div key={idx} style={{
+                width: isMain ? 210 : 175,
+                borderRadius: 24,
+                overflow: 'hidden',
+                border: isMain ? '1px solid rgba(124,58,237,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                boxShadow: isMain ? '0 32px 80px rgba(0,0,0,0.6),0 0 40px rgba(124,58,237,0.15)' : '0 24px 60px rgba(0,0,0,0.5)',
+                background: '#12121D',
+                flexShrink: 0,
+                position: 'relative',
+                transform: isMain ? 'translateY(-20px)' : 'scale(0.95)',
+                opacity: isMain ? 1 : 0.72,
+                transition: 'all 0.3s ease',
+              }}>
+                <img src={IMG(`${key}.jpg`)} alt="" style={{ width: '100%', aspectRatio: '9/16', objectFit: 'cover', display: 'block', transition: 'opacity 0.8s ease' }} loading="eager" />
+                <div style={{ position: 'absolute', bottom: 10, left: 10, right: 10, background: 'rgba(6,6,13,0.82)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '6px 10px', fontFamily: '"Syne",sans-serif', fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'rgba(242,240,250,0.5)' }}>
+                  {labels[idx].split('·')[0].trim()} <span style={{ color: '#F72C5B' }}>·</span> {labels[idx].split('·')[1]?.trim()}
                 </div>
-                <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${mod.lightColor} ${mod.textColor}`}>
-                  {mod.badge}
-                </span>
               </div>
-
-              <div>
-                <h3 className="text-base font-black text-slate-900 uppercase italic tracking-tight">{mod.name}</h3>
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{mod.tagline}</p>
-              </div>
-
-              <p className="text-sm text-slate-500 leading-relaxed">{mod.desc}</p>
-
-              <div className="space-y-2">
-                <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Cómo funciona</p>
-                {mod.steps.map((step, j) => (
-                  <div key={j} className="flex items-start gap-2.5">
-                    <div className={`w-4 h-4 ${mod.color} rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 opacity-80`}>
-                      <span className="text-[8px] font-black text-white">{j + 1}</span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 leading-tight">{step}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="text-center">
-          <button
-            onClick={onOpenAuth}
-            className="px-8 py-4 bg-brand-600 text-white rounded-2xl text-sm font-black uppercase tracking-widest hover:bg-brand-700 transition-all shadow-xl shadow-brand-100 inline-flex items-center gap-2"
-          >
-            Probar todos los módulos gratis <ArrowRight className="w-4 h-4" />
-          </button>
+            );
+          })}
         </div>
       </section>
 
-      {/* ── PROCESO VISUAL ── */}
-      <section className="bg-slate-50 py-20 px-5 md:px-10">
-        <div className="max-w-7xl mx-auto space-y-12">
-          <div className="text-center space-y-3">
-            <p className="text-[11px] font-black text-brand-600 uppercase tracking-widest">Así de simple</p>
-            <h2 className="text-3xl md:text-5xl font-black uppercase italic tracking-tighter text-slate-900">
-              Contenido profesional<br />en <span className="text-brand-600">3 pasos</span>
+      {/* ══ MARQUEE ══════════════════════════════════════════════════════════════ */}
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', borderBottom: '1px solid rgba(255,255,255,0.07)', background: '#0D0D18', padding: '18px 0', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', width: 'max-content', animation: 'mq 22s linear infinite' }}>
+          {[...Array(2)].map((_, rep) => (
+            ['Model DNA','AI Generator','Content Studio Pro','Scene Clone','Outfit Kit · Ghost Mannequin','Product Studio','Identity Lock System','Gemini Imagen 4'].map((item, i) => (
+              <div key={`${rep}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 32px', fontFamily: '"Syne",sans-serif', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'rgba(242,240,250,0.22)', whiteSpace: 'nowrap', borderRight: '1px solid rgba(255,255,255,0.07)' }}>
+                <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#F72C5B', flexShrink: 0 }} />
+                {item}
+              </div>
+            ))
+          ))}
+        </div>
+        <style>{`@keyframes mq{from{transform:translateX(0)}to{transform:translateX(-50%)}}`}</style>
+      </div>
+
+      {/* ══ MODULES ══════════════════════════════════════════════════════════════ */}
+      <section id="modulos" className="px-6 md:px-10 py-24">
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-10">
+            <div className="flex items-center gap-2.5 mb-4 text-[10px] font-bold uppercase tracking-[0.25em]" style={{ color: '#F72C5B' }}>
+              <div style={{ width: 20, height: 1, background: '#F72C5B' }} />
+              Módulos del sistema
+            </div>
+            <h2 style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', textTransform: 'uppercase', fontSize: 'clamp(32px,4vw,56px)', letterSpacing: '-0.03em', lineHeight: 1.05, marginBottom: 12 }}>
+              Todo lo que necesitas<br />en una sola plataforma
             </h2>
+            <p style={{ fontSize: 15, color: 'rgba(242,240,250,0.45)', maxWidth: 480, lineHeight: 1.75 }}>
+              Seis herramientas especializadas. Haz click en cada módulo para ver cómo funciona.
+            </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              {
-                step: '01',
-                icon: <Camera className="w-6 h-6" />,
-                color: 'bg-brand-600',
-                title: 'Sube tus referencias',
-                desc: 'Fotos de tu modelo, producto, outfit o escena. La IA entiende el contexto automáticamente.',
-              },
-              {
-                step: '02',
-                icon: <Wand2 className="w-6 h-6" />,
-                color: 'bg-indigo-600',
-                title: 'Elige módulo y ajusta',
-                desc: 'Selecciona el módulo según tu objetivo. Ajusta estilo, formato y parámetros en segundos.',
-              },
-              {
-                step: '03',
-                icon: <Sparkles className="w-6 h-6" />,
-                color: 'bg-emerald-600',
-                title: 'Genera y descarga',
-                desc: 'La IA procesa tus referencias y genera contenido profesional listo para publicar. Descarga en alta resolución.',
-              },
-            ].map((step, i) => (
-              <div key={i} className="relative bg-white rounded-[28px] border border-slate-100 p-8 space-y-5">
-                <div className="flex items-center justify-between">
-                  <div className={`w-12 h-12 ${step.color} rounded-2xl flex items-center justify-center text-white shadow-lg`}>
-                    {step.icon}
-                  </div>
-                  <span className="text-6xl font-black text-slate-100 select-none">{step.step}</span>
-                </div>
+          {/* Tab buttons */}
+          <div className="flex gap-2 flex-wrap mb-1">
+            {MODULES.map(mod => (
+              <button key={mod.id} onClick={() => setActiveModule(mod.id)}
+                className="flex items-center gap-2 rounded-full font-black text-[11px] uppercase tracking-[0.1em] transition-all"
+                style={{
+                  padding: '10px 20px', border: '1px solid',
+                  borderColor: activeModule === mod.id ? 'rgba(247,44,91,0.4)' : 'rgba(255,255,255,0.07)',
+                  background: activeModule === mod.id ? 'linear-gradient(135deg,rgba(124,58,237,0.15),rgba(247,44,91,0.1))' : 'transparent',
+                  color: activeModule === mod.id ? '#fff' : 'rgba(242,240,250,0.45)',
+                  fontFamily: '"Syne",sans-serif',
+                  cursor: 'pointer',
+                }}
+              >
+                <i className={`fa-solid ${mod.icon} text-xs`} style={{ color: activeModule === mod.id ? mod.accent : undefined }} />
+                {mod.name}
+              </button>
+            ))}
+          </div>
+
+          {/* Panel */}
+          <div style={{ background: '#0D0D18', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 24, overflow: 'hidden', animation: 'panIn 0.35s cubic-bezier(0.4,0,0.2,1)' }}>
+            <style>{`@keyframes panIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
+            <div className="grid" style={{ gridTemplateColumns: '260px 1fr', minHeight: 480 }}>
+
+              {/* Info column */}
+              <div style={{ padding: '36px 28px', borderRight: '1px solid rgba(255,255,255,0.07)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div>
-                  <h3 className="text-base font-black text-slate-900 uppercase italic tracking-tight">{step.title}</h3>
-                  <p className="text-sm text-slate-500 mt-2 leading-relaxed">{step.desc}</p>
+                  <div style={{ width: 44, height: 44, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, marginBottom: 16, background: activeMod.accentBg }}>
+                    <i className={`fa-solid ${activeMod.icon}`} style={{ color: activeMod.accent }} />
+                  </div>
+                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.18em', color: activeMod.accent, marginBottom: 8 }}>{activeMod.sub}</div>
+                  <div style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', textTransform: 'uppercase', fontSize: 22, letterSpacing: '-0.02em', lineHeight: 1.1, marginBottom: 10 }}>{activeMod.name}</div>
+                  <p style={{ fontSize: 13, color: 'rgba(242,240,250,0.45)', lineHeight: 1.7, marginBottom: 20 }}>{activeMod.desc}</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+                    {activeMod.features.map(f => (
+                      <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'rgba(242,240,250,0.50)' }}>
+                        <i className="fa-solid fa-check" style={{ fontSize: 9, color: '#F72C5B', flexShrink: 0 }} />{f}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                {i < 2 && (
-                  <div className="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 z-10">
-                    <ArrowRight className="w-5 h-5 text-slate-300" />
+                <button onClick={onOpenAuth} className="inline-flex items-center gap-2 text-white font-black uppercase tracking-[0.1em] rounded-full transition-all hover:opacity-90" style={{ fontFamily: '"Syne",sans-serif', fontSize: 10, padding: '11px 22px', background: 'linear-gradient(135deg,#7C3AED,#F72C5B)', border: 'none', cursor: 'pointer', boxShadow: '0 4px 20px rgba(247,44,91,0.25)', width: 'fit-content' }}>
+                  <i className="fa-solid fa-bolt text-[10px]" /> Probar gratis
+                </button>
+              </div>
+
+              {/* Gallery column */}
+              <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16, overflow: 'hidden' }}>
+
+                {/* Prompt block (AI Generator only) */}
+                {'prompt' in activeMod && (
+                  <div style={{ background: 'rgba(124,58,237,0.07)', border: '1px solid rgba(124,58,237,0.18)', borderRadius: 14, padding: '14px 16px' }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: '#F72C5B', marginBottom: 8 }}>
+                      <i className="fa-solid fa-terminal" style={{ marginRight: 5 }} />Prompt utilizado
+                    </div>
+                    <p style={{ fontSize: 11, fontStyle: 'italic', color: 'rgba(242,240,250,0.45)', lineHeight: 1.7, maxHeight: 88, overflow: 'auto' }}>
+                      {(activeMod as any).prompt}
+                    </p>
                   </div>
                 )}
+
+                {/* References */}
+                {activeMod.refs.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(242,240,250,0.28)' }}>
+                        {activeMod.id === 'studio' ? 'Referencias · Avatar · Producto · Escena · Outfit' : 'Referencia'}
+                      </span>
+                      <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.07)' }} />
+                    </div>
+                    <div className="flex gap-2.5">
+                      {activeMod.refs.map(ref => (
+                        <div key={ref.label} onClick={() => openLB(ref.src)} className="flex-1 relative rounded-xl overflow-hidden cursor-pointer transition-all hover:scale-[1.02] border" style={{ border: '1px solid rgba(255,255,255,0.08)', minWidth: 0 }}>
+                          <img src={ref.src} alt={ref.label} className="w-full block object-cover" style={{ height: activeMod.id === 'studio' ? 130 : 180, objectFit: activeMod.id === 'studio' && ref.label === 'Producto' ? 'contain' : 'cover', background: ref.label === 'Producto' ? '#14141F' : undefined, padding: ref.label === 'Producto' ? 8 : undefined }} loading="lazy" />
+                          <div style={{ position: 'absolute', top: 6, left: 6, background: 'rgba(0,0,0,0.75)', borderRadius: 5, padding: '2px 7px', fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.55)' }}>{ref.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Results */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: '#F72C5B' }}>
+                      {activeMod.id === 'clone' ? 'Resultado clonado' : activeMod.id === 'studio' ? 'Resultados · Master · Shot 1 · Shot 2' : 'Resultados generados'}
+                    </span>
+                    <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.07)' }} />
+                  </div>
+                  <div className="flex gap-2.5" style={activeMod.id === 'clone' ? { display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 10 } : {}}>
+                    {activeMod.results.map((res, i) => (
+                      <div key={res.label} onClick={() => openLB(res.src)}
+                        className="relative rounded-xl overflow-hidden cursor-pointer transition-all hover:scale-[1.02]"
+                        style={{
+                          flex: activeMod.id === 'clone' ? undefined : 1,
+                          border: `1.5px solid ${activeMod.id === 'clone' && i === activeMod.results.length - 1 ? '#F72C5B' : 'rgba(247,44,91,0.3)'}`,
+                          boxShadow: activeMod.id === 'clone' && i === activeMod.results.length - 1 ? '0 0 20px rgba(247,44,91,0.2)' : undefined,
+                          minWidth: 0,
+                        }}
+                      >
+                        <img src={res.src} alt={res.label} className="w-full block object-cover" style={{ height: activeMod.id === 'product' ? 160 : 200 }} loading="lazy" />
+                        <div style={{ position: 'absolute', top: 6, left: 6, background: 'rgba(247,44,91,0.75)', borderRadius: 5, padding: '2px 7px', fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'white' }}>{res.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ══ STATS ════════════════════════════════════════════════════════════════ */}
+      <div style={{ background: '#0D0D18', borderTop: '1px solid rgba(255,255,255,0.07)', borderBottom: '1px solid rgba(255,255,255,0.07)', padding: '60px 6vw' }}>
+        <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-px" style={{ background: 'rgba(255,255,255,0.07)' }}>
+          {[['6','Módulos especializados'],['∞','Identidades posibles'],['5x','Más rápido que un estudio'],['100%','Coherencia de identidad']].map(([n, l]) => (
+            <div key={l} style={{ background: '#0D0D18', padding: '36px 28px', textAlign: 'center' }}>
+              <div style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', fontSize: 'clamp(36px,5vw,64px)', letterSpacing: '-0.04em', lineHeight: 1, background: 'linear-gradient(135deg,#E879F9,#F72C5B)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', marginBottom: 8 }}>{n}</div>
+              <div style={{ fontSize: 11, fontWeight: 500, color: 'rgba(242,240,250,0.40)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ══ GALLERY SCROLL ═══════════════════════════════════════════════════════ */}
+      <section style={{ padding: '80px 6vw', background: '#0D0D18', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center gap-2.5 mb-3 text-[10px] font-bold uppercase tracking-[0.25em]" style={{ color: '#F72C5B' }}>
+            <div style={{ width: 20, height: 1, background: '#F72C5B' }} />
+            Generado con LUZ IA
+          </div>
+          <h2 style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', textTransform: 'uppercase', fontSize: 'clamp(28px,3.5vw,48px)', letterSpacing: '-0.03em', marginBottom: 36 }}>
+            Resultados reales
+          </h2>
+          <div className="flex gap-3 overflow-x-auto pb-4" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
+            {HERO_KEYS.map(key => (
+              <div key={key} onClick={() => openLB(IMG(`${key}.jpg`))} style={{ flexShrink: 0, width: 200, borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)', cursor: 'pointer', transition: 'all 0.3s' }}
+                onMouseOver={e => { (e.currentTarget as HTMLElement).style.transform = 'scale(1.03)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(247,44,91,0.4)'; }}
+                onMouseOut={e => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.07)'; }}
+              >
+                <img src={IMG(`${key}.jpg`)} alt="" style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover', display: 'block' }} loading="lazy" />
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── TESTIMONIOS ── */}
-      <section className="py-20 px-5 md:px-10 max-w-7xl mx-auto space-y-12">
-        <div className="text-center space-y-3">
-          <p className="text-[11px] font-black text-brand-600 uppercase tracking-widest">Lo que dicen nuestros usuarios</p>
-          <h2 className="text-3xl md:text-4xl font-black uppercase italic tracking-tighter text-slate-900">
-            Resultados reales
-          </h2>
-        </div>
+      {/* ══ PRICING ══════════════════════════════════════════════════════════════ */}
+      <section id="precios" style={{ padding: '80px 6vw' }}>
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-10">
+            <div className="flex items-center justify-center gap-2.5 mb-3 text-[10px] font-bold uppercase tracking-[0.25em]" style={{ color: '#F72C5B' }}>
+              <div style={{ width: 20, height: 1, background: '#F72C5B' }} />
+              Planes
+              <div style={{ width: 20, height: 1, background: '#F72C5B' }} />
+            </div>
+            <h2 style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', textTransform: 'uppercase', fontSize: 'clamp(28px,4vw,52px)', letterSpacing: '-0.03em', marginBottom: 12 }}>
+              Precios que escalan<br />con tu negocio
+            </h2>
+            <p style={{ fontSize: 14, color: 'rgba(242,240,250,0.45)', marginBottom: 24 }}>Empieza gratis. Sin tarjeta de crédito.</p>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          {TESTIMONIALS.map((t, i) => (
-            <div key={i} className="bg-white rounded-[28px] border border-slate-100 p-6 space-y-4">
-              <StarRating count={t.stars} />
-              <p className="text-sm text-slate-600 leading-relaxed">"{t.text}"</p>
-              <div>
-                <p className="text-xs font-black text-slate-800 uppercase tracking-tight">{t.name}</p>
-                <p className="text-[10px] text-slate-400 font-medium mt-0.5">{t.role}</p>
+            {/* Credit note */}
+            <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 mb-6" style={{ background: 'rgba(232,121,249,0.08)', border: '1px solid rgba(232,121,249,0.2)', fontSize: 12, fontWeight: 600, color: '#E879F9' }}>
+              <i className="fa-solid fa-bolt text-xs" />
+              Seedream: 1 crédito = 1 imagen &nbsp;·&nbsp; Gemini: 2 créditos = 1 imagen
+            </div>
+
+            {/* Billing toggle */}
+            <div className="flex items-center justify-center">
+              <div className="flex items-center gap-0 rounded-full p-1" style={{ background: '#14141F', border: '1px solid rgba(255,255,255,0.07)' }}>
+                {[['Mensual', false], ['Anual', true]].map(([label, isAnnual]) => (
+                  <button key={String(label)} onClick={() => setBillingAnnual(isAnnual as boolean)}
+                    className="font-black uppercase text-[11px] tracking-widest rounded-full transition-all"
+                    style={{ padding: '8px 22px', fontFamily: '"Syne",sans-serif', border: 'none', cursor: 'pointer', background: billingAnnual === isAnnual ? 'linear-gradient(135deg,#7C3AED,#F72C5B)' : 'transparent', color: billingAnnual === isAnnual ? '#fff' : 'rgba(242,240,250,0.45)', boxShadow: billingAnnual === isAnnual ? '0 2px 12px rgba(247,44,91,0.25)' : 'none' }}
+                  >
+                    {label}{isAnnual && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(232,121,249,0.2)', color: '#E879F9' }}>-20%</span>}
+                  </button>
+                ))}
               </div>
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── PRECIOS ── */}
-      <section id="precios" className="bg-slate-50 py-20 px-5 md:px-10">
-        <div className="max-w-5xl mx-auto space-y-12">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="space-y-2">
-              <p className="text-[11px] font-black text-brand-600 uppercase tracking-widest">Sin sorpresas</p>
-              <h2 className="text-3xl md:text-4xl font-black uppercase italic tracking-tighter text-slate-900">
-                Precios <span className="text-brand-600">transparentes</span>
-              </h2>
-            </div>
-            <button
-              onClick={toggle}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
-            >
-              {currency === 'USD' ? '🇨🇱 Ver en CLP' : '🇺🇸 Ver en USD'}
-            </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {(['free', 'starter', 'pro'] as const).map(key => {
-              const plan = PLANS[key];
-              const isPro = key === 'pro';
+          {/* Plans grid */}
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(5,1fr)' }}>
+            {LANDING_PLANS.map(plan => {
+              const price = billingAnnual && plan.priceAnnual !== null ? plan.priceAnnual : plan.priceMonthly;
+              const [whole, cents] = price === 0 ? ['0', null] : String(price.toFixed(2)).split('.');
+
               return (
-                <div
-                  key={key}
-                  className={`bg-white rounded-[28px] border p-6 flex flex-col gap-5 relative ${isPro ? 'border-indigo-200 ring-2 ring-indigo-500 shadow-xl shadow-indigo-50' : 'border-slate-100'}`}
-                >
-                  {isPro && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full">
+                <div key={plan.id} style={{
+                  background: plan.featured ? 'linear-gradient(160deg,rgba(124,58,237,0.12),rgba(247,44,91,0.07),#0D0D18)' : '#0D0D18',
+                  border: `1px solid ${plan.featured ? 'rgba(124,58,237,0.4)' : 'rgba(255,255,255,0.07)'}`,
+                  borderRadius: 20, padding: '28px 20px',
+                  display: 'flex', flexDirection: 'column', gap: 0,
+                  position: 'relative',
+                  transform: plan.featured ? 'scale(1.03)' : 'none',
+                  boxShadow: plan.featured ? '0 0 40px rgba(124,58,237,0.15)' : 'none',
+                  transition: 'transform 0.3s',
+                }}>
+                  {plan.featured && (
+                    <div style={{ position: 'absolute', top: -12, left: '50%', transform: 'translateX(-50%)', padding: '4px 14px', borderRadius: 100, background: 'linear-gradient(135deg,#7C3AED,#F72C5B)', fontFamily: '"Syne",sans-serif', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#fff', whiteSpace: 'nowrap', boxShadow: '0 4px 16px rgba(247,44,91,0.3)' }}>
                       Más popular
                     </div>
                   )}
-                  <div>
-                    <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${isPro ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
-                      {plan.label}
-                    </span>
-                    <div className="mt-4">
-                      {plan.priceMonthly === 0 ? (
-                        <p className="text-3xl font-black text-slate-900">Gratis</p>
-                      ) : (
-                        <>
-                          <p className="text-3xl font-black text-slate-900">{format(plan.priceMonthly)}</p>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">por mes</p>
-                        </>
-                      )}
-                    </div>
-                    <p className="text-[10px] font-bold text-slate-400 mt-1">{plan.approxImages}</p>
+                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(242,240,250,0.28)', marginBottom: 16 }}>{plan.name}</div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 2, marginBottom: 6 }}>
+                    {price === 0 ? (
+                      <span style={{ fontFamily: '"Syne",sans-serif', fontSize: 40, fontWeight: 800, lineHeight: 0.95, letterSpacing: '-0.03em' }}>$0</span>
+                    ) : (
+                      <>
+                        <span style={{ fontFamily: '"Syne",sans-serif', fontSize: 40, fontWeight: 800, lineHeight: 0.95, letterSpacing: '-0.03em' }}>${whole}</span>
+                        <span style={{ fontFamily: '"Syne",sans-serif', fontSize: 18, fontWeight: 700, marginTop: 7, letterSpacing: '-0.02em' }}>.{cents}</span>
+                      </>
+                    )}
+                    <span style={{ fontSize: 10, fontWeight: 500, color: 'rgba(242,240,250,0.35)', marginTop: 24, marginLeft: 2 }}>{plan.period}</span>
                   </div>
-                  <ul className="space-y-2 flex-1">
-                    {plan.features.slice(0, 4).map((f, i) => (
-                      <li key={i} className="flex items-start gap-2">
-                        <Check className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5" />
-                        <span className="text-[11px] font-medium text-slate-600 leading-tight">{f}</span>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#F72C5B', marginBottom: 18, paddingBottom: 18, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                    {plan.credits} · {plan.images}
+                  </div>
+                  <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20, flex: 1 }}>
+                    {plan.features.map(f => (
+                      <li key={f} style={{ display: 'flex', alignItems: 'flex-start', gap: 7, fontSize: 11, color: 'rgba(242,240,250,0.50)' }}>
+                        <i className="fa-solid fa-check" style={{ fontSize: 9, color: '#F72C5B', marginTop: 2, flexShrink: 0 }} />{f}
+                      </li>
+                    ))}
+                    {plan.negative.map(f => (
+                      <li key={f} style={{ display: 'flex', alignItems: 'flex-start', gap: 7, fontSize: 11, color: 'rgba(242,240,250,0.25)' }}>
+                        <i className="fa-solid fa-bolt" style={{ fontSize: 9, color: 'rgba(242,240,250,0.25)', marginTop: 2, flexShrink: 0 }} />{f}
                       </li>
                     ))}
                   </ul>
-                  <button
-                    onClick={onOpenAuth}
-                    className={`w-full py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                      isPro
-                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-100'
-                        : 'bg-slate-900 hover:bg-slate-700 text-white'
-                    }`}
+                  <button onClick={onOpenAuth}
+                    style={{ width: '100%', padding: '12px 0', borderRadius: 12, fontFamily: '"Syne",sans-serif', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', cursor: 'pointer', border: plan.featured ? 'none' : '1px solid rgba(255,255,255,0.12)', background: plan.featured ? 'linear-gradient(135deg,#7C3AED,#F72C5B)' : 'transparent', color: '#fff', boxShadow: plan.featured ? '0 4px 20px rgba(247,44,91,0.25)' : 'none', transition: 'all 0.2s' }}
+                    onMouseOver={e => { if (!plan.featured) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
+                    onMouseOut={e => { if (!plan.featured) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                   >
-                    {plan.priceMonthly === 0 ? 'Empezar gratis' : 'Suscribirse'}
+                    {plan.cta}
                   </button>
                 </div>
               );
             })}
           </div>
 
-          <div className="text-center">
-            <button
-              onClick={() => navigate('/pricing')}
-              className="text-sm font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest inline-flex items-center gap-1.5 transition-colors"
-            >
-              Ver todos los planes <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+          {/* Credit explanation */}
+          <div className="flex items-start gap-3 mt-6 rounded-2xl p-4" style={{ background: 'rgba(124,58,237,0.07)', border: '1px solid rgba(124,58,237,0.18)' }}>
+            <i className="fa-solid fa-bolt" style={{ color: '#F72C5B', marginTop: 2, flexShrink: 0, fontSize: 13 }} />
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>1 crédito = 1 imagen (con Seedream)</p>
+              <p style={{ fontSize: 12, color: 'rgba(242,240,250,0.40)', lineHeight: 1.65 }}>Módulos como Content Studio o Model DNA consumen más créditos por la complejidad del proceso (set de 4 planos, múltiples shots, etc.). Los planes Explorer, Starter, Pro y Studio se renuevan automáticamente. Plan Free: 10 créditos únicos, no renovables.</p>
+            </div>
+          </div>
+
+          <p className="text-center mt-4" style={{ fontSize: 11, color: 'rgba(242,240,250,0.25)' }}>
+            Precios en USD. Plan anual disponible con 20% de descuento en Starter, Pro y Studio. Explorer se cobra semanalmente.
+          </p>
+        </div>
+      </section>
+
+      {/* ══ FAQ ══════════════════════════════════════════════════════════════════ */}
+      <section id="faq" style={{ padding: '80px 6vw' }}>
+        <div className="max-w-3xl mx-auto">
+          <div className="text-center mb-10">
+            <div className="flex items-center justify-center gap-2.5 mb-3 text-[10px] font-bold uppercase tracking-[0.25em]" style={{ color: '#F72C5B' }}>
+              <div style={{ width: 20, height: 1, background: '#F72C5B' }} />
+              Preguntas frecuentes
+              <div style={{ width: 20, height: 1, background: '#F72C5B' }} />
+            </div>
+            <h2 style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', textTransform: 'uppercase', fontSize: 'clamp(28px,4vw,48px)', letterSpacing: '-0.03em' }}>FAQ</h2>
+          </div>
+          <div style={{ background: '#0D0D18', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 24, padding: '0 28px' }}>
+            {FAQS.map((faq, i) => <FaqItem key={i} q={faq.q} a={faq.a} />)}
           </div>
         </div>
       </section>
 
-      {/* ── FAQ ── */}
-      <section id="faq" className="py-20 px-5 md:px-10 max-w-3xl mx-auto space-y-10">
-        <div className="text-center space-y-3">
-          <p className="text-[11px] font-black text-brand-600 uppercase tracking-widest">Preguntas frecuentes</p>
-          <h2 className="text-3xl md:text-4xl font-black uppercase italic tracking-tighter text-slate-900">
-            FAQ
+      {/* ══ CTA FINAL ════════════════════════════════════════════════════════════ */}
+      <section style={{ padding: '100px 6vw', textAlign: 'center', background: 'linear-gradient(160deg,rgba(124,58,237,0.08),rgba(247,44,91,0.05),transparent)', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 700, height: 400, background: 'radial-gradient(ellipse,rgba(124,58,237,0.14),rgba(247,44,91,0.07),transparent 65%)', pointerEvents: 'none' }} />
+        <div className="max-w-2xl mx-auto relative">
+          <div className="flex items-center justify-center gap-2.5 mb-4 text-[10px] font-bold uppercase tracking-[0.25em]" style={{ color: '#F72C5B' }}>
+            <div style={{ width: 20, height: 1, background: '#F72C5B' }} /> Comienza hoy <div style={{ width: 20, height: 1, background: '#F72C5B' }} />
+          </div>
+          <h2 style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', textTransform: 'uppercase', fontSize: 'clamp(32px,5vw,64px)', letterSpacing: '-0.03em', lineHeight: 1.05, marginBottom: 14 }}>
+            ¿Listo para producir<br />como un estudio?
           </h2>
+          <p style={{ fontSize: 15, color: 'rgba(242,240,250,0.45)', marginBottom: 36 }}>10 créditos gratis al registrarte. Sin tarjeta. Resultados en minutos.</p>
+          <button onClick={onOpenAuth} className="inline-flex items-center gap-2 text-white font-black uppercase tracking-widest rounded-full transition-all hover:opacity-90 hover:translate-y-[-2px]" style={{ fontFamily: '"Syne",sans-serif', fontSize: 15, padding: '18px 44px', background: 'linear-gradient(135deg,#7C3AED,#F72C5B)', border: 'none', cursor: 'pointer', boxShadow: '0 0 40px rgba(247,44,91,0.25)' }}>
+            <i className="fa-solid fa-bolt" /> Crear mi cuenta gratuita
+          </button>
+          <div className="flex items-center justify-center gap-2 mt-5" style={{ fontSize: 13, color: 'rgba(242,240,250,0.40)' }}>
+            <i className="fa-solid fa-gift" style={{ color: '#F72C5B' }} />
+            10 créditos gratis incluidos · Sin tarjeta de crédito
+          </div>
         </div>
-        <div className="bg-white rounded-[28px] border border-slate-100 px-8 divide-y divide-slate-100">
-          {FAQS.map((faq, i) => (
-            <FaqItem key={i} q={faq.q} a={faq.a} />
+      </section>
+
+      {/* ══ FOOTER ═══════════════════════════════════════════════════════════════ */}
+      <footer style={{ borderTop: '1px solid rgba(255,255,255,0.07)', padding: '36px 6vw', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+        <div className="flex items-center gap-2.5" style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', textTransform: 'uppercase', fontSize: 16, letterSpacing: '-0.02em' }}>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg,#7C3AED,#F72C5B)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>
+            <i className="fa-solid fa-bolt text-white" />
+          </div>
+          LUZ IA
+        </div>
+        <div className="flex gap-6 flex-wrap">
+          {[['privacidad','Privacidad'],['terminos','Términos'],['descargo','Descargo']].map(([to, label]) => (
+            <Link key={to} to={`/${to}`} style={{ fontSize: 11, fontWeight: 500, color: 'rgba(242,240,250,0.25)', textDecoration: 'none', textTransform: 'uppercase', letterSpacing: '0.06em', transition: 'color 0.2s' }}
+              onMouseOver={e => (e.currentTarget as HTMLElement).style.color = '#fff'}
+              onMouseOut={e => (e.currentTarget as HTMLElement).style.color = 'rgba(242,240,250,0.25)'}
+            >{label}</Link>
           ))}
         </div>
-      </section>
-
-      {/* ── CTA FINAL ── */}
-      <section className="bg-slate-900 py-20 px-5 md:px-10">
-        <div className="max-w-3xl mx-auto text-center space-y-8">
-          <div className="w-16 h-16 bg-brand-600 rounded-[24px] flex items-center justify-center mx-auto shadow-2xl shadow-brand-600/30">
-            <i className="fa-solid fa-bolt text-white text-2xl" />
-          </div>
-          <h2 className="text-3xl md:text-5xl font-black uppercase italic tracking-tighter text-white leading-tight">
-            Empieza hoy.<br />
-            <span className="text-brand-400">Sin riesgo.</span>
-          </h2>
-          <p className="text-slate-400 text-sm leading-relaxed">
-            10 créditos gratis al registrarte. Sin tarjeta de crédito. Sin permanencia.
-            Si no te convence, no pierdes nada.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <button
-              onClick={onOpenAuth}
-              className="px-8 py-4 bg-brand-600 text-white rounded-2xl text-sm font-black uppercase tracking-widest hover:bg-brand-700 transition-all shadow-xl shadow-brand-600/30 inline-flex items-center justify-center gap-2"
-            >
-              Crear cuenta gratis <ArrowRight className="w-4 h-4" />
-            </button>
-            <a
-              href="#precios"
-              className="px-8 py-4 bg-white/10 text-white rounded-2xl text-sm font-black uppercase tracking-widest hover:bg-white/20 transition-all inline-flex items-center justify-center gap-2"
-            >
-              Ver precios
-            </a>
-          </div>
-        </div>
-      </section>
-
-      {/* ── FOOTER ── */}
-      <footer className="bg-slate-900 border-t border-white/5 py-10 px-5 md:px-10">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-3">
-            <div className="w-7 h-7 bg-brand-600 rounded-xl flex items-center justify-center">
-              <i className="fa-solid fa-bolt text-white text-xs" />
-            </div>
-            <span className="text-sm font-black text-white uppercase italic tracking-tighter">LUZ IA</span>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-            <Link to="/privacidad" className="text-[11px] font-bold text-slate-500 hover:text-slate-300 uppercase tracking-widest transition-colors">Privacidad</Link>
-            <Link to="/terminos"   className="text-[11px] font-bold text-slate-500 hover:text-slate-300 uppercase tracking-widest transition-colors">Términos</Link>
-            <Link to="/descargo"   className="text-[11px] font-bold text-slate-500 hover:text-slate-300 uppercase tracking-widest transition-colors">Descargo</Link>
-            <Link to="/contacto"   className="text-[11px] font-bold text-slate-500 hover:text-slate-300 uppercase tracking-widest transition-colors">Contacto</Link>
-          </div>
-          <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">
-            © {new Date().getFullYear()} LUZ IA · Todos los derechos reservados
-          </p>
-        </div>
+        <p style={{ fontSize: 11, color: 'rgba(242,240,250,0.18)' }}>© {new Date().getFullYear()} LUZ IA · Todos los derechos reservados</p>
       </footer>
+
     </div>
   );
 };
