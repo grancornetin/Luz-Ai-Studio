@@ -1,6 +1,7 @@
 // src/services/missionsService.ts
 // Sistema de misiones para ganar créditos gratis.
-// Las misiones completadas se guardan en Firestore bajo users/{uid}/missions/{missionId}.
+// Completadas → users/{uid}/missions/status
+// Créditos → van a topUpCredits (persistentes, no expiran con el período)
 
 import { db } from '../firebase';
 import {
@@ -13,67 +14,87 @@ export interface Mission {
   label:           string;
   description:     string;
   action:          string;
-  maxCompletions?: number;
+  maxCompletions:  number;
   icon:            string;
+  repeatable:      boolean;
+  cooldownHours?:  number; // para misiones repetibles con cooldown
 }
 
 export const MISSIONS: Mission[] = [
   {
-    id: 'tutorial',
-    credits: 5,
-    label: 'Completar el tutorial',
-    description: 'Termina el tutorial de bienvenida de la app.',
-    action: 'completeTutorial',
+    id:             'verify_email',
+    credits:        5,
+    label:          'Verificar tu correo',
+    description:    'Confirma tu dirección de email para mayor seguridad.',
+    action:         'verifyEmail',
     maxCompletions: 1,
-    icon: 'fa-graduation-cap',
+    repeatable:     false,
+    icon:           'fa-envelope-circle-check',
   },
   {
-    id: 'email_verified',
-    credits: 10,
-    label: 'Verificar tu correo',
-    description: 'Confirma tu dirección de email.',
-    action: 'verifyEmail',
+    id:             'complete_tutorial',
+    credits:        3,
+    label:          'Completar el tutorial',
+    description:    'Termina el tutorial de bienvenida de la app.',
+    action:         'completeTutorial',
     maxCompletions: 1,
-    icon: 'fa-envelope-circle-check',
+    repeatable:     false,
+    icon:           'fa-graduation-cap',
   },
   {
-    id: 'instagram_follow',
-    credits: 5,
-    label: 'Seguir en Instagram',
-    description: 'Sigue la cuenta oficial de LUZ IA en Instagram.',
-    action: 'followInstagram',
+    id:             'first_generation',
+    credits:        5,
+    label:          'Primera generación',
+    description:    'Genera tu primera imagen en cualquier módulo.',
+    action:         'firstGeneration',
     maxCompletions: 1,
-    icon: 'fa-instagram',
+    repeatable:     false,
+    icon:           'fa-wand-magic-sparkles',
   },
   {
-    id: 'first_generation',
-    credits: 5,
-    label: 'Primera generación',
-    description: 'Genera tu primera imagen en cualquier módulo.',
-    action: 'firstGeneration',
+    id:             'follow_instagram',
+    credits:        5,
+    label:          'Seguir en Instagram',
+    description:    'Sigue @luziastudio en Instagram.',
+    action:         'followInstagram',
     maxCompletions: 1,
-    icon: 'fa-wand-magic-sparkles',
+    repeatable:     false,
+    icon:           'fa-brands fa-instagram',
   },
   {
-    id: 'referral',
-    credits: 20,
-    label: 'Invitar a un amigo',
-    description: 'Un amigo se suscribe usando tu código de referido.',
-    action: 'inviteFriend',
-    maxCompletions: 10,
-    icon: 'fa-user-plus',
+    id:             'daily_login',
+    credits:        1,
+    label:          'Login diario',
+    description:    'Inicia sesión cada día para ganar créditos.',
+    action:         'dailyLogin',
+    maxCompletions: 365,
+    repeatable:     true,
+    cooldownHours:  24,
+    icon:           'fa-calendar-check',
+  },
+  {
+    id:             'referral',
+    credits:        10,
+    label:          'Invitar a un amigo',
+    description:    'Un amigo se registra usando tu código de referido.',
+    action:         'referFriend',
+    maxCompletions: 5,
+    repeatable:     true,
+    icon:           'fa-user-plus',
   },
 ];
 
 export interface MissionStatus {
-  completed: boolean;
-  count:     number;
+  completed:    boolean;
+  count:        number;
   completedAt?: string;
+  lastCompletedAt?: string; // para repetibles con cooldown
 }
 
 export type UserMissions = Record<string, MissionStatus>;
 
-// Obtiene el estado de misiones del usuario
+// ── Leer estado de misiones ───────────────────────────────────────────────────
+
 export async function getUserMissions(userId: string): Promise<UserMissions> {
   try {
     const ref  = doc(db, 'users', userId, 'missions', 'status');
@@ -82,8 +103,22 @@ export async function getUserMissions(userId: string): Promise<UserMissions> {
   } catch { return {}; }
 }
 
-// Completa una misión si no se ha excedido el máximo
-export async function completeMission(userId: string, missionId: string): Promise<{ success: boolean; creditsEarned: number; message: string }> {
+// ── Verificar si una misión repetible está en cooldown ────────────────────────
+
+export function isMissionOnCooldown(status: MissionStatus, mission: Mission): boolean {
+  if (!mission.repeatable || !mission.cooldownHours) return false;
+  if (!status.lastCompletedAt) return false;
+  const last    = new Date(status.lastCompletedAt).getTime();
+  const elapsed = (Date.now() - last) / (1000 * 60 * 60);
+  return elapsed < mission.cooldownHours;
+}
+
+// ── Completar misión ──────────────────────────────────────────────────────────
+
+export async function completeMission(
+  userId:    string,
+  missionId: string,
+): Promise<{ success: boolean; creditsEarned: number; message: string }> {
   const mission = MISSIONS.find(m => m.id === missionId);
   if (!mission) return { success: false, creditsEarned: 0, message: 'Misión no encontrada' };
 
@@ -92,24 +127,33 @@ export async function completeMission(userId: string, missionId: string): Promis
   const current   = snap.exists() ? (snap.data() as UserMissions) : {};
   const mStatus   = current[missionId] || { completed: false, count: 0 };
 
-  const max = mission.maxCompletions ?? 1;
-  if (mStatus.count >= max) {
-    return { success: false, creditsEarned: 0, message: 'Misión ya completada' };
+  // Verificar límite de completaciones
+  if (mStatus.count >= mission.maxCompletions) {
+    return { success: false, creditsEarned: 0, message: 'Misión ya completada al máximo' };
   }
+
+  // Verificar cooldown para misiones repetibles
+  if (isMissionOnCooldown(mStatus, mission)) {
+    return { success: false, creditsEarned: 0, message: 'Misión en cooldown, espera un poco' };
+  }
+
+  const now = new Date().toISOString();
 
   // Actualizar estado de misión
   await setDoc(statusRef, {
     [missionId]: {
-      completed:   true,
-      count:       mStatus.count + 1,
-      completedAt: new Date().toISOString(),
+      completed:       true,
+      count:           (mStatus.count || 0) + 1,
+      completedAt:     mStatus.completedAt || now,
+      lastCompletedAt: now,
     },
   }, { merge: true });
 
-  // Sumar créditos al usuario
+  // Sumar créditos a topUpCredits (persistentes, no expiran)
   const userRef = doc(db, 'users', userId);
   await updateDoc(userRef, {
-    'credits.available': increment(mission.credits),
+    topUpCredits:        increment(mission.credits),
+    'credits.available': increment(mission.credits), // campo legacy sincronizado
   });
 
   // Registrar transacción
@@ -122,10 +166,54 @@ export async function completeMission(userId: string, missionId: string): Promis
     note:      `Misión completada: ${mission.label}`,
   });
 
-  return { success: true, creditsEarned: mission.credits, message: `+${mission.credits} créditos ganados` };
+  return {
+    success:       true,
+    creditsEarned: mission.credits,
+    message:       `+${mission.credits} créditos ganados`,
+  };
 }
 
-// Se llama cuando un referido se suscribe — suma créditos al referidor
+// ── Auto-verificar misiones automáticas ──────────────────────────────────────
+// Se llama al cargar el perfil — verifica condiciones sin que el usuario haga nada.
+
+export async function autoCheckMissions(
+  userId:        string,
+  emailVerified: boolean,
+): Promise<{ missionId: string; creditsEarned: number }[]> {
+  const earned: { missionId: string; creditsEarned: number }[] = [];
+
+  // verify_email — automática
+  if (emailVerified) {
+    const r = await completeMission(userId, 'verify_email');
+    if (r.success && !r.message.includes('máximo')) {
+      earned.push({ missionId: 'verify_email', creditsEarned: r.creditsEarned });
+    }
+  }
+
+  // daily_login — automática al cargar
+  const r = await completeMission(userId, 'daily_login');
+  if (r.success) {
+    earned.push({ missionId: 'daily_login', creditsEarned: r.creditsEarned });
+  }
+
+  return earned;
+}
+
+// ── Auto-completar primera generación ────────────────────────────────────────
+// Se llama desde cualquier módulo al finalizar una generación exitosa.
+
+export async function checkFirstGeneration(userId: string): Promise<void> {
+  const statusRef = doc(db, 'users', userId, 'missions', 'status');
+  const snap      = await getDoc(statusRef);
+  const current   = snap.exists() ? (snap.data() as UserMissions) : {};
+  if (!current['first_generation'] || current['first_generation'].count === 0) {
+    await completeMission(userId, 'first_generation');
+  }
+}
+
+// ── Créditos por referido exitoso ─────────────────────────────────────────────
+// Se llama cuando un referido hace su primera generación.
+
 export async function addReferralCredits(referrerId: string): Promise<void> {
   await completeMission(referrerId, 'referral');
 }

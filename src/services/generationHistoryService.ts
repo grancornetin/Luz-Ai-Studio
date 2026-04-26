@@ -3,6 +3,8 @@
 // Redis y @upstash/redis viven únicamente en el servidor — nunca aquí.
 
 import { getAuth } from 'firebase/auth';
+import { checkFirstGeneration } from './missionsService';
+import { rewardReferrer } from './referralService';
 
 export interface GenerationRecord {
   id:           string;
@@ -64,6 +66,13 @@ export const generationHistoryService = {
       createdAt: new Date().toISOString(),
     };
     await call('save', { record: newRecord });
+
+    // Auto-disparar misión primera generación y reward de referido (fire-and-forget)
+    const uid = getAuth().currentUser?.uid;
+    if (uid) {
+      checkFirstGeneration(uid).catch(() => {});
+      rewardReferrer(uid).catch(() => {});
+    }
   },
 
   async getAll(limit = 100, offset = 0): Promise<GenerationRecord[]> {

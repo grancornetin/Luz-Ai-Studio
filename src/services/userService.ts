@@ -9,6 +9,7 @@ import {
 import { PLAN_CREDITS } from './creditConfig';
 import type { PlanId } from './creditsService';
 import { resetPeriodIfNeeded, getEffectiveCredits } from './creditsService';
+import { generateReferralCode } from './referralService';
 
 // ── Interfaces exportadas ─────────────────────────────────────────────────────
 
@@ -45,11 +46,14 @@ export const userService = {
       plan:                  'free',
       planValidUntil:        null,
       creditsUsedThisPeriod: 0,
-      topUpCredits:          0,
+      topUpCredits:          20, // créditos iniciales Free
       lastPeriodReset:       serverTimestamp(),
-      // Campo legacy para compatibilidad con missionsService
+      referralCode:          generateReferralCode(uid),
+      referralCount:         0,
+      referredBy:            null,
+      // Campo legacy
       credits: {
-        available: 10,
+        available: 20,
         used:      0,
         plan:      'free',
       },

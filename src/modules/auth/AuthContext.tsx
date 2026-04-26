@@ -8,6 +8,7 @@ import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
 import { userService, UserCredits, UserStats, PLAN_CREDITS } from '../../services/userService';
 import { handleFirestoreError, OperationType } from '../../services/firestoreUtils';
+import { autoCheckMissions } from '../../services/missionsService';
 import { runMigration } from '../../utils/migratePrompts';
 
 export interface UserInterests {
@@ -149,6 +150,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ]);
         setCredits(userCredits);
         setStats(userStats);
+
+        // ── Auto-verificar misiones (fire-and-forget) ──
+        autoCheckMissions(
+          firebaseUser.uid,
+          firebaseUser.emailVerified,
+        ).catch(err => console.warn('[AuthContext] Mission autocheck warning:', err));
 
         // ── Migración localStorage → Firestore (fire-and-forget) ──
         // Se ejecuta una sola vez por usuario gracias al flag en Firestore.
