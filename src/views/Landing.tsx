@@ -275,7 +275,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
   const activeMod = MODULES.find(m => m.id === activeModule) || MODULES[0];
 
   return (
-    <div className="min-h-screen bg-[#06060D] text-white font-sans" style={{ fontFamily: '"DM Sans", sans-serif' }}>
+    <div className="min-h-screen bg-[#06060D] text-white font-sans" style={{ fontFamily: '"DM Sans", sans-serif', overflowX: 'hidden', maxWidth: '100vw' }}>
 
       {/* Google Fonts */}
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" />
@@ -306,13 +306,13 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
       </nav>
 
       {/* ══ HERO ═════════════════════════════════════════════════════════════════ */}
-      <section className="relative min-h-[100dvh] flex items-center overflow-hidden" style={{ padding: '0 6vw' }}>
+      <section className="relative min-h-[100dvh] flex items-center overflow-hidden" style={{ padding: '0 5vw', maxWidth: '100vw' }}>
         {/* Ambient glows */}
         <div className="absolute pointer-events-none" style={{ top: '20%', right: '8%', width: 600, height: 700, background: 'radial-gradient(ellipse,rgba(124,58,237,0.14) 0%,rgba(247,44,91,0.07) 40%,transparent 70%)', zIndex: 0 }} />
         <div className="absolute pointer-events-none" style={{ top: '30%', left: '-5%', width: 400, height: 500, background: 'radial-gradient(ellipse,rgba(124,58,237,0.1),transparent 65%)', zIndex: 0 }} />
 
         {/* ─ TEXT BOX (fixed width layer) ─ */}
-        <div className="relative z-10 flex-shrink-0 w-full max-w-[540px]" style={{ padding: '140px 0 100px' }}>
+        <div className="relative z-10 flex-shrink-0 w-full" style={{ maxWidth: 'min(540px, 100%)', padding: '140px 0 100px' }}>
 
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border mb-7" style={{ background: 'rgba(124,58,237,0.12)', borderColor: 'rgba(124,58,237,0.3)', fontSize: 10, fontWeight: 700, color: 'rgba(232,121,249,0.9)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>
@@ -321,7 +321,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
           </div>
 
           {/* H1 — each line is nowrap, font-size forces fit */}
-          <h1 style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', textTransform: 'uppercase', lineHeight: 0.94, letterSpacing: '-0.04em', marginBottom: 24, fontSize: 48, whiteSpace: 'nowrap' }}>
+          <h1 style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', textTransform: 'uppercase', lineHeight: 0.94, letterSpacing: '-0.04em', marginBottom: 24, fontSize: 'clamp(32px, 11vw, 72px)', whiteSpace: 'normal', overflowWrap: 'break-word', wordBreak: 'break-word' }}>
             <div>Crea</div>
             <div style={{ background: 'linear-gradient(135deg,#E879F9,#F72C5B)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Contenido</div>
             <div style={{ color: 'rgba(242,240,250,0.28)' }}>Que Vende</div>
@@ -347,6 +347,11 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
               </span>
             ))}
           </div>
+        </div>
+
+        {/* ─ MOBILE BACKGROUND — hero image behind text ─ */}
+        <div className="lg:hidden absolute inset-0 z-0" style={{ backgroundImage: `url(${IMG('hero_h7.jpg')})`, backgroundSize: 'cover', backgroundPosition: 'center top' }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(105deg, rgba(6,6,13,0.93) 0%, rgba(6,6,13,0.82) 50%, rgba(6,6,13,0.45) 100%)' }} />
         </div>
 
         {/* ─ PHONE CARDS (right side, desktop only) ─ */}
@@ -380,7 +385,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
       </section>
 
       {/* ══ MARQUEE ══════════════════════════════════════════════════════════════ */}
-      <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', borderBottom: '1px solid rgba(255,255,255,0.07)', background: '#0D0D18', padding: '18px 0', overflow: 'hidden' }}>
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', borderBottom: '1px solid rgba(255,255,255,0.07)', background: '#0D0D18', padding: '18px 0', overflow: 'hidden', maxWidth: '100vw' }}>
         <div style={{ display: 'flex', width: 'max-content', animation: 'mq 22s linear infinite' }}>
           {[...Array(2)].map((_, rep) => (
             ['Model DNA','AI Generator','Content Studio Pro','Scene Clone','Outfit Kit · Ghost Mannequin','Product Studio','Identity Lock System','Gemini Imagen 4'].map((item, i) => (
@@ -391,7 +396,15 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
             ))
           ))}
         </div>
-        <style>{`@keyframes mq{from{transform:translateX(0)}to{transform:translateX(-50%)}}`}</style>
+        <style>{`
+        @keyframes mq{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+        * { box-sizing: border-box; }
+        body, html { overflow-x: hidden; max-width: 100vw; }
+        @media (max-width: 768px) {
+          .module-panel-grid { grid-template-columns: 1fr !important; }
+          .hero-text-box { max-width: 100% !important; }
+        }
+      `}</style>
       </div>
 
       {/* ══ MODULES ══════════════════════════════════════════════════════════════ */}
@@ -411,7 +424,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
           </div>
 
           {/* Tab buttons */}
-          <div className="flex gap-2 flex-wrap mb-1">
+          <div className="flex gap-2 mb-1" style={{ overflowX: 'auto', flexWrap: 'wrap', WebkitOverflowScrolling: 'touch', paddingBottom: 4 }}>
             {MODULES.map(mod => (
               <button key={mod.id} onClick={() => setActiveModule(mod.id)}
                 className="flex items-center gap-2 rounded-full font-black text-[11px] uppercase tracking-[0.1em] transition-all"
@@ -433,10 +446,10 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
           {/* Panel */}
           <div style={{ background: '#0D0D18', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 24, overflow: 'hidden', animation: 'panIn 0.35s cubic-bezier(0.4,0,0.2,1)' }}>
             <style>{`@keyframes panIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
-            <div className="grid" style={{ gridTemplateColumns: '260px 1fr', minHeight: 480 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', minHeight: 'auto' }}>
 
               {/* Info column */}
-              <div style={{ padding: '36px 28px', borderRight: '1px solid rgba(255,255,255,0.07)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div style={{ padding: '28px 20px', borderRight: 'none', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 16 }}>
                 <div>
                   <div style={{ width: 44, height: 44, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, marginBottom: 16, background: activeMod.accentBg }}>
                     <i className={`fa-solid ${activeMod.icon}`} style={{ color: activeMod.accent }} />
@@ -458,7 +471,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
               </div>
 
               {/* Gallery column */}
-              <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16, overflow: 'hidden' }}>
+              <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 14, overflow: 'hidden' }}>
 
                 {/* Prompt block (AI Generator only) */}
                 {'prompt' in activeMod && (
@@ -484,7 +497,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
                     <div className="flex gap-2.5">
                       {activeMod.refs.map(ref => (
                         <div key={ref.label} onClick={() => openLB(ref.src)} className="flex-1 relative rounded-xl overflow-hidden cursor-pointer transition-all hover:scale-[1.02] border" style={{ border: '1px solid rgba(255,255,255,0.08)', minWidth: 0 }}>
-                          <img src={ref.src} alt={ref.label} className="w-full block object-cover" style={{ height: activeMod.id === 'studio' ? 130 : 180, objectFit: activeMod.id === 'studio' && ref.label === 'Producto' ? 'contain' : 'cover', background: ref.label === 'Producto' ? '#14141F' : undefined, padding: ref.label === 'Producto' ? 8 : undefined }} loading="lazy" />
+                          <img src={ref.src} alt={ref.label} className="w-full block object-cover" style={{ height: activeMod.id === 'studio' ? 110 : 150, objectFit: activeMod.id === 'studio' && ref.label === 'Producto' ? 'contain' : 'cover', background: ref.label === 'Producto' ? '#14141F' : undefined, padding: ref.label === 'Producto' ? 8 : undefined }} loading="lazy" />
                           <div style={{ position: 'absolute', top: 6, left: 6, background: 'rgba(0,0,0,0.75)', borderRadius: 5, padding: '2px 7px', fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.55)' }}>{ref.label}</div>
                         </div>
                       ))}
@@ -511,7 +524,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
                           minWidth: 0,
                         }}
                       >
-                        <img src={res.src} alt={res.label} className="w-full block object-cover" style={{ height: activeMod.id === 'product' ? 160 : 200 }} loading="lazy" />
+                        <img src={res.src} alt={res.label} className="w-full block object-cover" style={{ height: activeMod.id === 'product' ? 130 : 160 }} loading="lazy" />
                         <div style={{ position: 'absolute', top: 6, left: 6, background: 'rgba(247,44,91,0.75)', borderRadius: 5, padding: '2px 7px', fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'white' }}>{res.label}</div>
                       </div>
                     ))}
@@ -528,8 +541,8 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
         <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-px" style={{ background: 'rgba(255,255,255,0.07)' }}>
           {[['6','Módulos especializados'],['∞','Identidades posibles'],['5x','Más rápido que un estudio'],['100%','Coherencia de identidad']].map(([n, l]) => (
             <div key={l} style={{ background: '#0D0D18', padding: '36px 28px', textAlign: 'center' }}>
-              <div style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', fontSize: 'clamp(36px,5vw,64px)', letterSpacing: '-0.04em', lineHeight: 1, background: 'linear-gradient(135deg,#E879F9,#F72C5B)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', marginBottom: 8 }}>{n}</div>
-              <div style={{ fontSize: 11, fontWeight: 500, color: 'rgba(242,240,250,0.40)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{l}</div>
+              <div style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', fontSize: 'clamp(28px,7vw,60px)', letterSpacing: '-0.03em', lineHeight: 1, background: 'linear-gradient(135deg,#E879F9,#F72C5B)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', marginBottom: 8 }}>{n}</div>
+              <div style={{ fontSize: 10, fontWeight: 500, color: 'rgba(242,240,250,0.40)', textTransform: 'uppercase', letterSpacing: '0.08em', lineHeight: 1.3 }}>{l}</div>
             </div>
           ))}
         </div>
@@ -594,7 +607,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
           </div>
 
           {/* Plans grid */}
-          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(5,1fr)' }}>
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
             {LANDING_PLANS.map(plan => {
               const price = billingAnnual && plan.priceAnnual !== null ? plan.priceAnnual : plan.priceMonthly;
               const [whole, cents] = price === 0 ? ['0', null] : String(price.toFixed(2)).split('.');
