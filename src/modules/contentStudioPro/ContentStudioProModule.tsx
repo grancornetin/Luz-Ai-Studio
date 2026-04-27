@@ -53,8 +53,8 @@ const MAX_BATCH_SIZE = 5;
 const MIN_BATCH_SIZE = 2;
 
 // Reintentos automáticos
-const AUTO_RETRY_ATTEMPTS = 3;
-const AUTO_RETRY_DELAY_MS = 2000;
+const AUTO_RETRY_ATTEMPTS = 1;   // reducido de 3 → 1 para evitar 429 por reintentos en cadena
+const AUTO_RETRY_DELAY_MS = 3000; // aumentado a 3s para dar tiempo a que Gemini se recupere
 
 interface BatchSession {
   id: string;
@@ -156,9 +156,15 @@ const ContentStudioProModule: React.FC = () => {
     setShotCount(newCount);
   }, [focus, productSize]);
 
+  // Análisis de relevancia con debounce 2s — evita múltiples llamadas a Gemini
+  // cuando el usuario sube varias referencias seguidas o en móvil con re-renders
   useEffect(() => {
-    const checkProductRelevance = async () => {
-      if ((focus === 'OUTFIT' || focus === 'SCENE') && productRef) {
+    if (!(focus === 'OUTFIT' || focus === 'SCENE') || !productRef) {
+      setShowProductWarning(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
         const result = await analyzeProductRelevance(productRef, focus, outfitRef, sceneRef, sceneText);
         if (!result.isRelevant && isProductComplement) {
           setShowProductWarning(true);
@@ -166,9 +172,9 @@ const ContentStudioProModule: React.FC = () => {
         } else {
           setShowProductWarning(false);
         }
-      }
-    };
-    checkProductRelevance();
+      } catch { /* silencioso — no crítico */ }
+    }, 2000);
+    return () => clearTimeout(timer);
   }, [productRef, outfitRef, sceneRef, sceneText, focus, isProductComplement]);
 
   // Handlers para slots

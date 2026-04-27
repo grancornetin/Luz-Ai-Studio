@@ -16,7 +16,7 @@
 const API_URL     = '/api/gemini/image';
 const POLL_INTERVAL_MS   = 2000;   // 2 s entre polls
 const MAX_POLL_ATTEMPTS  = 90;     // 90 × 2 s = 3 minutos máximo
-const MAX_SILENT_RETRIES = 1;      // 1 reintento — solo Flash, sin fallback a Pro
+const MAX_SILENT_RETRIES = 1;      // 1 intento total (sin retry silencioso) — evita 429 acumulado
 
 export type ImageJobStatus = 'pending' | 'processing' | 'retrying' | 'completed' | 'failed';
 
@@ -86,6 +86,21 @@ async function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// Convierte mensajes técnicos de la API en mensajes amigables para el usuario
+function friendlyApiError(raw: string): string {
+  const msg = (raw || '').toLowerCase();
+  if (msg.includes('429') || msg.includes('quota') || msg.includes('resource_exhausted') || msg.includes('resource has been exhausted') || msg.includes('exhausted')) {
+    return 'Espera un momento — demasiadas solicitudes. Intenta de nuevo en unos segundos.';
+  }
+  if (msg.includes('timeout') || msg.includes('timed out')) {
+    return 'La generación tardó demasiado. Intenta de nuevo.';
+  }
+  if (msg.includes('content') && (msg.includes('filter') || msg.includes('block') || msg.includes('policy'))) {
+    return 'El contenido fue bloqueado por las políticas de la IA. Ajusta el prompt e intenta de nuevo.';
+  }
+  return raw; // mensaje original si no hay traducción
+}
+
 // ─── Función principal ────────────────────────────────────────────────────────
 
 async function generateImageOnce(params: GenerateImageParams): Promise<string> {
@@ -100,7 +115,7 @@ async function generateImageOnce(params: GenerateImageParams): Promise<string> {
     params.onStatusChange?.(job.status as ImageJobStatus, job.image, shotIndex ?? job.shotIndex);
 
     if (job.status === 'completed' && job.image) return job.image;
-    if (job.status === 'failed')   throw new Error(job.error || 'Image generation failed');
+    if (job.status === 'failed')   throw new Error(friendlyApiError(job.error || 'Image generation failed'));
   }
 
   throw new Error(`Image generation timeout after ${MAX_POLL_ATTEMPTS * POLL_INTERVAL_MS / 1000}s`);
@@ -119,11 +134,6 @@ export const imageApiService = {
 
     for (let retry = 0; retry < MAX_SILENT_RETRIES; retry++) {
       try {
-        if (retry > 0) {
-          console.log(`[ImageAPI] Silent retry ${retry}/${MAX_SILENT_RETRIES - 1} for ${params.module || 'unknown'}`);
-          params.onStatusChange?.('retrying', undefined, params.shotIndex);
-          await sleep(1500); // pequeña pausa antes de reintentar
-        }
         return await generateImageOnce(params);
       } catch (err: any) {
         lastError = err;

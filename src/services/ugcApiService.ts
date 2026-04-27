@@ -1,6 +1,20 @@
 // src/services/ugcApiService.ts
 // Servicio cliente para comunicarse con /api/gemini/ugc
 
+function friendlyApiError(raw: string): string {
+  const msg = (raw || '').toLowerCase();
+  if (msg.includes('429') || msg.includes('quota') || msg.includes('resource_exhausted') || msg.includes('resource has been exhausted') || msg.includes('exhausted')) {
+    return 'Espera un momento — demasiadas solicitudes. Intenta de nuevo en unos segundos.';
+  }
+  if (msg.includes('timeout') || msg.includes('timed out')) {
+    return 'La generación tardó demasiado. Intenta de nuevo.';
+  }
+  if (msg.includes('content') && (msg.includes('filter') || msg.includes('block') || msg.includes('policy'))) {
+    return 'El contenido fue bloqueado por las políticas de la IA. Ajusta el prompt e intenta de nuevo.';
+  }
+  return raw;
+}
+
 export interface REF0Analysis {
   lighting: {
     primarySource: string;
@@ -95,7 +109,7 @@ class UGCApiService {
 
     if (!startResponse.ok) {
       const errorText = await startResponse.text();
-      throw new Error(`Failed to start generation: ${startResponse.status} - ${errorText}`);
+      throw new Error(friendlyApiError(`Failed to start generation: ${startResponse.status} - ${errorText}`));
     }
 
     const { jobId, shotIndex } = await startResponse.json();
@@ -137,7 +151,7 @@ class UGCApiService {
       }
 
       if (job.status === 'failed') {
-        throw new Error(`Generation failed: ${job.error}`);
+        throw new Error(friendlyApiError(job.error || 'Generation failed'));
       }
 
       attempts++;
@@ -209,7 +223,7 @@ class UGCApiService {
       }
 
       if (job.status === 'failed') {
-        throw new Error(`Generation failed: ${job.error}`);
+        throw new Error(friendlyApiError(job.error || 'Generation failed'));
       }
 
       attempts++;

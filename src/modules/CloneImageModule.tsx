@@ -263,16 +263,17 @@ export default function CloneImageModule() {
     cloneMasterStorage.listSessions().then(setSessions).catch(() => {});
   }, []);
 
-  // --- Lógica de análisis de productos ---
+  // --- Análisis de escena con debounce 1.5s para evitar llamadas duplicadas en móvil ---
   useEffect(() => {
     if (!targetImage) return;
-    setAnalyzingTarget(true);
-    analyzeScene(targetImage)
-      .then(products => {
-        setDetectedProducts(products);
-      })
-      .catch(err => console.warn("Error analyzing scene:", err))
-      .finally(() => setAnalyzingTarget(false));
+    const timer = setTimeout(() => {
+      setAnalyzingTarget(true);
+      analyzeScene(targetImage)
+        .then(products => { setDetectedProducts(products); })
+        .catch(err => console.warn("Error analyzing scene:", err))
+        .finally(() => setAnalyzingTarget(false));
+    }, 1500);
+    return () => clearTimeout(timer); // cleanup evita disparo si imagen cambia rápido
   }, [targetImage]);
 
   const updateProductReplacement = (productId: string, imageBase64: string | null) => {
