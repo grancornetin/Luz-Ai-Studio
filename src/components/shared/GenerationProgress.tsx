@@ -17,6 +17,8 @@ interface GenerationProgressProps {
   completedShots?: CompletedShot[];
   totalShots?: number;
   etaSeconds?: number;
+  autoRetryCount?: number;    // 0 = intento inicial, 1 = primer reintento, etc.
+  maxAutoRetries?: number;
 }
 
 export const GenerationProgress: React.FC<GenerationProgressProps> = ({
@@ -25,6 +27,8 @@ export const GenerationProgress: React.FC<GenerationProgressProps> = ({
   completedShots = [],
   totalShots = 0,
   etaSeconds = 0,
+  autoRetryCount = 0,
+  maxAutoRetries = 1,
 }) => {
   const safeIndex = Math.min(currentStepIndex, steps.length - 1);
   const percent = steps.length > 0 ? ((safeIndex + 1) / steps.length) * 100 : 0;
@@ -81,6 +85,11 @@ export const GenerationProgress: React.FC<GenerationProgressProps> = ({
                 {status === 'active' && etaSeconds > 0 && (
                   <p className="text-[10px] text-slate-400 mt-0.5 font-medium">
                     ~{etaMinutes > 0 ? `${etaMinutes}m ` : ''}{etaRemSecs}s restantes
+                  </p>
+                )}
+                {status === 'active' && autoRetryCount > 0 && (
+                  <p className="text-[10px] text-amber-500 mt-0.5 font-bold animate-pulse">
+                    Reintentando ({autoRetryCount}/{maxAutoRetries})...
                   </p>
                 )}
               </div>

@@ -99,7 +99,7 @@ const PromptStudioView: React.FC = () => {
                 </h1>
               </div>
               <p className="text-sm md:text-lg font-bold text-slate-400 uppercase tracking-widest max-w-2xl leading-relaxed">
-                Visual Prompt Engineering · DNA Lock · IA Generativa
+                Generador de imágenes con IA · Control creativo profesional
               </p>
               <div className="flex gap-3">
                 <button

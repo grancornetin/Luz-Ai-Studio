@@ -29,6 +29,8 @@ import { GenerateButton } from '../components/shared/GenerateButton';
 import { useModelSelection } from '../hooks/useModelSelection';
 import { useAuth } from '../modules/auth/AuthContext';
 import { GenerationProgress, type ProgressStep } from '../components/shared/GenerationProgress';
+import { ErrorDisplay, toAppError, type AppError } from '../components/shared/ErrorDisplay';
+import { REFUNDABLE_ERRORS } from '../services/imageApiService';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -237,11 +239,12 @@ export default function CloneImageModule() {
   const [finalImage, setFinalImage] = useState<string | null>(null);
   
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
+  const [creditsRefunded, setCreditsRefunded] = useState(false);
 
   const CLONE_STEPS: ProgressStep[] = [
     { id: 'analyze', label: 'Analizando escena y geometría' },
-    { id: 'biolock', label: 'Inyectando identidad (Bio-Lock)' },
+    { id: 'biolock', label: 'Reconociendo identidad facial' },
     { id: 'synth',   label: 'Sintetizando composición' },
   ];
   const [cloneStepIndex, setCloneStepIndex] = useState(0);
@@ -311,12 +314,13 @@ export default function CloneImageModule() {
     }
   }
 
-  const { checkAndDeduct, showNoCredits, requiredCredits, closeModal } = useCreditGuard();
+  const { checkAndDeduct, showNoCredits, requiredCredits, closeModal, refundCredits } = useCreditGuard();
 
   async function handleGenerateBase() {
     const ok = await checkAndDeduct(CREDIT_COSTS.CLONE_IMAGE);
     if (!ok) return;
     setError(null);
+    setCreditsRefunded(false);
     setLoading(true);
 
     // Iniciar progreso narrado
@@ -382,7 +386,12 @@ export default function CloneImageModule() {
 
       setStep(4);
     } catch (e: any) {
-      setError(e?.message || "Error al generar.");
+      const appErr = toAppError(e);
+      setError(appErr);
+      if (REFUNDABLE_ERRORS.has(appErr.code as any)) {
+        const refunded = await refundCredits(CREDIT_COSTS.CLONE_IMAGE);
+        setCreditsRefunded(refunded);
+      }
     } finally {
       // Limpiar timers de progreso
       if (cloneEtaRef.current) { clearInterval(cloneEtaRef.current); cloneEtaRef.current = null; }
@@ -397,6 +406,7 @@ export default function CloneImageModule() {
   async function handleApplyOutfitsAndProducts() {
     if (!baseComposition) return;
     setError(null);
+    setCreditsRefunded(false);
     setLoading(true);
 
     try {
@@ -455,7 +465,7 @@ export default function CloneImageModule() {
         return updated;
       });
     } catch (e: any) {
-      setError(e?.message || "Error al aplicar cambios.");
+      setError(toAppError(e));
     } finally {
       setLoading(false);
     }
@@ -532,6 +542,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
     setReplaceOutfit2(false);
     setDetectedProducts([]);
     setError(null);
+    setCreditsRefunded(false);
     setMaxStep(1);
   };
 
@@ -545,7 +556,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
           <div className="text-center md:text-left">
             <h1 className="t-display text-3xl md:text-4xl text-slate-900">Scene <span className="text-brand-600">Clone</span></h1>
             <div className="flex items-center justify-center md:justify-start gap-2 mt-1">
-              <p className="text-slate-500 font-bold uppercase text-[8px] md:text-[10px] tracking-[0.3em] italic">Clonación de escenas · Identity Lock</p>
+              <p className="text-slate-500 font-bold uppercase text-[8px] md:text-[10px] tracking-[0.3em] italic">Clonar escenas · Coherencia facial <span className="normal-case font-medium text-slate-400 text-[8px]">(Scene Clone)</span></p>
               <ModuleTutorial moduleId="sceneClone" steps={TUTORIAL_CONFIGS.sceneClone} />
             </div>
           </div>
@@ -791,9 +802,12 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
               )}
 
               {error && (
-                <div className="p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-xs font-medium animate-in fade-in">
-                  <i className="fa-solid fa-circle-exclamation mr-2"></i> {error}
-                </div>
+                <ErrorDisplay
+                  error={error}
+                  creditsRefunded={creditsRefunded}
+                  onRetry={step === 3 ? handleGenerateBase : handleApplyOutfitsAndProducts}
+                  onDismiss={() => setError(null)}
+                />
               )}
 
             </section>

@@ -20,6 +20,71 @@ const MAX_SILENT_RETRIES = 1;      // 1 intento total (sin retry silencioso) —
 
 export type ImageJobStatus = 'pending' | 'processing' | 'retrying' | 'completed' | 'failed';
 
+// ─── Códigos de error estandarizados ─────────────────────────────────────────
+
+export enum ErrorCode {
+  NO_CREDITS       = 'NO_CREDITS',
+  INVALID_IMAGE    = 'INVALID_IMAGE',
+  FACE_NOT_DETECTED = 'FACE_NOT_DETECTED',
+  CONTENT_BLOCKED  = 'CONTENT_BLOCKED',
+  TIMEOUT          = 'TIMEOUT',
+  SERVER_ERROR     = 'SERVER_ERROR',
+  RATE_LIMIT       = 'RATE_LIMIT',
+  UNKNOWN          = 'UNKNOWN',
+}
+
+/** Errores imputables al sistema (se reembolsan créditos) */
+export const REFUNDABLE_ERRORS = new Set<ErrorCode>([
+  ErrorCode.SERVER_ERROR,
+  ErrorCode.TIMEOUT,
+  ErrorCode.RATE_LIMIT,
+]);
+
+export interface AppError {
+  message: string;
+  code: ErrorCode;
+}
+
+/** Convierte un mensaje de error crudo en un AppError con código clasificado */
+export function parseErrorCode(raw: string): AppError {
+  const lower = (raw || '').toLowerCase();
+
+  // Intentar extraer JSON de la API
+  try {
+    const parsed = JSON.parse(raw);
+    const code = parsed?.error?.code ?? parsed?.code;
+    const msg  = parsed?.error?.message ?? parsed?.message ?? '';
+    if (code === 429 || String(code) === '429') {
+      return { code: ErrorCode.RATE_LIMIT, message: 'Demasiadas solicitudes simultáneas. Espera unos segundos e intenta de nuevo.' };
+    }
+    if (msg) return parseErrorCode(msg); // recursión con el mensaje extraído
+  } catch { /* no es JSON */ }
+
+  if (lower.includes('429') || lower.includes('quota') || lower.includes('resource_exhausted') || lower.includes('exhausted')) {
+    return { code: ErrorCode.RATE_LIMIT, message: 'Demasiadas solicitudes simultáneas. Espera unos segundos e intenta de nuevo.' };
+  }
+  if (lower.includes('timeout') || lower.includes('timed out')) {
+    return { code: ErrorCode.TIMEOUT, message: 'La generación tardó demasiado. Puedes reintentar — tus créditos serán reembolsados.' };
+  }
+  if (lower.includes('face') || lower.includes('rostro') || lower.includes('no face') || lower.includes('face not detected')) {
+    return { code: ErrorCode.FACE_NOT_DETECTED, message: 'No se detectó un rostro claro en la foto. Prueba con otra imagen donde el rostro sea visible de frente.' };
+  }
+  if (lower.includes('content') && (lower.includes('filter') || lower.includes('block') || lower.includes('policy') || lower.includes('safety'))) {
+    return { code: ErrorCode.CONTENT_BLOCKED, message: 'El contenido fue bloqueado por las políticas de seguridad de la IA. Ajusta el prompt o la imagen de referencia.' };
+  }
+  if (lower.includes('invalid image') || lower.includes('unsupported') || lower.includes('corrupt') || lower.includes('bad image')) {
+    return { code: ErrorCode.INVALID_IMAGE, message: 'La imagen no es válida o no puede procesarse. Sube otra imagen en formato JPG o PNG.' };
+  }
+  if (lower.includes('credit') || lower.includes('crédito') || lower.includes('insufficient')) {
+    return { code: ErrorCode.NO_CREDITS, message: 'No tienes suficientes créditos para esta generación.' };
+  }
+  if (lower.includes('500') || lower.includes('internal server') || lower.includes('server error') || lower.includes('failed to start')) {
+    return { code: ErrorCode.SERVER_ERROR, message: 'Error interno del servidor. Tus créditos serán reembolsados automáticamente. Intenta de nuevo.' };
+  }
+
+  return { code: ErrorCode.UNKNOWN, message: raw || 'Ocurrió un error inesperado. Intenta de nuevo.' };
+}
+
 export type ModelId = 'gemini' | 'seedream';
 
 export interface GenerateImageParams {
@@ -57,7 +122,10 @@ async function startJob(params: GenerateImageParams): Promise<{ jobId: string; s
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(`Failed to start image job: ${res.status} ${text}`);
+    const appErr = parseErrorCode(`${res.status} ${text}`);
+    const err = new Error(appErr.message) as any;
+    err.code = appErr.code;
+    throw err;
   }
 
   return res.json();
@@ -127,10 +195,17 @@ async function generateImageOnce(params: GenerateImageParams): Promise<string> {
     params.onStatusChange?.(job.status as ImageJobStatus, job.image, shotIndex ?? job.shotIndex);
 
     if (job.status === 'completed' && job.image) return job.image;
-    if (job.status === 'failed')   throw new Error(friendlyApiError(job.error || 'Image generation failed'));
+    if (job.status === 'failed') {
+      const appErr = parseErrorCode(job.error || 'Image generation failed');
+      const err = new Error(appErr.message) as any;
+      err.code = appErr.code;
+      throw err;
+    }
   }
 
-  throw new Error(`Image generation timeout after ${MAX_POLL_ATTEMPTS * POLL_INTERVAL_MS / 1000}s`);
+  const timeoutErr = new Error(`La generación tardó demasiado. Tus créditos serán reembolsados automáticamente.`) as any;
+  timeoutErr.code = ErrorCode.TIMEOUT;
+  throw timeoutErr;
 }
 
 // ─── API pública ──────────────────────────────────────────────────────────────

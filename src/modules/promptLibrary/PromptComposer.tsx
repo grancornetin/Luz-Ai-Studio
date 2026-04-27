@@ -15,7 +15,8 @@ import NoCreditsModal from '../../components/shared/NoCreditsModal';
 import { usePromptComposer } from './hooks/usePromptComposer';
 import { PromptDNA } from './types/promptTypes';
 
-import { AlertCircle, Sparkles, ChevronDown, Zap, Megaphone, Images, Info } from 'lucide-react';
+import { Sparkles, ChevronDown, Zap, Megaphone, Images, Info } from 'lucide-react';
+import { ErrorDisplay } from '../../components/shared/ErrorDisplay';
 import { ModelSelector } from '../../components/shared/ModelSelector';
 import { useAuth } from '../../modules/auth/AuthContext';   // ✅ Ruta corregida
 import { imageCost } from '../../services/creditConfig';
@@ -148,10 +149,10 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
                 </div>
                 <div>
                   <h2 className="t-display text-xl text-slate-800">
-                    Prompt Composer
+                    Editor de prompts
                   </h2>
-                  <p className="t-meta mt-1">
-                    Visual Prompt Engineering Studio
+                  <p className="t-meta mt-1 text-slate-400">
+                    Control creativo profesional <span className="text-slate-300 text-[9px] normal-case">(Prompt Composer)</span>
                   </p>
                 </div>
               </header>
@@ -181,10 +182,11 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
                 )}
 
                 {error && outputMode === 'standard' && (
-                  <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3 text-red-600">
-                    <AlertCircle className="w-5 h-5" />
-                    <p className="t-body-sm text-red-600">{error}</p>
-                  </div>
+                  <ErrorDisplay
+                    error={{ message: error }}
+                    onRetry={generate}
+                    onDismiss={() => {}}
+                  />
                 )}
               </div>
             </section>
@@ -209,7 +211,7 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
               >
                 <div className="flex items-center gap-2">
                   <span className="t-meta text-slate-500">
-                    Advanced Prompt Structure
+                    Estructura avanzada <span className="text-slate-300 text-[9px] normal-case font-medium">(DNA)</span>
                   </span>
                   <div className="group relative">
                     <Info className="w-3.5 h-3.5 text-slate-400 cursor-help" />

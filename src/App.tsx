@@ -54,7 +54,7 @@ const PLAN_STYLES: Record<string, { label: string; className: string }> = {
 
 const MENU_GROUPS = [
   {
-    label: 'Crear Identidad',
+    label: 'Crear modelo digital',
     icon: 'fa-dna',
     items: [
       { path: '/crear/clonar',  label: 'Modelo desde fotos',  sublabel: 'Model DNA',     icon: 'fa-camera' },
@@ -63,7 +63,7 @@ const MENU_GROUPS = [
     ]
   },
   {
-    label: 'Generar Contenido',
+    label: 'Generar contenido',
     icon: 'fa-wand-magic-sparkles',
     items: [
       { path: '/prompt-studio',   label: 'Generador con IA',    sublabel: 'Prompt Studio',  icon: 'fa-wand-magic-sparkles' },
@@ -121,10 +121,10 @@ const LoginWall: React.FC<{ onOpen: () => void }> = ({ onOpen }) => {
         </div>
         <div className="grid grid-cols-2 gap-3 text-left">
           {[
-            { icon: 'fa-wand-magic-sparkles', label: 'AI Generator',   color: 'bg-indigo-50 text-indigo-600' },
-            { icon: 'fa-dna',                 label: 'Model DNA',       color: 'bg-purple-50 text-purple-600' },
-            { icon: 'fa-clone',               label: 'Scene Clone',     color: 'bg-blue-50 text-blue-600' },
-            { icon: 'fa-mobile-screen-button', label: 'Content Studio', color: 'bg-emerald-50 text-emerald-600' },
+            { icon: 'fa-wand-magic-sparkles', label: 'Generador con IA',    color: 'bg-indigo-50 text-indigo-600' },
+            { icon: 'fa-dna',                 label: 'Crear modelo',         color: 'bg-purple-50 text-purple-600' },
+            { icon: 'fa-clone',               label: 'Clonar escena',        color: 'bg-blue-50 text-blue-600' },
+            { icon: 'fa-mobile-screen-button', label: 'Contenido para redes', color: 'bg-emerald-50 text-emerald-600' },
           ].map((item, i) => (
             <div key={i} className="bg-white p-4 rounded-2xl border border-slate-100 flex items-center gap-3">
               <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${item.color}`}>

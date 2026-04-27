@@ -96,7 +96,7 @@ const PromptLibraryModule: React.FC = () => {
               </div>
 
               <p className="text-sm md:text-lg font-bold text-slate-400 uppercase tracking-widest max-w-2xl leading-relaxed">
-                Visual Prompt Engineering & Community DNA.
+                Generador con IA · Galería de la comunidad.
               </p>
 
               <ModuleTutorial moduleId="aiGenerator" steps={TUTORIAL_CONFIGS.aiGenerator} label="¿Cómo funciona?" />

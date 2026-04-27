@@ -358,10 +358,10 @@ const OutfitExtractorModule: React.FC = () => {
         <header className="flex flex-col md:flex-row items-center justify-between gap-4 px-4 pt-2">
           <div className="text-center md:text-left">
             <button onClick={reset} className="group">
-              <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none hover:text-brand-600 transition-colors">Outfit <span className="text-brand-600 group-hover:text-slate-900">Kit</span></h1>
+              <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none hover:text-brand-600 transition-colors">Extraer <span className="text-brand-600 group-hover:text-slate-900">prendas</span></h1>
             </button>
             <div className="flex items-center justify-center md:justify-start gap-2 mt-1">
-              <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em] italic">Extractor de prendas · Ghost Render</p>
+              <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em] italic">Extractor de prendas · Render de ropa <span className="normal-case font-medium text-slate-300 text-[8px]">(Outfit Extractor)</span></p>
               <ModuleTutorial moduleId="outfitKit" steps={TUTORIAL_CONFIGS.outfitKit} />
             </div>
           </div>
@@ -415,8 +415,8 @@ const OutfitExtractorModule: React.FC = () => {
                 </div>
                 <div className="hidden lg:col-span-7 lg:flex flex-col items-center justify-center text-center p-12 bg-slate-900 rounded-[64px] border-8 border-slate-800 shadow-2xl space-y-8">
                   <i className="fa-solid fa-shirt text-white/5 text-8xl"></i>
-                  <h3 className="text-white text-2xl font-black uppercase italic tracking-tighter">Motor Vertex AI</h3>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.4em] max-w-xs leading-relaxed">Aísla productos con fidelidad 2K usando referencias visuales.</p>
+                  <h3 className="text-white text-2xl font-black uppercase italic tracking-tighter">Análisis de prendas</h3>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.4em] max-w-xs leading-relaxed">Aísla y renderiza cada prenda con fidelidad profesional.</p>
                 </div>
               </div>
             )}

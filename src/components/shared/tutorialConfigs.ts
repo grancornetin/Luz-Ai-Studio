@@ -20,15 +20,15 @@ export const TUTORIAL_CONFIGS: Record<string, TutorialStep[]> = {
     {
       icon: 'fa-camera',
       color: 'bg-purple-600 text-white',
-      title: 'Model DNA · From Photos',
-      description: 'Si tienes fotos reales de una persona, el módulo "Model DNA · Fotos" extrae su ADN biométrico digital y genera el set técnico automáticamente.',
+      title: 'Crear modelo desde fotos',
+      description: 'Si tienes fotos reales de una persona, el módulo "Crear modelo desde fotos" extrae su identidad digital y genera el set técnico automáticamente.',
       tip: 'Funciona mejor con 2-3 fotos de buena luz, de frente y perfil.',
     },
     {
       icon: 'fa-sliders',
       color: 'bg-violet-600 text-white',
-      title: 'Model DNA · From Scratch',
-      description: 'Si necesitas una identidad completamente nueva, "Model DNA · Manual" te permite configurar género, etnia, edad, complexión y personalidad para crear un avatar desde cero.',
+      title: 'Crear modelo desde cero',
+      description: 'Si necesitas una identidad completamente nueva, "Crear modelo desde cero" te permite configurar género, etnia, edad, complexión y personalidad para diseñar un modelo propio.',
     },
     {
       // PUNTO 6 FIXED: texto honesto sobre integración manual
@@ -89,8 +89,8 @@ export const TUTORIAL_CONFIGS: Record<string, TutorialStep[]> = {
     {
       icon: 'fa-ghost',
       color: 'bg-slate-700 text-white',
-      title: 'Paso 2 — Ghost Mannequin',
-      description: 'Selecciona qué prendas quieres renderizar. La IA genera imágenes tipo "ghost mannequin": la prenda aparece llena de forma 3D, como si la llevara una persona invisible, sobre fondo blanco.',
+      title: 'Paso 2 — Render de prendas',
+      description: 'Selecciona qué prendas quieres renderizar. La IA genera imágenes con la prenda en volumen 3D, como si la llevara una persona invisible, sobre fondo blanco. Estilo Ghost Mannequin.',
       tip: 'Este estilo es el estándar en e-commerce. Ideal para catálogos y fichas de producto.',
     },
     {
@@ -142,8 +142,8 @@ export const TUTORIAL_CONFIGS: Record<string, TutorialStep[]> = {
     {
       icon: 'fa-dna',
       color: 'bg-indigo-600 text-white',
-      title: 'El proceso de clonación',
-      description: 'La IA genera primero un "Bodymaster" (vista frontal completa), luego vistas trasera y lateral, y finalmente un close-up facial de alta fidelidad. Todo el proceso tarda 1-2 minutos.',
+      title: 'El proceso de generación',
+      description: 'La IA genera primero la vista frontal completa, luego vistas trasera y lateral, y finalmente un close-up facial de alta fidelidad. Todo el proceso tarda 1-2 minutos.',
     },
     {
       // PUNTO 6 FIXED: honesto sobre cómo reusar en otros módulos

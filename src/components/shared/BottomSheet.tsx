@@ -3,12 +3,12 @@ import { X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const modules = [
-  { name: 'Modelo digital',  icon: '👤', path: '/crear/clonar',      cost: '8 cr' },
-  { name: 'Foto producto',   icon: '📸', path: '/productos',          cost: '2 cr' },
-  { name: 'Contenido UGC',   icon: '📱', path: '/studio-pro',         cost: '6-14 cr' },
-  { name: 'Prompt Studio',   icon: '✨', path: '/prompt-studio',      cost: '2 cr' },
-  { name: 'Clonar escena',   icon: '🖼️', path: '/clonar',             cost: '2 cr' },
-  { name: 'Outfit Extractor',icon: '👕', path: '/outfit-extractor',   cost: '0 cr' },
+  { name: 'Crear modelo',     tech: 'Model DNA',         icon: '👤', path: '/crear/clonar',      cost: '8 cr' },
+  { name: 'Foto producto',    tech: 'Product Studio',    icon: '📸', path: '/productos',          cost: '2 cr' },
+  { name: 'Contenido redes',  tech: 'UGC Studio',        icon: '📱', path: '/studio-pro',         cost: '6-14 cr' },
+  { name: 'Generador con IA', tech: 'Prompt Studio',     icon: '✨', path: '/prompt-studio',      cost: '2 cr' },
+  { name: 'Clonar escena',    tech: 'Scene Clone',       icon: '🖼️', path: '/clonar',             cost: '2 cr' },
+  { name: 'Extraer prendas',  tech: 'Outfit Extractor',  icon: '👕', path: '/outfit-extractor',   cost: '0 cr' },
 ];
 
 interface BottomSheetProps {
@@ -48,6 +48,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ open, onClose }) => {
             >
               <span className="text-3xl">{mod.icon}</span>
               <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight text-center leading-tight">{mod.name}</span>
+              <span className="text-[9px] font-medium text-slate-300 normal-case tracking-normal">({mod.tech})</span>
               <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{mod.cost}</span>
             </button>
           ))}

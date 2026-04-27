@@ -131,7 +131,7 @@ const ContentCreator: React.FC<{ avatars: AvatarProfile[], products: ProductProf
     setWorkflowStep('preview_master');
     setMasterImage(null);
     setIsModifiedInCheckpoint(false);
-    setStatus('Sintetizando Master Anchor...');
+    setStatus('Generando imagen base...');
 
     const { dna, mapInfo } = getDnaStack(false);
 
@@ -357,7 +357,7 @@ const ContentCreator: React.FC<{ avatars: AvatarProfile[], products: ProductProf
 
             {workflowStep === 'setup' ? (
               <button onClick={generateMasterImage} disabled={!isMandatoryReady} className="w-full py-5 md:py-6 bg-indigo-600 text-white rounded-[24px] font-black text-[10px] md:text-xs uppercase tracking-[0.2em] shadow-2xl hover:bg-indigo-700 active:scale-95 transition-all">
-                Sintetizar Master Anchor
+                Generar imagen base
               </button>
             ) : (
               <button onClick={() => { setWorkflowStep('setup'); setMasterImage(null); }} className="w-full py-4 text-slate-400 font-black text-[10px] uppercase tracking-widest hover:text-slate-600">

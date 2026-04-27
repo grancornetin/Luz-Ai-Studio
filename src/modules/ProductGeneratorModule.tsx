@@ -381,9 +381,9 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
       <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 pb-20 animate-in fade-in duration-500">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-1">
           <div>
-            <h1 className="t-display text-3xl text-slate-900">Product Studio Pro</h1>
+            <h1 className="t-display text-3xl text-slate-900">Foto de producto</h1>
             <div className="flex items-center gap-2 mt-2">
-              <p className="text-slate-500 font-medium italic text-xs md:text-sm">Fotografía de alta gama.</p>
+              <p className="text-slate-500 font-medium italic text-xs md:text-sm">Fotografía comercial de alta gama. <span className="normal-case font-normal text-slate-300 text-[9px]">(Product Studio)</span></p>
               <ModuleTutorial moduleId="catalog" steps={TUTORIAL_CONFIGS.catalog} />
             </div>
           </div>

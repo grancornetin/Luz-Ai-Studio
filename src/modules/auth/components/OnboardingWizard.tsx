@@ -25,9 +25,9 @@ const CASES: CaseConfig[] = [
     id: 'avatar',
     icon: 'fa-dna',
     title: 'Modelo Digital',
-    subtitle: 'Model DNA',
+    subtitle: 'Crear modelo',
     realCost: 8,
-    description: 'Clona tu identidad a partir de fotos reales.',
+    description: 'Crea tu modelo digital a partir de fotos reales.',
     route: '/crear/clonar',
     lsKey: 'onboarding_image_avatar',
   },
@@ -35,7 +35,7 @@ const CASES: CaseConfig[] = [
     id: 'product',
     icon: 'fa-gem',
     title: 'Foto de Producto',
-    subtitle: 'Catálogo Pro',
+    subtitle: 'Foto profesional',
     realCost: 2,
     description: 'Genera fotografía comercial de cualquier producto.',
     route: '/productos',
@@ -44,10 +44,10 @@ const CASES: CaseConfig[] = [
   {
     id: 'ugc',
     icon: 'fa-mobile-screen-button',
-    title: 'Contenido UGC',
+    title: 'Contenido para redes',
     subtitle: 'Content Studio',
     realCost: 6,
-    description: 'Crea 2 shots estilo iPhone orgánico con tu avatar.',
+    description: 'Crea 2 fotos estilo smartphone orgánico con tu modelo.',
     route: '/studio-pro',
     lsKey: 'onboarding_image_ugc',
   },
@@ -205,7 +205,7 @@ const OnboardingWizard: React.FC<Props> = ({ onDone }) => {
               <p className="text-xs text-slate-500 font-medium">
                 {selectedCase === 'avatar' && 'Sube una foto de rostro clara (sin gafas de sol, buena luz).'}
                 {selectedCase === 'product' && 'Sube una foto de tu producto sobre fondo blanco o claro.'}
-                {selectedCase === 'ugc' && 'Sube una foto de rostro para tu avatar UGC.'}
+                {selectedCase === 'ugc' && 'Sube una foto de rostro para tu contenido de redes.'}
               </p>
 
               <ImageSlot

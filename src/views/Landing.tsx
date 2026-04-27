@@ -31,7 +31,7 @@ const MODULES = [
     desc: 'Extrae el ADN biométrico de fotos reales y crea un gemelo digital con fidelidad persistente — o diseña un modelo desde cero con parámetros precisos.',
     features: ['Set de 4 planos técnicos', 'Identidad persistente en todos los módulos', 'From Photos o From Scratch', 'Biblioteca de modelos'],
     refs:    [{ src: IMG('dna_ref.jpg'), label: 'Referencia' }],
-    results: [{ src: IMG('dna_p1.jpg'), label: 'P1 Bodymaster' }, { src: IMG('dna_p2.jpg'), label: 'P2 Rear' }, { src: IMG('dna_p3.jpg'), label: 'P3 Side' }, { src: IMG('dna_p4.jpg'), label: 'P4 Facemaster' }],
+    results: [{ src: IMG('dna_p1.jpg'), label: 'Vista Frontal' }, { src: IMG('dna_p2.jpg'), label: 'Vista Trasera' }, { src: IMG('dna_p3.jpg'), label: 'Vista Lateral' }, { src: IMG('dna_p4.jpg'), label: 'Close-up Facial' }],
   },
   {
     id: 'gen',
@@ -51,22 +51,22 @@ const MODULES = [
     icon: 'fa-mobile-screen-button',
     accent: '#F72C5B',
     accentBg: 'rgba(247,44,91,0.12)',
-    name: 'Content Studio Pro',
-    sub: 'UGC · Identity Lock',
-    desc: 'Sesiones completas de contenido UGC estilo iPhone orgánico. El Lock System mantiene identidad, producto y escena 100% consistentes.',
-    features: ['Master Anchor + shots derivados', 'Modos Avatar, Producto, Outfit, Escena', 'Checkpoint de validación', 'Descarga ZIP o biblioteca'],
+    name: 'Contenido para redes',
+    sub: 'Contenido orgánico · Sesiones completas',
+    desc: 'Sesiones completas de contenido estilo smartphone orgánico. Mantiene identidad, producto y escena 100% consistentes en cada imagen.',
+    features: ['Imagen base + imágenes derivadas', 'Modos Avatar, Producto, Outfit, Escena', 'Revisión antes de generar', 'Descarga ZIP o biblioteca'],
     refs:    [{ src: IMG('cs_avatar.jpg'), label: 'Avatar' }, { src: IMG('cs_product.jpg'), label: 'Producto' }, { src: IMG('cs_scene.jpg'), label: 'Escena' }, { src: IMG('cs_outfit.jpg'), label: 'Outfit' }],
-    results: [{ src: IMG('cs_master.jpg'), label: 'Master Anchor' }, { src: IMG('cs_s1.jpg'), label: 'Shot 1' }, { src: IMG('cs_s2.jpg'), label: 'Shot 2' }],
+    results: [{ src: IMG('cs_master.jpg'), label: 'Imagen base' }, { src: IMG('cs_s1.jpg'), label: 'Shot 1' }, { src: IMG('cs_s2.jpg'), label: 'Shot 2' }],
   },
   {
     id: 'clone',
     icon: 'fa-clone',
     accent: '#63B3ED',
     accentBg: 'rgba(99,179,237,0.12)',
-    name: 'Scene Clone',
-    sub: 'Identity Injection',
-    desc: 'Replica cualquier fotografía existente inyectando una nueva identidad digital. Misma escena, misma iluminación — nueva persona.',
-    features: ['Clonación biométrica de precisión', 'Soporte para 1 o 2 sujetos', 'Outfit swap opcional'],
+    name: 'Clonar escena',
+    sub: 'Replica fotos con nueva identidad',
+    desc: 'Replica cualquier fotografía existente con tu modelo digital. Misma escena, misma iluminación — nueva persona.',
+    features: ['Reemplazo de identidad preciso', 'Soporte para 1 o 2 personas', 'Cambio de outfit opcional'],
     refs:    [{ src: IMG('sc_target.jpg'), label: 'Target' }, { src: IMG('sc_ref.jpg'), label: 'Identidad' }],
     results: [{ src: IMG('sc_result.jpg'), label: 'Resultado' }],
   },
@@ -75,10 +75,10 @@ const MODULES = [
     icon: 'fa-shirt',
     accent: '#68D391',
     accentBg: 'rgba(104,211,145,0.12)',
-    name: 'Outfit Kit',
-    sub: 'Ghost Mannequin 3D',
-    desc: 'Extrae automáticamente cada prenda de un outfit completo y genera renders Ghost Mannequin 3D individuales. Activos de nivel fashion en segundos.',
-    features: ['Detección automática por IA', 'Ghost Mannequin 3D por pieza', 'Selección individual de prendas', 'Kit final compuesto + ZIP'],
+    name: 'Extraer prendas',
+    sub: 'Renders de ropa profesionales',
+    desc: 'Extrae automáticamente cada prenda de un outfit y genera renders con la ropa en 3D sobre fondo blanco. Activos de nivel fashion en segundos.',
+    features: ['Detección automática por IA', 'Render 3D por prenda', 'Selección individual de prendas', 'Kit final compuesto + ZIP'],
     refs:    [{ src: IMG('out_orig.jpg'), label: 'Outfit Original' }],
     results: [{ src: IMG('out_p1.jpg'), label: 'Prenda 1' }, { src: IMG('out_p2.jpg'), label: 'Prenda 2' }, { src: IMG('out_final.jpg'), label: 'Kit Final' }],
   },
@@ -388,7 +388,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
       <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', borderBottom: '1px solid rgba(255,255,255,0.07)', background: '#0D0D18', padding: '18px 0', overflow: 'hidden', width: '100%', maxWidth: '100%' }}>
         <div style={{ display: 'flex', width: 'max-content', animation: 'mq 22s linear infinite' }}>
           {[...Array(2)].map((_, rep) => (
-            ['Model DNA','AI Generator','Content Studio Pro','Scene Clone','Outfit Kit · Ghost Mannequin','Product Studio','Identity Lock System','Gemini Imagen 4'].map((item, i) => (
+            ['Crear modelo digital','Generador con IA','Contenido para redes','Clonar escena','Extraer prendas','Foto de producto','Coherencia facial','Gemini Imagen 4'].map((item, i) => (
               <div key={`${rep}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 32px', fontFamily: '"Syne",sans-serif', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'rgba(242,240,250,0.22)', whiteSpace: 'nowrap', borderRight: '1px solid rgba(255,255,255,0.07)' }}>
                 <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#F72C5B', flexShrink: 0 }} />
                 {item}

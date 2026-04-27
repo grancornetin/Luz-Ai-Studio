@@ -37,6 +37,8 @@ import { generationHistoryService } from '../../services/generationHistoryServic
 import { readAndCompressFile, downloadAsZip } from '../../utils/imageUtils';
 
 // Nuevos componentes base
+import { ErrorDisplay, toAppError, type AppError } from '../../components/shared/ErrorDisplay';
+import { REFUNDABLE_ERRORS } from '../../services/imageApiService';
 import { ImageSlot } from '../../components/shared/ImageSlot';
 import UploadDisclaimer from '../../components/shared/UploadDisclaimer';
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
@@ -126,7 +128,8 @@ const ContentStudioProModule: React.FC = () => {
   const [productWarningMsg, setProductWarningMsg] = useState('');
 
   const [loadingMsg, setLoadingMsg] = useState('');
-  const [errorStatus, setErrorStatus] = useState<string | null>(null);
+  const [errorStatus, setErrorStatus] = useState<AppError | null>(null);
+  const [creditsRefunded, setCreditsRefunded] = useState(false);
   const [sessionPlan, setSessionPlan] = useState<any>(null);
   const [ref0Analysis, setRef0Analysis] = useState<REF0Analysis | undefined>(undefined);
   
@@ -245,6 +248,7 @@ const ContentStudioProModule: React.FC = () => {
     
     setStep('generating_master');
     setErrorStatus(null);
+    setCreditsRefunded(false);
 
     try {
       setLoadingMsg('Analizando referencias y preparando sesión...');
@@ -319,7 +323,13 @@ const ContentStudioProModule: React.FC = () => {
 
       setStep('checkpoint');
     } catch (e: any) {
-      setErrorStatus(`Error: ${e.message}`);
+      const appErr = toAppError(e);
+      setErrorStatus(appErr);
+      // Reembolsar si el error es del sistema y se descontaron créditos
+      if (!free && REFUNDABLE_ERRORS.has(appErr.code as any)) {
+        const refunded = await refundCredits(MODEL_CREDIT_COST[modelId] * (1 + userShotCount));
+        setCreditsRefunded(refunded);
+      }
       setStep('setup');
     }
   };
@@ -360,7 +370,7 @@ const ContentStudioProModule: React.FC = () => {
       setRef0Analysis(analysis);
       setStep('checkpoint');
     } catch (e: any) {
-      setErrorStatus(`Error: ${e.message}`);
+      setErrorStatus(toAppError(e));
       setStep('checkpoint');
     }
   };
@@ -847,7 +857,7 @@ const ContentStudioProModule: React.FC = () => {
             </h1>
             <div className="flex items-center justify-center md:justify-start gap-2 mt-2">
               <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.4em] italic">
-                UGC & Social · Sesiones orgánicas
+                Contenido para redes · Sesiones orgánicas
               </p>
               <ModuleTutorial moduleId="contentStudio" steps={TUTORIAL_CONFIGS.contentStudio} />
             </div>
@@ -888,7 +898,7 @@ const ContentStudioProModule: React.FC = () => {
                 {/* Enfoque de sesión */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <label className="t-meta">Enfoque de sesión</label>
+                    <label className="t-meta">Protagonista de la sesión</label>
                     <div className="group relative">
                       <i className="fa-solid fa-circle-info text-slate-300 text-[10px] cursor-help"></i>
                       <div className="absolute bottom-full left-0 mb-2 w-64 p-2 bg-slate-900 text-white text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
@@ -1073,7 +1083,7 @@ const ContentStudioProModule: React.FC = () => {
                 <GenerateButton
                   onClick={startMasterGeneration}
                   disabled={step !== 'setup'}
-                  label={`Sintetizar Master + ${userShotCount} shots`}
+                  label={`Generar imagen base + ${userShotCount} imágenes`}
                   loadingLabel="Generando..."
                   fixedCost={sessionCost}
                   creditsAfter={creditsAfterMaster}
@@ -1081,9 +1091,12 @@ const ContentStudioProModule: React.FC = () => {
                 />
 
                 {errorStatus && (
-                  <div className="p-4 rounded-2xl bg-red-50 border border-red-100 text-red-600 text-xs font-bold">
-                    {errorStatus}
-                  </div>
+                  <ErrorDisplay
+                    error={errorStatus}
+                    creditsRefunded={creditsRefunded}
+                    onRetry={() => { setErrorStatus(null); setCreditsRefunded(false); startMasterGeneration(); }}
+                    onDismiss={() => setErrorStatus(null)}
+                  />
                 )}
               </section>
             </div>
@@ -1096,10 +1109,11 @@ const ContentStudioProModule: React.FC = () => {
                 </div>
               </div>
               <div className="space-y-4">
-                <h3 className="t-display text-4xl text-white">UGC Identity Lock</h3>
+                <h3 className="t-display text-4xl text-white">Coherencia visual</h3>
                 <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.4em] max-w-sm mx-auto leading-relaxed">
                   Persistencia facial + coherencia visual estilo smartphone.
                 </p>
+                <p className="text-slate-600 text-[9px] normal-case tracking-normal">(UGC Identity Lock)</p>
               </div>
             </div>
           </div>
@@ -1130,7 +1144,7 @@ const ContentStudioProModule: React.FC = () => {
                     <span className="px-3 py-1 bg-brand-600 text-white text-[10px] font-black rounded-full uppercase">Master</span>
                   </div>
                 </div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Imagen ancla · Identity Lock activo</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Imagen base · coherencia facial activa</p>
               </div>
 
               {/* Progreso narrado */}
@@ -1165,7 +1179,7 @@ const ContentStudioProModule: React.FC = () => {
                   </div>
                   <div className="absolute top-4 left-4 md:top-6 md:left-6">
                     <span className="px-3 md:px-5 py-1.5 md:py-2 bg-brand-600 text-white text-[10px] font-black rounded-full uppercase tracking-widest shadow-xl">
-                      Master Anchor (UGC)
+                      Imagen base (UGC)
                     </span>
                   </div>
                 </div>
@@ -1174,7 +1188,7 @@ const ContentStudioProModule: React.FC = () => {
               <div className="lg:col-span-5 flex flex-col space-y-6 md:space-y-10 justify-center">
                 <div className="p-6 md:p-10 bg-slate-900 rounded-[24px] md:rounded-[40px] text-white space-y-6 md:space-y-8">
                   <h3 className="t-display text-lg md:text-xl border-b border-white/10 pb-4 md:pb-6">
-                    Check de identidad (UGC)
+                    Revisión de imagen base
                   </h3>
                   <div className="space-y-3 md:space-y-4">
                     <div className="flex items-start gap-3 md:gap-4">
@@ -1196,14 +1210,14 @@ const ContentStudioProModule: React.FC = () => {
                     onClick={regenerateMaster}
                     className="t-meta text-brand-400 hover:text-white transition-all italic flex items-center gap-2"
                   >
-                    <i className="fa-solid fa-rotate"></i> Regenerar Master ({currentSet.attemptsImage0}/3)
+                    <i className="fa-solid fa-rotate"></i> Regenerar imagen base ({currentSet.attemptsImage0}/3)
                   </button>
                 </div>
 
                 <div className="bg-slate-50 p-6 md:p-10 rounded-[24px] md:rounded-[40px] border border-slate-100 space-y-6 md:space-y-8">
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">
-                      <label className="t-meta">Enfoque de sesión</label>
+                      <label className="t-meta">Protagonista de la sesión</label>
                       <div className="group relative">
                         <i className="fa-solid fa-circle-info text-slate-300 text-[10px] cursor-help"></i>
                         <div className="absolute bottom-full left-0 mb-2 w-64 p-2 bg-slate-900 text-white text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
@@ -1253,11 +1267,20 @@ const ContentStudioProModule: React.FC = () => {
                     </div>
                   )}
 
+                  {errorStatus && (
+                    <ErrorDisplay
+                      error={errorStatus}
+                      creditsRefunded={creditsRefunded}
+                      onRetry={() => { setErrorStatus(null); regenerateMaster(); }}
+                      onDismiss={() => setErrorStatus(null)}
+                    />
+                  )}
+
                   <button
                     onClick={approveAndProduce}
                     className="w-full py-5 md:py-7 bg-brand-600 text-white rounded-[24px] md:rounded-[32px] t-meta shadow-2xl hover:bg-brand-700 transition-all active:scale-95"
                   >
-                    Comenzar producción ({currentSet.userShotCount ?? userShotCount} Shots)
+                    Generar {currentSet.userShotCount ?? userShotCount} imágenes
                   </button>
                 </div>
               </div>

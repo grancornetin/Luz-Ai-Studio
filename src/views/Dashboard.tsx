@@ -21,13 +21,13 @@ import { useModelSelection } from '../hooks/useModelSelection';
 // null = precio fijo (no varía con el modelo) | 0 = gratis
 const MODULE_GROUPS = [
   {
-    groupLabel: 'Crear Identidad',
+    groupLabel: 'Crear modelo digital',
     groupColor: 'bg-indigo-600',
     modules: [
       {
         path: '/crear/clonar',
-        title: 'Model DNA',
-        subtitle: 'From Photos',
+        title: 'Crear modelo',
+        subtitle: 'desde fotos',
         description: 'Extrae el ADN biométrico de fotos reales para crear un modelo digital fiel.',
         icon: 'fa-camera',
         accent: 'text-indigo-600',
@@ -37,8 +37,8 @@ const MODULE_GROUPS = [
       },
       {
         path: '/crear/manual',
-        title: 'Model DNA',
-        subtitle: 'From Scratch',
+        title: 'Crear modelo',
+        subtitle: 'desde cero',
         description: 'Diseña una identidad digital 100% nueva configurando cada rasgo.',
         icon: 'fa-sliders',
         accent: 'text-violet-600',
@@ -48,8 +48,8 @@ const MODULE_GROUPS = [
       },
       {
         path: '/modelos',
-        title: 'Biblioteca',
-        subtitle: 'Modelos guardados',
+        title: 'Mis modelos',
+        subtitle: 'Avatares guardados',
         description: 'Accede a todos tus modelos creados y úsalos en cualquier módulo.',
         icon: 'fa-user-astronaut',
         accent: 'text-purple-600',
@@ -60,12 +60,12 @@ const MODULE_GROUPS = [
     ]
   },
   {
-    groupLabel: 'Generar Contenido',
+    groupLabel: 'Generar contenido',
     groupColor: 'bg-emerald-600',
     modules: [
       {
         path: '/prompt-studio',
-        title: 'AI Generator',
+        title: 'Generador con IA',
         subtitle: 'Prompt Studio',
         description: 'Crea imágenes con prompts avanzados, campañas y generación masiva.',
         icon: 'fa-wand-magic-sparkles',
@@ -76,9 +76,9 @@ const MODULE_GROUPS = [
       },
       {
         path: '/studio-pro',
-        title: 'Content Studio',
+        title: 'Contenido para redes',
         subtitle: 'UGC & Social',
-        description: 'Genera contenido tipo iPhone orgánico con tu modelo e identidad de marca.',
+        description: 'Genera contenido tipo smartphone orgánico con tu modelo e identidad de marca.',
         icon: 'fa-mobile-screen-button',
         accent: 'text-emerald-600',
         bg: 'bg-emerald-50',
@@ -87,8 +87,8 @@ const MODULE_GROUPS = [
       },
       {
         path: '/clonar',
-        title: 'Scene Clone',
-        subtitle: 'Clonar escena',
+        title: 'Clonar escena',
+        subtitle: 'Scene Clone',
         description: 'Replica una fotografía existente inyectando una nueva identidad.',
         icon: 'fa-clone',
         accent: 'text-blue-600',
@@ -104,8 +104,8 @@ const MODULE_GROUPS = [
     modules: [
       {
         path: '/outfit-extractor',
-        title: 'Outfit Kit',
-        subtitle: 'Extractor de prendas',
+        title: 'Extraer prendas',
+        subtitle: 'Outfit Extractor',
         description: 'Separa cada prenda de un outfit y genera renders ghost individuales.',
         icon: 'fa-shirt',
         accent: 'text-purple-600',
@@ -115,8 +115,8 @@ const MODULE_GROUPS = [
       },
       {
         path: '/productos',
-        title: 'Catálogo',
-        subtitle: 'Product shots',
+        title: 'Foto de producto',
+        subtitle: 'Product Studio',
         description: 'Analiza y genera fotografía comercial de tus productos.',
         icon: 'fa-gem',
         accent: 'text-slate-700',

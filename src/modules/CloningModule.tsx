@@ -15,6 +15,8 @@ import { ModelSelector } from '../components/shared/ModelSelector';
 import { useModelSelection } from '../hooks/useModelSelection';
 
 // Nuevos componentes base
+import { ErrorDisplay, toAppError, type AppError } from '../components/shared/ErrorDisplay';
+import { REFUNDABLE_ERRORS } from '../services/imageApiService';
 import { ImageSlot } from '../components/shared/ImageSlot';
 import UploadDisclaimer from '../components/shared/UploadDisclaimer';
 import { ImageLightbox } from '../components/shared/ImageLightbox';
@@ -34,6 +36,8 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
   const [previews, setPreviews] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [gender, setGender] = useState<'hombre' | 'mujer'>('mujer');
+  const [cloneError, setCloneError] = useState<AppError | null>(null);
+  const [creditsRefunded, setCreditsRefunded] = useState(false);
 
   // Lightbox state
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -42,7 +46,7 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
   // FAB scroll detection
   const { isVisible: fabVisible } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: false });
 
-  const { checkAndDeduct, showNoCredits, requiredCredits, closeModal } = useCreditGuard();
+  const { checkAndDeduct, showNoCredits, requiredCredits, closeModal, refundCredits } = useCreditGuard();
 
   // Onboarding: carga imagen gratuita desde localStorage si viene del wizard
   useEffect(() => {
@@ -86,6 +90,8 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
     }
 
     setIsLoading(true);
+    setCloneError(null);
+    setCreditsRefunded(false);
     setStatus('Iniciando clonación asíncrona...');
     setPreviews([]);
 
@@ -144,7 +150,12 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
 
       setStatus('Completado');
     } catch (err: any) {
-      alert("Error en clonación: " + err.message);
+      const appErr = toAppError(err);
+      setCloneError(appErr);
+      if (!free && REFUNDABLE_ERRORS.has(appErr.code as any)) {
+        const refunded = await refundCredits(CREDIT_COSTS.CREATE_MODEL_CLONE);
+        setCreditsRefunded(refunded);
+      }
       setStatus('Error');
     } finally {
       setIsLoading(false);
@@ -180,9 +191,9 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
           <div className="lg:col-span-4 space-y-6">
             <section className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-6">
               <header className="border-b pb-4">
-                <h2 className="t-display text-xl text-slate-900">Model DNA <span className="text-brand-600">· From Photos</span></h2>
+                <h2 className="t-display text-xl text-slate-900">Crear modelo <span className="text-brand-600">· desde fotos</span></h2>
                 <div className="flex items-center gap-3 mt-1">
-                  <p className="t-meta text-slate-400">Clona una identidad real desde fotos</p>
+                  <p className="t-meta text-slate-400">Crea tu modelo digital desde fotos reales <span className="text-slate-300 text-[9px] normal-case font-medium">(Model DNA)</span></p>
                   <ModuleTutorial moduleId="modelDnaPhotos" steps={TUTORIAL_CONFIGS.modelDnaPhotos} compact />
                 </div>
               </header>
@@ -228,7 +239,7 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                   onClick={startCloning}
                   loading={isLoading}
                   disabled={!name || files.length === 0}
-                  label="Sintetizar BODYMASTER"
+                  label="Generar modelo digital"
                   loadingLabel={status || 'Procesando...'}
                   imageCount={1}
                   creditsAfter={creditsAfter}
@@ -236,11 +247,20 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                 />
               )}
 
-              {(isLoading || status) && previews.length === 0 && (
+              {(isLoading || status === 'Procesando en segundo plano...' || status === 'Iniciando clonación asíncrona...' || status === 'Generando activos maestros...') && previews.length === 0 && !cloneError && (
                 <div className="p-6 bg-brand-900 rounded-[32px] text-white flex items-center gap-4 animate-pulse">
                   <div className="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
                   <p className="t-meta">{status || 'Procesando...'}</p>
                 </div>
+              )}
+
+              {cloneError && (
+                <ErrorDisplay
+                  error={cloneError}
+                  creditsRefunded={creditsRefunded}
+                  onRetry={() => startCloning()}
+                  onDismiss={() => setCloneError(null)}
+                />
               )}
 
               {previews.length === 4 && !isLoading && (
@@ -266,10 +286,11 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                     <i className="fa-solid fa-dna animate-pulse"></i>
                   </div>
                   <div className="space-y-4">
-                    <h3 className="t-display text-4xl text-white">Identity Synthesizer</h3>
+                    <h3 className="t-display text-4xl text-white">Creador de modelos</h3>
                     <p className="text-slate-500 text-sm font-medium max-w-sm mx-auto italic leading-relaxed">
-                      Protocolo de generación de Activos Maestros para e‑commerce de alta escala.
+                      Genera tu modelo digital para e‑commerce de alta escala.
                     </p>
+                    <p className="text-slate-600 text-[9px] normal-case tracking-normal">(Identity Synthesizer · Model DNA)</p>
                   </div>
                 </div>
               )}
@@ -279,7 +300,7 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                   <header className="flex justify-between items-center border-b border-white/10 pb-8">
                     <div>
                       <h3 className="t-display text-3xl text-white">{name}</h3>
-                      <p className="t-meta text-brand-400">Master Digital Twin Identity Set</p>
+                      <p className="t-meta text-brand-400">Set de identidad digital <span className="text-brand-700/60 text-[9px] normal-case">(Digital Twin)</span></p>
                     </div>
                     {/* Botón de descarga rápida (además del FAB) */}
                     <button onClick={handleDownloadZip} className="px-6 py-4 bg-white/10 text-white rounded-2xl text-[10px] font-black uppercase border border-white/10 hover:bg-white/20">
@@ -289,10 +310,10 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {[
-                      { img: previews[0], label: 'P1: BODYMASTER', sub: 'Frontal Technical' },
-                      { img: previews[1], label: 'P2: REAR VIEW', sub: '180° Back view' },
-                      { img: previews[2], label: 'P3: SIDE PROFILE', sub: '90° Side view' },
-                      { img: previews[3], label: 'P4: FACEMASTER', sub: 'DNA Source 1:1' },
+                      { img: previews[0], label: 'Vista frontal', sub: 'Cuerpo completo' },
+                      { img: previews[1], label: 'Vista trasera', sub: '180° posterior' },
+                      { img: previews[2], label: 'Vista lateral', sub: '90° perfil' },
+                      { img: previews[3], label: 'Close-up facial', sub: 'Referencia de identidad' },
                     ].map((p, i) => (
                       <div
                         key={i}
@@ -331,7 +352,7 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                       <i className="fa-solid fa-circle-info"></i>
                     </div>
                     <p className="text-[11px] text-slate-400 font-medium leading-relaxed italic">
-                      Este set garantiza la persistencia facial. El <span className="text-white font-bold">FACEMASTER</span> será inyectado como semilla de identidad en todas las generaciones de productos y lifestyle para evitar variaciones faciales.
+                      Este set garantiza la persistencia facial. La <span className="text-white font-bold">foto de cara</span> se usa como referencia de identidad en todas las generaciones para mantener coherencia facial.
                     </p>
                   </footer>
                 </div>

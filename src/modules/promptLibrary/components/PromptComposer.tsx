@@ -146,10 +146,10 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
               </div>
               <div>
                 <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter italic leading-none">
-                  Prompt Composer
+                  Editor de prompts
                 </h2>
                 <p className="text-xs font-black text-slate-400 uppercase tracking-widest mt-1">
-                  Visual Prompt Engineering Studio
+                  Control creativo profesional <span className="normal-case font-medium text-[9px] text-slate-300">(Prompt Composer)</span>
                 </p>
               </div>
             </header>
