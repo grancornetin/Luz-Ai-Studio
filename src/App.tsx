@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { LogOut, User as UserIcon, Menu, X } from 'lucide-react';
+import { LogOut, User as UserIcon, Menu, X, Search } from 'lucide-react';
 
 // Vistas y Módulos
 import Landing from './views/Landing';
@@ -42,6 +42,7 @@ import OnboardingWizard from './modules/auth/components/OnboardingWizard';
 import AppAssistant from './components/AppAssistant';
 import { WalletPill } from './components/shared/WalletPill';
 import { MobileBottomNav } from './components/shared/MobileBottomNav';
+import { GlobalSearchModal } from './components/shared/GlobalSearchModal';
 import { AvatarProfile, ProductProfile } from './types';
 
 const PLAN_STYLES: Record<string, { label: string; className: string }> = {
@@ -258,12 +259,26 @@ const AppContent: React.FC = () => {
   const [products, setProducts] = useState<ProductProfile[]>([]);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   const location = useLocation();
   const isDashboard = location.pathname === '/dashboard';
 
   // Cerrar sidebar automáticamente al cambiar de ruta
   const handleSidebarNavigate = () => setIsSidebarCollapsed(true);
+
+  // Atajo global Cmd+K / Ctrl+K
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        if (user) setIsSearchOpen(prev => !prev);
+      }
+      if (e.key === 'Escape') setIsSearchOpen(false);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -336,8 +351,18 @@ const AppContent: React.FC = () => {
               </div>
             )}
             <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
-              {/* WalletPill flotante en la esquina superior derecha */}
-              <div className="fixed top-5 right-5 z-[70] hidden md:block">
+              {/* Barra superior derecha: búsqueda + wallet */}
+              <div className="fixed top-5 right-5 z-[70] hidden md:flex items-center gap-2">
+                {user && (
+                  <button
+                    onClick={() => setIsSearchOpen(true)}
+                    className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm text-sm"
+                  >
+                    <Search size={14} />
+                    <span className="text-xs font-medium text-slate-400">Buscar...</span>
+                    <kbd className="text-[10px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded border border-slate-200 font-bold leading-none">⌘K</kbd>
+                  </button>
+                )}
                 <WalletPill />
               </div>
               <main className="flex-1 p-4 md:p-10 overflow-x-hidden pb-24 md:pb-10">
@@ -362,11 +387,12 @@ const AppContent: React.FC = () => {
                   <Route path="*"               element={<Navigate to="/dashboard" replace />} />
                 </Routes>
               </main>
-              <MobileBottomNav />
+              <MobileBottomNav onSearchOpen={() => setIsSearchOpen(true)} />
             </div>
           </div>
           {isNewUser && <OnboardingWizard onDone={markOnboardingDone} />}
           <AppAssistant />
+          <GlobalSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
         </ProtectedRoute>
       } />
     </Routes>

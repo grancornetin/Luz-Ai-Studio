@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
-import { Home, PlusSquare, Folder, User } from 'lucide-react';
+import { Home, PlusSquare, Search, User } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { BottomSheet } from './BottomSheet';
 
-export const MobileBottomNav: React.FC = () => {
+interface MobileBottomNavProps {
+  onSearchOpen?: () => void;
+}
+
+export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ onSearchOpen }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -34,9 +38,12 @@ export const MobileBottomNav: React.FC = () => {
           <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Crear</span>
         </button>
 
-        <button onClick={() => navigate('/projects')} className={btnClass('/projects')}>
-          <Folder size={iconSize('/projects')} />
-          <span className={`text-[10px] font-black uppercase tracking-widest ${isActive('/projects') ? 'text-indigo-600' : 'text-slate-400'}`}>Proyectos</span>
+        <button
+          onClick={() => onSearchOpen?.()}
+          className="flex flex-col items-center gap-1 px-3 py-1 text-slate-400"
+        >
+          <Search size={22} />
+          <span className="text-[10px] font-black uppercase tracking-widest">Buscar</span>
         </button>
 
         <button onClick={() => navigate('/cuenta')} className={btnClass('/cuenta')}>
