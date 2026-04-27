@@ -1,14 +1,18 @@
 // src/modules/CloningModule.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AvatarProfile } from '../types';
 import { startClone, waitForCloneComplete } from '../services/avatarCloneService';
 import { useCreditGuard } from '../hooks/useCreditGuard';
 import NoCreditsModal from '../components/shared/NoCreditsModal';
-import { CREDIT_COSTS } from '../services/creditConfig';
+import { CREDIT_COSTS, MODEL_CREDIT_COST } from '../services/creditConfig';
 import { readAndCompressFile, downloadAsZip } from '../utils/imageUtils';
 import ModuleTutorial from '../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../components/shared/tutorialConfigs';
 import { generationHistoryService } from '../services/generationHistoryService';
+import { useAuth } from '../modules/auth/AuthContext';
+import { GenerateButton } from '../components/shared/GenerateButton';
+import { ModelSelector } from '../components/shared/ModelSelector';
+import { useModelSelection } from '../hooks/useModelSelection';
 
 // Nuevos componentes base
 import { ImageSlot } from '../components/shared/ImageSlot';
@@ -22,6 +26,8 @@ interface CloningModuleProps {
 }
 
 const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
+  const { credits } = useAuth();
+  const { modelId, setModelId } = useModelSelection();
   const [name, setName] = useState('');
   const [files, setFiles] = useState<string[]>([]); // hasta 3 imágenes en base64
   const [status, setStatus] = useState('');
@@ -38,6 +44,24 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
 
   const { checkAndDeduct, showNoCredits, requiredCredits, closeModal } = useCreditGuard();
 
+  // Onboarding: carga imagen gratuita desde localStorage si viene del wizard
+  useEffect(() => {
+    const img = localStorage.getItem('onboarding_image_avatar');
+    const free = localStorage.getItem('onboarding_free_generation');
+    if (img && free) {
+      localStorage.removeItem('onboarding_image_avatar');
+      localStorage.removeItem('onboarding_free_generation');
+      setFiles([img]);
+      setName('Mi primer modelo');
+      startCloning(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Costo: 1 sesión = 1 imagen = 4 créditos (independiente del modelo)
+  const totalCost = CREDIT_COSTS.CREATE_MODEL_CLONE;
+  const creditsAfter = Math.max(0, credits.available - totalCost);
+
   // Handlers para los 3 slots de imagen
   const updateFile = (index: number, base64: string | null) => {
     const newFiles = [...files];
@@ -51,13 +75,15 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
     setFiles(cleaned);
   };
 
-  const startCloning = async () => {
+  const startCloning = async (free = false) => {
     if (!name || files.length === 0) {
       alert("Nombre y al menos una foto de referencia son requeridos.");
       return;
     }
-    const ok = await checkAndDeduct(CREDIT_COSTS.CREATE_MODEL_CLONE);
-    if (!ok) return;
+    if (!free) {
+      const ok = await checkAndDeduct(CREDIT_COSTS.CREATE_MODEL_CLONE);
+      if (!ok) return;
+    }
 
     setIsLoading(true);
     setStatus('Iniciando clonación asíncrona...');
@@ -111,7 +137,7 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
           imageUrl: img,
           module: 'model_dna',
           moduleLabel: `Model DNA — Por Imagen (${viewLabels[idx] || `Vista ${idx + 1}`})`,
-          creditsUsed: idx === 0 ? CREDIT_COSTS.CREATE_MODEL_CLONE : 0,
+          creditsUsed: (!free && idx === 0) ? CREDIT_COSTS.CREATE_MODEL_CLONE : 0,
           promptText: `Clonación desde imagen — ${name}`,
         }).catch(console.error);
       });
@@ -154,9 +180,9 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
           <div className="lg:col-span-4 space-y-6">
             <section className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-6">
               <header className="border-b pb-4">
-                <h2 className="text-xl font-black text-slate-900 uppercase italic">Model DNA <span className="text-brand-600">· From Photos</span></h2>
+                <h2 className="t-display text-xl text-slate-900">Model DNA <span className="text-brand-600">· From Photos</span></h2>
                 <div className="flex items-center gap-3 mt-1">
-                  <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Clona una identidad real desde fotos</p>
+                  <p className="t-meta text-slate-400">Clona una identidad real desde fotos</p>
                   <ModuleTutorial moduleId="modelDnaPhotos" steps={TUTORIAL_CONFIGS.modelDnaPhotos} compact />
                 </div>
               </header>
@@ -191,16 +217,29 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
 
               <UploadDisclaimer />
 
+              <ModelSelector
+                value={modelId}
+                onChange={setModelId}
+                disabled={isLoading}
+              />
+
               {!isLoading && previews.length === 0 && (
-                <button onClick={startCloning} className="w-full py-5 bg-brand-600 text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl hover:bg-brand-700 active:scale-95 transition-all">
-                  Sintetizar BODYMASTER
-                </button>
+                <GenerateButton
+                  onClick={startCloning}
+                  loading={isLoading}
+                  disabled={!name || files.length === 0}
+                  label="Sintetizar BODYMASTER"
+                  loadingLabel={status || 'Procesando...'}
+                  imageCount={1}
+                  creditsAfter={creditsAfter}
+                  className="py-5 rounded-[24px] text-xs"
+                />
               )}
 
               {(isLoading || status) && previews.length === 0 && (
                 <div className="p-6 bg-brand-900 rounded-[32px] text-white flex items-center gap-4 animate-pulse">
                   <div className="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
-                  <p className="text-[10px] font-black uppercase tracking-widest">{status || 'Procesando...'}</p>
+                  <p className="t-meta">{status || 'Procesando...'}</p>
                 </div>
               )}
 
@@ -210,7 +249,7 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                     <i className="fa-solid fa-circle-check text-accent-500 text-2xl mb-2"></i>
                     <p className="text-[10px] font-black text-accent-600 uppercase">Avatar Guardado en Biblioteca</p>
                   </div>
-                  <button onClick={reset} className="w-full py-4 text-slate-400 text-[10px] font-black uppercase tracking-widest hover:text-slate-600">
+                  <button onClick={reset} className="w-full py-4 text-slate-400 t-meta hover:text-slate-600">
                     Crear Otro Avatar
                   </button>
                 </div>
@@ -227,7 +266,7 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                     <i className="fa-solid fa-dna animate-pulse"></i>
                   </div>
                   <div className="space-y-4">
-                    <h3 className="text-4xl font-black text-white uppercase italic tracking-tighter">Identity Synthesizer</h3>
+                    <h3 className="t-display text-4xl text-white">Identity Synthesizer</h3>
                     <p className="text-slate-500 text-sm font-medium max-w-sm mx-auto italic leading-relaxed">
                       Protocolo de generación de Activos Maestros para e‑commerce de alta escala.
                     </p>
@@ -239,8 +278,8 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                 <div className="space-y-10 animate-in fade-in duration-1000">
                   <header className="flex justify-between items-center border-b border-white/10 pb-8">
                     <div>
-                      <h3 className="text-white font-black text-3xl uppercase italic tracking-tighter">{name}</h3>
-                      <p className="text-brand-400 text-[10px] font-black uppercase tracking-widest">Master Digital Twin Identity Set</p>
+                      <h3 className="t-display text-3xl text-white">{name}</h3>
+                      <p className="t-meta text-brand-400">Master Digital Twin Identity Set</p>
                     </div>
                     {/* Botón de descarga rápida (además del FAB) */}
                     <button onClick={handleDownloadZip} className="px-6 py-4 bg-white/10 text-white rounded-2xl text-[10px] font-black uppercase border border-white/10 hover:bg-white/20">
@@ -278,8 +317,8 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                         <div className="absolute top-6 left-6 right-6">
                           <div className="px-5 py-2 bg-black/50 backdrop-blur-xl text-white rounded-2xl border border-white/20 flex justify-between items-center shadow-2xl">
                             <div>
-                              <p className="text-[9px] font-black uppercase tracking-widest">{p.label}</p>
-                              <p className="text-[7px] text-white/50 font-bold uppercase tracking-widest leading-none mt-0.5">{p.sub}</p>
+                              <p className="t-meta text-[9px]">{p.label}</p>
+                              <p className="t-meta-light leading-none mt-0.5">{p.sub}</p>
                             </div>
                           </div>
                         </div>

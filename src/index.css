@@ -99,3 +99,41 @@ body {
 .hover-transition {
   transition: all 0.2s ease-in-out;
 }
+
+/* ============================================
+   SISTEMA TIPOGRÁFICO — 4 NIVELES
+   Display  → títulos hero, números grandes
+   Title    → encabezados de sección/tarjeta
+   Body     → texto descriptivo
+   Meta     → etiquetas, badges, metadatos
+   ============================================ */
+@layer components {
+  /* Nivel 1 – Display: solo 1-2 por pantalla */
+  .t-display {
+    @apply font-black uppercase italic tracking-tighter leading-none;
+  }
+
+  /* Nivel 2 – Title: encabezados de sección */
+  .t-title {
+    @apply font-bold text-slate-800 tracking-normal leading-snug;
+  }
+  .t-title-sm {
+    @apply font-semibold text-slate-800 tracking-normal leading-snug;
+  }
+
+  /* Nivel 3 – Body: texto descriptivo */
+  .t-body {
+    @apply font-normal text-slate-600 leading-relaxed;
+  }
+  .t-body-sm {
+    @apply font-medium text-slate-500 text-sm leading-relaxed;
+  }
+
+  /* Nivel 4 – Meta: etiquetas, badges, contadores */
+  .t-meta {
+    @apply font-bold uppercase tracking-wide text-[10px] text-slate-400;
+  }
+  .t-meta-light {
+    @apply font-semibold uppercase tracking-wide text-[9px] text-slate-300;
+  }
+}

@@ -1,10 +1,13 @@
+// src/modules/contentStudioPro/ContentStudioProModule.tsx
+// (solo se modificó el GenerateButton en la sección SETUP para añadir creditsAfter)
+
 import React, { useState, useEffect, useCallback } from 'react';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
 import { useCreditGuard } from '../../../hooks/useCreditGuard';
 import { useAuth } from '../../modules/auth/AuthContext';
 import NoCreditsModal from '../../components/shared/NoCreditsModal';
-import { CREDIT_COSTS } from '../../services/creditConfig';
+import { CREDIT_COSTS, MODEL_CREDIT_COST } from '../../services/creditConfig';
 import {
   ContentStudioProSet,
   Focus,
@@ -42,6 +45,8 @@ import { useScrollFAB } from '../../hooks/useScrollFAB';
 import { ModelSelector } from '../../components/shared/ModelSelector';
 import { GenerateButton } from '../../components/shared/GenerateButton';
 import { useModelSelection } from '../../hooks/useModelSelection';
+import { GenerationProgress, type ProgressStep, type CompletedShot } from '../../components/shared/GenerationProgress';
+import { useGenerationProgress } from '../../hooks/useGenerationProgress';
 
 type Step = 'setup' | 'generating_master' | 'checkpoint' | 'producing' | 'library' | 'batch_generating';
 type FilterTab = 'TODAS' | 'AVATAR' | 'PRODUCT' | 'OUTFIT' | 'SCENE';
@@ -90,6 +95,7 @@ const CustomCheckbox: React.FC<{ checked: boolean; onChange: () => void; label?:
 
 const ContentStudioProModule: React.FC = () => {
   const { modelId, setModelId } = useModelSelection();
+  const { credits } = useAuth(); // <-- NUEVO: para obtener créditos actuales
   const [step, setStep] = useState<Step>('setup');
   const [sets, setSets] = useState<ContentStudioProSet[]>([]);
   const [currentSet, setCurrentSet] = useState<ContentStudioProSet | null>(null);
@@ -130,9 +136,19 @@ const ContentStudioProModule: React.FC = () => {
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [lightboxMetadata, setLightboxMetadata] = useState<{ label: string }>({ label: '' });
 
-  const [shotCount, setShotCount] = useState(6);
-  
+  const [userShotCount, setUserShotCount] = useState(6);
+
   const [generatingShots, setGeneratingShots] = useState<{ [key: string]: { status: string; imageUrl?: string; error?: string; autoRetryCount?: number } }>({});
+
+  // Progreso narrado Sprint 7
+  const [progressJobId, setProgressJobId] = useState<string>('');
+  const [progressSteps, setProgressSteps] = useState<ProgressStep[]>([]);
+  const [progressStepIndex, setProgressStepIndex] = useState(0);
+  const [progressShots, setProgressShots] = useState<CompletedShot[]>([]);
+  const [progressTotalShots, setProgressTotalShots] = useState(0);
+  const [progressEta, setProgressEta] = useState(0);
+  const progressEtaTimerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const progressStartRef = React.useRef<number>(0);
 
   const [showIncompleteModal, setShowIncompleteModal] = useState(false);
   const [pendingProducedSet, setPendingProducedSet] = useState<ContentStudioProSet | null>(null);
@@ -146,18 +162,30 @@ const ContentStudioProModule: React.FC = () => {
     loadSets();
   }, []);
 
+  // Onboarding: carga imagen gratuita desde localStorage si viene del wizard
+  useEffect(() => {
+    const img = localStorage.getItem('onboarding_image_ugc');
+    const free = localStorage.getItem('onboarding_free_generation');
+    if (img && free) {
+      localStorage.removeItem('onboarding_image_ugc');
+      localStorage.removeItem('onboarding_free_generation');
+      setFaceRefs([img]);
+      setUserShotCount(2);
+      startMasterGeneration(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const loadSets = async () => {
     const allSets = await contentStudioStorage.listSets();
     setSets(allSets);
   };
 
   useEffect(() => {
-    const newCount = getShotCount(focus, productSize);
-    setShotCount(newCount);
+    setUserShotCount(getShotCount(focus, productSize));
   }, [focus, productSize]);
 
-  // Análisis de relevancia con debounce 2s — evita múltiples llamadas a Gemini
-  // cuando el usuario sube varias referencias seguidas o en móvil con re-renders
+  // Análisis de relevancia con debounce 2s
   useEffect(() => {
     if (!(focus === 'OUTFIT' || focus === 'SCENE') || !productRef) {
       setShowProductWarning(false);
@@ -205,11 +233,15 @@ const ContentStudioProModule: React.FC = () => {
     return true;
   };
 
-  const startMasterGeneration = async () => {
+  const startMasterGeneration = async (free = false) => {
     if (!validateReferences()) return;
-    
-    const ok = await checkAndDeduct(CREDIT_COSTS.UGC_PER_SHOT);
-    if (!ok) return;
+
+    if (!free) {
+      const costPerImage = MODEL_CREDIT_COST[modelId];
+      const totalCost = costPerImage * (1 + userShotCount);
+      const ok = await checkAndDeduct(totalCost);
+      if (!ok) return;
+    }
     
     setStep('generating_master');
     setErrorStatus(null);
@@ -247,7 +279,7 @@ const ContentStudioProModule: React.FC = () => {
       );
       setRef0Analysis(analysis);
 
-      const shotKeys = getShotKeys(shotCount);
+      const shotKeys = getShotKeys(userShotCount);
       const initialShots = shotKeys.map((key, idx) => ({
         key,
         name: `Shot ${idx + 1}`,
@@ -273,7 +305,8 @@ const ContentStudioProModule: React.FC = () => {
         image0Url: image0,
         ref0Analysis: analysis,
         attemptsImage0: 1,
-        shots: initialShots
+        shots: initialShots,
+        userShotCount,
       };
 
       setCurrentSet(newSet);
@@ -393,6 +426,44 @@ const ContentStudioProModule: React.FC = () => {
     throw lastError;
   };
 
+  // ── Helpers de progreso ──────────────────────────────────────────────────────
+  const startProgress = (steps: ProgressStep[], totalShots: number) => {
+    const jobId = crypto.randomUUID();
+    setProgressJobId(jobId);
+    setProgressSteps(steps);
+    setProgressStepIndex(0);
+    setProgressShots([]);
+    setProgressTotalShots(totalShots);
+    setProgressEta(steps.length * 20);
+    progressStartRef.current = Date.now();
+
+    if (progressEtaTimerRef.current) clearInterval(progressEtaTimerRef.current);
+    progressEtaTimerRef.current = setInterval(() => {
+      setProgressStepIndex(idx => {
+        const elapsed = (Date.now() - progressStartRef.current) / 1000;
+        const secPerStep = idx > 0 ? elapsed / idx : 20;
+        const remaining = (steps.length - idx) * secPerStep;
+        setProgressEta(Math.max(0, Math.round(remaining)));
+        return idx; // no mutamos el índice aquí
+      });
+    }, 1500);
+
+    return jobId;
+  };
+
+  const advanceProgress = (idx: number) => setProgressStepIndex(idx);
+
+  const addProgressShot = (url: string, index: number) =>
+    setProgressShots(prev => [...prev, { url, index }]);
+
+  const stopProgress = () => {
+    if (progressEtaTimerRef.current) {
+      clearInterval(progressEtaTimerRef.current);
+      progressEtaTimerRef.current = null;
+    }
+  };
+  // ────────────────────────────────────────────────────────────────────────────
+
   const approveAndProduce = async () => {
     if (!currentSet || !currentSet.image0Url || !currentSet.faceRefs[0]) return;
 
@@ -405,7 +476,20 @@ const ContentStudioProModule: React.FC = () => {
 
     setStep('producing');
     setCurrentSet(producingSet);
-    
+
+    // Iniciar progreso narrado
+    const shotCount = producingSet.shots.length;
+    const steps: ProgressStep[] = [
+      { id: 'analyze', label: 'Analizando referencias y composición' },
+      ...producingSet.shots.map((s, i) => ({
+        id: `shot-${i}`,
+        label: `Generando shot ${i + 1} de ${shotCount}`,
+      })),
+      { id: 'refine', label: 'Finalizando sesión' },
+    ];
+    startProgress(steps, shotCount);
+    advanceProgress(0);
+
     const initialGenState: { [key: string]: { status: string; imageUrl?: string; error?: string; autoRetryCount?: number } } = {};
     producingSet.shots.forEach((shot) => {
       initialGenState[shot.key] = { status: 'pending', autoRetryCount: 0 };
@@ -443,9 +527,12 @@ const ContentStudioProModule: React.FC = () => {
       }
     };
 
+    // step 0 = "Analizando", steps 1..N = shots, step N+1 = "Finalizando"
+    advanceProgress(1);
+
     const shotPromises = updatedShots.map(async (shot, idx) => {
       updateShotStatus(shot.key, 'processing');
-      
+
       try {
         const url = await generateShotWithAutoRetry(
           producingSet,
@@ -459,31 +546,40 @@ const ContentStudioProModule: React.FC = () => {
             updateShotStatus(shot.key, 'retrying', undefined, undefined, attempt - 1);
           }
         );
-        
+
         updateShotStatus(shot.key, 'completed', url);
-        
+        addProgressShot(url, idx);
+        // avanza al siguiente paso de shot (idx+2 porque el paso 0 es "Analizando")
+        advanceProgress(idx + 2);
+
         saveToHistorySafe({
           imageUrl: url,
           moduleLabel: `UGC Pro (${FOCUS_LABELS[focus].split(' / ')[0]} - ${shot.name})`,
           promptText: `Shot ${shot.key} for ${focus}`,
         });
-        
+
       } catch (e: any) {
         updateShotStatus(shot.key, 'failed', undefined, e?.message || 'Error desconocido');
       }
     });
 
     await Promise.all(shotPromises);
-    
+
+    // Paso final "Finalizando"
+    advanceProgress(updatedShots.length + 1);
+    stopProgress();
+
     const finalSet = { ...producingSet, shots: updatedShots };
     const failedShots = updatedShots.filter(s => s.status === 'error');
-    
+
     if (failedShots.length > 0) {
       setPendingProducedSet(finalSet);
       setShowIncompleteModal(true);
     } else {
       await contentStudioStorage.saveSet(finalSet);
       await loadSets();
+      // Breve pausa para mostrar el estado "Finalizado" antes de navegar
+      await new Promise(r => setTimeout(r, 1800));
       setStep('library');
       setGeneratingShots({});
     }
@@ -632,7 +728,6 @@ const ContentStudioProModule: React.FC = () => {
         shotIndex,
         updatedShots.length,
         (status, imageUrl) => {
-
           if (status === 'completed' && imageUrl) {
             updatedShots[shotIndex] = {
               ...shot,
@@ -737,79 +832,9 @@ const ContentStudioProModule: React.FC = () => {
   });
   const showSelectionTools = filteredSets.length > 0;
 
-  const renderShotStatus = (shotKey: ShotKey, idx: number) => {
-    const genState = generatingShots[shotKey];
-    if (!genState) return null;
-    
-    const getStatusIcon = () => {
-      switch (genState.status) {
-        case 'pending':    return <i className="fa-regular fa-clock text-slate-400 text-xl"></i>;
-        case 'processing': return <i className="fa-solid fa-spinner animate-spin text-brand-500 text-xl"></i>;
-        case 'retrying':   return <i className="fa-solid fa-arrows-rotate animate-spin text-amber-500 text-xl"></i>;
-        case 'completed':  return <i className="fa-solid fa-circle-check text-green-500 text-xl"></i>;
-        case 'failed':     return <i className="fa-solid fa-circle-exclamation text-red-500 text-xl"></i>;
-        default: return null;
-      }
-    };
-    
-    const getStatusText = () => {
-      switch (genState.status) {
-        case 'pending':    return 'En cola';
-        case 'processing': return 'Generando...';
-        case 'retrying':   return `Reintento ${genState.autoRetryCount ?? 1}/${AUTO_RETRY_ATTEMPTS}`;
-        case 'completed':  return 'Completado';
-        case 'failed':     return 'Falló';
-        default: return '';
-      }
-    };
-
-    const getStatusColor = () => {
-      switch (genState.status) {
-        case 'retrying': return 'text-amber-500';
-        case 'failed':   return 'text-red-500';
-        case 'completed': return 'text-green-500';
-        default: return 'text-slate-500';
-      }
-    };
-    
-    return (
-      <div
-        key={idx}
-        className="aspect-[3/4] bg-slate-50 rounded-[24px] overflow-hidden relative group cursor-pointer flex flex-col shadow-lg"
-        onClick={() => genState.imageUrl && currentSet && openLightbox(currentSet, idx + 1)}
-      >
-        <div className="flex-1 relative overflow-hidden bg-slate-100">
-          {genState.imageUrl ? (
-            <img src={genState.imageUrl} className="w-full h-full object-cover" />
-          ) : (
-            <div className="flex h-full items-center justify-center flex-col gap-3 p-3">
-              {getStatusIcon()}
-              <span className={`text-[10px] font-black uppercase tracking-wider ${getStatusColor()}`}>
-                {getStatusText()}
-              </span>
-              {genState.status === 'failed' && genState.error && (
-                <span className="text-[10px] text-red-400 px-2 text-center leading-snug">
-                  {genState.error.length > 60 ? genState.error.slice(0, 60) + '…' : genState.error}
-                </span>
-              )}
-            </div>
-          )}
-          <div className="absolute top-4 left-4">
-            <span className="px-3 py-1 bg-black/40 backdrop-blur-md text-white text-[10px] font-black rounded-full uppercase border border-white/10 italic">
-              Shot {idx + 1}
-            </span>
-          </div>
-          {genState.status === 'retrying' && (
-            <div className="absolute top-4 right-4">
-              <span className="px-2 py-1 bg-amber-500/90 backdrop-blur-md text-white text-[10px] font-black rounded-full uppercase">
-                Auto-retry
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
+  // Costo total de la sesión: master + userShotCount shots
+  const sessionCost = MODEL_CREDIT_COST[modelId] * (1 + userShotCount);
+  const creditsAfterMaster = Math.max(0, credits.available - sessionCost);
 
   return (
     <>
@@ -817,7 +842,7 @@ const ContentStudioProModule: React.FC = () => {
       <div className="max-w-7xl mx-auto space-y-6 md:space-y-10 pb-20 animate-in fade-in">
         <header className="flex flex-col md:flex-row items-center justify-between gap-6 px-4">
           <div className="text-center md:text-left">
-            <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">
+            <h1 className="t-display text-3xl md:text-4xl text-slate-900">
               Content <span className="text-brand-600">Studio</span>
             </h1>
             <div className="flex items-center justify-center md:justify-start gap-2 mt-2">
@@ -836,7 +861,7 @@ const ContentStudioProModule: React.FC = () => {
                 setSelectedSets(new Set());
                 setBatchMode(false);
               }}
-              className={`px-6 md:px-8 py-2 md:py-3 rounded-xl md:rounded-2xl text-[10px] font-black uppercase transition-all ${step !== 'library' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400'}`}
+              className={`px-6 md:px-8 py-2 md:py-3 rounded-xl md:rounded-2xl t-meta transition-all ${step !== 'library' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400'}`}
             >
               Laboratorio
             </button>
@@ -847,7 +872,7 @@ const ContentStudioProModule: React.FC = () => {
                 setSelectedSets(new Set());
                 setBatchMode(false);
               }}
-              className={`px-6 md:px-8 py-2 md:py-3 rounded-xl md:rounded-2xl text-[10px] font-black uppercase transition-all ${step === 'library' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400'}`}
+              className={`px-6 md:px-8 py-2 md:py-3 rounded-xl md:rounded-2xl t-meta transition-all ${step === 'library' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400'}`}
             >
               Historial ({sets.length})
             </button>
@@ -863,7 +888,7 @@ const ContentStudioProModule: React.FC = () => {
                 {/* Enfoque de sesión */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Enfoque de sesión</label>
+                    <label className="t-meta">Enfoque de sesión</label>
                     <div className="group relative">
                       <i className="fa-solid fa-circle-info text-slate-300 text-[10px] cursor-help"></i>
                       <div className="absolute bottom-full left-0 mb-2 w-64 p-2 bg-slate-900 text-white text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
@@ -881,7 +906,7 @@ const ContentStudioProModule: React.FC = () => {
                         <i className={`fa-solid ${
                           k === 'AVATAR' ? 'fa-user-circle' : k === 'PRODUCT' ? 'fa-gem' : k === 'OUTFIT' ? 'fa-shirt' : 'fa-image'
                         } text-xl md:text-2xl`}></i>
-                        <span className="text-[10px] font-black uppercase tracking-widest leading-none text-center">
+                        <span className="t-meta leading-none text-center">
                           {FOCUS_LABELS[k as Focus].split(' / ')[0]}
                         </span>
                       </button>
@@ -896,7 +921,7 @@ const ContentStudioProModule: React.FC = () => {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{getSlotLabel('face', focus)}</label>
+                      <label className="t-meta">{getSlotLabel('face', focus)}</label>
                       <div className="group relative">
                         <i className="fa-solid fa-circle-info text-slate-300 text-[10px] cursor-help"></i>
                         <div className="absolute bottom-full left-0 mb-2 w-64 p-2 bg-slate-900 text-white text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
@@ -965,7 +990,7 @@ const ContentStudioProModule: React.FC = () => {
 
                 {focus === 'SCENE' && (
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Descripción adicional (opcional)</label>
+                    <label className="t-meta">Descripción adicional (opcional)</label>
                     <textarea
                       value={sceneText}
                       onChange={(e) => setSceneText(e.target.value)}
@@ -978,7 +1003,7 @@ const ContentStudioProModule: React.FC = () => {
 
                 {focus === 'PRODUCT' && (
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tamaño del producto</label>
+                    <label className="t-meta">Tamaño del producto</label>
                     <div className="flex bg-white p-1 rounded-[16px] md:rounded-[20px] border border-slate-200">
                       {Object.entries(SIZE_LABELS).map(([k, v]) => (
                         <button
@@ -1006,12 +1031,52 @@ const ContentStudioProModule: React.FC = () => {
                   disabled={step !== 'setup'}
                 />
 
+                {/* Selector de cantidad de shots */}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <label className="t-meta">Cantidad de shots</label>
+                    <span className="text-[9px] text-slate-400 italic">recomendado: 6</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[2, 4, 6].map(n => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setUserShotCount(n)}
+                        className={`py-3 rounded-xl text-xs font-bold uppercase transition-all ${
+                          userShotCount === n
+                            ? 'bg-brand-600 text-white shadow-md'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {n} shots
+                      </button>
+                    ))}
+                  </div>
+                  {userShotCount === 2 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-700 text-[11px] font-medium">
+                      ⚠️ <strong>2 shots</strong>: solo obtendrás close-up y torso. Se perderán ángulos como hero shot, lifestyle y detalle.
+                    </div>
+                  )}
+                  {userShotCount === 4 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-700 text-[11px] font-medium">
+                      ⚠️ <strong>4 shots</strong>: incluye close-up, producto en mano, detalle y torso. No habrá hero shot ni lifestyle.
+                    </div>
+                  )}
+                  {userShotCount === 6 && (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-emerald-700 text-[11px] font-medium">
+                      ✅ <strong>6 shots</strong>: cobertura completa (close-up, producto, detalle, torso, hero, lifestyle).
+                    </div>
+                  )}
+                </div>
+
                 <GenerateButton
                   onClick={startMasterGeneration}
                   disabled={step !== 'setup'}
-                  label="Sintetizar Master Anchor (UGC)"
+                  label={`Sintetizar Master + ${userShotCount} shots`}
                   loadingLabel="Generando..."
-                  imageCount={2}
+                  fixedCost={sessionCost}
+                  creditsAfter={creditsAfterMaster}
                   className="py-5 md:py-7 rounded-[24px] md:rounded-[32px] text-[10px] md:text-xs"
                 />
 
@@ -1031,7 +1096,7 @@ const ContentStudioProModule: React.FC = () => {
                 </div>
               </div>
               <div className="space-y-4">
-                <h3 className="text-white text-4xl font-black uppercase italic tracking-tighter">UGC Identity Lock</h3>
+                <h3 className="t-display text-4xl text-white">UGC Identity Lock</h3>
                 <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.4em] max-w-sm mx-auto leading-relaxed">
                   Persistencia facial + coherencia visual estilo smartphone.
                 </p>
@@ -1045,8 +1110,8 @@ const ContentStudioProModule: React.FC = () => {
           <div className="min-h-[500px] md:min-h-[600px] flex flex-col items-center justify-center space-y-8 md:space-y-12 bg-slate-900 rounded-[40px] md:rounded-[64px] border-8 border-slate-800 shadow-2xl p-6 md:p-10 text-center animate-in zoom-in mx-4">
             <div className="w-16 h-16 md:w-20 md:h-20 border-4 border-white/5 border-t-brand-500 rounded-full animate-spin shadow-[0_0_30px_rgba(247,44,91,0.3)]"></div>
             <div className="space-y-4">
-              <h2 className="text-white text-xl md:text-3xl font-black uppercase italic tracking-tighter leading-none">{loadingMsg}</h2>
-              <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.5em] animate-pulse">
+              <h2 className="t-display text-xl md:text-3xl text-white">{loadingMsg}</h2>
+              <p className="t-meta text-slate-500 tracking-[0.5em] animate-pulse">
                 UGC SYSTEM • Gemini ACTIVE
               </p>
             </div>
@@ -1055,40 +1120,33 @@ const ContentStudioProModule: React.FC = () => {
 
         {/* PRODUCING */}
         {step === 'producing' && currentSet && (
-          <div className="min-h-[600px] bg-white rounded-[40px] border border-slate-100 shadow-2xl p-6 md:p-10 mx-4 animate-in zoom-in">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h2 className="text-xl md:text-2xl font-black text-slate-900 uppercase italic tracking-tighter">
-                  Generando sesión {focus}...
-                </h2>
-                <p className="text-slate-400 text-[10px] mt-1">
-                  {Object.values(generatingShots).filter(s => s.status === 'completed').length} de {shotCount} shots completados
-                </p>
+          <div className="bg-white rounded-[40px] border border-slate-100 shadow-2xl p-6 md:p-10 mx-4 animate-in zoom-in">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
+              {/* Master anchor */}
+              <div className="flex flex-col items-center gap-4">
+                <div className="aspect-[3/4] w-full max-w-xs rounded-[24px] overflow-hidden border-4 border-brand-600 shadow-xl relative">
+                  <img src={currentSet.image0Url!} className="w-full h-full object-cover" />
+                  <div className="absolute top-4 left-4">
+                    <span className="px-3 py-1 bg-brand-600 text-white text-[10px] font-black rounded-full uppercase">Master</span>
+                  </div>
+                </div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Imagen ancla · Identity Lock activo</p>
               </div>
-              <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-brand-500 transition-all duration-300"
-                  style={{ width: `${(Object.values(generatingShots).filter(s => s.status === 'completed').length / shotCount) * 100}%` }}
+
+              {/* Progreso narrado */}
+              <div className="flex flex-col justify-center">
+                <h2 className="t-display text-xl text-slate-900 mb-6">
+                  Generando sesión <span className="text-brand-600">{focus}</span>
+                </h2>
+                <GenerationProgress
+                  steps={progressSteps}
+                  currentStepIndex={progressStepIndex}
+                  completedShots={progressShots}
+                  totalShots={progressTotalShots}
+                  etaSeconds={progressEta}
                 />
               </div>
             </div>
-
-            <div className="mb-8">
-              <div className="aspect-[3/4] max-w-xs mx-auto rounded-[24px] overflow-hidden border-4 border-brand-600 shadow-xl relative">
-                <img src={currentSet.image0Url!} className="w-full h-full object-cover" />
-                <div className="absolute top-4 left-4">
-                  <span className="px-3 py-1 bg-brand-600 text-white text-[10px] font-black rounded-full uppercase">Master</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              {currentSet.shots.map((shot, idx) => renderShotStatus(shot.key, idx))}
-            </div>
-
-            <p className="text-center text-[10px] text-slate-400 mt-6 animate-pulse">
-              Generando imágenes... El proceso puede tomar hasta 2 minutos por imagen
-            </p>
           </div>
         )}
 
@@ -1115,7 +1173,7 @@ const ContentStudioProModule: React.FC = () => {
 
               <div className="lg:col-span-5 flex flex-col space-y-6 md:space-y-10 justify-center">
                 <div className="p-6 md:p-10 bg-slate-900 rounded-[24px] md:rounded-[40px] text-white space-y-6 md:space-y-8">
-                  <h3 className="text-lg md:text-xl font-black uppercase italic tracking-tighter leading-none border-b border-white/10 pb-4 md:pb-6">
+                  <h3 className="t-display text-lg md:text-xl border-b border-white/10 pb-4 md:pb-6">
                     Check de identidad (UGC)
                   </h3>
                   <div className="space-y-3 md:space-y-4">
@@ -1136,7 +1194,7 @@ const ContentStudioProModule: React.FC = () => {
                   </div>
                   <button
                     onClick={regenerateMaster}
-                    className="text-brand-400 font-black text-[10px] uppercase tracking-widest hover:text-white transition-all italic flex items-center gap-2"
+                    className="t-meta text-brand-400 hover:text-white transition-all italic flex items-center gap-2"
                   >
                     <i className="fa-solid fa-rotate"></i> Regenerar Master ({currentSet.attemptsImage0}/3)
                   </button>
@@ -1145,7 +1203,7 @@ const ContentStudioProModule: React.FC = () => {
                 <div className="bg-slate-50 p-6 md:p-10 rounded-[24px] md:rounded-[40px] border border-slate-100 space-y-6 md:space-y-8">
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Enfoque de sesión</label>
+                      <label className="t-meta">Enfoque de sesión</label>
                       <div className="group relative">
                         <i className="fa-solid fa-circle-info text-slate-300 text-[10px] cursor-help"></i>
                         <div className="absolute bottom-full left-0 mb-2 w-64 p-2 bg-slate-900 text-white text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
@@ -1159,7 +1217,7 @@ const ContentStudioProModule: React.FC = () => {
                         focus === 'AVATAR' ? 'fa-user-circle' : focus === 'PRODUCT' ? 'fa-gem' : focus === 'OUTFIT' ? 'fa-shirt' : 'fa-image'
                       } text-xl md:text-2xl text-brand-600`}></i>
                       <div>
-                        <p className="text-[11px] md:text-[13px] font-black text-slate-900 uppercase tracking-wider">
+                        <p className="t-meta text-[11px] md:text-[13px] text-slate-900">
                           {FOCUS_LABELS[focus].split(' / ')[0]}
                         </p>
                         <p className="text-[10px] text-slate-500">
@@ -1174,7 +1232,7 @@ const ContentStudioProModule: React.FC = () => {
 
                   {focus === 'PRODUCT' && currentSet.productSize && (
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tamaño del producto</label>
+                      <label className="t-meta">Tamaño del producto</label>
                       <div className="text-[11px] font-bold text-slate-700 bg-white p-3 rounded-xl border border-slate-200">
                         {currentSet.productSize === 'SMALL' && '🔍 Pequeño (Joyas, Relojes) → macro close-ups'}
                         {currentSet.productSize === 'MEDIUM' && '📦 Mediano (Bolsos, Zapatos) → producto en mano'}
@@ -1185,7 +1243,7 @@ const ContentStudioProModule: React.FC = () => {
 
                   {(focus === 'OUTFIT' || focus === 'SCENE') && currentSet.productRef && (
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      <label className="t-meta">
                         {focus === 'OUTFIT' ? 'Objeto complementario' : 'Prop / Objeto adicional'}
                       </label>
                       <div className="text-[11px] font-bold text-slate-700 bg-white p-3 rounded-xl border border-slate-200 flex items-center gap-2">
@@ -1197,9 +1255,9 @@ const ContentStudioProModule: React.FC = () => {
 
                   <button
                     onClick={approveAndProduce}
-                    className="w-full py-5 md:py-7 bg-brand-600 text-white rounded-[24px] md:rounded-[32px] font-black text-[10px] md:text-xs uppercase tracking-[0.2em] shadow-2xl hover:bg-brand-700 transition-all active:scale-95"
+                    className="w-full py-5 md:py-7 bg-brand-600 text-white rounded-[24px] md:rounded-[32px] t-meta shadow-2xl hover:bg-brand-700 transition-all active:scale-95"
                   >
-                    Comenzar producción ({shotCount} Shots)
+                    Comenzar producción ({currentSet.userShotCount ?? userShotCount} Shots)
                   </button>
                 </div>
               </div>
@@ -1225,7 +1283,7 @@ const ContentStudioProModule: React.FC = () => {
                       setSelectionMode(false);
                       setSelectedSets(new Set());
                     }}
-                    className={`px-4 md:px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all ${
+                    className={`px-4 md:px-6 py-2 rounded-full t-meta whitespace-nowrap transition-all ${
                       activeTab === tab
                         ? 'bg-brand-600 text-white shadow-md'
                         : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
@@ -1245,7 +1303,7 @@ const ContentStudioProModule: React.FC = () => {
                   {!selectionMode ? (
                     <button
                       onClick={() => setSelectionMode(true)}
-                      className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-slate-100 transition-all"
+                      className="px-4 py-2 bg-white border border-slate-200 rounded-lg t-meta hover:bg-slate-100 transition-all"
                     >
                       <i className="fa-solid fa-check-square mr-1"></i> Seleccionar múltiple
                     </button>
@@ -1253,19 +1311,19 @@ const ContentStudioProModule: React.FC = () => {
                     <>
                       <button
                         onClick={selectAllFiltered}
-                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-slate-100 transition-all"
+                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg t-meta hover:bg-slate-100 transition-all"
                       >
                         <i className="fa-solid fa-square-check mr-1"></i> Seleccionar todo
                       </button>
                       <button
                         onClick={clearSelection}
-                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-slate-100 transition-all"
+                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg t-meta hover:bg-slate-100 transition-all"
                       >
                         <i className="fa-solid fa-square mr-1"></i> Limpiar
                       </button>
                       <button
                         onClick={() => setSelectionMode(false)}
-                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-slate-100 transition-all"
+                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg t-meta hover:bg-slate-100 transition-all"
                       >
                         <i className="fa-solid fa-times mr-1"></i> Salir
                       </button>
@@ -1306,7 +1364,7 @@ const ContentStudioProModule: React.FC = () => {
                           <img src={set.image0Url!} className="w-full h-full object-cover" />
                         </div>
                         <div>
-                          <h3 className="text-xl md:text-2xl font-black text-slate-900 uppercase italic leading-none">
+                          <h3 className="t-display text-xl md:text-2xl text-slate-900">
                             {set.focus === 'PRODUCT' && '📦 '}
                             {set.focus === 'OUTFIT' && '👔 '}
                             {set.focus === 'SCENE' && '🏞️ '}
@@ -1332,7 +1390,7 @@ const ContentStudioProModule: React.FC = () => {
                       <div className="flex gap-2 w-full md:w-auto">
                         <button
                           onClick={() => downloadSingleSet(set)}
-                          className="flex-1 md:flex-none px-6 md:px-10 py-3 md:py-5 bg-white border border-slate-200 rounded-xl md:rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 md:gap-3 shadow-sm hover:bg-slate-50 active:scale-95 transition-all"
+                          className="flex-1 md:flex-none px-6 md:px-10 py-3 md:py-5 bg-white border border-slate-200 rounded-xl md:rounded-2xl t-meta flex items-center justify-center gap-2 md:gap-3 shadow-sm hover:bg-slate-50 active:scale-95 transition-all"
                         >
                           <i className="fa-solid fa-file-zipper"></i> Pack
                         </button>

@@ -7,8 +7,12 @@ import ModuleTutorial from '../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../components/shared/tutorialConfigs';
 import { useCreditGuard } from '../hooks/useCreditGuard';
 import NoCreditsModal from '../components/shared/NoCreditsModal';
-import { CREDIT_COSTS } from '../services/creditConfig';
+import { CREDIT_COSTS, MODEL_CREDIT_COST } from '../services/creditConfig';
 import { downloadAsZip } from '../utils/imageUtils';
+import { useAuth } from '../modules/auth/AuthContext';
+import { GenerateButton } from '../components/shared/GenerateButton';
+import { ModelSelector } from '../components/shared/ModelSelector';
+import { useModelSelection } from '../hooks/useModelSelection';
 import { 
   ETHNICITY_OPTIONS, AGE_OPTIONS, BUILD_OPTIONS, OUTFITS_MUJER, OUTFITS_HOMBRE, 
   EYE_COLORS, HAIR_COLORS, HAIR_TYPES, HAIR_LENGTHS, PERSONALITY_OPTIONS, EXPRESSION_OPTIONS 
@@ -24,6 +28,8 @@ interface ManualCreatorModuleProps {
 }
 
 const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => {
+  const { credits } = useAuth();
+  const { modelId, setModelId } = useModelSelection();
   const [name, setName] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
@@ -52,6 +58,9 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
   });
 
   const { checkAndDeduct, showNoCredits, requiredCredits, closeModal } = useCreditGuard();
+
+  const totalCost = CREDIT_COSTS.CREATE_MODEL_MANUAL;
+  const creditsAfter = Math.max(0, credits.available - totalCost);
 
   const handleGenderChange = (gender: 'mujer' | 'hombre') => {
     setData({
@@ -264,14 +273,23 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
               </div>
             </div>
 
+            <ModelSelector
+              value={modelId}
+              onChange={setModelId}
+              disabled={isProcessing}
+            />
+
             <div className="pt-4">
-              <button 
-                onClick={handleCreate} 
-                disabled={isProcessing} 
-                className="w-full py-5 bg-brand-600 text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl hover:bg-brand-700 active:scale-95 transition-all disabled:opacity-50"
-              >
-                {isProcessing ? status : 'Sintetizar ADN Maestro'}
-              </button>
+              <GenerateButton
+                onClick={handleCreate}
+                loading={isProcessing}
+                disabled={!name || isProcessing}
+                label="Sintetizar ADN Maestro"
+                loadingLabel={status || 'Sintetizando...'}
+                imageCount={1}
+                creditsAfter={creditsAfter}
+                className="py-5 rounded-[24px]"
+              />
             </div>
           </section>
 

@@ -1,10 +1,10 @@
 // src/modules/ProductGeneratorModule.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ModuleTutorial from '../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../components/shared/tutorialConfigs';
 import { useCreditGuard } from '../../hooks/useCreditGuard';
 import NoCreditsModal from '../components/shared/NoCreditsModal';
-import { CREDIT_COSTS } from '../services/creditConfig';
+import { CREDIT_COSTS, MODEL_CREDIT_COST } from '../services/creditConfig';
 import { useNavigate } from 'react-router-dom';
 import { ProductProfile } from '../types';
 import { geminiService } from '../services/geminiService';
@@ -13,6 +13,7 @@ import { PRODUCT_BASE_STYLES_SEEDREAM } from '../constants';
 import { ModelSelector } from '../components/shared/ModelSelector';
 import { GenerateButton } from '../components/shared/GenerateButton';
 import { useModelSelection } from '../hooks/useModelSelection';
+import { useAuth } from '../modules/auth/AuthContext';
 import { generationHistoryService } from '../services/generationHistoryService';
 import { readAndCompressFile, downloadAsZip } from '../utils/imageUtils';
 import { 
@@ -77,6 +78,7 @@ const sanitizeProductAnchor = (prompt: string, productCategory: string): string 
 const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, products, standalone }) => {
   const navigate = useNavigate();
   const { modelId, setModelId } = useModelSelection();
+  const { credits } = useAuth(); // para saber créditos actuales
   const [activeTab, setActiveTab] = useState<'create' | 'library'>('create');
   const [currentStep, setCurrentStep] = useState<ProductWorkflowStep>('setup');
   const [name, setName] = useState('');
@@ -105,6 +107,20 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
   const { isVisible: fabVisible } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: false });
 
   const { checkAndDeduct, showNoCredits, requiredCredits, closeModal } = useCreditGuard();
+
+  // Onboarding: carga imagen gratuita desde localStorage si viene del wizard
+  useEffect(() => {
+    const img = localStorage.getItem('onboarding_image_product');
+    const free = localStorage.getItem('onboarding_free_generation');
+    if (img && free) {
+      localStorage.removeItem('onboarding_image_product');
+      localStorage.removeItem('onboarding_free_generation');
+      setFiles([img, null, null, null]);
+      setName('Mi primer producto');
+      startGeneratingHero(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Handlers para los 4 slots de imagen
   const updateFile = (index: number, base64: string | null) => {
@@ -148,8 +164,6 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
   };
 
   const generateImageWithAllRules = async (intent: string, refs: string[]) => {
-    // Seedream interpreta literalmente "studio multi-light setup (Key, Fill, Rim)"
-    // y renderiza el equipo. Usamos un prompt sin mencionar equipo fotográfico.
     const styles = modelId === 'seedream' ? PRODUCT_BASE_STYLES_SEEDREAM : PRODUCT_BASE_STYLES;
     const baseStylePrompt = styles[style];
     const finalPrompt = `${baseStylePrompt}\n${intent}\n${PRODUCT_HARD_RULES}\nPRODUCT ANCHOR: ${productAnchor}`;
@@ -170,18 +184,20 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
 
   const MIN_PHOTOS = 2;
 
-  const startGeneratingHero = async () => {
+  const startGeneratingHero = async (free = false) => {
     const validFiles = files.filter(f => f !== null) as string[];
     if (!name) {
       alert("Por favor, especifica el nombre del producto.");
       return;
     }
-    if (validFiles.length < MIN_PHOTOS) {
+    if (!free && validFiles.length < MIN_PHOTOS) {
       alert(`Sube al menos ${MIN_PHOTOS} fotos del producto (ej: frontal y trasera) para que la IA comprenda todas sus caras.`);
       return;
     }
-    const ok = await checkAndDeduct(CREDIT_COSTS.PRODUCT_GENERATION);
-    if (!ok) return;
+    if (!free) {
+      const ok = await checkAndDeduct(CREDIT_COSTS.PRODUCT_GENERATION);
+      if (!ok) return;
+    }
 
     setCurrentStep('analyzing');
     setProcessingStatus('Escaneando materiales y contexto del producto...');
@@ -205,7 +221,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
         imageUrl: heroImage,
         module: 'catalog',
         moduleLabel: 'Product Studio (Hero)',
-        creditsUsed: CREDIT_COSTS.PRODUCT_GENERATION,
+        creditsUsed: free ? 0 : CREDIT_COSTS.PRODUCT_GENERATION,
         promptText: heroIntent
       }).catch(console.error);
 
@@ -354,21 +370,26 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
   const isGenerating = currentStep === 'analyzing' || currentStep === 'generating_hero' || currentStep === 'generating_remaining';
   const hasTooManyHeroAttempts = heroAttempts >= MAX_HERO_ATTEMPTS;
 
+  // Calcular créditos restantes después de generar el set de 5 imágenes
+  const creditCostPerImage = MODEL_CREDIT_COST[modelId];
+  const totalCost = 5 * creditCostPerImage;
+  const creditsAfter = Math.max(0, credits.available - totalCost);
+
   return (
     <>
       <NoCreditsModal isOpen={showNoCredits} onClose={closeModal} required={requiredCredits} available={0} />
       <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 pb-20 animate-in fade-in duration-500">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-1">
           <div>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic">Product Studio Pro</h1>
+            <h1 className="t-display text-3xl text-slate-900">Product Studio Pro</h1>
             <div className="flex items-center gap-2 mt-2">
               <p className="text-slate-500 font-medium italic text-xs md:text-sm">Fotografía de alta gama.</p>
               <ModuleTutorial moduleId="catalog" steps={TUTORIAL_CONFIGS.catalog} />
             </div>
           </div>
           <div className={`flex bg-white p-1 rounded-2xl shadow-sm border border-slate-100 transition-all ${isGenerating ? 'opacity-50 pointer-events-none' : ''}`}>
-            <button onClick={() => { setActiveTab('create'); window.scrollTo(0,0); resetCreator(); }} className={`px-5 md:px-8 py-2 md:py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'create' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700'}`}>Laboratorio</button>
-            <button onClick={() => { setActiveTab('library'); window.scrollTo(0,0); resetCreator(); }} className={`px-5 md:px-8 py-2 md:py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'library' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700'}`}>Catálogo ({products.length})</button>
+            <button onClick={() => { setActiveTab('create'); window.scrollTo(0,0); resetCreator(); }} className={`px-5 md:px-8 py-2 md:py-3 rounded-xl t-meta transition-all ${activeTab === 'create' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700'}`}>Laboratorio</button>
+            <button onClick={() => { setActiveTab('library'); window.scrollTo(0,0); resetCreator(); }} className={`px-5 md:px-8 py-2 md:py-3 rounded-xl t-meta transition-all ${activeTab === 'library' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700'}`}>Catálogo ({products.length})</button>
           </div>
         </header>
 
@@ -378,18 +399,18 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
               <div className={`bg-white p-6 md:p-8 rounded-[32px] md:rounded-[40px] shadow-sm border border-slate-100 space-y-8 transition-all ${isGenerating ? 'opacity-40 pointer-events-none' : ''}`}>
                 <div className="space-y-6">
                   <div>
-                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Nombre del Artículo</label>
+                    <label className="t-meta block mb-2">Nombre del Artículo</label>
                     <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Ej: Reloj Chrono Gold v2" autoComplete="off" autoCapitalize="words" className="w-full px-5 py-3 md:px-6 md:py-4 rounded-2xl border bg-slate-50 font-bold text-slate-800 outline-none focus:bg-white transition-all text-base md:text-sm" />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Describe tu producto (Opcional)</label>
+                    <label className="t-meta block mb-2">Describe tu producto (Opcional)</label>
                     <textarea value={userDescription} onChange={e => setUserDescription(e.target.value)} placeholder="Ej: Reloj de acero inoxidable con esfera azul y correa de cuero negro." autoComplete="off" autoCapitalize="sentences" className="w-full p-4 rounded-2xl border bg-slate-50 text-base md:text-xs min-h-[80px] font-bold text-slate-800 outline-none focus:bg-white transition-all"></textarea>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Categoría</label>
+                      <label className="t-meta block mb-2">Categoría</label>
                       <select value={category} onChange={e => setCategory(e.target.value as any)} className="w-full p-3 md:p-4 rounded-xl border bg-slate-50 text-base md:text-xs font-bold text-slate-900 outline-none">
                         <option value="clothing">Ropa / Textil</option>
                         <option value="jewelry">Joyería / Accesorios</option>
@@ -398,10 +419,10 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Estilo de Producción</label>
+                      <label className="t-meta block mb-2">Estilo de Producción</label>
                       <div className="flex bg-slate-100 p-1 rounded-xl">
-                        <button onClick={() => setStyle('comercial')} className={`flex-1 py-2 text-xs font-black uppercase rounded-lg transition-all ${style === 'comercial' ? 'bg-white shadow-sm text-brand-600 border border-brand-50' : 'text-slate-400'}`}>Comercial</button>
-                        <button onClick={() => setStyle('organico')} className={`flex-1 py-2 text-xs font-black uppercase rounded-lg transition-all ${style === 'organico' ? 'bg-white shadow-sm text-brand-600 border border-brand-50' : 'text-slate-400'}`}>Orgánico</button>
+                        <button onClick={() => setStyle('comercial')} className={`flex-1 py-2 t-meta rounded-lg transition-all ${style === 'comercial' ? 'bg-white shadow-sm text-brand-600 border border-brand-50' : 'text-slate-400'}`}>Comercial</button>
+                        <button onClick={() => setStyle('organico')} className={`flex-1 py-2 t-meta rounded-lg transition-all ${style === 'organico' ? 'bg-white shadow-sm text-brand-600 border border-brand-50' : 'text-slate-400'}`}>Orgánico</button>
                       </div>
                     </div>
                   </div>
@@ -450,6 +471,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
                     label="Generar Set de 5 Fotos"
                     loadingLabel={processingStatus || 'Generando...'}
                     imageCount={5}
+                    creditsAfter={creditsAfter}
                     className="py-4 md:py-5 rounded-2xl md:rounded-[24px]"
                   />
                 </div>
@@ -463,15 +485,15 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
                      <div className="w-40 h-40 md:w-56 md:h-56 bg-white/5 rounded-full flex items-center justify-center text-6xl md:text-8xl text-white/10 border border-white/10 shadow-inner">
                         <i className={`fa-solid fa-gem ${currentStep === 'analyzing' ? 'animate-pulse' : ''}`}></i>
                      </div>
-                     <h3 className="text-2xl md:text-3xl font-black text-white uppercase italic tracking-tighter max-w-sm mx-auto">Motor de Catálogo Pro</h3>
-                     {currentStep === 'analyzing' && <p className="text-brand-400 text-xs font-black uppercase tracking-widest animate-pulse">{processingStatus}</p>}
+                     <h3 className="t-display text-2xl md:text-3xl text-white max-w-sm mx-auto">Motor de Catálogo Pro</h3>
+                     {currentStep === 'analyzing' && <p className="t-meta text-brand-400 animate-pulse">{processingStatus}</p>}
                   </div>
                 )}
 
                 {(currentStep === 'generating_hero' || currentStep === 'generating_remaining') && (
                   <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6 md:space-y-10 p-4">
                     <div className="w-16 h-16 border-4 border-white/5 border-t-brand-500 rounded-full animate-spin"></div>
-                    <p className="text-brand-400 text-xs font-black uppercase tracking-widest animate-pulse">{processingStatus}</p>
+                    <p className="t-meta text-brand-400 animate-pulse">{processingStatus}</p>
                   </div>
                 )}
 
@@ -479,8 +501,8 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
                   <div className="flex-1 flex flex-col space-y-8 animate-in fade-in">
                     <header className="flex justify-between items-center border-b border-white/10 pb-6">
                       <div>
-                        <h3 className="text-white font-black text-2xl uppercase italic tracking-tighter">Checkpoint: Imagen Hero</h3>
-                        <p className="text-brand-400 text-xs font-black uppercase tracking-[0.3em] mt-1 italic">Validación de Fidelidad 1:1</p>
+                        <h3 className="t-display text-2xl text-white">Checkpoint: Imagen Hero</h3>
+                        <p className="t-meta text-brand-400 mt-1">Validación de Fidelidad 1:1</p>
                       </div>
                     </header>
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
@@ -492,7 +514,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
                           >
                             <img src={generatedShots[0]} className="w-full h-full object-cover" />
                             <div className="absolute inset-x-0 bottom-0 p-6 bg-gradient-to-t from-black/90 to-transparent text-center">
-                              <p className="text-white text-xs font-black uppercase tracking-[0.4em]">INSPECCIÓN: IMAGEN MAESTRA (HERO)</p>
+                              <p className="t-meta text-white">INSPECCIÓN: IMAGEN MAESTRA (HERO)</p>
                             </div>
                             <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                               <i className="fa-solid fa-expand text-white text-3xl"></i>
@@ -502,14 +524,14 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
                             <button 
                               onClick={regenerateHero} 
                               disabled={isGenerating || hasTooManyHeroAttempts}
-                              className={`flex-1 py-5 bg-white/5 text-white rounded-3xl font-black text-xs uppercase border border-white/10 hover:bg-white/10 transition-all ${hasTooManyHeroAttempts ? 'opacity-30 cursor-not-allowed' : ''}`}
+                              className={`flex-1 py-5 bg-white/5 text-white rounded-3xl t-meta border border-white/10 hover:bg-white/10 transition-all ${hasTooManyHeroAttempts ? 'opacity-30 cursor-not-allowed' : ''}`}
                             >
                               {isGenerating ? 'Generando...' : (hasTooManyHeroAttempts ? 'Límite de Reintentos' : `Regenerar ( ${heroAttempts}/${MAX_HERO_ATTEMPTS-1} )`)}
                             </button>
                             <button 
                               onClick={generateRemainingShots} 
                               disabled={isGenerating}
-                              className={`flex-1 py-5 rounded-3xl font-black text-xs uppercase shadow-2xl transition-all ${isGenerating ? 'bg-slate-700 text-slate-500' : 'bg-brand-500 text-white hover:bg-brand-400'}`}
+                              className={`flex-1 py-5 rounded-3xl t-meta shadow-2xl transition-all ${isGenerating ? 'bg-slate-700 text-slate-500' : 'bg-brand-500 text-white hover:bg-brand-400'}`}
                             >
                               Aprobar y Continuar
                             </button>
@@ -522,7 +544,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
                         </div>
                       </div>
                       <div className="md:col-span-5 bg-white/5 rounded-[40px] border border-white/10 p-6 space-y-6 text-white">
-                        <h4 className="text-xs font-black text-brand-400 uppercase tracking-widest border-b border-white/10 pb-4">Guía de Aprobación</h4>
+                        <h4 className="t-meta text-brand-400 border-b border-white/10 pb-4">Guía de Aprobación</h4>
                         <p className="text-xs font-bold leading-relaxed">
                           <i className="fa-solid fa-circle-check text-brand-400 mr-2"></i>
                           Verifica que la imagen 1 muestre SOLO el producto correcto.
@@ -544,15 +566,15 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
                   <div className="space-y-6 md:space-y-8 animate-in fade-in">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-white/10 pb-6 md:pb-8 gap-4">
                       <div>
-                        <h3 className="text-white font-black text-xl md:text-2xl uppercase italic tracking-tighter">{name}</h3>
-                        <span className="text-brand-400 text-xs font-black uppercase tracking-[0.2em]">{processingStatus}</span>
+                        <h3 className="t-display text-xl md:text-2xl text-white">{name}</h3>
+                        <span className="t-meta text-brand-400">{processingStatus}</span>
                       </div>
                       <div className="flex gap-2 w-full sm:w-auto">
-                        <button onClick={() => handleDownloadZip(null)} disabled={isZipping} className="flex-1 sm:flex-none px-4 md:px-6 py-3 md:py-4 bg-white/10 text-white rounded-xl md:rounded-2xl text-xs font-black uppercase flex items-center justify-center gap-2 hover:bg-white/20 transition-all border border-white/5">
+                        <button onClick={() => handleDownloadZip(null)} disabled={isZipping} className="flex-1 sm:flex-none px-4 md:px-6 py-3 md:py-4 bg-white/10 text-white rounded-xl md:rounded-2xl t-meta flex items-center justify-center gap-2 hover:bg-white/20 transition-all border border-white/5">
                           {isZipping ? <i className="fa-solid fa-spinner animate-spin"></i> : <i className="fa-solid fa-file-zipper"></i>}
                           zip completo
                         </button>
-                        <button onClick={handleSaveToCatalog} className="flex-1 sm:flex-none px-6 md:px-8 py-3 md:py-4 bg-brand-500 text-white rounded-xl md:rounded-2xl text-xs font-black uppercase shadow-lg hover:bg-brand-600 transition-all active:scale-95">
+                        <button onClick={handleSaveToCatalog} className="flex-1 sm:flex-none px-6 md:px-8 py-3 md:py-4 bg-brand-500 text-white rounded-xl md:rounded-2xl t-meta shadow-lg hover:bg-brand-600 transition-all active:scale-95">
                           guardar en catálogo
                         </button>
                       </div>
@@ -595,7 +617,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
                   <img src={product.generatedImages[0] || product.baseImages[0]} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                 </div>
                 <div className="px-1 md:px-2 space-y-3 md:space-y-4">
-                  <h4 className="text-xl md:text-2xl font-black text-slate-900 uppercase italic truncate tracking-tight">{product.name}</h4>
+                  <h4 className="t-display text-xl md:text-2xl text-slate-900 truncate">{product.name}</h4>
                   <div className="flex gap-2">
                     <span className="px-3 py-1.5 bg-slate-50 text-xs font-black text-slate-500 uppercase rounded-xl border border-slate-100">{product.metadata.material}</span>
                     <span className="px-3 py-1.5 bg-slate-50 text-xs font-black text-slate-500 uppercase rounded-xl border border-slate-100">{product.category}</span>

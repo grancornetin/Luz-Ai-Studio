@@ -3,7 +3,7 @@ import PromptInput from './components/PromptInput';
 import PromptDNAAnalyzer from './components/PromptDNAAnalyzer';
 import PromptDNAEditor from './components/PromptDNAEditor';
 import ReferenceSlots from './components/ReferenceSlots';
-import GenerateControls from './components/GenerateControls';
+import GenerateButton from '../../components/shared/GenerateButton';
 import GeneratedImages from './components/GeneratedImages';
 import PromptTemplateSelector from './components/PromptTemplateSelector';
 import PromptHistory from './components/PromptHistory';
@@ -17,6 +17,8 @@ import { PromptDNA } from './types/promptTypes';
 
 import { AlertCircle, Sparkles, ChevronDown, Zap, Megaphone, Images, Info } from 'lucide-react';
 import { ModelSelector } from '../../components/shared/ModelSelector';
+import { useAuth } from '../../modules/auth/AuthContext';   // ✅ Ruta corregida
+import { imageCost } from '../../services/creditConfig';
 
 type OutputMode = 'standard' | 'campaign' | 'photodump';
 
@@ -60,6 +62,8 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
     setModelId,
   } = usePromptComposer();
 
+  const { credits, isAdmin } = useAuth();
+
   const [showAdvanced, setShowAdvanced] = React.useState(false);
   const [outputMode, setOutputMode]     = React.useState<OutputMode>('standard');
   const [activeTab, setActiveTab]       = React.useState<'inputs' | 'results'>('inputs');
@@ -102,6 +106,11 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
     setPromptText(safePromptText.trim().length > 0 ? `${safePromptText}, ${built}` : built);
   };
 
+  // Cálculo del costo y créditos restantes
+  const cost = imageCost(1, modelId);
+  const hasEnoughCredits = isAdmin || credits.available >= cost;
+  const creditsAfter = isAdmin ? undefined : credits.available - cost;
+
   return (
     <>
       <NoCreditsModal isOpen={showNoCredits} onClose={closeNoCredits} available={0} />
@@ -110,7 +119,7 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
         <div className="flex lg:hidden bg-slate-100 p-1 rounded-2xl gap-1 mb-4">
           <button
             onClick={() => setActiveTab('inputs')}
-            className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+            className={`flex-1 py-3 rounded-xl t-meta transition-all ${
               activeTab === 'inputs' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'
             }`}
           >
@@ -118,7 +127,7 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('results')}
-            className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+            className={`flex-1 py-3 rounded-xl t-meta transition-all ${
               activeTab === 'results' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'
             }`}
           >
@@ -138,10 +147,10 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
                   <Sparkles className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter italic leading-none">
+                  <h2 className="t-display text-xl text-slate-800">
                     Prompt Composer
                   </h2>
-                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest mt-1">
+                  <p className="t-meta mt-1">
                     Visual Prompt Engineering Studio
                   </p>
                 </div>
@@ -159,10 +168,14 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
                       onChange={setModelId}
                       disabled={isGenerating}
                     />
-                    <GenerateControls
-                      onGenerate={generate}
-                      isGenerating={isGenerating}
-                      disabled={!safePromptText.trim()}
+                    <GenerateButton
+                      onClick={generate}
+                      loading={isGenerating}
+                      disabled={!safePromptText.trim() || !hasEnoughCredits}
+                      label="Generar imagen"
+                      loadingLabel="Generando..."
+                      imageCount={1}
+                      creditsAfter={creditsAfter}
                     />
                   </div>
                 )}
@@ -170,7 +183,7 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
                 {error && outputMode === 'standard' && (
                   <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3 text-red-600">
                     <AlertCircle className="w-5 h-5" />
-                    <p className="text-xs font-bold uppercase tracking-tight">{error}</p>
+                    <p className="t-body-sm text-red-600">{error}</p>
                   </div>
                 )}
               </div>
@@ -195,7 +208,7 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
                 className="flex items-center justify-between w-full"
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-black uppercase tracking-widest text-slate-500">
+                  <span className="t-meta text-slate-500">
                     Advanced Prompt Structure
                   </span>
                   <div className="group relative">
@@ -240,7 +253,7 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
                 <div className="relative group flex-1">
                   <button
                     onClick={() => setOutputMode('standard')}
-                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl t-meta transition-all ${
                       outputMode === 'standard' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'
                     }`}
                   >
@@ -255,7 +268,7 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
                 <div className="relative group flex-1">
                   <button
                     onClick={() => setOutputMode('campaign')}
-                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl t-meta transition-all ${
                       outputMode === 'campaign' ? 'bg-violet-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'
                     }`}
                   >
@@ -270,7 +283,7 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
                 <div className="relative group flex-1">
                   <button
                     onClick={() => setOutputMode('photodump')}
-                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl t-meta transition-all ${
                       outputMode === 'photodump' ? 'bg-pink-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'
                     }`}
                   >

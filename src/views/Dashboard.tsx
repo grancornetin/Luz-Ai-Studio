@@ -195,7 +195,10 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
   const planName         = credits?.plan || 'free';
   const totalGens        = stats?.totalGenerations || 0;
   const isOutOfCredits   = !isAdmin && availableCredits === 0;
-  const isLowCredits     = !isAdmin && availableCredits > 0 && availableCredits <= 3;
+  const isLowCredits     = !isAdmin && availableCredits > 0 && availableCredits <= 5;
+  const [dismissedLowCredits, setDismissedLowCredits] = useState(
+    localStorage.getItem('dismissedLowCredits') === 'true'
+  );
 
   const handleTab = (tab: typeof NAV_TABS[0]) => {
     if (tab.route) { navigate(tab.route); return; }
@@ -208,32 +211,31 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
       {/* HEADER */}
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 px-1">
         <div>
-          <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter uppercase italic leading-tight flex flex-wrap items-baseline gap-x-2 gap-y-0">
+          <h1 className="t-display text-3xl md:text-5xl text-slate-900 flex flex-wrap items-baseline gap-x-2 gap-y-0">
             <span>Hola,</span>
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-indigo-600 break-words pr-1">{displayName}</span>
             <span>👋</span>
           </h1>
-          <p className="text-slate-500 font-medium italic mt-1 text-xs md:text-base">
+          <p className="t-body-sm mt-1">
             Tu ecosistema de producción publicitaria está listo.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={() => navigate('/pricing')} className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-indigo-600 hover:border-indigo-200 transition-all shadow-sm">
+          <button onClick={() => navigate('/pricing')} className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-100 rounded-2xl t-meta text-slate-500 hover:text-indigo-600 hover:border-indigo-200 transition-all shadow-sm">
             <Tag className="w-3.5 h-3.5" /> Planes
           </button>
-          <button onClick={() => navigate('/buy-credits')} className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-sm">
+          <button onClick={() => navigate('/buy-credits')} className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-2xl t-meta hover:bg-indigo-700 transition-all shadow-sm">
             <ShoppingCart className="w-3.5 h-3.5" /> Recargar
           </button>
           <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-2xl border border-slate-100 shadow-sm">
             <Crown className="w-4 h-4 text-amber-500" />
-            <span className="text-xs font-black text-slate-600 uppercase tracking-widest">
+            <span className="t-meta text-slate-600">
               {isAdmin ? 'Admin' : (planName.charAt(0).toUpperCase() + planName.slice(1))}
             </span>
           </div>
-          {/* Botón cerrar sesión — visible en desktop y móvil */}
           <button
             onClick={signOut}
-            className="flex items-center gap-2 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border border-rose-100"
+            className="flex items-center gap-2 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-2xl t-meta transition-all border border-rose-100"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Salir</span>
@@ -247,7 +249,7 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
           <button
             key={tab.id}
             onClick={() => handleTab(tab)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all flex-shrink-0 ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl t-meta whitespace-nowrap transition-all flex-shrink-0 ${
               activeTab === tab.id && !tab.route
                 ? 'bg-indigo-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-slate-700 hover:bg-slate-50'
@@ -270,8 +272,8 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
               }
             </div>
             <div>
-              <p className="text-lg font-black text-slate-900 uppercase tracking-tight">{profile?.displayName || 'Usuario'}</p>
-              <p className="text-xs text-slate-400 font-medium">{profile?.email}</p>
+              <p className="t-title text-lg">{profile?.displayName || 'Usuario'}</p>
+              <p className="t-body-sm text-slate-400">{profile?.email}</p>
             </div>
           </div>
           <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 text-center space-y-2">
@@ -494,15 +496,25 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
           </div>
         </div>
       )}
-      {isLowCredits && (
+      {isLowCredits && !dismissedLowCredits && (
         <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 text-amber-700 px-5 py-4 rounded-2xl">
           <div className="flex items-center gap-3">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
-            <p className="text-xs font-black uppercase tracking-tight">
-              Te queda{availableCredits > 1 ? 'n' : ''} {availableCredits} crédito{availableCredits > 1 ? 's' : ''} — recarga para no interrumpir tu flujo
-            </p>
+            <div>
+              <p className="text-xs font-black uppercase tracking-tight">Te quedan pocos créditos</p>
+              <p className="text-xs font-bold text-amber-600 mt-0.5">
+                Te queda{availableCredits > 1 ? 'n' : ''} {availableCredits} crédito{availableCredits > 1 ? 's' : ''} — completa misiones o compra más.
+              </p>
+            </div>
           </div>
-          <button onClick={() => navigate('/buy-credits')} className="flex-shrink-0 px-3 py-2 bg-amber-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all">Recargar</button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button onClick={() => navigate('/pricing')} className="px-3 py-2 bg-amber-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all">Comprar</button>
+            <button
+              onClick={() => { localStorage.setItem('dismissedLowCredits', 'true'); setDismissedLowCredits(true); }}
+              className="text-amber-400 hover:text-amber-600 transition-colors p-1"
+              title="Cerrar"
+            >✕</button>
+          </div>
         </div>
       )}
 
@@ -517,10 +529,10 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
           <div key={i} className="bg-white px-5 py-4 rounded-2xl border border-slate-100 shadow-sm space-y-1">
             <div className="flex items-center gap-2">
               {s.icon}
-              <p className="text-xs font-black uppercase text-slate-400 tracking-widest">{s.label}</p>
+              <p className="t-meta">{s.label}</p>
             </div>
-            <p className="text-2xl font-black text-slate-900 leading-none">{s.value}</p>
-            <p className="text-xs font-bold text-slate-400 uppercase">{s.sub}</p>
+            <p className="t-display text-2xl text-slate-900">{s.value}</p>
+            <p className="t-meta-light">{s.sub}</p>
           </div>
         ))}
       </div>
@@ -550,10 +562,10 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
                     <Sparkles className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-black text-white uppercase italic tracking-tighter leading-none">
+                    <h3 className="t-display text-lg text-white">
                       Prompt Gallery
                     </h3>
-                    <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">
+                    <p className="t-meta text-indigo-200">
                       Comunidad
                     </p>
                   </div>
@@ -582,10 +594,10 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
                     <Clock className="w-5 h-5 text-slate-600" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-black text-slate-900 uppercase italic tracking-tighter leading-none">
+                    <h3 className="t-display text-lg text-slate-900">
                       Mis Generaciones
                     </h3>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <p className="t-meta">
                       Historial
                     </p>
                   </div>
@@ -596,7 +608,7 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
                 {totalGens > 0 && (
                   <div className="flex items-center gap-1.5">
                     <Images className="w-3.5 h-3.5 text-slate-400" />
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <span className="t-meta">
                       {totalGens} generacion{totalGens !== 1 ? 'es' : ''} totales
                     </span>
                   </div>
@@ -616,7 +628,7 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
         <div key={group.groupLabel} className="space-y-4">
           <div className="flex items-center gap-3">
             <div className={`w-1.5 h-5 ${group.groupColor} rounded-full`} />
-            <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">{group.groupLabel}</h2>
+            <h2 className="t-meta text-slate-500">{group.groupLabel}</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
@@ -631,23 +643,20 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
                 </div>
                 <div className="flex-1 space-y-0.5 md:space-y-1 md:mb-4 min-w-0">
                   <div className="flex items-baseline gap-2 flex-wrap">
-                    <h3 className="text-base md:text-xl font-black text-slate-900 uppercase italic tracking-tighter leading-tight md:leading-none">{mod.title}</h3>
+                    <h3 className="t-title text-base md:text-lg">{mod.title}</h3>
                     {mod.subtitle && (
-                      <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{mod.subtitle}</span>
+                      <span className="t-meta">{mod.subtitle}</span>
                     )}
                   </div>
-                  <p className="text-xs font-medium text-slate-500 leading-tight md:leading-relaxed line-clamp-2 md:line-clamp-none">{mod.description}</p>
+                  <p className="t-body-sm leading-tight md:leading-relaxed line-clamp-2 md:line-clamp-none">{mod.description}</p>
                   {mod.creditsGemini > 0 && (() => {
                     const cost = mod.creditsSeedream !== null
                       ? (modelId === 'seedream' ? mod.creditsSeedream : mod.creditsGemini)
                       : mod.creditsGemini;
-                    const suffix = mod.creditsSeedream !== null ? ' · según modelo' : ' · solo Gemini';
                     return (
                       <div className="flex md:hidden items-center gap-1 mt-1">
                         <Zap className="w-2.5 h-2.5 text-amber-400" />
-                        <span className="text-xs font-black text-slate-400 uppercase tracking-wider">
-                          {cost} cr{cost > 1 ? '.' : '.'}
-                        </span>
+                        <span className="t-meta text-amber-500">{cost} cr.</span>
                       </div>
                     );
                   })()}
@@ -660,7 +669,7 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
                   return (
                     <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
                       <Zap className="w-3 h-3 text-amber-400" />
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                      <span className="t-meta whitespace-nowrap">
                         {hasRange
                           ? `${cost} cr. · desde ${mod.creditsSeedream} con Seedream`
                           : `${cost} cr. · solo Gemini`}

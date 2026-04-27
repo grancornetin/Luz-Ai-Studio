@@ -150,6 +150,7 @@ export interface ContentStudioProSet {
   ref0Analysis?: REF0Analysis;  // NUEVO: análisis guardado
   shots: Shot[];
   attemptsImage0: number;
+  userShotCount?: number;
 }
 
 export interface GalleryImage {

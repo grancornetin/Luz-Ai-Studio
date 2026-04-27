@@ -8,7 +8,7 @@ import { promptParserService } from '../services/promptParserService';
 import { promptBuilder } from '../services/promptBuilder';
 import { payloadValidator } from '../services/payloadValidator';
 import { useAuth } from '../../auth/AuthContext';
-import { CREDIT_COSTS } from '../../../services/creditConfig';
+import { CREDIT_COSTS, imageCost } from '../../../services/creditConfig';
 import { useModelSelection } from '../../../hooks/useModelSelection';
 
 const mergeDNA = (baseDNA: PromptDNA, referenceDNA: PromptDNA): PromptDNA => {
@@ -70,11 +70,8 @@ export const usePromptComposer = () => {
 
     if (!promptText.trim()) return;
 
-    // Detectar si hay slot de persona activo para saber qué modelo y costo usar
-    const hasPersonSlot = slots.some((s: any) => s.type === 'person' && s.imageUrl);
-    const creditCost = hasPersonSlot
-      ? CREDIT_COSTS.PROMPT_WITH_PERSON
-      : CREDIT_COSTS.PROMPT_NO_PERSON;
+    // Costo dinámico según el modelo (Gemini = 2 créditos, Seedream = 1 crédito)
+    const creditCost = imageCost(1, modelId);
 
     // Verificar y descontar créditos
     if (!isAdmin) {
@@ -127,7 +124,7 @@ export const usePromptComposer = () => {
         finalPrompt,
         references,
         negativePrompt,
-        hasPersonSlot,
+        false, // ya no se usa el flag de persona, el costo se calculó arriba
         { modelId },
       );
 
@@ -143,12 +140,11 @@ export const usePromptComposer = () => {
       setGeneratedImages(prev => [image, ...prev]);
 
       // Guardar en historial automáticamente
-      const hasPersonRef = slots.some((s: any) => s.type === 'person' && s.imageUrl);
       generationHistoryService.save({
         imageUrl:    image,
         module:      'prompt_studio',
         moduleLabel: 'AI Generator',
-        creditsUsed: hasPersonRef ? CREDIT_COSTS.PROMPT_WITH_PERSON : CREDIT_COSTS.PROMPT_NO_PERSON,
+        creditsUsed: creditCost,
         promptText:  finalPrompt,
       }).catch(console.error);
 
@@ -158,7 +154,7 @@ export const usePromptComposer = () => {
       setIsGenerating(false);
     }
 
-  }, [promptText, dna, slots, getActiveReferences, buildDNA]);
+  }, [promptText, dna, slots, getActiveReferences, buildDNA, modelId, credits.available, isAdmin, deductCredits]);
 
   const reset = useCallback(() => {
 

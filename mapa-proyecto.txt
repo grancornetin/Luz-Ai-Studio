@@ -1,0 +1,532 @@
+================================================================================
+MAPA DEL PROYECTO: LUZ IA STUDIO
+Stack: React 19 + TypeScript + Vite + Firebase + Google Gemini/Seedream
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+RAÍZ / CONFIG
+────────────────────────────────────────────────────────────────────────────────
+
+package.json
+  Dependencias del proyecto: React 19, Firebase, Vite, Tailwind, Vertex AI SDK.
+  Define scripts: dev, build, preview.
+
+tsconfig.json
+  Configuración TypeScript (target ES2022, JSX react-jsx, bundler resolution).
+
+vite.config.ts
+  Config de build y dev server con Vite para Vercel deployment.
+
+tailwind.config.cjs
+  Estilos Tailwind: componentes custom, colores brand, plugins.
+
+postcss.config.cjs
+  PostCSS + Autoprefixer para procesamiento de CSS.
+
+vercel.json
+  Config de deploy en Vercel: rutas, env vars, rewrites.
+
+env.example
+  Template de variables de entorno (GEMINI_API_KEY, Firebase keys, Upstash tokens).
+
+index.html
+  Entrypoint HTML que monta React en el div #root.
+
+types.ts
+  Tipos globales compartidos: ContentType, AvatarProfile, ProductProfile, GenerationSet, OutfitItem.
+  Es la fuente de tipos core usada por todos los módulos.
+
+firestore.rules
+  Reglas de seguridad Firestore: lectura/escritura restringida por UID de usuario.
+
+storage.rules
+  Reglas de seguridad Cloud Storage: solo usuarios autenticados pueden subir.
+
+metadata.json
+  Metadata simple del proyecto (título, versión, descripción).
+
+PRICING_BRIEF.md
+  Especificación de planes y precios (Free/Explorer/Starter/Pro/Studio/Admin).
+
+test-image.ts
+  Script manual para testear generación de imágenes directamente contra la API.
+
+────────────────────────────────────────────────────────────────────────────────
+SRC/ — RAÍZ
+────────────────────────────────────────────────────────────────────────────────
+
+src/main.tsx
+  Entry point de React: createRoot, ErrorBoundary wrapper, CSS global.
+
+src/App.tsx
+  Componente raíz: HashRouter, menús globales, contextos de auth, routing entre vistas.
+  Importa todos los módulos y vistas; orquesta la navegación principal.
+
+src/index.css
+  Tailwind imports + estilos globales (tipografía, colores brand, reset).
+
+src/firebase.ts
+  Inicializa Firebase: Auth, Firestore, Storage usando firebase-applet-config.json.
+  Exporta instancias auth, db, storage usadas en toda la app.
+
+src/firebase-applet-config.json
+  Configuración Firebase: apiKey, authDomain, projectId, storageBucket.
+
+src/firebase-blueprint.json
+  Schema/backup de colecciones Firestore (referencia estructural, no se usa en runtime).
+
+src/constants.tsx
+  Schemas JSON para Gemini: AVATAR_EXTRACTOR_SCHEMA, PRODUCT_ANALYZER_SCHEMA, OUTFIT_ANALYZER_SCHEMA.
+  Define la forma exacta de respuesta esperada de Gemini en análisis de contenido.
+
+────────────────────────────────────────────────────────────────────────────────
+SRC/CONTEXTS/
+────────────────────────────────────────────────────────────────────────────────
+
+src/contexts/ModelSelectionContext.tsx
+  Context global para el modelo de IA activo (gemini vs seedream).
+  Persiste la selección en localStorage; fuente única de verdad de modelo.
+
+────────────────────────────────────────────────────────────────────────────────
+SRC/HOOKS/
+────────────────────────────────────────────────────────────────────────────────
+
+src/hooks/useCreditGuard.ts
+  Valida y deduce créditos antes de operaciones costosas.
+  Expone checkAndDeduct() y dispara el modal NoCredits si no hay saldo.
+
+src/hooks/useCurrency.ts
+  Conversión y formateo de divisas para mostrar precios al usuario.
+
+src/hooks/useModelSelection.ts
+  Consume ModelSelectionContext: expone modelId y setModelId.
+
+src/hooks/useScrollFAB.ts
+  Detecta scroll para mostrar/ocultar el Floating Action Button.
+
+────────────────────────────────────────────────────────────────────────────────
+SRC/COMPONENTS/ — Componentes base reutilizables
+────────────────────────────────────────────────────────────────────────────────
+
+src/components/AppAssistant.tsx
+  Chat widget flotante de asistencia al usuario, powered by Gemini.
+  Deps: geminiService, AuthContext.
+
+src/components/AvatarLibrary.tsx
+  Galería read-only de avatares guardados del usuario.
+  Deps: avatarService, AuthContext.
+
+src/components/ErrorBoundary.tsx
+  React Error Boundary: captura errores en el árbol y muestra fallback UI.
+
+src/components/shared/FloatingActionBar.tsx
+  FAB sticky con visibilidad basada en scroll; reutilizable en módulos.
+  Deps: useScrollFAB.
+
+src/components/shared/GenerateButton.tsx
+  Botón de generación con estados visuales: loading, disabled, error, ready.
+
+src/components/shared/ImageLightbox.tsx
+  Modal lightbox para ver imágenes a tamaño completo con controles.
+
+src/components/shared/ImageSlot.tsx
+  Slot de upload/preview de imagen (input de usuario con preview inline).
+
+src/components/shared/LegalPageHeader.tsx
+  Header común para páginas legales (Política, Términos, Descargo).
+
+src/components/shared/ModelSelector.tsx
+  Toggle Gemini vs Seedream; consume/actualiza ModelSelectionContext.
+
+src/components/shared/ModuleTutorial.tsx
+  Modal de tutorial interactivo paso a paso para módulos de la app.
+  Deps: tutorialConfigs.ts.
+
+src/components/shared/NoCreditsModal.tsx
+  Modal informativo que aparece cuando el usuario no tiene créditos suficientes.
+
+src/components/shared/UploadConsent/Disclaimer.tsx
+  Disclaimers legales para consentimiento de upload de imágenes.
+
+src/components/shared/tutorialConfigs.ts
+  Config JSON de tutorials: pasos, tooltips, textos, handlers por módulo.
+
+────────────────────────────────────────────────────────────────────────────────
+SRC/MODULES/AUTH/
+────────────────────────────────────────────────────────────────────────────────
+
+src/modules/auth/AuthContext.tsx
+  React Context central de autenticación: user, profile, credits, stats, isAdmin, previewPlan.
+  Métodos: deductCredit, refreshCredits, signOut, markOnboardingDone.
+  Deps: Firebase auth, creditsService, missionsService. ES EL CONTEXTO MÁS IMPORTANTE.
+
+src/modules/auth/components/AuthModal.tsx
+  Modal de login/signup: email+password y opciones de autenticación social.
+
+src/modules/auth/components/OnboardingModal.tsx
+  Modal onboarding para nuevos usuarios: intereses, configuración inicial.
+
+────────────────────────────────────────────────────────────────────────────────
+SRC/MODULES/ — Módulos de características principales
+────────────────────────────────────────────────────────────────────────────────
+
+src/modules/CloningModule.tsx
+  Crear avatar desde fotos: 3 image slots, nombre, género → extractAvatarProfile API.
+  Flujo: upload → checkCredits (8cr) → startClone → save AvatarProfile.
+  Deps: useCreditGuard, avatarCloneService, generationHistoryService.
+
+src/modules/ManualCreatorModule.tsx
+  Crear avatar 100% manual por texto: form con 15+ campos (género, edad, ojos, cabello, etc).
+  Guarda AvatarProfile en Firestore sin consumir créditos de imagen.
+  Deps: generationHistoryService, userService.
+
+src/modules/CloneImageModule.tsx
+  Clonar/transformar una imagen existente (variante del Cloning).
+  Reutiliza patrones de UI de CloningModule pero con lógica de cloneImageService.
+
+src/modules/cloneMaster/storage.ts
+  Gestión de clones guardados en Firestore (actualmente no activo en UI).
+
+────────────────────────────────────────────────────────────────────────────────
+SRC/MODULES/PROMPT LIBRARY — Sistema completo de prompts
+────────────────────────────────────────────────────────────────────────────────
+
+src/modules/promptLibrary/PromptLibraryModule.tsx
+  Orquestador principal: alterna entre galería y composer, modal de detalles, flujo publish.
+  Deps: usePromptLibrary, usePromptComposer, promptService.
+
+src/modules/promptLibrary/PromptComposer.tsx
+  Editor visual de prompts con DNA editor integrado y slots de referencia.
+  Deps: usePromptComposer, useReferences, generationService, useCreditGuard.
+
+src/modules/promptLibrary/components/PromptGallery.tsx
+  Vista tipo Pinterest de prompts públicos con paginación y filtros.
+  Deps: usePromptLibrary, promptService.
+
+src/modules/promptLibrary/components/PromptInput.tsx
+  Textarea enriquecido para escribir el prompt con auto-resize.
+
+src/modules/promptLibrary/components/ReferenceSlots.tsx
+  Slots de hasta 3 imágenes de referencia para guiar la generación.
+  Deps: useReferences, referenceService.
+
+src/modules/promptLibrary/components/PromptDNAAnalyzer.tsx
+  Analiza el texto del prompt y extrae DNA (style, mood, lighting, etc).
+  Deps: Gemini via promptParserService.
+
+src/modules/promptLibrary/components/PromptDNAEditor.tsx
+  Editor visual del DNA de un prompt (sliders/selects por dimensión).
+
+src/modules/promptLibrary/components/PromptDNAViewer.tsx
+  Vista read-only del DNA de un prompt (para cards y detalles).
+
+src/modules/promptLibrary/components/PromptCard.tsx
+  Card individual de prompt: thumbnail, likes, saves, botón variaciones.
+  Deps: promptService (like, save, delete).
+
+src/modules/promptLibrary/components/PromptHistory.tsx
+  Historial de prompts generados por el usuario en sesión.
+
+src/modules/promptLibrary/components/PublishPromptModal.tsx
+  Modal para publicar prompt a la galería pública: título, tags, descripción.
+
+src/modules/promptLibrary/components/MyPromptsPanel.tsx
+  Panel lateral con prompts personales guardados del usuario.
+
+src/modules/promptLibrary/components/SavedPromptsPanel.tsx
+  Panel lateral con prompts guardados/favoritos de la galería.
+
+src/modules/promptLibrary/components/PhotodumpMode.tsx
+  Modo especial para generar múltiples imágenes tipo "photodump" en batch.
+
+src/modules/promptLibrary/components/CampaignGenerator.tsx
+  Genera series de prompts para campañas de contenido (multi-shot estructurado).
+
+src/modules/promptLibrary/components/PromptVariations.tsx
+  Genera variaciones de un prompt existente (remix automático).
+  Deps: variationsService.
+
+src/modules/promptLibrary/hooks/usePromptLibrary.ts
+  Suscripción real-time a galería pública, search, filtros, like, delete.
+  Deps: promptLibraryService, AuthContext.
+
+src/modules/promptLibrary/hooks/usePromptComposer.ts
+  Estado local del composer: texto del prompt, DNA actual, referencias activas.
+
+src/modules/promptLibrary/hooks/usePromptParser.ts
+  Parsea sintaxis personalizada de tokens en el texto del prompt.
+  Deps: promptParserService.
+
+src/modules/promptLibrary/hooks/useReferences.ts
+  Gestión de slots de referencia: upload, análisis de influencia, peso por slot.
+  Deps: referenceService, referenceInfluence.
+
+src/modules/promptLibrary/services/promptEngine.ts
+  Construye el payload final de generación combinando DNA + referencias + texto.
+  Es el núcleo de la lógica de generación de prompts.
+
+src/modules/promptLibrary/services/promptLibraryService.ts
+  CRUD de prompts en Firestore: prompts públicos y colección personal.
+
+src/modules/promptLibrary/services/promptService.ts
+  Operaciones sobre prompts: publish, like, save, delete, fetch gallery.
+
+src/modules/promptLibrary/services/generationService.ts
+  Llama /api/gemini/image y gestiona el flujo job → polling → resultado.
+  Deps: imageApiService.
+
+src/modules/promptLibrary/services/promptBuilder.ts
+  Construye el string final de prompt desde sus componentes (texto + DNA + tokens).
+
+src/modules/promptLibrary/services/promptParserService.ts
+  Parsea y valida la sintaxis personalizada de prompts.
+
+src/modules/promptLibrary/services/promptTemplates.ts
+  Templates predefinidos de prompts por categoría/estilo.
+
+src/modules/promptLibrary/services/referenceService.ts
+  Analiza imágenes de referencia con Gemini y extrae DNA de influencia.
+
+src/modules/promptLibrary/services/referenceInfluence.ts
+  Calcula los pesos/influence de cada imagen de referencia en el payload.
+
+src/modules/promptLibrary/services/tokenParser.ts
+  Parser de tokens especiales (ej: [[avatar]], [[product]]) en prompts.
+
+src/modules/promptLibrary/services/variationsService.ts
+  Genera variaciones automáticas de un prompt existente via Gemini.
+
+src/modules/promptLibrary/services/payloadValidator.ts
+  Valida el payload antes de enviarlo a la API (tamaño, campos requeridos).
+
+src/modules/promptLibrary/types/promptTypes.ts
+  Tipos: Prompt, PromptDNA, PromptBoard, PromptComment, ReferenceSlot.
+
+────────────────────────────────────────────────────────────────────────────────
+SRC/MODULES/CONTENT STUDIO PRO — Generador UGC profesional
+────────────────────────────────────────────────────────────────────────────────
+
+src/modules/contentStudioPro/ContentStudioProModule.tsx
+  Orquestador principal: selección avatar/product → generación master → batches de shots → galería.
+  UI: tabla de shots, lightbox, controles de batch, descarga ZIP.
+  Deps: useCreditGuard, useModelSelection, contentStudioService.
+
+src/modules/contentStudioPro/service.ts
+  Lógica de negocio: validar inputs, construir payloads UGC, llamar APIs de generación.
+
+src/modules/contentStudioPro/storage.ts
+  Persistencia de sesiones de studio en LocalStorage y Firestore.
+
+src/modules/contentStudioPro/types.ts
+  Tipos: ContentStudioProSet, ShotStatus, ShotDirective, Focus, ProductSize.
+
+src/modules/contentStudioPro/ugcDirectorService.ts
+  Analiza relevancia de producto para cada shot y genera directivas de cámara/escena.
+
+────────────────────────────────────────────────────────────────────────────────
+SRC/MODULES/OUTFIT EXTRACTOR — Extractor de prendas desde imágenes
+────────────────────────────────────────────────────────────────────────────────
+
+src/modules/outfitExtractor/OutfitExtractorModule.tsx
+  UI: upload de imagen → analyzeOutfit → canvas con ítems de outfit detectados.
+  Deps: outfitService, generationHistoryService.
+
+src/modules/outfitExtractor/outfitService.ts
+  Orquesta analyzeOutfit (Gemini content API) + parseOutfit resultado.
+
+src/modules/outfitExtractor/outfitStorage.ts
+  Persiste outfits analizados en Firestore: users/{uid}/outfits.
+
+src/modules/outfitExtractor/types.ts
+  Tipos: OutfitSet, OutfitItem (category, visual_description, color, material, etc).
+
+────────────────────────────────────────────────────────────────────────────────
+SRC/SERVICES/ — Servicios core de negocio
+────────────────────────────────────────────────────────────────────────────────
+
+src/services/userService.ts
+  CRUD completo de usuarios en Firestore: avatars, products, sets, stats, créditos.
+  Fuente principal de acceso a datos del usuario.
+
+src/services/firestoreUtils.ts
+  Error handling y logging centralizado para todas las operaciones Firestore.
+
+src/services/creditsService.ts
+  Sistema de créditos: deduct, reset de período, getEffectiveCredits.
+  Fuente única de verdad del saldo; usado por AuthContext y useCreditGuard.
+
+src/services/creditConfig.ts
+  Config de costos: MODEL_CREDIT_COST (gemini=2cr, seedream=1cr), CREDIT_COSTS por acción.
+  Cambiar aquí afecta el costo de TODAS las operaciones de crédito.
+
+src/services/checkoutService.ts
+  Integración con LemonSqueezy (payment gateway): crear sesión de checkout.
+
+src/services/geminiService.ts
+  Cliente central de Gemini: wrappers de imageApiService + content API.
+  Expone extractAvatarProfile, analyzeProduct, analyzeOutfit, generateText.
+
+src/services/imageApiService.ts
+  Cliente universal para /api/gemini/image: startJob (→202) → polling cada 2s hasta 90 intentos.
+  Callback onStatusChange para actualizar UI. Maneja retry silencioso.
+
+src/services/avatarCloneService.ts
+  Cliente para /api/avatar/clone: startClone → getCloneStatus → waitForCloneComplete.
+
+src/services/cloneImageService.ts
+  Clona/transforma una imagen individual llamando la API correspondiente.
+
+src/services/ugcApiService.ts
+  Llama el endpoint de generación UGC multi-shot.
+
+src/services/dbService.ts
+  Wrapper de compatibilidad sobre Firestore (getAvatars, saveAvatar, getSets).
+  Redirige a userService; mantener por compatibilidad con módulos viejos.
+
+src/services/generationHistoryService.ts
+  Guarda y recupera historial de generaciones (shots, metadata, timestamps) en Firestore.
+
+src/services/sceneAnalysisService.ts
+  Analiza escenas para UGC: detecta fondo, iluminación, mood para directivas.
+
+src/services/avatarService.ts
+  Gestión de avatares guardados: get, save, delete desde Firestore.
+
+src/services/missionsService.ts
+  Sistema de misiones/quests (daily, weekly) con cooldown y recompensas en créditos.
+
+src/services/referralService.ts
+  Códigos referral: stats de uso, reembolso de créditos, códigos especiales.
+
+src/services/promptRevealService.ts
+  Revelar u ocultar el prompt de imágenes en la galería pública.
+
+src/services/imageUtils.ts
+  Comprimir imágenes, descargar individualmente, crear ZIP de múltiples imágenes.
+
+────────────────────────────────────────────────────────────────────────────────
+SRC/VIEWS/ — Páginas/Vistas principales
+────────────────────────────────────────────────────────────────────────────────
+
+src/views/Landing.tsx
+  Landing page pública: hero, features, CTA de registro/login.
+
+src/views/Dashboard.tsx
+  Hub central del usuario: cards de módulos con costos en créditos, stats, misiones.
+  Deps: useAuth, useModelSelection, missionsService.
+
+src/views/ContentCreator.tsx
+  Wrapper/redirector hacia módulos de creación de contenido.
+
+src/views/GenerationHistory.tsx
+  Historial completo de todas las generaciones del usuario (tabla filtrable).
+  Deps: generationHistoryService.
+
+src/views/Library.tsx
+  Galería personal: avatares, prompts y outfits guardados del usuario.
+
+src/views/PromptGalleryView.tsx
+  Vista completa de la Prompt Gallery pública (layout Pinterest).
+
+src/views/PromptStudioView.tsx
+  Vista completa del Prompt Studio (composer + herramientas).
+
+src/views/OutfitExtractor.tsx
+  Vista wrapper del módulo OutfitExtractor.
+
+src/views/Pricing.tsx
+  Tabla de planes, comparación de features, botones de upgrade.
+
+src/views/BuyCredits.tsx
+  Página/modal de compra de créditos top-up, integra LemonSqueezy checkout.
+
+src/views/AccountSettings.tsx
+  Perfil del usuario: editar datos, preferencias, notificaciones, logout.
+
+src/views/CheckoutSuccess.tsx
+  Página post-checkout exitoso (confirma compra, actualiza UI de créditos).
+
+src/views/CheckoutCancel.tsx
+  Página post-checkout cancelado.
+
+src/views/PoliticaPrivacidad.tsx
+  Página de Política de Privacidad (texto legal estático).
+
+src/views/TerminosUso.tsx
+  Página de Términos de Uso (texto legal estático).
+
+src/views/Descargo.tsx
+  Página de Descargo de Responsabilidad (texto legal estático).
+
+src/views/Contacto.tsx
+  Formulario de contacto (envío de emails/consultas).
+
+────────────────────────────────────────────────────────────────────────────────
+API/ — Endpoints Vercel Serverless
+────────────────────────────────────────────────────────────────────────────────
+
+api/_middleware.ts
+  Rate limiting (Redis Upstash), CORS, validación de auth, security headers.
+  Funciones: checkRateLimit (30img/h, 120data/h), validateBase64Image, validatePrompt, setSecurityHeaders.
+
+api/gemini/content.ts
+  POST /api/gemini/content: extractAvatarProfile, analyzeProduct, analyzeOutfit, generateText, chat.
+  Usa gemini-2.5-flash en us-central1 para análisis de contenido (texto/JSON).
+
+api/gemini/image.ts
+  POST /api/gemini/image: orquesta generación async → encola en QStash (devuelve jobId 202).
+  GET /api/gemini/image?jobId=...: polling de estado del job hasta resultado/error.
+
+api/gemini/image-worker.ts
+  Worker QStash: recibe job, llama Gemini imagen, guarda resultado base64 en Redis.
+
+api/gemini/seedream-worker.ts
+  Worker QStash para modelo Seedream (alternativa rápida, 1cr vs 2cr de Gemini).
+
+api/gemini/ugc-worker.ts
+  Worker QStash para generación UGC multi-shot: orquesta batch de shots en paralelo.
+
+api/avatar/clone.ts
+  POST /api/avatar/clone: startClone → getJobStatus. Orquesta Worker + Firestore.
+
+api/avatar/clone-worker.ts
+  Worker async: llama Gemini para extractAvatarProfile, guarda resultado en Redis.
+
+api/history.ts
+  GET /api/history: recupera generationHistory del usuario desde Firestore.
+
+api/webhooks/lemonsqueezy.ts
+  Webhook LemonSqueezy: recibe notificaciones de pagos, valida firma HMAC, actualiza plan en Firestore.
+
+────────────────────────────────────────────────────────────────────────────────
+MAPA CONCEPTUAL DE CRÉDITOS
+────────────────────────────────────────────────────────────────────────────────
+
+  Cambiar costos  → src/services/creditConfig.ts
+  Deducir crédito → src/modules/auth/AuthContext.tsx (deductCredit)
+  Guard de ops    → src/hooks/useCreditGuard.ts
+  Saldo Firestore → src/services/creditsService.ts
+  Compra créditos → src/views/BuyCredits.tsx + api/webhooks/lemonsqueezy.ts
+
+────────────────────────────────────────────────────────────────────────────────
+MAPA CONCEPTUAL DE GENERACIÓN DE IMÁGENES
+────────────────────────────────────────────────────────────────────────────────
+
+  Payload build   → src/modules/promptLibrary/services/promptEngine.ts
+  Cliente HTTP    → src/services/imageApiService.ts  (polling loop)
+  API endpoint    → api/gemini/image.ts              (encola QStash)
+  Worker          → api/gemini/image-worker.ts       (llama Gemini, guarda Redis)
+  Modelo alt.     → api/gemini/seedream-worker.ts    (Seedream 1cr)
+  Config modelo   → src/contexts/ModelSelectionContext.tsx
+
+────────────────────────────────────────────────────────────────────────────────
+MAPA CONCEPTUAL DE AUTENTICACIÓN Y USUARIO
+────────────────────────────────────────────────────────────────────────────────
+
+  Init Firebase   → src/firebase.ts
+  Auth Context    → src/modules/auth/AuthContext.tsx  (todo el estado global)
+  Login/Signup    → src/modules/auth/components/AuthModal.tsx
+  Datos usuario   → src/services/userService.ts       (Firestore)
+  Misiones        → src/services/missionsService.ts
+
+================================================================================

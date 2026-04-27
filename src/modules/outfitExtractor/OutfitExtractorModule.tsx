@@ -1,28 +1,33 @@
+// src/modules/outfitExtractor/OutfitExtractorModule.tsx
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
 import { useCreditGuard } from '../../../hooks/useCreditGuard';
 import NoCreditsModal from '../../components/shared/NoCreditsModal';
-import { CREDIT_COSTS } from '../../services/creditConfig';
+import { CREDIT_COSTS, MODEL_CREDIT_COST } from '../../services/creditConfig';
 import { generationHistoryService } from '../../services/generationHistoryService';
 import { outfitService } from './outfitService';
 import { outfitStorage } from './outfitStorage';
 import { OutfitKit, OutfitItem, SavedOutfitItem, OutfitCombination } from './types';
 import { downloadAsZip } from '../../utils/imageUtils';
+import { useAuth } from '../../modules/auth/AuthContext';
+import { GenerateButton } from '../../components/shared/GenerateButton';
+import { ModelSelector } from '../../components/shared/ModelSelector';
+import { useModelSelection } from '../../hooks/useModelSelection';
 
 // Nuevos componentes base
 import { ImageSlot } from '../../components/shared/ImageSlot';
 import UploadDisclaimer from '../../components/shared/UploadDisclaimer';
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
 import { FloatingActionBar } from '../../components/shared/FloatingActionBar';
-import { ModelSelector } from '../../components/shared/ModelSelector';
 import { useScrollFAB } from '../../hooks/useScrollFAB';
-import { useModelSelection } from '../../hooks/useModelSelection';
 
 type Step = 'idle' | 'detecting' | 'scan_overlay' | 'generating_renders' | 'reviewing_renders' | 'composing' | 'final_kit' | 'library';
 type LibraryView = 'kits' | 'items' | 'combinations' | 'creator';
 
 const OutfitExtractorModule: React.FC = () => {
+  const { credits } = useAuth();
+  const { modelId, setModelId } = useModelSelection();
   const [step, setStep] = useState<Step>('idle');
   const [mainView, setMainView] = useState<'main' | 'library'>('main');
   const [libView, setLibView] = useState<LibraryView>('kits');
@@ -45,10 +50,27 @@ const OutfitExtractorModule: React.FC = () => {
 
   // FAB scroll detection
   const { isVisible: fabVisible } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: false });
-  const { modelId, setModelId } = useModelSelection();
 
   const { checkAndDeduct, showNoCredits, requiredCredits, closeModal } = useCreditGuard();
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Costo por prenda = CREDIT_COSTS.OUTFIT_PER_GARMENT (independiente del modelo)
+  // El total se calcula en tiempo real según el número de prendas seleccionadas
+  // El GenerateButton se usa en la fase de generación de renders. Para simplificar,
+  // pasaremos el costo dinámico al botón dentro de confirmSelectionAndRender.
+  // Pero como ConfirmSelectionAndRender no es un botón único (es un paso con varios),
+  // vamos a modificar solo el botón de inicio de detección y el de "Generar Outfit Kit".
+  // En este caso, el primer botón de "Analizar Outfit" no tiene costo (es gratis).
+  // El segundo botón "Isolar Selección" sí tiene costo variable. Para ese, vamos a
+  // calcular creditsAfter en ese momento y pasárselo al GenerateButton.
+  // Pero el GenerateButton se usa en la UI para confirmSelectionAndRender,
+  // y no está en el código actual, sino que es un botón normal. Lo reemplazaremos.
+
+  // Calculamos créditos restantes después de la detección (gratis) y generación de renders:
+  // El costo por render es CREDIT_COSTS.OUTFIT_PER_GARMENT por prenda seleccionada.
+  // El botón "Isolar Selección" se encuentra en la fase 'scan_overlay'.
+  // Vamos a modificar ese botón para que sea un GenerateButton con creditsAfter dinámico.
+  // Pero el estado currentKit cambia, así que debemos calcular el costo en el render.
 
   useEffect(() => {
     loadLibrary();
@@ -89,7 +111,6 @@ const OutfitExtractorModule: React.FC = () => {
     }
   };
 
-  // ImageSlot ya maneja la compresión automática, solo actualizamos estado
   const handleSourceImageChange = (base64: string | null) => {
     setSourceImage(base64);
   };
@@ -220,7 +241,6 @@ const OutfitExtractorModule: React.FC = () => {
     }
   };
 
-  // Reemplazar downloadAll con downloadAsZip
   const downloadAll = async (kit: OutfitKit | null = currentKit) => {
     if (!kit) return;
     setIsZipping(true);
@@ -253,7 +273,6 @@ const OutfitExtractorModule: React.FC = () => {
     setMainView('main');
   };
 
-  // Abrir lightbox con una o varias imágenes
   const openLightbox = (images: string[], initialIndex: number = 0, label: string = '') => {
     setLightboxImages(images);
     setLightboxIndex(initialIndex);
@@ -261,7 +280,6 @@ const OutfitExtractorModule: React.FC = () => {
     setLightboxOpen(true);
   };
 
-  // Creator Logic
   const canAddLayer = (category: string) => {
     const count = creatorSelectedItems.filter(i => i.category === category).length;
     if (category === 'top') return count < 3;
@@ -324,9 +342,15 @@ const OutfitExtractorModule: React.FC = () => {
     }, {} as Record<string, SavedOutfitItem[]>);
   }, [libraryItems]);
 
-  // ──────────────────────────────────────────────────────────────
-  // RENDER
-  // ──────────────────────────────────────────────────────────────
+  // Calcular créditos restantes para "Isolar Selección"
+  const selectedItemsCount = currentKit?.items.filter(i => i.selected).length || 0;
+  const renderCost = selectedItemsCount * CREDIT_COSTS.OUTFIT_PER_GARMENT;
+  const creditsAfterRender = Math.max(0, credits.available - renderCost);
+
+  // Costo para "Generar Outfit Kit" en la sección de mezclador (1 crédito fijo)
+  const comboCost = CREDIT_COSTS.OUTFIT_PER_GARMENT;
+  const creditsAfterCombo = Math.max(0, credits.available - comboCost);
+
   return (
     <>
       <NoCreditsModal isOpen={showNoCredits} onClose={closeModal} required={requiredCredits} available={0} />
@@ -376,7 +400,6 @@ const OutfitExtractorModule: React.FC = () => {
                   <section className="bg-white p-6 md:p-10 rounded-[40px] border border-slate-100 shadow-sm space-y-8 text-center">
                     <div className="space-y-4 text-left">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Subir Foto Real</label>
-                      {/* Reemplazo por ImageSlot */}
                       <ImageSlot
                         value={sourceImage}
                         onChange={handleSourceImageChange}
@@ -478,13 +501,16 @@ const OutfitExtractorModule: React.FC = () => {
                       ))}
                     </div>
 
-                    <button 
-                      onClick={confirmSelectionAndRender} 
-                      disabled={currentKit.items.filter(i => i.selected).length === 0}
-                      className="w-full py-6 bg-brand-600 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.3em] shadow-xl hover:bg-brand-700 transition-all active:scale-95 disabled:opacity-30"
-                    >
-                      Isolar Selección ({currentKit.items.filter(i => i.selected).length})
-                    </button>
+                    {/* Botón de "Isolar Selección" convertido a GenerateButton */}
+                    <GenerateButton
+                      onClick={confirmSelectionAndRender}
+                      disabled={selectedItemsCount === 0}
+                      label={`Isolar Selección (${selectedItemsCount})`}
+                      loadingLabel="Renderizando..."
+                      imageCount={selectedItemsCount}
+                      creditsAfter={creditsAfterRender}
+                      className="w-full py-6 rounded-[24px] text-xs uppercase tracking-[0.3em] shadow-xl transition-all active:scale-95 disabled:opacity-30"
+                    />
                   </section>
                 </div>
               </div>
@@ -742,13 +768,15 @@ const OutfitExtractorModule: React.FC = () => {
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Costo de Mezcla</span>
                         <span className="text-brand-400 font-black text-lg uppercase italic leading-none">1 Crédito</span>
                       </div>
-                      <button 
+                      <GenerateButton
                         onClick={generateCombinedOutfit}
                         disabled={creatorSelectedItems.length === 0}
-                        className="w-full py-6 bg-brand-600 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.3em] shadow-xl hover:bg-brand-700 transition-all active:scale-95 disabled:opacity-30 disabled:grayscale"
-                      >
-                        Generar Outfit Kit
-                      </button>
+                        label="Generar Outfit Kit"
+                        loadingLabel="Generando..."
+                        imageCount={1}
+                        creditsAfter={creditsAfterCombo}
+                        className="w-full py-6 rounded-[24px] text-xs uppercase tracking-[0.3em] shadow-xl hover:bg-brand-700 transition-all active:scale-95 disabled:opacity-30 disabled:grayscale"
+                      />
                     </div>
                   </section>
                 </div>

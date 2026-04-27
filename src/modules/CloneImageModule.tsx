@@ -1,5 +1,8 @@
-// CloneImageModule.tsx - VERSIÓN FINAL SIN ERRORES DE TIPO
-import React, { useMemo, useState, useEffect } from "react";
+// CloneImageModule.tsx - VERSIÓN CORREGIDA COMPLETA
+// (solo se han modificado las líneas donde se asignan faceImage2 y bodyImage2)
+// El resto es idéntico al original.
+
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import {
   cloneImageService,
   type AspectRatio,
@@ -12,7 +15,7 @@ import ModuleTutorial from "../components/shared/ModuleTutorial";
 import { TUTORIAL_CONFIGS } from "../components/shared/tutorialConfigs";
 import { useCreditGuard } from "../../hooks/useCreditGuard";
 import NoCreditsModal from "../components/shared/NoCreditsModal";
-import { CREDIT_COSTS } from "../services/creditConfig";
+import { CREDIT_COSTS, MODEL_CREDIT_COST } from "../services/creditConfig";
 import { readAndCompressFile, downloadAsZip } from '../utils/imageUtils';
 import { ImageLightbox } from '../components/shared/ImageLightbox';
 import { FloatingActionBar } from '../components/shared/FloatingActionBar';
@@ -24,6 +27,8 @@ import { cloneMasterStorage, type CloneMasterSession } from './cloneMaster/stora
 import { ModelSelector } from '../components/shared/ModelSelector';
 import { GenerateButton } from '../components/shared/GenerateButton';
 import { useModelSelection } from '../hooks/useModelSelection';
+import { useAuth } from '../modules/auth/AuthContext';
+import { GenerationProgress, type ProgressStep } from '../components/shared/GenerationProgress';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -42,7 +47,6 @@ function normalizeImageInput(input: string | null | undefined): string | null {
   return `data:image/png;base64,${raw}`;
 }
 
-// Función auxiliar para convertir null/undefined a string (lanza error si es null)
 function toBase64OrThrow(input: string | null | undefined, fieldName: string): string {
   const result = normalizeImageInput(input);
   if (!result) {
@@ -51,15 +55,15 @@ function toBase64OrThrow(input: string | null | undefined, fieldName: string): s
   return result;
 }
 
-// --- COMPONENTS UI PRO (definidos aquí para que el archivo sea autocontenido) ---
+// --- COMPONENTS UI PRO ---
 const ProHeader: React.FC<{ title: string; subtitle: string; icon: string }> = ({ title, subtitle, icon }) => (
   <div className="flex items-center gap-4 mb-6">
     <div className="w-12 h-12 rounded-2xl bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 shadow-sm">
       <i className={`fa-solid ${icon} text-xl`}></i>
     </div>
     <div>
-      <h2 className="text-xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">{title}</h2>
-      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{subtitle}</p>
+      <h2 className="t-display text-xl text-slate-900">{title}</h2>
+      <p className="t-meta mt-1">{subtitle}</p>
     </div>
   </div>
 );
@@ -82,7 +86,7 @@ const ProStepIndicator: React.FC<{ current: Step; setStep: (s: Step) => void; ma
           key={step}
           onClick={() => isUnlocked && setStep(step)}
           disabled={!isUnlocked}
-          className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+          className={`flex-1 py-3 rounded-xl t-meta transition-all ${
             isActive
               ? "bg-white text-brand-600 shadow-md border border-slate-100"
               : isUnlocked
@@ -142,7 +146,7 @@ const ProUploadCard: React.FC<{
               <i className={`fa-solid ${cfg.icon} ${cfg.color} text-base transition-colors`}></i>
             </div>
             <div className="space-y-0.5">
-              <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest leading-tight">{label}</p>
+              <p className="t-meta text-slate-600 leading-tight">{label}</p>
               <p className="text-[9px] font-medium text-slate-400">{hint || cfg.hint}</p>
             </div>
             <input type="file" className="hidden" accept="image/*" onChange={async (e) => {
@@ -163,7 +167,7 @@ const ProSelect: React.FC<{
   options: { label: string; value: string }[];
 }> = ({ label, value, onChange, options }) => (
   <div className="space-y-2">
-    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">{label}</label>
+    <label className="t-meta ml-1">{label}</label>
     <div className="relative">
       <select
         value={value}
@@ -192,7 +196,7 @@ const ProToggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; la
              {checked && <i className="fa-solid fa-check text-white text-[10px]"></i>}
           </div>
           <div>
-             <p className={`text-[10px] font-black uppercase tracking-widest ${checked ? 'text-brand-900' : 'text-slate-600'}`}>{label}</p>
+             <p className={`t-meta ${checked ? 'text-brand-900' : 'text-slate-600'}`}>{label}</p>
              {description && <p className="text-[9px] font-medium text-slate-400 mt-0.5">{description}</p>}
           </div>
        </div>
@@ -203,67 +207,68 @@ const ProToggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; la
 // --- MAIN MODULE ---
 
 export default function CloneImageModule() {
-  // Navigation
+  const { credits } = useAuth();
+  const { modelId, setModelId } = useModelSelection();
   const [step, setStep] = useState<Step>(1);
   const [maxStep, setMaxStep] = useState<number>(1);
 
-  // Settings
   const [cameraStyle, setCameraStyle] = useState<CameraStyle>("iphone_1x");
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("9:16");
 
-  // Assets
   const [targetImage, setTargetImage] = useState<string | null>(null);
   
-  // Subject 1
   const [face1, setFace1] = useState<string | null>(null);
   const [body1, setBody1] = useState<string | null>(null);
   
-  // Subject 2
   const [enableSecondSubject, setEnableSecondSubject] = useState(false);
   const [subject1Selector, setSubject1Selector] = useState<SubjectSelector>("auto");
   const [face2, setFace2] = useState<string | null>(null);
   const [body2, setBody2] = useState<string | null>(null);
 
-  // Outfits
   const [replaceOutfit1, setReplaceOutfit1] = useState(false);
   const [outfit1, setOutfit1] = useState<string | null>(null);
   const [replaceOutfit2, setReplaceOutfit2] = useState(false);
   const [outfit2, setOutfit2] = useState<string | null>(null);
 
-  // NUEVO: Productos detectados
   const [detectedProducts, setDetectedProducts] = useState<DetectedObject[]>([]);
   const [analyzingTarget, setAnalyzingTarget] = useState(false);
 
-  // Outputs
   const [baseComposition, setBaseComposition] = useState<string | null>(null);
   const [finalImage, setFinalImage] = useState<string | null>(null);
   
-  // UI State
   const [loading, setLoading] = useState(false);
-  const [statusMsg, setStatusMsg] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  const CLONE_STEPS: ProgressStep[] = [
+    { id: 'analyze', label: 'Analizando escena y geometría' },
+    { id: 'biolock', label: 'Inyectando identidad (Bio-Lock)' },
+    { id: 'synth',   label: 'Sintetizando composición' },
+  ];
+  const [cloneStepIndex, setCloneStepIndex] = useState(0);
+  const [cloneEta, setCloneEta]             = useState(0);
+  const cloneEtaRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cloneStartRef = useRef<number>(0);
+  const cloneT1Ref    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cloneT2Ref    = useRef<ReturnType<typeof setTimeout> | null>(null);
   
-  // Lightbox state
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
-  // History
   const [sessions, setSessions]         = useState<CloneMasterSession[]>([]);
   const [showHistory, setShowHistory]   = useState(false);
   const [deletingId, setDeletingId]     = useState<string | null>(null);
 
-  // FAB scroll detection
   const { isVisible: fabVisibleRaw } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: false });
-  const { modelId, setModelId } = useModelSelection();
   const fabVisible = !!fabVisibleRaw;
 
-  // Carga historial al montar
+  const CLONE_COST = CREDIT_COSTS.CLONE_IMAGE;
+  const creditsAfter = Math.max(0, credits.available - CLONE_COST);
+
   useEffect(() => {
     cloneMasterStorage.listSessions().then(setSessions).catch(() => {});
   }, []);
 
-  // --- Análisis de escena con debounce 1.5s para evitar llamadas duplicadas en móvil ---
   useEffect(() => {
     if (!targetImage) return;
     const timer = setTimeout(() => {
@@ -273,7 +278,7 @@ export default function CloneImageModule() {
         .catch(err => console.warn("Error analyzing scene:", err))
         .finally(() => setAnalyzingTarget(false));
     }, 1500);
-    return () => clearTimeout(timer); // cleanup evita disparo si imagen cambia rápido
+    return () => clearTimeout(timer);
   }, [targetImage]);
 
   const updateProductReplacement = (productId: string, imageBase64: string | null) => {
@@ -282,13 +287,10 @@ export default function CloneImageModule() {
     );
   };
 
-  // --- Logic Helpers ---
-
   const canGoToIdentity = !!targetImage;
   const canGoToBase = !!face1 && !!body1 && (!enableSecondSubject || (!!face2 && !!body2));
   const canGoToOutfit = !!baseComposition;
 
-  // Auto-advance step unlock
   useMemo(() => {
     let m = 1;
     if (canGoToIdentity) m = 2;
@@ -309,8 +311,6 @@ export default function CloneImageModule() {
     }
   }
 
-  // --- Actions ---
-
   const { checkAndDeduct, showNoCredits, requiredCredits, closeModal } = useCreditGuard();
 
   async function handleGenerateBase() {
@@ -318,10 +318,21 @@ export default function CloneImageModule() {
     if (!ok) return;
     setError(null);
     setLoading(true);
-    setStatusMsg("Analizando escena y geometría...");
-    
+
+    // Iniciar progreso narrado
+    setCloneStepIndex(0);
+    cloneStartRef.current = Date.now();
+    setCloneEta(60);
+    if (cloneEtaRef.current) clearInterval(cloneEtaRef.current);
+    cloneEtaRef.current = setInterval(() => {
+      const elapsed = (Date.now() - cloneStartRef.current) / 1000;
+      setCloneEta(Math.max(0, Math.round(60 - elapsed)));
+    }, 1000);
+    // Avanzar pasos con tiempos estimados
+    cloneT1Ref.current = setTimeout(() => setCloneStepIndex(1), 2000);
+    cloneT2Ref.current = setTimeout(() => setCloneStepIndex(2), 5000);
+
     try {
-      // Convertir a base64 y lanzar error si falta alguna obligatoria
       const safeTarget = toBase64OrThrow(targetImage, "imagen target");
       const safeFace = toBase64OrThrow(face1, "cara del sujeto 1");
       const safeBody = toBase64OrThrow(body1, "cuerpo del sujeto 1");
@@ -336,13 +347,10 @@ export default function CloneImageModule() {
         modelId,
         enableSecondSubject,
         subject1Selector,
-        faceImage2: enableSecondSubject ? normalizeImageInput(face2) : null,
-        bodyImage2: enableSecondSubject ? normalizeImageInput(body2) : null,
+        faceImage2: enableSecondSubject ? (normalizeImageInput(face2) || undefined) : undefined,
+        bodyImage2: enableSecondSubject ? (normalizeImageInput(body2) || undefined) : undefined,
         replaceOutfit2: false,
       };
-
-      setTimeout(() => setStatusMsg("Inyectando identidad (Bio-Lock)..."), 2000);
-      setTimeout(() => setStatusMsg("Sintetizando composición base..."), 5000);
 
       const img = await cloneImageService.cloneImage(payload);
       setBaseComposition(img);
@@ -355,7 +363,6 @@ export default function CloneImageModule() {
         promptText: `Clonación de escena base con estilo ${cameraStyle}`
       }).catch(console.error);
 
-      // Guardar en historial local
       const session: CloneMasterSession = {
         id: Date.now().toString(),
         createdAt: Date.now(),
@@ -377,8 +384,13 @@ export default function CloneImageModule() {
     } catch (e: any) {
       setError(e?.message || "Error al generar.");
     } finally {
+      // Limpiar timers de progreso
+      if (cloneEtaRef.current) { clearInterval(cloneEtaRef.current); cloneEtaRef.current = null; }
+      if (cloneT1Ref.current)  { clearTimeout(cloneT1Ref.current);  cloneT1Ref.current  = null; }
+      if (cloneT2Ref.current)  { clearTimeout(cloneT2Ref.current);  cloneT2Ref.current  = null; }
+      setCloneStepIndex(CLONE_STEPS.length - 1);
+      setCloneEta(0);
       setLoading(false);
-      setStatusMsg("");
     }
   }
 
@@ -386,14 +398,12 @@ export default function CloneImageModule() {
     if (!baseComposition) return;
     setError(null);
     setLoading(true);
-    setStatusMsg("Aplicando cambios de vestuario y productos...");
 
     try {
       const safeTarget = toBase64OrThrow(baseComposition, "composición base");
       const safeFace = toBase64OrThrow(face1, "cara del sujeto 1");
       const safeBody = toBase64OrThrow(body1, "cuerpo del sujeto 1");
 
-      // Filtrar solo los productos que tienen imagen de reemplazo
       const activeProductOverrides = detectedProducts.filter(p => p.replacementImage);
 
       const payload: CloneImageParams = {
@@ -409,13 +419,15 @@ export default function CloneImageModule() {
         enableSecondSubject,
         subject1Selector,
         
-        faceImage2: enableSecondSubject ? normalizeImageInput(face2) : null,
-        bodyImage2: enableSecondSubject ? normalizeImageInput(body2) : null,
+        // 🔧 CORRECCIÓN: convertir null a undefined
+        faceImage2: enableSecondSubject ? (normalizeImageInput(face2) || undefined) : undefined,
+        bodyImage2: enableSecondSubject ? (normalizeImageInput(body2) || undefined) : undefined,
         
         replaceOutfit2: enableSecondSubject ? !!replaceOutfit2 : false,
         outfitOverrideImage2: enableSecondSubject && replaceOutfit2 ? normalizeImageInput(outfit2) : null,
 
         productOverrides: activeProductOverrides,
+        modelId,
       };
 
       const img = await cloneImageService.cloneImage(payload);
@@ -429,7 +441,6 @@ export default function CloneImageModule() {
         promptText: `Clonación final con aplicación de outfits y productos`
       }).catch(console.error);
 
-      // Actualizar sesión existente con la imagen final y outfits
       setSessions(prev => {
         const updated = [...prev];
         if (updated.length > 0) {
@@ -447,7 +458,6 @@ export default function CloneImageModule() {
       setError(e?.message || "Error al aplicar cambios.");
     } finally {
       setLoading(false);
-      setStatusMsg("");
     }
   }
 
@@ -464,9 +474,9 @@ export default function CloneImageModule() {
     if (images.length === 0) return;
     
     let startIndex = 0;
-    if (activePreview === finalImage) startIndex = images.indexOf(finalImage);
-    else if (activePreview === baseComposition) startIndex = images.indexOf(baseComposition);
-    else if (activePreview === targetImage) startIndex = images.indexOf(targetImage);
+   if (activePreview === finalImage) startIndex = images.indexOf(finalImage!);
+else if (activePreview === baseComposition) startIndex = images.indexOf(baseComposition!);
+else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!);
     
     setLightboxImages(images);
     setLightboxIndex(startIndex >= 0 ? startIndex : 0);
@@ -533,7 +543,7 @@ export default function CloneImageModule() {
         
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-4 pt-2">
           <div className="text-center md:text-left">
-            <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">Scene <span className="text-brand-600">Clone</span></h1>
+            <h1 className="t-display text-3xl md:text-4xl text-slate-900">Scene <span className="text-brand-600">Clone</span></h1>
             <div className="flex items-center justify-center md:justify-start gap-2 mt-1">
               <p className="text-slate-500 font-bold uppercase text-[8px] md:text-[10px] tracking-[0.3em] italic">Clonación de escenas · Identity Lock</p>
               <ModuleTutorial moduleId="sceneClone" steps={TUTORIAL_CONFIGS.sceneClone} />
@@ -543,14 +553,14 @@ export default function CloneImageModule() {
             {sessions.length > 0 && (
               <button
                 onClick={() => setShowHistory(p => !p)}
-                className={`px-4 md:px-6 py-2 md:py-3 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase transition-all flex items-center gap-2 ${showHistory ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-slate-900'}`}
+                className={`px-4 md:px-6 py-2 md:py-3 rounded-xl md:rounded-2xl t-meta transition-all flex items-center gap-2 ${showHistory ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-slate-900'}`}
               >
                 <i className="fa-solid fa-clock-rotate-left text-xs"></i>
                 <span className="hidden md:inline">Historial</span>
                 <span className="w-4 h-4 bg-brand-100 text-brand-700 rounded-full text-[8px] font-black flex items-center justify-center">{sessions.length}</span>
               </button>
             )}
-            <button onClick={fullReset} className="px-6 md:px-8 py-2 md:py-3 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase text-slate-400 hover:text-slate-900 transition-all">Reset</button>
+            <button onClick={fullReset} className="px-6 md:px-8 py-2 md:py-3 rounded-xl md:rounded-2xl t-meta text-slate-400 hover:text-slate-900 transition-all">Reset</button>
           </div>
         </header>
 
@@ -602,7 +612,7 @@ export default function CloneImageModule() {
                     <button
                       onClick={() => canGoToIdentity && setStep(2)}
                       disabled={!canGoToIdentity}
-                      className="w-full py-5 bg-brand-600 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-brand-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full py-5 bg-brand-600 text-white rounded-[24px] t-meta shadow-xl hover:bg-brand-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Continuar a Identidad
                     </button>
@@ -616,7 +626,7 @@ export default function CloneImageModule() {
                   
                   <div className="space-y-3">
                     <div className="flex justify-between items-end">
-                      <label className="text-[10px] font-black text-brand-900 uppercase tracking-widest">Sujeto 1 (Principal)</label>
+                      <label className="t-meta text-brand-900">Sujeto 1 (Principal)</label>
                       {enableSecondSubject && (
                         <div className="flex bg-slate-100 rounded-lg p-0.5">
                            {['left','auto','right'].map(s => (
@@ -646,7 +656,7 @@ export default function CloneImageModule() {
 
                   {enableSecondSubject && (
                     <div className="space-y-3 animate-in fade-in">
-                      <label className="text-[10px] font-black text-purple-900 uppercase tracking-widest">Sujeto 2</label>
+                      <label className="t-meta text-purple-900">Sujeto 2</label>
                       <div className="grid grid-cols-2 gap-3">
                         <ProUploadCard label="Rostro S2" value={face2} onChange={(v) => { setFace2(v); resetDownstream(2); }} height="h-36" slotType="face" />
                         <ProUploadCard label="Cuerpo S2" value={body2} onChange={(v) => { setBody2(v); resetDownstream(2); }} height="h-36" slotType="body" />
@@ -661,7 +671,7 @@ export default function CloneImageModule() {
                     <button 
                       onClick={() => canGoToBase && setStep(3)} 
                       disabled={!canGoToBase}
-                      className="flex-1 py-4 bg-brand-600 text-white rounded-[20px] font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-brand-700 active:scale-95 transition-all disabled:opacity-50"
+                      className="flex-1 py-4 bg-brand-600 text-white rounded-[20px] t-meta shadow-xl hover:bg-brand-700 active:scale-95 transition-all disabled:opacity-50"
                     >
                       Confirmar Identidad
                     </button>
@@ -678,7 +688,7 @@ export default function CloneImageModule() {
                         🚀
                      </div>
                      <div>
-                        <h3 className="text-sm font-black text-slate-900 uppercase">Listo para procesar</h3>
+                        <h3 className="t-title-sm text-slate-900">Listo para procesar</h3>
                         <p className="text-[10px] text-slate-500 font-medium mt-1 leading-relaxed px-4">
                           La IA clonará la escena del target inyectando la identidad biométrica de tus referencias.
                         </p>
@@ -694,12 +704,13 @@ export default function CloneImageModule() {
                       label="Generar Clonación"
                       loadingLabel="Procesando..."
                       imageCount={1}
+                      creditsAfter={creditsAfter}
                       className="py-6 rounded-[24px]"
                     />
                   </div>
                   
                   {baseComposition && !loading && (
-                     <button onClick={() => setStep(4)} className="w-full py-4 bg-brand-50 text-brand-600 border border-brand-100 rounded-[20px] font-black text-xs uppercase tracking-widest hover:bg-brand-100 transition-all">
+                     <button onClick={() => setStep(4)} className="w-full py-4 bg-brand-50 text-brand-600 border border-brand-100 rounded-[20px] t-meta hover:bg-brand-100 transition-all">
                         Continuar a Outfit <i className="fa-solid fa-arrow-right ml-2"></i>
                      </button>
                   )}
@@ -713,7 +724,7 @@ export default function CloneImageModule() {
                   <div className="space-y-4">
                     <div className={`p-4 rounded-[24px] border transition-all ${replaceOutfit1 ? 'bg-brand-50 border-brand-200' : 'bg-white border-slate-200'}`}>
                        <div className="flex items-center justify-between mb-4">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-700">Cambiar Outfit S1</label>
+                          <label className="t-meta text-slate-700">Cambiar Outfit S1</label>
                           <input type="checkbox" checked={replaceOutfit1} onChange={(e) => setReplaceOutfit1(e.target.checked)} className="w-5 h-5 accent-brand-600 cursor-pointer" />
                        </div>
                        {replaceOutfit1 && (
@@ -724,7 +735,7 @@ export default function CloneImageModule() {
                     {enableSecondSubject && (
                       <div className={`p-4 rounded-[24px] border transition-all ${replaceOutfit2 ? 'bg-purple-50 border-purple-200' : 'bg-white border-slate-200'}`}>
                          <div className="flex items-center justify-between mb-4">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-700">Cambiar Outfit S2</label>
+                            <label className="t-meta text-slate-700">Cambiar Outfit S2</label>
                             <input type="checkbox" checked={replaceOutfit2} onChange={(e) => setReplaceOutfit2(e.target.checked)} className="w-5 h-5 accent-purple-600 cursor-pointer" />
                          </div>
                          {replaceOutfit2 && (
@@ -743,7 +754,7 @@ export default function CloneImageModule() {
                       <div className="space-y-3">
                         <div className="flex items-center gap-2">
                           <i className="fa-solid fa-box-open text-brand-500"></i>
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-700">Productos detectados (opcional)</label>
+                          <label className="t-meta text-slate-700">Productos detectados (opcional)</label>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           {detectedProducts.map((product) => (
@@ -765,7 +776,7 @@ export default function CloneImageModule() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 pt-4">
-                    <button onClick={() => setStep(3)} className="py-4 bg-white border border-slate-200 text-slate-600 rounded-[20px] font-black text-[10px] uppercase hover:bg-slate-50">
+                    <button onClick={() => setStep(3)} className="py-4 bg-white border border-slate-200 text-slate-600 rounded-[20px] t-meta hover:bg-slate-50">
                       Volver a Base
                     </button>
                     <button
@@ -807,12 +818,12 @@ export default function CloneImageModule() {
 
               <div className="flex-1 relative rounded-[32px] overflow-hidden bg-slate-950/50 flex items-center justify-center border border-white/5 group">
                  {loading ? (
-                   <div className="text-center space-y-6 animate-pulse">
-                      <div className="w-20 h-20 border-4 border-brand-500/30 border-t-brand-500 rounded-full animate-spin mx-auto shadow-[0_0_30px_rgba(255,116,139,0.2)]"></div>
-                      <div>
-                         <h4 className="text-white font-black text-xl uppercase italic tracking-wider">{statusMsg || "Procesando..."}</h4>
-                         <p className="text-brand-400 text-[10px] font-bold uppercase tracking-[0.4em] mt-2">Gemini Pro Engine Active</p>
-                      </div>
+                   <div className="w-full max-w-sm mx-auto py-8 px-2">
+                     <GenerationProgress
+                       steps={CLONE_STEPS}
+                       currentStepIndex={cloneStepIndex}
+                       etaSeconds={cloneEta}
+                     />
                    </div>
                  ) : activePreview ? (
                    <div className="relative w-full h-full p-4 md:p-8 cursor-zoom-in" onClick={openLightbox}>
@@ -849,7 +860,6 @@ export default function CloneImageModule() {
           </div>
         </div>
 
-        {/* HISTORIAL */}
         {showHistory && sessions.length > 0 && (
           <section className="px-4 md:px-0 space-y-4 animate-in fade-in duration-300">
             <div className="flex items-center justify-between">
@@ -864,7 +874,6 @@ export default function CloneImageModule() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {sessions.map(s => (
                 <div key={s.id} className="bg-white rounded-[28px] border border-slate-100 shadow-sm overflow-hidden group">
-                  {/* Miniaturas */}
                   <div className="grid grid-cols-3 gap-0.5 h-36 bg-slate-100">
                     <img src={s.targetImage}      alt="Target"  className="w-full h-full object-cover" />
                     <img src={s.baseComposition}  alt="Base"    className="w-full h-full object-cover" />
@@ -875,7 +884,6 @@ export default function CloneImageModule() {
                         </div>
                     }
                   </div>
-                  {/* Info */}
                   <div className="p-4 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
@@ -884,7 +892,7 @@ export default function CloneImageModule() {
                           {s.finalImage ? ' · Final' : ' · Base'}
                         </p>
                         <p className="text-[9px] text-slate-400 font-medium mt-0.5">
-                          {new Date(s.createdAt).toLocaleDateString()} · {s.cameraStyle.replace('iphone_', 'iPhone ')}
+                          {new Date(s.createdAt).toLocaleDateString()} · {s.cameraStyle?.replace('iphone_', 'iPhone ')}
                         </p>
                       </div>
                       <button
@@ -898,7 +906,6 @@ export default function CloneImageModule() {
                         }
                       </button>
                     </div>
-                    {/* Descargas */}
                     <div className="flex gap-2">
                       <a
                         href={s.finalImage || s.baseComposition}

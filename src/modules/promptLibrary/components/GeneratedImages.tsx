@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { Share2, Download } from 'lucide-react';
 import { ImageLightbox } from '../../../components/shared/ImageLightbox';
+import { AddToProjectButton } from '../../../components/shared/AddToProjectButton';
 
 interface GeneratedImagesProps {
   images: string[];
   onPublish: (imageUrl: string) => void;
+  module?: string;
 }
 
-const GeneratedImages: React.FC<GeneratedImagesProps> = ({ images, onPublish }) => {
+const GeneratedImages: React.FC<GeneratedImagesProps> = ({ images, onPublish, module = 'prompt_studio' }) => {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
@@ -59,6 +61,12 @@ const GeneratedImages: React.FC<GeneratedImagesProps> = ({ images, onPublish }) 
               >
                 <Share2 className="w-4 h-4" />
               </button>
+              <AddToProjectButton
+                imageUrl={img}
+                type="result"
+                module={module}
+                className="p-2"
+              />
             </div>
             <div className="absolute top-2 left-2 bg-black/60 text-white text-[8px] font-black px-2 py-1 rounded-lg uppercase">
               #{i + 1}
