@@ -2,7 +2,17 @@
 // Servicio cliente para comunicarse con /api/gemini/ugc
 
 function friendlyApiError(raw: string): string {
-  const msg = (raw || '').toLowerCase();
+  let msg = (raw || '').toLowerCase();
+  try {
+    const parsed = JSON.parse(raw);
+    const code = parsed?.error?.code ?? parsed?.code;
+    const message = parsed?.error?.message ?? parsed?.message ?? '';
+    if (code === 429 || String(code) === '429') {
+      return 'Espera un momento — demasiadas solicitudes. Intenta de nuevo en unos segundos.';
+    }
+    msg = message.toLowerCase();
+  } catch { /* no es JSON */ }
+
   if (msg.includes('429') || msg.includes('quota') || msg.includes('resource_exhausted') || msg.includes('resource has been exhausted') || msg.includes('exhausted')) {
     return 'Espera un momento — demasiadas solicitudes. Intenta de nuevo en unos segundos.';
   }

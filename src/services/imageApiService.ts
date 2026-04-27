@@ -86,9 +86,21 @@ async function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Convierte mensajes técnicos de la API en mensajes amigables para el usuario
+// Convierte mensajes técnicos de la API en mensajes amigables para el usuario.
+// Maneja tanto strings planos como JSON crudo con estructura { error: { code, message } }
 function friendlyApiError(raw: string): string {
-  const msg = (raw || '').toLowerCase();
+  // Intentar extraer el mensaje real si viene como JSON
+  let msg = (raw || '').toLowerCase();
+  try {
+    const parsed = JSON.parse(raw);
+    const code = parsed?.error?.code ?? parsed?.code;
+    const message = parsed?.error?.message ?? parsed?.message ?? '';
+    if (code === 429 || String(code) === '429') {
+      return 'Espera un momento — demasiadas solicitudes. Intenta de nuevo en unos segundos.';
+    }
+    msg = message.toLowerCase();
+  } catch { /* no es JSON, usar el string raw */ }
+
   if (msg.includes('429') || msg.includes('quota') || msg.includes('resource_exhausted') || msg.includes('resource has been exhausted') || msg.includes('exhausted')) {
     return 'Espera un momento — demasiadas solicitudes. Intenta de nuevo en unos segundos.';
   }
@@ -98,7 +110,7 @@ function friendlyApiError(raw: string): string {
   if (msg.includes('content') && (msg.includes('filter') || msg.includes('block') || msg.includes('policy'))) {
     return 'El contenido fue bloqueado por las políticas de la IA. Ajusta el prompt e intenta de nuevo.';
   }
-  return raw; // mensaje original si no hay traducción
+  return raw;
 }
 
 // ─── Función principal ────────────────────────────────────────────────────────
