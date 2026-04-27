@@ -518,27 +518,113 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
         </div>
       )}
 
-      {/* STATS */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { icon: <Zap className="w-4 h-4 text-indigo-500" />, label: 'Créditos', value: isAdmin ? '∞' : String(availableCredits), sub: 'disponibles' },
-          { icon: <TrendingUp className="w-4 h-4 text-emerald-500" />, label: 'Generaciones', value: String(totalGens), sub: 'totales' },
-          { icon: <User className="w-4 h-4 text-purple-500" />, label: 'Modelos', value: String(avatars?.length || 0), sub: 'guardados' },
-          { icon: <Package className="w-4 h-4 text-blue-500" />, label: 'Productos', value: String(products?.length || 0), sub: 'en catálogo' },
-        ].map((s, i) => (
-          <div key={i} className="bg-white px-5 py-4 rounded-2xl border border-slate-100 shadow-sm space-y-1">
-            <div className="flex items-center gap-2">
-              {s.icon}
-              <p className="t-meta">{s.label}</p>
+      {/* ── HERO: greeting card + gradient credit card ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Greeting + CTA */}
+        <div className="bg-white border border-slate-100 rounded-[28px] p-6 md:p-8 shadow-sm space-y-4">
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Buenos días,</p>
+            <h2 className="t-display text-3xl md:text-4xl text-slate-900">{displayName}</h2>
+          </div>
+          <p className="text-sm text-slate-500 font-medium leading-relaxed">
+            Tu ecosistema de producción publicitaria está listo.
+            {totalGens > 0 && <> Has generado <strong className="text-slate-700">{totalGens} imágenes</strong> en total.</>}
+          </p>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <button
+              onClick={() => navigate('/studio-pro')}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-pink-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-violet-200/60 hover:shadow-violet-300/60 transition-all"
+            >
+              <Sparkles className="w-3.5 h-3.5" /> Crear contenido
+            </button>
+            <button
+              onClick={() => navigate('/prompt-gallery')}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all"
+            >
+              Ver inspiración →
+            </button>
+          </div>
+        </div>
+
+        {/* Gradient credit card */}
+        <div className="relative bg-gradient-to-br from-violet-600 to-pink-600 rounded-[28px] p-6 md:p-8 text-white overflow-hidden shadow-xl shadow-violet-200/60">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+          <p className="text-[10px] font-black uppercase tracking-widest opacity-80 mb-1 relative">Saldo · {isAdmin ? 'Admin' : (planName.charAt(0).toUpperCase() + planName.slice(1))}</p>
+          <div className="flex items-baseline gap-3 relative">
+            <span className="text-5xl md:text-6xl font-black tracking-tighter leading-none">{isAdmin ? '∞' : availableCredits}</span>
+            <span className="text-sm opacity-85">créditos</span>
+          </div>
+          {!isAdmin && (
+            <p className="text-xs opacity-80 mt-1 relative">~{Math.floor(availableCredits / 2)} imágenes posibles</p>
+          )}
+          {!isAdmin && (
+            <div className="mt-4 h-1.5 bg-white/20 rounded-full overflow-hidden relative">
+              <div
+                className="h-full bg-white rounded-full transition-all duration-700"
+                style={{ width: `${Math.min(100, (availableCredits / 100) * 100)}%` }}
+              />
             </div>
-            <p className="t-display text-2xl text-slate-900">{s.value}</p>
-            <p className="t-meta-light">{s.sub}</p>
+          )}
+          <div className="flex items-center justify-between mt-4 relative">
+            <span className="text-[10px] opacity-75">
+              {isAdmin ? 'Acceso ilimitado' : `Plan ${planName}`}
+            </span>
+            <button
+              onClick={() => navigate('/pricing')}
+              className="px-3 py-1.5 bg-white text-violet-700 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-violet-50 transition-all"
+            >
+              Ver planes
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── STATS (monthly) ── */}
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: 'Generaciones', value: String(totalGens), sub: 'totales', color: 'text-slate-900' },
+          { label: 'Modelos',      value: String(avatars?.length || 0), sub: 'guardados', color: 'text-purple-600' },
+          { label: 'Productos',    value: String(products?.length || 0), sub: 'en catálogo', color: 'text-blue-600' },
+        ].map((s, i) => (
+          <div key={i} className="bg-white px-4 py-4 rounded-2xl border border-slate-100 shadow-sm space-y-0.5">
+            <p className="t-meta text-slate-400">{s.label}</p>
+            <p className={`text-2xl font-black ${s.color} tracking-tight`}>{s.value}</p>
+            <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">{s.sub}</p>
           </div>
         ))}
       </div>
 
+      {/* ── QUICK ACTIONS 2×2 ── */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="w-1.5 h-5 bg-violet-600 rounded-full" />
+          <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">¿Qué necesitas crear?</h2>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { t: 'Modelo digital',   s: 'Desde tus fotos',   cost: '8 cr',     accent: 'text-violet-600', bg: 'bg-violet-50',  path: '/crear/clonar' },
+            { t: 'Contenido UGC',    s: 'Estilo iPhone',     cost: '12-28 cr', accent: 'text-pink-600',   bg: 'bg-pink-50',    path: '/studio-pro'   },
+            { t: 'Foto de producto', s: '5 ángulos pro',     cost: '2 cr/foto',accent: 'text-indigo-600', bg: 'bg-indigo-50',  path: '/productos'    },
+            { t: 'Clonar escena',    s: 'Tu cara aquí',      cost: '2 cr',     accent: 'text-emerald-600',bg: 'bg-emerald-50', path: '/clonar'       },
+          ].map(a => (
+            <button
+              key={a.t}
+              onClick={() => navigate(a.path)}
+              className="bg-white border border-slate-100 rounded-[20px] p-4 text-left hover:shadow-md hover:border-slate-200 transition-all group"
+            >
+              <div className={`w-8 h-8 rounded-xl ${a.bg} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
+                <Sparkles className={`w-4 h-4 ${a.accent}`} />
+              </div>
+              <p className="text-sm font-bold text-slate-800 leading-tight">{a.t}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">{a.s}</p>
+              <p className={`text-[10px] font-black mt-2 ${a.accent}`}>{a.cost}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* ── QUICK ACCESS: Gallery + History ── */}
-      <div className="space-y-4">
+      <div className="space-y-3">
         <div className="flex items-center gap-3">
           <div className="w-1.5 h-5 bg-indigo-600 rounded-full" />
           <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">Acceso Rápido</h2>
@@ -551,7 +637,6 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
             onClick={() => navigate('/prompt-gallery')}
             className="group relative bg-gradient-to-br from-indigo-600 to-violet-600 p-6 md:p-8 rounded-[32px] cursor-pointer hover:scale-[1.02] hover:shadow-2xl hover:shadow-indigo-200 transition-all overflow-hidden"
           >
-            {/* Background decoration */}
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
             <div className="absolute bottom-0 left-0 w-20 h-20 bg-black/10 rounded-full translate-y-1/2 -translate-x-1/2" />
 
@@ -562,16 +647,12 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
                     <Sparkles className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="t-display text-lg text-white">
-                      Prompt Gallery
-                    </h3>
-                    <p className="t-meta text-indigo-200">
-                      Comunidad
-                    </p>
+                    <h3 className="t-display text-lg text-white">Prompt Gallery</h3>
+                    <p className="t-meta text-indigo-200">Comunidad</p>
                   </div>
                 </div>
                 <p className="text-sm text-indigo-100 font-medium leading-relaxed max-w-xs">
-                  Explora, guarda y publica prompts con la comunidad. Tableros, likes y comentarios.
+                  Explora, guarda y publica prompts con la comunidad.
                 </p>
               </div>
               <div className="w-9 h-9 rounded-full border border-white/30 flex items-center justify-center text-white/60 group-hover:bg-white group-hover:text-indigo-600 transition-all flex-shrink-0 mt-1">
@@ -594,23 +675,17 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
                     <Clock className="w-5 h-5 text-slate-600" />
                   </div>
                   <div>
-                    <h3 className="t-display text-lg text-slate-900">
-                      Mis Generaciones
-                    </h3>
-                    <p className="t-meta">
-                      Historial
-                    </p>
+                    <h3 className="t-display text-lg text-slate-900">Mis Generaciones</h3>
+                    <p className="t-meta">Historial</p>
                   </div>
                 </div>
                 <p className="text-sm text-slate-500 font-medium leading-relaxed max-w-xs">
-                  Todas las imágenes que has generado en cada módulo. Descarga, filtra y gestiona tu trabajo.
+                  Todas las imágenes generadas. Descarga, filtra y gestiona tu trabajo.
                 </p>
                 {totalGens > 0 && (
                   <div className="flex items-center gap-1.5">
                     <Images className="w-3.5 h-3.5 text-slate-400" />
-                    <span className="t-meta">
-                      {totalGens} generacion{totalGens !== 1 ? 'es' : ''} totales
-                    </span>
+                    <span className="t-meta">{totalGens} generacion{totalGens !== 1 ? 'es' : ''} totales</span>
                   </div>
                 )}
               </div>

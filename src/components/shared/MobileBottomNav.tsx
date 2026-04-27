@@ -15,7 +15,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ onSearchOpen }
   const isActive = (path: string) => location.pathname === path;
 
   const btnClass = (path: string) =>
-    `flex flex-col items-center gap-1 px-3 py-1 ${isActive(path) ? 'text-indigo-600' : 'text-slate-400'}`;
+    `flex flex-col items-center gap-1 px-3 py-1 ${isActive(path) ? 'text-violet-600' : 'text-slate-400'}`;
 
   const iconSize = (path: string) => (isActive(path) ? 24 : 22);
 
@@ -27,7 +27,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ onSearchOpen }
       >
         <button onClick={() => navigate('/dashboard')} className={btnClass('/dashboard')}>
           <Home size={iconSize('/dashboard')} />
-          <span className={`text-[10px] font-black uppercase tracking-widest ${isActive('/dashboard') ? 'text-indigo-600' : 'text-slate-400'}`}>Inicio</span>
+          <span className={`text-[10px] font-black uppercase tracking-widest ${isActive('/dashboard') ? 'text-violet-600' : 'text-slate-400'}`}>Inicio</span>
         </button>
 
         <button
@@ -48,7 +48,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ onSearchOpen }
 
         <button onClick={() => navigate('/cuenta')} className={btnClass('/cuenta')}>
           <User size={iconSize('/cuenta')} />
-          <span className={`text-[10px] font-black uppercase tracking-widest ${isActive('/cuenta') ? 'text-indigo-600' : 'text-slate-400'}`}>Perfil</span>
+          <span className={`text-[10px] font-black uppercase tracking-widest ${isActive('/cuenta') ? 'text-violet-600' : 'text-slate-400'}`}>Perfil</span>
         </button>
       </nav>
 

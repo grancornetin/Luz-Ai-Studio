@@ -356,11 +356,11 @@ const AppContent: React.FC = () => {
                 {user && (
                   <button
                     onClick={() => setIsSearchOpen(true)}
-                    className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm text-sm"
+                    className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-500 hover:bg-white hover:border-slate-300 hover:shadow-sm transition-all text-sm"
                   >
-                    <Search size={14} />
-                    <span className="text-xs font-medium text-slate-400">Buscar...</span>
-                    <kbd className="text-[10px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded border border-slate-200 font-bold leading-none">⌘K</kbd>
+                    <Search size={14} className="text-slate-400" />
+                    <span className="text-xs font-medium text-slate-400 italic">Buscar...</span>
+                    <kbd className="text-[10px] bg-white text-slate-400 px-1.5 py-0.5 rounded-md border border-slate-200 font-bold leading-none ml-1">⌘K</kbd>
                   </button>
                 )}
                 <WalletPill />

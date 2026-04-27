@@ -49,6 +49,7 @@ import { GenerateButton } from '../../components/shared/GenerateButton';
 import { useModelSelection } from '../../hooks/useModelSelection';
 import { GenerationProgress, type ProgressStep, type CompletedShot } from '../../components/shared/GenerationProgress';
 import { useGenerationProgress } from '../../hooks/useGenerationProgress';
+import { CostSummary } from './components/CostSummary';
 
 type Step = 'setup' | 'generating_master' | 'checkpoint' | 'producing' | 'library' | 'batch_generating';
 type FilterTab = 'TODAS' | 'AVATAR' | 'PRODUCT' | 'OUTFIT' | 'SCENE';
@@ -1101,20 +1102,16 @@ const ContentStudioProModule: React.FC = () => {
               </section>
             </div>
 
-            <div className="hidden lg:col-span-7 lg:flex flex-col items-center justify-center text-center p-12 bg-slate-900 rounded-[64px] border-8 border-slate-800 shadow-2xl space-y-12">
-              <div className="relative">
-                <i className="fa-solid fa-dna text-white/5 text-9xl"></i>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-24 h-24 border-t-2 border-brand-500/20 rounded-full animate-spin"></div>
-                </div>
-              </div>
-              <div className="space-y-4">
-                <h3 className="t-display text-4xl text-white">Coherencia visual</h3>
-                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.4em] max-w-sm mx-auto leading-relaxed">
-                  Persistencia facial + coherencia visual estilo smartphone.
-                </p>
-                <p className="text-slate-600 text-[9px] normal-case tracking-normal">(UGC Identity Lock)</p>
-              </div>
+            <div className="hidden lg:col-span-7 lg:block">
+              <CostSummary
+                shots={userShotCount}
+                totalCost={sessionCost}
+                availableCredits={credits?.available ?? 0}
+                onGenerate={() => startMasterGeneration()}
+                disabled={false}
+                generating={false}
+                estimatedMinutes={Math.ceil(userShotCount * 0.4)}
+              />
             </div>
           </div>
         )}

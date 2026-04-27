@@ -89,14 +89,14 @@ const PromptGallery: React.FC<PromptGalleryProps> = ({
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
 
         {/* SEARCH */}
-        <div className="relative w-full md:w-96">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+        <div className="relative w-full md:flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Buscar prompts, autores, tags..."
-            className="w-full bg-white border border-slate-100 rounded-2xl pl-12 pr-6 py-4 text-sm font-bold text-slate-700 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none shadow-sm"
+            placeholder="Buscar prompts, tags, estilos..."
+            className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-11 pr-6 py-3.5 text-sm text-slate-700 font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all outline-none"
           />
         </div>
 
@@ -159,21 +159,21 @@ const PromptGallery: React.FC<PromptGalleryProps> = ({
         <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
           <button
             onClick={() => setActiveTag(null)}
-            className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
-              !activeTag ? 'bg-slate-900 text-white shadow-lg' : 'bg-white text-slate-400 border border-slate-100 hover:bg-slate-50'
+            className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex-shrink-0 ${
+              !activeTag ? 'bg-violet-600 text-white shadow-md shadow-violet-200' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
             }`}
           >
-            Todos
+            Todo
           </button>
           {allTags.map(tag => (
             <button
               key={tag}
               onClick={() => setActiveTag(tag)}
-              className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
-                activeTag === tag ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-slate-400 border border-slate-100 hover:bg-slate-50'
+              className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex-shrink-0 ${
+                activeTag === tag ? 'bg-violet-600 text-white shadow-md shadow-violet-200' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
               }`}
             >
-              #{tag}
+              {tag}
             </button>
           ))}
         </div>
