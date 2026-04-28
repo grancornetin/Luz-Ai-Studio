@@ -15,7 +15,8 @@ import NoCreditsModal from '../../../components/shared/NoCreditsModal';
 import { usePromptComposer } from '../hooks/usePromptComposer';
 import { PromptDNA } from '../types/promptTypes';
 
-import { AlertCircle, Sparkles, ChevronDown, Zap, Megaphone, Images } from 'lucide-react';
+import { AlertCircle, Sparkles, ChevronDown, Zap, Megaphone, Images, WandSparkles } from 'lucide-react';
+import { formatPrompt } from '../utils/promptAutoFormatter';
 
 // ──────────────────────────────────────────
 // PromptComposer Sprint 4
@@ -96,6 +97,11 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
     setPromptText(variantText);
   };
 
+  const handleAutoFormat = () => {
+    const formatted = formatPrompt(safePromptText);
+    if (formatted !== safePromptText) setPromptText(formatted);
+  };
+
   const applyTemplate = (templateDNA: PromptDNA) => {
     const parts: string[] = [];
     if (templateDNA.styles)      parts.push(...templateDNA.styles);
@@ -157,7 +163,19 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
             <PromptTemplateSelector onApply={applyTemplate} />
 
             <div className="space-y-6">
-              <PromptInput value={safePromptText} onChange={setPromptText} />
+              <div className="relative">
+                <PromptInput value={safePromptText} onChange={setPromptText} />
+                {safePromptText.trim().length > 0 && (
+                  <button
+                    onClick={handleAutoFormat}
+                    title="Auto-format prompt"
+                    className="absolute -bottom-3 right-4 flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-brand-600 bg-white border border-slate-100 hover:border-brand-200 rounded-full shadow-sm hover:shadow-brand-100 transition-all active:scale-95"
+                  >
+                    <WandSparkles className="w-3 h-3" />
+                    Auto-format
+                  </button>
+                )}
+              </div>
 
               {outputMode === 'standard' && (
                 <GenerateControls
