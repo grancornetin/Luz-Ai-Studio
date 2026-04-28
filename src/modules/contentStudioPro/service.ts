@@ -917,45 +917,111 @@ FORBIDDEN: scene redesign, person floating over background,
 // ===================================================================
 // MOTOR DE GENERACIÓN CON POLLING
 // ===================================================================
-// Describe los roles de las referencias en lenguaje natural para Seedream.
-// Gemini interpreta referencias por posición numérica; Seedream necesita
-// que el texto explique qué es cada imagen referenciada.
-function buildSeedreamRefContext(refs: (string | null)[], isDerivedShot: boolean): string {
-  // Para shots derivados: [REF0/image0, face, face?, face?, outfit?, product?, scene?]
-  // Para image0 (master): [face, face, outfit?, product?, scene?]
-  const validRefs = refs.filter(Boolean);
-  if (validRefs.length === 0) return '';
+// ===================================================================
+// ADAPTADOR SEEDREAM — AISLADO DEL FLUJO GEMINI
+// ===================================================================
+// IMPORTANTE:
+// - Gemini queda intacto: conserva sus referencias numéricas y su prompt original.
+// - Seedream recibe el mismo contenido semántico, pero sin depender de "REF1/REF2".
+// - Seedream no pondera referencias como Gemini; por eso necesita instrucciones
+//   por rol visual y una política de anclaje explícita.
+function buildSeedreamRefContext(
+  refs: (string | null)[],
+  isDerivedShot: boolean,
+): string {
+  const count = refs.filter(Boolean).length;
+  if (count === 0) return '';
 
-  const lines: string[] = ['[REFERENCE IMAGES PROVIDED — USE EACH ONE AS DESCRIBED:]'];
+  return `
+╔═══════════════════════════════════════════════════════════════════╗
+║                 SEEDREAM REFERENCE ROLE POLICY                   ║
+╚═══════════════════════════════════════════════════════════════════╝
 
-  if (isDerivedShot) {
-    // Primer ref es el master shot (REF0)
-    lines.push('• Image 1: Master reference shot — establishes the environment, lighting, and visual world.');
-    // Las siguientes hasta 3 son cara (deduplicadas en el worker, pero aquí describimos)
-    lines.push('• Image 2: Face identity reference — copy this person\'s face, hair, and skin tone EXACTLY.');
-    let idx = 3;
-    for (let i = 3; i < refs.length && refs[i]; i++) {
-      // Intentamos inferir el rol por posición (outfit, product, scene en ese orden)
-      const roles = ['Outfit reference — reproduce the garments exactly.',
-                     'Product reference — reproduce the product exactly.',
-                     'Scene/environment reference — match the environment exactly.'];
-      lines.push(`• Image ${idx}: ${roles[i - 3] || 'Additional reference.'}`);
-      idx++;
-    }
-  } else {
-    // Master shot: [face, face, outfit?, product?, scene?]
-    lines.push('• Image 1: Face identity reference — copy this person\'s face, hair, and skin tone EXACTLY.');
-    let idx = 2;
-    for (let i = 2; i < refs.length && refs[i]; i++) {
-      const roles = ['Outfit reference — reproduce the garments exactly.',
-                     'Product reference — reproduce the product exactly.',
-                     'Scene/environment reference — match the environment exactly.'];
-      lines.push(`• Image ${idx}: ${roles[i - 2] || 'Additional reference.'}`);
-      idx++;
-    }
-  }
+You are receiving several reference images. Do NOT treat them as a collage.
+Do NOT copy their layout. Do NOT insert reference images into the output.
+Use them only as visual constraints.
 
-  return lines.join('\n');
+${isDerivedShot ? `
+DERIVED SHOT MODE:
+- One reference is the already approved MASTER / REF0 image.
+- REF0 is the visual-world anchor: same person, same outfit, same scene,
+  same lighting family, same color temperature, same real-life moment.
+- Other references reinforce exact identity, outfit, product, and scene truth.
+
+Priority for Seedream derived shots:
+1. Preserve the MASTER / REF0 world and continuity.
+2. Preserve the FACE identity exactly from the face identity reference.
+3. Preserve the OUTFIT exactly from the outfit reference, if provided.
+4. Preserve the PRODUCT exactly from the product reference, if provided.
+5. Preserve the SCENE geometry and lighting from REF0 / scene reference.
+
+You are NOT creating a new character, outfit, location, or lighting style.
+You are taking a new iPhone-style photo inside the same existing moment.
+` : `
+ANCHOR / REF0 MODE:
+- Face identity reference defines ONLY the person identity.
+- Outfit reference defines ONLY the clothing, footwear, accessories and fit.
+- Product reference defines ONLY the featured object/product, if provided.
+- Scene reference defines ONLY the environment, spatial layout and lighting.
+
+Integrate these references into ONE natural iPhone-style UGC photo.
+Do NOT let the face reference override outfit, product, or scene.
+Do NOT let the outfit reference override face identity.
+Do NOT let the scene reference replace the person.
+`}
+
+Seedream must obey ALL provided references, not just the face reference.
+If a reference exists, it is binding.
+`;
+}
+
+function adaptPromptForSeedream(prompt: string): string {
+  return prompt
+    .replace(/⚠️⚠️⚠️\s*REFERENCE IMAGE 1 AND 2 ARE THE FACE IDENTITY LOCK\..*?⚠️⚠️⚠️/gs,
+      '⚠️⚠️⚠️ FACE IDENTITY LOCK — SEEDREAM MODE ⚠️⚠️⚠️\nThe face identity reference defines the only person allowed in the image.\nCopy the same face, bone structure, skin tone, hair color, hair texture, eye color, nose, lips, jaw, chin and expression style.\nDo not replace the person. Do not beautify into a different person. Do not average identities.')
+    .replace(/⚠️⚠️⚠️\s*IDENTITY LOCK.*?⚠️⚠️⚠️/gs,
+      '⚠️⚠️⚠️ IDENTITY LOCK — SEEDREAM MODE ⚠️⚠️⚠️\nThe face identity reference is binding. The output must show the same person, not a similar person.')
+    .replace(/\(refs? 1 and 2\)/gi, '(the face identity reference)')
+    .replace(/refs? 1 and 2/gi, 'the face identity reference')
+    .replace(/refs? 2 and 3/gi, 'the face identity reference')
+    .replace(/refs? 2,\s*3,?\s*and 4/gi, 'the face identity reference')
+    .replace(/References? 2,\s*3,?\s*and 4/gi, 'The face identity reference')
+    .replace(/REF0 \(ref \d+\)/gi, 'REF0 / the approved master image')
+    .replace(/FACE REF \(refs [^)]+\)/gi, 'FACE REF / the face identity reference')
+    .replace(/\brefs?\s+\d+(?:\s+and\s+\d+)?\b/gi, 'the corresponding reference image')
+    .trim();
+}
+
+function buildSeedreamPrompt(
+  prompt: string,
+  refs: (string | null)[],
+  systemInstructions: string,
+  negativePrompt: string,
+  isDerivedShot: boolean,
+): string {
+  const refContext = buildSeedreamRefContext(refs, isDerivedShot);
+  const adaptedPrompt = adaptPromptForSeedream(prompt);
+
+  return `${systemInstructions}
+
+${refContext}
+
+╔═══════════════════════════════════════════════════════════════════╗
+║                    SEEDREAM EXECUTION RULES                      ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+- Generate ONE single realistic image. No collage. No grid. No reference board.
+- Use the references as constraints, not as images to paste into the output.
+- Keep the same person, outfit, product, scene and lighting when they are provided.
+- Do not only follow the face reference. Outfit, product and scene are equally binding.
+- Preserve natural iPhone UGC realism: imperfect, organic, real-life capture.
+- Avoid studio polish, beauty filter, editorial lighting, over-smooth skin.
+
+TASK:
+${adaptedPrompt}
+
+NEGATIVE:
+${negativePrompt}`;
 }
 
 async function generateWithPolling(
@@ -971,35 +1037,9 @@ async function generateWithPolling(
   const referenceImages = await prepareReferenceImagesCompressed(refs);
   const negativePrompt = isDerivedShot ? NEGATIVE_SHORT : NEGATIVE_FULL;
 
-  let fullPrompt: string;
-  if (modelId === 'seedream') {
-    // Para Seedream: mismo prompt rico que Gemini, pero con referencias descritas textualmente
-    // en lugar de por posición numérica (Seedream no interpreta "ref 1", "refs 2 and 3", etc.)
-    const refContext = buildSeedreamRefContext(refs, isDerivedShot);
-
-    // Reemplazar menciones de posición numérica por lenguaje descriptivo
-    const adaptedPrompt = prompt
-      // Bloques de anclaje que dependen de posición numérica → ya cubiertos por refContext
-      .replace(/⚠️⚠️⚠️\s*REFERENCE IMAGE 1 AND 2 ARE THE FACE IDENTITY LOCK\..*?⚠️⚠️⚠️/gs,
-        '⚠️⚠️⚠️ THE FACE IDENTITY IMAGES ARE THE FACE IDENTITY LOCK. ⚠️⚠️⚠️\nThe person shown in the face reference images is the ONLY person allowed in this generation.\nCopy their face, bone structure, skin tone, hair color and texture, eye color, and all facial features EXACTLY.\nDo NOT substitute this person for any other. Do NOT average with other references.\nThe face identity images are the GROUND TRUTH identity. NEVER override it.')
-      .replace(/⚠️⚠️⚠️\s*IDENTITY LOCK.*?⚠️⚠️⚠️/gs,
-        '⚠️⚠️⚠️ IDENTITY LOCK — READ THIS FIRST BEFORE ANYTHING ELSE ⚠️⚠️⚠️\nThe face identity images in this request are the FACE IDENTITY.\nThis is the ONLY person permitted in this image.\nCopy their face EXACTLY: bone structure, eye shape, eye color, nose, lips, jaw, chin, brow shape.\nCopy their hair EXACTLY: color, texture, length, wave pattern.\nCopy their skin tone EXACTLY: undertone, warmth, complexion.\nDo NOT average their face with any other reference.\nDo NOT substitute a different person even if it seems to "fit" the shot better.\nThis constraint has ABSOLUTE priority over every other instruction in this prompt.')
-      // Inline numeric ref mentions in prose
-      .replace(/\(refs? 1 and 2\)/gi, '(the face identity images)')
-      .replace(/refs? 1 and 2/gi, 'the face identity images')
-      .replace(/refs? 2 and 3/gi, 'the face identity images')
-      .replace(/refs? 2,\s*3,?\s*and 4/gi, 'the face identity images')
-      .replace(/References? 2,\s*3,?\s*and 4/gi, 'The face identity images')
-      .replace(/REF0 \(ref \d+\)/gi, 'REF0 (the master reference image)')
-      .replace(/FACE REF \(refs [^)]+\)/gi, 'FACE REF (the face identity images)')
-      // Generic "ref N" fallback
-      .replace(/\brefs?\s+\d+(?:\s+and\s+\d+)?\b/gi, 'the corresponding reference image')
-      .trim();
-
-    fullPrompt = `${systemInstructions}\n\n${refContext}\n\nTASK:\n${adaptedPrompt}\n\nNEGATIVE:\n${negativePrompt}`;
-  } else {
-    fullPrompt = `${systemInstructions}\n\nTASK:\n${prompt}\n\nNEGATIVE:\n${negativePrompt}`;
-  }
+  const fullPrompt = modelId === 'seedream'
+    ? buildSeedreamPrompt(prompt, refs, systemInstructions, negativePrompt, isDerivedShot)
+    : `${systemInstructions}\n\nTASK:\n${prompt}\n\nNEGATIVE:\n${negativePrompt}`;
 
   return ugcApiService.generateImageAsync({
     prompt: fullPrompt,

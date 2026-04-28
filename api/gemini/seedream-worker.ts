@@ -74,20 +74,11 @@ function toEvolinkSize(aspectRatio: string): string {
   return map[aspectRatio] || '1:1';
 }
 
-// ─── Compresión de imagen base64 en Node (sin Canvas) ────────────────────────
-// Usa solo Buffer — no hay Canvas en Vercel serverless.
-// Estrategia: si el base64 supera MAX_REF_BYTES, trunca a ese límite.
-// EvoLink acepta imágenes de referencia de hasta ~2MB; con la compresión
-// previa del frontend (1024px/0.82) rara vez superan 200-300KB en base64.
-const MAX_REF_B64_CHARS = 400_000; // ~300KB decoded ≈ límite seguro para EvoLink
-
-function trimBase64IfNeeded(b64: string): string {
-  if (b64.length <= MAX_REF_B64_CHARS) return b64;
-  // Recortar al límite — el resultado sigue siendo válido JPEG/PNG parcialmente
-  // ya que EvoLink usará lo que pueda interpretar. En la práctica el frontend
-  // ya comprime a 1024px/0.82, así que esto es un safety net.
-  console.warn(`[SeedreamWorker] Reference image truncated: ${b64.length} → ${MAX_REF_B64_CHARS} chars`);
-  return b64.slice(0, MAX_REF_B64_CHARS);
+// ─── Manejo de referencias base64 ────────────────────────────────────────────
+// IMPORTANTE: NO truncar base64. Truncar imágenes produce referencias corruptas
+// y Seedream termina ignorándolas. La compresión debe ocurrir antes, en frontend.
+function keepBase64Intact(b64: string): string {
+  return b64;
 }
 
 // ─── Extrae referencias de imagen desde los parts guardados en Redis ──────────
@@ -103,9 +94,16 @@ function extractReferenceDataUrls(parts: any[]): string[] {
     const part = parts[i];
     if (part?.inlineData?.data) {
       const mime    = part.inlineData.mimeType || 'image/jpeg';
-      const trimmed = trimBase64IfNeeded(part.inlineData.data);
-      // Usar los primeros 100 chars como fingerprint para deduplicar
-      const fingerprint = trimmed.slice(0, 100);
+      const trimmed = keepBase64Intact(part.inlineData.data);
+      // Fingerprint robusto: los primeros bytes de imágenes JPEG/PNG suelen ser muy parecidos.
+      // Si usamos solo el inicio, podemos deduplicar erróneamente outfit/scene/product.
+      const mid = Math.floor(trimmed.length / 2);
+      const fingerprint = [
+        trimmed.length,
+        trimmed.slice(0, 80),
+        trimmed.slice(Math.max(0, mid - 40), mid + 40),
+        trimmed.slice(-80),
+      ].join('|');
       if (!seen.has(fingerprint)) {
         seen.add(fingerprint);
         refs.push(`data:${mime};base64,${trimmed}`);
@@ -168,15 +166,17 @@ async function processSeedreamJob(
   const refsToSend = referenceDataUrls.slice(0, MAX_REFS);
 
   if (refsToSend.length === 1) {
-    // Una sola referencia: campo singular
     evolinkBody.image_url = refsToSend[0];
   } else if (refsToSend.length > 1) {
-    // Múltiples referencias: primera como principal + array completo
-    evolinkBody.image_url  = refsToSend[0];
+    // CRÍTICO PARA UGC SEEDREAM:
+    // No enviar image_url + image_urls al mismo tiempo, porque algunos gateways
+    // priorizan image_url e ignoran el array. Ese comportamiento hacía que
+    // Seedream respetara solo la primera referencia (normalmente rostro).
+    // En multi-ref usamos SOLO image_urls para que outfit/product/scene no queden anulados.
     evolinkBody.image_urls = refsToSend;
   }
 
-  console.log(`[SeedreamWorker ${jobId}] Sending ${refsToSend.length} refs (${referenceDataUrls.length} after dedup)`);
+  console.log(`[SeedreamWorker ${jobId}] Sending ${refsToSend.length} refs via ${refsToSend.length > 1 ? 'image_urls' : 'image_url'} (${referenceDataUrls.length} after dedup)`);
 
   let taskId: string;
   try {
