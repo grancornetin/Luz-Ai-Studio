@@ -25,6 +25,9 @@ import PromptStudioView from './views/PromptStudioView';
 import ProjectsList from './modules/projects/ProjectsList';
 import ProjectDetail from './modules/projects/ProjectDetail';
 
+// ADMIN
+import BatchProgressPanel from './modules/admin/BatchProgressPanel';
+
 // PRECIOS Y CRÉDITOS
 import Pricing from './views/Pricing';
 import BuyCredits from './views/BuyCredits';
@@ -369,6 +372,7 @@ const AppContent: React.FC = () => {
                   <Route path="/projects"        element={<ProjectsList />} />
                   <Route path="/projects/:id"   element={<ProjectDetail />} />
                   <Route path="/prompt-library" element={<Navigate to="/prompt-gallery" replace />} />
+                  <Route path="/admin/batch"    element={<BatchProgressPanel />} />
                   <Route path="*"               element={<Navigate to="/dashboard" replace />} />
                 </Routes>
               </main>
