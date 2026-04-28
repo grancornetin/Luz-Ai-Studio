@@ -141,7 +141,7 @@ export async function verifyAuth(req: VercelRequest): Promise<string> {
 const MAX_IMAGE_BYTES     = 5 * 1024 * 1024; // 5MB decoded
 const ALLOWED_MIMES       = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const MAX_PROMPT_LEN      = 32_000; // prompts de imagen pueden ser muy largos
-const MAX_CHAT_PROMPT_LEN = 8_000;  // límite más estricto para el asistente de chat
+const MAX_CHAT_PROMPT_LEN = 48_000; // asistente: system prompt ~19k + historial + margen
 
 export function validateBase64Image(data: string, mimeType: string): string | null {
   if (!data || data.length < 64) return 'Image data too short';

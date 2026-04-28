@@ -26,7 +26,7 @@ const MODULE_GROUPS = [
     modules: [
       {
         path: '/crear/clonar',
-        title: 'Crear modelo',
+        title: 'CREAR MODELO',
         subtitle: 'desde fotos',
         description: 'Extrae el ADN biométrico de fotos reales para crear un modelo digital fiel.',
         icon: 'fa-camera',
@@ -37,7 +37,7 @@ const MODULE_GROUPS = [
       },
       {
         path: '/crear/manual',
-        title: 'Crear modelo',
+        title: 'CREAR MODELO',
         subtitle: 'desde cero',
         description: 'Diseña una identidad digital 100% nueva configurando cada rasgo.',
         icon: 'fa-sliders',
@@ -48,7 +48,7 @@ const MODULE_GROUPS = [
       },
       {
         path: '/modelos',
-        title: 'Mis modelos',
+        title: 'MIS MODELOS',
         subtitle: 'Avatares guardados',
         description: 'Accede a todos tus modelos creados y úsalos en cualquier módulo.',
         icon: 'fa-user-astronaut',
@@ -65,7 +65,7 @@ const MODULE_GROUPS = [
     modules: [
       {
         path: '/prompt-studio',
-        title: 'Generador con IA',
+        title: 'GENERADOR CON IA',
         subtitle: 'Prompt Studio',
         description: 'Crea imágenes con prompts avanzados, campañas y generación masiva.',
         icon: 'fa-wand-magic-sparkles',
@@ -76,7 +76,7 @@ const MODULE_GROUPS = [
       },
       {
         path: '/studio-pro',
-        title: 'Contenido para redes',
+        title: 'CONTENIDO PARA REDES',
         subtitle: 'UGC & Social',
         description: 'Genera contenido tipo smartphone orgánico con tu modelo e identidad de marca.',
         icon: 'fa-mobile-screen-button',
@@ -87,7 +87,7 @@ const MODULE_GROUPS = [
       },
       {
         path: '/clonar',
-        title: 'Clonar escena',
+        title: 'CLONAR ESCENA',
         subtitle: 'Scene Clone',
         description: 'Replica una fotografía existente inyectando una nueva identidad.',
         icon: 'fa-clone',
@@ -104,7 +104,7 @@ const MODULE_GROUPS = [
     modules: [
       {
         path: '/outfit-extractor',
-        title: 'Extraer prendas',
+        title: 'EXTRAER PRENDAS',
         subtitle: 'Outfit Extractor',
         description: 'Separa cada prenda de un outfit y genera renders ghost individuales.',
         icon: 'fa-shirt',
@@ -115,7 +115,7 @@ const MODULE_GROUPS = [
       },
       {
         path: '/productos',
-        title: 'Foto de producto',
+        title: 'FOTO DE PRODUCTO',
         subtitle: 'Product Studio',
         description: 'Analiza y genera fotografía comercial de tus productos.',
         icon: 'fa-gem',

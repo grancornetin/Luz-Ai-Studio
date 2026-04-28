@@ -69,6 +69,16 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
   const [outputMode, setOutputMode]     = React.useState<OutputMode>('standard');
   const [activeTab, setActiveTab]       = React.useState<'inputs' | 'results'>('inputs');
 
+  const plan = credits?.plan ?? 'free';
+  // Campaign y Photodump: bloqueado en free/weekly, limitado en starter, libre en pro/studio/admin
+  const canUseBatchModes = isAdmin || plan === 'pro' || plan === 'studio' || plan === 'starter';
+  const batchIsLimited   = !isAdmin && plan === 'starter';
+  const batchLockReason  = !canUseBatchModes
+    ? 'Disponible desde el plan Starter. Actualiza para acceder.'
+    : batchIsLimited
+    ? 'Starter: 3 sesiones/día. Actualiza a Pro para uso ilimitado.'
+    : null;
+
   const safePromptText = typeof promptText === 'string' ? promptText : '';
   const usedTokens     = extractTokens(safePromptText);
 
@@ -269,31 +279,43 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
 
                 <div className="relative group flex-1">
                   <button
-                    onClick={() => setOutputMode('campaign')}
+                    onClick={() => canUseBatchModes && setOutputMode('campaign')}
                     className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl t-meta transition-all ${
-                      outputMode === 'campaign' ? 'bg-violet-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'
+                      !canUseBatchModes
+                        ? 'text-slate-600 cursor-not-allowed opacity-50'
+                        : outputMode === 'campaign'
+                        ? 'bg-violet-600 text-white shadow-lg'
+                        : 'text-slate-500 hover:text-slate-300'
                     }`}
                   >
                     <Megaphone className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Campaign</span>
+                    {!canUseBatchModes && <span className="text-[8px] bg-amber-500 text-white px-1 rounded font-black">PRO</span>}
+                    {batchIsLimited && outputMode !== 'campaign' && <span className="text-[8px] bg-amber-500/70 text-white px-1 rounded font-black">LIM</span>}
                   </button>
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-900 text-white text-[9px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                    Genera múltiples imágenes del mismo sujeto en distintas escenas. Ideal para campañas coherentes.
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 p-2 bg-slate-900 text-white text-[9px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                    {batchLockReason ?? 'Genera múltiples imágenes del mismo sujeto en distintas escenas. Ideal para campañas coherentes.'}
                   </div>
                 </div>
 
                 <div className="relative group flex-1">
                   <button
-                    onClick={() => setOutputMode('photodump')}
+                    onClick={() => canUseBatchModes && setOutputMode('photodump')}
                     className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl t-meta transition-all ${
-                      outputMode === 'photodump' ? 'bg-pink-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'
+                      !canUseBatchModes
+                        ? 'text-slate-600 cursor-not-allowed opacity-50'
+                        : outputMode === 'photodump'
+                        ? 'bg-pink-600 text-white shadow-lg'
+                        : 'text-slate-500 hover:text-slate-300'
                     }`}
                   >
                     <Images className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Photodump</span>
+                    {!canUseBatchModes && <span className="text-[8px] bg-amber-500 text-white px-1 rounded font-black">PRO</span>}
+                    {batchIsLimited && outputMode !== 'photodump' && <span className="text-[8px] bg-amber-500/70 text-white px-1 rounded font-black">LIM</span>}
                   </button>
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-900 text-white text-[9px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                    Generación masiva de variaciones automáticas (cambios sutiles a creativos). Perfecto para testing y volumen.
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 p-2 bg-slate-900 text-white text-[9px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                    {batchLockReason ?? 'Generación masiva de variaciones automáticas. Perfecto para testing y volumen.'}
                   </div>
                 </div>
               </div>
