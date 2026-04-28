@@ -1270,6 +1270,34 @@ Natural UGC aesthetic. NO beautification. NO studio polish.`;
 
     const system = `${PARADIGM_RULE}\n${REF0_ANCHOR_RULE}\n${getModeDominance(focus)}`;
 
+    // Extra identity reinforcement for shots prone to drift (index 2 = shot 3, or INTERACTION role)
+    const isHighDriftRisk = (shotIndex !== undefined && shotIndex === 2) || directive?.role === 'INTERACTION';
+    const driftGuard = isHighDriftRisk ? `
+🔴🔴🔴🔴🔴 ANTI-DRIFT EMERGENCY OVERRIDE — SHOT ${(shotIndex ?? 0) + 1} 🔴🔴🔴🔴🔴
+
+THIS SHOT HAS ELEVATED RISK OF IDENTITY DRIFT. READ CAREFULLY.
+
+The person in THIS shot MUST be 100% identical to the face references.
+Do NOT let the shot's action (hands, interaction, pose) cause any change to the face.
+The face identity is NON-NEGOTIABLE even when:
+- The hands are performing an action
+- The person is looking at something
+- The body is angled differently
+- The shot framing changes
+
+FACE IDENTITY CHECK BEFORE FINALIZING:
+→ Same bone structure as face reference? YES required.
+→ Same eye shape and color as face reference? YES required.
+→ Same nose as face reference? YES required.
+→ Same lips as face reference? YES required.
+→ Same jaw and chin as face reference? YES required.
+→ Same hair (color, texture, length, wave) as face reference? YES required.
+→ Same skin tone as face reference? YES required.
+
+If ANY feature is different → DISCARD and regenerate.
+The body may change position. The face NEVER changes.
+` : '';
+
     const prompt = `
 ⚠️⚠️⚠️ IDENTITY LOCK — READ THIS FIRST BEFORE ANYTHING ELSE ⚠️⚠️⚠️
 
@@ -1282,6 +1310,7 @@ This is the ONLY person permitted in this image.
 - Do NOT substitute a different person even if it seems to "fit" the shot better.
 - If the shot role requires a different angle, expression, or distance — keep SAME FACE, change ONLY the angle/expression/distance.
 - This constraint has ABSOLUTE priority over every other instruction in this prompt.
+${driftGuard}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CREATE A NEW PHOTO FROM THE SAME SESSION AS REF0.

@@ -462,20 +462,6 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
         </section>
       )}
 
-      {/* TAB: CONFIGURACIÓN — redirige a AccountSettings */}
-      {activeTab === 'settings' && (
-        <section className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-8 space-y-6 animate-in fade-in">
-          <div className="flex items-center gap-3 mb-2">
-            <Settings className="w-5 h-5 text-slate-500" />
-            <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Configuración</h2>
-          </div>
-          <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 text-center space-y-2">
-            <Settings className="w-8 h-8 text-slate-300 mx-auto" />
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Preferencias</p>
-            <p className="text-[10px] text-slate-400">Cambiar email, contraseña, idioma y notificaciones — disponible próximamente.</p>
-          </div>
-        </section>
-      )}
 
       {/* HOME TAB CONTENT */}
       {activeTab === 'home' && (<>

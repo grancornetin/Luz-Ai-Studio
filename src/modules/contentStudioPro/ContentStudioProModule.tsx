@@ -607,6 +607,18 @@ const ContentStudioProModule: React.FC = () => {
     setStep('producing');
     setCurrentSet(targetSet);
 
+    // Build fresh progress steps for the retry
+    const retrySteps: ProgressStep[] = [
+      { id: 'retry-init', label: 'Preparando reintento...' },
+      ...failedShots.map((s, i) => ({
+        id: `retry-shot-${i}`,
+        label: `Reintentando shot ${targetSet.shots.findIndex(sh => sh.key === s.key) + 1} de ${targetSet.shots.length}`,
+      })),
+      { id: 'retry-done', label: 'Finalizando sesión' },
+    ];
+    startProgress(retrySteps, failedShots.length);
+    advanceProgress(0);
+
     const useProduct = (targetSet.focus === 'OUTFIT' || targetSet.focus === 'SCENE')
       ? (targetSet.productRef !== null)
       : true;
@@ -645,7 +657,9 @@ const ContentStudioProModule: React.FC = () => {
       }
     };
 
-    const retryPromises = failedShots.map(async (shot) => {
+    advanceProgress(1); // move past "Preparando reintento"
+
+    const retryPromises = failedShots.map(async (shot, retryIdx) => {
       const idx = updatedShots.findIndex(s => s.key === shot.key);
       updateShotStatus(shot.key, 'processing');
 
@@ -663,6 +677,8 @@ const ContentStudioProModule: React.FC = () => {
           }
         );
         updateShotStatus(shot.key, 'completed', url);
+        addProgressShot(url, idx);
+        advanceProgress(retryIdx + 2); // 0=init, 1=first shot, ...
 
         saveToHistorySafe({
           imageUrl: url,
@@ -676,6 +692,7 @@ const ContentStudioProModule: React.FC = () => {
     });
 
     await Promise.all(retryPromises);
+    stopProgress();
 
     const finalSet = { ...targetSet, shots: updatedShots };
     const stillFailed = updatedShots.filter(s => s.status === 'error');

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { LogOut, User as UserIcon, Menu, X, Search } from 'lucide-react';
+import { LogOut, User as UserIcon, Menu, X } from 'lucide-react';
 
 // Vistas y Módulos
 import Landing from './views/Landing';
@@ -40,7 +40,6 @@ import { ModelSelectionProvider } from './contexts/ModelSelectionContext';
 import AuthModal from './modules/auth/components/AuthModal';
 import OnboardingWizard from './modules/auth/components/OnboardingWizard';
 import AppAssistant from './components/AppAssistant';
-import { WalletPill } from './components/shared/WalletPill';
 import { MobileBottomNav } from './components/shared/MobileBottomNav';
 import { GlobalSearchModal } from './components/shared/GlobalSearchModal';
 import { AvatarProfile, ProductProfile } from './types';
@@ -351,21 +350,7 @@ const AppContent: React.FC = () => {
               </div>
             )}
             <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
-              {/* Barra superior derecha: búsqueda + wallet */}
-              <div className="fixed top-5 right-5 z-[70] hidden md:flex items-center gap-2">
-                {user && (
-                  <button
-                    onClick={() => setIsSearchOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-500 hover:bg-white hover:border-slate-300 hover:shadow-sm transition-all text-sm"
-                  >
-                    <Search size={14} className="text-slate-400" />
-                    <span className="text-xs font-medium text-slate-400 italic">Buscar...</span>
-                    <kbd className="text-[10px] bg-white text-slate-400 px-1.5 py-0.5 rounded-md border border-slate-200 font-bold leading-none ml-1">⌘K</kbd>
-                  </button>
-                )}
-                <WalletPill />
-              </div>
-              <main className="flex-1 p-4 md:p-10 overflow-x-hidden pb-24 md:pb-10">
+<main className="flex-1 p-4 md:p-10 overflow-x-hidden pb-24 md:pb-10">
                 <Routes>
                   <Route path="/dashboard"      element={<Dashboard />} />
                   <Route path="/historial"      element={<GenerationHistory />} />
