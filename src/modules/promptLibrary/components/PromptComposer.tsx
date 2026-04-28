@@ -162,20 +162,21 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
 
             <PromptTemplateSelector onApply={applyTemplate} />
 
-            <div className="space-y-6">
-              <div className="relative">
-                <PromptInput value={safePromptText} onChange={setPromptText} />
+            <div className="space-y-2">
+              <PromptInput value={safePromptText} onChange={setPromptText} />
+              <div className="flex justify-end">
                 {safePromptText.trim().length > 0 && (
                   <button
                     onClick={handleAutoFormat}
                     title="Auto-format prompt"
-                    className="absolute -bottom-3 right-4 flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-brand-600 bg-white border border-slate-100 hover:border-brand-200 rounded-full shadow-sm hover:shadow-brand-100 transition-all active:scale-95"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-brand-600 bg-white border border-slate-100 hover:border-brand-200 rounded-full shadow-sm transition-all active:scale-95"
                   >
                     <WandSparkles className="w-3 h-3" />
                     Auto-format
                   </button>
                 )}
               </div>
+            </div>
 
               {outputMode === 'standard' && (
                 <GenerateControls
