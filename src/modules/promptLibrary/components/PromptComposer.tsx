@@ -162,8 +162,9 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
 
             <PromptTemplateSelector onApply={applyTemplate} />
 
-            <div className="space-y-2">
+            <div className="space-y-4">
               <PromptInput value={safePromptText} onChange={setPromptText} />
+
               <div className="flex justify-end">
                 {safePromptText.trim().length > 0 && (
                   <button
@@ -176,7 +177,6 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
                   </button>
                 )}
               </div>
-            </div>
 
               {outputMode === 'standard' && (
                 <GenerateControls
