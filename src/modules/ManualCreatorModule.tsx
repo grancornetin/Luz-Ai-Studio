@@ -11,8 +11,6 @@ import { CREDIT_COSTS, MODEL_CREDIT_COST } from '../services/creditConfig';
 import { downloadAsZip } from '../utils/imageUtils';
 import { useAuth } from '../modules/auth/AuthContext';
 import { GenerateButton } from '../components/shared/GenerateButton';
-import { ModelSelector } from '../components/shared/ModelSelector';
-import { useModelSelection } from '../hooks/useModelSelection';
 import { 
   ETHNICITY_OPTIONS, AGE_OPTIONS, BUILD_OPTIONS, OUTFITS_MUJER, OUTFITS_HOMBRE, 
   EYE_COLORS, HAIR_COLORS, HAIR_TYPES, HAIR_LENGTHS, PERSONALITY_OPTIONS, EXPRESSION_OPTIONS 
@@ -29,7 +27,7 @@ interface ManualCreatorModuleProps {
 
 const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => {
   const { credits } = useAuth();
-  const { modelId, setModelId } = useModelSelection();
+  const modelId = 'gemini' as const;
   const [name, setName] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
@@ -272,12 +270,6 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
                 </div>
               </div>
             </div>
-
-            <ModelSelector
-              value={modelId}
-              onChange={setModelId}
-              disabled={isProcessing}
-            />
 
             <div className="pt-4">
               <GenerateButton

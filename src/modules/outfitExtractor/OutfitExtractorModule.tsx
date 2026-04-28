@@ -12,8 +12,6 @@ import { OutfitKit, OutfitItem, SavedOutfitItem, OutfitCombination } from './typ
 import { downloadAsZip } from '../../utils/imageUtils';
 import { useAuth } from '../../modules/auth/AuthContext';
 import { GenerateButton } from '../../components/shared/GenerateButton';
-import { ModelSelector } from '../../components/shared/ModelSelector';
-import { useModelSelection } from '../../hooks/useModelSelection';
 
 // Nuevos componentes base
 import { ImageSlot } from '../../components/shared/ImageSlot';
@@ -27,7 +25,7 @@ type LibraryView = 'kits' | 'items' | 'combinations' | 'creator';
 
 const OutfitExtractorModule: React.FC = () => {
   const { credits } = useAuth();
-  const { modelId, setModelId } = useModelSelection();
+  const modelId = 'gemini' as const;
   const [step, setStep] = useState<Step>('idle');
   const [mainView, setMainView] = useState<'main' | 'library'>('main');
   const [libView, setLibView] = useState<LibraryView>('kits');
@@ -409,7 +407,6 @@ const OutfitExtractorModule: React.FC = () => {
                       />
                     </div>
                     <UploadDisclaimer />
-                    <ModelSelector value={modelId} onChange={setModelId} disabled={step !== 'idle'} />
                     <button onClick={startDetection} disabled={!sourceImage} className="w-full py-5 md:py-6 bg-brand-600 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.3em] shadow-xl hover:bg-brand-700 transition-all active:scale-95 disabled:opacity-50">Analizar Outfit</button>
                   </section>
                 </div>

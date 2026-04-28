@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { MISSIONS, getUserMissions, completeMission, isMissionOnCooldown, type UserMissions } from '../services/missionsService';
 import { getReferralStats, redeemSpecialCode } from '../services/referralService';
-import { useModelSelection } from '../hooks/useModelSelection';
 
 // creditsGemini: costo con Nano Banana 2 | creditsSeedream: costo con Seedream
 // null = precio fijo (no varía con el modelo) | 0 = gratis
@@ -189,7 +188,7 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
     setTimeout(() => setMissionMsg(null), 3000);
   };
 
-  const { modelId } = useModelSelection();
+  const modelId = 'gemini' as const;
   const displayName      = profile?.displayName?.split(' ')[0] || 'Creador';
   const availableCredits = credits?.available || 0;
   const planName         = credits?.plan || 'free';
@@ -710,34 +709,19 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
                     )}
                   </div>
                   <p className="t-body-sm leading-tight md:leading-relaxed line-clamp-2 md:line-clamp-none">{mod.description}</p>
-                  {mod.creditsGemini > 0 && (() => {
-                    const cost = mod.creditsSeedream !== null
-                      ? (modelId === 'seedream' ? mod.creditsSeedream : mod.creditsGemini)
-                      : mod.creditsGemini;
-                    return (
-                      <div className="flex md:hidden items-center gap-1 mt-1">
-                        <Zap className="w-2.5 h-2.5 text-amber-400" />
-                        <span className="t-meta text-amber-500">{cost} cr.</span>
-                      </div>
-                    );
-                  })()}
-                </div>
-                {mod.creditsGemini > 0 && (() => {
-                  const cost = mod.creditsSeedream !== null
-                    ? (modelId === 'seedream' ? mod.creditsSeedream : mod.creditsGemini)
-                    : mod.creditsGemini;
-                  const hasRange = mod.creditsSeedream !== null && mod.creditsSeedream !== mod.creditsGemini;
-                  return (
-                    <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
-                      <Zap className="w-3 h-3 text-amber-400" />
-                      <span className="t-meta whitespace-nowrap">
-                        {hasRange
-                          ? `${cost} cr. · desde ${mod.creditsSeedream} con Seedream`
-                          : `${cost} cr. · solo Gemini`}
-                      </span>
+                  {mod.creditsGemini > 0 && (
+                    <div className="flex md:hidden items-center gap-1 mt-1">
+                      <Zap className="w-2.5 h-2.5 text-amber-400" />
+                      <span className="t-meta text-amber-500">{mod.creditsGemini} cr.</span>
                     </div>
-                  );
-                })()}
+                  )}
+                </div>
+                {mod.creditsGemini > 0 && (
+                  <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
+                    <Zap className="w-3 h-3 text-amber-400" />
+                    <span className="t-meta whitespace-nowrap">{mod.creditsGemini} cr.</span>
+                  </div>
+                )}
                 <div className="hidden md:flex absolute top-7 right-7 w-9 h-9 rounded-full border border-slate-100 items-center justify-center text-slate-300 group-hover:bg-slate-900 group-hover:text-white group-hover:border-slate-900 transition-all">
                   <ArrowRight size={14} className="-rotate-45 group-hover:rotate-0 transition-transform" />
                 </div>

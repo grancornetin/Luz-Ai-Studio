@@ -44,9 +44,7 @@ import UploadDisclaimer from '../../components/shared/UploadDisclaimer';
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
 import { FloatingActionBar } from '../../components/shared/FloatingActionBar';
 import { useScrollFAB } from '../../hooks/useScrollFAB';
-import { ModelSelector } from '../../components/shared/ModelSelector';
 import { GenerateButton } from '../../components/shared/GenerateButton';
-import { useModelSelection } from '../../hooks/useModelSelection';
 import { GenerationProgress, type ProgressStep, type CompletedShot } from '../../components/shared/GenerationProgress';
 import { useGenerationProgress } from '../../hooks/useGenerationProgress';
 import { CostSummary } from './components/CostSummary';
@@ -97,7 +95,7 @@ const CustomCheckbox: React.FC<{ checked: boolean; onChange: () => void; label?:
 );
 
 const ContentStudioProModule: React.FC = () => {
-  const { modelId, setModelId } = useModelSelection();
+  const modelId = 'gemini' as const;
   const { credits } = useAuth(); // <-- NUEVO: para obtener créditos actuales
   const [step, setStep] = useState<Step>('setup');
   const [sets, setSets] = useState<ContentStudioProSet[]>([]);
@@ -1053,11 +1051,7 @@ const ContentStudioProModule: React.FC = () => {
 
                 <UploadDisclaimer />
 
-                <ModelSelector
-                  value={modelId}
-                  onChange={setModelId}
-                  disabled={step !== 'setup'}
-                />
+
 
                 {/* Selector de cantidad de shots */}
                 <div className="space-y-3">

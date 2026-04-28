@@ -24,9 +24,7 @@ import { analyzeScene, DetectedObject } from '../services/sceneAnalysisService';
 import { ImageSlot } from '../components/shared/ImageSlot';
 import UploadDisclaimer from '../components/shared/UploadDisclaimer';
 import { cloneMasterStorage, type CloneMasterSession } from './cloneMaster/storage';
-import { ModelSelector } from '../components/shared/ModelSelector';
 import { GenerateButton } from '../components/shared/GenerateButton';
-import { useModelSelection } from '../hooks/useModelSelection';
 import { useAuth } from '../modules/auth/AuthContext';
 import { GenerationProgress, type ProgressStep } from '../components/shared/GenerationProgress';
 import { ErrorDisplay, toAppError, type AppError } from '../components/shared/ErrorDisplay';
@@ -210,7 +208,7 @@ const ProToggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; la
 
 export default function CloneImageModule() {
   const { credits } = useAuth();
-  const { modelId, setModelId } = useModelSelection();
+  const modelId = 'gemini' as const;
   const [step, setStep] = useState<Step>(1);
   const [maxStep, setMaxStep] = useState<number>(1);
 
@@ -705,8 +703,6 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                         </p>
                      </div>
                   </div>
-
-                  <ModelSelector value={modelId} onChange={setModelId} disabled={loading} />
 
                   <div className="pt-2">
                     <GenerateButton

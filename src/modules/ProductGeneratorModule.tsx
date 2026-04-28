@@ -9,10 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { ProductProfile } from '../types';
 import { geminiService } from '../services/geminiService';
 import { imageApiService, extractImageRef } from '../services/imageApiService';
-import { PRODUCT_BASE_STYLES_SEEDREAM } from '../constants';
-import { ModelSelector } from '../components/shared/ModelSelector';
 import { GenerateButton } from '../components/shared/GenerateButton';
-import { useModelSelection } from '../hooks/useModelSelection';
 import { useAuth } from '../modules/auth/AuthContext';
 import { generationHistoryService } from '../services/generationHistoryService';
 import { readAndCompressFile, downloadAsZip } from '../utils/imageUtils';
@@ -77,7 +74,7 @@ const sanitizeProductAnchor = (prompt: string, productCategory: string): string 
 
 const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, products, standalone }) => {
   const navigate = useNavigate();
-  const { modelId, setModelId } = useModelSelection();
+  const modelId = 'gemini' as const;
   const { credits } = useAuth(); // para saber créditos actuales
   const [activeTab, setActiveTab] = useState<'create' | 'library'>('create');
   const [currentStep, setCurrentStep] = useState<ProductWorkflowStep>('setup');
@@ -164,7 +161,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
   };
 
   const generateImageWithAllRules = async (intent: string, refs: string[]) => {
-    const styles = modelId === 'seedream' ? PRODUCT_BASE_STYLES_SEEDREAM : PRODUCT_BASE_STYLES;
+    const styles = PRODUCT_BASE_STYLES;
     const baseStylePrompt = styles[style];
     const finalPrompt = `${baseStylePrompt}\n${intent}\n${PRODUCT_HARD_RULES}\nPRODUCT ANCHOR: ${productAnchor}`;
 
@@ -461,8 +458,6 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
                   </div>
 
                   <UploadDisclaimer />
-
-                  <ModelSelector value={modelId} onChange={setModelId} disabled={isGenerating} />
 
                   <GenerateButton
                     onClick={startGeneratingHero}

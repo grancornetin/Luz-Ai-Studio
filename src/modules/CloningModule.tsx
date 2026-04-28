@@ -11,8 +11,6 @@ import { TUTORIAL_CONFIGS } from '../components/shared/tutorialConfigs';
 import { generationHistoryService } from '../services/generationHistoryService';
 import { useAuth } from '../modules/auth/AuthContext';
 import { GenerateButton } from '../components/shared/GenerateButton';
-import { ModelSelector } from '../components/shared/ModelSelector';
-import { useModelSelection } from '../hooks/useModelSelection';
 
 // Nuevos componentes base
 import { ErrorDisplay, toAppError, type AppError } from '../components/shared/ErrorDisplay';
@@ -29,7 +27,7 @@ interface CloningModuleProps {
 
 const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
   const { credits } = useAuth();
-  const { modelId, setModelId } = useModelSelection();
+  const modelId = 'gemini' as const;
   const [name, setName] = useState('');
   const [files, setFiles] = useState<string[]>([]); // hasta 3 imágenes en base64
   const [status, setStatus] = useState('');
@@ -227,12 +225,6 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
               </div>
 
               <UploadDisclaimer />
-
-              <ModelSelector
-                value={modelId}
-                onChange={setModelId}
-                disabled={isLoading}
-              />
 
               {!isLoading && previews.length === 0 && (
                 <GenerateButton
