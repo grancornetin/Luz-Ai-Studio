@@ -12,7 +12,7 @@
     "api/avatar/clone-worker.ts": {
       "maxDuration": 300
     },
-    "api/prompts/batch-worker.ts": {
+    "api/batch.ts": {
       "maxDuration": 300
     },
     "api/webhooks/lemonsqueezy.ts": {
