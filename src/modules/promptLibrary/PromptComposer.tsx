@@ -15,7 +15,8 @@ import NoCreditsModal from '../../components/shared/NoCreditsModal';
 import { usePromptComposer } from './hooks/usePromptComposer';
 import { PromptDNA } from './types/promptTypes';
 
-import { Sparkles, ChevronDown, Zap, Megaphone, Images, Info } from 'lucide-react';
+import { Sparkles, ChevronDown, Zap, Megaphone, Images, Info, WandSparkles } from 'lucide-react';
+import { formatPrompt } from './utils/promptAutoFormatter';
 import { ErrorDisplay } from '../../components/shared/ErrorDisplay';
 import { ModelSelector } from '../../components/shared/ModelSelector';
 import { useAuth } from '../../modules/auth/AuthContext';   // ✅ Ruta corregida
@@ -104,6 +105,11 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
     setPromptText(variantText);
   };
 
+  const handleAutoFormat = () => {
+    const formatted = formatPrompt(safePromptText);
+    if (formatted !== safePromptText) setPromptText(formatted);
+  };
+
   const applyTemplate = (templateDNA: PromptDNA) => {
     const parts: string[] = [];
     if (templateDNA.styles)      parts.push(...templateDNA.styles);
@@ -169,8 +175,21 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
 
               <PromptTemplateSelector onApply={applyTemplate} />
 
-              <div className="space-y-6">
+              <div className="space-y-4">
                 <PromptInput value={safePromptText} onChange={setPromptText} />
+
+                <div className="flex justify-end">
+                  {safePromptText.trim().length > 0 && (
+                    <button
+                      onClick={handleAutoFormat}
+                      title="Auto-format prompt"
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-brand-600 bg-white border border-slate-100 hover:border-brand-200 rounded-full shadow-sm transition-all active:scale-95"
+                    >
+                      <WandSparkles className="w-3 h-3" />
+                      Auto-format
+                    </button>
+                  )}
+                </div>
 
                 {outputMode === 'standard' && (
                   <div className="space-y-3">
