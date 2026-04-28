@@ -973,17 +973,30 @@ async function generateWithPolling(
 
   let fullPrompt: string;
   if (modelId === 'seedream') {
-    // Para Seedream: reemplazar la semántica de refs numeradas por descripción textual
+    // Para Seedream: mismo prompt rico que Gemini, pero con referencias descritas textualmente
+    // en lugar de por posición numérica (Seedream no interpreta "ref 1", "refs 2 and 3", etc.)
     const refContext = buildSeedreamRefContext(refs, isDerivedShot);
-    // Limpiar menciones de "Reference Image N" y "refs N and M" del prompt Gemini
-    const cleanedPrompt = prompt
-      .replace(/⚠️⚠️⚠️.*?⚠️⚠️⚠️/gs, '')
-      .replace(/References? \d+[^.]*\./g, '')
-      .replace(/refs? \d+[^.]*\./gi, '')
-      .replace(/REF0 \(ref \d+\)[^.]*\./g, '')
-      .replace(/FACE REF \(refs [^)]+\)[^.]*\./g, '')
+
+    // Reemplazar menciones de posición numérica por lenguaje descriptivo
+    const adaptedPrompt = prompt
+      // Bloques de anclaje que dependen de posición numérica → ya cubiertos por refContext
+      .replace(/⚠️⚠️⚠️\s*REFERENCE IMAGE 1 AND 2 ARE THE FACE IDENTITY LOCK\..*?⚠️⚠️⚠️/gs,
+        '⚠️⚠️⚠️ THE FACE IDENTITY IMAGES ARE THE FACE IDENTITY LOCK. ⚠️⚠️⚠️\nThe person shown in the face reference images is the ONLY person allowed in this generation.\nCopy their face, bone structure, skin tone, hair color and texture, eye color, and all facial features EXACTLY.\nDo NOT substitute this person for any other. Do NOT average with other references.\nThe face identity images are the GROUND TRUTH identity. NEVER override it.')
+      .replace(/⚠️⚠️⚠️\s*IDENTITY LOCK.*?⚠️⚠️⚠️/gs,
+        '⚠️⚠️⚠️ IDENTITY LOCK — READ THIS FIRST BEFORE ANYTHING ELSE ⚠️⚠️⚠️\nThe face identity images in this request are the FACE IDENTITY.\nThis is the ONLY person permitted in this image.\nCopy their face EXACTLY: bone structure, eye shape, eye color, nose, lips, jaw, chin, brow shape.\nCopy their hair EXACTLY: color, texture, length, wave pattern.\nCopy their skin tone EXACTLY: undertone, warmth, complexion.\nDo NOT average their face with any other reference.\nDo NOT substitute a different person even if it seems to "fit" the shot better.\nThis constraint has ABSOLUTE priority over every other instruction in this prompt.')
+      // Inline numeric ref mentions in prose
+      .replace(/\(refs? 1 and 2\)/gi, '(the face identity images)')
+      .replace(/refs? 1 and 2/gi, 'the face identity images')
+      .replace(/refs? 2 and 3/gi, 'the face identity images')
+      .replace(/refs? 2,\s*3,?\s*and 4/gi, 'the face identity images')
+      .replace(/References? 2,\s*3,?\s*and 4/gi, 'The face identity images')
+      .replace(/REF0 \(ref \d+\)/gi, 'REF0 (the master reference image)')
+      .replace(/FACE REF \(refs [^)]+\)/gi, 'FACE REF (the face identity images)')
+      // Generic "ref N" fallback
+      .replace(/\brefs?\s+\d+(?:\s+and\s+\d+)?\b/gi, 'the corresponding reference image')
       .trim();
-    fullPrompt = `${refContext}\n\n${cleanedPrompt}\n\nNEGATIVE: ${negativePrompt}`;
+
+    fullPrompt = `${systemInstructions}\n\n${refContext}\n\nTASK:\n${adaptedPrompt}\n\nNEGATIVE:\n${negativePrompt}`;
   } else {
     fullPrompt = `${systemInstructions}\n\nTASK:\n${prompt}\n\nNEGATIVE:\n${negativePrompt}`;
   }
