@@ -1,5 +1,15 @@
 // services/avatarCloneService.ts
+import { getAuth } from 'firebase/auth';
+
 const API_BASE = '/api/avatar/clone';
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const token = await getAuth().currentUser?.getIdToken().catch(() => null);
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+  };
+}
 
 export interface StartCloneParams {
   mode: 'image' | 'manual';
@@ -15,7 +25,7 @@ export interface StartCloneParams {
 export async function startClone(params: StartCloneParams): Promise<{ jobId: string }> {
   const res = await fetch(API_BASE, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await authHeaders(),
     body: JSON.stringify({ action: 'startClone', payload: params }),
   });
   if (!res.ok) {
@@ -35,7 +45,7 @@ export async function getCloneStatus(jobId: string): Promise<{
 }> {
   const res = await fetch(API_BASE, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await authHeaders(),
     body: JSON.stringify({ action: 'getJobStatus', payload: { jobId } }),
   });
   if (!res.ok) throw new Error(`Failed to get status: ${res.status}`);

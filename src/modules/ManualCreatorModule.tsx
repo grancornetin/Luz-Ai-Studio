@@ -278,7 +278,8 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
                 disabled={!name || isProcessing}
                 label="Sintetizar ADN Maestro"
                 loadingLabel={status || 'Sintetizando...'}
-                imageCount={1}
+                imageCount={4}
+                fixedModel="gemini"
                 creditsAfter={creditsAfter}
                 className="py-5 rounded-[24px]"
               />

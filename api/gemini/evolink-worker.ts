@@ -65,8 +65,8 @@ const PROVIDER_CONFIG: Record<ModelProvider, {
   gptimage: {
     modelId:     GPT_IMAGE_MODEL_ID,
     maxRefs:     16,
-    pollDelayMs: 3000,
-    maxAttempts: 45,
+    pollDelayMs: 2000,  // 2s — igual que Seedream, GPT Image 2 suele responder en 30-60s
+    maxAttempts: 55,    // 55 × 2s = 110s — cabe con margen en maxDuration:150s de Vercel
     circuitKey:  'circuit:gptimage',
   },
 };

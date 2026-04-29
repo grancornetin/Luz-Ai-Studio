@@ -233,7 +233,8 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                   disabled={!name || files.length === 0}
                   label="Generar modelo digital"
                   loadingLabel={status || 'Procesando...'}
-                  imageCount={1}
+                  imageCount={4}
+                  fixedModel="gemini"
                   creditsAfter={creditsAfter}
                   className="py-5 rounded-[24px] text-xs"
                 />
