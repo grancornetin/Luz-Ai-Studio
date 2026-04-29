@@ -61,6 +61,7 @@ function assertSecret(req: VercelRequest, body: Record<string, any>, envKey: str
 type PreparedPromptItem = {
   raw: string;
   category?: string;
+  tags?: string[];
   sourceId?: string;
   sourceUrl?: string;
   sourceImage?: string;
@@ -118,6 +119,7 @@ async function handleImport(req: VercelRequest, res: VercelResponse) {
       id: itemId, batchId, index: i,
       rawPrompt:       item.raw,
       category:        item.category     || 'other',
+      preparedTags:    item.tags         || [],
       sourceId:        item.sourceId     || null,
       sourceUrl:       item.sourceUrl    || null,
       sourceImage:     item.sourceImage  || null,
@@ -387,7 +389,9 @@ async function handleWorker(req: VercelRequest, res: VercelResponse) {
   const normalizedPrompt = normalizePrompt(item.rawPrompt);
   const category         = item.category || 'other';
   const title            = generateTitle(normalizedPrompt, category);
-  const tags             = generateTags(normalizedPrompt, category);
+  const tags             = (Array.isArray(item.preparedTags) && item.preparedTags.length > 0)
+    ? item.preparedTags
+    : generateTags(normalizedPrompt, category);
 
   const jobId      = await startImageGeneration(baseUrl, normalizedPrompt);
   const base64Img  = await pollImageGeneration(baseUrl, jobId);

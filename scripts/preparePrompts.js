@@ -26,6 +26,7 @@ function getArg(name, fallback) {
 const INPUT_FILE        = getArg('input',      'trending-prompts.json');
 const OUTPUT_FILE       = getArg('output',     'prepared-prompts.json');
 const LIMIT             = Number(getArg('limit',     '100'));
+const OFFSET            = Number(getArg('offset',    '0'));
 const MIN_LIKES         = Number(getArg('minLikes',  '0'));
 const MIN_LENGTH        = Number(getArg('minLength', '60'));
 const CATEGORIES_FILTER = getArg('categories', '')
@@ -98,7 +99,13 @@ function isCommerciallyRelevant(item, normalizedPrompt) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// DETECCIÓN DE CATEGORÍA (más precisa)
+// DETECCIÓN DE CATEGORÍA
+//
+// Jerarquía de prioridad (de mayor a menor):
+//   poster > branding > product > editorial > outfit > fashion > avatar > ugc
+//
+// Cada nivel solo se activa si la intención visual DOMINANTE coincide,
+// no por keywords sueltas.
 // ══════════════════════════════════════════════════════════════════════════════
 
 function detectCategory(item, prompt) {
@@ -106,50 +113,84 @@ function detectCategory(item, prompt) {
     ? item.categories.join(' ').toLowerCase() : '';
   const p = `${cats} ${prompt}`.toLowerCase();
 
-  // Producto primero (muy específico)
-  if (/\b(product shot|product photo|packaging|bottle|can|jar|skincare|cosmetic|ecommerce|mockup|brand identity|label design)\b/.test(p))
-    return 'product';
-
-  // Moda / editorial
-  if (/\b(fashion|outfit|dress|editorial|lookbook|wardrobe|clothing|garment|style shot|runway)\b/.test(p))
-    return 'fashion';
-
-  // Comida
-  if (/\b(food photo|recipe|dish|meal|cake|dessert|restaurant|culinary|plating|ingredients)\b/.test(p))
-    return 'food';
-
-  // Poster / diseño gráfico
-  if (/\b(poster|flyer|banner|typograph|graphic design|cover|album art|movie poster|concert|headline)\b/.test(p))
+  // 1. POSTER — diseño gráfico, tipografía, layout estructurado
+  if (/\b(poster|flyer|banner|typograph|graphic design|album art|movie poster|concert poster|headline|layout|cover design)\b/.test(p))
     return 'poster';
 
-  // Publicidad / anuncio
-  if (/\b(advertisement|ad campaign|commercial|brand campaign|marketing visual|promo)\b/.test(p))
-    return 'advertising';
+  // 2. BRANDING — identidad de marca, lenguaje visual, concepto de marca
+  if (/\b(brand identity|branding|brand concept|visual language|logo|brand guide|color palette.*brand|brand.*color palette)\b/.test(p))
+    return 'branding';
 
-  // Infografía / técnico
-  if (/\b(infographic|diagram|blueprint|technical drawing|annotation|schematic|cross.section)\b/.test(p))
-    return 'infographic';
+  // 3. PRODUCT — objeto/producto como sujeto principal
+  if (/\b(product shot|product photo|product image|product render|packaging|bottle|can|jar|skincare product|cosmetic product|ecommerce|mockup|label design|supplement|perfume bottle|spray bottle)\b/.test(p))
+    return 'product';
 
-  // 3D / icono
-  if (/\b(3d render|isometric|diorama|pixar.style|icon set|3d icon|blender|cinema 4d)\b/.test(p))
-    return '3d';
+  // 4. EDITORIAL — composición limpia, fondo minimal/degradado, estética de revista
+  //    Solo si NO hay persona dominante (de lo contrario es fashion/outfit/avatar)
+  if (/\b(editorial|magazine|clean background|gradient background|minimalist composition|white background.*model|studio.*minimal)\b/.test(p)
+      && !/\b(fashion editorial|outfit|full body|full-body|lookbook)\b/.test(p))
+    return 'editorial';
 
-  // UGC / lifestyle
-  if (/\b(ugc|user.generated|iphone photo|candid|mirror selfie|camera roll|lifestyle photo|content creator)\b/.test(p))
-    return 'ugc';
+  // 5. OUTFIT — descripción detallada de ropa: múltiples prendas, accesorios, styling
+  if (/\b(outfit|full.body|head.to.toe|wearing.*and.*shoes|top.*bottom.*accessories|streetwear|look.*styled|styled.*look|lookbook|wardrobe|garment|attire)\b/.test(p)
+      && /\b(woman|man|girl|boy|model|person|figure)\b/.test(p))
+    return 'outfit';
 
-  // Avatar / retrato (solo si hay señal clara de persona + uso comercial)
-  if (/\b(model photo|portrait session|headshot|beauty shot|skin texture|editorial portrait|studio portrait)\b/.test(p))
+  // 6. FASHION — persona presente, estética/estilo como foco principal
+  if (/\b(fashion|runway|editorial fashion|clothing|style shot|haute couture|luxury fashion|fashion week)\b/.test(p))
+    return 'fashion';
+  if (/\bdress\b/.test(p) && /\b(woman|girl|model|wearing|styled)\b/.test(p))
+    return 'fashion';
+
+  // 7. AVATAR — cara o identidad como foco principal (close-up, retrato, selfie)
+  if (/\b(portrait|close.up|face.*focus|headshot|beauty shot|skin texture|extreme close.up|macro.*face|eyes.*focus)\b/.test(p))
+    return 'avatar';
+  if (/\b(model photo|portrait session|editorial portrait|studio portrait|selfie)\b/.test(p))
     return 'avatar';
 
-  // Categoría desde JSON original como fallback
-  if (cats.includes('product'))     return 'product';
-  if (cats.includes('fashion'))     return 'fashion';
-  if (cats.includes('food'))        return 'food';
-  if (cats.includes('photograph'))  return 'avatar';
+  // 8. UGC — estilo casual, cámara de teléfono, imperfecciones naturales
+  if (/\b(ugc|user.generated|iphone photo|candid|mirror selfie|camera roll|lifestyle photo|content creator|phone camera|natural.*imperfect)\b/.test(p))
+    return 'ugc';
+
+  // Fallbacks desde categorías del JSON original
+  if (cats.includes('product'))    return 'product';
+  if (cats.includes('fashion'))    return 'fashion';
+  if (cats.includes('food'))       return 'food';
+  if (cats.includes('photograph')) return 'avatar';
   if (cats.includes('girl') || cats.includes('woman') || cats.includes('man')) return 'avatar';
 
   return 'other';
+}
+
+// Genera tags descriptivos siguiendo el vocabulario del clasificador
+function generateTagsFromPrompt(prompt, category) {
+  const p = prompt.toLowerCase();
+  const tags = new Set([category]);
+
+  // Composición / encuadre
+  if (/\b(close.up|extreme close.up|macro)\b/.test(p))   tags.add('close-up');
+  if (/\b(full.body|head.to.toe|full body)\b/.test(p))    tags.add('full-body');
+  if (/\b(low angle|worm.?s eye)\b/.test(p))             tags.add('low-angle');
+  if (/\b(top.?down|overhead|bird.?s eye)\b/.test(p))    tags.add('top-down');
+
+  // Iluminación
+  if (/\b(studio light|controlled light|softbox|ring light)\b/.test(p)) tags.add('studio-light');
+  if (/\b(natural light|golden hour|outdoor light|sunlight)\b/.test(p)) tags.add('natural-light');
+  if (/\b(soft light|diffuse|overcast)\b/.test(p))                      tags.add('soft-light');
+  if (/\b(high.?contrast|dramatic light|chiaroscuro|rim light)\b/.test(p)) tags.add('high-contrast');
+  if (/\b(cinematic|film.?like|movie.?style)\b/.test(p))               tags.add('cinematic');
+
+  // Fondo / estética
+  if (/\b(white background|seamless white|clean background)\b/.test(p)) tags.add('clean-background');
+  if (/\b(gradient background|gradient backdrop)\b/.test(p))            tags.add('gradient-background');
+  if (/\b(minimal|minimalist)\b/.test(p))                               tags.add('minimal');
+  if (/\b(graphic layout|typography|typograph)\b/.test(p))             tags.add('graphic-layout');
+
+  // Estilo de captura
+  if (/\b(selfie|mirror shot|mirror selfie)\b/.test(p))  tags.add('selfie');
+  if (/\b(mirror shot|mirror selfie)\b/.test(p))         tags.add('mirror-shot');
+
+  return Array.from(tags).slice(0, 7);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -339,6 +380,7 @@ let   skippedExcluded  = 0;
 let   skippedPlaceholder = 0;
 let   skippedNonCommercial = 0;
 let   skippedDuplicate = 0;
+let   skippedOffset    = 0;
 
 for (const item of sorted) {
   if (prepared.length >= LIMIT) break;
@@ -368,9 +410,13 @@ for (const item of sorted) {
   if (seenFingerprints.has(fingerprint)) { skippedDuplicate++; continue; }
   seenFingerprints.add(fingerprint);
 
+  if (seenFingerprints.size <= OFFSET) { skippedOffset++; continue; }
+
+  const category = detectCategory(item, normalizedPrompt);
   prepared.push({
     raw:          normalizedPrompt,
-    category:     detectCategory(item, normalizedPrompt),
+    category,
+    tags:         generateTagsFromPrompt(normalizedPrompt, category),
     sourceId:     item.id          || null,
     sourceUrl:    item.source_url  || null,
     sourceImage:  item.image       || null,
@@ -408,6 +454,8 @@ console.log(`  Religiosos/inapropiados : ${skippedExcluded}`);
 console.log(`  No comerciales          : ${skippedNonCommercial}`);
 console.log(`  Placeholders/negativos  : ${skippedPlaceholder}`);
 console.log(`  Duplicados              : ${skippedDuplicate}`);
+if (OFFSET > 0)
+console.log(`  Saltados por offset     : ${skippedOffset}`);
 console.log('');
 console.log('Siguiente paso:');
 console.log(`  Revisa prepared-prompts.json y luego envía el batch.`);
