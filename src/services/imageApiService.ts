@@ -13,6 +13,8 @@
 // Los módulos reciben onStatusChange para actualizar su propia UI.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { getAuth } from 'firebase/auth';
+
 const API_URL     = '/api/gemini/image';
 const POLL_INTERVAL_MS   = 2000;   // 2 s entre polls
 const MAX_POLL_ATTEMPTS  = 90;     // 90 × 2 s = 3 minutos máximo
@@ -96,6 +98,7 @@ export interface GenerateImageParams {
   totalShots?:      number;
   module?:          string;   // trazabilidad en logs
   modelId?:         ModelId;  // 'gemini' (default) | 'seedream' | 'gptimage'
+  uid?:             string;   // uid del usuario autenticado (requerido en no-batch)
   onStatusChange?:  (status: ImageJobStatus, image?: string, shotIndex?: number) => void;
 }
 
@@ -116,6 +119,7 @@ async function startJob(params: GenerateImageParams): Promise<{ jobId: string; s
         totalShots:      params.totalShots,
         module:          params.module,
         modelId:         params.modelId || 'gemini',
+        uid:             params.uid ?? getAuth().currentUser?.uid,
       },
     }),
   });
