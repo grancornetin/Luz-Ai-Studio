@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
   onAuthStateChanged,
-  getRedirectResult,
   User as FirebaseUser,
   signOut as firebaseSignOut
 } from 'firebase/auth';
@@ -87,15 +86,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [previewPlan, setPreviewPlanState] = useState<string | null>(null);
 
   const setPreviewPlan = (p: string | null) => setPreviewPlanState(p);
-
-  // Captura el resultado del redirect de Google en móvil.
-  // getRedirectResult() solo tiene resultado la primera vez que carga la página
-  // después del redirect — en llamadas posteriores devuelve null sin error.
-  // onAuthStateChanged se encarga de actualizar el estado; esto solo evita
-  // que el resultado quede colgado si la página recarga antes del listener.
-  useEffect(() => {
-    getRedirectResult(auth).catch(() => {/* ignorar — onAuthStateChanged maneja el login */});
-  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {

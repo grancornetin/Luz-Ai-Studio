@@ -6,14 +6,10 @@ import {
   sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithPopup,
-  signInWithRedirect,
 } from 'firebase/auth';
 // RUTA CORREGIDA: sube 3 niveles para encontrar firebase.ts en /src
 import { auth } from '../../../firebase';
 import { X, Mail, Lock, User, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
-
-// En móvil los popups son bloqueados por el browser — usar redirect en su lugar
-const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -23,6 +19,9 @@ interface AuthModalProps {
 type AuthMode = 'login' | 'signup' | 'reset';
 
 const googleProvider = new GoogleAuthProvider();
+// select_account fuerza mostrar el selector de cuentas en móvil
+// en vez de intentar hacer login silencioso que algunos browsers bloquean
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [mode, setMode]               = useState<AuthMode>('login');
@@ -44,17 +43,22 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const changeMode = (m: AuthMode) => { resetFields(); setMode(m); };
 
   const friendlyError = (code: string): string => {
+    console.error('[Auth] Firebase error code:', code);
     const map: Record<string, string> = {
-      'auth/user-not-found':      'Usuario no encontrado.',
-      'auth/wrong-password':      'Contraseña incorrecta.',
-      'auth/email-already-in-use':'El correo ya está en uso.',
-      'auth/weak-password':       'La contraseña debe tener al menos 6 caracteres.',
-      'auth/invalid-email':       'Correo inválido.',
-      'auth/popup-closed-by-user':'Cerraste la ventana de Google. Intenta de nuevo.',
-      'auth/cancelled-popup-request': 'Operación cancelada.',
-      'auth/invalid-credential':  'Correo o contraseña incorrectos.',
+      'auth/user-not-found':         'Usuario no encontrado.',
+      'auth/wrong-password':         'Contraseña incorrecta.',
+      'auth/email-already-in-use':   'El correo ya está en uso.',
+      'auth/weak-password':          'La contraseña debe tener al menos 6 caracteres.',
+      'auth/invalid-email':          'Correo inválido.',
+      'auth/popup-closed-by-user':   'Cerraste la ventana de Google. Intenta de nuevo.',
+      'auth/cancelled-popup-request':'Operación cancelada.',
+      'auth/invalid-credential':     'Correo o contraseña incorrectos.',
+      'auth/unauthorized-domain':    'Dominio no autorizado. Contacta al administrador.',
+      'auth/operation-not-allowed':  'Inicio con Google no habilitado. Contacta al administrador.',
+      'auth/popup-blocked':          'El navegador bloqueó la ventana de Google. Permite popups para este sitio e intenta de nuevo.',
+      'auth/network-request-failed': 'Error de red. Verifica tu conexión e intenta de nuevo.',
     };
-    return map[code] || 'Ocurrió un error inesperado.';
+    return map[code] || `Ocurrió un error inesperado (${code}).`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -87,16 +91,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     setLoadingGoogle(true);
     setError(null);
     try {
-      if (isMobile) {
-        // En móvil: redirect (la página se recarga y getRedirectResult captura el resultado)
-        await signInWithRedirect(auth, googleProvider);
-        // signInWithRedirect navega fuera — el código después de esto no se ejecuta
-      } else {
-        await signInWithPopup(auth, googleProvider);
-        onClose();
-      }
+      await signInWithPopup(auth, googleProvider);
+      onClose();
     } catch (err: any) {
       setError(friendlyError(err.code));
+    } finally {
       setLoadingGoogle(false);
     }
   };
