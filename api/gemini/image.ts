@@ -60,7 +60,7 @@ async function getJob(jobId: string): Promise<ImageJob | null> {
   return data as ImageJob;
 }
 
-import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, checkRateLimit, sanitizeUid } from '../_middleware.js';
+import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, getBatchImageRatelimit, checkRateLimit, sanitizeUid } from '../_middleware.js';
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -90,9 +90,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const promptErr = validatePrompt(prompt);
       if (promptErr) return res.status(400).json({ error: promptErr });
 
-      // Rate limiting por uid (si viene) o por IP como fallback
-      const rlKey = rawUid ? sanitizeUid(rawUid) : (req.headers['x-forwarded-for'] as string || 'unknown');
-      const allowed = await checkRateLimit(getImageRatelimit(), rlKey, res);
+      // Rate limiting — batch importer tiene su propio bucket sin límite práctico
+      const isBatch = moduleName === 'batch_prompt_importer';
+      const rlKey   = isBatch ? 'batch_importer' : (rawUid ? sanitizeUid(rawUid) : (req.headers['x-forwarded-for'] as string || 'unknown'));
+      const limiter = isBatch ? getBatchImageRatelimit() : getImageRatelimit();
+      const allowed = await checkRateLimit(limiter, rlKey, res);
       if (!allowed) return;
 
       // Construir parts para el worker (igual que ugc-worker)

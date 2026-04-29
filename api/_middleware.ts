@@ -19,7 +19,7 @@ function getRedis(): Redis {
   return _redisClient;
 }
 
-// Generación de imágenes: máx 30 por hora por usuario
+// Generación de imágenes: máx 30 por hora por usuario normal
 let _imageRatelimit: Ratelimit | null = null;
 export function getImageRatelimit(): Ratelimit {
   if (!_imageRatelimit) {
@@ -30,6 +30,19 @@ export function getImageRatelimit(): Ratelimit {
     });
   }
   return _imageRatelimit;
+}
+
+// Generación de imágenes para batch importer: máx 2000 por hora (sin límite práctico)
+let _batchImageRatelimit: Ratelimit | null = null;
+export function getBatchImageRatelimit(): Ratelimit {
+  if (!_batchImageRatelimit) {
+    _batchImageRatelimit = new Ratelimit({
+      redis:   getRedis(),
+      limiter: Ratelimit.slidingWindow(2000, '1 h'),
+      prefix:  'rl:batch_image',
+    });
+  }
+  return _batchImageRatelimit;
 }
 
 // Historia / datos: máx 120 por hora por usuario
