@@ -14,6 +14,12 @@ import {
   OUTFIT_ANALYZER_SCHEMA,
 } from '../constants';
 import { imageApiService, extractImageRef, type GenerateImageParams } from './imageApiService';
+import { getAuth } from 'firebase/auth';
+
+async function getAuthHeader(): Promise<Record<string, string>> {
+  const token = await getAuth().currentUser?.getIdToken().catch(() => null);
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
 
 const CONTENT_ENDPOINT = '/api/gemini/content';
 
@@ -34,7 +40,7 @@ async function callContentApi(payload: {
 }): Promise<any> {
   const res = await fetch(CONTENT_ENDPOINT, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
     body:    JSON.stringify(payload),
   });
   if (!res.ok) {

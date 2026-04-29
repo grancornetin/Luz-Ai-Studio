@@ -7,6 +7,12 @@
 import { OutfitKit, OutfitItem, SavedOutfitItem } from './types';
 import { compressImageForUpload } from '../../utils/imageUtils';
 import { imageApiService, extractImageRef, type ModelId } from '../../services/imageApiService';
+import { getAuth } from 'firebase/auth';
+
+async function getAuthHeader(): Promise<Record<string, string>> {
+  const token = await getAuth().currentUser?.getIdToken().catch(() => null);
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
 
 const CONTENT_API = '/api/gemini/content';
 
@@ -20,7 +26,7 @@ async function callContentAPI(action: string, prompt: string, images?: string[])
   }
   const res  = await fetch(CONTENT_API, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
     body:    JSON.stringify(payload),
   });
   const data = await res.json();
