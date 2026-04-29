@@ -244,6 +244,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(response);
     }
 
+    // ── Resetear circuit breakers (solo admin interno) ────────────────────────
+    if (action === 'resetCircuits') {
+      const secret = payload?.secret;
+      if (secret !== process.env.ADMIN_SECRET) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+      await Promise.all([
+        redis.del('circuit:gemini'),
+        redis.del('circuit:seedream'),
+        redis.del('circuit:gptimage'),
+      ]);
+      return res.status(200).json({ ok: true, message: 'All circuits reset' });
+    }
+
     return res.status(400).json({ error: `Unknown action: ${action}` });
 
   } catch (err: any) {

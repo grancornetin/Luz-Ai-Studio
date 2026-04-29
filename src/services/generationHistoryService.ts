@@ -44,9 +44,13 @@ async function call(action: string, payload: Record<string, unknown> = {}): Prom
   const uid = getUid();
   if (!uid) throw new Error('Usuario no autenticado');
 
+  const token = await getAuth().currentUser?.getIdToken().catch(() => null);
   const res = await fetch(API, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type':  'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
     body:    JSON.stringify({ action, payload: { uid, ...payload } }),
   });
   if (!res.ok) {

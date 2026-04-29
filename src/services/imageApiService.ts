@@ -17,7 +17,7 @@ import { getAuth } from 'firebase/auth';
 
 const API_URL     = '/api/gemini/image';
 const POLL_INTERVAL_MS   = 2000;   // 2 s entre polls
-const MAX_POLL_ATTEMPTS  = 90;     // 90 × 2 s = 3 minutos máximo
+const MAX_POLL_ATTEMPTS  = 120;    // 120 × 2 s = 4 minutos máximo (cubre GPT Image 2 ~135s)
 const MAX_SILENT_RETRIES = 1;      // 1 intento total (sin retry silencioso) — evita 429 acumulado
 
 export type ImageJobStatus = 'pending' | 'processing' | 'retrying' | 'completed' | 'failed';
