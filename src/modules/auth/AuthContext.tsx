@@ -88,15 +88,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const setPreviewPlan = (p: string | null) => setPreviewPlanState(p);
 
-  // Captura el resultado del signInWithRedirect en móvil.
-  // Se ejecuta una sola vez al montar — si hay resultado pendiente,
-  // onAuthStateChanged lo recibe y actualiza el user automáticamente.
   useEffect(() => {
-    getRedirectResult(auth).catch(() => {});
-  }, []);
+    // En móvil con signInWithRedirect, getRedirectResult debe completar
+    // ANTES de que onAuthStateChanged dispare con user=null en el primer render.
+    // Si no esperamos, loading=false → LoginWall aparece → flickea cuando llega el user real.
+    let redirectResolved = false;
+    const redirectPromise = getRedirectResult(auth)
+      .catch(() => null)
+      .finally(() => { redirectResolved = true; });
 
-  useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      // Espera el redirect result en el primer dispatch para evitar el flicker
+      if (!redirectResolved) await redirectPromise;
+
       if (!firebaseUser) {
         // Usuario no autenticado — limpiar todo
         setUser(null);

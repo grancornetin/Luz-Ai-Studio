@@ -106,7 +106,22 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 // ── LOGIN WALL ────────────────────────────────────────────────────────────────
 const LoginWall: React.FC<{ onOpen: () => void }> = ({ onOpen }) => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  // Mientras Firebase resuelve el estado inicial (incluye getRedirectResult
+  // después de signInWithRedirect en móvil), no mostramos el muro de login
+  // para evitar que el usuario vea "Iniciar sesión" después de autenticarse.
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen w-full bg-slate-50">
+        <div className="flex flex-col items-center gap-4 opacity-40">
+          <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center animate-pulse">
+            <i className="fa-solid fa-bolt text-white text-xl"></i>
+          </div>
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Cargando sesión...</p>
+        </div>
+      </div>
+    );
+  }
   if (user) return <Navigate to="/dashboard" replace />;
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
