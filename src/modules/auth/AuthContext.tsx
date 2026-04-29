@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
   onAuthStateChanged,
+  getRedirectResult,
   User as FirebaseUser,
   signOut as firebaseSignOut
 } from 'firebase/auth';
@@ -86,6 +87,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [previewPlan, setPreviewPlanState] = useState<string | null>(null);
 
   const setPreviewPlan = (p: string | null) => setPreviewPlanState(p);
+
+  // Captura el resultado del signInWithRedirect en móvil.
+  // Se ejecuta una sola vez al montar — si hay resultado pendiente,
+  // onAuthStateChanged lo recibe y actualiza el user automáticamente.
+  useEffect(() => {
+    getRedirectResult(auth).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {

@@ -6,10 +6,13 @@ import {
   sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
 } from 'firebase/auth';
 // RUTA CORREGIDA: sube 3 niveles para encontrar firebase.ts en /src
 import { auth } from '../../../firebase';
 import { X, Mail, Lock, User, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -88,14 +91,21 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   };
 
   const handleGoogle = async () => {
-    setLoadingGoogle(true);
     setError(null);
     try {
-      await signInWithPopup(auth, googleProvider);
-      onClose();
+      if (isMobile) {
+        // En móvil popup es bloqueado — redirect navega fuera de la app,
+        // AuthContext captura el resultado al volver y onAuthStateChanged
+        // actualiza el user, lo que cierra el modal en App.tsx
+        setLoadingGoogle(true);
+        await signInWithRedirect(auth, googleProvider);
+      } else {
+        setLoadingGoogle(true);
+        await signInWithPopup(auth, googleProvider);
+        onClose();
+      }
     } catch (err: any) {
       setError(friendlyError(err.code));
-    } finally {
       setLoadingGoogle(false);
     }
   };
