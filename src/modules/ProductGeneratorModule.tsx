@@ -27,6 +27,14 @@ import UploadDisclaimer from '../components/shared/UploadDisclaimer';
 import { ImageLightbox } from '../components/shared/ImageLightbox';
 import { FloatingActionBar } from '../components/shared/FloatingActionBar';
 import { useScrollFAB } from '../hooks/useScrollFAB';
+import { GenerationProgress, type ProgressStep } from '../components/shared/GenerationProgress';
+
+const PRODUCT_STEPS: ProgressStep[] = [
+  { id: 'analyze',    label: 'Analizando producto y materiales' },
+  { id: 'hero',       label: 'Generando Hero Shot (imagen principal)' },
+  { id: 'remaining',  label: 'Generando set completo (shots 2-5)' },
+  { id: 'done',       label: 'Set de producto completado' },
+];
 
 interface ProductPhotographyProps {
   saveProduct: (product: ProductProfile) => void;
@@ -84,6 +92,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
   const [style, setStyle] = useState<'comercial' | 'organico'>('comercial');
   const [files, setFiles] = useState<(string | null)[]>([null, null, null, null]); // 4 slots
   const [processingStatus, setProcessingStatus] = useState('');
+  const [progressStep, setProgressStep] = useState(0);
   const [generatedShots, setGeneratedShots] = useState<string[]>([]);
   const [analyzedData, setAnalyzedData] = useState<any>(null);
   const [productAnchor, setProductAnchor] = useState('');
@@ -197,6 +206,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
     }
 
     setCurrentStep('analyzing');
+    setProgressStep(0);
     setProcessingStatus('Escaneando materiales y contexto del producto...');
     setGeneratedShots([]);
     setHeroApproved(false);
@@ -207,6 +217,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
       setProductAnchor(sanitizeProductAnchor(analysis.product_prompt, category));
       
       setCurrentStep('generating_hero');
+      setProgressStep(1);
       setProcessingStatus('Generando Imagen Hero (1/5)...');
       
       const heroIntent = getShotIntent(1, category, style);
@@ -268,6 +279,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
     if (!ok) return;
     setHeroApproved(true);
     setCurrentStep('generating_remaining');
+    setProgressStep(2);
     setProcessingStatus('Generando el resto del set (2-5)...');
 
     const shotsProgress = [...generatedShots];
@@ -296,6 +308,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
     );
 
     setCurrentStep('completed_session');
+    setProgressStep(3);
     setProcessingStatus('Producción completada.');
   };
 
@@ -338,6 +351,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
     setProductAnchor('');
     setCurrentStep('setup');
     setProcessingStatus('');
+    setProgressStep(0);
     setHeroApproved(false);
     setHeroAttempts(0);
     setSelectedProduct(null);
@@ -485,10 +499,14 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({ saveProduct, pr
                   </div>
                 )}
 
-                {(currentStep === 'generating_hero' || currentStep === 'generating_remaining') && (
-                  <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6 md:space-y-10 p-4">
-                    <div className="w-16 h-16 border-4 border-white/5 border-t-brand-500 rounded-full animate-spin"></div>
-                    <p className="t-meta text-brand-400 animate-pulse">{processingStatus}</p>
+                {(currentStep === 'analyzing' || currentStep === 'generating_hero' || currentStep === 'generating_remaining') && (
+                  <div className="flex-1 flex flex-col justify-center p-6 md:p-10">
+                    <GenerationProgress
+                      steps={PRODUCT_STEPS}
+                      currentStepIndex={progressStep}
+                      totalShots={currentStep === 'generating_remaining' ? 4 : 0}
+                      completedShots={generatedShots.slice(1).map((url, i) => ({ url, index: i }))}
+                    />
                   </div>
                 )}
 

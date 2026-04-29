@@ -20,6 +20,14 @@ import UploadDisclaimer from '../components/shared/UploadDisclaimer';
 import { ImageLightbox } from '../components/shared/ImageLightbox';
 import { FloatingActionBar } from '../components/shared/FloatingActionBar';
 import { useScrollFAB } from '../hooks/useScrollFAB';
+import { GenerationProgress, type ProgressStep } from '../components/shared/GenerationProgress';
+
+const DNA_STEPS: ProgressStep[] = [
+  { id: 'body',  label: 'Creando Body Master (vista frontal)' },
+  { id: 'views', label: 'Creando vistas trasera y lateral' },
+  { id: 'face',  label: 'Creando Face Master (close-up facial)' },
+  { id: 'done',  label: 'Modelo digital listo' },
+];
 
 interface CloningModuleProps {
   onSave: (avatar: AvatarProfile) => void;
@@ -36,6 +44,7 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
   const [gender, setGender] = useState<'hombre' | 'mujer'>('mujer');
   const [cloneError, setCloneError] = useState<AppError | null>(null);
   const [creditsRefunded, setCreditsRefunded] = useState(false);
+  const [progressStep, setProgressStep] = useState(0);
 
   // Lightbox state
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -90,6 +99,7 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
     setIsLoading(true);
     setCloneError(null);
     setCreditsRefunded(false);
+    setProgressStep(0);
     setStatus('Iniciando clonación asíncrona...');
     setPreviews([]);
 
@@ -104,8 +114,16 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
       });
 
       setStatus('Procesando en segundo plano...');
+      setProgressStep(0);
       const images = await waitForCloneComplete(jobId, (jobStatus, result) => {
-        if (jobStatus === 'processing') setStatus('Generando activos maestros...');
+        if (jobStatus === 'processing') {
+          setStatus('Generando activos maestros...');
+          // El clone-worker genera body → views → face secuencialmente
+          // Estimamos el paso según cuántas imágenes han llegado
+          if (result && result.length >= 1) setProgressStep(1);
+          if (result && result.length >= 3) setProgressStep(2);
+          if (result && result.length >= 4) setProgressStep(3);
+        }
         if (result && result.length === 4) setPreviews(result);
       });
 
@@ -166,6 +184,7 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
     setPreviews([]);
     setStatus('');
     setIsLoading(false);
+    setProgressStep(0);
     setLightboxOpen(false);
   };
 
@@ -240,10 +259,12 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                 />
               )}
 
-              {(isLoading || status === 'Procesando en segundo plano...' || status === 'Iniciando clonación asíncrona...' || status === 'Generando activos maestros...') && previews.length === 0 && !cloneError && (
-                <div className="p-6 bg-brand-900 rounded-[32px] text-white flex items-center gap-4 animate-pulse">
-                  <div className="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
-                  <p className="t-meta">{status || 'Procesando...'}</p>
+              {isLoading && previews.length === 0 && !cloneError && (
+                <div className="bg-slate-50 border border-slate-100 rounded-[32px] p-6">
+                  <GenerationProgress
+                    steps={DNA_STEPS}
+                    currentStepIndex={progressStep}
+                  />
                 </div>
               )}
 

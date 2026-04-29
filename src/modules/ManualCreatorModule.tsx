@@ -20,6 +20,14 @@ import {
 import { ImageLightbox } from '../components/shared/ImageLightbox';
 import { FloatingActionBar } from '../components/shared/FloatingActionBar';
 import { useScrollFAB } from '../hooks/useScrollFAB';
+import { GenerationProgress, type ProgressStep } from '../components/shared/GenerationProgress';
+
+const DNA_STEPS: ProgressStep[] = [
+  { id: 'body',  label: 'Creando Body Master (vista frontal)' },
+  { id: 'views', label: 'Creando vistas trasera y lateral' },
+  { id: 'face',  label: 'Creando Face Master (close-up facial)' },
+  { id: 'done',  label: 'Identidad sintetizada' },
+];
 
 interface ManualCreatorModuleProps {
   onSave: (avatar: AvatarProfile) => void;
@@ -32,6 +40,7 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
   const [previews, setPreviews] = useState<string[]>([]);
+  const [progressStep, setProgressStep] = useState(0);
   const [pendingAvatarData, setPendingAvatarData] = useState<AvatarProfile | null>(null);
 
   // Lightbox state
@@ -94,20 +103,28 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
     setIsProcessing(true);
     setPreviews([]);
     setPendingAvatarData(null);
+    setProgressStep(0);
     setStatus('Sintetizando ADN Maestro...');
 
     try {
       const identityPrompt = `A ${data.gender}, ${data.age}, ${data.ethnicity}, ${data.build} build. Eyes: ${data.eyes}. Hair: ${data.hairLength}, ${data.hairType}, ${data.hairColor}. Style: ${data.personality}. Expression: ${data.expression}. Wearing ${data.outfit}.`;
-      
-      setStatus('Renderizando Set de Consistencia (4 planos)...');
-      
+
+      let shotsCompleted = 0;
+      const onStatusChange = () => {
+        shotsCompleted++;
+        if (shotsCompleted === 1) setProgressStep(1); // body done → vistas
+        if (shotsCompleted === 3) setProgressStep(2); // rear+side done → face
+        if (shotsCompleted === 4) setProgressStep(3); // face done
+      };
+
       const shots = await avatarService.generateMasterSet(
-        identityPrompt, 
-        "blurry, low quality, distorted face, messy background", 
-        data.gender, 
+        identityPrompt,
+        "blurry, low quality, distorted face, messy background",
+        data.gender,
         data.outfit,
         data.personality,
-        data.expression
+        data.expression,
+        onStatusChange,
       );
       
       setPreviews(shots);
@@ -157,6 +174,7 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
     setPendingAvatarData(null);
     setName('');
     setStatus('');
+    setProgressStep(0);
     setIsProcessing(false);
   };
 
@@ -287,9 +305,11 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
           </section>
 
           {isProcessing && (
-            <div className="bg-brand-900 p-6 rounded-[32px] text-white flex items-center gap-4 animate-pulse">
-              <div className="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
-              <p className="text-[10px] font-black uppercase tracking-widest">{status}</p>
+            <div className="bg-slate-50 border border-slate-100 rounded-[32px] p-6">
+              <GenerationProgress
+                steps={DNA_STEPS}
+                currentStepIndex={progressStep}
+              />
             </div>
           )}
         </div>

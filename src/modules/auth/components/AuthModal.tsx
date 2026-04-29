@@ -1,15 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
   sendPasswordResetEmail,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
 } from 'firebase/auth';
 // RUTA CORREGIDA: sube 3 niveles para encontrar firebase.ts en /src
-import { auth } from '../../../firebase'; 
+import { auth } from '../../../firebase';
 import { X, Mail, Lock, User, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+
+// En móvil los popups son bloqueados por el browser — usar redirect en su lugar
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -29,6 +34,19 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [loadingGoogle, setLoadingGoogle] = useState(false);
   const [error, setError]             = useState<string | null>(null);
   const [success, setSuccess]         = useState<string | null>(null);
+
+  // Capturar el resultado cuando el usuario vuelve del redirect de Google en móvil
+  useEffect(() => {
+    if (!isOpen) return;
+    getRedirectResult(auth).then(result => {
+      if (result?.user) onClose();
+    }).catch(err => {
+      if (err.code && err.code !== 'auth/no-current-user') {
+        setError(friendlyError(err.code));
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -83,11 +101,16 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     setLoadingGoogle(true);
     setError(null);
     try {
-      await signInWithPopup(auth, googleProvider);
-      onClose();
+      if (isMobile) {
+        // En móvil: redirect (la página se recarga y getRedirectResult captura el resultado)
+        await signInWithRedirect(auth, googleProvider);
+        // signInWithRedirect navega fuera — el código después de esto no se ejecuta
+      } else {
+        await signInWithPopup(auth, googleProvider);
+        onClose();
+      }
     } catch (err: any) {
       setError(friendlyError(err.code));
-    } finally {
       setLoadingGoogle(false);
     }
   };
