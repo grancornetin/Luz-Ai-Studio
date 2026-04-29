@@ -1,0 +1,670 @@
+================================================================================
+  LUZ IA STUDIO — AUDITORÍA DE LANZAMIENTO
+  Fecha: 29 de abril de 2026
+  Auditado por: Claude Code (Sonnet 4.6)
+================================================================================
+
+Este documento cubre todo lo necesario para llevar la app desde el estado actual
+hasta: (1) lanzamiento público en web, y (2) empaquetado para iOS App Store y
+Google Play Store.
+
+Leyenda de estado:
+  [x] = COMPLETADO
+  [ ] = PENDIENTE
+  [!] = REQUIERE DECISIÓN O ACCIÓN MANUAL
+  [-] = OPCIONAL / MEJORA FUTURA
+
+================================================================================
+  RESUMEN EJECUTIVO
+================================================================================
+
+La arquitectura del proyecto es sólida: rate limiting, circuit breaker, webhooks
+con firma HMAC, transacciones atómicas de créditos, workers asíncronos via QStash.
+Los problemas encontrados son QUIRÚRGICOS, no estructurales. La mayoría ya fueron
+resueltos en esta sesión.
+
+Stack: React 19 + TypeScript + Vite + TailwindCSS + Firebase + Vercel
+Pagos: Dodo Payments (webhooks activos)
+IA: Google Gemini 3 + Seedream 4.5 (EvoLink)
+Infra: Upstash Redis + QStash + Vercel Serverless
+
+================================================================================
+  BLOQUE A — SEGURIDAD BACKEND
+  Estado: 5 de 7 completados en esta sesión
+================================================================================
+
+[x] SEC-01 — api/history.ts + api/gemini/content.ts sin autenticación
+    CRÍTICO. Cualquiera podía leer o manipular el historial de otro usuario
+    pasando un uid arbitrario en el body.
+    FIX: Se agregó verifyAuth(req) al inicio de ambos handlers. El uid ahora
+    viene del token Firebase verificado, no del body.
+    Archivos: api/history.ts (línea 40), api/gemini/content.ts (línea 43)
+
+[x] SEC-02 — Email admin hardcodeado en AuthContext.tsx y firestore.rules
+    CRÍTICO. grancornetin@gmail.com estaba hardcodeado como fallback de admin.
+    Si esa cuenta se pierde o cambia, se pierde el acceso admin en producción
+    y habría que hacer redeploy urgente.
+    FIX: Eliminado de AuthContext.tsx:244 y firestore.rules:41-43. El rol admin
+    ahora se basa únicamente en role="admin" en Firestore.
+    NOTA: Tu cuenta (bastian.herrera.2a@gmail.com) ya tiene role="admin" en
+    Firestore, así que no hay impacto en ti.
+    Archivos: src/modules/auth/AuthContext.tsx, firestore.rules
+
+[x] SEC-03 — CORS aceptaba cualquier proyecto de Vercel del mundo
+    ALTO. La condición origin.endsWith('.vercel.app') permitía que cualquier
+    app en Vercel hiciera peticiones a tus endpoints.
+    FIX: Cambiado a regex restrictivo que solo acepta luz-ia-studio*.vercel.app
+    Archivo: api/_middleware.ts (línea 107)
+
+[x] SEC-04 — RETURN_URL de pago hardcodeada en el código
+    ALTO. 'https://luz-ia-studio-1.vercel.app/checkout/success' estaba quemada.
+    Al cambiar de dominio (dominio propio, etc.), el checkout rompe silenciosamente.
+    FIX: Ahora usa import.meta.env.VITE_APP_URL con fallback.
+    Archivo: src/services/checkoutService.ts (línea 6)
+
+[x] SEC-05 — api/avatar/clone.ts sin autenticación
+    ALTO. El endpoint de clonación de avatar tomaba el uid del body sin
+    verificar el token Firebase.
+    FIX: Se agregó verifyAuth(req) antes del switch de acciones. El uid para
+    rate limiting ahora viene del token verificado.
+    Archivo: api/avatar/clone.ts
+
+[ ] SEC-06 — Rate limit en generación con uid ausente
+    MEDIO. Si llega un request sin uid al endpoint de imagen (no-batch),
+    todos comparten el bucket 'unknown' en Redis, lo que permite que un
+    atacante degrade el servicio para otros.
+    FIX PENDIENTE: Rechazar con 401 si rawUid está vacío en requests no-batch.
+    Archivo: api/gemini/image.ts (líneas 130-131)
+    Esfuerzo: 30 minutos
+
+[ ] SEC-07 — Sin Content-Security-Policy
+    BAJO. No hay CSP en vercel.json ni en index.html. Si un CDN externo
+    (FontAwesome via cdnjs) es comprometido, puede inyectar JS malicioso.
+    FIX PENDIENTE: Agregar header CSP en vercel.json permitiendo Firebase,
+    Google APIs, cdnjs.cloudflare.com, fonts.googleapis.com.
+    Archivo: vercel.json
+    Esfuerzo: 1 hora
+
+================================================================================
+  BLOQUE B — BUGS UX / FLUJOS CRÍTICOS
+  Estado: 4 de 6 completados en esta sesión
+================================================================================
+
+[x] UX-01 — HashRouter rompía el flujo de retorno de pago
+    CRÍTICO. La RETURN_URL de Dodo apuntaba a /checkout/success, pero con
+    HashRouter esa URL resuelve a la raíz en vez del componente CheckoutSuccess.
+    Resultado: usuario paga pero ve la landing, no la confirmación.
+    FIX: Migrado a BrowserRouter. vercel.json ya tenía el rewrite SPA correcto.
+    Archivo: src/App.tsx (línea 2)
+
+[x] UX-02 — CheckoutSuccess esperaba 3 segundos fijos para refrescar créditos
+    CRÍTICO. Si el webhook de Dodo llegaba después de 3s, el usuario veía
+    "¡Pago exitoso!" pero sus créditos no aparecían hasta recargar la página.
+    FIX: Ahora hace polling de refreshCredits() cada 2 segundos por hasta 16s.
+    Archivo: src/views/CheckoutSuccess.tsx
+
+[x] UX-03 + UX-04 — alert() nativo y window.open(_blank) en flujo de pagos
+    ALTO. alert() es bloqueado en WebView de Capacitor (App Store).
+    window.open(_blank) también falla en iOS WebView.
+    FIX: alert() reemplazado por navigate('/login'). window.open reemplazado
+    por window.location.href (misma pestaña, compatible con WebView).
+    Archivos: src/views/Pricing.tsx (líneas 29-37), src/views/BuyCredits.tsx (14-22)
+
+[ ] UX-05 — NoCreditsModal tiene precios incorrectos hardcodeados
+    MEDIO. El modal muestra $9.99 / $19.99 / $39.99 pero los precios reales
+    en creditConfig.ts son $14.99 / $39.99 / $99.99. Puede confundir usuarios
+    y potencialmente considerarse publicidad engañosa.
+    FIX PENDIENTE: Importar PLANS desde creditConfig.ts y renderizar dinámicamente.
+    Además los planes muestran 240/600/1500 créditos que tampoco coinciden con
+    los reales (200/500/1200).
+    Archivo: src/components/shared/NoCreditsModal.tsx (líneas 17-45)
+    Esfuerzo: 1 hora
+
+[ ] UX-06 — NoCreditsModal dice "pagos se habilitarán próximamente"
+    MEDIO. El bloque amber en la línea 134 dice que los pagos no están
+    disponibles, cuando en realidad SÍ lo están con Dodo Payments.
+    Esto hace que usuarios con intención de pagar se vayan sin comprar.
+    FIX PENDIENTE: Eliminar ese bloque y hacer que los planes sean clickeables
+    navegando a /pricing al hacer click.
+    Archivo: src/components/shared/NoCreditsModal.tsx (líneas 133-138)
+    Esfuerzo: 30 minutos
+
+[ ] UX-07 — Sin favicon, meta description ni og:tags
+    BAJO. index.html no tiene favicon, meta description ni Open Graph tags.
+    Afecta la apariencia en pestañas del navegador y el preview en redes sociales.
+    FIX PENDIENTE: Crear favicon.png en /public, agregar meta tags en index.html.
+    Archivo: index.html
+    Esfuerzo: 30 minutos
+
+================================================================================
+  BLOQUE C — PERFORMANCE
+  Estado: 0 de 4 completados (pendientes todos)
+================================================================================
+
+[ ] PERF-01 — Sin code splitting: bundle inicial incluye TODOS los módulos
+    ALTO. src/App.tsx importa estáticamente ContentStudioProModule (1640 líneas),
+    Dashboard (741 líneas), CloningModule, ManualCreatorModule, ProductGenerator,
+    Landing, etc. Todo se descarga aunque el usuario solo visite una página.
+    FIX PENDIENTE: Aplicar React.lazy() + Suspense a todas las rutas de módulos.
+
+    Ejemplo del cambio:
+      ANTES: import CloningModule from './modules/CloningModule';
+      DESPUÉS: const CloningModule = React.lazy(() => import('./modules/CloningModule'));
+
+    Envolver las <Routes> con:
+      <Suspense fallback={<div className="flex items-center justify-center h-screen">
+        <div className="animate-spin w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full" />
+      </div>}>
+
+    Archivo: src/App.tsx (líneas 6-37)
+    Esfuerzo: 2-3 horas (hay ~15 imports que cambiar)
+
+[ ] PERF-02 — FontAwesome all.min.css (~1.2MB) y Google Fonts importado dos veces
+    ALTO. index.html línea 13 carga all.min.css de cdnjs (incluye TODOS los
+    íconos de FA, la mayoría no usados). Además Google Fonts está importado
+    tanto en index.html (línea 17 del style) como en src/index.css (línea 1).
+    FIX PENDIENTE:
+    1. Eliminar @import de Google Fonts de src/index.css (ya está en index.html).
+    2. Cambiar all.min.css por solid.min.css que pesa ~400KB menos.
+       URL: https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/solid.min.css
+       + https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/fontawesome.min.css
+    Archivos: index.html (línea 13), src/index.css (línea 1)
+    Esfuerzo: 30 minutos
+
+[ ] PERF-03 — Sin preconnect hints para dominios externos críticos
+    MEDIO. Sin preconnect, cada primer request a Firebase, Google Fonts, y
+    cdnjs paga el costo completo de DNS + TCP + TLS (~200-400ms extra).
+    FIX PENDIENTE: Agregar en index.html dentro de <head>:
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+      <link rel="dns-prefetch" href="https://firebaseapp.com">
+    Archivo: index.html
+    Esfuerzo: 15 minutos
+
+[ ] PERF-04 — vite.config.ts sin rollupOptions: un solo chunk masivo en build
+    BAJO. Sin configuración de chunks manuales, Vite produce un bundle gigante
+    sin división vendor/app. Esto ralentiza el tiempo de carga inicial.
+    FIX PENDIENTE: Agregar en vite.config.ts:
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              vendor: ['react', 'react-dom', 'react-router-dom'],
+              firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+            }
+          }
+        },
+        chunkSizeWarningLimit: 1000,
+      }
+    Archivo: vite.config.ts
+    Esfuerzo: 30 minutos
+
+================================================================================
+  BLOQUE D — ACCESIBILIDAD
+  Estado: 0 de 3 completados (pendientes todos)
+================================================================================
+
+[ ] A11Y-01 — MobileBottomNav sin aria-label ni aria-current
+    ALTO. Los 4 botones del nav móvil (Inicio, Crear, Buscar, Perfil) no tienen
+    aria-label. Los lectores de pantalla los anuncian como "botón" sin más info.
+    Tampoco hay aria-current="page" en el botón activo.
+    FIX PENDIENTE: En src/components/shared/MobileBottomNav.tsx agregar:
+      <button aria-label="Ir al inicio" aria-current={isActive('/dashboard') ? 'page' : undefined} ...>
+      <button aria-label="Crear contenido" ...>
+      <button aria-label="Buscar" ...>
+      <button aria-label="Mi perfil" aria-current={isActive('/cuenta') ? 'page' : undefined} ...>
+    Archivo: src/components/shared/MobileBottomNav.tsx
+    Esfuerzo: 30 minutos
+
+[ ] A11Y-02 — AuthModal sin role="dialog", aria-modal ni focus trap
+    ALTO. El modal de login no tiene los atributos ARIA que los lectores de
+    pantalla necesitan para anunciarlo correctamente. Tampoco hay focus trap
+    (el foco puede salir del modal mientras está abierto).
+    FIX PENDIENTE: En el div contenedor del modal agregar:
+      role="dialog" aria-modal="true" aria-labelledby="auth-modal-title"
+    Y en el <h2> del modal: id="auth-modal-title"
+    Para focus trap básico: usar el hook useFocusTrap o la librería focus-trap-react.
+    Archivo: src/modules/auth/components/AuthModal.tsx
+    Esfuerzo: 1-2 horas
+
+[ ] A11Y-03 — Texto demasiado pequeño en varios componentes
+    MEDIO. text-[9px] en GenerateButton (preview de créditos) y text-[10px]
+    en MobileBottomNav. WCAG AA requiere mínimo 12px para texto informativo.
+    FIX PENDIENTE: Cambiar text-[9px] y text-[10px] a text-xs (12px) en
+    todos los elementos informativos críticos.
+    Archivos: src/components/shared/GenerateButton.tsx,
+              src/components/shared/MobileBottomNav.tsx
+    Esfuerzo: 30 minutos
+
+================================================================================
+  BLOQUE E — TESTING MANUAL (hacer antes de lanzar)
+  Estado: Pendiente
+================================================================================
+
+Estos flujos deben testearse manualmente en el navegador antes de declarar
+la app lista para producción:
+
+[ ] FLUJO 1 — Registro → Onboarding → Primera generación
+    1. Abre la app en modo incógnito (sesión limpia)
+    2. Haz click en "Ingresar" desde la landing
+    3. Regístrate con un email nuevo (no el tuyo)
+    4. Verifica que aparece el OnboardingWizard
+    5. Selecciona un caso de uso y completa el wizard
+    6. Verifica que tienes créditos disponibles en el WalletPill
+    7. Genera una imagen en cualquier módulo
+    8. Verifica que aparece en /historial
+
+[ ] FLUJO 2 — Sin créditos → Upgrade → Pago → Confirmación
+    1. Con un usuario de prueba con 0 créditos, intenta generar
+    2. Verifica que aparece NoCreditsModal (con precios correctos post-fix)
+    3. Navega a /pricing
+    4. Haz click en un plan — verifica que abre el checkout en la MISMA pestaña
+    5. Completa un pago de prueba en sandbox de Dodo
+    6. Verifica que el retorno llega a /checkout/success (no a /)
+    7. Verifica que los créditos aparecen en 2-5 segundos (sin recargar)
+
+[ ] FLUJO 3 — Generación exitosa → Publicar en galería
+    1. Genera una imagen en PromptStudio
+    2. Haz click en "Publicar en galería"
+    3. Rellena título y tags en el modal
+    4. Verifica que aparece en /prompt-gallery
+    5. Verifica que otro usuario puede verla y hacer "Recrear"
+
+[ ] FLUJO 4 — Error en generación → Mensaje → Crédito reembolsado
+    1. Usa un prompt que active el filtro de seguridad de Google
+       (ej: algo con violencia o contenido adulto)
+    2. Verifica que el mensaje de error es claro y legible
+    3. Verifica que el crédito fue reembolsado (saldo no bajó)
+    4. Verifica que el botón de Reintentar funciona
+
+[ ] FLUJO 5 — Mobile (probar en Chrome DevTools con iPhone 14 Pro)
+    1. Abre DevTools → Toggle device → iPhone 14 Pro (390x844)
+    2. Verifica que MobileBottomNav es visible y funcional
+    3. Abre el BottomSheet desde el botón "+"
+    4. Navega por CloningModule: los slots de imagen aceptan fotos
+    5. Verifica que no hay overflow horizontal en ninguna vista
+    6. Verifica que el contenido no queda tapado por la barra de navegación
+
+[ ] FLUJO 6 — Admin
+    1. Inicia sesión con tu cuenta (bastian.herrera.2a@gmail.com)
+    2. Verifica que puedes acceder a /admin/batch
+    3. Verifica que el panel de admin es visible en el sidebar
+    4. Verifica que NO aparece "pagos se habilitarán próximamente" en NoCreditsModal
+       (esto confirma que UX-06 fue aplicado)
+
+================================================================================
+  BLOQUE F — PREPARACIÓN PARA APP STORE (Fase 2)
+  Estado: No iniciado — hacer después del lanzamiento web
+================================================================================
+
+--- F1. INTEGRACIÓN CAPACITOR ---
+
+[ ] CAP-01 — Instalar y configurar Capacitor base
+    CRÍTICO. El proyecto actualmente es web puro. Para App Store se necesita
+    empaquetar con Capacitor (Ionic).
+
+    Pasos:
+    1. npm install @capacitor/core @capacitor/cli @capacitor/ios @capacitor/android
+    2. npm install @capacitor/browser @capacitor/haptics @capacitor/status-bar @capacitor/splash-screen
+    3. npx cap init "LUZ IA Studio" "com.luziastudio.app" --web-dir=dist
+    4. npx cap add ios      (requiere macOS con Xcode instalado)
+    5. npx cap add android  (requiere Android Studio)
+
+    Crear capacitor.config.ts en la raíz del proyecto:
+    -------------------------------------------------------
+    import type { CapacitorConfig } from '@capacitor/cli';
+    const config: CapacitorConfig = {
+      appId: 'com.luziastudio.app',
+      appName: 'LUZ IA Studio',
+      webDir: 'dist',
+      server: { androidScheme: 'https' },
+      plugins: {
+        SplashScreen: { launchShowDuration: 2000, backgroundColor: '#FFFFFF' },
+        StatusBar: { style: 'Default', backgroundColor: '#FFFFFF' },
+      },
+    };
+    export default config;
+    -------------------------------------------------------
+    Esfuerzo: 4-8 horas
+
+[ ] CAP-02 — Ajuste del base path en vite.config.ts para Capacitor
+    CRÍTICO. Capacitor carga la app desde file:/// y falla con rutas absolutas.
+
+    FIX en vite.config.ts:
+      base: process.env.CAPACITOR_BUILD ? './' : '/',
+
+    Scripts en package.json:
+      "build:web": "vite build",
+      "build:mobile": "CAPACITOR_BUILD=true vite build",
+      "sync:ios": "npm run build:mobile && npx cap sync ios",
+      "sync:android": "npm run build:mobile && npx cap sync android",
+      "open:ios": "npx cap open ios",
+      "open:android": "npx cap open android"
+    Esfuerzo: 1 hora
+
+[ ] CAP-03 — Política de pagos in-app (Apple/Google exigen IAP nativo)
+    CRÍTICO. Apple App Store Guideline 3.1.1 y Google Play Policy prohíben
+    cobrar por bienes digitales sin usar su sistema de pagos nativo (IAP),
+    que cobra un 30% de comisión.
+
+    ESTRATEGIA RECOMENDADA (para lanzamiento rápido, sin pagar el 30%):
+    Clasificar LUZ IA como "Reader App" — la app nativa NO muestra precios
+    ni botones de compra. Todo el flujo de pago se hace en la web.
+
+    Implementación:
+    1. Crear src/utils/platform.ts:
+       import { Capacitor } from '@capacitor/core';
+       export const isNative = () => Capacitor.isNativePlatform();
+       export const isIOS = () => Capacitor.getPlatform() === 'ios';
+       export const isAndroid = () => Capacitor.getPlatform() === 'android';
+
+    2. En Pricing.tsx y BuyCredits.tsx, si isNative():
+       Mostrar: "Gestiona tu suscripción en luz-ia-studio.com"
+       Ocultar: todos los botones de pago y precios
+    Esfuerzo: 3-4 horas
+
+[ ] CAP-04 — Reemplazar window.open para checkout con Capacitor Browser
+    ALTO. Ya se cambió window.open a window.location.href para web (UX-04).
+    En Capacitor, si en algún momento se permite abrir el checkout desde la app,
+    usar el plugin Browser de Capacitor:
+      import { Browser } from '@capacitor/browser';
+      await Browser.open({ url: checkoutUrl, presentationStyle: 'popover' });
+    Esfuerzo: 1 hora
+
+[ ] CAP-05 — Safe area y notch en dispositivos modernos
+    ALTO. El botón hamburger está fijo en top-5 left-5. En iPhones con
+    Dynamic Island o notch puede quedar tapado.
+
+    FIX en src/index.css, agregar variables globales:
+      :root {
+        --safe-area-top: env(safe-area-inset-top, 0px);
+        --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+      }
+
+    FIX en el botón hamburger del sidebar (src/App.tsx):
+      Cambiar: top-5 left-5
+      A:       style={{ top: 'calc(env(safe-area-inset-top) + 1.25rem)' }}
+
+    NOTA: MobileBottomNav ya tiene safe-area-inset-bottom aplicado. Bien.
+    Esfuerzo: 2 horas
+
+[ ] CAP-06 — Firebase Auth con Google Sign-In en WebView nativo
+    ALTO. signInWithPopup() no funciona en WebView de iOS/Android.
+
+    Opciones:
+    A) Deshabilitar Google Sign-In en la app nativa (solo email/password)
+    B) Instalar @codetrix-studio/capacitor-google-auth y configurar:
+       - GoogleService-Info.plist en Xcode (iOS)
+       - google-services.json en Android Studio (Android)
+       - URL scheme en Info.plist para el redirect OAuth
+
+    Recomendación: Opción A para lanzamiento inicial, Opción B en v1.1.
+    Esfuerzo: 3 horas (Opción A: 1 hora, Opción B: 3+ horas)
+
+[ ] CAP-07 — Deep linking para retorno del checkout
+    ALTO. Después de pagar en el browser externo, el usuario debe poder
+    volver a la app a /checkout/success.
+
+    iOS: Configurar apple-app-site-association en el servidor web.
+    Android: Configurar assetlinks.json y agregar intent-filter en AndroidManifest.
+    Esfuerzo: 3 horas
+
+[ ] CAP-08 — Haptic feedback en generación
+    MEDIO. Las apps nativas de calidad usan vibración táctil como feedback.
+
+    Agregar en GenerateButton.tsx:
+      import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
+      // Al hacer tap: Haptics.impact({ style: ImpactStyle.Medium })
+      // Al completar: Haptics.notification({ type: NotificationType.Success })
+      // Al fallar:    Haptics.notification({ type: NotificationType.Error })
+    Esfuerzo: 2 horas
+
+[ ] CAP-09 — Detección de estado offline
+    BAJO. La app asume conectividad constante. En mobile, los usuarios pierden
+    señal frecuentemente.
+
+    Agregar @capacitor/network + toast/banner cuando la app está offline.
+    Deshabilitar botones de generación sin conexión.
+    Esfuerzo: 3 horas
+
+--- F2. ASSETS PARA LAS TIENDAS ---
+
+[ ] ASSET-01 — Crear todos los assets visuales requeridos
+    CRÍTICO. Sin estos assets no se puede publicar en ninguna tienda.
+
+    iOS App Store:
+    - App Icon: 1024x1024px PNG (SIN canal alpha, SIN transparencia)
+    - Splash screen: Launch Screen nativo (no web)
+    - Screenshots iPhone 6.7": 1290x2796px (mínimo 3, máximo 10)
+    - Screenshots iPhone 5.5": 1242x2208px
+    - Screenshots iPad Pro 12.9": 2048x2732px (opcional pero recomendado)
+
+    Android Google Play:
+    - App Icon: 512x512px PNG
+    - Feature Graphic: 1024x500px (aparece en la ficha de la store)
+    - Screenshots Phone: 1080x1920px mínimo
+    - Screenshots Tablet 7": recomendado
+
+    Herramienta recomendada para generar desde una sola imagen fuente:
+      npx @capacitor/assets generate --iconBackgroundColor '#ffffff' --splashBackgroundColor '#ffffff'
+    Esfuerzo: 4-8 horas (diseño incluido)
+
+[ ] ASSET-02 — PWA Manifest
+    ALTO. Permite instalar la app desde el navegador en Android sin App Store.
+
+    Crear public/manifest.json:
+    {
+      "name": "LUZ IA Studio",
+      "short_name": "LUZ IA",
+      "description": "Crea contenido publicitario con IA",
+      "icons": [
+        { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+        { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+      ],
+      "start_url": "/",
+      "display": "standalone",
+      "theme_color": "#FF748B",
+      "background_color": "#FFFFFF",
+      "orientation": "portrait"
+    }
+
+    Agregar en index.html: <link rel="manifest" href="/manifest.json">
+    Esfuerzo: 1 hora
+
+--- F3. CUMPLIMIENTO DE GUIDELINES ---
+
+[ ] GUIDE-01 — Disclaimer de IA en onboarding
+    CRÍTICO para aprobación de Apple y Google.
+    Guideline 1.1 de Apple exige disclosure clara de contenido generado por IA.
+
+    FIX: Agregar en el OnboardingWizard (primer paso que ve el usuario):
+    "Las imágenes generadas por esta app son creadas por Inteligencia Artificial."
+
+    Verificar también que UploadConsentModal cubre el consentimiento explícito
+    para subir fotos de personas reales (ya existe, solo confirmar que es visible).
+    Archivo: src/modules/auth/components/OnboardingWizard.tsx
+    Esfuerzo: 1 hora
+
+[ ] GUIDE-02 — URLs de Política de Privacidad y Términos accesibles sin login
+    CRÍTICO. Las tiendas exigen que estas URLs funcionen sin autenticación.
+
+    BUENAS NOTICIAS: Con la migración a BrowserRouter (UX-01 completado),
+    las rutas /privacidad y /terminos ya son URLs directas sin hash.
+    Solo verificar que funcionen en producción después del deploy.
+    Verificar también que la Política menciona el uso de IA y datos de imágenes.
+    Archivos: src/views/PoliticaPrivacidad.tsx, src/views/TerminosUso.tsx
+
+[ ] GUIDE-03 — Textos para las fichas de las tiendas
+    ALTO. Preparar con anticipación para no retrasar el proceso de revisión.
+
+    iOS App Store (límites estrictos):
+    - Nombre: "LUZ IA Studio" (30 caracteres máx)
+    - Subtítulo: "Genera contenido visual con IA" (30 caracteres máx)
+    - Descripción: hasta 4000 caracteres
+    - Palabras clave: hasta 100 caracteres total, separadas por coma
+      Sugerencia: "ia,fotos,avatar,modelo,publicidad,ecommerce,contenido"
+    - Categoría primaria: Photo & Video
+    - Categoría secundaria: Productivity
+
+    Google Play:
+    - Título: "LUZ IA Studio" (50 caracteres máx)
+    - Descripción corta: hasta 80 caracteres
+    - Descripción larga: hasta 4000 caracteres
+    - Categoría: Photography
+    Esfuerzo: 2 horas (redactar textos)
+
+[ ] GUIDE-04 — Age Rating y moderación de contenido
+    ALTO. Apps de generación de imágenes con personas reales típicamente
+    califican para 17+ en iOS si no tienen moderación activa.
+
+    Para mantener 12+ (mayor visibilidad en búsquedas):
+    1. Implementar moderación activa de la galería de prompts antes de publicar
+    2. Agregar botón de reporte en cada prompt de la galería (ya existe
+       el campo reportedBy en Firestore rules, falta la UI)
+    3. En App Store Connect: marcar "Frequent/Intense" en "Sexual Content"
+       como NO si se implementa moderación
+    Esfuerzo: 3-4 horas
+
+--- F4. BUILD PIPELINE ---
+
+[ ] BUILD-01 — Scripts de build diferenciados en package.json
+    ALTO. Necesario para mantener builds web y mobile separados.
+
+    Agregar en package.json:
+      "build:web": "vite build",
+      "build:mobile": "CAPACITOR_BUILD=true vite build",
+      "sync:ios": "npm run build:mobile && npx cap sync ios",
+      "sync:android": "npm run build:mobile && npx cap sync android",
+      "open:ios": "npx cap open ios",
+      "open:android": "npx cap open android"
+
+    NOTA: Para iOS se requiere macOS con Xcode 15+.
+    Para Android se puede construir en Windows con Android Studio.
+    Esfuerzo: 30 minutos
+
+================================================================================
+  CHECKLIST ORDEN DE EJECUCIÓN RECOMENDADO
+================================================================================
+
+--- SEMANA 1 (ya completada en esta sesión) ---
+[x] SEC-01: verifyAuth en history.ts y content.ts
+[x] SEC-02: Quitar email hardcodeado de AuthContext y firestore.rules
+[x] SEC-03: CORS restrictivo en _middleware.ts
+[x] SEC-04: RETURN_URL a variable de entorno
+[x] SEC-05: verifyAuth en clone.ts
+[x] UX-01: HashRouter → BrowserRouter
+[x] UX-02: Polling en CheckoutSuccess
+[x] UX-03/04: Reemplazar alert() y window.open en pagos
+
+--- SEMANA 2 (fixes restantes antes de lanzar) ---
+[ ] UX-05: Sincronizar precios en NoCreditsModal (IMPORTANTE antes de lanzar)
+[ ] UX-06: Eliminar "pagos próximamente" en NoCreditsModal (IMPORTANTE)
+[ ] PERF-01: React.lazy + Suspense en todas las rutas
+[ ] PERF-02: Fix Google Fonts duplicado, reducir FontAwesome
+[ ] SEC-06: Rechazar requests sin uid en image.ts
+[ ] A11Y-01: aria-labels en MobileBottomNav
+[ ] A11Y-03: Aumentar texto mínimo a 12px
+[ ] UX-07: Favicon + meta description
+[ ] PERF-03: preconnect hints en index.html
+[ ] PERF-04: rollupOptions en vite.config.ts
+
+--- SEMANA 3 (testing + preparación mobile) ---
+[ ] Ejecutar todos los flujos del Bloque E de testing manual
+[ ] CAP-01: Instalar Capacitor base
+[ ] CAP-02: Ajuste base path vite.config.ts
+[ ] CAP-03: Detección de plataforma, ocultar pagos en native
+[ ] CAP-05: Safe area CSS variables
+[ ] ASSET-02: PWA Manifest
+
+--- SEMANA 4 (assets + submission a tiendas) ---
+[ ] ASSET-01: Crear todos los assets visuales (iconos, screenshots, splash)
+[ ] CAP-06: Firebase Auth nativo (Google Sign-In o deshabilitar en native)
+[ ] CAP-07: Deep linking
+[ ] GUIDE-01: Disclaimer de IA en onboarding
+[ ] GUIDE-02: Verificar URLs legales en producción
+[ ] GUIDE-03: Redactar textos de ficha para las tiendas
+[ ] GUIDE-04: Age rating y moderación de galería
+[ ] BUILD-01: Scripts de CI/CD en package.json
+[ ] CAP-04: Browser plugin para checkout
+[ ] CAP-08: Haptics
+[ ] CAP-09: Offline detection
+
+================================================================================
+  RESUMEN DE ISSUES POR SEVERIDAD
+================================================================================
+
+CRÍTICOS (bloquean lanzamiento o aprobación en tiendas):
+  [x] SEC-01 — history.ts + content.ts sin auth
+  [x] SEC-02 — Email admin hardcodeado
+  [x] UX-01  — HashRouter rompía flujo de pago
+  [x] UX-02  — CheckoutSuccess sin polling de créditos
+  [ ] UX-05  — Precios incorrectos en NoCreditsModal
+  [ ] UX-06  — "Pagos próximamente" cuando ya están activos
+  [ ] CAP-01 — Instalar Capacitor (Fase 2)
+  [ ] CAP-02 — Base path para Capacitor (Fase 2)
+  [ ] CAP-03 — Política de pagos IAP (Fase 2)
+  [ ] ASSET-01 — Assets visuales para las tiendas (Fase 2)
+  [ ] GUIDE-01 — Disclaimer de IA (Fase 2)
+
+ALTOS (degradan experiencia o seguridad significativamente):
+  [x] SEC-03 — CORS permisivo
+  [x] SEC-04 — RETURN_URL hardcodeada
+  [x] SEC-05 — clone.ts sin auth
+  [x] UX-03/04 — alert() y window.open incompatibles con WebView
+  [ ] PERF-01 — Sin code splitting
+  [ ] PERF-02 — FontAwesome 1.2MB + Fonts duplicado
+  [ ] A11Y-01 — MobileBottomNav sin aria-labels
+  [ ] A11Y-02 — AuthModal sin ARIA ni focus trap
+  [ ] CAP-04 — window.open en Capacitor (Fase 2)
+  [ ] CAP-05 — Safe area para notch (Fase 2)
+  [ ] CAP-06 — Google Sign-In en WebView (Fase 2)
+  [ ] CAP-07 — Deep linking (Fase 2)
+  [ ] ASSET-02 — PWA Manifest (Fase 2)
+  [ ] GUIDE-03 — Textos para tiendas (Fase 2)
+  [ ] GUIDE-04 — Age rating y moderación (Fase 2)
+  [ ] BUILD-01 — Scripts de build (Fase 2)
+
+MEDIOS:
+  [ ] SEC-06 — Rate limit con uid ausente
+  [ ] UX-07  — Sin favicon ni meta tags
+  [ ] PERF-03 — Sin preconnect hints
+  [ ] A11Y-03 — Texto muy pequeño
+  [ ] CAP-08 — Haptics (Fase 2)
+  [ ] GUIDE-02 — Verificar URLs legales (Fase 2)
+
+BAJOS:
+  [ ] SEC-07 — Sin Content-Security-Policy
+  [ ] PERF-04 — Sin rollupOptions en Vite
+  [ ] CAP-09 — Offline detection (Fase 2)
+
+================================================================================
+  NOTAS FINALES
+================================================================================
+
+DOMINIO PERSONALIZADO:
+  Antes del lanzamiento público, actualizar VITE_APP_URL en Vercel con tu
+  dominio final. Esto afecta la RETURN_URL del checkout (SEC-04 ya resuelto
+  para que lo tome del entorno).
+
+VARIABLES DE ENTORNO EN VERCEL:
+  Verificar que en Vercel Dashboard → Settings → Environment Variables están
+  configuradas TODAS las variables de .env.production. Especialmente:
+  - VITE_APP_URL (el dominio final de la app)
+  - DODO_PAYMENTS_WEBHOOK_SECRET
+  - GOOGLE_SERVICE_ACCOUNT_KEY
+  - QSTASH_TOKEN + QSTASH_CURRENT_SIGNING_KEY + QSTASH_NEXT_SIGNING_KEY
+  - KV_REST_API_URL + KV_REST_API_TOKEN
+
+FIRESTORE RULES:
+  Después de modificar firestore.rules, recordar desplegarlas:
+    firebase deploy --only firestore:rules
+  (o desde Firebase Console → Firestore → Rules → Publish)
+
+DODO PAYMENTS SANDBOX:
+  Para testear el flujo completo de pagos sin cobros reales, cambiar
+  DODO_PAYMENTS_MODE=sandbox en las variables de entorno de desarrollo.
+
+================================================================================
+  Fin del documento — LUZ IA Studio Auditoría v1.0 — 29/04/2026
+================================================================================
