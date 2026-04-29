@@ -282,6 +282,9 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     if (!user) return;
+    // Cerrar el modal de auth cuando el usuario se autentica
+    // (cubre el caso de signInWithRedirect en móvil)
+    setIsAuthModalOpen(false);
     const load = async () => {
       const [a, p] = await Promise.all([dbService.getAvatars(), dbService.getProducts()]);
       setAvatars(a || []);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -7,7 +7,6 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signInWithRedirect,
-  getRedirectResult,
 } from 'firebase/auth';
 // RUTA CORREGIDA: sube 3 niveles para encontrar firebase.ts en /src
 import { auth } from '../../../firebase';
@@ -34,19 +33,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [loadingGoogle, setLoadingGoogle] = useState(false);
   const [error, setError]             = useState<string | null>(null);
   const [success, setSuccess]         = useState<string | null>(null);
-
-  // Capturar el resultado cuando el usuario vuelve del redirect de Google en móvil
-  useEffect(() => {
-    if (!isOpen) return;
-    getRedirectResult(auth).then(result => {
-      if (result?.user) onClose();
-    }).catch(err => {
-      if (err.code && err.code !== 'auth/no-current-user') {
-        setError(friendlyError(err.code));
-      }
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
 
   if (!isOpen) return null;
 
