@@ -71,21 +71,26 @@ const BatchProgressPanel: React.FC = () => {
   const [itemFilter, setItemFilter]   = useState<'all' | 'failed' | 'completed'>('all');
   const [loadingBatches, setLoadingBatches] = useState(true);
 
-  if (!isAdmin) return <Navigate to="/dashboard" replace />;
-
   // Suscripción a batches (últimos 10)
   useEffect(() => {
+    if (!isAdmin) return;
     const q = query(
       collection(db, 'prompt_batches'),
       orderBy('createdAt', 'desc'),
       limit(10)
     );
-    const unsub = onSnapshot(q, snap => {
-      setBatches(snap.docs.map(d => ({ id: d.id, ...d.data() } as BatchDoc)));
-      setLoadingBatches(false);
-    });
+    const unsub = onSnapshot(q,
+      snap => {
+        setBatches(snap.docs.map(d => ({ id: d.id, ...d.data() } as BatchDoc)));
+        setLoadingBatches(false);
+      },
+      err => {
+        console.error('[BatchProgressPanel] Firestore error:', err);
+        setLoadingBatches(false);
+      }
+    );
     return unsub;
-  }, []);
+  }, [isAdmin]);
 
   // Suscripción a items del batch seleccionado
   useEffect(() => {
@@ -101,6 +106,8 @@ const BatchProgressPanel: React.FC = () => {
     });
     return unsub;
   }, [selectedId]);
+
+  if (!isAdmin) return <Navigate to="/dashboard" replace />;
 
   const selected = batches.find(b => b.id === selectedId) ?? null;
 
