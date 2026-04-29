@@ -25,11 +25,15 @@ function getArg(name, fallback) {
 
 const INPUT_FILE        = getArg('input',      'trending-prompts.json');
 const OUTPUT_FILE       = getArg('output',     'prepared-prompts.json');
+const PUBLISHED_IDS_FILE = getArg('publishedIds', 'published-source-ids.json');
 const LIMIT             = Number(getArg('limit',     '100'));
 const OFFSET            = Number(getArg('offset',    '0'));
 const MIN_LIKES         = Number(getArg('minLikes',  '0'));
 const MIN_LENGTH        = Number(getArg('minLength', '60'));
 const CATEGORIES_FILTER = getArg('categories', '')
+  .split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+// --focus: categorías prioritarias (se seleccionan primero, el resto rellena)
+const FOCUS_CATEGORIES  = getArg('focus', '')
   .split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
 
 // ── Leer input ────────────────────────────────────────────────────────────────
@@ -42,6 +46,17 @@ try { data = JSON.parse(readFileSync(inputPath, 'utf-8')); }
 catch (e) { console.error(`✗ Error JSON: ${e.message}`); process.exit(1); }
 
 if (!Array.isArray(data)) { console.error('✗ El archivo debe ser un array.'); process.exit(1); }
+
+// ── IDs ya publicados (para evitar duplicados con batches anteriores) ──────────
+
+const publishedIdsPath = resolve(cwd, PUBLISHED_IDS_FILE);
+const publishedSourceIds = new Set(
+  existsSync(publishedIdsPath)
+    ? JSON.parse(readFileSync(publishedIdsPath, 'utf-8'))
+    : []
+);
+if (publishedSourceIds.size > 0)
+  console.log(`✓ Excluyendo ${publishedSourceIds.size} sourceIds ya publicados.`);
 
 // ══════════════════════════════════════════════════════════════════════════════
 // FILTROS DE EXCLUSIÓN
@@ -347,73 +362,22 @@ function isNegativeOnlyPrompt(p) {
   return (hits >= 4 && l.length < 600) || (start && hits >= 2);
 }
 
-function isValidItem(item, prompt) {
-  if (!prompt || prompt.length < MIN_LENGTH)      return false;
-  if (Number(item.likes || 0) < MIN_LIKES)        return false;
-  if (isExcluded(prompt))                         return false;
-  if (hasUnreplacedPlaceholders(prompt))          return false;
-  if (isNegativeOnlyPrompt(prompt))               return false;
-  if (!isCommerciallyRelevant(item, prompt))      return false;
-
-  const l = prompt.toLowerCase();
-  if (l.includes('open gemini') && l.includes('step 1')) return false;
-  if (l.includes('all prompts in alt'))                  return false;
-  if (l.includes('follow me'))                           return false;
-
-  if (CATEGORIES_FILTER.length > 0) {
-    const cats = Array.isArray(item.categories)
-      ? item.categories.map(c => String(c).toLowerCase()) : [];
-    if (!cats.some(c => CATEGORIES_FILTER.some(f => c.includes(f)))) return false;
-  }
-
-  return true;
-}
-
 // ══════════════════════════════════════════════════════════════════════════════
 // PROCESO PRINCIPAL
 // ══════════════════════════════════════════════════════════════════════════════
 
 const sorted = [...data].sort((a, b) => Number(a.rank || 999999) - Number(b.rank || 999999));
-const prepared         = [];
 const seenFingerprints = new Set();
-let   skippedExcluded  = 0;
-let   skippedPlaceholder = 0;
-let   skippedNonCommercial = 0;
-let   skippedDuplicate = 0;
-let   skippedOffset    = 0;
+let skippedExcluded    = 0;
+let skippedPlaceholder = 0;
+let skippedNonCommercial = 0;
+let skippedDuplicate   = 0;
+let skippedOffset      = 0;
+let skippedPublished   = 0;
 
-for (const item of sorted) {
-  if (prepared.length >= LIMIT) break;
-
-  const normalizedPrompt = normalizePrompt(item.prompt);
-
-  // Contadores de debug
-  if (isExcluded(normalizedPrompt))                      { skippedExcluded++;       continue; }
-  if (hasUnreplacedPlaceholders(normalizedPrompt))       { skippedPlaceholder++;    continue; }
-  if (isNegativeOnlyPrompt(normalizedPrompt))            { skippedPlaceholder++;    continue; }
-  if (!normalizedPrompt || normalizedPrompt.length < MIN_LENGTH) { continue; }
-  if (Number(item.likes || 0) < MIN_LIKES)               { continue; }
-  if (!isCommerciallyRelevant(item, normalizedPrompt))   { skippedNonCommercial++;  continue; }
-
-  const l = normalizedPrompt.toLowerCase();
-  if (l.includes('open gemini') && l.includes('step 1')) continue;
-  if (l.includes('all prompts in alt'))                  continue;
-  if (l.includes('follow me'))                           continue;
-
-  if (CATEGORIES_FILTER.length > 0) {
-    const cats = Array.isArray(item.categories)
-      ? item.categories.map(c => String(c).toLowerCase()) : [];
-    if (!cats.some(c => CATEGORIES_FILTER.some(f => c.includes(f)))) continue;
-  }
-
-  const fingerprint = normalizedPrompt.toLowerCase().slice(0, 500);
-  if (seenFingerprints.has(fingerprint)) { skippedDuplicate++; continue; }
-  seenFingerprints.add(fingerprint);
-
-  if (seenFingerprints.size <= OFFSET) { skippedOffset++; continue; }
-
+function buildItem(item, normalizedPrompt) {
   const category = detectCategory(item, normalizedPrompt);
-  prepared.push({
+  return {
     raw:          normalizedPrompt,
     category,
     tags:         generateTagsFromPrompt(normalizedPrompt, category),
@@ -426,8 +390,55 @@ for (const item of sorted) {
     views:        item.views       || 0,
     author:       item.author      || null,
     authorName:   item.author_name || null,
-  });
+  };
 }
+
+function passesBaseFilters(item, normalizedPrompt) {
+  if (!normalizedPrompt || normalizedPrompt.length < MIN_LENGTH) return false;
+  if (Number(item.likes || 0) < MIN_LIKES)             return false;
+  if (isExcluded(normalizedPrompt))                    { skippedExcluded++;       return false; }
+  if (hasUnreplacedPlaceholders(normalizedPrompt))     { skippedPlaceholder++;    return false; }
+  if (isNegativeOnlyPrompt(normalizedPrompt))          { skippedPlaceholder++;    return false; }
+  if (!isCommerciallyRelevant(item, normalizedPrompt)) { skippedNonCommercial++;  return false; }
+  const l = normalizedPrompt.toLowerCase();
+  if (l.includes('open gemini') && l.includes('step 1')) return false;
+  if (l.includes('all prompts in alt'))                  return false;
+  if (l.includes('follow me'))                           return false;
+  if (CATEGORIES_FILTER.length > 0) {
+    const cats = Array.isArray(item.categories)
+      ? item.categories.map(c => String(c).toLowerCase()) : [];
+    if (!cats.some(c => CATEGORIES_FILTER.some(f => c.includes(f)))) return false;
+  }
+  return true;
+}
+
+// Candidatos válidos (todos los que pasan filtros base)
+const candidates = [];
+for (const item of sorted) {
+  const normalizedPrompt = normalizePrompt(item.prompt);
+  if (!passesBaseFilters(item, normalizedPrompt)) continue;
+
+  // Excluir sourceIds ya publicados en la galería
+  if (item.id && publishedSourceIds.has(String(item.id))) { skippedPublished++; continue; }
+
+  const fingerprint = normalizedPrompt.toLowerCase().slice(0, 500);
+  if (seenFingerprints.has(fingerprint)) { skippedDuplicate++; continue; }
+  seenFingerprints.add(fingerprint);
+
+  candidates.push(buildItem(item, normalizedPrompt));
+}
+
+// Si hay --focus, ordenar poniendo primero las categorías prioritarias
+let pool = candidates;
+if (FOCUS_CATEGORIES.length > 0) {
+  const focused = candidates.filter(c => FOCUS_CATEGORIES.includes(c.category));
+  const rest    = candidates.filter(c => !FOCUS_CATEGORIES.includes(c.category));
+  pool = [...focused, ...rest];
+}
+
+// Aplicar offset y limit
+const prepared = pool.slice(OFFSET, OFFSET + LIMIT);
+skippedOffset  = OFFSET;
 
 // Stats por categoría
 const catStats = {};
@@ -450,12 +461,15 @@ Object.entries(catStats).sort((a,b) => b[1]-a[1]).forEach(([cat, n]) => {
 });
 console.log('');
 console.log('Descartados:');
+console.log(`  Ya publicados           : ${skippedPublished}`);
 console.log(`  Religiosos/inapropiados : ${skippedExcluded}`);
 console.log(`  No comerciales          : ${skippedNonCommercial}`);
 console.log(`  Placeholders/negativos  : ${skippedPlaceholder}`);
 console.log(`  Duplicados              : ${skippedDuplicate}`);
 if (OFFSET > 0)
 console.log(`  Saltados por offset     : ${skippedOffset}`);
+if (FOCUS_CATEGORIES.length > 0)
+console.log(`  Foco aplicado           : ${FOCUS_CATEGORIES.join(', ')}`);
 console.log('');
 console.log('Siguiente paso:');
 console.log(`  Revisa prepared-prompts.json y luego envía el batch.`);
