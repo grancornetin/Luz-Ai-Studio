@@ -129,6 +129,11 @@ async function processJob(jobId: string, parts: any[]): Promise<void> {
 
     throw new Error(`El modelo no generó imagen (finishReason: ${finishReason}). Reformula el prompt.`);
   } catch (err: any) {
+    // Marcar gemini como DOWN si es rate limit de Vertex
+    if (err.message?.includes('RESOURCE_EXHAUSTED') || err.message?.includes('429')) {
+      await redis.set('circuit:gemini', 'down', { ex: 60 * 60 * 2 });
+      console.warn(`[ImageWorker] Rate limit Vertex — circuit gemini abierto por 2h`);
+    }
     job.status    = 'failed';
     job.error     = err.message || 'Flash model failed';
     job.updatedAt = Date.now();

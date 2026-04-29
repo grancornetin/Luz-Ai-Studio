@@ -62,6 +62,41 @@ async function getJob(jobId: string): Promise<ImageJob | null> {
 
 import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, getBatchImageRatelimit, checkRateLimit, sanitizeUid } from '../_middleware.js';
 
+// ─── Circuit breaker ──────────────────────────────────────────────────────────
+// Cuando un proveedor agota su cuota, se marca en Redis por 2h.
+// El orchestrator elige el primer proveedor disponible automáticamente.
+const CIRCUIT_TTL = 60 * 60 * 2; // 2 horas
+
+async function isProviderDown(provider: string): Promise<boolean> {
+  try {
+    const val = await redis.get(`circuit:${provider}`);
+    return val === 'down';
+  } catch { return false; }
+}
+
+export async function markProviderDown(provider: string): Promise<void> {
+  try {
+    await redis.set(`circuit:${provider}`, 'down', { ex: CIRCUIT_TTL });
+    console.warn(`[Circuit] ${provider} marcado como DOWN por ${CIRCUIT_TTL / 3600}h`);
+  } catch {}
+}
+
+export async function markProviderUp(provider: string): Promise<void> {
+  try {
+    await redis.del(`circuit:${provider}`);
+  } catch {}
+}
+
+// Elige el mejor proveedor disponible según preferencia del usuario y estado del circuit
+async function resolveProvider(requestedModel: string): Promise<'gemini' | 'seedream'> {
+  const preferred  = requestedModel === 'seedream' ? ['seedream', 'gemini'] : ['gemini', 'seedream'];
+  for (const p of preferred) {
+    if (!(await isProviderDown(p))) return p as 'gemini' | 'seedream';
+  }
+  // Todos caídos — intentar igual con el preferido (puede haberse recuperado)
+  return preferred[0] as 'gemini' | 'seedream';
+}
+
 // ─── Handler ──────────────────────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setSecurityHeaders(res);
@@ -135,16 +170,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         module: moduleName,
       };
 
-      const isSeedream = modelId === 'seedream';
+      // Elegir proveedor disponible (circuit breaker automático)
+      const resolvedModel = await resolveProvider(modelId);
+      const isSeedream    = resolvedModel === 'seedream';
 
-      // Guardar parts en Redis para ambos modelos — Seedream también los usa
-      // para extraer las referencias de imagen en formato base64
+      // Guardar parts en Redis para ambos modelos
       await Promise.all([
         saveJob(job),
         redis.set(`img_parts:${jobId}`, JSON.stringify(parts), { ex: 3600 }),
+        // Guardar el modelo resuelto para que el cliente sepa cuál se usó
+        redis.set(`img_model:${jobId}`, resolvedModel, { ex: 3600 }),
       ]);
 
-      // Enrutar al worker según el modelo seleccionado
+      // Enrutar al worker según el modelo disponible
       let workerUrl: string;
       let workerBody: Record<string, unknown>;
 
@@ -162,7 +200,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         retries: 2,
       });
 
-      console.log(`[Image] Job ${jobId} enqueued model=${isSeedream ? 'seedream' : 'gemini'} (module: ${moduleName || 'unknown'}) → ${workerUrl}`);
+      console.log(`[Image] Job ${jobId} enqueued model=${resolvedModel}${resolvedModel !== modelId ? ` (fallback desde ${modelId})` : ''} (module: ${moduleName || 'unknown'})`);
       return res.status(202).json({
         success: true,
         jobId,

@@ -192,6 +192,14 @@ async function processSeedreamJob(
 
     if (!startRes.ok) {
       const errText = await startRes.text().catch(() => '');
+      // Marcar seedream como DOWN en el circuit breaker si es rate limit
+      if (startRes.status === 429 || startRes.status === 500) {
+        const isRateLimit = errText.includes('rate limit') || errText.includes('Rate limit') || errText.includes('daily');
+        if (isRateLimit) {
+          await redis.set('circuit:seedream', 'down', { ex: 60 * 60 * 2 });
+          console.warn(`[SeedreamWorker] Rate limit detectado — circuit seedream abierto por 2h`);
+        }
+      }
       throw new Error(`EvoLink start failed ${startRes.status}: ${errText}`);
     }
 
