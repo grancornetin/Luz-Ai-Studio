@@ -1,11 +1,11 @@
-// api/gemini/gpt-image-worker.ts
-// Worker de GPT Image 2 vía EvoLink.
+// api/gemini/evolink-worker.ts
+// Worker unificado para todos los modelos EvoLink (Seedream 4.5, GPT Image 2, etc.)
 // Llamado exclusivamente por QStash — nunca por el cliente directamente.
 //
 // Flujo:
-//   1. Recibe { jobId, prompt, aspectRatio } desde QStash
-//   2. POST a EvoLink /images/generations (model: gpt-image-2-beta) → obtiene task_id
-//   3. Polling a EvoLink /tasks/{task_id} hasta completed (máx 45 intentos × 3s)
+//   1. Recibe { jobId, prompt, aspectRatio, modelProvider } desde QStash
+//   2. POST a EvoLink /images/generations con el model ID correspondiente
+//   3. Polling a EvoLink /tasks/{task_id} hasta completed
 //   4. Descarga la imagen y la convierte a data URL base64
 //   5. Actualiza Redis img_job:{jobId} con resultado
 
@@ -26,12 +26,14 @@ const receiver = new Receiver({
 });
 
 // ─── EvoLink config ───────────────────────────────────────────────────────────
-const EVOLINK_BASE_URL    = process.env.EVOLINK_BASE_URL || 'https://api.evolink.ai/v1';
-const EVOLINK_API_KEY     = process.env.EVOLINK_API_KEY  || '';
-const GPT_IMAGE_MODEL_ID  = process.env.GPT_IMAGE_MODEL_ID || 'gpt-image-2-beta';
+const EVOLINK_BASE_URL   = process.env.EVOLINK_BASE_URL  || 'https://api.evolink.ai/v1';
+const EVOLINK_API_KEY    = process.env.EVOLINK_API_KEY   || '';
+const SEEDREAM_MODEL_ID  = process.env.SEEDREAM_MODEL_ID || 'doubao-seedream-4.5';
+const GPT_IMAGE_MODEL_ID = process.env.GPT_IMAGE_MODEL_ID || 'gpt-image-2-beta';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
-type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
+type JobStatus      = 'pending' | 'processing' | 'completed' | 'failed';
+type ModelProvider  = 'seedream' | 'gptimage';
 
 interface ImageJob {
   id:          string;
@@ -44,6 +46,30 @@ interface ImageJob {
   totalShots?: number;
   module?:     string;
 }
+
+// ─── Config por proveedor ─────────────────────────────────────────────────────
+const PROVIDER_CONFIG: Record<ModelProvider, {
+  modelId:     string;
+  maxRefs:     number;
+  pollDelayMs: number;
+  maxAttempts: number;
+  circuitKey:  string;
+}> = {
+  seedream: {
+    modelId:     SEEDREAM_MODEL_ID,
+    maxRefs:     5,
+    pollDelayMs: 2000,
+    maxAttempts: 45,
+    circuitKey:  'circuit:seedream',
+  },
+  gptimage: {
+    modelId:     GPT_IMAGE_MODEL_ID,
+    maxRefs:     16,
+    pollDelayMs: 3000,
+    maxAttempts: 45,
+    circuitKey:  'circuit:gptimage',
+  },
+};
 
 // ─── Helpers Redis ────────────────────────────────────────────────────────────
 async function saveJob(job: ImageJob): Promise<void> {
@@ -61,8 +87,8 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// ─── Mapeo de aspectRatio al formato que acepta GPT Image 2 ──────────────────
-function toGptImageSize(aspectRatio: string): string {
+// ─── Mapeo de aspectRatio ─────────────────────────────────────────────────────
+function toEvolinkSize(aspectRatio: string): string {
   const map: Record<string, string> = {
     '1:1':  '1:1',
     '3:4':  '3:4',
@@ -74,15 +100,17 @@ function toGptImageSize(aspectRatio: string): string {
 }
 
 // ─── Extrae referencias de imagen desde los parts guardados en Redis ──────────
+// UGC Studio envía face duplicada para ponderar en Gemini — con EvoLink
+// deduplicamos para no enviar referencias repetidas.
 function extractReferenceDataUrls(parts: any[]): string[] {
   const refs: string[] = [];
   const seen = new Set<string>();
 
   for (const part of parts) {
     if (part?.inlineData?.data) {
-      const mime      = part.inlineData.mimeType || 'image/jpeg';
-      const trimmed   = part.inlineData.data;
-      const mid       = Math.floor(trimmed.length / 2);
+      const mime    = part.inlineData.mimeType || 'image/jpeg';
+      const trimmed = part.inlineData.data;
+      const mid     = Math.floor(trimmed.length / 2);
       const fingerprint = [
         trimmed.length,
         trimmed.slice(0, 80),
@@ -99,14 +127,18 @@ function extractReferenceDataUrls(parts: any[]): string[] {
 }
 
 // ─── Lógica principal ─────────────────────────────────────────────────────────
-async function processGptImageJob(
-  jobId: string,
-  prompt: string,
-  aspectRatio: string,
+async function processEvolinkJob(
+  jobId:         string,
+  prompt:        string,
+  aspectRatio:   string,
+  modelProvider: ModelProvider,
 ): Promise<void> {
+  const config = PROVIDER_CONFIG[modelProvider];
+  const tag    = `[EvolinkWorker:${modelProvider} ${jobId}]`;
+
   const job = await getJob(jobId);
   if (!job) {
-    console.error(`[GptImageWorker] Job ${jobId} not found in Redis`);
+    console.error(`${tag} Job not found in Redis`);
     return;
   }
 
@@ -119,7 +151,7 @@ async function processGptImageJob(
     job.error     = 'EVOLINK_API_KEY not configured in environment variables';
     job.updatedAt = Date.now();
     await saveJob(job);
-    console.error(`[GptImageWorker ${jobId}] Missing EVOLINK_API_KEY env var`);
+    console.error(`${tag} Missing EVOLINK_API_KEY env var`);
     return;
   }
 
@@ -130,30 +162,34 @@ async function processGptImageJob(
     if (rawParts) {
       const parts = typeof rawParts === 'string' ? JSON.parse(rawParts) : rawParts;
       referenceDataUrls = extractReferenceDataUrls(parts);
-      console.log(`[GptImageWorker ${jobId}] Found ${referenceDataUrls.length} reference image(s)`);
+      console.log(`${tag} Found ${referenceDataUrls.length} reference image(s)`);
     }
   } catch (e) {
-    console.warn(`[GptImageWorker ${jobId}] Could not read img_parts from Redis:`, e);
+    console.warn(`${tag} Could not read img_parts from Redis:`, e);
   }
 
-  // GPT Image 2 acepta hasta 16 referencias
-  const MAX_REFS    = 16;
-  const refsToSend  = referenceDataUrls.slice(0, MAX_REFS);
+  const refsToSend = referenceDataUrls.slice(0, config.maxRefs);
 
   const evolinkBody: Record<string, unknown> = {
-    model:      GPT_IMAGE_MODEL_ID,
+    model:  config.modelId,
     prompt,
-    size:       toGptImageSize(aspectRatio),
-    resolution: '1K',
+    size:   toEvolinkSize(aspectRatio),
   };
 
+  // GPT Image 2 soporta parámetro resolution; Seedream lo ignora si se lo pasamos
+  if (modelProvider === 'gptimage') {
+    evolinkBody.resolution = '1K';
+  }
+
+  // CRÍTICO: no mezclar image_url + image_urls — algunos gateways priorizan
+  // image_url e ignoran el array, dejando outfit/producto sin efecto.
   if (refsToSend.length === 1) {
-    evolinkBody.image_urls = refsToSend;
+    evolinkBody.image_url = refsToSend[0];
   } else if (refsToSend.length > 1) {
     evolinkBody.image_urls = refsToSend;
   }
 
-  console.log(`[GptImageWorker ${jobId}] Sending ${refsToSend.length} refs, model=${GPT_IMAGE_MODEL_ID}`);
+  console.log(`${tag} Sending ${refsToSend.length} refs, model=${config.modelId}`);
 
   let taskId: string;
   try {
@@ -171,8 +207,8 @@ async function processGptImageJob(
       if (startRes.status === 429 || startRes.status === 500) {
         const isRateLimit = errText.includes('rate limit') || errText.includes('Rate limit') || errText.includes('daily');
         if (isRateLimit) {
-          await redis.set('circuit:gptimage', 'down', { ex: 60 * 60 * 2 });
-          console.warn(`[GptImageWorker] Rate limit detectado — circuit gptimage abierto por 2h`);
+          await redis.set(config.circuitKey, 'down', { ex: 60 * 60 * 2 });
+          console.warn(`${tag} Rate limit detectado — circuit abierto por 2h`);
         }
       }
       throw new Error(`EvoLink start failed ${startRes.status}: ${errText}`);
@@ -182,7 +218,7 @@ async function processGptImageJob(
     taskId = startData.id || startData.task_id;
     if (!taskId) throw new Error('EvoLink returned no task_id');
 
-    console.log(`[GptImageWorker ${jobId}] EvoLink task started: ${taskId}`);
+    console.log(`${tag} EvoLink task started: ${taskId}`);
   } catch (err: any) {
     job.status    = 'failed';
     job.error     = `EvoLink start error: ${err.message}`;
@@ -191,13 +227,9 @@ async function processGptImageJob(
     return;
   }
 
-  // ── Polling hasta completed ───────────────────────────────────────────────
-  // GPT Image 2 es más lento que Seedream — usamos 3s entre polls
-  const MAX_ATTEMPTS  = 45;   // 45 × 3s = 135s máximo
-  const POLL_DELAY_MS = 3000;
-
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    await sleep(POLL_DELAY_MS);
+  // ── Polling ───────────────────────────────────────────────────────────────
+  for (let attempt = 0; attempt < config.maxAttempts; attempt++) {
+    await sleep(config.pollDelayMs);
 
     let taskData: any;
     try {
@@ -211,12 +243,12 @@ async function processGptImageJob(
       }
       taskData = await pollRes.json();
     } catch (err: any) {
-      console.warn(`[GptImageWorker ${jobId}] Poll attempt ${attempt + 1} error: ${err.message}`);
+      console.warn(`${tag} Poll attempt ${attempt + 1} error: ${err.message}`);
       continue;
     }
 
     const status = taskData.status;
-    console.log(`[GptImageWorker ${jobId}] Attempt ${attempt + 1}: status=${status}`);
+    console.log(`${tag} Attempt ${attempt + 1}: status=${status}`);
 
     if (status === 'completed' || status === 'succeeded') {
       const imageUrl: string | undefined =
@@ -249,7 +281,7 @@ async function processGptImageJob(
         job.updatedAt = Date.now();
         await saveJob(job);
         await redis.del(`img_parts:${jobId}`).catch(() => {});
-        console.log(`[GptImageWorker ${jobId}] Completed successfully`);
+        console.log(`${tag} Completed successfully`);
       } catch (err: any) {
         job.status    = 'failed';
         job.error     = `Image download error: ${err.message}`;
@@ -265,16 +297,16 @@ async function processGptImageJob(
       job.error     = errMsg;
       job.updatedAt = Date.now();
       await saveJob(job);
-      console.error(`[GptImageWorker ${jobId}] EvoLink task failed: ${errMsg}`);
+      console.error(`${tag} EvoLink task failed: ${errMsg}`);
       return;
     }
   }
 
   job.status    = 'failed';
-  job.error     = `EvoLink timeout after ${MAX_ATTEMPTS * POLL_DELAY_MS / 1000}s`;
+  job.error     = `EvoLink timeout after ${config.maxAttempts * config.pollDelayMs / 1000}s`;
   job.updatedAt = Date.now();
   await saveJob(job);
-  console.error(`[GptImageWorker ${jobId}] Timeout`);
+  console.error(`${tag} Timeout`);
 }
 
 // ─── Handler principal ────────────────────────────────────────────────────────
@@ -283,27 +315,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const signature = req.headers['upstash-signature'] as string;
   if (!signature) {
-    console.error('[GptImageWorker] Missing upstash-signature');
+    console.error('[EvolinkWorker] Missing upstash-signature');
     return res.status(401).json({ error: 'Missing signature' });
   }
 
   try {
     await receiver.verify({ signature, body: JSON.stringify(req.body) });
   } catch {
-    console.error('[GptImageWorker] Invalid QStash signature');
+    console.error('[EvolinkWorker] Invalid QStash signature');
     return res.status(401).json({ error: 'Invalid signature' });
   }
 
-  const { jobId, prompt, aspectRatio = '1:1' } = req.body;
+  const { jobId, prompt, aspectRatio = '1:1', modelProvider = 'seedream' } = req.body;
   if (!jobId || !prompt) {
     return res.status(400).json({ error: 'Missing jobId or prompt' });
   }
 
+  if (modelProvider !== 'seedream' && modelProvider !== 'gptimage') {
+    return res.status(400).json({ error: `Unknown modelProvider: ${modelProvider}` });
+  }
+
   try {
-    await processGptImageJob(jobId, prompt, aspectRatio);
+    await processEvolinkJob(jobId, prompt, aspectRatio, modelProvider as ModelProvider);
     return res.status(200).json({ ok: true, jobId });
   } catch (err: any) {
-    console.error(`[GptImageWorker] Unhandled error for ${jobId}:`, err.message);
+    console.error(`[EvolinkWorker] Unhandled error for ${jobId}:`, err.message);
     return res.status(500).json({ error: err.message });
   }
 }

@@ -6,10 +6,7 @@
     "api/gemini/ugc-worker.ts": {
       "maxDuration": 60
     },
-    "api/gemini/seedream-worker.ts": {
-      "maxDuration": 120
-    },
-    "api/gemini/gpt-image-worker.ts": {
+    "api/gemini/evolink-worker.ts": {
       "maxDuration": 150
     },
     "api/avatar/clone-worker.ts": {

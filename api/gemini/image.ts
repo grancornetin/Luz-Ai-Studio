@@ -196,11 +196,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let workerBody: Record<string, unknown>;
 
       if (isSeedream) {
-        workerUrl  = `${process.env.WORKER_BASE_URL}/api/gemini/seedream-worker`;
-        workerBody = { jobId, prompt, aspectRatio };
+        workerUrl  = `${process.env.WORKER_BASE_URL}/api/gemini/evolink-worker`;
+        workerBody = { jobId, prompt, aspectRatio, modelProvider: 'seedream' };
       } else if (isGptImage) {
-        workerUrl  = `${process.env.WORKER_BASE_URL}/api/gemini/gpt-image-worker`;
-        workerBody = { jobId, prompt, aspectRatio };
+        workerUrl  = `${process.env.WORKER_BASE_URL}/api/gemini/evolink-worker`;
+        workerBody = { jobId, prompt, aspectRatio, modelProvider: 'gptimage' };
       } else {
         workerUrl  = `${process.env.WORKER_BASE_URL}/api/gemini/image-worker`;
         workerBody = { jobId };
