@@ -22,13 +22,14 @@ export const MODEL_LOCATIONS: Record<string, string> = {
 };
 
 // ── COSTO POR MODELO ─────────────────────────────────────────────────────────
-export const MODEL_CREDIT_COST: Record<'gemini' | 'seedream', number> = {
+export const MODEL_CREDIT_COST: Record<'gemini' | 'seedream' | 'gptimage', number> = {
   gemini:   2,   // Nano Banana 2 — 2 créditos/imagen
   seedream: 1,   // Seedream 4.5  — 1 crédito/imagen
+  gptimage: 2,   // GPT Image 2   — 2 créditos/imagen
 };
 
 /** Devuelve el costo en créditos de N imágenes según el modelo activo. */
-export function imageCost(images: number, modelId: 'gemini' | 'seedream' = 'gemini'): number {
+export function imageCost(images: number, modelId: 'gemini' | 'seedream' | 'gptimage' = 'gemini'): number {
   return images * MODEL_CREDIT_COST[modelId];
 }
 

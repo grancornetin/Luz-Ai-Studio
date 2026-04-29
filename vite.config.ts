@@ -20,6 +20,15 @@ export default defineConfig({
       '@': path.resolve(__dirname, '.'),
     },
   },
-  // Ya NO se expone ninguna API key al browser
-  // Todas las llamadas a IA pasan por /api/gemini/*
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 1000,
+  },
 });

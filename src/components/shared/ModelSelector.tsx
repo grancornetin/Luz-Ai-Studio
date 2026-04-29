@@ -2,7 +2,7 @@
 // Selector de modelo de generación de imágenes.
 
 import React from 'react';
-import { Zap } from 'lucide-react';
+import { Zap, Sparkles } from 'lucide-react';
 import type { ModelId } from '../../services/imageApiService';
 
 interface ModelSelectorProps {
@@ -42,6 +42,15 @@ const MODELS: {
     icon:    <Zap className="w-4 h-4" />,
     color:   'text-emerald-600',
     ring:    'ring-emerald-500 bg-emerald-50 border-emerald-200',
+  },
+  {
+    id:      'gptimage',
+    label:   'GPT Image 2',
+    desc:    'Alta creatividad, prompts complejos',
+    credits: 2,
+    icon:    <Sparkles className="w-4 h-4" />,
+    color:   'text-violet-600',
+    ring:    'ring-violet-500 bg-violet-50 border-violet-200',
   },
 ];
 
@@ -89,7 +98,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               </p>
             </div>
             {active && (
-              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${m.id === 'gemini' ? 'bg-yellow-400' : 'bg-emerald-400'} animate-pulse`} />
+              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${m.id === 'gemini' ? 'bg-yellow-400' : m.id === 'gptimage' ? 'bg-violet-400' : 'bg-emerald-400'} animate-pulse`} />
             )}
           </button>
         );

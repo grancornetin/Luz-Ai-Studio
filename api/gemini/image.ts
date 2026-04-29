@@ -88,13 +88,20 @@ export async function markProviderUp(provider: string): Promise<void> {
 }
 
 // Elige el mejor proveedor disponible según preferencia del usuario y estado del circuit
-async function resolveProvider(requestedModel: string): Promise<'gemini' | 'seedream'> {
-  const preferred  = requestedModel === 'seedream' ? ['seedream', 'gemini'] : ['gemini', 'seedream'];
+async function resolveProvider(requestedModel: string): Promise<'gemini' | 'seedream' | 'gptimage'> {
+  let preferred: string[];
+  if (requestedModel === 'seedream') {
+    preferred = ['seedream', 'gemini', 'gptimage'];
+  } else if (requestedModel === 'gptimage') {
+    preferred = ['gptimage', 'gemini', 'seedream'];
+  } else {
+    preferred = ['gemini', 'gptimage', 'seedream'];
+  }
   for (const p of preferred) {
-    if (!(await isProviderDown(p))) return p as 'gemini' | 'seedream';
+    if (!(await isProviderDown(p))) return p as 'gemini' | 'seedream' | 'gptimage';
   }
   // Todos caídos — intentar igual con el preferido (puede haberse recuperado)
-  return preferred[0] as 'gemini' | 'seedream';
+  return preferred[0] as 'gemini' | 'seedream' | 'gptimage';
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -118,7 +125,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         totalShots,
         module: moduleName,
         uid: rawUid,
-        modelId = 'gemini',   // 'gemini' | 'seedream'
+        modelId = 'gemini',   // 'gemini' | 'seedream' | 'gptimage'
       } = payload;
 
       if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
@@ -127,6 +134,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // Rate limiting — batch importer tiene su propio bucket sin límite práctico
       const isBatch = moduleName === 'batch_prompt_importer';
+      if (!isBatch && !rawUid) return res.status(401).json({ error: 'Unauthorized' });
       const rlKey   = isBatch ? 'batch_importer' : (rawUid ? sanitizeUid(rawUid) : (req.headers['x-forwarded-for'] as string || 'unknown'));
       const limiter = isBatch ? getBatchImageRatelimit() : getImageRatelimit();
       const allowed = await checkRateLimit(limiter, rlKey, res);
@@ -173,8 +181,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Elegir proveedor disponible (circuit breaker automático)
       const resolvedModel = await resolveProvider(modelId);
       const isSeedream    = resolvedModel === 'seedream';
+      const isGptImage    = resolvedModel === 'gptimage';
 
-      // Guardar parts en Redis para ambos modelos
+      // Guardar parts en Redis para todos los modelos
       await Promise.all([
         saveJob(job),
         redis.set(`img_parts:${jobId}`, JSON.stringify(parts), { ex: 3600 }),
@@ -188,6 +197,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (isSeedream) {
         workerUrl  = `${process.env.WORKER_BASE_URL}/api/gemini/seedream-worker`;
+        workerBody = { jobId, prompt, aspectRatio };
+      } else if (isGptImage) {
+        workerUrl  = `${process.env.WORKER_BASE_URL}/api/gemini/gpt-image-worker`;
         workerBody = { jobId, prompt, aspectRatio };
       } else {
         workerUrl  = `${process.env.WORKER_BASE_URL}/api/gemini/image-worker`;

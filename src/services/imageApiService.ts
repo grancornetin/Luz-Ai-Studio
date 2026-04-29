@@ -85,7 +85,7 @@ export function parseErrorCode(raw: string): AppError {
   return { code: ErrorCode.UNKNOWN, message: raw || 'Ocurrió un error inesperado. Intenta de nuevo.' };
 }
 
-export type ModelId = 'gemini' | 'seedream';
+export type ModelId = 'gemini' | 'seedream' | 'gptimage';
 
 export interface GenerateImageParams {
   prompt:           string;
@@ -95,7 +95,7 @@ export interface GenerateImageParams {
   shotIndex?:       number;
   totalShots?:      number;
   module?:          string;   // trazabilidad en logs
-  modelId?:         ModelId;  // 'gemini' (default) | 'seedream'
+  modelId?:         ModelId;  // 'gemini' (default) | 'seedream' | 'gptimage'
   onStatusChange?:  (status: ImageJobStatus, image?: string, shotIndex?: number) => void;
 }
 

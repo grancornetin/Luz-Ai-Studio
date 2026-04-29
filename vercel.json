@@ -9,6 +9,9 @@
     "api/gemini/seedream-worker.ts": {
       "maxDuration": 120
     },
+    "api/gemini/gpt-image-worker.ts": {
+      "maxDuration": 150
+    },
     "api/avatar/clone-worker.ts": {
       "maxDuration": 300
     },
@@ -26,5 +29,16 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com https://qstash.upstash.io https://api.dodo.com https://checkout.dodo.com; frame-src 'none';"
+        }
+      ]
+    }
   ]
 }

@@ -1,40 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { LogOut, User as UserIcon, Menu, X } from 'lucide-react';
 
-// Vistas y Módulos
-import Landing from './views/Landing';
-import Dashboard from './views/Dashboard';
-import CloningModule from './modules/CloningModule';
-import ManualCreatorModule from './modules/ManualCreatorModule';
-import ProductGeneratorModule from './modules/ProductGeneratorModule';
-import AvatarLibrary from './components/AvatarLibrary';
-import ContentStudioProModule from './modules/contentStudioPro/ContentStudioProModule';
-import OutfitExtractorModule from './modules/outfitExtractor/OutfitExtractorModule';
-import CloneImageModule from './modules/CloneImageModule';
-import GenerationHistory from './views/GenerationHistory';
-import PoliticaPrivacidad from './views/PoliticaPrivacidad';
-import TerminosUso from './views/TerminosUso';
-import Descargo from './views/Descargo';
+// Vistas y Módulos — carga diferida para reducir bundle inicial
+const Landing               = lazy(() => import('./views/Landing'));
+const Dashboard             = lazy(() => import('./views/Dashboard'));
+const CloningModule         = lazy(() => import('./modules/CloningModule'));
+const ManualCreatorModule   = lazy(() => import('./modules/ManualCreatorModule'));
+const ProductGeneratorModule = lazy(() => import('./modules/ProductGeneratorModule'));
+const AvatarLibrary         = lazy(() => import('./components/AvatarLibrary'));
+const ContentStudioProModule = lazy(() => import('./modules/contentStudioPro/ContentStudioProModule'));
+const OutfitExtractorModule = lazy(() => import('./modules/outfitExtractor/OutfitExtractorModule'));
+const CloneImageModule      = lazy(() => import('./modules/CloneImageModule'));
+const GenerationHistory     = lazy(() => import('./views/GenerationHistory'));
+const PoliticaPrivacidad    = lazy(() => import('./views/PoliticaPrivacidad'));
+const TerminosUso           = lazy(() => import('./views/TerminosUso'));
+const Descargo              = lazy(() => import('./views/Descargo'));
+const PromptGalleryView     = lazy(() => import('./views/PromptGalleryView'));
+const PromptStudioView      = lazy(() => import('./views/PromptStudioView'));
+const ProjectsList          = lazy(() => import('./modules/projects/ProjectsList'));
+const ProjectDetail         = lazy(() => import('./modules/projects/ProjectDetail'));
+const BatchProgressPanel    = lazy(() => import('./modules/admin/BatchProgressPanel'));
+const Pricing               = lazy(() => import('./views/Pricing'));
+const BuyCredits            = lazy(() => import('./views/BuyCredits'));
+const Contacto              = lazy(() => import('./views/Contacto'));
+const AccountSettings       = lazy(() => import('./views/AccountSettings'));
+const CheckoutSuccess       = lazy(() => import('./views/CheckoutSuccess'));
+const CheckoutCancel        = lazy(() => import('./views/CheckoutCancel'));
 
-// NUEVAS VISTAS PARA PROMPT LIBRARY
-import PromptGalleryView from './views/PromptGalleryView';
-import PromptStudioView from './views/PromptStudioView';
-
-// PROYECTOS
-import ProjectsList from './modules/projects/ProjectsList';
-import ProjectDetail from './modules/projects/ProjectDetail';
-
-// ADMIN
-import BatchProgressPanel from './modules/admin/BatchProgressPanel';
-
-// PRECIOS Y CRÉDITOS
-import Pricing from './views/Pricing';
-import BuyCredits from './views/BuyCredits';
-import Contacto from './views/Contacto';
-import AccountSettings from './views/AccountSettings';
-import CheckoutSuccess from './views/CheckoutSuccess';
-import CheckoutCancel from './views/CheckoutCancel';
+const LazyFallback = (
+  <div className="flex items-center justify-center h-screen">
+    <div className="animate-spin w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full" />
+  </div>
+);
 
 // Servicios y Contexto
 import { dbService } from './services/dbService';
@@ -325,6 +323,7 @@ const AppContent: React.FC = () => {
     );
 
   return (
+    <Suspense fallback={LazyFallback}>
     <Routes>
       {/* Rutas públicas */}
       <Route path="/" element={landingElement} />
@@ -385,6 +384,7 @@ const AppContent: React.FC = () => {
         </ProtectedRoute>
       } />
     </Routes>
+    </Suspense>
   );
 };
 

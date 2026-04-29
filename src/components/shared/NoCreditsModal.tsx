@@ -1,44 +1,40 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { X, Zap, ArrowRight, Crown } from 'lucide-react';
-
-// ──────────────────────────────────────────
-// NoCreditsModal
-// Se muestra cuando el usuario intenta generar
-// sin tener suficientes créditos.
-// ──────────────────────────────────────────
+import { PLANS as CONFIG_PLANS } from '../../services/creditConfig';
 
 interface NoCreditsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  required?: number;   // Cuántos créditos necesita la acción
-  available?: number;  // Cuántos tiene disponibles
+  required?: number;
+  available?: number;
 }
 
 const PLANS = [
   {
     id: 'starter',
-    label: 'Starter',
-    price: '$9.99',
-    credits: 240,
-    images: '~120',
+    label: CONFIG_PLANS.starter.label,
+    price: `$${CONFIG_PLANS.starter.priceMonthly}`,
+    credits: CONFIG_PLANS.starter.credits,
+    images: CONFIG_PLANS.starter.approxImages,
     color: 'bg-brand-600',
     highlight: false,
   },
   {
     id: 'pro',
-    label: 'Pro',
-    price: '$19.99',
-    credits: 600,
-    images: '~300',
+    label: CONFIG_PLANS.pro.label,
+    price: `$${CONFIG_PLANS.pro.priceMonthly}`,
+    credits: CONFIG_PLANS.pro.credits,
+    images: CONFIG_PLANS.pro.approxImages,
     color: 'bg-brand-600',
     highlight: true,
   },
   {
     id: 'studio',
-    label: 'Studio',
-    price: '$39.99',
-    credits: 1500,
-    images: '~750',
+    label: CONFIG_PLANS.studio.label,
+    price: `$${CONFIG_PLANS.studio.priceMonthly}`,
+    credits: CONFIG_PLANS.studio.credits,
+    images: CONFIG_PLANS.studio.approxImages,
     color: 'bg-violet-600',
     highlight: false,
   },
@@ -50,6 +46,7 @@ const NoCreditsModal: React.FC<NoCreditsModalProps> = ({
   required = 1,
   available = 0,
 }) => {
+  const navigate = useNavigate();
   if (!isOpen) return null;
 
   return (
@@ -97,6 +94,7 @@ const NoCreditsModal: React.FC<NoCreditsModalProps> = ({
             {PLANS.map(plan => (
               <div
                 key={plan.id}
+                onClick={() => { onClose(); navigate('/pricing'); }}
                 className={`relative flex items-center justify-between p-4 rounded-2xl border-2 transition-all cursor-pointer ${
                   plan.highlight
                     ? 'border-brand-500 bg-brand-50'
@@ -128,13 +126,6 @@ const NoCreditsModal: React.FC<NoCreditsModalProps> = ({
                 </div>
               </div>
             ))}
-          </div>
-
-          {/* NOTA PAGOS */}
-          <div className="bg-amber-50 border border-amber-100 rounded-2xl p-3.5">
-            <p className="text-[10px] font-bold text-amber-700 text-center leading-relaxed">
-              💳 Los pagos se habilitarán próximamente. Si necesitas créditos ahora, contacta al equipo de soporte.
-            </p>
           </div>
 
           <button

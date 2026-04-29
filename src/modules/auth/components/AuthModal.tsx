@@ -110,6 +110,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-modal-title"
         className="bg-white w-full max-w-md rounded-[32px] shadow-2xl overflow-hidden relative animate-in zoom-in-95 fade-in duration-200"
         onClick={e => e.stopPropagation()}
       >
@@ -126,7 +129,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             <div className="w-14 h-14 bg-brand-600 rounded-2xl flex items-center justify-center shadow-xl shadow-brand-200 mx-auto mb-5">
               <i className="fa-solid fa-bolt text-white text-2xl"></i>
             </div>
-            <h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase italic">
+            <h2 id="auth-modal-title" className="text-2xl font-black text-slate-800 tracking-tight uppercase italic">
               {TITLES[mode]}
             </h2>
             <p className="text-slate-500 text-sm mt-1.5 font-medium">

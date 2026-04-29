@@ -63,13 +63,13 @@ export const GenerateButton: React.FC<GenerateButtonProps> = ({
             <span>{label}</span>
             <span className="flex items-center gap-1 bg-white/20 rounded-xl px-2 py-0.5">
               <Zap className="w-3 h-3 fill-current" />
-              <span className="text-[10px] font-black">{creditCost}</span>
+              <span className="text-xs font-black">{creditCost}</span>
             </span>
           </div>
 
           {/* Línea secundaria: créditos restantes (opcional) */}
           {showPreview && (
-            <div className="text-[9px] font-bold text-white/80">
+            <div className="text-xs font-bold text-white/80">
               → te quedarán {creditsAfter} créditos
             </div>
           )}
