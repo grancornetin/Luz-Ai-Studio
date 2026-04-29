@@ -15,7 +15,7 @@
     "api/batch.ts": {
       "maxDuration": 300
     },
-    "api/webhooks/lemonsqueezy.ts": {
+    "api/webhooks/dodopayments.ts": {
       "maxDuration": 10
     },
     "api/**/*.ts": {

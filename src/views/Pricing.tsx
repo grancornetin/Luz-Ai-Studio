@@ -4,7 +4,7 @@ import { Check, Zap, ArrowLeft, DollarSign } from 'lucide-react';
 import { PLANS, type PlanKey } from '../services/creditConfig';
 import { useCurrency } from '../hooks/useCurrency';
 import { useAuth } from '../modules/auth/AuthContext';
-import { buildCheckoutUrl, PLAN_TO_VARIANT, type VariantKey } from '../services/checkoutService';
+import { buildCheckoutUrl, PLAN_TO_PRODUCT, PLAN_TO_PRODUCT_YEARLY, type ProductKey } from '../services/checkoutService';
 
 const PLAN_ORDER: PlanKey[] = ['free', 'weekly', 'starter', 'pro', 'studio'];
 
@@ -27,12 +27,13 @@ export default function Pricing() {
 
   const handleSubscribe = (planId: string) => {
     if (planId === 'free') return;
-    const variantKey = PLAN_TO_VARIANT[planId] as VariantKey | undefined;
-    if (!variantKey || !user?.uid) {
+    const map = billing === 'annual' ? PLAN_TO_PRODUCT_YEARLY : PLAN_TO_PRODUCT;
+    const productKey = (map[planId] ?? PLAN_TO_PRODUCT[planId]) as ProductKey | undefined;
+    if (!productKey || !user?.uid) {
       alert('Inicia sesión para suscribirte.');
       return;
     }
-    const url = buildCheckoutUrl(variantKey, user.uid);
+    const url = buildCheckoutUrl(productKey, user.uid);
     window.open(url, '_blank');
   };
 

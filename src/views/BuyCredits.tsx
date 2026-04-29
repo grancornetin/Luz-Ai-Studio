@@ -4,7 +4,7 @@ import { Zap, ArrowLeft, DollarSign, TrendingDown } from 'lucide-react';
 import { TOP_UP_PACKAGES } from '../services/creditConfig';
 import { useCurrency } from '../hooks/useCurrency';
 import { useAuth } from '../modules/auth/AuthContext';
-import { buildCheckoutUrl, TOPUP_TO_VARIANT, type VariantKey } from '../services/checkoutService';
+import { buildCheckoutUrl, TOPUP_TO_PRODUCT, type ProductKey } from '../services/checkoutService';
 
 export default function BuyCredits() {
   const navigate         = useNavigate();
@@ -12,12 +12,12 @@ export default function BuyCredits() {
   const { currency, toggle, format } = useCurrency();
 
   const handleBuy = (pkgId: string) => {
-    const variantKey = TOPUP_TO_VARIANT[pkgId] as VariantKey | undefined;
-    if (!variantKey || !user?.uid) {
+    const productKey = TOPUP_TO_PRODUCT[pkgId] as ProductKey | undefined;
+    if (!productKey || !user?.uid) {
       alert('Inicia sesión para comprar créditos.');
       return;
     }
-    const url = buildCheckoutUrl(variantKey, user.uid);
+    const url = buildCheckoutUrl(productKey, user.uid);
     window.open(url, '_blank');
   };
 

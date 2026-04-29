@@ -46,9 +46,9 @@ const PoliticaPrivacidad: React.FC = () => {
         productos, outfits) se procesan a través de la API de Google Gemini y no se almacenan
         permanentemente en nuestros servidores. Se procesan en tiempo real para la generación
         de contenido.</p>
-        <p><strong>Información de pago:</strong> Los pagos son procesados por Lemon Squeezy, nuestro
+        <p><strong>Información de pago:</strong> Los pagos son procesados por Dodo Payments, nuestro
         procesador de pagos. LUZ IA no almacena datos de tarjetas de crédito ni información
-        bancaria. Consulta la política de privacidad de Lemon Squeezy para más detalles.</p>
+        bancaria. Consulta la política de privacidad de Dodo Payments para más detalles.</p>
         <p><strong>Datos técnicos:</strong> Podemos recopilar información sobre tu dispositivo,
         navegador, dirección IP y patrones de uso para mejorar el servicio.</p>
       </Section>
@@ -71,7 +71,7 @@ const PoliticaPrivacidad: React.FC = () => {
         <p><strong>Google (Firebase y Gemini API):</strong> Para autenticación, almacenamiento de
         datos y procesamiento de imágenes. Google tiene sus propias políticas de privacidad
         disponibles en policies.google.com.</p>
-        <p><strong>Lemon Squeezy:</strong> Para procesar pagos y gestionar suscripciones.
+        <p><strong>Dodo Payments:</strong> Para procesar pagos y gestionar suscripciones.
         Solo compartimos el correo electrónico y el ID de usuario necesarios para la
         transacción.</p>
         <p>En caso de requerimiento legal o judicial, podemos divulgar información a las

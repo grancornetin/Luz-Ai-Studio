@@ -65,7 +65,7 @@ const TerminosUso: React.FC = () => {
         <p><strong>Plan Free:</strong> 20 créditos únicos al registrarse, no se renuevan.</p>
         <p><strong>Planes de suscripción:</strong> Los créditos se renuevan mensualmente según
         el plan contratado. Los créditos no utilizados no se acumulan al siguiente mes.</p>
-        <p>Los pagos son procesados por <strong>Lemon Squeezy</strong> como merchant of record.
+        <p>Los pagos son procesados por <strong>Dodo Payments</strong> como merchant of record.
         Las suscripciones se renuevan automáticamente hasta que sean canceladas. Puedes
         cancelar en cualquier momento desde tu portal de cliente.</p>
         <p><strong>No realizamos reembolsos</strong> por créditos ya consumidos o por el período
