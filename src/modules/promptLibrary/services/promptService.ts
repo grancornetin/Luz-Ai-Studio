@@ -163,7 +163,7 @@ export const promptService = {
     const sortField = opts?.sortBy === 'likes' ? 'likes' : 'createdAt';
     constraints.push(orderBy('isFlagged'));
     constraints.push(orderBy(sortField, 'desc'));
-    constraints.push(limit(PAGE_SIZE));
+    constraints.push(limit(500));
 
     const q = query(collection(db, GLOBAL_PROMPTS), ...constraints);
 

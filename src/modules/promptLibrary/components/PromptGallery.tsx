@@ -62,9 +62,26 @@ const PromptGallery: React.FC<PromptGalleryProps> = ({
   const [visibleCount, setVisibleCount] = React.useState(ITEMS_PER_PAGE);
   const sortMenuRef = React.useRef<HTMLDivElement>(null);
   const topRef = React.useRef<HTMLDivElement>(null);
+  const sentinelRef = React.useRef<HTMLDivElement>(null);
 
   // Reset visibleCount cuando cambian filtros/búsqueda
   React.useEffect(() => { setVisibleCount(ITEMS_PER_PAGE); }, [searchQuery, activeTag, sortBy]);
+
+  // Scroll infinito: cuando el sentinel entra en viewport, carga más
+  React.useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount(c => c + ITEMS_PER_PAGE);
+        }
+      },
+      { rootMargin: '300px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [prompts]);
 
   React.useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -225,17 +242,8 @@ const PromptGallery: React.FC<PromptGalleryProps> = ({
             ))}
           </div>
 
-          {/* Cargar más */}
-          {hasMore && (
-            <div className="flex justify-center pt-4">
-              <button
-                onClick={() => setVisibleCount(c => c + ITEMS_PER_PAGE)}
-                className="px-8 py-3.5 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
-              >
-                Ver más ({prompts.length - visibleCount} restantes)
-              </button>
-            </div>
-          )}
+          {/* Sentinel invisible — dispara carga automática al hacer scroll */}
+          {hasMore && <div ref={sentinelRef} className="h-8" />}
 
           {/* Fin de galería */}
           {isAtEnd && prompts.length >= ITEMS_PER_PAGE && (
