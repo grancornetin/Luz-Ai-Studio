@@ -2,7 +2,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Redis } from '@upstash/redis';
 import { Client as QStashClient } from '@upstash/qstash';
-import { setCorsHeaders, setSecurityHeaders, validateBase64Image, getImageRatelimit, checkRateLimit, sanitizeUid } from '../_middleware.js';
+import { setCorsHeaders, setSecurityHeaders, validateBase64Image, getImageRatelimit, checkRateLimit, sanitizeUid, verifyAuth } from '../_middleware.js';
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL!,
@@ -32,6 +32,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (setCorsHeaders(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  let verifiedUid: string;
+  try {
+    verifiedUid = await verifyAuth(req);
+  } catch {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   const { action, payload } = req.body;
   if (!action) return res.status(400).json({ error: 'Missing action' });
 
@@ -39,13 +46,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Acción: startClone (modo imagen o manual)
   // ──────────────────────────────────────────────
   if (action === 'startClone') {
-    const { mode, name, files, identityPrompt, negativePrompt, gender, personality, expression, uid: rawUid } = payload;
+    const { mode, name, files, identityPrompt, negativePrompt, gender, personality, expression } = payload;
     if (!name || !mode) {
       return res.status(400).json({ error: 'Missing name or mode' });
     }
 
     // Rate limiting — clonación es la operación más costosa (4 imágenes)
-    const rlKey = rawUid ? sanitizeUid(rawUid) : (req.headers['x-forwarded-for'] as string || 'unknown');
+    const rlKey = sanitizeUid(verifiedUid);
     const allowed = await checkRateLimit(getImageRatelimit(), rlKey, res);
     if (!allowed) return;
 

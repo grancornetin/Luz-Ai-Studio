@@ -3,7 +3,7 @@
 
 import { DODO_PRODUCTS, type ProductKey } from '../config/dodoProducts';
 
-const RETURN_URL = 'https://luz-ia-studio-1.vercel.app/checkout/success';
+const RETURN_URL = `${import.meta.env.VITE_APP_URL || 'https://luz-ia-studio-1.vercel.app'}/checkout/success`;
 
 export { DODO_PRODUCTS };
 export type { ProductKey };

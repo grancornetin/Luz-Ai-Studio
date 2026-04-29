@@ -240,8 +240,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setStats(newStats);
   };
 
-  const isAdmin = profile?.role === 'admin' ||
-                  profile?.email === 'grancornetin@gmail.com';
+  const isAdmin = profile?.role === 'admin';
 
   // Cuando el admin simula un plan, los créditos visibles cambian pero isAdmin se mantiene
   const effectiveCredits: UserCredits = (isAdmin && previewPlan)

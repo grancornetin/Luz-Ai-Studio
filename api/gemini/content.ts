@@ -29,7 +29,7 @@ interface ContentRequest {
   model?: string;
 }
 
-import { setSecurityHeaders, validateBase64Image, validatePrompt, validateChatPrompt } from '../_middleware.js';
+import { setSecurityHeaders, validateBase64Image, validatePrompt, validateChatPrompt, verifyAuth } from '../_middleware.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setSecurityHeaders(res);
@@ -39,6 +39,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  try {
+    await verifyAuth(req);
+  } catch {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
 
   try {
     const body = req.body as ContentRequest;

@@ -103,8 +103,8 @@ if (process.env.NODE_ENV !== 'production') {
 
 export function setCorsHeaders(req: VercelRequest, res: VercelResponse): boolean {
   const origin = req.headers.origin || '';
-  // En Vercel preview deployments el origin termina en .vercel.app
-  const isVercelPreview = origin.endsWith('.vercel.app');
+  // Solo preview deployments del propio proyecto
+  const isVercelPreview = /^https:\/\/luz-ia-studio[\w-]*\.vercel\.app$/.test(origin);
   const isAllowed = ALLOWED_ORIGINS.includes(origin) || isVercelPreview;
 
   if (isAllowed) {

@@ -27,14 +27,12 @@ export default function Pricing() {
 
   const handleSubscribe = (planId: string) => {
     if (planId === 'free') return;
+    if (!user?.uid) { navigate('/login'); return; }
     const map = billing === 'annual' ? PLAN_TO_PRODUCT_YEARLY : PLAN_TO_PRODUCT;
     const productKey = (map[planId] ?? PLAN_TO_PRODUCT[planId]) as ProductKey | undefined;
-    if (!productKey || !user?.uid) {
-      alert('Inicia sesión para suscribirte.');
-      return;
-    }
+    if (!productKey) return;
     const url = buildCheckoutUrl(productKey, user.uid);
-    window.open(url, '_blank');
+    window.location.href = url;
   };
 
   return (

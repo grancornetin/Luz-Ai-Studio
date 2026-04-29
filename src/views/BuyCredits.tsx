@@ -12,13 +12,11 @@ export default function BuyCredits() {
   const { currency, toggle, format } = useCurrency();
 
   const handleBuy = (pkgId: string) => {
+    if (!user?.uid) { navigate('/login'); return; }
     const productKey = TOPUP_TO_PRODUCT[pkgId] as ProductKey | undefined;
-    if (!productKey || !user?.uid) {
-      alert('Inicia sesión para comprar créditos.');
-      return;
-    }
+    if (!productKey) return;
     const url = buildCheckoutUrl(productKey, user.uid);
-    window.open(url, '_blank');
+    window.location.href = url;
   };
 
   return (

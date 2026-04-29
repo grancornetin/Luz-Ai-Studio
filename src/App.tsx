@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { HashRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { LogOut, User as UserIcon, Menu, X } from 'lucide-react';
 
 // Vistas y Módulos
@@ -389,13 +389,13 @@ const AppContent: React.FC = () => {
 };
 
 const App: React.FC = () => (
-  <HashRouter>
+  <BrowserRouter>
     <AuthProvider>
       <ModelSelectionProvider>
         <AppContent />
       </ModelSelectionProvider>
     </AuthProvider>
-  </HashRouter>
+  </BrowserRouter>
 );
 
 export default App;

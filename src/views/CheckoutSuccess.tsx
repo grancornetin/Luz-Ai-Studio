@@ -1,16 +1,26 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, Zap } from 'lucide-react';
 import { useAuth } from '../modules/auth/AuthContext';
 
 export default function CheckoutSuccess() {
   const navigate = useNavigate();
-  const { refreshCredits } = useAuth();
+  const { refreshCredits, credits } = useAuth();
+  const initialCredits = useRef(credits.available);
+  const attempts = useRef(0);
+  const maxAttempts = 8; // 8 × 2s = 16s máximo
 
   useEffect(() => {
-    // Refrescar créditos tras el pago (el webhook puede tardar 2-5s)
-    const t = setTimeout(() => { refreshCredits().catch(() => {}); }, 3000);
-    return () => clearTimeout(t);
+    const poll = async () => {
+      if (attempts.current >= maxAttempts) return;
+      attempts.current += 1;
+      await refreshCredits().catch(() => {});
+      // Si los créditos cambiaron, el polling puede detenerse (el ref se actualizó en el closure)
+    };
+
+    // Primer intento a los 2s, luego cada 2s
+    const interval = setInterval(poll, 2000);
+    return () => clearInterval(interval);
   }, []);
 
   return (

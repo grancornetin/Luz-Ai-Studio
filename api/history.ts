@@ -4,7 +4,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Redis } from '@upstash/redis';
-import { setSecurityHeaders, sanitizeUid } from './_middleware.js';
+import { setSecurityHeaders, sanitizeUid, verifyAuth } from './_middleware.js';
 
 const redis = new Redis({
   url:   process.env.KV_REST_API_URL!,
@@ -45,13 +45,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  let verifiedUid: string;
+  try {
+    verifiedUid = await verifyAuth(req);
+  } catch {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const uid = sanitizeUid(verifiedUid);
+
   const { action, payload } = req.body || {};
   if (!action) return res.status(400).json({ error: 'Missing action' });
-
-  // uid viene del body — sanitizado para evitar Redis key injection
-  const rawUid: string | undefined = payload?.uid;
-  if (!rawUid) return res.status(400).json({ error: 'Missing uid' });
-  const uid = sanitizeUid(rawUid);
 
   try {
 

@@ -1,0 +1,50 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>LUZ IA Extractor</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; width: 280px; background: #0f0f0f; color: #f0f0f0; }
+    .header { background: linear-gradient(135deg, #7c3aed, #a855f7); padding: 14px 16px; }
+    .header h1 { font-size: 14px; font-weight: 700; letter-spacing: 0.05em; }
+    .header p  { font-size: 11px; opacity: 0.8; margin-top: 2px; }
+    .body { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+    .counter { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; }
+    .counter .num { font-size: 28px; font-weight: 800; color: #a855f7; }
+    .counter .label { font-size: 11px; color: #888; }
+    .last-captured { font-size: 11px; color: #666; background: #1a1a1a; border-radius: 6px; padding: 8px 10px; min-height: 36px; word-break: break-word; line-height: 1.4; }
+    .last-captured.has-content { color: #ccc; }
+    button { border: none; border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
+    button:hover { opacity: 0.85; }
+    #btn-capture { background: linear-gradient(135deg, #7c3aed, #a855f7); color: white; }
+    #btn-capture.success { background: linear-gradient(135deg, #059669, #10b981); }
+    #btn-capture.error   { background: linear-gradient(135deg, #dc2626, #ef4444); }
+    #btn-download { background: #1a1a1a; border: 1px solid #333; color: #ccc; }
+    #btn-download:disabled { opacity: 0.4; cursor: not-allowed; }
+    #btn-clear { background: transparent; color: #555; font-size: 11px; padding: 4px; text-decoration: underline; }
+    .footer { padding: 0 16px 12px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>LUZ IA — Extractor</h1>
+    <p>Facebook foto abierta → pulsa Capturar</p>
+  </div>
+  <div class="body">
+    <div class="counter">
+      <div>
+        <div class="num" id="count">0</div>
+        <div class="label">prompts capturados</div>
+      </div>
+    </div>
+    <div class="last-captured" id="last-text">Abre una foto en Facebook y pulsa Capturar</div>
+    <button id="btn-capture">Capturar imagen actual</button>
+    <button id="btn-download" disabled>Descargar facebook-raw.json</button>
+  </div>
+  <div class="footer">
+    <button id="btn-clear">Limpiar todo</button>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
