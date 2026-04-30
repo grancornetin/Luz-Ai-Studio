@@ -91,6 +91,7 @@ async function initFirebaseAdmin() {
 
 // ── CORS ───────────────────────────────────────────────────────────────────────
 const ALLOWED_ORIGINS = [
+  'https://luz-ia-studio-1.vercel.app',
   'https://luz-ia-studio.vercel.app',
   'https://www.luz-ia-studio.vercel.app',
   // Agrega tu dominio personalizado aquí cuando lo tengas
