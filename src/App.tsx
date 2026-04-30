@@ -7,7 +7,7 @@ const Landing               = lazy(() => import('./views/Landing'));
 const Dashboard             = lazy(() => import('./views/Dashboard'));
 const CloningModule         = lazy(() => import('./modules/CloningModule'));
 const ManualCreatorModule   = lazy(() => import('./modules/ManualCreatorModule'));
-const ProductGeneratorModule = lazy(() => import('./modules/ProductGeneratorModule'));
+const ProductGeneratorModule = lazy(() => import('./modules/productGenerator/ProductGeneratorModule'));
 const AvatarLibrary         = lazy(() => import('./components/AvatarLibrary'));
 const ContentStudioProModule = lazy(() => import('./modules/contentStudioPro/ContentStudioProModule'));
 const OutfitExtractorModule = lazy(() => import('./modules/outfitExtractor/OutfitExtractorModule'));
