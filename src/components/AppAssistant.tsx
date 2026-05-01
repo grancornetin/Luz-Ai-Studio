@@ -517,6 +517,21 @@ const AppAssistant: React.FC = () => {
     if (isOpen) { setHasUnread(false); setTimeout(() => inputRef.current?.focus(), 300); }
   }, [isOpen]);
 
+  // ── Sincronización con bottom-nav móvil ──────────────────────
+  // El bottom-nav móvil dispara `app:assistant:toggle` cuando el usuario toca su botón.
+  // Cada vez que cambia isOpen, anunciamos el estado para que el nav resalte el botón.
+  useEffect(() => {
+    const handleToggle = () => setIsOpen((v) => !v);
+    window.addEventListener('app:assistant:toggle', handleToggle);
+    return () => window.removeEventListener('app:assistant:toggle', handleToggle);
+  }, []);
+
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent('app:assistant:state', { detail: { open: isOpen } }),
+    );
+  }, [isOpen]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -616,10 +631,11 @@ const AppAssistant: React.FC = () => {
 
   return (
     <>
-      {/* ── FLOATING BUTTON ────────────────────────────────── */}
+      {/* ── FLOATING BUTTON (solo desktop) ─────────────────── */}
+      {/* En móvil el botón vive en MobileBottomNav (4to slot). */}
       <button
         onClick={() => setIsOpen(p => !p)}
-        className={`fixed bottom-6 right-6 z-[900] w-14 h-14 rounded-2xl shadow-2xl flex items-center justify-center transition-all duration-300 ${
+        className={`hidden md:flex fixed bottom-6 right-6 z-[900] w-14 h-14 rounded-2xl shadow-2xl items-center justify-center transition-all duration-300 ${
           isOpen
             ? 'bg-slate-800 text-white scale-95'
             : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:scale-110 hover:shadow-indigo-200'
@@ -633,10 +649,16 @@ const AppAssistant: React.FC = () => {
       </button>
 
       {/* ── CHAT PANEL ─────────────────────────────────────── */}
+      {/* Mobile: ancho completo entre los bordes, anclado arriba del bottom-nav.
+          Desktop: panel chico anclado abajo a la derecha sobre el FAB. */}
       <div
-        className={`fixed bottom-24 right-6 z-[890] w-[min(380px,calc(100vw-24px))] bg-white rounded-[28px] shadow-2xl border border-slate-200 flex flex-col overflow-hidden transition-all duration-300 origin-bottom-right ${
-          isOpen ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
-        }`}
+        className={`fixed z-[890] bg-white shadow-2xl border border-slate-200 flex flex-col overflow-hidden transition-all duration-300
+          right-2 left-2 md:left-auto md:right-6
+          bottom-[calc(72px+env(safe-area-inset-bottom))] md:bottom-24
+          rounded-[24px] md:rounded-[28px]
+          w-auto md:w-[min(380px,calc(100vw-24px))]
+          origin-bottom md:origin-bottom-right
+          ${isOpen ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'}`}
         style={{ maxHeight: 'min(580px, calc(100dvh - 120px))' }}
       >
         {/* HEADER */}

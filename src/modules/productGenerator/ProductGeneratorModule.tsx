@@ -492,6 +492,30 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
     setSelectedProduct(null);
   };
 
+  // ─── Volver atrás desde el Paso 6 sin perder el wizard ──────────────────────
+  // Vuelve al Paso 4 (configuración de tipo/cantidad). Limpia los resultados
+  // anteriores pero preserva: producto, objetivo, estilo y configuración.
+  const backToConfig = () => {
+    setGeneratedShots([]);
+    setCollageShot(null);
+    setDirectorResult(null);
+    setLastPayloads([]);
+    setProcessingStatus('');
+    setProgressStepIndex(0);
+    setStep(4);
+  };
+
+  // Vuelve al Paso 1 conservando el producto pero permitiendo cambiar las fotos.
+  const backToStart = () => {
+    setGeneratedShots([]);
+    setCollageShot(null);
+    setDirectorResult(null);
+    setLastPayloads([]);
+    setProcessingStatus('');
+    setProgressStepIndex(0);
+    setStep(1);
+  };
+
   // ─── Lightbox helpers ───────────────────────────────────────────────────────
   const openLightbox = (images: string[], initialIndex: number, label: string) => {
     setLightboxImages(images);
@@ -680,6 +704,8 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
                   onDownloadZip={handleDownloadZip}
                   onSaveToCatalog={handleSaveToCatalog}
                   onRestart={resetCreator}
+                  onBackToConfig={backToConfig}
+                  onBackToStart={backToStart}
                 />
               )}
             </div>

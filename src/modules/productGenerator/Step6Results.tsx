@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Download, FileArchive, Plus, RotateCcw, Grid3x3, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Check, Download, FileArchive, Plus, RotateCcw, Grid3x3, RefreshCw, AlertTriangle, Sliders } from 'lucide-react';
 
 interface Step6ResultsProps {
   productTitle: string;
@@ -14,6 +14,10 @@ interface Step6ResultsProps {
   onDownloadZip: () => void;
   onSaveToCatalog: () => void;
   onRestart: () => void;
+  /** Vuelve al Paso 4 (Tipo y cantidad) preservando el estado del wizard. */
+  onBackToConfig?: () => void;
+  /** Vuelve al Paso 1 (Producto) preservando el estado del wizard. */
+  onBackToStart?: () => void;
   onCreateManualGrid?: (selectedIndices: number[]) => void; // opcional
 }
 
@@ -30,6 +34,8 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
   onDownloadZip,
   onSaveToCatalog,
   onRestart,
+  onBackToConfig,
+  onBackToStart,
   onCreateManualGrid,
 }) => {
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -262,24 +268,53 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
       )}
 
       {/* Footer actions */}
-      <div className="flex justify-between items-center mt-7 pt-5 border-t border-slate-200 gap-3.5 flex-wrap">
-        <button
-          type="button"
-          onClick={onRestart}
-          className="flex items-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 text-slate-700 rounded-xl px-4 py-3 text-[13px] font-semibold transition-colors"
-        >
-          <RotateCcw size={14} />
-          Crear otro producto
-        </button>
-        <button
-          type="button"
-          disabled
-          className="flex items-center gap-1.5 bg-white border border-slate-200 text-slate-400 rounded-xl px-4 py-3 text-[13px] font-semibold cursor-not-allowed"
-          title="Próximamente"
-        >
-          <Plus size={14} />
-          Agregar a proyecto
-        </button>
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center mt-7 pt-5 border-t border-slate-200 gap-2 md:gap-3.5">
+        {/* Izquierda: ajustar / reintentar todo */}
+        <div className="flex flex-wrap gap-2">
+          {onBackToConfig && (
+            <button
+              type="button"
+              onClick={onBackToConfig}
+              style={{ touchAction: 'manipulation' }}
+              className="flex items-center gap-1.5 bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-700 rounded-xl px-4 py-3 text-[13px] font-bold transition-colors duration-150"
+            >
+              <Sliders size={14} />
+              Ajustar y volver a generar
+            </button>
+          )}
+          {onBackToStart && (
+            <button
+              type="button"
+              onClick={onBackToStart}
+              style={{ touchAction: 'manipulation' }}
+              className="flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-3 text-[13px] font-semibold transition-colors duration-150"
+            >
+              <RotateCcw size={14} />
+              Cambiar fotos del producto
+            </button>
+          )}
+        </div>
+        {/* Derecha: empezar de cero / proyecto */}
+        <div className="flex flex-wrap gap-2 md:justify-end">
+          <button
+            type="button"
+            onClick={onRestart}
+            style={{ touchAction: 'manipulation' }}
+            className="flex items-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 text-slate-700 rounded-xl px-4 py-3 text-[13px] font-semibold transition-colors duration-150"
+          >
+            <RotateCcw size={14} />
+            Empezar de cero
+          </button>
+          <button
+            type="button"
+            disabled
+            className="flex items-center gap-1.5 bg-white border border-slate-200 text-slate-400 rounded-xl px-4 py-3 text-[13px] font-semibold cursor-not-allowed"
+            title="Próximamente"
+          >
+            <Plus size={14} />
+            Agregar a proyecto
+          </button>
+        </div>
       </div>
     </div>
   );
