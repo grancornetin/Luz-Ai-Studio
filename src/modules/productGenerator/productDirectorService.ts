@@ -1,4 +1,3 @@
-// src/modules/productGenerator/productDirectorService.ts
 import { geminiService } from '../../services/geminiService';
 
 /* ======================================================
@@ -53,7 +52,7 @@ export type ProductPromptPayload = {
 };
 
 /* ======================================================
-   GLOBAL RULES (ANTI-COPY)
+   CORE RULES (ANTI-COPY SYSTEM)
 ====================================================== */
 
 const PRODUCT_IDENTITY_RULES = [
@@ -63,13 +62,9 @@ const PRODUCT_IDENTITY_RULES = [
   'All uploaded images represent the SAME product in different folds or positions.',
   'Do NOT replicate the original composition, camera angle, table, surface or background.',
   'Ignore any background elements such as tables, cables, textures or objects.',
-  'Generate a NEW composition.',
-  'Each image must be visually different from the others.'
+  'Generate a NEW composition based on the selected style and shot definition.',
+  'Each generated image MUST be visually different in composition and angle.'
 ].join('\n');
-
-/* ======================================================
-   NEGATIVE PROMPT
-====================================================== */
 
 const PRODUCT_NEGATIVE_PROMPT = [
   'wrong product',
@@ -91,6 +86,7 @@ const PRODUCT_NEGATIVE_PROMPT = [
 export const runProductDirector = async (
   input: ProductDirectorInput
 ): Promise<ProductDirectorResult> => {
+
   if (!input.productImages.length) {
     throw new Error('At least one product image is required');
   }
@@ -113,12 +109,13 @@ export const runProductDirector = async (
 ====================================================== */
 
 const buildMasterContext = (input: ProductDirectorInput): MasterContext => {
+
   if (input.referenceImage) {
     return {
       background: 'match reference background',
       lighting: 'match reference lighting',
       colorTone: 'match reference tone',
-      mood: 'reference-based',
+      mood: 'reference-based product photography',
       environment: 'reference environment'
     };
   }
@@ -138,7 +135,7 @@ const buildMasterContext = (input: ProductDirectorInput): MasterContext => {
         background: 'dark elegant surface',
         lighting: 'cinematic lighting',
         colorTone: 'neutral dark',
-        mood: 'luxury',
+        mood: 'luxury premium',
         environment: 'studio'
       };
 
@@ -185,6 +182,7 @@ const buildMasterContext = (input: ProductDirectorInput): MasterContext => {
 ====================================================== */
 
 const selectShotTypes = (input: ProductDirectorInput): string[] => {
+
   if (input.referenceImage) {
     return input.count === 2
       ? ['REFERENCE_MATCH', 'REFERENCE_VARIATION']
@@ -192,10 +190,25 @@ const selectShotTypes = (input: ProductDirectorInput): string[] => {
   }
 
   if (input.mode === 'grid') {
-    if (input.gridType === '1x2') return ['FRONT', 'ANGLE'];
-    if (input.gridType === '2x2') return ['FRONT', 'BACK', 'DETAIL', 'CONTEXT'];
 
-    return ['HERO', 'FRONT', 'BACK', 'SIDE', 'ANGLE', 'DETAIL', 'TOP', 'CONTEXT'];
+    if (input.gridType === '1x2') {
+      return ['FRONT', 'ANGLE'];
+    }
+
+    if (input.gridType === '2x2') {
+      return ['FRONT', 'BACK', 'DETAIL', 'CONTEXT'];
+    }
+
+    return [
+      'HERO',
+      'FRONT',
+      'BACK',
+      'SIDE',
+      'ANGLE',
+      'DETAIL',
+      'TOP',
+      'CONTEXT'
+    ];
   }
 
   if (input.count === 2) return ['HERO', 'ANGLE'];
@@ -228,11 +241,11 @@ const getComposition = (type: string): string => {
     case 'HERO': return 'product centered and dominant';
     case 'ANGLE': return 'three quarter angle';
     case 'DETAIL': return 'close-up detail';
-    case 'CONTEXT': return 'product in environment';
+    case 'CONTEXT': return 'product placed in realistic environment';
     case 'BACK': return 'rear view';
     case 'TOP': return 'top view';
-    case 'REFERENCE_MATCH': return 'match reference';
-    case 'REFERENCE_VARIATION': return 'variation of reference';
+    case 'REFERENCE_MATCH': return 'match reference composition';
+    case 'REFERENCE_VARIATION': return 'slight variation of reference';
     default: return 'balanced composition';
   }
 };
@@ -246,15 +259,16 @@ const getFocus = (type: string): string =>
 const getEnvironmentRules = (): string => `
 ${PRODUCT_IDENTITY_RULES}
 
-Each shot must have a different composition and camera angle.
-Do not repeat layouts.
+Each shot must have a unique composition and camera angle.
+Do not repeat layouts or perspectives.
+Maintain realism and product accuracy.
 `;
 
 /* ======================================================
-   PROMPT BUILDER
+   PROMPT BUILDER (RESPETANDO TU CONTRATO ORIGINAL)
 ====================================================== */
 
-export const buildPromptPayloads = (
+export const buildPromptPayloadsFromDirectorResult = (
   input: ProductDirectorInput,
   result: ProductDirectorResult
 ): ProductPromptPayload[] => {
@@ -302,5 +316,5 @@ export const buildPromptPayloads = (
 
 export const productDirectorService = {
   run: runProductDirector,
-  buildPromptPayloads
+  buildPromptPayloadsFromDirectorResult
 };
