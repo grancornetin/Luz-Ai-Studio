@@ -139,12 +139,13 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
             >
               <div
                 onClick={() => !isError && onLightbox(i)}
-                className={`group relative w-full aspect-[3/4] rounded-2xl overflow-hidden bg-white transition-all ${
-                  isError ? 'cursor-not-allowed' : 'cursor-pointer hover:-translate-y-0.5'
+                style={{ touchAction: 'manipulation' }}
+                className={`group relative w-full aspect-[3/4] rounded-2xl overflow-hidden bg-white transition-shadow duration-150 ${
+                  isError ? 'cursor-not-allowed' : 'cursor-pointer md:hover:-translate-y-0.5'
                 } ${
                   sel
                     ? 'shadow-[0_0_0_3px_rgb(124_58_237),0_16px_40px_rgba(124,58,237,0.25)]'
-                    : 'shadow-[0_8px_20px_rgba(15,23,42,0.06)] hover:shadow-md'
+                    : 'shadow-[0_8px_20px_rgba(15,23,42,0.06)] md:hover:shadow-md'
                 }`}
               >
                 {isError ? (
@@ -168,10 +169,12 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
                       e.stopPropagation();
                       toggleSel(i);
                     }}
-                    className={`absolute top-2.5 left-2.5 z-10 w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold shadow transition-all ${
+                    style={{ touchAction: 'manipulation' }}
+                    aria-label={sel ? 'Quitar selección' : 'Seleccionar imagen'}
+                    className={`absolute top-2.5 left-2.5 z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow transition-colors duration-150 ${
                       sel
                         ? 'bg-violet-600 text-white'
-                        : 'bg-white/95 text-slate-900 opacity-0 group-hover:opacity-100 md:opacity-100'
+                        : 'bg-white/95 text-slate-900 opacity-100 md:opacity-0 md:group-hover:opacity-100'
                     }`}
                   >
                     {sel ? <Check size={14} strokeWidth={3} /> : ''}
@@ -202,9 +205,11 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
                         `${productTitle.replace(/\s+/g, '_') || 'product'}_shot_${i + 1}.png`
                       );
                     }}
-                    className="absolute bottom-3 right-3 w-9 h-9 rounded-full bg-white text-slate-900 shadow-lg flex items-center justify-center hover:scale-110 transition-transform md:opacity-0 md:group-hover:opacity-100"
+                    style={{ touchAction: 'manipulation' }}
+                    aria-label={`Descargar imagen ${i + 1}`}
+                    className="absolute bottom-3 right-3 w-10 h-10 rounded-full bg-white text-slate-900 shadow-lg flex items-center justify-center md:hover:scale-110 transition-transform duration-150 opacity-100 md:opacity-0 md:group-hover:opacity-100 active:scale-95"
                   >
-                    <Download size={14} />
+                    <Download size={16} />
                   </button>
                 )}
               </div>

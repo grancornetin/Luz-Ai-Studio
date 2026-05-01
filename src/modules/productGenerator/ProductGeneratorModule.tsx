@@ -429,13 +429,40 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDownloadIndividual = (url: string, filename: string) => {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // Descarga robusta: para URLs http(s) hace fetch → blob → objectURL para forzar
+  // descarga (evita que iOS Safari/Android Chrome abran la imagen en vez de bajarla).
+  // Para data URLs y blob URLs cae al método clásico.
+  const handleDownloadIndividual = async (url: string, filename: string) => {
+    try {
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        const res = await fetch(url, { mode: 'cors' });
+        if (!res.ok) throw new Error('fetch failed');
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = filename;
+        link.rel = 'noopener';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        // dar tiempo al browser a iniciar la descarga antes de revocar
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 4000);
+        return;
+      }
+      // data: o blob: → descarga directa
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.rel = 'noopener';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error('Descarga directa falló, abriendo en nueva pestaña:', err);
+      // Fallback final: abrir en nueva pestaña para que el usuario use "Guardar imagen como..."
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const handleDownloadZip = async () => {
@@ -539,35 +566,41 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
             </div>
           </div>
           <div
-            className={`flex bg-white p-1 rounded-2xl shadow-sm border border-slate-100 transition-all ${
-              isGenerating ? 'opacity-50 pointer-events-none' : ''
+            className={`flex bg-white p-1 rounded-2xl shadow-sm border border-slate-100 transition-opacity duration-150 ${
+              isGenerating ? 'opacity-50' : ''
             }`}
           >
             <button
               type="button"
+              disabled={isGenerating}
               onClick={() => {
+                if (isGenerating) return;
                 setActiveTab('create');
                 window.scrollTo(0, 0);
                 resetCreator();
               }}
-              className={`px-5 md:px-8 py-2 md:py-3 rounded-xl t-meta transition-all ${
+              style={{ touchAction: 'manipulation' }}
+              className={`px-5 md:px-8 py-2 md:py-3 rounded-xl t-meta transition-colors duration-150 disabled:cursor-not-allowed ${
                 activeTab === 'create'
                   ? 'bg-brand-600 text-white shadow-lg'
-                  : 'text-slate-400 hover:text-slate-700'
+                  : 'text-slate-400 md:hover:text-slate-700'
               }`}
             >
               Laboratorio
             </button>
             <button
               type="button"
+              disabled={isGenerating}
               onClick={() => {
+                if (isGenerating) return;
                 setActiveTab('library');
                 window.scrollTo(0, 0);
               }}
-              className={`px-5 md:px-8 py-2 md:py-3 rounded-xl t-meta transition-all ${
+              style={{ touchAction: 'manipulation' }}
+              className={`px-5 md:px-8 py-2 md:py-3 rounded-xl t-meta transition-colors duration-150 disabled:cursor-not-allowed ${
                 activeTab === 'library'
                   ? 'bg-brand-600 text-white shadow-lg'
-                  : 'text-slate-400 hover:text-slate-700'
+                  : 'text-slate-400 md:hover:text-slate-700'
               }`}
             >
               Catálogo ({products.length})
@@ -711,10 +744,10 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
               setSelectedProduct(null);
             }}
             onDownload={(url, idx) => {
-              const link = document.createElement('a');
-              link.href = url;
-              link.download = `product_image_${idx + 1}.png`;
-              link.click();
+              handleDownloadIndividual(
+                url,
+                `${wizard.product.title.replace(/\s+/g, '_') || 'product'}_image_${idx + 1}.png`,
+              );
             }}
             metadata={lightboxMetadata}
           />

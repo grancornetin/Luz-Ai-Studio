@@ -29,7 +29,8 @@ export const WizardFooter: React.FC<WizardFooterProps> = ({
           <button
             type="button"
             onClick={onBack}
-            className="hidden md:flex items-center gap-1.5 bg-transparent border-0 text-slate-500 hover:text-slate-700 text-sm font-semibold py-3 px-1 transition-colors"
+            style={{ touchAction: 'manipulation' }}
+            className="hidden md:flex items-center gap-1.5 bg-transparent border-0 text-slate-500 hover:text-slate-700 text-sm font-semibold py-3 px-1 transition-colors duration-150"
           >
             <ArrowLeft size={16} />
             Atrás
@@ -38,7 +39,8 @@ export const WizardFooter: React.FC<WizardFooterProps> = ({
             type="button"
             onClick={onBack}
             aria-label="Atrás"
-            className="md:hidden w-12 h-12 bg-slate-100 hover:bg-slate-200 rounded-xl flex items-center justify-center text-slate-700 transition-colors flex-shrink-0"
+            style={{ touchAction: 'manipulation' }}
+            className="md:hidden w-12 h-12 bg-slate-100 active:bg-slate-200 rounded-xl flex items-center justify-center text-slate-700 transition-colors duration-150 flex-shrink-0"
           >
             <ArrowLeft size={18} />
           </button>
@@ -64,8 +66,9 @@ export const WizardFooter: React.FC<WizardFooterProps> = ({
         type="button"
         onClick={onContinue}
         disabled={disabled || loading}
+        style={{ touchAction: 'manipulation' }}
         className={`
-          flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all
+          flex flex-col items-center justify-center gap-0.5 rounded-xl transition-colors duration-150
           px-5 md:px-7 py-3 md:py-3.5 min-h-12 min-w-[140px] md:min-w-[180px]
           text-sm font-semibold
           ${
