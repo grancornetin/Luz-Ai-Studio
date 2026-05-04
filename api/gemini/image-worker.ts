@@ -13,6 +13,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Receiver } from '@upstash/qstash';
 import { Redis } from '@upstash/redis';
 import { GoogleGenAI } from '@google/genai';
+import { reportShotResult, appendToHistory } from '../_notifications.js';
 
 // ─── Redis ───────────────────────────────────────────────────────────────────
 const redis = new Redis({
@@ -40,6 +41,12 @@ interface ImageJob {
   shotIndex?: number;
   totalShots?: number;
   module?: string;   // trazabilidad: 'product', 'outfit', 'clone', 'avatar', 'prompt', etc.
+  // Notificaciones Nivel 3 — vienen del orchestrator (image.ts)
+  uid?: string;
+  sessionId?: string;
+  moduleLabel?: string;
+  metadata?: Record<string, any>;
+  refunded?: boolean;
 }
 
 // ─── Helpers Redis ────────────────────────────────────────────────────────────
@@ -69,6 +76,50 @@ function getGenAIClient(): GoogleGenAI {
     location: 'global',
     googleAuthOptions: { credentials: getCredentials() },
   });
+}
+
+// ─── Notificación + historial al terminar el job ──────────────────────────────
+// Persiste el resultado a Firestore (notificación) y a Redis (historial).
+// Si falla, el reembolso lo hace reportShotResult dentro de la transacción.
+async function persistJobOutcome(job: ImageJob, success: boolean): Promise<void> {
+  if (!job.uid || !job.sessionId || job.totalShots == null || job.shotIndex == null) {
+    // Backwards compatibility: jobs viejos sin uid/sessionId — no notificamos
+    return;
+  }
+
+  try {
+    await reportShotResult({
+      uid: job.uid,
+      sessionId: job.sessionId,
+      module: job.module || 'unknown',
+      moduleLabel: job.moduleLabel,
+      totalShots: job.totalShots,
+      shotIndex: job.shotIndex,
+      shotStatus: success ? 'completed' : 'failed',
+      imageUrl: success ? job.result : undefined,
+      error: success ? undefined : job.error,
+      metadata: job.metadata,
+    });
+
+    // Marcar el job como reembolsado para que el cliente no lo vuelva a hacer
+    if (!success) {
+      job.refunded = true;
+      await saveJob(job);
+    }
+
+    // Si la imagen salió bien, también la guardamos al historial (malla de seguridad).
+    if (success && job.result) {
+      await appendToHistory({
+        uid: job.uid,
+        imageUrl: job.result,
+        module: job.module || 'unknown',
+        moduleLabel: job.moduleLabel,
+        creditsUsed: 1,
+      });
+    }
+  } catch (err: any) {
+    console.error(`[ImageWorker ${job.id}] persistJobOutcome failed:`, err.message);
+  }
 }
 
 // ─── Lógica de generación ─────────────────────────────────────────────────────
@@ -106,6 +157,7 @@ async function processJob(jobId: string, parts: any[]): Promise<void> {
           job.updatedAt = Date.now();
           await saveJob(job);
           console.log(`[ImageWorker ${jobId}] Completed`);
+          await persistJobOutcome(job, true);
           return;
         }
       }
@@ -139,6 +191,7 @@ async function processJob(jobId: string, parts: any[]): Promise<void> {
     job.updatedAt = Date.now();
     await saveJob(job);
     console.error(`[ImageWorker ${jobId}] Failed: ${err.message}`);
+    await persistJobOutcome(job, false);
   }
 }
 

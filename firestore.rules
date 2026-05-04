@@ -7,15 +7,18 @@
 //     onboardingDone, createdAt
 //   Subcollections:
 //     - avatars, products, sets, outfits     (existentes)
-//     - savedPrompts/{promptId}              (NUEVO — bookmarks)
-//     - boards/{boardId}                     (NUEVO — tableros Pinterest)
-//     - meta/{docId}                         (NUEVO — flags internos, ej: migración)
+//     - savedPrompts/{promptId}              (bookmarks)
+//     - boards/{boardId}                     (tableros Pinterest)
+//     - meta/{docId}                         (flags internos)
+//     - notifications/{notificationId}       (NUEVO — Notificaciones Nivel 3)
+//                                              · Solo el server (Admin SDK) puede CREAR/sobrescribir status, shots, créditos.
+//                                              · El cliente puede leer, marcar como leída (campo `read`), y borrar.
 //
 // Collection: prompts/{promptId}            (existente, local/legacy)
 //
-// Collection: globalPrompts/{promptId}      (NUEVO — galería comunitaria)
+// Collection: globalPrompts/{promptId}      (galería comunitaria)
 //   Subcollections:
-//     - comments/{commentId}                (NUEVO — comentarios)
+//     - comments/{commentId}
 //
 // ===============================================================
 
@@ -125,24 +128,49 @@ service cloud.firestore {
 
       allow delete: if isAdmin();
 
-      // Subcollecciones existentes: avatars, products, sets, outfits
-      match /{subcollection}/{docId} {
+      // Subcollecciones existentes (avatars, products, sets, outfits, etc.)
+      match /avatars/{docId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+      match /products/{docId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+      match /sets/{docId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+      match /outfits/{docId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+      match /creditTransactions/{docId} {
         allow read, write: if isOwner(userId) || isAdmin();
       }
 
-      // NUEVO — Prompts guardados / bookmarks
+      // Prompts guardados / bookmarks
       match /savedPrompts/{promptId} {
         allow read, write: if isOwner(userId) || isAdmin();
       }
 
-      // NUEVO — Tableros Pinterest
+      // Tableros Pinterest
       match /boards/{boardId} {
         allow read, write: if isOwner(userId) || isAdmin();
       }
 
-      // NUEVO — Flags internos (ej: migración)
+      // Flags internos (ej: migración)
       match /meta/{docId} {
         allow read, write: if isOwner(userId) || isAdmin();
+      }
+
+      // NUEVO — Notificaciones Nivel 3
+      // El cliente puede leer y borrar. Solo puede ACTUALIZAR el flag `read`
+      // (marcar como leída). NUNCA puede crear ni modificar el contenido,
+      // que solo se escribe vía Firebase Admin SDK desde los workers.
+      match /notifications/{notificationId} {
+        allow read:   if isOwner(userId) || isAdmin();
+        allow create: if isAdmin();
+        allow update: if isAdmin() ||
+                         (isOwner(userId) &&
+                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']));
+        allow delete: if isOwner(userId) || isAdmin();
       }
     }
 

@@ -12,6 +12,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Receiver } from '@upstash/qstash';
 import { Redis } from '@upstash/redis';
+import { reportShotResult, appendToHistory } from '../_notifications.js';
 
 // ─── Redis ───────────────────────────────────────────────────────────────────
 const redis = new Redis({
@@ -45,6 +46,12 @@ interface ImageJob {
   shotIndex?:  number;
   totalShots?: number;
   module?:     string;
+  // Notificaciones Nivel 3
+  uid?:         string;
+  sessionId?:   string;
+  moduleLabel?: string;
+  metadata?:    Record<string, any>;
+  refunded?:    boolean;
 }
 
 // ─── Config por proveedor ─────────────────────────────────────────────────────
@@ -126,6 +133,42 @@ function extractReferenceDataUrls(parts: any[]): string[] {
   return refs;
 }
 
+// ─── Notificación + historial al terminar el job ──────────────────────────────
+async function persistJobOutcome(job: ImageJob, success: boolean): Promise<void> {
+  if (!job.uid || !job.sessionId || job.totalShots == null || job.shotIndex == null) {
+    return;
+  }
+  try {
+    await reportShotResult({
+      uid: job.uid,
+      sessionId: job.sessionId,
+      module: job.module || 'unknown',
+      moduleLabel: job.moduleLabel,
+      totalShots: job.totalShots,
+      shotIndex: job.shotIndex,
+      shotStatus: success ? 'completed' : 'failed',
+      imageUrl: success ? job.result : undefined,
+      error: success ? undefined : job.error,
+      metadata: job.metadata,
+    });
+    if (!success) {
+      job.refunded = true;
+      await saveJob(job);
+    }
+    if (success && job.result) {
+      await appendToHistory({
+        uid: job.uid,
+        imageUrl: job.result,
+        module: job.module || 'unknown',
+        moduleLabel: job.moduleLabel,
+        creditsUsed: 1,
+      });
+    }
+  } catch (err: any) {
+    console.error(`[EvolinkWorker ${job.id}] persistJobOutcome failed:`, err.message);
+  }
+}
+
 // ─── Lógica principal ─────────────────────────────────────────────────────────
 async function processEvolinkJob(
   jobId:         string,
@@ -152,6 +195,7 @@ async function processEvolinkJob(
     job.updatedAt = Date.now();
     await saveJob(job);
     console.error(`${tag} Missing EVOLINK_API_KEY env var`);
+    await persistJobOutcome(job, false);
     return;
   }
 
@@ -224,6 +268,7 @@ async function processEvolinkJob(
     job.error     = `EvoLink start error: ${err.message}`;
     job.updatedAt = Date.now();
     await saveJob(job);
+    await persistJobOutcome(job, false);
     return;
   }
 
@@ -263,6 +308,7 @@ async function processEvolinkJob(
         job.error     = 'EvoLink completed but no image URL in response';
         job.updatedAt = Date.now();
         await saveJob(job);
+        await persistJobOutcome(job, false);
         return;
       }
 
@@ -282,11 +328,13 @@ async function processEvolinkJob(
         await saveJob(job);
         await redis.del(`img_parts:${jobId}`).catch(() => {});
         console.log(`${tag} Completed successfully`);
+        await persistJobOutcome(job, true);
       } catch (err: any) {
         job.status    = 'failed';
         job.error     = `Image download error: ${err.message}`;
         job.updatedAt = Date.now();
         await saveJob(job);
+        await persistJobOutcome(job, false);
       }
       return;
     }
@@ -298,6 +346,7 @@ async function processEvolinkJob(
       job.updatedAt = Date.now();
       await saveJob(job);
       console.error(`${tag} EvoLink task failed: ${errMsg}`);
+      await persistJobOutcome(job, false);
       return;
     }
   }
@@ -307,6 +356,7 @@ async function processEvolinkJob(
   job.updatedAt = Date.now();
   await saveJob(job);
   console.error(`${tag} Timeout`);
+  await persistJobOutcome(job, false);
 }
 
 // ─── Handler principal ────────────────────────────────────────────────────────

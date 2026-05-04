@@ -37,6 +37,12 @@ interface ImageJob {
   shotIndex?: number;
   totalShots?: number;
   module?: string;
+  // Notificaciones Nivel 3 — el worker los lee desde el job en Redis
+  uid?: string;
+  sessionId?: string;
+  moduleLabel?: string;
+  metadata?: Record<string, any>;
+  refunded?: boolean; // marcado por el worker cuando reembolsa server-side
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -126,7 +132,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         shotIndex,
         totalShots,
         module: moduleName,
+        moduleLabel,
         uid: rawUid,
+        sessionId,
+        metadata,
         modelId = 'gemini',   // 'gemini' | 'seedream' | 'gptimage'
       } = payload;
 
@@ -170,6 +179,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Crear job en Redis — las imágenes (parts) se guardan en Redis, NO en QStash
       // QStash tiene límite de 1MB por mensaje; las imágenes en base64 lo exceden fácilmente.
       const jobId = generateJobId();
+      const safeUid = rawUid ? sanitizeUid(rawUid) : undefined;
       const job: ImageJob = {
         id:        jobId,
         status:    'pending',
@@ -178,6 +188,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         shotIndex,
         totalShots,
         module: moduleName,
+        uid:         safeUid,
+        sessionId:   sessionId,
+        moduleLabel: moduleLabel,
+        metadata:    metadata,
       };
 
       // Elegir proveedor disponible (circuit breaker automático)
@@ -239,6 +253,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updatedAt: job.updatedAt,
         shotIndex: job.shotIndex,
         totalShots: job.totalShots,
+        // El cliente lo lee para saber si el server ya reembolsó (evita doble reembolso)
+        refunded:  job.refunded === true,
       };
       if (job.status === 'completed') response.image = job.result;
       if (job.status === 'failed')    response.error = job.error;

@@ -97,9 +97,17 @@ export interface GenerateImageParams {
   shotIndex?:       number;
   totalShots?:      number;
   module?:          string;   // trazabilidad en logs
+  moduleLabel?:     string;   // legible para mostrar en notificaciones
   modelId?:         ModelId;  // 'gemini' (default) | 'seedream' | 'gptimage'
   uid?:             string;   // uid del usuario autenticado (requerido en no-batch)
+  sessionId?:       string;   // agrupa shots de un mismo set en la notificación
+  metadata?:        Record<string, any>; // info libre para mostrar en el panel
   onStatusChange?:  (status: ImageJobStatus, image?: string, shotIndex?: number) => void;
+}
+
+/** Genera un sessionId único para un set de imágenes. Usar uno por set. */
+export function newSessionId(): string {
+  return `sess_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 // ─── Helpers internos ─────────────────────────────────────────────────────────
@@ -118,8 +126,11 @@ async function startJob(params: GenerateImageParams): Promise<{ jobId: string; s
         shotIndex:       params.shotIndex,
         totalShots:      params.totalShots,
         module:          params.module,
+        moduleLabel:     params.moduleLabel,
         modelId:         params.modelId || 'gemini',
         uid:             params.uid ?? getAuth().currentUser?.uid,
+        sessionId:       params.sessionId,
+        metadata:        params.metadata,
       },
     }),
   });
@@ -140,6 +151,7 @@ async function pollJob(jobId: string): Promise<{
   image?: string;
   error?: string;
   shotIndex?: number;
+  refunded?: boolean;
 }> {
   const res = await fetch(API_URL, {
     method:  'POST',
