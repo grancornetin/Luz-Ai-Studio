@@ -581,7 +581,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
             <h1 className="t-display text-3xl text-slate-900">Foto de producto</h1>
             <div className="flex items-center gap-2 mt-2">
               <p className="text-slate-500 font-medium italic text-xs md:text-sm">
-                Wizard guiado de fotografía comercial.{' '}
+                Genera contenido comercial en 6 pasos.{' '}
                 <span className="normal-case font-normal text-slate-300 text-[9px]">
                   (Product Studio)
                 </span>
