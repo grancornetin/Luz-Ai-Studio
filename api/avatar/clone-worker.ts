@@ -229,6 +229,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           module: job.module || 'clone',
           moduleLabel: job.moduleLabel || 'Clone de modelo',
           creditsUsed: 1,
+          metadata: { ...job.metadata, viewLabel: labels[i] },
+          config: {
+            shotIndex: i,
+            totalShots: 4,
+            sessionId: job.sessionId,
+          },
         });
       }
     }

@@ -97,6 +97,12 @@ async function persistJobOutcome(job: Job, success: boolean): Promise<void> {
         module: job.module || 'content_studio',
         moduleLabel: job.moduleLabel,
         creditsUsed: 1,
+        metadata: job.metadata,
+        config: {
+          shotIndex: job.shotIndex,
+          totalShots: job.totalShots,
+          sessionId: job.sessionId,
+        },
       });
     }
   } catch (err: any) {

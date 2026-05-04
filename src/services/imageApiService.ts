@@ -14,6 +14,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getAuth } from 'firebase/auth';
+import { generationHistoryService, MODULE_LABELS } from './generationHistoryService';
 
 const API_URL     = '/api/gemini/image';
 const POLL_INTERVAL_MS   = 2000;   // 2 s entre polls
@@ -224,6 +225,48 @@ async function generateImageOnce(params: GenerateImageParams): Promise<string> {
   throw timeoutErr;
 }
 
+function resolveHistoryModule(module?: string): string {
+  if (!module) return 'unknown';
+  if (module === 'product' || module.includes('product')) return 'catalog';
+  if (module.includes('cloneImage') || module.includes('scene')) return 'scene_clone';
+  if (module.includes('avatarService') || module.includes('model_dna')) return 'model_dna';
+  if (module.includes('ugc') || module.includes('content_studio')) return 'content_studio_pro';
+  return module;
+}
+
+function historyReferencesFromParams(params: GenerateImageParams) {
+  return (params.referenceImages || []).map((ref, index) => ({
+    label: `Referencia ${index + 1}`,
+    mimeType: ref.mimeType,
+    role: `REF${index}`,
+    imageUrl: `data:${ref.mimeType || 'image/jpeg'};base64,${ref.data}`,
+  }));
+}
+
+function saveGeneratedImageToHistory(image: string, params: GenerateImageParams): void {
+  const module = resolveHistoryModule(params.module);
+  generationHistoryService.save({
+    imageUrl: image,
+    module,
+    moduleLabel: params.moduleLabel || MODULE_LABELS[module] || params.module || 'Generacion',
+    creditsUsed: 0,
+    promptText: params.prompt,
+    source: 'client',
+    config: {
+      aspectRatio: params.aspectRatio || '3:4',
+      modelId: params.modelId || 'gemini',
+      negative: params.negative,
+      shotIndex: params.shotIndex,
+      totalShots: params.totalShots,
+      sessionId: params.sessionId,
+    },
+    metadata: params.metadata,
+    references: historyReferencesFromParams(params),
+  }).catch((err) => {
+    console.warn('[History] Auto-save failed:', err?.message || err);
+  });
+}
+
 // ─── API pública ──────────────────────────────────────────────────────────────
 
 export const imageApiService = {
@@ -237,7 +280,9 @@ export const imageApiService = {
 
     for (let retry = 0; retry < MAX_SILENT_RETRIES; retry++) {
       try {
-        return await generateImageOnce(params);
+        const image = await generateImageOnce(params);
+        saveGeneratedImageToHistory(image, params);
+        return image;
       } catch (err: any) {
         lastError = err;
         console.warn(`[ImageAPI] Attempt ${retry + 1} failed: ${err.message}`);

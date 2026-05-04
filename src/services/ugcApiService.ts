@@ -1,6 +1,8 @@
 // src/services/ugcApiService.ts
 // Servicio cliente para comunicarse con /api/gemini/ugc
 
+import { generationHistoryService, MODULE_LABELS } from './generationHistoryService';
+
 function friendlyApiError(raw: string): string {
   let msg = (raw || '').toLowerCase();
   try {
@@ -168,6 +170,30 @@ class UGCApiService {
 
       if (job.status === 'completed') {
         console.log(`[UGC] Job ${jobId} completed`);
+        generationHistoryService.save({
+          imageUrl: job.image,
+          module: params.module || 'content_studio_pro',
+          moduleLabel: params.moduleLabel || MODULE_LABELS[params.module || 'content_studio_pro'] || 'Content Studio',
+          creditsUsed: 0,
+          promptText: params.prompt,
+          source: 'client',
+          config: {
+            aspectRatio: params.aspectRatio || '3:4',
+            modelId: params.modelId || 'gemini',
+            shotIndex: params.shotIndex,
+            totalShots: params.totalShots,
+            sessionId: params.sessionId,
+          },
+          metadata: params.metadata,
+          references: (params.referenceImages || []).map((ref, index) => ({
+            label: `Referencia ${index + 1}`,
+            mimeType: ref.mimeType,
+            role: `REF${index}`,
+            imageUrl: `data:${ref.mimeType || 'image/jpeg'};base64,${ref.data}`,
+          })),
+        }).catch((err) => {
+          console.warn('[History] UGC auto-save failed:', err?.message || err);
+        });
         return job.image;
       }
 

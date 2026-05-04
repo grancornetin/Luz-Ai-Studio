@@ -162,6 +162,12 @@ async function persistJobOutcome(job: ImageJob, success: boolean): Promise<void>
         module: job.module || 'unknown',
         moduleLabel: job.moduleLabel,
         creditsUsed: 1,
+        metadata: job.metadata,
+        config: {
+          shotIndex: job.shotIndex,
+          totalShots: job.totalShots,
+          sessionId: job.sessionId,
+        },
       });
     }
   } catch (err: any) {

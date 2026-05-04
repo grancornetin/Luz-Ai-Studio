@@ -246,6 +246,8 @@ export async function appendToHistory(input: {
   moduleLabel?: string;
   promptText?: string;
   creditsUsed: number;
+  metadata?: Record<string, any>;
+  config?: Record<string, any>;
 }): Promise<void> {
   const { Redis } = await import('@upstash/redis');
   const redis = new Redis({
@@ -256,19 +258,32 @@ export async function appendToHistory(input: {
   const MAX_ENTRIES = 100;
   const TTL_SECONDS = 90 * 24 * 60 * 60;
   const key = `history:${input.uid.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 128)}`;
+  const imageKey = input.imageUrl.startsWith('data:')
+    ? `data:${input.imageUrl.length}:${input.imageUrl.slice(0, 96)}:${input.imageUrl.slice(-96)}`
+    : input.imageUrl;
 
   try {
     const existing = await redis.get<any[]>(key) || [];
+    const duplicate = existing.find((r: any) => r.imageKey === imageKey || r.imageUrl === input.imageUrl);
     const record = {
-      id: `gen_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      ...(duplicate || {}),
+      id: duplicate?.id || `gen_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       imageUrl: input.imageUrl,
+      imageKey,
       module: input.module,
       moduleLabel: resolveLabel(input.module, input.moduleLabel),
-      promptText: input.promptText,
-      creditsUsed: input.creditsUsed,
-      createdAt: new Date().toISOString(),
+      promptText: input.promptText || duplicate?.promptText,
+      creditsUsed: Math.max(input.creditsUsed || 0, duplicate?.creditsUsed || 0),
+      createdAt: duplicate?.createdAt || new Date().toISOString(),
+      metadata: { ...(duplicate?.metadata || {}), ...(input.metadata || {}) },
+      config: { ...(duplicate?.config || {}), ...(input.config || {}) },
+      source: duplicate?.source || 'worker',
+      syncedAt: new Date().toISOString(),
     };
-    const updated = [record, ...existing].slice(0, MAX_ENTRIES);
+    const updated = [
+      record,
+      ...existing.filter((r: any) => r.id !== duplicate?.id && r.imageKey !== imageKey && r.imageUrl !== input.imageUrl),
+    ].slice(0, MAX_ENTRIES);
     await redis.set(key, updated, { ex: TTL_SECONDS });
   } catch (err: any) {
     console.error(`[Notifications] appendToHistory failed for ${input.uid}:`, err.message);

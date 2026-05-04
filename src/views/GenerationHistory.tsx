@@ -1,32 +1,32 @@
-/**
- * GenerationHistory.tsx — FIXED (sin secondaryActions)
- */
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   generationHistoryService,
   GenerationRecord,
-  MODULE_LABELS
+  MODULE_LABELS,
 } from '../services/generationHistoryService';
 import {
-  Clock, Download, Trash2, Image, Loader2, X,
-  Filter, CheckSquare, Square, DownloadCloud, AlertCircle, RefreshCw
+  AlertCircle,
+  CheckCircle2,
+  CheckSquare,
+  Clock,
+  Copy,
+  Download,
+  DownloadCloud,
+  Image,
+  Loader2,
+  PackagePlus,
+  RefreshCw,
+  Square,
+  Trash2,
+  UserPlus,
 } from 'lucide-react';
 import { downloadAsZip } from '../utils/imageUtils';
 import { ImageLightbox } from '../components/shared/ImageLightbox';
 import { FloatingActionBar } from '../components/shared/FloatingActionBar';
+import { AddToProjectButton } from '../components/shared/AddToProjectButton';
 import { useScrollFAB } from '../hooks/useScrollFAB';
-
-// localStorage fallback
-const LS_KEY = 'luz_generation_history';
-
-function loadFromLocalStorage(): GenerationRecord[] {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
-}
+import { dbService } from '../services/dbService';
+import type { AvatarProfile, ProductProfile } from '../types';
 
 const timeAgo = (isoDate: string): string => {
   const diff = Date.now() - new Date(isoDate).getTime();
@@ -43,18 +43,38 @@ const downloadImage = (img: string, index: number) => {
   const link = document.createElement('a');
   link.href = img;
   link.download = `luzIA_${index + 1}.png`;
+  document.body.appendChild(link);
   link.click();
+  document.body.removeChild(link);
+};
+
+const isModelRecord = (record: GenerationRecord): boolean =>
+  record.module.includes('model_dna') ||
+  record.module.includes('avatar') ||
+  record.moduleLabel.toLowerCase().includes('model dna');
+
+const readableName = (record: GenerationRecord): string => {
+  const fromMetadata = record.metadata?.name || record.metadata?.productTitle || record.metadata?.title;
+  if (fromMetadata) return String(fromMetadata);
+  const label = MODULE_LABELS[record.module] || record.moduleLabel || 'Generacion';
+  return `${label} ${new Date(record.createdAt).toLocaleDateString()}`;
+};
+
+const promptSnippet = (record: GenerationRecord): string => {
+  const prompt = record.promptText?.replace(/\s+/g, ' ').trim();
+  if (!prompt) return 'Sin prompt guardado';
+  return prompt.length > 110 ? `${prompt.slice(0, 110)}...` : prompt;
 };
 
 const GenerationHistory: React.FC = () => {
   const [records, setRecords] = useState<GenerationRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [apiError, setApiError] = useState(false);
-  const [usingFallback, setUsingFallback] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkLoading, setIsBulkLoading] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
@@ -63,36 +83,36 @@ const GenerationHistory: React.FC = () => {
 
   const { isVisible: fabVisible } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: false });
 
+  const showToast = (message: string) => {
+    setToast(message);
+    window.setTimeout(() => setToast(null), 2600);
+  };
+
   const loadHistory = useCallback(async () => {
     setLoading(true);
-    setApiError(false);
-    setUsingFallback(false);
+    setLoadError(false);
     try {
-      const timeoutPromise = new Promise<GenerationRecord[]>((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 5000)
-      );
-      const apiPromise = generationHistoryService.getAll(200);
-      const data = await Promise.race([apiPromise, timeoutPromise]);
+      const data = await generationHistoryService.getAll(200);
       setRecords(data);
+    } catch (err) {
+      console.warn('[GenerationHistory] load failed', err);
+      setLoadError(true);
+    } finally {
       setLoading(false);
-      return;
-    } catch (err: any) {
-      console.warn('[GenerationHistory] API failed, using localStorage fallback');
-      setApiError(true);
     }
-    const local = loadFromLocalStorage();
-    setRecords(local);
-    setUsingFallback(true);
-    setLoading(false);
   }, []);
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
-  const filtered = activeFilter
-    ? records.filter(r => r.module === activeFilter)
-    : records;
+  const filtered = useMemo(
+    () => activeFilter ? records.filter(r => r.module === activeFilter) : records,
+    [activeFilter, records],
+  );
 
-  const allModules = Array.from(new Set(records.map(r => r.module)));
+  const allModules = useMemo(
+    () => Array.from(new Set(records.map(r => r.module))),
+    [records],
+  );
 
   const toggleSelect = (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -111,34 +131,28 @@ const GenerationHistory: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Eliminar esta imagen del historial?')) return;
+    if (!confirm('Eliminar esta imagen del historial?')) return;
     setDeletingId(id);
-    if (!usingFallback) {
+    try {
       await generationHistoryService.delete(id).catch(console.error);
+      setRecords(prev => prev.filter(r => r.id !== id));
+      setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+    } finally {
+      setDeletingId(null);
     }
-    setRecords(prev => {
-      const updated = prev.filter(r => r.id !== id);
-      if (usingFallback) localStorage.setItem(LS_KEY, JSON.stringify(updated));
-      return updated;
-    });
-    setDeletingId(null);
-    setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n; });
   };
 
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`¿Eliminar ${selectedIds.size} imágenes?`)) return;
+    if (!confirm(`Eliminar ${selectedIds.size} imagenes?`)) return;
     setIsBulkLoading(true);
-    if (!usingFallback) {
+    try {
       await generationHistoryService.deleteBatch(Array.from(selectedIds)).catch(console.error);
+      setRecords(prev => prev.filter(r => !selectedIds.has(r.id)));
+      setSelectedIds(new Set());
+    } finally {
+      setIsBulkLoading(false);
     }
-    setRecords(prev => {
-      const updated = prev.filter(r => !selectedIds.has(r.id));
-      if (usingFallback) localStorage.setItem(LS_KEY, JSON.stringify(updated));
-      return updated;
-    });
-    setSelectedIds(new Set());
-    setIsBulkLoading(false);
   };
 
   const handleBulkDownload = async () => {
@@ -147,16 +161,84 @@ const GenerationHistory: React.FC = () => {
     try {
       const selected = records.filter(r => selectedIds.has(r.id));
       await downloadAsZip(selected.map(r => r.imageUrl), `luzIA_${Date.now()}.zip`, 'gen');
-    } catch { alert('Error al crear ZIP. Descarga individualmente.'); }
-    finally { setIsBulkLoading(false); }
+    } catch {
+      alert('Error al crear ZIP. Descarga individualmente.');
+    } finally {
+      setIsBulkLoading(false);
+    }
   };
 
   const openLightbox = (record: GenerationRecord, idx: number) => {
-    const filteredImages = filtered.map(r => r.imageUrl);
-    setLightboxImages(filteredImages);
+    setLightboxImages(filtered.map(r => r.imageUrl));
     setLightboxIndex(idx);
-    setLightboxMeta({ label: MODULE_LABELS[record.module] || record.module });
+    setLightboxMeta({ label: MODULE_LABELS[record.module] || record.moduleLabel || record.module });
     setLightboxOpen(true);
+  };
+
+  const copyPrompt = async (record: GenerationRecord) => {
+    const text = record.promptText || '';
+    if (!text) {
+      showToast('Esta imagen no tiene prompt guardado');
+      return;
+    }
+    await navigator.clipboard?.writeText(text);
+    showToast('Prompt copiado');
+  };
+
+  const saveToCatalog = async (record: GenerationRecord) => {
+    const refs = (record.references || [])
+      .map(ref => ref.imageUrl)
+      .filter((url): url is string => !!url);
+
+    const product: ProductProfile = {
+      id: `history_product_${Date.now()}`,
+      name: readableName(record),
+      category: 'other',
+      baseImages: refs,
+      generatedImages: [record.imageUrl],
+      productPrompt: record.promptText || '',
+      technicalDescription: record.metadata?.technicalDescription || 'Guardado desde historial.',
+      commercialDescription: record.metadata?.commercialDescription || 'Imagen recuperada desde historial.',
+      metadata: {
+        material: record.metadata?.material || '',
+        color: record.metadata?.color || '',
+        style: record.config?.modelId || record.module,
+      },
+      createdAt: Date.now(),
+    };
+
+    await dbService.saveProduct(product);
+    showToast('Guardado en catalogo');
+  };
+
+  const saveToModelLibrary = async (record: GenerationRecord) => {
+    const avatar: AvatarProfile = {
+      id: `history_avatar_${Date.now()}`,
+      name: readableName(record),
+      type: record.module === 'model_dna_manual' ? 'manual' : 'clone',
+      identityPrompt: record.promptText || '',
+      physicalDescription: record.metadata?.physicalDescription || 'Identidad recuperada desde historial.',
+      negativePrompt: record.config?.negative || '',
+      baseImages: [record.imageUrl],
+      metadata: {
+        gender: record.metadata?.gender || '',
+        age: record.metadata?.age || '',
+        build: record.metadata?.build || '',
+        ethnicity: record.metadata?.ethnicity || '',
+        eyes: record.metadata?.eyes || '',
+        hairColor: record.metadata?.hairColor || '',
+        hairType: record.metadata?.hairType || '',
+        hairLength: record.metadata?.hairLength || '',
+        personality: record.metadata?.personality || '',
+        expression: record.metadata?.expression || '',
+        outfit: record.metadata?.outfit || '',
+        source: 'generation_history',
+      },
+      createdAt: Date.now(),
+    };
+
+    await dbService.saveAvatar(avatar);
+    showToast('Guardado en biblioteca de modelos');
   };
 
   return (
@@ -172,7 +254,7 @@ const GenerationHistory: React.FC = () => {
                 Mis Generaciones
               </h1>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                {loading ? 'Cargando...' : `${records.length} imágenes guardadas`}
+                {loading ? 'Cargando...' : `${records.length} imagenes protegidas`}
               </p>
             </div>
           </div>
@@ -187,13 +269,13 @@ const GenerationHistory: React.FC = () => {
         </button>
       </header>
 
-      {usingFallback && (
+      {loadError && (
         <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 text-amber-700 px-5 py-4 rounded-2xl">
           <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-xs font-black uppercase tracking-tight">Historial local</p>
+            <p className="text-xs font-black uppercase tracking-tight">Historial local activo</p>
             <p className="text-xs font-bold text-amber-600 mt-0.5">
-              No se pudo conectar con el servidor. Mostrando historial guardado en este dispositivo.
+              No se pudo sincronizar con el servidor, pero se mantiene la copia de seguridad de este dispositivo.
             </p>
           </div>
         </div>
@@ -211,9 +293,9 @@ const GenerationHistory: React.FC = () => {
           <div className="w-16 h-16 bg-slate-100 rounded-[24px] flex items-center justify-center">
             <Image className="w-8 h-8 text-slate-300" />
           </div>
-          <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Sin generaciones aún</p>
+          <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Sin generaciones aun</p>
           <p className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-            Las imágenes que generes aparecerán aquí
+            Las imagenes que generes apareceran aqui
           </p>
         </div>
       )}
@@ -260,6 +342,8 @@ const GenerationHistory: React.FC = () => {
             {filtered.map((record, idx) => {
               const isSelected = selectedIds.has(record.id);
               const isDeleting = deletingId === record.id;
+              const moduleLabel = MODULE_LABELS[record.module] || record.moduleLabel || record.module;
+
               return (
                 <div
                   key={record.id}
@@ -281,20 +365,60 @@ const GenerationHistory: React.FC = () => {
                         <Image className="w-8 h-8 text-slate-200" />
                       </div>
                     )}
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+
+                    <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 flex-wrap p-3">
                       <button
                         onClick={e => { e.stopPropagation(); downloadImage(record.imageUrl, idx); }}
                         className="p-2 bg-white/20 backdrop-blur-sm text-white rounded-xl hover:bg-white/30 transition-colors"
+                        title="Descargar"
                       >
                         <Download className="w-4 h-4" />
                       </button>
                       <button
+                        onClick={e => { e.stopPropagation(); copyPrompt(record); }}
+                        className="p-2 bg-white/20 backdrop-blur-sm text-white rounded-xl hover:bg-white/30 transition-colors"
+                        title="Copiar prompt"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                      {isModelRecord(record) ? (
+                        <button
+                          onClick={e => { e.stopPropagation(); saveToModelLibrary(record).catch(err => showToast(err.message)); }}
+                          className="p-2 bg-emerald-500/90 text-white rounded-xl hover:bg-emerald-500 transition-colors"
+                          title="Guardar en biblioteca de modelos"
+                        >
+                          <UserPlus className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={e => { e.stopPropagation(); saveToCatalog(record).catch(err => showToast(err.message)); }}
+                          className="p-2 bg-emerald-500/90 text-white rounded-xl hover:bg-emerald-500 transition-colors"
+                          title="Guardar en catalogo"
+                        >
+                          <PackagePlus className="w-4 h-4" />
+                        </button>
+                      )}
+                      <AddToProjectButton
+                        imageUrl={record.imageUrl}
+                        type="result"
+                        module={record.module}
+                        metadata={{
+                          promptText: record.promptText,
+                          moduleLabel,
+                          historyId: record.id,
+                          config: record.config,
+                        }}
+                        className="rounded-xl bg-white/90"
+                      />
+                      <button
                         onClick={e => { e.stopPropagation(); handleDelete(record.id); }}
-                        className="p-2 bg-red-500/80 text-white rounded-xl hover:bg-red-600 transition-colors"
+                        className="p-2 bg-red-500/85 text-white rounded-xl hover:bg-red-600 transition-colors"
+                        title="Eliminar"
                       >
                         {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                       </button>
                     </div>
+
                     <button
                       onClick={e => toggleSelect(record.id, e)}
                       className={`absolute top-2 left-2 w-6 h-6 rounded-lg flex items-center justify-center transition-all ${
@@ -305,13 +429,22 @@ const GenerationHistory: React.FC = () => {
                     >
                       {isSelected ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
                     </button>
+                    {record.references?.length ? (
+                      <span className="absolute top-2 right-2 bg-black/50 text-white text-[8px] font-black px-2 py-1 rounded-lg uppercase">
+                        {record.references.length} refs
+                      </span>
+                    ) : null}
                   </div>
-                  <div className="p-3 space-y-1">
-                    <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded-md">
-                      {MODULE_LABELS[record.module] || record.module}
+
+                  <div className="p-3 space-y-2">
+                    <span className="inline-flex text-[9px] font-black text-indigo-500 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded-md max-w-full truncate">
+                      {moduleLabel}
                     </span>
                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
                       {timeAgo(record.createdAt)}
+                    </p>
+                    <p className="text-[10px] font-semibold text-slate-500 leading-snug line-clamp-2">
+                      {promptSnippet(record)}
                     </p>
                   </div>
                 </div>
@@ -328,10 +461,17 @@ const GenerationHistory: React.FC = () => {
           onClose={() => setLightboxOpen(false)}
           onDownload={(url, idx) => downloadImage(url, idx)}
           metadata={lightboxMeta}
+          extraButton={filtered.some(record => !!record.promptText) ? {
+            label: 'Copiar prompt',
+            icon: <Copy className="w-4 h-4" />,
+            onClick: (_url, idx) => {
+              const record = filtered[idx];
+              if (record) copyPrompt(record);
+            },
+          } : undefined}
         />
       )}
 
-      {/* FAB — usando onDelete y onDownload directamente */}
       {selectedIds.size > 0 && fabVisible && (
         <FloatingActionBar
           isVisible={true}
@@ -339,7 +479,19 @@ const GenerationHistory: React.FC = () => {
           onDownload={handleBulkDownload}
           onDelete={handleBulkDelete}
           onClearSelection={() => setSelectedIds(new Set())}
+          primaryAction={{
+            label: isBulkLoading ? 'Procesando...' : 'Descargar ZIP',
+            icon: isBulkLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <DownloadCloud className="w-4 h-4" />,
+            onClick: handleBulkDownload,
+          }}
         />
+      )}
+
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-4 py-2 rounded-full text-xs font-bold z-[20001] flex items-center gap-2">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
+          {toast}
+        </div>
       )}
     </div>
   );
