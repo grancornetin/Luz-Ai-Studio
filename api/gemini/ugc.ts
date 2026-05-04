@@ -17,6 +17,13 @@ interface Job {
   updatedAt: number;
   shotIndex?: number;
   totalShots?: number;
+  // Notificaciones Nivel 3
+  uid?: string;
+  sessionId?: string;
+  module?: string;
+  moduleLabel?: string;
+  metadata?: Record<string, any>;
+  refunded?: boolean;
 }
 
 // Usar variables KV_REST_API_* que Vercel inyecta automáticamente
@@ -146,7 +153,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Iniciar generación asíncrona
     if (action === 'generateImageAsync') {
-      const { prompt, referenceImages, aspectRatio = '3:4', shotIndex, totalShots, modelId = 'gemini' } = payload;
+      const {
+        prompt, referenceImages, aspectRatio = '3:4',
+        shotIndex, totalShots, modelId = 'gemini',
+        uid: rawUid, sessionId, module: moduleName, moduleLabel, metadata,
+      } = payload;
       if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
 
       const parts: any[] = [];
@@ -161,6 +172,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       parts.push({ text: prompt });
 
       const jobId = generateJobId();
+      const safeUid = rawUid ? sanitizeUid(rawUid) : undefined;
       const job: Job = {
         id: jobId,
         status: 'pending',
@@ -168,6 +180,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updatedAt: Date.now(),
         shotIndex,
         totalShots,
+        uid: safeUid,
+        sessionId,
+        module: moduleName,
+        moduleLabel,
+        metadata,
       };
 
       // Siempre guardar parts en Redis — evita superar límite 1MB de QStash
@@ -210,6 +227,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updatedAt: job.updatedAt,
         shotIndex: job.shotIndex,
         totalShots: job.totalShots,
+        refunded: job.refunded === true,
       };
       if (job.status === 'completed') response.image = job.result;
       if (job.status === 'failed') response.error = job.error;

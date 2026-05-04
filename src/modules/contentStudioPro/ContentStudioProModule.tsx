@@ -38,7 +38,9 @@ import { readAndCompressFile, downloadAsZip } from '../../utils/imageUtils';
 
 // Nuevos componentes base
 import { ErrorDisplay, toAppError, type AppError } from '../../components/shared/ErrorDisplay';
-import { REFUNDABLE_ERRORS } from '../../services/imageApiService';
+import { REFUNDABLE_ERRORS, newSessionId } from '../../services/imageApiService';
+import { getNotification } from '../../services/notificationsService';
+import { useSearchParams } from 'react-router-dom';
 import { ImageSlot } from '../../components/shared/ImageSlot';
 import UploadDisclaimer from '../../components/shared/UploadDisclaimer';
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
@@ -96,10 +98,12 @@ const CustomCheckbox: React.FC<{ checked: boolean; onChange: () => void; label?:
 
 const ContentStudioProModule: React.FC = () => {
   const modelId = 'gemini' as const;
-  const { credits } = useAuth(); // <-- NUEVO: para obtener créditos actuales
+  const { credits, user } = useAuth();
   const [step, setStep] = useState<Step>('setup');
   const [sets, setSets] = useState<ContentStudioProSet[]>([]);
   const [currentSet, setCurrentSet] = useState<ContentStudioProSet | null>(null);
+  // sessionId del set en curso, para que server agrupe master + derived shots en una sola notificación
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<FilterTab>('TODAS');
 
   const [selectionMode, setSelectionMode] = useState(false);
@@ -163,6 +167,70 @@ const ContentStudioProModule: React.FC = () => {
   useEffect(() => {
     loadSets();
   }, []);
+
+  // Retomar sesión desde notificación (?session=xxx)
+  // Reconstruimos el set y saltamos a 'shots' o 'completed' según el estado.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const sessionParam = searchParams.get('session');
+    if (!sessionParam || !user) return;
+    let cancelled = false;
+    (async () => {
+      const notif = await getNotification(user.uid, sessionParam);
+      if (cancelled || !notif) {
+        setSearchParams({}, { replace: true });
+        return;
+      }
+      // Master en posición 0, derivados en 1..N
+      const masterShot = notif.shots.find(s => s.index === 0);
+      const derivedShots = notif.shots.filter(s => s.index > 0).sort((a, b) => a.index - b.index);
+      const userShots = Math.max(0, notif.totalShots - 1);
+
+      const reconstructedShots = Array.from({ length: userShots }).map((_, i) => {
+        const found = derivedShots.find(s => s.index === i + 1);
+        return {
+          key: `s${i + 1}` as ShotKey,
+          name: `Shot ${i + 1}`,
+          promptUsed: '',
+          negativeUsed: '',
+          status: found?.status === 'completed' && found.imageUrl ? 'done' as const :
+                  found?.status === 'failed' ? 'error' as const : 'idle' as const,
+          imageUrl: found?.imageUrl,
+          errorMsg: found?.error || null,
+          attempts: 0,
+        };
+      });
+
+      const reconstructedSet: ContentStudioProSet = {
+        id: sessionParam,
+        createdAt: notif.createdAt,
+        style: FIXED_STYLE as any,
+        focus: notif.metadata?.focus || 'AVATAR',
+        productSize: notif.metadata?.productSize,
+        productCategory: 'jewelry' as any,
+        faceRefs: [],
+        productRef: null,
+        outfitRef: null,
+        sceneRef: null,
+        sceneText: '',
+        image0Url: masterShot?.imageUrl || '',
+        ref0Analysis: undefined as any,
+        attemptsImage0: 1,
+        shots: reconstructedShots,
+        userShotCount: notif.metadata?.userShotCount || userShots,
+      };
+
+      setCurrentSet(reconstructedSet);
+      setCurrentSessionId(sessionParam);
+      setUserShotCount(reconstructedSet.userShotCount || userShots);
+      // Si hay master, vamos a 'producing' (vista con grilla de shots);
+      // si no, vuelve a setup para que reconfigure refs.
+      setStep(masterShot?.imageUrl ? 'producing' : 'setup');
+      setSearchParams({}, { replace: true });
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
 
   // Onboarding: carga imagen gratuita desde localStorage si viene del wizard
   useEffect(() => {
@@ -249,11 +317,32 @@ const ContentStudioProModule: React.FC = () => {
     setErrorStatus(null);
     setCreditsRefunded(false);
 
+    // Notificaciones Nivel 3: total = 1 master + N derived shots
+    const totalShotsForSession = 1 + userShotCount;
+    const sessionId = newSessionId();
+    setCurrentSessionId(sessionId);
+    const sessionMetadata: Record<string, any> = {
+      focus,
+      productSize: focus === 'PRODUCT' ? productSize : undefined,
+      userShotCount,
+      hasFace: faceRefs.length > 0,
+      hasProduct: !!productRef,
+      hasOutfit: !!outfitRef,
+      hasScene: !!sceneRef,
+    };
+    const sessionParams = {
+      uid: user?.uid,
+      sessionId,
+      module: 'content_studio',
+      moduleLabel: `Content Studio (${FOCUS_LABELS[focus].split(' / ')[0]})`,
+      metadata: sessionMetadata,
+    };
+
     try {
       setLoadingMsg('Analizando referencias y preparando sesión...');
-      
+
       const useProduct = (focus === 'OUTFIT' || focus === 'SCENE') ? isProductComplement : true;
-      
+
       const plan = await contentStudioService.buildSessionPlan(
         focus,
         { productRef, outfitRef, sceneRef, sceneText },
@@ -263,7 +352,7 @@ const ContentStudioProModule: React.FC = () => {
       setSessionPlan(plan);
 
       setLoadingMsg('Sincronizando identidad y generando Master...');
-      
+
       const { imageUrl: image0, analysis } = await contentStudioService.generateImage0(
         faceRefs[0],
         productRef,
@@ -279,6 +368,8 @@ const ContentStudioProModule: React.FC = () => {
           if (status === 'completed') setLoadingMsg('Master generado exitosamente');
         },
         modelId,
+        // Master = posición 0 dentro del set master+derived
+        { ...sessionParams, shotIndex: 0, totalShots: totalShotsForSession },
       );
       setRef0Analysis(analysis);
 
@@ -396,7 +487,14 @@ const ContentStudioProModule: React.FC = () => {
     useProduct: boolean,
     focusRef: string | null,
     currentSessionPlan: any,
-    onAttemptUpdate: (attempt: number) => void
+    onAttemptUpdate: (attempt: number) => void,
+    sessionParams?: {
+      uid?: string;
+      sessionId?: string;
+      module?: string;
+      moduleLabel?: string;
+      metadata?: Record<string, any>;
+    },
   ): Promise<string> => {
     let lastError: any = null;
 
@@ -424,6 +522,7 @@ const ContentStudioProModule: React.FC = () => {
           totalShots,
           () => {},
           modelId,
+          sessionParams,
         );
 
         return url;
@@ -539,6 +638,16 @@ const ContentStudioProModule: React.FC = () => {
     // step 0 = "Analizando", steps 1..N = shots, step N+1 = "Finalizando"
     advanceProgress(1);
 
+    // Notificaciones Nivel 3: shots derivados van en posiciones 1..N
+    // (master ya ocupó la posición 0). totalShots incluye al master.
+    const totalShotsForSession = updatedShots.length + 1;
+    const sessionParamsForShots = currentSessionId ? {
+      uid: user?.uid,
+      sessionId: currentSessionId,
+      module: 'content_studio',
+      moduleLabel: `Content Studio (${FOCUS_LABELS[focus].split(' / ')[0]})`,
+    } : undefined;
+
     const shotPromises = updatedShots.map(async (shot, idx) => {
       updateShotStatus(shot.key, 'processing');
 
@@ -546,14 +655,15 @@ const ContentStudioProModule: React.FC = () => {
         const url = await generateShotWithAutoRetry(
           producingSet,
           shot,
-          idx,
-          updatedShots.length,
+          idx + 1,                  // shotIndex en la notificación (master fue 0)
+          totalShotsForSession,
           useProduct,
           focusRef,
           sessionPlan,
           (attempt) => {
             updateShotStatus(shot.key, 'retrying', undefined, undefined, attempt - 1);
-          }
+          },
+          sessionParamsForShots,
         );
 
         updateShotStatus(shot.key, 'completed', url);
@@ -657,6 +767,16 @@ const ContentStudioProModule: React.FC = () => {
 
     advanceProgress(1); // move past "Preparando reintento"
 
+    // El retry crea su propia mini-notificación con totalShots = N reintentos
+    const retrySessionId = newSessionId();
+    const retrySessionParams = {
+      uid: user?.uid,
+      sessionId: retrySessionId,
+      module: 'content_studio',
+      moduleLabel: `Content Studio (${FOCUS_LABELS[targetSet.focus].split(' / ')[0]} – Retry)`,
+    };
+    const retryTotal = failedShots.length;
+
     const retryPromises = failedShots.map(async (shot, retryIdx) => {
       const idx = updatedShots.findIndex(s => s.key === shot.key);
       updateShotStatus(shot.key, 'processing');
@@ -665,14 +785,15 @@ const ContentStudioProModule: React.FC = () => {
         const url = await generateShotWithAutoRetry(
           targetSet,
           shot,
-          idx,
-          updatedShots.length,
+          retryIdx,                   // posición en la nueva notificación de retry
+          retryTotal,
           useProduct,
           focusRef,
           sessionPlan,
           (attempt) => {
             updateShotStatus(shot.key, 'retrying', undefined, undefined, attempt - 1);
-          }
+          },
+          retrySessionParams,
         );
         updateShotStatus(shot.key, 'completed', url);
         addProgressShot(url, idx);

@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { LogOut, User as UserIcon, Menu, X } from 'lucide-react';
+import { LogOut, User as UserIcon, Menu, X, Bell } from 'lucide-react';
+import { useNotifications } from './hooks/useNotifications';
 
 // Vistas y Módulos — carga diferida para reducir bundle inicial
 const Landing               = lazy(() => import('./views/Landing'));
@@ -182,6 +183,7 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) => {
   const location = useLocation();
   const { profile, credits, isAdmin, signOut } = useAuth();
+  const { unreadCount } = useNotifications();
   const planStyle = PLAN_STYLES[credits.plan] || PLAN_STYLES.free;
   const isActive = (path: string) => location.pathname === path || (path !== '/' && location.pathname.startsWith(path));
 
@@ -196,6 +198,28 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
       <span className="text-xs font-black uppercase tracking-widest">{label}</span>
     </Link>
   );
+
+  // Notificaciones — link especial con badge de no-leídas, usando ícono lucide
+  const notificationsLink = () => {
+    const active = isActive('/notifications');
+    return (
+      <Link
+        to="/notifications"
+        onClick={onNavigate}
+        className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${active ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}
+      >
+        <div className="relative">
+          <Bell size={14} />
+          {unreadCount > 0 && (
+            <span className={`absolute -top-2 -right-2 min-w-[16px] h-[16px] px-1 text-[9px] font-black rounded-full flex items-center justify-center shadow-md ${active ? 'bg-white text-indigo-600' : 'bg-rose-500 text-white'}`}>
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+        </div>
+        <span className="text-xs font-black uppercase tracking-widest flex-1">Notificaciones</span>
+      </Link>
+    );
+  };
 
   return (
     <>
@@ -214,6 +238,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
         <div className="flex-1 overflow-y-auto px-6 space-y-6 pb-4">
           <div className="space-y-1">
             {navLink('/dashboard', 'Dashboard', 'fa-house')}
+            {notificationsLink()}
             {navLink('/historial', 'Mis Generaciones', 'fa-clock-rotate-left')}
           </div>
 

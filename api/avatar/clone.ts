@@ -21,6 +21,13 @@ interface CloneJob {
   error?: string;
   createdAt: number;
   updatedAt: number;
+  // Notificaciones Nivel 3
+  uid?: string;
+  sessionId?: string;
+  module?: string;
+  moduleLabel?: string;
+  metadata?: Record<string, any>;
+  refunded?: boolean;
 }
 
 function generateJobId(): string {
@@ -46,7 +53,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Acción: startClone (modo imagen o manual)
   // ──────────────────────────────────────────────
   if (action === 'startClone') {
-    const { mode, name, files, identityPrompt, negativePrompt, gender, personality, expression } = payload;
+    const {
+      mode, name, files, identityPrompt, negativePrompt, gender, personality, expression,
+      sessionId, module: moduleName, moduleLabel, metadata,
+    } = payload;
     if (!name || !mode) {
       return res.status(400).json({ error: 'Missing name or mode' });
     }
@@ -78,6 +88,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       status: 'pending',
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      uid: verifiedUid,
+      sessionId,
+      module: moduleName || 'clone',
+      moduleLabel: moduleLabel || 'Clone de modelo',
+      metadata: { ...metadata, name, mode, gender },
     };
     await redis.set(`clone_job:${jobId}`, JSON.stringify(job), { ex: 3600 });
 
@@ -106,6 +121,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       result: job.result,
       error: job.error,
       updatedAt: job.updatedAt,
+      refunded: job.refunded === true,
     });
   }
 

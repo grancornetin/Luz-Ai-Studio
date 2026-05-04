@@ -21,6 +21,7 @@ export const avatarService = {
     personality: string = 'Profesional y elegante',
     expression: string = 'Natural',
     onStatusChange?: GenerateImageParams['onStatusChange'],
+    sessionParams?: Partial<GenerateImageParams>,
   ): Promise<string> {
     const bodyArchetype = gender === 'mujer'
       ? 'PERFECT HOURGLASS 90-60-90 PROPORTIONS. Highly toned aesthetic silhouette. Slim waist, wide hips.'
@@ -63,6 +64,7 @@ export const avatarService = {
       aspectRatio:     '3:4',
       module:          `${MODULE}.generateBodyMaster`,
       onStatusChange,
+      ...sessionParams,
     });
   },
 
@@ -71,6 +73,7 @@ export const avatarService = {
     gender: 'hombre' | 'mujer',
     outfitDescription: string | null = null,
     onStatusChange?: GenerateImageParams['onStatusChange'],
+    sessionParams?: Partial<GenerateImageParams>,
   ): Promise<{ rear: string; side: string }> {
     const archetype    = gender === 'mujer' ? '90-60-90 silhouette' : 'Gym-toned build';
     const outfitClause = outfitDescription ? `Wearing ${outfitDescription}.` : 'Same technical bodysuit.';
@@ -84,6 +87,10 @@ export const avatarService = {
         aspectRatio:     '3:4',
         module:          `${MODULE}.rearView`,
         onStatusChange,
+        ...sessionParams,
+        // En el set master, rear es la posición 1 (después del body en posición 0).
+        // Si el llamador pasó shotIndex explícito (uso fuera del master), se respeta.
+        ...(sessionParams?.shotIndex == null ? { shotIndex: 1 } : {}),
       }),
       imageApiService.generateImage({
         prompt:          `[TECHNICAL VIEW: SIDE PROFILE 90 DEGREES]. FULL BODY HEAD-TO-TOE. Exact 90° rotation from BODYMASTER. ${outfitClause} Maintain ${archetype}.`,
@@ -92,6 +99,8 @@ export const avatarService = {
         aspectRatio:     '3:4',
         module:          `${MODULE}.sideView`,
         onStatusChange,
+        ...sessionParams,
+        ...(sessionParams?.shotIndex == null ? { shotIndex: 2 } : {}),
       }),
     ]);
 
@@ -102,6 +111,7 @@ export const avatarService = {
     bodyMaster: string,
     outfitDescription: string | null = null,
     onStatusChange?: GenerateImageParams['onStatusChange'],
+    sessionParams?: Partial<GenerateImageParams>,
   ): Promise<string> {
     const outfitClause = outfitDescription
       ? `Outfit visible at neck only, matching ${outfitDescription}.`
@@ -123,9 +133,13 @@ export const avatarService = {
       aspectRatio:     '3:4',
       module:          `${MODULE}.generateFaceMaster`,
       onStatusChange,
+      ...sessionParams,
     });
   },
 
+  // El "set master" emite 4 imágenes (body + rear + side + face) que el módulo
+  // ve como un único set. Si sessionParams trae sessionId, esas 4 imágenes
+  // se agrupan en una sola notificación con totalShots=4 y shotIndex 0..3.
   async generateMasterSet(
     identityPrompt: string,
     negative: string,
@@ -134,16 +148,25 @@ export const avatarService = {
     personality: string = 'Profesional y elegante',
     expression: string = 'Natural',
     onStatusChange?: GenerateImageParams['onStatusChange'],
+    sessionParams?: Partial<GenerateImageParams>,
   ): Promise<string[]> {
+    const totalShots = 4;
+    const withShot = (i: number): Partial<GenerateImageParams> | undefined =>
+      sessionParams ? { ...sessionParams, shotIndex: i, totalShots } : undefined;
+
     // BodyMaster primero — las 3 vistas dependen de él
     const bodyMaster = await this.generateBodyMaster(
       identityPrompt, negative, [], gender, forceOutfit, personality, expression, onStatusChange,
+      withShot(0),
     );
 
     // Las 3 vistas restantes en paralelo
     const [{ rear, side }, faceMaster] = await Promise.all([
-      this.generateTechnicalViews(bodyMaster, gender, forceOutfit, onStatusChange),
-      this.generateFaceMaster(bodyMaster, forceOutfit, onStatusChange),
+      this.generateTechnicalViews(bodyMaster, gender, forceOutfit, onStatusChange,
+        // rear y side comparten paramset; abajo el módulo se encarga de pasar shotIndex 1 y 2
+        sessionParams ? { ...sessionParams, totalShots } : undefined,
+      ),
+      this.generateFaceMaster(bodyMaster, forceOutfit, onStatusChange, withShot(3)),
     ]);
 
     return [bodyMaster, rear, side, faceMaster];

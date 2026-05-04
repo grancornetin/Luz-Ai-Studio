@@ -11,6 +11,9 @@ import { outfitStorage } from './outfitStorage';
 import { OutfitKit, OutfitItem, SavedOutfitItem, OutfitCombination } from './types';
 import { downloadAsZip } from '../../utils/imageUtils';
 import { useAuth } from '../../modules/auth/AuthContext';
+import { newSessionId } from '../../services/imageApiService';
+import { getNotification } from '../../services/notificationsService';
+import { useSearchParams } from 'react-router-dom';
 import { GenerateButton } from '../../components/shared/GenerateButton';
 
 // Nuevos componentes base
@@ -24,7 +27,7 @@ type Step = 'idle' | 'detecting' | 'scan_overlay' | 'generating_renders' | 'revi
 type LibraryView = 'kits' | 'items' | 'combinations' | 'creator';
 
 const OutfitExtractorModule: React.FC = () => {
-  const { credits } = useAuth();
+  const { credits, user } = useAuth();
   const modelId = 'gemini' as const;
   const [step, setStep] = useState<Step>('idle');
   const [mainView, setMainView] = useState<'main' | 'library'>('main');
@@ -51,6 +54,34 @@ const OutfitExtractorModule: React.FC = () => {
 
   const { checkAndDeduct, showNoCredits, requiredCredits, closeModal } = useCreditGuard();
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Retomar sesión desde notificación: cargar imágenes ya generadas en lightbox
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const sessionParam = searchParams.get('session');
+    if (!sessionParam || !user) return;
+    let cancelled = false;
+    (async () => {
+      const notif = await getNotification(user.uid, sessionParam);
+      if (cancelled || !notif) {
+        setSearchParams({}, { replace: true });
+        return;
+      }
+      const imgs = notif.shots
+        .filter(s => s.status === 'completed' && s.imageUrl)
+        .sort((a, b) => a.index - b.index)
+        .map(s => s.imageUrl!);
+      if (imgs.length > 0) {
+        setLightboxImages(imgs);
+        setLightboxIndex(0);
+        setLightboxMetadata({ label: notif.moduleLabel });
+        setLightboxOpen(true);
+      }
+      setSearchParams({}, { replace: true });
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
 
   // Costo por prenda = CREDIT_COSTS.OUTFIT_PER_GARMENT (independiente del modelo)
   // El total se calcula en tiempo real según el número de prendas seleccionadas
@@ -166,17 +197,33 @@ const OutfitExtractorModule: React.FC = () => {
 
     setStep('generating_renders');
     const updatedItems = [...currentKit.items];
-    
+
+    // Notificaciones Nivel 3: una sesión por extracción de outfit
+    const sessionId = newSessionId();
+    const totalSelected = selectedItems.length;
+    const baseSessionParams = {
+      uid: user?.uid,
+      sessionId,
+      module: 'outfit',
+      moduleLabel: 'Extraer prendas',
+      metadata: { kitId: currentKit.id, totalItems: totalSelected },
+    };
+
+    let shotIdx = 0;
     for (let i = 0; i < updatedItems.length; i++) {
       const item = updatedItems[i];
       if (!item.selected) continue;
-      
+
       setLoadingMsg(`Renderizando: ${item.name}...`);
       item.status = 'generating';
       setCurrentKit({ ...currentKit, items: [...updatedItems] });
-      
+
+      const currentShotIdx = shotIdx++;
       try {
-        const url = await outfitService.generateItemRender(item, currentKit.originalImage, modelId);
+        const url = await outfitService.generateItemRender(
+          item, currentKit.originalImage, modelId,
+          { ...baseSessionParams, shotIndex: currentShotIdx, totalShots: totalSelected },
+        );
         item.imageUrl = url;
         item.status = 'done';
 
@@ -200,8 +247,15 @@ const OutfitExtractorModule: React.FC = () => {
     setStep('composing');
     setLoadingMsg('Componiendo Kit Comercial...');
     try {
-      const finalUrl = await outfitService.generateFinalComposition(currentKit, modelId);
-      
+      const finalUrl = await outfitService.generateFinalComposition(currentKit, modelId, {
+        uid: user?.uid,
+        sessionId: newSessionId(),
+        module: 'outfit',
+        moduleLabel: 'Outfit (Kit final)',
+        shotIndex: 0,
+        totalShots: 1,
+      });
+
       generationHistoryService.save({
         imageUrl: finalUrl,
         module: 'outfit_extractor',
@@ -311,7 +365,14 @@ const OutfitExtractorModule: React.FC = () => {
     setStep('composing');
     setLoadingMsg('Sincronizando Capas y Luces...');
     try {
-      const finalUrl = await outfitService.generateCombinationComposition(creatorSelectedItems, modelId);
+      const finalUrl = await outfitService.generateCombinationComposition(creatorSelectedItems, modelId, {
+        uid: user?.uid,
+        sessionId: newSessionId(),
+        module: 'outfit',
+        moduleLabel: 'Outfit (Combinación)',
+        shotIndex: 0,
+        totalShots: 1,
+      });
       const newCombo: OutfitCombination = {
         id: `combo_${Date.now()}`,
         name: creatorName || 'Sin Nombre',

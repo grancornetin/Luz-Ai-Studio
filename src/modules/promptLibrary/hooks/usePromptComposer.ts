@@ -10,6 +10,7 @@ import { payloadValidator } from '../services/payloadValidator';
 import { useAuth } from '../../auth/AuthContext';
 import { CREDIT_COSTS, imageCost } from '../../../services/creditConfig';
 import { useModelSelection } from '../../../hooks/useModelSelection';
+import { newSessionId } from '../../../services/imageApiService';
 
 const mergeDNA = (baseDNA: PromptDNA, referenceDNA: PromptDNA): PromptDNA => {
   const unique = (arr?: string[]) => Array.from(new Set(arr || []));
@@ -63,7 +64,7 @@ export const usePromptComposer = () => {
   const [error, setError] = useState<string | null>(null);
   const [showNoCredits, setShowNoCredits] = useState(false);
 
-  const { credits, isAdmin, deductCredits } = useAuth();
+  const { credits, isAdmin, deductCredits, user } = useAuth();
   const { modelId, setModelId } = useModelSelection();
 
   const generate = useCallback(async () => {
@@ -125,7 +126,16 @@ export const usePromptComposer = () => {
         references,
         negativePrompt,
         false, // ya no se usa el flag de persona, el costo se calculó arriba
-        { modelId },
+        {
+          modelId,
+          uid: user?.uid,
+          sessionId: newSessionId(),
+          module: 'prompt_studio',
+          moduleLabel: 'AI Generator',
+          shotIndex: 0,
+          totalShots: 1,
+          metadata: { promptText: promptText.slice(0, 200) },
+        },
       );
 
       // 🧠 Guardamos metadata de generación

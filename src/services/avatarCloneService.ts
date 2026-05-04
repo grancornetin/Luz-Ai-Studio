@@ -20,6 +20,11 @@ export interface StartCloneParams {
   gender: 'hombre' | 'mujer';
   personality?: string;
   expression?: string;
+  // Notificaciones Nivel 3
+  sessionId?: string;
+  module?: string;
+  moduleLabel?: string;
+  metadata?: Record<string, any>;
 }
 
 export async function startClone(params: StartCloneParams): Promise<{ jobId: string }> {

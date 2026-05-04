@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Receiver } from '@upstash/qstash';
 import { Redis } from '@upstash/redis';
 import { GoogleGenAI } from '@google/genai';
+import { reportShotResult, appendToHistory } from '../_notifications.js';
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL!,
@@ -205,12 +206,66 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     job.updatedAt = Date.now();
     await redis.set(`clone_job:${jobId}`, JSON.stringify(job), { ex: 3600 });
 
+    // Notificación Nivel 3: el clone produce 4 imágenes (body, rear, side, face)
+    // que el usuario percibe como un solo set. Reportamos las 4 para que aparezcan
+    // como un álbum dentro de una sola notificación.
+    if (job.uid && job.sessionId) {
+      const labels = ['Body Master', 'Vista trasera', 'Vista de perfil', 'Face Master'];
+      for (let i = 0; i < resultImages.length; i++) {
+        await reportShotResult({
+          uid: job.uid,
+          sessionId: job.sessionId,
+          module: job.module || 'clone',
+          moduleLabel: job.moduleLabel,
+          totalShots: 4,
+          shotIndex: i,
+          shotStatus: 'completed',
+          imageUrl: resultImages[i],
+          metadata: { ...job.metadata, viewLabel: labels[i] },
+        });
+        await appendToHistory({
+          uid: job.uid,
+          imageUrl: resultImages[i],
+          module: job.module || 'clone',
+          moduleLabel: job.moduleLabel || 'Clone de modelo',
+          creditsUsed: 1,
+        });
+      }
+    }
+
     return res.status(200).json({ ok: true });
   } catch (error: any) {
     job.status = 'failed';
     job.error = error.message;
     job.updatedAt = Date.now();
     await redis.set(`clone_job:${jobId}`, JSON.stringify(job), { ex: 3600 });
+
+    // Notificar fallo. Clone es atómico (las 4 vistas se generan secuencialmente
+    // y dependen de la primera): si falla la generación, se reporta como un único
+    // shot fallido para que la notificación cierre como 'failed' (no in_progress).
+    if (job.uid && job.sessionId) {
+      try {
+        await reportShotResult({
+          uid: job.uid,
+          sessionId: job.sessionId,
+          module: job.module || 'clone',
+          moduleLabel: job.moduleLabel,
+          totalShots: 1,
+          shotIndex: 0,
+          shotStatus: 'failed',
+          error: error.message,
+          metadata: job.metadata,
+          // Clone cobra 4 créditos al inicio. Si falla reembolsamos los 4.
+          creditsPerShot: 4,
+        });
+        // Marcar refunded para que el cliente no reembolse de nuevo
+        job.refunded = true;
+        await redis.set(`clone_job:${jobId}`, JSON.stringify(job), { ex: 3600 });
+      } catch (e: any) {
+        console.error('[clone-worker] persistJobOutcome failed:', e.message);
+      }
+    }
+
     return res.status(500).json({ error: error.message });
   }
 }

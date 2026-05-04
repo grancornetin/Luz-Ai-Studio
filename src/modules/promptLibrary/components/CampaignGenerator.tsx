@@ -6,6 +6,8 @@ import { downloadAsZip } from '../../../utils/imageUtils';
 import { ImageLightbox } from '../../../components/shared/ImageLightbox';
 import { FloatingActionBar } from '../../../components/shared/FloatingActionBar';
 import { useScrollFAB } from '../../../hooks/useScrollFAB';
+import { newSessionId } from '../../../services/imageApiService';
+import { useAuth } from '../../auth/AuthContext';
 
 interface CampaignGeneratorProps {
   basePrompt: string;
@@ -27,7 +29,7 @@ const CampaignGenerator: React.FC<CampaignGeneratorProps> = ({
   dna,
   references
 }) => {
-
+  const { user } = useAuth();
   const [scenes, setScenes] = useState<string[]>(DEFAULT_SCENES);
   const [results, setResults] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -71,7 +73,14 @@ const CampaignGenerator: React.FC<CampaignGeneratorProps> = ({
         campaignPrompts,
         references,
         undefined,
-        (p) => setProgress(p)
+        (p) => setProgress(p),
+        {
+          uid: user?.uid,
+          sessionId: newSessionId(),
+          module: 'prompt_studio',
+          moduleLabel: 'AI Generator (Campaign)',
+          metadata: { scenes: validScenes.length, basePrompt: basePrompt.slice(0, 100) },
+        },
       );
 
       setResults(images);

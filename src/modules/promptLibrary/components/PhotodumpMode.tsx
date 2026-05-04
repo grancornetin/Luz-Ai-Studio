@@ -12,6 +12,8 @@ import { ImageLightbox } from '../../../components/shared/ImageLightbox';
 import { FloatingActionBar } from '../../../components/shared/FloatingActionBar';
 import { useScrollFAB } from '../../../hooks/useScrollFAB';
 import { geminiService } from '../../../services/geminiService';
+import { newSessionId } from '../../../services/imageApiService';
+import { useAuth } from '../../auth/AuthContext';
 
 interface PhotodumpModeProps {
   basePrompt: string;
@@ -91,6 +93,7 @@ Generate ${count} prompts now.`;
 }
 
 const PhotodumpMode: React.FC<PhotodumpModeProps> = ({ basePrompt, dna, references }) => {
+  const { user } = useAuth();
   const [count, setCount]         = useState(4);
   const [intensity, setIntensity] = useState<Intensity>('media');
   const [results, setResults]     = useState<string[]>([]);
@@ -117,6 +120,13 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({ basePrompt, dna, referenc
         references,
         undefined,
         (p) => setProgress(p),
+        {
+          uid: user?.uid,
+          sessionId: newSessionId(),
+          module: 'prompt_studio',
+          moduleLabel: 'AI Generator (Photodump)',
+          metadata: { intensity, basePrompt: basePrompt.slice(0, 100) },
+        },
       );
       setResults(images.filter(Boolean));
     } catch (err: any) {

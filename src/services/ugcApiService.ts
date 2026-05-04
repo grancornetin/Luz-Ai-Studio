@@ -94,6 +94,12 @@ class UGCApiService {
     shotIndex?: number;
     totalShots?: number;
     modelId?: 'gemini' | 'seedream';
+    // Notificaciones Nivel 3
+    uid?: string;
+    sessionId?: string;
+    module?: string;
+    moduleLabel?: string;
+    metadata?: Record<string, any>;
     onStatusChange?: (status: string, image?: string, shotIndex?: number) => void;
   }): Promise<string> {
     // Seedream no soporta reference images — usa el endpoint genérico
@@ -113,6 +119,11 @@ class UGCApiService {
           shotIndex: params.shotIndex,
           totalShots: params.totalShots,
           modelId: params.modelId || 'gemini',
+          uid: params.uid,
+          sessionId: params.sessionId,
+          module: params.module,
+          moduleLabel: params.moduleLabel,
+          metadata: params.metadata,
         },
       }),
     });

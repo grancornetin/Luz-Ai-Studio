@@ -1,5 +1,5 @@
 // src/modules/ManualCreatorModule.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { avatarService } from '../services/avatarService';
 import { generationHistoryService } from '../services/generationHistoryService';
 import { AvatarProfile } from '../types';
@@ -10,6 +10,9 @@ import NoCreditsModal from '../components/shared/NoCreditsModal';
 import { CREDIT_COSTS, MODEL_CREDIT_COST } from '../services/creditConfig';
 import { downloadAsZip } from '../utils/imageUtils';
 import { useAuth } from '../modules/auth/AuthContext';
+import { newSessionId } from '../services/imageApiService';
+import { getNotification } from '../services/notificationsService';
+import { useSearchParams } from 'react-router-dom';
 import { GenerateButton } from '../components/shared/GenerateButton';
 import { 
   ETHNICITY_OPTIONS, AGE_OPTIONS, BUILD_OPTIONS, OUTFITS_MUJER, OUTFITS_HOMBRE, 
@@ -34,10 +37,34 @@ interface ManualCreatorModuleProps {
 }
 
 const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => {
-  const { credits } = useAuth();
+  const { credits, user } = useAuth();
   const modelId = 'gemini' as const;
   const [name, setName] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Retomar sesión desde notificación (?session=xxx)
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const sessionParam = searchParams.get('session');
+    if (!sessionParam || !user) return;
+    let cancelled = false;
+    (async () => {
+      const notif = await getNotification(user.uid, sessionParam);
+      if (cancelled || !notif) {
+        setSearchParams({}, { replace: true });
+        return;
+      }
+      const completed = notif.shots
+        .filter(s => s.status === 'completed' && s.imageUrl)
+        .sort((a, b) => a.index - b.index)
+        .map(s => s.imageUrl!);
+      if (completed.length > 0) setPreviews(completed);
+      if (notif.metadata?.name) setName(notif.metadata.name);
+      setSearchParams({}, { replace: true });
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
   const [status, setStatus] = useState('');
   const [previews, setPreviews] = useState<string[]>([]);
   const [progressStep, setProgressStep] = useState(0);
@@ -117,6 +144,16 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
         if (shotsCompleted === 4) setProgressStep(3); // face done
       };
 
+      // Notificaciones Nivel 3: 4 imágenes en una sesión
+      const sessionId = newSessionId();
+      const sessionParams = {
+        uid: user?.uid,
+        sessionId,
+        module: 'model_dna_manual',
+        moduleLabel: 'Modelo desde cero',
+        metadata: { name, gender: data.gender, mode: 'manual' },
+      };
+
       const shots = await avatarService.generateMasterSet(
         identityPrompt,
         "blurry, low quality, distorted face, messy background",
@@ -125,6 +162,7 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
         data.personality,
         data.expression,
         onStatusChange,
+        sessionParams,
       );
       
       setPreviews(shots);

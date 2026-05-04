@@ -1033,6 +1033,13 @@ async function generateWithPolling(
   totalShots?: number,
   onStatusChange?: (status: string, image?: string) => void,
   modelId?: 'gemini' | 'seedream',
+  sessionParams?: {
+    uid?: string;
+    sessionId?: string;
+    module?: string;
+    moduleLabel?: string;
+    metadata?: Record<string, any>;
+  },
 ): Promise<string> {
   const referenceImages = await prepareReferenceImagesCompressed(refs);
   const negativePrompt = isDerivedShot ? NEGATIVE_SHORT : NEGATIVE_FULL;
@@ -1049,6 +1056,7 @@ async function generateWithPolling(
     totalShots,
     onStatusChange,
     modelId,
+    ...sessionParams,
   });
 }
 
@@ -1123,6 +1131,15 @@ export const contentStudioService = {
     productIsRelevant?: boolean,
     onStatusChange?: (status: string, image?: string) => void,
     modelId?: 'gemini' | 'seedream',
+    sessionParams?: {
+      uid?: string;
+      sessionId?: string;
+      module?: string;
+      moduleLabel?: string;
+      metadata?: Record<string, any>;
+      shotIndex?: number;
+      totalShots?: number;
+    },
   ): Promise<{ imageUrl: string; analysis: REF0Analysis }> {
     await this.ensureAccess();
 
@@ -1225,7 +1242,14 @@ UNIVERSAL RULES:
 - Person must look REAL: natural skin texture, genuine expression.
 - Person is STATIC (standing still, sitting, or leaning — NOT mid-walk).`;
 
-    const imageUrl = await generateWithPolling(prompt, refsToPass, system, false, undefined, undefined, onStatusChange, modelId);
+    const imageUrl = await generateWithPolling(
+      prompt, refsToPass, system, false,
+      sessionParams?.shotIndex,
+      sessionParams?.totalShots,
+      onStatusChange,
+      modelId,
+      sessionParams,
+    );
     
     // Analizar REF0 para congelar luz, espacio y acciones
     const imageData = extractImageData(imageUrl);
@@ -1276,6 +1300,13 @@ UNIVERSAL RULES:
     totalShots?: number,
     onStatusChange?: (status: string, imageUrl?: string) => void,
     modelId?: 'gemini' | 'seedream',
+    sessionParams?: {
+      uid?: string;
+      sessionId?: string;
+      module?: string;
+      moduleLabel?: string;
+      metadata?: Record<string, any>;
+    },
   ): Promise<string> {
     await this.ensureAccess();
 
@@ -1302,7 +1333,7 @@ Natural UGC aesthetic. NO beautification. NO studio polish.`;
       if (productRef && productIsRelevant !== false) refs.push(productRef);
       if (sceneRef) refs.push(sceneRef);
 
-      return generateWithPolling(fallbackPrompt, refs, '', true, shotIndex, totalShots, onStatusChange, modelId);
+      return generateWithPolling(fallbackPrompt, refs, '', true, shotIndex, totalShots, onStatusChange, modelId, sessionParams);
     }
 
     const directivePrompt = translateDirectiveToPrompt(directive, focus, ref0Analysis);
@@ -1405,7 +1436,7 @@ FINAL CHECKLIST (apply before finalizing):
     if (productRef && productIsRelevant !== false) refs.push(productRef);
     if (sceneRef) refs.push(sceneRef);
 
-    return generateWithPolling(prompt, refs, system, true, shotIndex, totalShots, onStatusChange, modelId);
+    return generateWithPolling(prompt, refs, system, true, shotIndex, totalShots, onStatusChange, modelId, sessionParams);
   },
 
   // ──────────────────────────────────────────────────────────────

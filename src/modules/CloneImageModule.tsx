@@ -28,7 +28,9 @@ import { GenerateButton } from '../components/shared/GenerateButton';
 import { useAuth } from '../modules/auth/AuthContext';
 import { GenerationProgress, type ProgressStep } from '../components/shared/GenerationProgress';
 import { ErrorDisplay, toAppError, type AppError } from '../components/shared/ErrorDisplay';
-import { REFUNDABLE_ERRORS } from '../services/imageApiService';
+import { REFUNDABLE_ERRORS, newSessionId } from '../services/imageApiService';
+import { getNotification } from '../services/notificationsService';
+import { useSearchParams } from 'react-router-dom';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -207,7 +209,7 @@ const ProToggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; la
 // --- MAIN MODULE ---
 
 export default function CloneImageModule() {
-  const { credits } = useAuth();
+  const { credits, user } = useAuth();
   const modelId = 'gemini' as const;
   const [step, setStep] = useState<Step>(1);
   const [maxStep, setMaxStep] = useState<number>(1);
@@ -235,6 +237,36 @@ export default function CloneImageModule() {
 
   const [baseComposition, setBaseComposition] = useState<string | null>(null);
   const [finalImage, setFinalImage] = useState<string | null>(null);
+
+  // Retomar sesión desde notificación
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const sessionParam = searchParams.get('session');
+    if (!sessionParam || !user) return;
+    let cancelled = false;
+    (async () => {
+      const notif = await getNotification(user.uid, sessionParam);
+      if (cancelled || !notif) {
+        setSearchParams({}, { replace: true });
+        return;
+      }
+      const completed = notif.shots.find(s => s.status === 'completed' && s.imageUrl);
+      if (completed?.imageUrl) {
+        // Si era el "Final" lo cargamos como finalImage; si no, como base
+        if (notif.moduleLabel.includes('Final')) {
+          setFinalImage(completed.imageUrl);
+        } else {
+          setBaseComposition(completed.imageUrl);
+        }
+        if (notif.metadata?.cameraStyle) setCameraStyle(notif.metadata.cameraStyle);
+        if (notif.metadata?.aspectRatio) setAspectRatio(notif.metadata.aspectRatio);
+        setStep(4);
+      }
+      setSearchParams({}, { replace: true });
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
@@ -352,6 +384,15 @@ export default function CloneImageModule() {
         faceImage2: enableSecondSubject ? (normalizeImageInput(face2) || undefined) : undefined,
         bodyImage2: enableSecondSubject ? (normalizeImageInput(body2) || undefined) : undefined,
         replaceOutfit2: false,
+        sessionParams: {
+          uid: user?.uid,
+          sessionId: newSessionId(),
+          module: 'scene_clone',
+          moduleLabel: 'Clonar escena (Base)',
+          shotIndex: 0,
+          totalShots: 1,
+          metadata: { cameraStyle, aspectRatio, enableSecondSubject },
+        },
       };
 
       const img = await cloneImageService.cloneImage(payload);
@@ -436,6 +477,15 @@ export default function CloneImageModule() {
 
         productOverrides: activeProductOverrides,
         modelId,
+        sessionParams: {
+          uid: user?.uid,
+          sessionId: newSessionId(),
+          module: 'scene_clone',
+          moduleLabel: 'Clonar escena (Final)',
+          shotIndex: 0,
+          totalShots: 1,
+          metadata: { cameraStyle, aspectRatio, enableSecondSubject },
+        },
       };
 
       const img = await cloneImageService.cloneImage(payload);

@@ -119,6 +119,7 @@ export const generationService = {
     references: (string | null)[],
     negativePrompt?: string,
     onProgress?: (p: GenerationProgress) => void,
+    sessionParams?: Partial<GenerateImageParams>,
   ): Promise<string[]> {
     const refs = toRefs(references);
     const neg  = negativePrompt || DEFAULT_NEGATIVE;
@@ -130,9 +131,12 @@ export const generationService = {
       negative:        neg,
       referenceImages: refs,
       aspectRatio:     '3:4' as const,
+      module:          'promptLibrary.batchFlash',
+      ...sessionParams,
+      // shotIndex y totalShots NO deben ser sobrescritos por sessionParams.
+      // Los pongo después del spread para que ganen.
       shotIndex:       i,
       totalShots:      total,
-      module:          'promptLibrary.batchFlash',
     }));
 
     const results = await imageApiService.generateBatch(jobs, (done, t) => {
@@ -148,6 +152,7 @@ export const generationService = {
   async generateBatchFast(
     prompts: string[],
     onProgress?: (p: GenerationProgress) => void,
+    sessionParams?: Partial<GenerateImageParams>,
   ): Promise<string[]> {
     let completed = 0;
     const total   = prompts.length;
@@ -155,9 +160,10 @@ export const generationService = {
     const jobs: GenerateImageParams[] = prompts.map((prompt, i) => ({
       prompt,
       aspectRatio: '3:4' as const,
+      module:      'promptLibrary.batchFast',
+      ...sessionParams,
       shotIndex:   i,
       totalShots:  total,
-      module:      'promptLibrary.batchFast',
     }));
 
     const results = await imageApiService.generateBatch(jobs, (done, t) => {
@@ -174,7 +180,8 @@ export const generationService = {
     references: (string | null)[],
     negativePrompt?: string,
     onProgress?: (p: GenerationProgress) => void,
+    sessionParams?: Partial<GenerateImageParams>,
   ): Promise<string[]> {
-    return this.generateBatchFlash(prompts, references, negativePrompt, onProgress);
+    return this.generateBatchFlash(prompts, references, negativePrompt, onProgress, sessionParams);
   },
 };

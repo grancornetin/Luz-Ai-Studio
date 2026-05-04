@@ -6,6 +6,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Receiver } from '@upstash/qstash';
 import { Redis } from '@upstash/redis';
 import { GoogleGenAI } from '@google/genai';
+import { reportShotResult, appendToHistory } from '../_notifications.js';
 
 // ─── Redis (mismo config que ugc.ts) ────────────────────────────────────────
 const redis = new Redis({
@@ -30,6 +31,13 @@ interface Job {
   updatedAt: number;
   shotIndex?: number;
   totalShots?: number;
+  // Notificaciones Nivel 3
+  uid?: string;
+  sessionId?: string;
+  module?: string;
+  moduleLabel?: string;
+  metadata?: Record<string, any>;
+  refunded?: boolean;
 }
 
 // ─── Helpers Redis ───────────────────────────────────────────────────────────
@@ -58,6 +66,42 @@ function getGenAIClient(location: string): GoogleGenAI {
     location,
     googleAuthOptions: { credentials: getCredentials() },
   });
+}
+
+// ─── Notificación + historial al terminar el job ──────────────────────────────
+async function persistJobOutcome(job: Job, success: boolean): Promise<void> {
+  if (!job.uid || !job.sessionId || job.totalShots == null || job.shotIndex == null) {
+    return;
+  }
+  try {
+    await reportShotResult({
+      uid: job.uid,
+      sessionId: job.sessionId,
+      module: job.module || 'content_studio',
+      moduleLabel: job.moduleLabel,
+      totalShots: job.totalShots,
+      shotIndex: job.shotIndex,
+      shotStatus: success ? 'completed' : 'failed',
+      imageUrl: success ? job.result : undefined,
+      error: success ? undefined : job.error,
+      metadata: job.metadata,
+    });
+    if (!success) {
+      job.refunded = true;
+      await saveJob(job);
+    }
+    if (success && job.result) {
+      await appendToHistory({
+        uid: job.uid,
+        imageUrl: job.result,
+        module: job.module || 'content_studio',
+        moduleLabel: job.moduleLabel,
+        creditsUsed: 1,
+      });
+    }
+  } catch (err: any) {
+    console.error(`[UGCWorker ${job.id}] persistJobOutcome failed:`, err.message);
+  }
 }
 
 // ─── Lógica de generación (idéntica a processGenerationJob en ugc.ts) ────────
@@ -93,6 +137,7 @@ async function processGenerationJob(jobId: string, parts: any[]): Promise<void> 
           job.updatedAt = Date.now();
           await saveJob(job);
           console.log(`[Worker Job ${jobId}] Completed`);
+          await persistJobOutcome(job, true);
           return;
         }
       }
@@ -104,6 +149,7 @@ async function processGenerationJob(jobId: string, parts: any[]): Promise<void> 
     job.updatedAt = Date.now();
     await saveJob(job);
     console.error(`[Worker Job ${jobId}] Failed: ${e.message}`);
+    await persistJobOutcome(job, false);
   }
 }
 

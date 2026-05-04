@@ -14,7 +14,9 @@ import { GenerateButton } from '../components/shared/GenerateButton';
 
 // Nuevos componentes base
 import { ErrorDisplay, toAppError, type AppError } from '../components/shared/ErrorDisplay';
-import { REFUNDABLE_ERRORS } from '../services/imageApiService';
+import { REFUNDABLE_ERRORS, newSessionId } from '../services/imageApiService';
+import { getNotification } from '../services/notificationsService';
+import { useSearchParams } from 'react-router-dom';
 import { ImageSlot } from '../components/shared/ImageSlot';
 import UploadDisclaimer from '../components/shared/UploadDisclaimer';
 import { ImageLightbox } from '../components/shared/ImageLightbox';
@@ -34,7 +36,7 @@ interface CloningModuleProps {
 }
 
 const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
-  const { credits } = useAuth();
+  const { credits, user } = useAuth();
   const modelId = 'gemini' as const;
   const [name, setName] = useState('');
   const [files, setFiles] = useState<string[]>([]); // hasta 3 imágenes en base64
@@ -45,6 +47,33 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
   const [cloneError, setCloneError] = useState<AppError | null>(null);
   const [creditsRefunded, setCreditsRefunded] = useState(false);
   const [progressStep, setProgressStep] = useState(0);
+
+  // Retomar sesión desde notificación (?session=xxx)
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const sessionParam = searchParams.get('session');
+    if (!sessionParam || !user) return;
+    let cancelled = false;
+    (async () => {
+      const notif = await getNotification(user.uid, sessionParam);
+      if (cancelled || !notif) {
+        setSearchParams({}, { replace: true });
+        return;
+      }
+      const completedShots = notif.shots
+        .filter(s => s.status === 'completed' && s.imageUrl)
+        .sort((a, b) => a.index - b.index)
+        .map(s => s.imageUrl!);
+      if (completedShots.length > 0) {
+        setPreviews(completedShots);
+        setName(notif.metadata?.name || 'Modelo recuperado');
+        setStatus('Sesión recuperada desde notificación');
+      }
+      setSearchParams({}, { replace: true });
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
 
   // Lightbox state
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -104,6 +133,8 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
     setPreviews([]);
 
     try {
+      // Notificaciones Nivel 3: sessionId único por clonación
+      const sessionId = newSessionId();
       const { jobId } = await startClone({
         mode: 'image',
         name,
@@ -111,6 +142,10 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
         gender,
         personality: 'Profesional y elegante',
         expression: 'Natural',
+        sessionId,
+        module: 'clone',
+        moduleLabel: 'Clone de modelo',
+        metadata: { name, mode: 'image', gender },
       });
 
       setStatus('Procesando en segundo plano...');

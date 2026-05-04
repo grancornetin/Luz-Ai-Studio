@@ -28,6 +28,8 @@ export interface CloneImageParams {
   productOverrides?:    DetectedObject[];
   modelId?:             'gemini' | 'seedream';
   onStatusChange?:      GenerateImageParams['onStatusChange'];
+  // Notificaciones Nivel 3 — sessionId/module/etc para agrupar shots
+  sessionParams?:       Partial<GenerateImageParams>;
 }
 
 export const cloneImageService = {
@@ -141,6 +143,7 @@ ${cameraStylePrompt}
       module:          'cloneImageService',
       modelId:         params.modelId || 'gemini',
       onStatusChange:  params.onStatusChange,
+      ...params.sessionParams,
     });
   },
 };

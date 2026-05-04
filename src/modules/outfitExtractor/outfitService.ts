@@ -6,7 +6,7 @@
 
 import { OutfitKit, OutfitItem, SavedOutfitItem } from './types';
 import { compressImageForUpload } from '../../utils/imageUtils';
-import { imageApiService, extractImageRef, type ModelId } from '../../services/imageApiService';
+import { imageApiService, extractImageRef, type ModelId, type GenerateImageParams } from '../../services/imageApiService';
 import { getAuth } from 'firebase/auth';
 
 async function getAuthHeader(): Promise<Record<string, string>> {
@@ -48,6 +48,7 @@ async function generateOutfitImage(
   referenceImages: string[],
   aspectRatio: '1:1' | '3:4' = '3:4',
   modelId: ModelId = 'gemini',
+  sessionParams?: Partial<GenerateImageParams>,
 ): Promise<string> {
   const compressed = await Promise.all(
     referenceImages.map(img => compressImageForUpload(img)),
@@ -62,8 +63,10 @@ async function generateOutfitImage(
     negative: 'human skin, face, mannequin parts, background, text, watermark, shadow on background',
     referenceImages: refs.length > 0 ? refs : undefined,
     aspectRatio,
-    module: 'outfitService',
+    module: 'outfit',
+    moduleLabel: 'Outfit',
     modelId,
+    ...sessionParams,
   });
 }
 
@@ -114,7 +117,12 @@ Return ONLY valid JSON, no markdown formatting.`;
     };
   },
 
-  async generateItemRender(item: OutfitItem, originalImage: string, modelId: ModelId = 'gemini'): Promise<string> {
+  async generateItemRender(
+    item: OutfitItem,
+    originalImage: string,
+    modelId: ModelId = 'gemini',
+    sessionParams?: Partial<GenerateImageParams>,
+  ): Promise<string> {
     // Gemini interpreta "REF0" posicionalmente; Seedream necesita descripción textual
     const prompt = modelId === 'seedream'
       ? `[GHOST MANNEQUIN PRODUCT RENDER]
@@ -131,10 +139,14 @@ Create realistic 3D volume (shoulders/torso curve) as if worn by an invisible pe
 Pure white background (#FFFFFF). No human skin, face, or mannequin parts.
 Studio lighting, soft shadow at base.`;
 
-    return generateOutfitImage(prompt, [originalImage], '3:4', modelId);
+    return generateOutfitImage(prompt, [originalImage], '3:4', modelId, sessionParams);
   },
 
-  async generateFinalComposition(kit: OutfitKit, modelId: ModelId = 'gemini'): Promise<string> {
+  async generateFinalComposition(
+    kit: OutfitKit,
+    modelId: ModelId = 'gemini',
+    sessionParams?: Partial<GenerateImageParams>,
+  ): Promise<string> {
     const approvedItems = kit.items.filter(i => i.selected && i.imageUrl);
     if (approvedItems.length === 0) throw new Error('No hay elementos seleccionados.');
 
@@ -146,10 +158,14 @@ Arrange the following isolated ghost mannequin garments on a pure white backgrou
 Items: ${itemList}
 Consistent lighting, soft shadows, no humans, no mannequins.`;
 
-    return generateOutfitImage(prompt, refs.slice(0, 4), '1:1', modelId);
+    return generateOutfitImage(prompt, refs.slice(0, 4), '1:1', modelId, sessionParams);
   },
 
-  async generateCombinationComposition(items: SavedOutfitItem[], modelId: ModelId = 'gemini'): Promise<string> {
+  async generateCombinationComposition(
+    items: SavedOutfitItem[],
+    modelId: ModelId = 'gemini',
+    sessionParams?: Partial<GenerateImageParams>,
+  ): Promise<string> {
     if (items.length === 0) throw new Error('No hay elementos seleccionados.');
 
     const refs     = items.map(i => i.imageUrl);
@@ -161,6 +177,6 @@ Items: ${itemList}
 All items must appear as isolated ghost mannequin products with 3D volume.
 Consistent lighting, soft shadows, no humans.`;
 
-    return generateOutfitImage(prompt, refs.slice(0, 4), '1:1', modelId);
+    return generateOutfitImage(prompt, refs.slice(0, 4), '1:1', modelId, sessionParams);
   },
 };
