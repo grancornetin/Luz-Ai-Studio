@@ -78,18 +78,51 @@ export type ProductPromptPayload = {
 };
 
 /* ======================================================
-   CORE RULES (ANTI-COPY SYSTEM)
+   CORE RULES
 ====================================================== */
 
 const PRODUCT_IDENTITY_RULES = [
-  'CRITICAL PRODUCT RULES:',
-  'Use the uploaded product images ONLY to understand product identity: shape, material, color and design.',
+  'CRITICAL PRODUCT IDENTITY RULES:',
+  'Use the uploaded product images ONLY to understand the product identity: shape, material, color, proportions, real design and visible details.',
   'The product described in PRODUCT TITLE is the ONLY valid subject.',
-  'All uploaded images represent the SAME product in different folds or positions.',
-  'Do NOT replicate the original composition, camera angle, table, surface or background.',
-  'Ignore any background elements such as tables, cables, textures or objects.',
-  'Generate a NEW composition based on the selected style and shot definition.',
-  'Each generated image MUST be visually different in composition and angle.'
+  'All uploaded product images represent the SAME product in different folds, positions or angles.',
+  'Any surface, table, background, cables, room elements, props or environment visible in the uploaded product images are NOT part of the product and must be ignored.',
+  'Do NOT replicate the original composition, camera angle, table, surface, background or environment from the uploaded product images.',
+  'Generate a NEW composition based on the selected style, objective and shot definition.',
+  'Each generated image MUST be visually different in composition, framing and camera angle.',
+  'Preserve product fidelity over creativity.'
+].join('\n');
+
+const REFERENCE_PRIORITY_RULES = [
+  'REFERENCE MODE PRIORITY RULES:',
+  'The inspiration/reference image defines the composition, lighting, camera distance, framing, mood, scene and visual hierarchy.',
+  'The uploaded product images define ONLY the product identity.',
+  'Replace the product or main object from the reference image with the provided product.',
+  'Do NOT mix the reference product with the uploaded product.',
+  'Do NOT copy the uploaded product photo background, table, surface, scene or camera angle.',
+  'Keep the reference scene, lighting, framing and composition logic.',
+  'Only the product should change; the product must remain accurate to the uploaded product images.'
+].join('\n');
+
+const SINGLE_IMAGE_RULE = [
+  'SINGLE IMAGE OUTPUT RULE:',
+  'Do NOT create collages, grids, split screens, contact sheets or multi-image compositions.',
+  'Generate one clean product image for this shot only.'
+].join('\n');
+
+const GRID_SOURCE_IMAGE_RULE = [
+  'GRID SOURCE IMAGE RULE:',
+  'Generate only one clean individual product image for this shot.',
+  'Do NOT create the final grid inside this image.',
+  'The app will assemble the grid later using the individual generated images.'
+].join('\n');
+
+const SHOT_VARIATION_RULES = [
+  'SHOT VARIATION RULES:',
+  'This shot must have its own distinct composition, camera angle and framing.',
+  'Do not repeat the same layout from previous shots.',
+  'Do not simply reproduce an uploaded product image.',
+  'Do not create a near-duplicate of another generated shot.'
 ].join('\n');
 
 const PRODUCT_NEGATIVE_PROMPT = [
@@ -99,6 +132,11 @@ const PRODUCT_NEGATIVE_PROMPT = [
   'extra objects',
   'text',
   'watermark',
+  'collage',
+  'split screen',
+  'multi image layout',
+  'grid composition',
+  'contact sheet',
   'distortion',
   'surreal',
   'cartoon',
@@ -110,19 +148,19 @@ const PRODUCT_NEGATIVE_PROMPT = [
 ====================================================== */
 
 const CATEGORY_KEYWORDS: Record<ProductCategory, string[]> = {
-  clothing: ['polera', 'camiseta', 'remera', 'shirt', 'tshirt', 't-shirt', 'hoodie', 'poleron', 'sudadera', 'chaqueta', 'jacket', 'pantalon', 'pants', 'jeans', 'vestido', 'dress', 'falda', 'skirt', 'ropa', 'prenda'],
+  clothing: ['polera', 'camiseta', 'remera', 'shirt', 'tshirt', 't-shirt', 'hoodie', 'poleron', 'sudadera', 'chaqueta', 'jacket', 'pantalon', 'pants', 'jeans', 'vestido', 'dress', 'falda', 'skirt', 'ropa', 'prenda', 'pañuelo', 'panuelo', 'scarf'],
   footwear: ['zapatilla', 'zapatillas', 'sneaker', 'shoe', 'shoes', 'botin', 'bota', 'sandalia', 'calzado'],
-  tech:     ['iphone', 'celular', 'telefono', 'tablet', 'laptop', 'notebook', 'teclado', 'mouse', 'audifono', 'camara', 'smartwatch', 'cargador', 'tech', 'electronica'],
-  accessory:['aro', 'aros', 'pulsera', 'collar', 'cadena', 'gorro', 'beanie', 'lente', 'lentes', 'bolso', 'cartera'],
-  jewelry:  ['joya', 'joyeria', 'anillo', 'plata', 'oro', 'gold', 'silver', 'brillante', 'diamante', 'perla', 'arete'],
+  tech: ['iphone', 'celular', 'telefono', 'tablet', 'laptop', 'notebook', 'teclado', 'mouse', 'audifono', 'camara', 'smartwatch', 'cargador', 'tech', 'electronica'],
+  accessory: ['aro', 'aros', 'pulsera', 'collar', 'cadena', 'gorro', 'beanie', 'lente', 'lentes', 'bolso', 'cartera'],
+  jewelry: ['joya', 'joyeria', 'anillo', 'plata', 'oro', 'gold', 'silver', 'brillante', 'diamante', 'perla', 'arete'],
   cosmetic: ['labial', 'crema', 'serum', 'perfume', 'maquillaje', 'cosmetico', 'shampoo', 'skincare', 'fragancia', 'lipstick'],
-  home:     ['lampara', 'silla', 'mesa', 'cuadro', 'deco', 'decoracion', 'vela', 'mueble', 'cojin'],
-  food:     ['cafe', 'chocolate', 'galleta', 'snack', 'bebida', 'miel', 'mermelada', 'comida', 'alimento'],
-  object:   []
+  home: ['lampara', 'silla', 'mesa', 'cuadro', 'deco', 'decoracion', 'vela', 'mueble', 'cojin'],
+  food: ['cafe', 'chocolate', 'galleta', 'snack', 'bebida', 'miel', 'mermelada', 'comida', 'alimento'],
+  object: []
 };
 
 const normalize = (s?: string): string =>
-  (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 
 const cleanText = (s?: string): string => (s || '').replace(/\s+/g, ' ').trim();
 
@@ -153,7 +191,7 @@ const heuristicAnalyze = (input: ProductDirectorInput): ProductAnalysis => {
 };
 
 /* ======================================================
-   GEMINI ANALYSIS (cuando heurística no alcanza)
+   GEMINI ANALYSIS
 ====================================================== */
 
 type GeminiAnalysisRaw = {
@@ -165,9 +203,7 @@ type GeminiAnalysisRaw = {
 
 const shouldUseGemini = (input: ProductDirectorInput, heuristic: ProductAnalysis): boolean => {
   if (input.forceGeminiAnalysis) return true;
-  // Cuando hay 3+ fotos en categorías "complejas" (ropa/tech/cosmético), Gemini ayuda.
   if (input.productImages.length >= 3 && ['clothing', 'tech', 'footwear', 'cosmetic'].includes(heuristic.category)) return true;
-  // Si la categoría salió 'object' (no detectó nada), pedir ayuda a Gemini.
   if (heuristic.category === 'object') return true;
   return false;
 };
@@ -214,19 +250,20 @@ export const runProductDirector = async (
     throw new Error('At least one product image is required');
   }
 
-  // 1) Análisis del producto: heurística + Gemini si vale la pena.
-  const heuristic = heuristicAnalyze(input);
-  const geminiRaw = shouldUseGemini(input, heuristic) ? await geminiAnalyze(input) : null;
+  const normalizedInput: ProductDirectorInput = {
+    ...input,
+    mode: input.referenceImage ? 'recreate' : input.mode,
+    count: input.referenceImage ? (input.count === 2 ? 2 : 1) : input.count,
+  };
+
+  const heuristic = heuristicAnalyze(normalizedInput);
+  const geminiRaw = shouldUseGemini(normalizedInput, heuristic) ? await geminiAnalyze(normalizedInput) : null;
   const analysis = mergeAnalysis(heuristic, geminiRaw);
 
-  // 2) Master context.
-  const masterContext = buildMasterContext(input);
+  const masterContext = buildMasterContext(normalizedInput);
+  const shotTypes = selectShotTypes(normalizedInput);
 
-  // 3) Selección de shot types.
-  const shotTypes = selectShotTypes(input);
-
-  // 4) Build shots con aspectRatio segun objective.
-  const shots: Shot[] = shotTypes.map((type, index) => buildShot(type, index, input.objective));
+  const shots: Shot[] = shotTypes.map((type, index) => buildShot(type, index, normalizedInput.objective));
 
   return {
     analysis,
@@ -243,10 +280,10 @@ const buildMasterContext = (input: ProductDirectorInput): MasterContext => {
 
   if (input.referenceImage) {
     return {
-      background:  'match reference background',
-      lighting:    'match reference lighting',
-      colorTone:   'match reference tone',
-      mood:        'reference-based product photography',
+      background: 'match the reference image background family, surface, depth and scene structure',
+      lighting: 'match the reference image lighting direction, softness, contrast and shadow behavior',
+      colorTone: 'match the reference image color palette and temperature without changing the product color',
+      mood: 'reference-based product photography with faithful scene recreation',
       environment: input.allowHumanFromReference
         ? 'reference environment; human presence allowed only if the reference clearly contains it'
         : 'reference environment without inventing humans',
@@ -255,17 +292,17 @@ const buildMasterContext = (input: ProductDirectorInput): MasterContext => {
 
   switch (input.style) {
     case 'minimal':
-      return { background: 'clean white or beige background', lighting: 'soft diffused light', colorTone: 'neutral',          mood: 'minimal',         environment: 'studio'   };
+      return { background: 'clean white or beige background', lighting: 'soft diffused light', colorTone: 'neutral', mood: 'minimal', environment: 'studio' };
     case 'premium':
-      return { background: 'dark elegant surface',            lighting: 'cinematic lighting',  colorTone: 'neutral dark',     mood: 'luxury premium',  environment: 'studio'   };
+      return { background: 'dark elegant surface', lighting: 'cinematic lighting', colorTone: 'neutral dark', mood: 'luxury premium', environment: 'studio' };
     case 'lifestyle':
-      return { background: 'real environment',                lighting: 'natural light',       colorTone: 'warm',             mood: 'lifestyle',       environment: 'real setting' };
+      return { background: 'real environment', lighting: 'natural light', colorTone: 'warm', mood: 'lifestyle', environment: 'real setting' };
     case 'dark':
-      return { background: 'black background',                lighting: 'strong directional light', colorTone: 'high contrast', mood: 'dramatic',     environment: 'studio'   };
+      return { background: 'black background', lighting: 'strong directional light', colorTone: 'high contrast', mood: 'dramatic', environment: 'studio' };
     case 'natural':
-      return { background: 'wood or organic textures',        lighting: 'soft warm light',     colorTone: 'earth tones',      mood: 'natural',         environment: 'organic'  };
+      return { background: 'wood or organic textures', lighting: 'soft warm light', colorTone: 'earth tones', mood: 'natural', environment: 'organic' };
     default:
-      return { background: 'neutral background',              lighting: 'soft lighting',       colorTone: 'balanced',         mood: 'neutral',         environment: 'studio'   };
+      return { background: 'neutral background', lighting: 'soft lighting', colorTone: 'balanced', mood: 'neutral', environment: 'studio' };
   }
 };
 
@@ -275,7 +312,7 @@ const buildMasterContext = (input: ProductDirectorInput): MasterContext => {
 
 const selectShotTypes = (input: ProductDirectorInput): string[] => {
 
-  if (input.referenceImage) {
+  if (input.referenceImage || input.mode === 'recreate') {
     return input.count === 2
       ? ['REFERENCE_MATCH', 'REFERENCE_VARIATION']
       : ['REFERENCE_MATCH'];
@@ -299,12 +336,11 @@ const selectShotTypes = (input: ProductDirectorInput): string[] => {
 ====================================================== */
 
 const buildShot = (type: string, index: number, objective: ProductObjective): Shot => {
-  // Aspect ratio según objetivo: social pide vertical 4:5, ecommerce/catálogo cuadrado, ads horizontal-ish.
   const aspectRatio: Shot['aspectRatio'] =
     objective === 'social' ? '4:5'
     : objective === 'ads' ? '1:1'
     : objective === 'technical_catalog' ? '1:1'
-    : '3:4'; // ecommerce default
+    : '3:4';
 
   return {
     id: `shot_${index + 1}`,
@@ -312,7 +348,7 @@ const buildShot = (type: string, index: number, objective: ProductObjective): Sh
     composition: getComposition(type),
     framing: getFraming(type),
     focus: getFocus(type),
-    environmentRules: getEnvironmentRules(),
+    environmentRules: getEnvironmentRules(type),
     aspectRatio,
   };
 };
@@ -323,34 +359,65 @@ const buildShot = (type: string, index: number, objective: ProductObjective): Sh
 
 const getComposition = (type: string): string => {
   switch (type) {
-    case 'HERO':                return 'product centered and dominant';
-    case 'ANGLE':               return 'three quarter angle';
-    case 'DETAIL':              return 'close-up detail';
-    case 'CONTEXT':             return 'product placed in realistic environment';
-    case 'BACK':                return 'rear view';
-    case 'TOP':                 return 'top view';
-    case 'FRONT':               return 'straight front view';
-    case 'SIDE':                return 'side profile view';
-    case 'VARIATION':           return 'creative but realistic variation';
-    case 'REFERENCE_MATCH':     return 'match reference composition';
-    case 'REFERENCE_VARIATION': return 'slight variation of reference';
-    default:                    return 'balanced composition';
+    case 'HERO': return 'product centered and dominant in a fresh product-first composition';
+    case 'ANGLE': return 'three quarter angle, not copied from the uploaded product photos';
+    case 'DETAIL': return 'close-up detail focused on material, texture or finish';
+    case 'CONTEXT': return 'product placed in a realistic environment created from the selected style';
+    case 'BACK': return 'rear view or secondary side view when relevant';
+    case 'TOP': return 'top-down or elevated product view';
+    case 'FRONT': return 'straight front view with clean geometry';
+    case 'SIDE': return 'side profile view showing depth or silhouette';
+    case 'VARIATION': return 'creative but realistic variation with a new angle and layout';
+    case 'REFERENCE_MATCH': return 'match the reference image composition, framing and visual hierarchy';
+    case 'REFERENCE_VARIATION': return 'slight variation of the reference composition while keeping the same visual idea';
+    default: return 'balanced product-first composition';
   }
 };
 
-const getFraming = (type: string): string =>
-  type === 'DETAIL' ? 'macro close-up' : 'medium shot';
+const getFraming = (type: string): string => {
+  switch (type) {
+    case 'DETAIL': return 'macro close-up';
+    case 'REFERENCE_MATCH': return 'match reference framing and crop';
+    case 'REFERENCE_VARIATION': return 'similar crop and camera distance to the reference with a subtle variation';
+    case 'TOP': return 'overhead or elevated shot';
+    default: return 'medium shot';
+  }
+};
 
-const getFocus = (type: string): string =>
-  type === 'DETAIL' ? 'texture and material' : 'full product';
+const getFocus = (type: string): string => {
+  switch (type) {
+    case 'DETAIL': return 'texture, material, stitching, surface, finish or functional detail';
+    case 'REFERENCE_MATCH': return 'replace the reference product with the uploaded product while preserving the reference structure';
+    case 'REFERENCE_VARIATION': return 'same reference idea with slight angle or layout variation';
+    default: return 'full product visibility and product fidelity';
+  }
+};
 
-const getEnvironmentRules = (): string => `
-${PRODUCT_IDENTITY_RULES}
+const getEnvironmentRules = (type: string): string => {
+  if (type === 'REFERENCE_MATCH') {
+    return [
+      REFERENCE_PRIORITY_RULES,
+      'This shot should be the closest faithful recreation of the reference image.',
+      'Only replace the product; do not change the reference scene unnecessarily.',
+      'Maintain realistic product integration into the reference scene.'
+    ].join('\n');
+  }
 
-Each shot must have a unique composition and camera angle.
-Do not repeat layouts or perspectives.
-Maintain realism and product accuracy.
-`;
+  if (type === 'REFERENCE_VARIATION') {
+    return [
+      REFERENCE_PRIORITY_RULES,
+      'Create a subtle variation of the reference, not a new unrelated scene.',
+      'Change only one visual factor: slightly different angle, crop or product position.',
+      'Keep the same lighting and background family from the reference.'
+    ].join('\n');
+  }
+
+  return [
+    PRODUCT_IDENTITY_RULES,
+    SHOT_VARIATION_RULES,
+    'Maintain realism and product accuracy at all times.'
+  ].join('\n');
+};
 
 /* ======================================================
    PROMPT BUILDER
@@ -361,38 +428,64 @@ export const buildPromptPayloadsFromDirectorResult = (
   result: ProductDirectorResult
 ): ProductPromptPayload[] => {
 
+  const normalizedMode: ProductGenerationMode = input.referenceImage ? 'recreate' : input.mode;
+
   const referenceImages: string[] = input.referenceImage
-    ? [...input.productImages, input.referenceImage]
+    ? [input.referenceImage, ...input.productImages]
     : input.productImages;
 
-  return result.shots.map((shot) => ({
-    shotId: shot.id,
-    shotType: shot.type,
-    referenceImages,
-    negativePrompt: PRODUCT_NEGATIVE_PROMPT,
-    aspectRatio: shot.aspectRatio,
-    prompt: [
-      'Photorealistic product photography.',
-      PRODUCT_IDENTITY_RULES,
-      `PRODUCT TITLE: ${input.productTitle}`,
-      input.productDescription ? `DESCRIPTION: ${input.productDescription}` : '',
-      `PRODUCT ANCHOR: ${result.analysis.productAnchor}`,
-      '',
-      'MASTER CONTEXT:',
-      `Background: ${result.masterContext.background}`,
-      `Lighting: ${result.masterContext.lighting}`,
-      `Color tone: ${result.masterContext.colorTone}`,
-      `Mood: ${result.masterContext.mood}`,
-      `Environment: ${result.masterContext.environment}`,
-      '',
-      `SHOT TYPE: ${shot.type}`,
-      `Composition: ${shot.composition}`,
-      `Framing: ${shot.framing}`,
-      `Focus: ${shot.focus}`,
-      '',
-      shot.environmentRules,
-    ].filter(Boolean).join('\n'),
-  }));
+  return result.shots.map((shot) => {
+    const isReferenceShot = shot.type === 'REFERENCE_MATCH' || shot.type === 'REFERENCE_VARIATION';
+
+    const outputStructureRule =
+      normalizedMode === 'grid'
+        ? GRID_SOURCE_IMAGE_RULE
+        : SINGLE_IMAGE_RULE;
+
+    return {
+      shotId: shot.id,
+      shotType: shot.type,
+      referenceImages,
+      negativePrompt: PRODUCT_NEGATIVE_PROMPT,
+      aspectRatio: shot.aspectRatio,
+      prompt: [
+        'Photorealistic product photography.',
+        isReferenceShot ? REFERENCE_PRIORITY_RULES : PRODUCT_IDENTITY_RULES,
+        outputStructureRule,
+        SHOT_VARIATION_RULES,
+
+        `PRODUCT TITLE: ${input.productTitle}`,
+        input.productDescription ? `DESCRIPTION: ${input.productDescription}` : '',
+        `PRODUCT ANCHOR: ${result.analysis.productAnchor}`,
+        `TECHNICAL DESCRIPTION: ${result.analysis.technicalDescription}`,
+        `COMMERCIAL DESCRIPTION: ${result.analysis.commercialDescription}`,
+
+        '',
+        'MASTER CONTEXT:',
+        `Background: ${result.masterContext.background}`,
+        `Lighting: ${result.masterContext.lighting}`,
+        `Color tone: ${result.masterContext.colorTone}`,
+        `Mood: ${result.masterContext.mood}`,
+        `Environment: ${result.masterContext.environment}`,
+
+        '',
+        `SHOT TYPE: ${shot.type}`,
+        `Composition: ${shot.composition}`,
+        `Framing: ${shot.framing}`,
+        `Focus: ${shot.focus}`,
+
+        '',
+        'SHOT-SPECIFIC RULES:',
+        shot.environmentRules,
+
+        '',
+        'FINAL HARD RULE:',
+        input.referenceImage
+          ? 'Reference image controls scene and composition. Product images control only product identity.'
+          : 'Product images control only product identity. Scene and composition must be newly generated.',
+      ].filter(Boolean).join('\n'),
+    };
+  });
 };
 
 /* ======================================================
