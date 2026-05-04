@@ -41,6 +41,7 @@ import { ModelSelectionProvider } from './contexts/ModelSelectionContext';
 import AuthModal from './modules/auth/components/AuthModal';
 import OnboardingWizard from './modules/auth/components/OnboardingWizard';
 import AppAssistant from './components/AppAssistant';
+import NotificationsHUD from './components/NotificationsHUD';
 import { MobileBottomNav } from './components/shared/MobileBottomNav';
 import { GlobalSearchModal } from './components/shared/GlobalSearchModal';
 import { startNotificationsListener, stopNotificationsListener } from './hooks/useNotifications';
@@ -407,6 +408,7 @@ const AppContent: React.FC = () => {
           </div>
           {isNewUser && <OnboardingWizard onDone={markOnboardingDone} />}
           <AppAssistant />
+          <NotificationsHUD />
           <GlobalSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
         </ProtectedRoute>
       } />
