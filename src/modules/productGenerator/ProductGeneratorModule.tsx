@@ -7,15 +7,17 @@
 // — descuento total al apretar Generar + reembolso por fallos
 // — Paso 6 con reintento de fotos fallidas
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
 import { useCreditGuard } from '../../../hooks/useCreditGuard';
 import NoCreditsModal from '../../components/shared/NoCreditsModal';
 import { MODEL_CREDIT_COST } from '../../services/creditConfig';
 import { ProductProfile } from '../../types';
-import { imageApiService, extractImageRef } from '../../services/imageApiService';
+import { imageApiService, extractImageRef, newSessionId } from '../../services/imageApiService';
 import { useAuth } from '../auth/AuthContext';
 import { generationHistoryService } from '../../services/generationHistoryService';
+import { getNotification } from '../../services/notificationsService';
 import { downloadAsZip } from '../../utils/imageUtils';
 
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
@@ -108,7 +110,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
   standalone: _standalone,
 }) => {
   const modelId = 'gemini' as const;
-  const { credits, isAdmin } = useAuth();
+  const { credits, isAdmin, user } = useAuth();
   const { checkAndDeduct, refundCredits, showNoCredits, requiredCredits, closeModal } = useCreditGuard();
 
   const [activeTab, setActiveTab] = useState<'create' | 'library'>('create');
@@ -123,6 +125,9 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
   const [lastPayloads, setLastPayloads] = useState<ProductPromptPayload[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isZipping, setIsZipping] = useState(false);
+  // Notificaciones Nivel 3: ID único del set actual, para que el server agrupe
+  // todos los shots en una sola notificación que se va actualizando.
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   // ─── Lightbox ───────────────────────────────────────────────────────────────
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -130,6 +135,63 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [lightboxMetadata, setLightboxMetadata] = useState<{ label: string }>({ label: '' });
   const [_selectedProduct, setSelectedProduct] = useState<ProductProfile | null>(null);
+
+  // ─── Retomar sesión desde notificación (?session=xxx) ───────────────────────
+  // Cuando el usuario clickea una notificación, llega acá con el sessionId en
+  // la URL. Leemos la notificación de Firestore, reconstruimos los shots y
+  // saltamos al Paso 6 (resultados).
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const sessionParam = searchParams.get('session');
+    if (!sessionParam || !user) return;
+
+    let cancelled = false;
+    (async () => {
+      const notif = await getNotification(user.uid, sessionParam);
+      if (cancelled || !notif) {
+        // Limpiar el query param aunque no se haya encontrado la notificación
+        setSearchParams({}, { replace: true });
+        return;
+      }
+
+      // Reconstruir shots ordenados por index — los faltantes quedan como 'error'
+      const reconstructed: string[] = new Array(notif.totalShots).fill('error');
+      notif.shots.forEach(s => {
+        if (s.status === 'completed' && s.imageUrl) {
+          reconstructed[s.index] = s.imageUrl;
+        }
+      });
+
+      setCurrentSessionId(notif.sessionId);
+      setGeneratedShots(reconstructed);
+
+      // Reconstruir mínimo del wizard desde la metadata para que Step6 muestre
+      // título y stepper con el contexto correcto.
+      const md = notif.metadata || {};
+      setWizard(prev => ({
+        ...prev,
+        product: {
+          ...prev.product,
+          title: md.productTitle || prev.product.title,
+          desc:  md.productDescription || prev.product.desc,
+        },
+        goal:  md.objective || prev.goal,
+        style: { ...prev.style, preset: md.stylePreset || prev.style.preset },
+        type:  {
+          ...prev.type,
+          mode: md.mode || prev.type.mode,
+          finalCount: md.count || prev.type.finalCount,
+        },
+      }));
+
+      setStep(6);
+      // Limpiar el query param para que un refresh no vuelva a disparar el efecto
+      setSearchParams({}, { replace: true });
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
 
   // ─── Onboarding free generation desde wizard externo ────────────────────────
   useEffect(() => {
@@ -197,6 +259,19 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
     setGeneratedShots(new Array(finalCount).fill('') as string[]);
     setCollageShot(null);
 
+    // Nuevo sessionId para que el server agrupe todos los shots de este set
+    // en una sola notificación que se va actualizando shot por shot.
+    const sessionId = newSessionId();
+    setCurrentSessionId(sessionId);
+    const sessionMetadata = {
+      productTitle: state.product.title.trim(),
+      productDescription: state.product.desc.trim() || undefined,
+      objective: state.goal,
+      stylePreset: state.style.preset,
+      mode: state.type.mode,
+      count: finalCount,
+    };
+
     let creditsToRefund = 0;
     const shots = new Array<string>(finalCount).fill('');
 
@@ -225,10 +300,13 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
               negative:        payload.negativePrompt,
               referenceImages: referenceObjects.length > 0 ? referenceObjects : undefined,
               aspectRatio:     mapAspectRatio(payload.aspectRatio),
-              module:          'ProductGeneratorModule',
+              module:          'product',
+              moduleLabel:     'Foto de producto',
               modelId,
               shotIndex:       i,
               totalShots:      finalCount,
+              sessionId,
+              metadata:        sessionMetadata,
             });
             shots[i] = img;
             setGeneratedShots([...shots]);
@@ -329,8 +407,12 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
       negative:        'extra text, watermark, distorted layout, missing cells, mismatched product, broken geometry',
       referenceImages: [...productAndInspirationRefs, ...shotRefs],
       aspectRatio:     r === c ? '1:1' : '4:3',
-      module:          'ProductGeneratorModule',
+      module:          'product',
+      moduleLabel:     'Foto de producto (grid)',
       modelId,
+      shotIndex:       0,
+      totalShots:      1,
+      sessionId:       newSessionId(),
     });
   };
 
@@ -366,10 +448,15 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
             negative:        payload.negativePrompt,
             referenceImages: refs.length > 0 ? refs : undefined,
             aspectRatio:     mapAspectRatio(payload.aspectRatio),
-            module:          'ProductGeneratorModule',
+            module:          'product',
+            moduleLabel:     'Foto de producto',
             modelId,
             shotIndex:       i,
             totalShots:      generatedShots.length,
+            // Retry: NO uses el sessionId del set original. Si el set ya estaba
+            // marcado como `partial`, sumar más shots reabriría la notificación.
+            // Generamos una sesión nueva por reintento (cada retry = 1 set chico).
+            sessionId:       newSessionId(),
           });
           next[i] = img;
           generationHistoryService.save({

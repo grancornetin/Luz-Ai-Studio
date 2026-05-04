@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useAuth } from '../modules/auth/AuthContext';
-import { userService } from '../services/userService';
 
 // ──────────────────────────────────────────
 // useCreditGuard
@@ -72,39 +71,19 @@ export const useCreditGuard = (): UseCreditGuardReturn => {
   };
 
   /**
-   * Reembolsa créditos al usuario cuando una generación falla.
-   * Retorna true si se pudo reembolsar, false si no.
+   * Reembolso de créditos.
+   *
+   * Notificaciones Nivel 3: el reembolso se hace server-side desde los workers
+   * (api/_notifications.ts → reportShotResult), de forma atómica e
+   * independiente de si el navegador está abierto. Por eso esta función ya
+   * no toca Firestore — solo loggea para trazabilidad.
+   *
+   * Se mantiene en la API para no romper los módulos que siguen llamándola.
    */
   const refundCredits = async (amount: number): Promise<boolean> => {
-    // Admin nunca paga créditos, no necesita reembolso
-    if (isAdmin) return true;
-    
-    // No hay créditos para reembolsar
-    if (amount <= 0) return true;
-    
-    // Usuario no autenticado
-    if (!user) return false;
-    
-    try {
-      // Obtener créditos actuales del usuario
-      const currentCredits = await userService.getCredits(user.uid);
-      
-      // Calcular nuevos créditos (sumar el reembolso)
-      const newAvailable = currentCredits.available + amount;
-      
-      // Actualizar créditos en Firestore
-      await userService.updateCredits(user.uid, {
-        available: newAvailable,
-        used: currentCredits.used,
-        plan: currentCredits.plan
-      });
-      
-      console.log(`[useCreditGuard] Reembolsados ${amount} créditos. Nuevo total: ${newAvailable}`);
-      return true;
-    } catch (error) {
-      console.error('[useCreditGuard] Error refunding credits:', error);
-      return false;
-    }
+    if (isAdmin || amount <= 0 || !user) return true;
+    console.log(`[useCreditGuard] Refund de ${amount} créditos delegado al server (no-op cliente)`);
+    return true;
   };
 
   return {

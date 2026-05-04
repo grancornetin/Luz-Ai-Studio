@@ -43,7 +43,10 @@ import OnboardingWizard from './modules/auth/components/OnboardingWizard';
 import AppAssistant from './components/AppAssistant';
 import { MobileBottomNav } from './components/shared/MobileBottomNav';
 import { GlobalSearchModal } from './components/shared/GlobalSearchModal';
+import { startNotificationsListener, stopNotificationsListener } from './hooks/useNotifications';
 import { AvatarProfile, ProductProfile } from './types';
+
+const NotificationsPanel = lazy(() => import('./views/NotificationsPanel'));
 
 const PLAN_STYLES: Record<string, { label: string; className: string }> = {
   free:    { label: 'Free',    className: 'bg-slate-100 text-slate-500' },
@@ -296,7 +299,10 @@ const AppContent: React.FC = () => {
   }, [user]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      stopNotificationsListener();
+      return;
+    }
     // Cerrar el modal de auth cuando el usuario se autentica
     // (cubre el caso de signInWithRedirect en móvil)
     setIsAuthModalOpen(false);
@@ -306,6 +312,8 @@ const AppContent: React.FC = () => {
       setProducts(p || []);
     };
     load();
+    startNotificationsListener(user.uid);
+    return () => stopNotificationsListener();
   }, [user]);
 
   const saveAvatar = async (avatar: AvatarProfile) => {
@@ -374,6 +382,7 @@ const AppContent: React.FC = () => {
                 <Routes>
                   <Route path="/dashboard"      element={<Dashboard />} />
                   <Route path="/historial"      element={<GenerationHistory />} />
+                  <Route path="/notifications"  element={<NotificationsPanel />} />
                   <Route path="/modelos"        element={<AvatarLibrary avatars={avatars} />} />
                   <Route path="/crear/clonar"   element={<CloningModule onSave={saveAvatar} />} />
                   <Route path="/crear/manual"   element={<ManualCreatorModule onSave={saveAvatar} />} />

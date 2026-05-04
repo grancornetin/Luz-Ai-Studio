@@ -34,6 +34,7 @@ module.exports = {
       },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
+        display: ['Syne', 'Inter', 'sans-serif'],
       },
     },
   },

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Home, PlusSquare, Bell, MessageCircle } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { BottomSheet } from './BottomSheet';
+import { useNotifications } from '../../hooks/useNotifications';
 
 interface MobileBottomNavProps {
   /** Mantenido por compatibilidad con llamadas existentes (no se usa). */
@@ -20,6 +21,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = () => {
   const navigate = useNavigate();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const { unreadCount } = useNotifications();
 
   // Sincronizar el estado visual del botón con el del AppAssistant.
   useEffect(() => {
@@ -73,16 +75,26 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = () => {
           <span className={labelClass(false)}>Crear</span>
         </button>
 
-        {/* NOTIFICACIONES — hoy lleva a /historial */}
+        {/* NOTIFICACIONES */}
         <button
-          aria-label="Notificaciones e historial"
-          aria-current={isActive('/historial') ? 'page' : undefined}
-          onClick={() => navigate('/historial')}
+          aria-label={unreadCount > 0 ? `Notificaciones (${unreadCount} sin leer)` : 'Notificaciones'}
+          aria-current={isActive('/notifications') ? 'page' : undefined}
+          onClick={() => navigate('/notifications')}
           style={{ touchAction: 'manipulation' }}
-          className={btnClass(isActive('/historial'))}
+          className={`${btnClass(isActive('/notifications'))} relative`}
         >
-          <Bell size={isActive('/historial') ? 24 : 22} />
-          <span className={labelClass(isActive('/historial'))}>Avisos</span>
+          <div className="relative">
+            <Bell size={isActive('/notifications') ? 24 : 22} />
+            {unreadCount > 0 && (
+              <span
+                className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-md"
+                aria-hidden="true"
+              >
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </div>
+          <span className={labelClass(isActive('/notifications'))}>Avisos</span>
         </button>
 
         {/* ASISTENTE */}

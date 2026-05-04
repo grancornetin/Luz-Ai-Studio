@@ -2,11 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: 'Inter', sans-serif;
-  background-color: #f8fafc;
+/* ============================================
+   ESTILOS BASE (TIPOGRAFÍA Y FONDO GLOBAL)
+   ============================================ */
+@layer base {
+  html, body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: #f8fafc;
+  }
+  body {
+    margin: 0;
+  }
 }
 
+/* ============================================
+   CLASES EXISTENTES (SE MANTIENEN)
+   ============================================ */
 .glass {
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(12px);
@@ -106,32 +119,45 @@ body {
    Meta     → etiquetas, badges, metadatos
    ============================================ */
 @layer components {
-  /* Nivel 1 – Display: solo 1-2 por pantalla */
+  /* Nivel 1 – Display: solo 1-2 por pantalla (Syne italic 800) */
   .t-display {
-    @apply font-black uppercase italic tracking-tighter leading-none;
+    @apply font-display font-extrabold uppercase italic tracking-tighter leading-none;
   }
 
-  /* Nivel 2 – Title: encabezados de sección */
+  /* Nivel 2 – Title: encabezados de sección (Syne 700) */
   .t-title {
-    @apply font-bold text-slate-800 tracking-normal leading-snug;
+    @apply font-display font-bold text-slate-800 tracking-tight leading-snug;
   }
   .t-title-sm {
-    @apply font-semibold text-slate-800 tracking-normal leading-snug;
+    @apply font-display font-semibold text-slate-800 tracking-tight leading-snug;
   }
 
-  /* Nivel 3 – Body: texto descriptivo */
+  /* Nivel 3 – Body: texto descriptivo (Inter) */
   .t-body {
-    @apply font-normal text-slate-600 leading-relaxed;
+    @apply font-sans font-normal text-slate-600 leading-relaxed;
   }
   .t-body-sm {
-    @apply font-medium text-slate-500 text-sm leading-relaxed;
+    @apply font-sans font-medium text-slate-500 text-sm leading-relaxed;
   }
 
-  /* Nivel 4 – Meta: etiquetas, badges, contadores */
+  /* Nivel 4 – Meta: etiquetas, badges, contadores (Inter, mayúsculas) */
   .t-meta {
-    @apply font-bold uppercase tracking-wide text-[10px] text-slate-400;
+    @apply font-sans font-bold uppercase tracking-wider text-[10px] text-slate-400;
   }
   .t-meta-light {
-    @apply font-semibold uppercase tracking-wide text-[9px] text-slate-300;
+    @apply font-sans font-semibold uppercase tracking-wider text-[9px] text-slate-300;
+  }
+}
+
+/* ============================================
+   GLOBAL HEADINGS — Aplican Syne (font-display) a todos los h1-h4
+   por default. Si un componente necesita Inter explícito, usar
+   `font-sans` en el className.
+   La landing usa fontFamily inline y no es afectada.
+   ============================================ */
+@layer base {
+  h1, h2, h3, h4 {
+    font-family: 'Syne', 'Inter', sans-serif;
+    letter-spacing: -0.01em;
   }
 }
