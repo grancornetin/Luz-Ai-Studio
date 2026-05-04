@@ -122,7 +122,7 @@ export const Step1Product: React.FC<Step1ProductProps> = ({ state, onChange, dis
             className="hidden md:grid grid-cols-3 gap-2.5"
             style={{ gridAutoRows: '120px' }}
           >
-            <div className="row-span-2 h-full">
+            <div className="row-span-2 min-h-0">
               <ImageSlot
                 value={state.slots[0]}
                 onChange={(v) => setSlot(0, v)}
@@ -131,7 +131,6 @@ export const Step1Product: React.FC<Step1ProductProps> = ({ state, onChange, dis
                 hint={SLOT_DEFS[0].hint}
                 disabled={disabled}
                 iconless
-                className="h-full [&>div:last-child]:h-full"
               />
             </div>
             <ImageSlot
@@ -142,7 +141,6 @@ export const Step1Product: React.FC<Step1ProductProps> = ({ state, onChange, dis
               hint={SLOT_DEFS[1].label}
               disabled={disabled}
               iconless
-              className="h-full [&>div:last-child]:h-full"
             />
             <ImageSlot
               value={state.slots[2]}
@@ -152,9 +150,8 @@ export const Step1Product: React.FC<Step1ProductProps> = ({ state, onChange, dis
               hint={SLOT_DEFS[2].label}
               disabled={disabled}
               iconless
-              className="h-full [&>div:last-child]:h-full"
             />
-            <div className="col-span-2 h-full">
+            <div className="col-span-2 min-h-0">
               <ImageSlot
                 value={state.slots[3]}
                 onChange={(v) => setSlot(3, v)}
@@ -163,7 +160,6 @@ export const Step1Product: React.FC<Step1ProductProps> = ({ state, onChange, dis
                 hint={SLOT_DEFS[3].hint}
                 disabled={disabled}
                 iconless
-                className="h-full [&>div:last-child]:h-full"
               />
             </div>
           </div>

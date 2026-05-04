@@ -210,7 +210,7 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
     {showConsent && (
       <UploadConsentModal onAccept={handleConsentAccept} onCancel={handleConsentCancel} />
     )}
-    <div className={`w-full ${className}`}>
+    <div className={`w-full ${aspectRatio === 'auto' ? 'h-full flex flex-col' : ''} ${className}`}>
       {label && (
         <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
           {label}
@@ -230,7 +230,7 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
             : `border-dashed ${isDragging ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200'} ${config.bgColor} cursor-pointer`
           }
           ${disabled ? 'opacity-60 cursor-not-allowed' : ''}
-          ${aspectClasses[aspectRatio]}
+          ${aspectRatio === 'auto' ? 'flex-1 min-h-0' : aspectClasses[aspectRatio]}
         `}
       >
         {value ? (
