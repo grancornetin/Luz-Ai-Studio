@@ -82,12 +82,20 @@ function verifySignature(rawBody: string, signature: string): boolean {
 // ── Lógica por evento ─────────────────────────────────────────────────────────
 
 async function handlePaymentSucceeded(data: any): Promise<void> {
-  const db        = getDb();
-  const userId    = data.customer_id as string | undefined;
-  const productId = data.product_id  as string | undefined;
+  const db = getDb();
+
+  // Dodo envía customer_id dentro de data.customer.customer_id
+  // y el product_id en data.product_cart[0].product_id
+  const userId    = (data.customer?.customer_id ?? data.customer_id) as string | undefined;
+  const productId = (data.product_cart?.[0]?.product_id ?? data.product_id) as string | undefined;
+
+  console.log('[Dodo Webhook] payment.succeeded raw data keys:', Object.keys(data));
+  console.log('[Dodo Webhook] payment.succeeded customer:', JSON.stringify(data.customer));
+  console.log('[Dodo Webhook] payment.succeeded product_cart:', JSON.stringify(data.product_cart));
+  console.log('[Dodo Webhook] payment.succeeded resolved userId:', userId, 'productId:', productId);
 
   if (!userId || !productId) {
-    console.warn('[Dodo Webhook] payment.succeeded: missing customer_id or product_id');
+    console.warn('[Dodo Webhook] payment.succeeded: missing customer_id or product_id', JSON.stringify(data));
     return;
   }
 
@@ -171,11 +179,11 @@ async function handleReferral(referrerId: string, newUserId: string): Promise<vo
 
 async function handleSubscriptionActive(data: any, isRenewal: boolean): Promise<void> {
   const db        = getDb();
-  const userId    = data.customer_id  as string | undefined;
-  const productId = data.product_id   as string | undefined;
+  const userId    = (data.customer?.customer_id ?? data.customer_id) as string | undefined;
+  const productId = (data.product_id ?? data.items?.[0]?.price?.product_id) as string | undefined;
 
   if (!userId || !productId) {
-    console.warn('[Dodo Webhook] subscription event: missing customer_id or product_id');
+    console.warn('[Dodo Webhook] subscription event: missing customer_id or product_id', JSON.stringify(data));
     return;
   }
 
@@ -228,8 +236,8 @@ async function handleSubscriptionActive(data: any, isRenewal: boolean): Promise<
 
 async function handleSubscriptionUpdated(data: any): Promise<void> {
   const db        = getDb();
-  const userId    = data.customer_id as string | undefined;
-  const productId = data.product_id  as string | undefined;
+  const userId    = (data.customer?.customer_id ?? data.customer_id) as string | undefined;
+  const productId = (data.product_id ?? data.items?.[0]?.price?.product_id) as string | undefined;
   if (!userId || !productId) return;
 
   const plan = PLAN_MAP[productId];
@@ -250,7 +258,7 @@ async function handleSubscriptionUpdated(data: any): Promise<void> {
 
 async function handleSubscriptionCancelled(data: any): Promise<void> {
   const db     = getDb();
-  const userId = data.customer_id as string | undefined;
+  const userId = (data.customer?.customer_id ?? data.customer_id) as string | undefined;
   if (!userId) return;
 
   await db.collection('users').doc(userId).update({
@@ -288,7 +296,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const eventType = payload.type as string || '';
   const data      = payload.data || payload;
 
+  // Log completo para diagnóstico — eliminar después de confirmar que los webhooks funcionan
   console.log(`[Dodo Webhook] Event: ${eventType}`);
+  console.log('[Dodo Webhook] Full payload:', JSON.stringify(payload, null, 2));
 
   try {
     switch (eventType) {

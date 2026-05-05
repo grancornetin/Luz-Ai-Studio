@@ -232,16 +232,13 @@ const ContentStudioProModule: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid]);
 
-  // Onboarding: carga imagen gratuita desde localStorage si viene del wizard
+  // Onboarding: activa tour guiado si viene del wizard de registro
   useEffect(() => {
-    const img = localStorage.getItem('onboarding_image_ugc');
-    const free = localStorage.getItem('onboarding_free_generation');
-    if (img && free) {
-      localStorage.removeItem('onboarding_image_ugc');
-      localStorage.removeItem('onboarding_free_generation');
-      setFaceRefs([img]);
-      setUserShotCount(2);
-      startMasterGeneration(true);
+    const tour = localStorage.getItem('onboarding_tour_active');
+    if (tour === 'ugc') {
+      localStorage.removeItem('onboarding_tour_active');
+      // El usuario completa el módulo normalmente.
+      // El flag onboarding_free_generation se consume en startMasterGeneration.
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -306,7 +303,9 @@ const ContentStudioProModule: React.FC = () => {
   const startMasterGeneration = async (free = false) => {
     if (!validateReferences()) return;
 
-    if (!free) {
+    const isFreeOnboarding = free || localStorage.getItem('onboarding_free_generation') === 'true';
+    if (isFreeOnboarding) localStorage.removeItem('onboarding_free_generation');
+    if (!isFreeOnboarding) {
       const costPerImage = MODEL_CREDIT_COST[modelId];
       const totalCost = costPerImage * (1 + userShotCount);
       const ok = await checkAndDeduct(totalCost);

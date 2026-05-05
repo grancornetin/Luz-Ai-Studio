@@ -180,6 +180,19 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
 
   const handleCompleteMission = async (missionId: string) => {
     if (!user?.uid || completing) return;
+
+    // Misión de Instagram: abrir perfil y completar simbólicamente sin esperar verificación
+    if (missionId === 'follow_instagram') {
+      window.open('https://www.instagram.com/luziastudio', '_blank', 'noopener,noreferrer');
+      setCompleting(missionId);
+      const result = await completeMission(user.uid, missionId);
+      setMissionMsg(result.message || null);
+      if (result.success) getUserMissions(user.uid).then(setMissions).catch(() => {});
+      setCompleting(null);
+      setTimeout(() => setMissionMsg(null), 3000);
+      return;
+    }
+
     setCompleting(missionId);
     const result = await completeMission(user.uid, missionId);
     setMissionMsg(result.message || null);
@@ -376,6 +389,7 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
                 if (maxed) btnLabel = '✓ Hecho';
                 else if (onCooldown) btnLabel = 'Mañana';
                 else if (isLoading) btnLabel = '...';
+                else if (m.id === 'follow_instagram') btnLabel = 'Seguir';
 
                 return (
                   <div key={m.id} className={`flex items-start gap-3 p-4 rounded-2xl border transition-all ${

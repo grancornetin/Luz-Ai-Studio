@@ -193,25 +193,14 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid]);
 
-  // ─── Onboarding free generation desde wizard externo ────────────────────────
+  // ─── Onboarding: activa el tour guiado cuando llega desde el wizard de registro ─
   useEffect(() => {
-    const img = localStorage.getItem('onboarding_image_product');
-    const free = localStorage.getItem('onboarding_free_generation');
-    if (img && free) {
-      localStorage.removeItem('onboarding_image_product');
-      localStorage.removeItem('onboarding_free_generation');
-      const next: WizardState = {
-        ...INITIAL_WIZARD_STATE,
-        product: { ...INITIAL_WIZARD_STATE.product, slots: [img, null, null, null], title: 'Mi primer producto' },
-        goal: 'social',
-        style: { referenceImg: null, preset: 'minimal' },
-        type: { ...INITIAL_WIZARD_STATE.type, mode: 'pack', packCount: 2, finalCount: 2 },
-      };
-      setWizard(next);
-      setStep(5);
-      runGeneration(next, true).catch(console.error);
+    const tour = localStorage.getItem('onboarding_tour_active');
+    if (tour === 'product') {
+      localStorage.removeItem('onboarding_tour_active');
+      // No generamos automáticamente — el usuario sigue el wizard normal del módulo.
+      // El flag onboarding_free_generation se lee en runGeneration para saltarse el cobro.
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -635,7 +624,9 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
 
   const handleContinue = () => {
     if (step === 4) {
-      runGeneration(wizard, false).catch(console.error);
+      const isFreeOnboarding = localStorage.getItem('onboarding_free_generation') === 'true';
+      if (isFreeOnboarding) localStorage.removeItem('onboarding_free_generation');
+      runGeneration(wizard, isFreeOnboarding).catch(console.error);
       return;
     }
     if (step < 6) setStep((step + 1) as WizardStep);

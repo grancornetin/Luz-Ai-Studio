@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, Zap } from 'lucide-react';
+import { CheckCircle, Zap, Loader2 } from 'lucide-react';
 import { useAuth } from '../modules/auth/AuthContext';
 
 export default function CheckoutSuccess() {
@@ -8,20 +8,40 @@ export default function CheckoutSuccess() {
   const { refreshCredits, credits } = useAuth();
   const initialCredits = useRef(credits.available);
   const attempts = useRef(0);
-  const maxAttempts = 8; // 8 × 2s = 16s máximo
+  const maxAttempts = 15; // 15 × 2s = 30s máximo
+  const [creditsReceived, setCreditsReceived] = useState(false);
+  const [polling, setPolling] = useState(true);
 
   useEffect(() => {
+    // Capturamos los créditos iniciales justo cuando monta el componente
+    initialCredits.current = credits.available;
+  }, []);
+
+  useEffect(() => {
+    if (creditsReceived) return;
+
     const poll = async () => {
-      if (attempts.current >= maxAttempts) return;
+      if (attempts.current >= maxAttempts) {
+        setPolling(false);
+        return;
+      }
       attempts.current += 1;
       await refreshCredits().catch(() => {});
-      // Si los créditos cambiaron, el polling puede detenerse (el ref se actualizó en el closure)
     };
 
-    // Primer intento a los 2s, luego cada 2s
     const interval = setInterval(poll, 2000);
     return () => clearInterval(interval);
-  }, []);
+  }, [creditsReceived]);
+
+  // Cuando los créditos suben, marcamos éxito y redirigimos automáticamente
+  useEffect(() => {
+    if (credits.available > initialCredits.current && !creditsReceived) {
+      setCreditsReceived(true);
+      setPolling(false);
+      const timer = setTimeout(() => navigate('/dashboard'), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [credits.available]);
 
   return (
     <div className="min-h-screen bg-white flex items-center justify-center p-6">
@@ -34,15 +54,37 @@ export default function CheckoutSuccess() {
             ¡Pago exitoso!
           </h1>
           <p className="text-slate-500 font-medium leading-relaxed">
-            Tus créditos se activarán en unos segundos. Si no los ves de inmediato, recarga la página.
+            {creditsReceived
+              ? 'Tus créditos están listos. Te llevamos al dashboard...'
+              : polling
+              ? 'Activando tus créditos, un momento...'
+              : 'Tus créditos estarán disponibles en breve. Puedes ir al dashboard.'}
           </p>
         </div>
-        <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex items-center gap-3">
-          <Zap className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-          <p className="text-sm font-bold text-emerald-700 text-left">
-            Los créditos ya están en tu cuenta. ¡A generar!
-          </p>
-        </div>
+
+        {creditsReceived ? (
+          <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex items-center gap-3">
+            <Zap className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+            <p className="text-sm font-bold text-emerald-700 text-left">
+              ¡Créditos acreditados! Redirigiendo al dashboard...
+            </p>
+          </div>
+        ) : polling ? (
+          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex items-center gap-3">
+            <Loader2 className="w-5 h-5 text-slate-400 flex-shrink-0 animate-spin" />
+            <p className="text-sm font-medium text-slate-500 text-left">
+              Esperando confirmación del pago...
+            </p>
+          </div>
+        ) : (
+          <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex items-center gap-3">
+            <Zap className="w-5 h-5 text-amber-600 flex-shrink-0" />
+            <p className="text-sm font-bold text-amber-700 text-left">
+              Si no ves los créditos, recarga la página en unos segundos.
+            </p>
+          </div>
+        )}
+
         <button
           onClick={() => navigate('/dashboard')}
           className="w-full py-4 bg-brand-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-brand-700 transition-all shadow-lg shadow-brand-100"

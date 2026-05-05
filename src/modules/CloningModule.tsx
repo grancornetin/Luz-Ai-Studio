@@ -84,16 +84,13 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
 
   const { checkAndDeduct, showNoCredits, requiredCredits, closeModal, refundCredits } = useCreditGuard();
 
-  // Onboarding: carga imagen gratuita desde localStorage si viene del wizard
+  // Onboarding: activa tour guiado si viene del wizard de registro
   useEffect(() => {
-    const img = localStorage.getItem('onboarding_image_avatar');
-    const free = localStorage.getItem('onboarding_free_generation');
-    if (img && free) {
-      localStorage.removeItem('onboarding_image_avatar');
-      localStorage.removeItem('onboarding_free_generation');
-      setFiles([img]);
-      setName('Mi primer modelo');
-      startCloning(true);
+    const tour = localStorage.getItem('onboarding_tour_active');
+    if (tour === 'avatar') {
+      localStorage.removeItem('onboarding_tour_active');
+      // El usuario completa el wizard del módulo normalmente.
+      // El flag onboarding_free_generation se consume en startCloning.
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -120,7 +117,9 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
       alert("Nombre y al menos una foto de referencia son requeridos.");
       return;
     }
-    if (!free) {
+    const isFreeOnboarding = free || localStorage.getItem('onboarding_free_generation') === 'true';
+    if (isFreeOnboarding) localStorage.removeItem('onboarding_free_generation');
+    if (!isFreeOnboarding) {
       const ok = await checkAndDeduct(CREDIT_COSTS.CREATE_MODEL_CLONE);
       if (!ok) return;
     }
