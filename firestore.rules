@@ -178,6 +178,12 @@ service cloud.firestore {
         allow read, write: if isOwner(userId) || isAdmin();
       }
 
+      // Estado de misiones — el cliente lee y escribe el progreso.
+      // Los créditos de recompensa van por servidor (api/credits), no por esta regla.
+      match /missions/{docId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
       // NUEVO — Notificaciones Nivel 3
       // El cliente puede leer y borrar. Solo puede ACTUALIZAR el flag `read`
       // (marcar como leída). NUNCA puede crear ni modificar el contenido,
