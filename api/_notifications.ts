@@ -133,7 +133,12 @@ export async function reportShotResult(input: ReportShotInput): Promise<void> {
 
   try {
     await db.runTransaction(async (tx: any) => {
-      const snap = await tx.get(notifRef);
+      // Todas las lecturas primero — Firestore requiere que no haya
+      // escrituras antes de lecturas dentro de la misma transacción.
+      const [snap, userSnap] = await Promise.all([
+        tx.get(notifRef),
+        tx.get(userRef),
+      ]);
       const now = Date.now();
 
       const newShot: ShotRecord = {
@@ -144,10 +149,28 @@ export async function reportShotResult(input: ReportShotInput): Promise<void> {
         ...(error ? { error } : {}),
       };
 
+      // Helper: espejo exacto de la lógica de descuento en api/credits.ts.
+      // El descuento usa primero suscripción (período) y luego topUp como respaldo,
+      // así que el reembolso devuelve primero al período y el resto al topUp.
+      const buildRefundUpdate = (amount: number): Record<string, any> => {
+        if (!userSnap.exists) return {};
+        const d    = userSnap.data();
+        const used = Number(d.creditsUsedThisPeriod) || 0;
+        const topUp = Number(d.topUpCredits) || 0;
+
+        const periodRefund = Math.min(amount, used);
+        const topUpRefund  = amount - periodRefund;
+
+        const upd: Record<string, any> = {
+          'credits.available': FieldValue.increment(amount),
+        };
+        if (periodRefund > 0) upd.creditsUsedThisPeriod = Math.max(0, used - periodRefund);
+        if (topUpRefund  > 0) upd.topUpCredits          = topUp + topUpRefund;
+        return upd;
+      };
+
       if (!snap.exists) {
-        // Primer shot que reporta — creamos la notificación.
-        // Si es el único shot y falla, el status y el reembolso van en el mismo set()
-        // porque Firestore no permite set() + update() del mismo doc en una transacción.
+        // Primer (y único) shot que reporta — crear la notificación.
         const isSingleFailure = shotStatus === 'failed' && totalShots === 1;
         tx.set(notifRef, {
           id: sessionId,
@@ -168,11 +191,8 @@ export async function reportShotResult(input: ReportShotInput): Promise<void> {
         });
 
         if (isSingleFailure) {
-          // Reembolso atómico al usuario
-          tx.set(userRef, {
-            topUpCredits: FieldValue.increment(creditsPerShot),
-            'credits.available': FieldValue.increment(creditsPerShot),
-          }, { merge: true });
+          const refundUpd = buildRefundUpdate(creditsPerShot);
+          if (Object.keys(refundUpd).length > 0) tx.update(userRef, refundUpd);
         }
         return;
       }
@@ -181,7 +201,7 @@ export async function reportShotResult(input: ReportShotInput): Promise<void> {
       const data = snap.data() || {};
       const existingShots: ShotRecord[] = Array.isArray(data.shots) ? data.shots : [];
 
-      // Idempotencia: si ya existe un shot con este index, no duplicar
+      // Idempotencia: no duplicar si este shot ya fue reportado
       if (existingShots.some(s => s.index === shotIndex)) {
         console.log(`[Notifications] Shot ${shotIndex} of session ${sessionId} already reported — skipping`);
         return;
@@ -189,21 +209,16 @@ export async function reportShotResult(input: ReportShotInput): Promise<void> {
 
       const updatedShots = [...existingShots, newShot];
       const completedCount = updatedShots.filter(s => s.status === 'completed').length;
-      const failedCount = updatedShots.filter(s => s.status === 'failed').length;
-      const allReported = updatedShots.length >= totalShots;
+      const failedCount    = updatedShots.filter(s => s.status === 'failed').length;
+      const allReported    = updatedShots.length >= totalShots;
 
       let newStatus: NotificationStatus = 'in_progress';
       let creditsToRefund = 0;
 
       if (allReported) {
-        if (failedCount === 0) {
-          newStatus = 'completed';
-        } else if (completedCount === 0) {
-          newStatus = 'failed';
-        } else {
-          newStatus = 'partial';
-        }
-        // Reembolsar solo las fallidas
+        if (failedCount === 0)      newStatus = 'completed';
+        else if (completedCount === 0) newStatus = 'failed';
+        else                           newStatus = 'partial';
         creditsToRefund = failedCount * creditsPerShot;
       }
 
@@ -214,18 +229,13 @@ export async function reportShotResult(input: ReportShotInput): Promise<void> {
         status: newStatus,
         updatedAt: now,
       };
-
-      if (creditsToRefund > 0) {
-        update.creditsRefunded = creditsToRefund;
-      }
+      if (creditsToRefund > 0) update.creditsRefunded = creditsToRefund;
 
       tx.update(notifRef, update);
 
       if (creditsToRefund > 0) {
-        tx.set(userRef, {
-          topUpCredits: FieldValue.increment(creditsToRefund),
-          'credits.available': FieldValue.increment(creditsToRefund),
-        }, { merge: true });
+        const refundUpd = buildRefundUpdate(creditsToRefund);
+        if (Object.keys(refundUpd).length > 0) tx.update(userRef, refundUpd);
       }
     });
   } catch (err: any) {

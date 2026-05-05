@@ -221,14 +221,18 @@ la app lista para producción:
     2. Verifica que el mensaje de error es claro y legible
     3. Verifica que el crédito fue reembolsado (saldo no bajó)
     4. Verifica que el botón de Reintentar funciona
-    BUG ENCONTRADO Y CORREGIDO (5 mayo 2026): api/_notifications.ts líneas 147-180.
-    En la transacción Firestore para jobs de 1 solo shot, se hacía tx.set() +
-    tx.update() sobre el mismo documento — Firestore ignora el update() si en
-    la misma transacción ya hubo un set() del mismo ref. Resultado: el campo
-    creditsRefunded quedaba en 0 y el usuario nunca recibía el reembolso.
-    FIX: El status 'failed' y creditsRefunded ahora van directamente en el set()
-    inicial usando una variable isSingleFailure.
-    Archivo: api/_notifications.ts (líneas 147-180)
+    BUG ENCONTRADO Y CORREGIDO (5 mayo 2026): api/_notifications.ts.
+    Dos errores combinados impedían el reembolso:
+    1) tx.set() + tx.update() sobre el mismo doc en la misma transacción —
+       Firestore ignora el update() posterior al set(). El status 'failed' y
+       creditsRefunded nunca se guardaban.
+    2) El reembolso usaba FieldValue.increment() en topUpCredits sin leer
+       primero el estado del usuario — el descuento original pudo haber ido
+       a creditsUsedThisPeriod, no a topUpCredits.
+    FIX: Todas las lecturas (notifRef + userRef) van al inicio de la transacción
+    con Promise.all(). El reembolso calcula qué campo revertir leyendo el doc
+    del usuario dentro de la misma transacción (buildRefundUpdate).
+    Archivo: api/_notifications.ts
 
 [ ] FLUJO 5 — Mobile (probar en Chrome DevTools con iPhone 14 Pro)
     1. Abre DevTools → Toggle device → iPhone 14 Pro (390x844)

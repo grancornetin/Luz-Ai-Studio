@@ -92,16 +92,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const limit     = getPeriodLimit(plan);
         const remaining = limit - used;
 
+        // Prioridad: suscripción (período) primero, topUp como respaldo.
         let topUpDeduct  = 0;
         let periodDeduct = 0;
 
-        if (topUp >= cost) {
-          topUpDeduct = cost;
-        } else if (topUp > 0 && (topUp + remaining) >= cost) {
-          topUpDeduct  = topUp;
-          periodDeduct = cost - topUp;
-        } else if (remaining >= cost) {
+        if (remaining >= cost) {
           periodDeduct = cost;
+        } else if (remaining > 0 && (remaining + topUp) >= cost) {
+          periodDeduct = remaining;
+          topUpDeduct  = cost - remaining;
+        } else if (topUp >= cost) {
+          topUpDeduct = cost;
         } else {
           throw new Error('Insufficient credits');
         }
