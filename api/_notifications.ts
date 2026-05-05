@@ -145,31 +145,29 @@ export async function reportShotResult(input: ReportShotInput): Promise<void> {
       };
 
       if (!snap.exists) {
-        // Primer shot que reporta — creamos la notificación
+        // Primer shot que reporta — creamos la notificación.
+        // Si es el único shot y falla, el status y el reembolso van en el mismo set()
+        // porque Firestore no permite set() + update() del mismo doc en una transacción.
+        const isSingleFailure = shotStatus === 'failed' && totalShots === 1;
         tx.set(notifRef, {
           id: sessionId,
           sessionId,
           module: moduleName,
           moduleLabel: resolveLabel(moduleName, moduleLabel),
-          status: 'in_progress' as NotificationStatus,
+          status: (isSingleFailure ? 'failed' : 'in_progress') as NotificationStatus,
           totalShots,
           completedShots: shotStatus === 'completed' ? 1 : 0,
           failedShots: shotStatus === 'failed' ? 1 : 0,
           shots: [newShot],
           creditsCharged: totalShots * creditsPerShot,
-          creditsRefunded: 0,
+          creditsRefunded: isSingleFailure ? creditsPerShot : 0,
           metadata,
           read: false,
           createdAt: now,
           updatedAt: now,
         });
 
-        // Si este shot falla y es el único, ya lo reembolsamos acá
-        if (shotStatus === 'failed' && totalShots === 1) {
-          tx.update(notifRef, {
-            status: 'failed' as NotificationStatus,
-            creditsRefunded: creditsPerShot,
-          });
+        if (isSingleFailure) {
           // Reembolso atómico al usuario
           tx.set(userRef, {
             topUpCredits: FieldValue.increment(creditsPerShot),

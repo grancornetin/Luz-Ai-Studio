@@ -215,12 +215,20 @@ la app lista para producción:
     FIX: onAddToBoard ahora llama toggleSave(id, boardId) y se pasan boards +
     onCreateBoard al modal. Archivo: src/views/PromptGalleryView.tsx (líneas 149-166)
 
-[ ] FLUJO 4 — Error en generación → Mensaje → Crédito reembolsado
+[x] FLUJO 4 — Error en generación → Mensaje → Crédito reembolsado
     1. Usa un prompt que active el filtro de seguridad de Google
        (ej: algo con violencia o contenido adulto)
     2. Verifica que el mensaje de error es claro y legible
     3. Verifica que el crédito fue reembolsado (saldo no bajó)
     4. Verifica que el botón de Reintentar funciona
+    BUG ENCONTRADO Y CORREGIDO (5 mayo 2026): api/_notifications.ts líneas 147-180.
+    En la transacción Firestore para jobs de 1 solo shot, se hacía tx.set() +
+    tx.update() sobre el mismo documento — Firestore ignora el update() si en
+    la misma transacción ya hubo un set() del mismo ref. Resultado: el campo
+    creditsRefunded quedaba en 0 y el usuario nunca recibía el reembolso.
+    FIX: El status 'failed' y creditsRefunded ahora van directamente en el set()
+    inicial usando una variable isSingleFailure.
+    Archivo: api/_notifications.ts (líneas 147-180)
 
 [ ] FLUJO 5 — Mobile (probar en Chrome DevTools con iPhone 14 Pro)
     1. Abre DevTools → Toggle device → iPhone 14 Pro (390x844)
