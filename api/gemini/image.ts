@@ -66,7 +66,7 @@ async function getJob(jobId: string): Promise<ImageJob | null> {
   return data as ImageJob;
 }
 
-import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, getBatchImageRatelimit, checkRateLimit, sanitizeUid } from '../_middleware.js';
+import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, getBatchImageRatelimit, checkRateLimit, sanitizeUid, verifyAuth } from '../_middleware.js';
 
 // ─── Circuit breaker ──────────────────────────────────────────────────────────
 // Cuando un proveedor agota su cuota, se marca en Redis por 2h.
@@ -133,7 +133,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         totalShots,
         module: moduleName,
         moduleLabel,
-        uid: rawUid,
         sessionId,
         metadata,
         modelId = 'gemini',   // 'gemini' | 'seedream' | 'gptimage'
@@ -143,10 +142,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const promptErr = validatePrompt(prompt);
       if (promptErr) return res.status(400).json({ error: promptErr });
 
+      // ── Autenticación ─────────────────────────────────────────────────────
+      // Dos modos válidos:
+      //   1. Modo batch (importer interno): header Bearer == BATCH_INTERNAL_API_SECRET
+      //      y module === 'batch_prompt_importer'.
+      //   2. Modo usuario: token Firebase válido. El uid se obtiene SOLO del token,
+      //      nunca del cuerpo del request (evita que un atacante use un uid ajeno).
+      const isBatchModule = moduleName === 'batch_prompt_importer';
+      const authHeader    = (req.headers.authorization || '').trim();
+      const batchSecret   = process.env.BATCH_INTERNAL_API_SECRET || '';
+      const isBatchAuthed = isBatchModule
+        && batchSecret.length > 0
+        && authHeader === `Bearer ${batchSecret}`;
+
+      let verifiedUid: string | undefined;
+      if (!isBatchAuthed) {
+        try {
+          verifiedUid = await verifyAuth(req);
+        } catch {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+      }
+
       // Rate limiting — batch importer tiene su propio bucket sin límite práctico
-      const isBatch = moduleName === 'batch_prompt_importer';
-      if (!isBatch && !rawUid) return res.status(401).json({ error: 'Unauthorized' });
-      const rlKey   = isBatch ? 'batch_importer' : (rawUid ? sanitizeUid(rawUid) : (req.headers['x-forwarded-for'] as string || 'unknown'));
+      const isBatch = isBatchAuthed;
+      const rlKey   = isBatch ? 'batch_importer' : sanitizeUid(verifiedUid!);
       const limiter = isBatch ? getBatchImageRatelimit() : getImageRatelimit();
       const allowed = await checkRateLimit(limiter, rlKey, res);
       if (!allowed) return;
@@ -179,7 +199,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Crear job en Redis — las imágenes (parts) se guardan en Redis, NO en QStash
       // QStash tiene límite de 1MB por mensaje; las imágenes en base64 lo exceden fácilmente.
       const jobId = generateJobId();
-      const safeUid = rawUid ? sanitizeUid(rawUid) : undefined;
+      const safeUid = verifiedUid ? sanitizeUid(verifiedUid) : undefined;
       const job: ImageJob = {
         id:        jobId,
         status:    'pending',

@@ -4,7 +4,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Redis } from '@upstash/redis';
-import { setSecurityHeaders, sanitizeUid, verifyAuth } from './_middleware.js';
+import { setSecurityHeaders, setCorsHeaders, sanitizeUid, verifyAuth } from './_middleware.js';
 
 const redis = new Redis({
   url:   process.env.KV_REST_API_URL!,
@@ -80,10 +80,8 @@ async function setHistory(uid: string, records: GenerationRecord[]): Promise<voi
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setSecurityHeaders(res);
-  res.setHeader('Access-Control-Allow-Origin',  '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  // CORS restringido a la lista blanca centralizada (_middleware.ts).
+  if (setCorsHeaders(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   let verifiedUid: string;

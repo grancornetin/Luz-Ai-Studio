@@ -313,7 +313,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({ ok: true, event: eventType });
   } catch (err: any) {
+    // Importante: si la firma fue válida pero falló el procesamiento (ej. Firestore
+    // tuvo un hipo transitorio), respondemos 500 para que Dodo reintente. Si
+    // respondiéramos 200, Dodo daría el evento por entregado y el cliente perdería
+    // sus créditos de forma silenciosa.
     console.error(`[Dodo Webhook] Error handling ${eventType}:`, err.message);
-    return res.status(200).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: err.message });
   }
 }

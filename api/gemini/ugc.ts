@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from '@google/genai';
 import { Redis } from '@upstash/redis';
 import { Client as QStashClient } from '@upstash/qstash';
-import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, checkRateLimit, sanitizeUid } from '../_middleware.js';
+import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, checkRateLimit, sanitizeUid, verifyAuth } from '../_middleware.js';
 
 const RETRY_DELAY_MS = 3000;
 
@@ -138,9 +138,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { action, payload } = req.body;
     if (!action) return res.status(400).json({ error: 'Missing action' });
 
+    // ── Autenticación obligatoria para TODAS las acciones de este endpoint ──
+    // Esto evita que un atacante consuma cuota de Gemini gratis o cree jobs
+    // a nombre de otro usuario (todas las acciones cobran o devuelven datos).
+    let verifiedUid: string;
+    try {
+      verifiedUid = await verifyAuth(req);
+    } catch {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
     // Rate limiting en generaciones
     if (action === 'generateImageAsync') {
-      const rlKey = payload?.uid ? sanitizeUid(payload.uid) : (req.headers['x-forwarded-for'] as string || 'unknown');
+      const rlKey = sanitizeUid(verifiedUid);
       const allowed = await checkRateLimit(getImageRatelimit(), rlKey, res);
       if (!allowed) return;
 
@@ -156,7 +166,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const {
         prompt, referenceImages, aspectRatio = '3:4',
         shotIndex, totalShots, modelId = 'gemini',
-        uid: rawUid, sessionId, module: moduleName, moduleLabel, metadata,
+        sessionId, module: moduleName, moduleLabel, metadata,
       } = payload;
       if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
 
@@ -172,7 +182,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       parts.push({ text: prompt });
 
       const jobId = generateJobId();
-      const safeUid = rawUid ? sanitizeUid(rawUid) : undefined;
+      const safeUid = sanitizeUid(verifiedUid);
       const job: Job = {
         id: jobId,
         status: 'pending',

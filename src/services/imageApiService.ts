@@ -113,10 +113,15 @@ export function newSessionId(): string {
 
 // ─── Helpers internos ─────────────────────────────────────────────────────────
 
+async function getAuthHeader(): Promise<Record<string, string>> {
+  const token = await getAuth().currentUser?.getIdToken().catch(() => null);
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
+
 async function startJob(params: GenerateImageParams): Promise<{ jobId: string; shotIndex?: number }> {
   const res = await fetch(API_URL, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
     body: JSON.stringify({
       action: 'generateImageAsync',
       payload: {
@@ -156,7 +161,7 @@ async function pollJob(jobId: string): Promise<{
 }> {
   const res = await fetch(API_URL, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
     body: JSON.stringify({
       action:  'getJobStatus',
       payload: { jobId },

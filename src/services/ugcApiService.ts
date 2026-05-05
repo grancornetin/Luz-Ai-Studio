@@ -1,7 +1,13 @@
 // src/services/ugcApiService.ts
 // Servicio cliente para comunicarse con /api/gemini/ugc
 
+import { getAuth } from 'firebase/auth';
 import { generationHistoryService, MODULE_LABELS } from './generationHistoryService';
+
+async function getAuthHeader(): Promise<Record<string, string>> {
+  const token = await getAuth().currentUser?.getIdToken().catch(() => null);
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
 
 function friendlyApiError(raw: string): string {
   let msg = (raw || '').toLowerCase();
@@ -111,7 +117,7 @@ class UGCApiService {
     // Iniciar generación asíncrona
     const startResponse = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
       body: JSON.stringify({
         action: 'generateImageAsync',
         payload: {
@@ -151,7 +157,7 @@ class UGCApiService {
 
       const statusResponse = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
         body: JSON.stringify({
           action: 'getJobStatus',
           payload: { jobId },
@@ -229,7 +235,7 @@ class UGCApiService {
     // Usar el mismo método async pero con indicador de FAST
     const startResponse = await fetch(this.baseUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
       body: JSON.stringify({
         action: 'generateImageAsync',
         payload: {
@@ -256,7 +262,7 @@ class UGCApiService {
 
       const statusResponse = await fetch(this.baseUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
         body: JSON.stringify({
           action: 'getJobStatus',
           payload: { jobId },
@@ -288,7 +294,7 @@ class UGCApiService {
   }): Promise<REF0Analysis> {
     const response = await fetch(this.baseUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
       body: JSON.stringify({
         action: 'analyzeREF0',
         payload: params,
@@ -314,7 +320,7 @@ class UGCApiService {
   }): Promise<ProductRelevanceResult> {
     const response = await fetch(this.baseUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
       body: JSON.stringify({
         action: 'analyzeProductRelevance',
         payload: params,
@@ -337,7 +343,7 @@ class UGCApiService {
   }): Promise<OutfitAnalysis> {
     const response = await fetch(this.baseUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
       body: JSON.stringify({
         action: 'analyzeOutfit',
         payload: params,
@@ -360,7 +366,7 @@ class UGCApiService {
   }): Promise<SceneAnalysis> {
     const response = await fetch(this.baseUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
       body: JSON.stringify({
         action: 'analyzeScene',
         payload: params,
