@@ -1,6 +1,4 @@
 // src/services/checkoutService.ts
-// Genera URLs de checkout de Dodo Payments con user_id como customer_id.
-
 import { DODO_PRODUCTS, type ProductKey } from '../config/dodoProducts';
 
 const RETURN_URL = `${import.meta.env.VITE_APP_URL || 'https://luz-ia-studio-1.vercel.app'}/checkout/success`;
@@ -11,11 +9,11 @@ export type { ProductKey };
 export function buildCheckoutUrl(productKey: ProductKey, userId: string): string {
   const productId = DODO_PRODUCTS[productKey];
   const params = new URLSearchParams({
-    product_id: productId,
+    quantity: '1',
     customer_id: userId,
     return_url: RETURN_URL,
   });
-  return `https://checkout.dodopayments.com/checkout?${params.toString()}`;
+  return `https://checkout.dodopayments.com/buy/${productId}?${params.toString()}`;
 }
 
 export const PLAN_TO_PRODUCT: Record<string, ProductKey> = {
