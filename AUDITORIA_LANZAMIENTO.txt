@@ -204,12 +204,16 @@ la app lista para producción:
     6. Verifica que el retorno llega a /checkout/success (no a /)
     7. Verifica que los créditos aparecen en 2-5 segundos (sin recargar)
 
-[ ] FLUJO 3 — Generación exitosa → Publicar en galería
+[x] FLUJO 3 — Generación exitosa → Publicar en galería
     1. Genera una imagen en PromptStudio
     2. Haz click en "Publicar en galería"
     3. Rellena título y tags en el modal
     4. Verifica que aparece en /prompt-gallery
     5. Verifica que otro usuario puede verla y hacer "Recrear"
+    BUG CORREGIDO (5 mayo 2026): PromptGalleryView.tsx tenía un require() vacío
+    en onAddToBoard del modal de detalle → guardar en tablero no hacía nada.
+    FIX: onAddToBoard ahora llama toggleSave(id, boardId) y se pasan boards +
+    onCreateBoard al modal. Archivo: src/views/PromptGalleryView.tsx (líneas 149-166)
 
 [ ] FLUJO 4 — Error en generación → Mensaje → Crédito reembolsado
     1. Usa un prompt que active el filtro de seguridad de Google

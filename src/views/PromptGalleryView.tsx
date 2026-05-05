@@ -156,11 +156,8 @@ const PromptGalleryView: React.FC = () => {
           isLiked={isLiked(selectedPrompt.id)}
           onSave={() => toggleSave(selectedPrompt.id)}
           boards={boards}
-          onAddToBoard={(boardId) => {
-            // handled inside SavedPromptsPanel via promptService
-            const { promptService } = require('../modules/promptLibrary/services/promptService');
-            // We import here to avoid circular deps in the view
-          }}
+          onCreateBoard={createBoard}
+          onAddToBoard={(boardId) => toggleSave(selectedPrompt.id, boardId)}
         />
       )}
     </div>

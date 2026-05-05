@@ -152,10 +152,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setIsNewUser(true);
           // Llamar al endpoint servidor que crea el doc con Admin SDK
           const token = await firebaseUser.getIdToken();
-          await fetch('/api/user-init', {
+          await fetch('/api/credits', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body:    JSON.stringify({ email: userProfile.email, displayName: userProfile.displayName }),
+            body:    JSON.stringify({ action: 'initUser', payload: { email: userProfile.email, displayName: userProfile.displayName } }),
           }).catch(err => console.warn('[AuthContext] user-init warning:', err));
         }
 

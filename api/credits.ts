@@ -179,6 +179,70 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ ok: true });
     }
 
+    // ── initUser ───────────────────────────────────────────────────────────────
+    // Crea el documento de usuario con Admin SDK (ignora Firestore rules).
+    // Idempotente: si ya existe con créditos, no hace nada.
+    if (action === 'initUser') {
+      const { email, displayName } = payload || {};
+      const snap = await userRef.get();
+
+      if (snap.exists) {
+        const data = snap.data()!;
+        const hasWelcomeCredits = data.topUpCredits != null && data.topUpCredits > 0;
+        if (!hasWelcomeCredits) {
+          await db.runTransaction(async (tx) => {
+            tx.update(userRef, {
+              topUpCredits:        FieldValue.increment(20),
+              'credits.available': FieldValue.increment(20),
+              updatedAt:           FieldValue.serverTimestamp(),
+            });
+            const txRef = userRef.collection('creditTransactions').doc(`welcome_${Date.now()}`);
+            tx.set(txRef, {
+              type: 'topup', amount: 20,
+              paymentId: 'welcome_credits',
+              createdAt: FieldValue.serverTimestamp(),
+              note: 'Créditos de bienvenida (asignación tardía)',
+            });
+          });
+          return res.status(200).json({ ok: true, created: false, credited: true });
+        }
+        return res.status(200).json({ ok: true, created: false, credited: false });
+      }
+
+      const referralCode = uid.slice(0, 8).toUpperCase();
+      await db.runTransaction(async (tx) => {
+        tx.set(userRef, {
+          uid,
+          email:                 email || '',
+          displayName:           displayName || 'Usuario',
+          plan:                  'free',
+          planValidUntil:        null,
+          creditsUsedThisPeriod: 0,
+          topUpCredits:          20,
+          lastPeriodReset:       FieldValue.serverTimestamp(),
+          referralCode,
+          referralCount:         0,
+          referredBy:            null,
+          credits: { available: 20, used: 0, plan: 'free' },
+          interests:   { categories: [], tags: [], preferredModules: [] },
+          socials:     {},
+          preferences: { emailNotifications: true, feedSortBy: 'recent', theme: 'light' },
+          onboardingDone: false,
+          createdAt:  FieldValue.serverTimestamp(),
+          updatedAt:  FieldValue.serverTimestamp(),
+        });
+        const txRef = userRef.collection('creditTransactions').doc(`welcome_${Date.now()}`);
+        tx.set(txRef, {
+          type: 'topup', amount: 20,
+          paymentId: 'welcome_credits',
+          createdAt: FieldValue.serverTimestamp(),
+          note: 'Créditos de bienvenida',
+        });
+      });
+
+      return res.status(200).json({ ok: true, created: true, credited: true });
+    }
+
     return res.status(400).json({ error: `Unknown action: ${action}` });
 
   } catch (err: any) {
