@@ -16,7 +16,7 @@ export type ProductCategory =
 export type ProductDirectorInput = {
   productImages: string[];
   productTitle: string;
-  productDescription?: string;e
+  productDescription?: string;
   objective: ProductObjective;
   style?: ProductStyle;
   referenceImage?: string | null;
@@ -94,25 +94,126 @@ const PRODUCT_IDENTITY_RULES = [
 
 const PRODUCT_BRANDING_RULES = [
   'BRANDING IDENTITY RULE:',
-  'The uploaded product images are the ONLY source of truth for branding, logos, labels, text, printed graphics and inscriptions on the product.',
+  'The uploaded product images are the ONLY source of truth for branding, logos, labels, text, printed graphics, monograms and inscriptions on the product.',
   'If the uploaded product images do NOT contain logos, text, labels or branding, the generated product MUST NOT include any logos, text, labels, typography or branding.',
   'If the uploaded product images DO contain logos, text, labels or branding, reproduce ONLY those exact elements from the uploaded product images.',
-  'Do NOT copy, adapt, imitate or recreate any text, brand name, logo, typography, label or inscription from the reference image.',
+  'Do NOT copy, adapt, imitate or recreate any text, brand name, logo, typography, label, monogram or inscription from the reference image.',
   'Branding from the reference image must be completely ignored.',
   'Do NOT invent new logos, labels, text, letters, symbols, slogans, product names or brand marks.'
+].join('\n');
+
+const PRODUCT_ANATOMY_LOCK_RULES = [
+  'PRODUCT ANATOMY LOCK RULE:',
+  'The uploaded product anatomy must remain identical to the product shown in the uploaded product images.',
+  'Preserve the exact structure, silhouette, proportions, functional parts, openings, handles, straps, caps, closures, soles, labels, textures, material finish and visible design details.',
+  'Do NOT import anatomical features from the reference product.',
+  'If the reference product has a feature that the uploaded product does not have, remove that feature and adapt the uploaded product naturally to the scene.',
+  'If the uploaded product lacks a handle, strap, lid, opening, heel, closure or attachment shown in the reference, do NOT invent it.',
+  'The product must fit the reference scene according to its own anatomy.',
+  'Do NOT create a hybrid between the reference product and the uploaded product.'
+].join('\n');
+
+const PRODUCT_SILHOUETTE_RULES = [
+  'PRODUCT SILHOUETTE OVERRIDE RULE:',
+  'The product silhouette, cut, opening, structure, edge shape, profile, volume and proportions must come only from the uploaded product images.',
+  'Do NOT preserve the reference product silhouette if it differs from the uploaded product.',
+  'Replace the reference product completely with the uploaded product silhouette.',
+  'If the reference product is similar but anatomically different, the uploaded product anatomy wins.'
+].join('\n');
+
+const PAIR_AND_MULTIPLE_PRODUCT_RULES = [
+  'PAIR / MULTIPLE PRODUCT CONSISTENCY RULE:',
+  'If the product appears more than once in the scene, every instance must share the same uploaded product identity, color, material, silhouette, anatomy and details.',
+  'Do NOT make one product instance follow the reference and another follow the uploaded product.',
+  'Do NOT duplicate the product unnaturally; only show multiple instances when the reference scene logically requires it or the product is naturally a pair.',
+  'If the product is a pair, both items must look like the same product from the uploaded images.'
 ].join('\n');
 
 const REFERENCE_PRIORITY_RULES = [
   'REFERENCE MODE PRIORITY RULES:',
   'The inspiration/reference image defines the composition, lighting, camera distance, framing, mood, scene and visual hierarchy.',
   'The uploaded product images define ONLY the product identity.',
-  'The uploaded product images are the ONLY source of truth for product design, colors, shape, material and product branding.',
+  'The uploaded product images are the ONLY source of truth for product design, colors, shape, anatomy, material and product branding.',
   'Replace the product or main object from the reference image with the provided product.',
   'Do NOT mix the reference product with the uploaded product.',
   'Do NOT copy the uploaded product photo background, table, surface, scene or camera angle.',
   'Do NOT copy any text, logo, label or branding from the reference image.',
   'Keep the reference scene, lighting, framing and composition logic.',
   'Only the product should change; the product must remain accurate to the uploaded product images.'
+].join('\n');
+
+const REFERENCE_VISUAL_INTENTION_RULES = [
+  'REFERENCE VISUAL INTENTION RULE:',
+  'Preserve the visual intention of the reference image, not only the objects.',
+  'Identify and preserve what makes the reference visually valuable: product placement, camera perspective, lifestyle context, color harmony, supporting props, mood, scene rhythm and relationship between elements.',
+  'Do not reduce the reference to a generic scene if its appeal depends on a specific perspective, layout, color coordination or lifestyle story.'
+].join('\n');
+
+const REFERENCE_MATCH_CAMERA_LOCK_RULES = [
+  'REFERENCE MATCH CAMERA LOCK:',
+  'For REFERENCE_MATCH, preserve the reference camera angle, perspective, camera height, lens feeling, crop and spatial layout as closely as possible.',
+  'If the reference is top-down, POV, overhead, low-angle, side-view, close-up, flat lay, mirror shot or handheld-style, keep that same camera perspective.',
+  'Do NOT convert the reference perspective into a different type of shot.',
+  'Do NOT change a POV/top-down reference into a frontal or side product shot.',
+  'The camera position is part of the reference and must be respected.'
+].join('\n');
+
+const REFERENCE_LAYOUT_RULES = [
+  'REFERENCE LAYOUT RULE:',
+  'Preserve the main spatial relationship between the key elements in the reference image.',
+  'Keep the relative placement of body parts, props, surface, background and product unless the product replacement makes it physically impossible.',
+  'Preserve the general pose, product location, prop placement, negative space and directional flow from the reference.',
+  'Do not rearrange the reference into a new composition when the user asked to recreate inspiration.'
+].join('\n');
+
+const REFERENCE_MATCH_STRICTNESS_RULES = [
+  'REFERENCE_MATCH STRICTNESS RULE:',
+  'This shot must prioritize faithful recreation over creative variation.',
+  'Do not change the main camera angle, object placement, pose, layout, framing or scene structure.',
+  'Small adjustments are allowed only when required to fit the uploaded product anatomy naturally into the reference scene.',
+  'The output should feel like the same visual idea and same camera setup with the user product replacing the reference product.'
+].join('\n');
+
+const REFERENCE_VARIATION_CONTROL_RULES = [
+  'REFERENCE_VARIATION CONTROL RULE:',
+  'This shot may create a subtle variation, but only one visual factor may change: crop, slight angle, product position, or small prop spacing.',
+  'Do not create a new unrelated scene.',
+  'Do not change the reference mood, scene family, lighting family or core layout.',
+  'The variation must still be recognizably derived from the reference image.'
+].join('\n');
+
+const WORN_PRODUCT_INTEGRATION_RULES = [
+  'WORN / HELD PRODUCT INTEGRATION RULE:',
+  'If the reference shows the product being worn, held, carried or used, preserve the same use context.',
+  'The uploaded product must adapt to the body, hand, foot, surface or holder position without changing its identity or anatomy.',
+  'Do not turn a worn or held product scene into a standalone product shot.',
+  'Do not force the body or hand to use product features that the uploaded product does not have.',
+  'The product should be integrated naturally according to its own structure.'
+].join('\n');
+
+const PRODUCT_VISIBILITY_RULES = [
+  'PRODUCT VISIBILITY RULE:',
+  'The uploaded product must remain clearly visible and recognizable as the main product, even inside a lifestyle set with many props.',
+  'Supporting props may exist, but they must not cover, hide, replace or visually overpower the uploaded product.',
+  'The product should remain readable at first glance.',
+  'Do not let the scene become only a portrait, outfit photo, prop arrangement or background image where the product is secondary.'
+].join('\n');
+
+const COORDINATED_SET_HARMONY_RULES = [
+  'COORDINATED SET HARMONY RULE:',
+  'If the reference shows a coordinated lifestyle set where props visually match the reference product, supporting prop colors may be subtly adapted to harmonize with the uploaded product color and material.',
+  'Preserve prop types, scene structure and layout; only adapt secondary colors when it supports the original coordinated-set concept.',
+  'Do not change the uploaded product color.',
+  'Do not recolor every object; only adjust minor supporting props when needed to preserve the visual idea that the set feels coordinated.',
+  'The coordinated set must feel natural, commercial and believable.'
+].join('\n');
+
+const SUPPORTING_PROP_RULES = [
+  'SUPPORTING PROP RULES:',
+  'Preserve the type and role of important supporting props from the reference when they define the lifestyle concept.',
+  'Supporting props should support the product story, not compete with the uploaded product.',
+  'Do not introduce unrelated props that are not part of the reference idea.',
+  'Do not remove key props if they are central to the reference concept, unless they physically conflict with the uploaded product.'
 ].join('\n');
 
 const SINGLE_IMAGE_RULE = [
@@ -151,11 +252,25 @@ const HUMAN_CONTEXT_RULES = [
   'Do not invent additional people, faces, hands, poses or body parts not required by the reference.'
 ].join('\n');
 
+const HUMAN_PRODUCT_HIERARCHY_RULES = [
+  'HUMAN PRODUCT HIERARCHY RULE:',
+  'If the reference includes a person, the person may support the lifestyle context, but the uploaded product must remain clearly visible and recognizable.',
+  'Do not turn the image into a portrait where the product is secondary or obscured.',
+  'Human presence must serve the product scene, not replace the product as the main commercial subject.'
+].join('\n');
+
 const PRODUCT_NEGATIVE_PROMPT = [
   'wrong product',
   'changed product shape',
   'changed product color',
   'changed product material',
+  'changed product anatomy',
+  'imported reference product anatomy',
+  'hybrid product',
+  'invented handle',
+  'invented strap',
+  'invented lid',
+  'invented closure',
   'invented logo',
   'invented branding',
   'copied reference logo',
@@ -175,6 +290,9 @@ const PRODUCT_NEGATIVE_PROMPT = [
   'extra product',
   'unrelated clutter',
   'random props',
+  'product hidden',
+  'product obscured',
+  'product not visible',
   'distortion',
   'surreal',
   'cartoon',
@@ -198,7 +316,9 @@ const CATEGORY_KEYWORDS: Record<ProductCategory, string[]> = {
   ],
   footwear: [
     'zapatilla', 'zapatillas', 'sneaker', 'shoe', 'shoes',
-    'botin', 'bota', 'sandalia', 'calzado'
+    'botin', 'bota', 'sandalia', 'calzado', 'tacon', 'tacones',
+    'stiletto', 'pump', 'pumps', 'heel', 'heels', 'zapato',
+    'zapatos'
   ],
   tech: [
     'iphone', 'celular', 'telefono', 'tablet', 'laptop',
@@ -225,7 +345,10 @@ const CATEGORY_KEYWORDS: Record<ProductCategory, string[]> = {
     'cafe', 'chocolate', 'galleta', 'snack', 'bebida', 'miel',
     'mermelada', 'comida', 'alimento'
   ],
-  object: []
+  object: [
+    'botella', 'bottle', 'termo', 'thermos', 'vaso', 'cup',
+    'tumbler', 'drinkware', 'mug', 'frasco', 'jar'
+  ]
 };
 
 const normalize = (s?: string): string =>
@@ -300,7 +423,9 @@ const geminiAnalyze = async (input: ProductDirectorInput): Promise<GeminiAnalysi
     const desc = [
       input.productTitle,
       input.productDescription,
-      'Analyze only the product itself. Ignore backgrounds, surfaces, UI elements, color swatches, watermarks, and any reference-scene artifacts.'
+      'Analyze only the product itself. Ignore backgrounds, surfaces, UI elements, color swatches, watermarks, and any reference-scene artifacts.',
+      'Describe the product anatomy precisely: silhouette, proportions, functional parts, openings, handles, straps, caps, closures, soles, texture, material finish, labels and visible design details.',
+      'Do not include reference-scene objects or backgrounds as product features.'
     ].filter(Boolean).join('\n');
 
     const result = await geminiService.analyzeProduct(input.productImages, desc);
@@ -378,7 +503,7 @@ const buildMasterContext = (input: ProductDirectorInput): MasterContext => {
     return {
       background: 'match the reference image background family, surface, depth and scene structure',
       lighting: 'match the reference image lighting direction, softness, contrast and shadow behavior',
-      colorTone: 'match the reference image color palette and temperature without changing the product color',
+      colorTone: 'match the reference image color palette and temperature while preserving the uploaded product color',
       mood: 'reference-based product photography with faithful scene recreation',
       environment: input.allowHumanFromReference
         ? 'reference environment; human presence may be preserved only if the reference clearly contains it'
@@ -535,10 +660,10 @@ const getComposition = (type: string): string => {
       return 'creative but realistic variation with a new angle and layout';
 
     case 'REFERENCE_MATCH':
-      return 'match the reference image composition, framing and visual hierarchy';
+      return 'match the reference image composition, camera perspective, framing, layout and visual hierarchy';
 
     case 'REFERENCE_VARIATION':
-      return 'slight variation of the reference composition while keeping the same visual idea';
+      return 'subtle variation of the reference composition while keeping the same visual intention, layout family and scene logic';
 
     default:
       return 'balanced product-first composition';
@@ -551,7 +676,7 @@ const getFraming = (type: string): string => {
       return 'macro close-up';
 
     case 'REFERENCE_MATCH':
-      return 'match reference framing and crop';
+      return 'match reference framing, crop, camera height, lens feeling and perspective';
 
     case 'REFERENCE_VARIATION':
       return 'similar crop and camera distance to the reference with a subtle variation';
@@ -570,10 +695,10 @@ const getFocus = (type: string): string => {
       return 'texture, material, stitching, surface, finish or functional detail';
 
     case 'REFERENCE_MATCH':
-      return 'replace the reference product with the uploaded product while preserving the reference structure';
+      return 'replace the reference product with the uploaded product while preserving the reference structure and product visibility';
 
     case 'REFERENCE_VARIATION':
-      return 'same reference idea with slight angle or layout variation';
+      return 'same reference idea with slight angle, crop or product position variation while preserving the reference visual intention';
 
     default:
       return 'full product visibility and product fidelity';
@@ -584,9 +709,21 @@ const getEnvironmentRules = (type: string): string => {
   if (type === 'REFERENCE_MATCH') {
     return [
       REFERENCE_PRIORITY_RULES,
+      REFERENCE_VISUAL_INTENTION_RULES,
+      REFERENCE_MATCH_CAMERA_LOCK_RULES,
+      REFERENCE_LAYOUT_RULES,
+      REFERENCE_MATCH_STRICTNESS_RULES,
+      PRODUCT_ANATOMY_LOCK_RULES,
+      PRODUCT_SILHOUETTE_RULES,
+      PAIR_AND_MULTIPLE_PRODUCT_RULES,
       PRODUCT_BRANDING_RULES,
+      PRODUCT_VISIBILITY_RULES,
+      COORDINATED_SET_HARMONY_RULES,
+      SUPPORTING_PROP_RULES,
       INPUT_ARTIFACT_RULES,
       HUMAN_CONTEXT_RULES,
+      HUMAN_PRODUCT_HIERARCHY_RULES,
+      WORN_PRODUCT_INTEGRATION_RULES,
       'This shot should be the closest faithful recreation of the reference image.',
       'Only replace the product; do not change the reference scene unnecessarily.',
       'Maintain realistic product integration into the reference scene.',
@@ -597,11 +734,22 @@ const getEnvironmentRules = (type: string): string => {
   if (type === 'REFERENCE_VARIATION') {
     return [
       REFERENCE_PRIORITY_RULES,
+      REFERENCE_VISUAL_INTENTION_RULES,
+      REFERENCE_LAYOUT_RULES,
+      REFERENCE_VARIATION_CONTROL_RULES,
+      PRODUCT_ANATOMY_LOCK_RULES,
+      PRODUCT_SILHOUETTE_RULES,
+      PAIR_AND_MULTIPLE_PRODUCT_RULES,
       PRODUCT_BRANDING_RULES,
+      PRODUCT_VISIBILITY_RULES,
+      COORDINATED_SET_HARMONY_RULES,
+      SUPPORTING_PROP_RULES,
       INPUT_ARTIFACT_RULES,
       HUMAN_CONTEXT_RULES,
+      HUMAN_PRODUCT_HIERARCHY_RULES,
+      WORN_PRODUCT_INTEGRATION_RULES,
       'Create a subtle variation of the reference, not a new unrelated scene.',
-      'Change only one visual factor: slightly different angle, crop or product position.',
+      'Change only one visual factor: slightly different angle, crop, product position or minor prop spacing.',
       'Keep the same lighting and background family from the reference.',
       'Do not copy text, labels or branding from the reference product.'
     ].join('\n');
@@ -609,7 +757,11 @@ const getEnvironmentRules = (type: string): string => {
 
   return [
     PRODUCT_IDENTITY_RULES,
+    PRODUCT_ANATOMY_LOCK_RULES,
+    PRODUCT_SILHOUETTE_RULES,
+    PAIR_AND_MULTIPLE_PRODUCT_RULES,
     PRODUCT_BRANDING_RULES,
+    PRODUCT_VISIBILITY_RULES,
     INPUT_ARTIFACT_RULES,
     HUMAN_CONTEXT_RULES,
     SHOT_VARIATION_RULES,
@@ -640,6 +792,17 @@ export const buildPromptPayloadsFromDirectorResult = (
         ? GRID_SOURCE_IMAGE_RULE
         : SINGLE_IMAGE_RULE;
 
+    const referenceModeRules = isReferenceShot
+      ? [
+          REFERENCE_PRIORITY_RULES,
+          REFERENCE_VISUAL_INTENTION_RULES,
+          REFERENCE_LAYOUT_RULES,
+          shot.type === 'REFERENCE_MATCH'
+            ? REFERENCE_MATCH_CAMERA_LOCK_RULES
+            : REFERENCE_VARIATION_CONTROL_RULES
+        ].join('\n')
+      : PRODUCT_IDENTITY_RULES;
+
     return {
       shotId: shot.id,
       shotType: shot.type,
@@ -649,10 +812,20 @@ export const buildPromptPayloadsFromDirectorResult = (
       prompt: [
         'Photorealistic product photography.',
 
-        isReferenceShot ? REFERENCE_PRIORITY_RULES : PRODUCT_IDENTITY_RULES,
+        referenceModeRules,
+        PRODUCT_ANATOMY_LOCK_RULES,
+        PRODUCT_SILHOUETTE_RULES,
+        PAIR_AND_MULTIPLE_PRODUCT_RULES,
         PRODUCT_BRANDING_RULES,
+        PRODUCT_VISIBILITY_RULES,
+
+        isReferenceShot ? COORDINATED_SET_HARMONY_RULES : '',
+        isReferenceShot ? SUPPORTING_PROP_RULES : '',
         INPUT_ARTIFACT_RULES,
         HUMAN_CONTEXT_RULES,
+        isReferenceShot ? HUMAN_PRODUCT_HIERARCHY_RULES : '',
+        isReferenceShot ? WORN_PRODUCT_INTEGRATION_RULES : '',
+
         outputStructureRule,
 
         isReferenceShot ? '' : SHOT_VARIATION_RULES,
@@ -684,8 +857,8 @@ export const buildPromptPayloadsFromDirectorResult = (
         '',
         'FINAL HARD RULE:',
         input.referenceImage
-          ? 'Reference image controls scene, lighting and composition. Product images control only product identity, product design and product branding.'
-          : 'Product images control only product identity, product design and product branding. Scene and composition must be newly generated.',
+          ? 'Reference image controls scene, lighting, camera perspective and composition. Product images control only product identity, product anatomy, product design, product color, product material and product branding.'
+          : 'Product images control only product identity, product anatomy, product design, product color, product material and product branding. Scene and composition must be newly generated.',
       ].filter(Boolean).join('\n'),
     };
   });
