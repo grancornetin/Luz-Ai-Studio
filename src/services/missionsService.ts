@@ -5,7 +5,7 @@
 
 import { db } from '../firebase';
 import {
-  doc, getDoc, setDoc, updateDoc, increment, serverTimestamp,
+  doc, getDoc, setDoc,
 } from 'firebase/firestore';
 
 export interface Mission {
@@ -149,22 +149,9 @@ export async function completeMission(
     },
   }, { merge: true });
 
-  // Sumar créditos a topUpCredits (persistentes, no expiran)
-  const userRef = doc(db, 'users', userId);
-  await updateDoc(userRef, {
-    topUpCredits:        increment(mission.credits),
-    'credits.available': increment(mission.credits), // campo legacy sincronizado
-  });
-
-  // Registrar transacción
-  const txRef = doc(db, 'users', userId, 'creditTransactions', `mission_${missionId}_${Date.now()}`);
-  await setDoc(txRef, {
-    type:      'mission',
-    missionId,
-    amount:    mission.credits,
-    createdAt: serverTimestamp(),
-    note:      `Misión completada: ${mission.label}`,
-  });
+  // Sumar créditos via servidor — el cliente no puede escribir topUpCredits directamente
+  const { addTopUpCredits } = await import('./creditsService');
+  await addTopUpCredits(userId, mission.credits, missionId);
 
   return {
     success:       true,

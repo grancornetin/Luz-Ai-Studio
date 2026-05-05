@@ -47,15 +47,18 @@ export const userService = {
 
       if (!needsCredits) return;
 
+      // Los créditos iniciales los suma el servidor para que las Firestore rules
+      // no los bloqueen. Solo actualizamos el referralCode si falta (campo no protegido).
       await updateDoc(ref, {
-        topUpCredits:          20,
-        creditsUsedThisPeriod: 0,
-        plan:                  data.plan || 'free',
-        referralCode:          data.referralCode || generateReferralCode(uid),
-        referralCount:         data.referralCount ?? 0,
-        'credits.available':   20,
-        updatedAt:             serverTimestamp(),
+        plan:          data.plan || 'free',
+        referralCode:  data.referralCode || generateReferralCode(uid),
+        referralCount: data.referralCount ?? 0,
+        updatedAt:     serverTimestamp(),
       });
+
+      // Suma los créditos de bienvenida vía servidor
+      const { addTopUpCredits } = await import('./creditsService');
+      await addTopUpCredits(uid, 20, 'welcome_credits').catch(console.warn);
       return;
     }
 

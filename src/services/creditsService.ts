@@ -10,10 +10,29 @@
 //   credits.available:    number    — campo legacy que usaban las misiones
 
 import {
-  doc, getDoc, updateDoc, runTransaction,
-  serverTimestamp, increment, Timestamp, setDoc,
+  doc, getDoc,
+  Timestamp,
 } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { db } from '../firebase';
+
+async function getAuthHeader(): Promise<Record<string, string>> {
+  const token = await getAuth().currentUser?.getIdToken().catch(() => null);
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
+
+async function callCreditsApi(action: string, payload: Record<string, unknown> = {}): Promise<any> {
+  const res = await fetch('/api/credits', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
+    body:    JSON.stringify({ action, payload }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Credits API error: ${res.status}`);
+  }
+  return res.json();
+}
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -70,29 +89,15 @@ async function getUserCreditsDoc(uid: string): Promise<UserCreditsDoc> {
 }
 
 // ── resetPeriodIfNeeded ───────────────────────────────────────────────────────
-// Compara lastPeriodReset con hoy. Si pasó el período, reinicia el contador.
-// Se llama antes de cada generación y al cargar el perfil.
+// Delega al servidor la decisión de si el período venció y el reset.
+// El servidor usa Admin SDK, por lo que las Firestore rules no bloquean la escritura.
 
-export async function resetPeriodIfNeeded(uid: string): Promise<void> {
-  const ref  = doc(db, 'users', uid);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return;
-
-  const d    = snap.data();
-  const plan = (d.plan as PlanId) || 'free';
-  if (plan === 'free' || plan === 'admin') return; // no tiene períodos
-
-  const lastReset: Timestamp | undefined = d.lastPeriodReset;
-  const periodDays = PLAN_PERIOD_DAYS[plan];
-  const now        = Date.now();
-  const resetMs    = lastReset ? lastReset.toMillis() : 0;
-  const elapsed    = (now - resetMs) / (1000 * 60 * 60 * 24);
-
-  if (elapsed >= periodDays) {
-    await updateDoc(ref, {
-      creditsUsedThisPeriod: 0,
-      lastPeriodReset:       serverTimestamp(),
-    });
+export async function resetPeriodIfNeeded(_uid: string): Promise<void> {
+  try {
+    await callCreditsApi('resetPeriod');
+  } catch (err) {
+    // No bloquear el flujo si falla — es solo una optimización de UI
+    console.warn('[creditsService] resetPeriod failed (non-blocking):', err);
   }
 }
 
@@ -106,74 +111,26 @@ export function canGenerate(user: UserCreditsDoc, cost: number): boolean {
 }
 
 // ── deductCredits ─────────────────────────────────────────────────────────────
-// Descuenta créditos en transacción atómica.
-// Prioridad: topUpCredits primero, luego créditos del período.
+// Delega el descuento al servidor via /api/credits.
+// El servidor usa Admin SDK + transacción atómica — las Firestore rules no
+// pueden ser bypasseadas por el cliente para inflar su propio saldo.
 
-export async function deductCredits(uid: string, cost: number): Promise<boolean> {
+export async function deductCredits(_uid: string, cost: number): Promise<boolean> {
   if (cost <= 0) return true;
-
   try {
-    let ok = false;
-    await runTransaction(db, async (tx) => {
-      const ref  = doc(db, 'users', uid);
-      const snap = await tx.get(ref);
-      if (!snap.exists()) throw new Error('User not found');
-
-      const d    = snap.data();
-      const plan = (d.plan as PlanId) || 'free';
-      if (plan === 'admin') { ok = true; return; }
-
-      const topUp  = d.topUpCredits            || 0;
-      const used   = d.creditsUsedThisPeriod   || 0;
-      const limit  = getPeriodLimit(plan);
-      const remaining = limit - used;
-
-      let topUpDeduct = 0;
-      let periodDeduct = 0;
-
-      if (topUp >= cost) {
-        topUpDeduct = cost;
-      } else if (topUp > 0 && (topUp + remaining) >= cost) {
-        topUpDeduct  = topUp;
-        periodDeduct = cost - topUp;
-      } else if (remaining >= cost) {
-        periodDeduct = cost;
-      } else {
-        throw new Error('Insufficient credits');
-      }
-
-      const updates: Record<string, any> = {};
-      if (topUpDeduct  > 0) updates.topUpCredits            = topUp  - topUpDeduct;
-      if (periodDeduct > 0) updates.creditsUsedThisPeriod   = used   + periodDeduct;
-      // Mantener campo legacy sincronizado
-      updates['credits.available'] = Math.max(0, (d.credits?.available || 0) - cost);
-
-      tx.update(ref, updates);
-      ok = true;
-    });
-    return ok;
+    const data = await callCreditsApi('deduct', { cost });
+    return data?.ok === true;
   } catch {
     return false;
   }
 }
 
 // ── addTopUpCredits ───────────────────────────────────────────────────────────
+// Solo se llama para recompensas de misiones. Delega al servidor.
+// Los top-ups reales de pago pasan por api/webhooks/dodopayments.ts.
 
-export async function addTopUpCredits(uid: string, amount: number, note: string): Promise<void> {
-  const ref = doc(db, 'users', uid);
-  await updateDoc(ref, {
-    topUpCredits:        increment(amount),
-    'credits.available': increment(amount),
-  });
-
-  // Log de transacción
-  const txRef = doc(db, 'users', uid, 'creditTransactions', `topup_${Date.now()}`);
-  await setDoc(txRef, {
-    type:      'topup',
-    amount,
-    createdAt: serverTimestamp(),
-    note,
-  });
+export async function addTopUpCredits(_uid: string, amount: number, missionId: string): Promise<void> {
+  await callCreditsApi('rewardMission', { missionId, credits: amount });
 }
 
 // ── getEffectiveCredits ───────────────────────────────────────────────────────
@@ -199,41 +156,3 @@ export async function getEffectiveCredits(uid: string): Promise<{
   };
 }
 
-// ── activatePlan ─────────────────────────────────────────────────────────────
-// Llamada desde el webhook cuando se activa/renueva una suscripción.
-
-export async function activatePlan(
-  uid: string,
-  plan: PlanId,
-  validUntil: Date,
-): Promise<void> {
-  const ref = doc(db, 'users', uid);
-  await updateDoc(ref, {
-    plan,
-    planValidUntil:        Timestamp.fromDate(validUntil),
-    creditsUsedThisPeriod: 0,
-    lastPeriodReset:       serverTimestamp(),
-  });
-
-  // Log
-  const txRef = doc(db, 'users', uid, 'creditTransactions', `plan_${plan}_${Date.now()}`);
-  await setDoc(txRef, {
-    type:      'subscription',
-    plan,
-    validUntil: Timestamp.fromDate(validUntil),
-    createdAt:  serverTimestamp(),
-    note:       `Plan ${plan} activado`,
-  });
-}
-
-// ── cancelPlan ────────────────────────────────────────────────────────────────
-
-export async function cancelPlan(uid: string): Promise<void> {
-  const ref = doc(db, 'users', uid);
-  await updateDoc(ref, {
-    plan:                  'free',
-    planValidUntil:        null,
-    creditsUsedThisPeriod: 0,
-    lastPeriodReset:       serverTimestamp(),
-  });
-}
