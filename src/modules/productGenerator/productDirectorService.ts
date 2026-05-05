@@ -432,6 +432,11 @@ const PRODUCT_NEGATIVE_PROMPT = [
   '3d render look',
   'low resolution',
   'blurred subject',
+  'white background catalog shot when recreating reference',
+  'minimal pedestal shot when recreating reference',
+  'isolated studio shot when recreating reference',
+  'abandoned reference scene',
+  'removed reference props',
 ].join(', ');
 
 const SOURCE_ORDER_RULE = [
@@ -591,11 +596,37 @@ const REFERENCE_MATCH_STRICTNESS_RULES = [
 const REFERENCE_VARIATION_CONTROL_RULES = [
   'REFERENCE_VARIATION CONTROL RULE:',
   'This shot must keep the same concept, mood and scene family as the reference, but create a useful commercial alternative.',
-  'Change exactly one or two of these: crop, product placement, supporting prop color harmony, small prop spacing, or camera distance.',
-  'Do NOT repeat REFERENCE_MATCH.',
+  'The variation must remain recognizably derived from the reference image.',
+  'Allowed changes: crop, camera distance, small product position adjustment, small prop spacing adjustment, or subtle secondary prop color harmony.',
+  'Change exactly one or two controlled elements only.',
+  'Do NOT repeat REFERENCE_MATCH exactly.',
   'Do NOT create a new unrelated scene.',
-  'Do not change the reference mood, scene family, lighting family or core layout.',
-  'The variation must still be recognizably derived from the reference image.',
+  'Do NOT change the reference mood, scene family, lighting family, physical setting or core prop layout.',
+].join('\n');
+
+const REFERENCE_VARIATION_SCENE_LOCK_RULES = [
+  'REFERENCE_VARIATION SCENE LOCK RULE:',
+  'REFERENCE_VARIATION must stay inside the same physical environment as the reference image.',
+  'Do NOT change the location, setting, surface, room type, environment type or scene family.',
+  'Do NOT turn the variation into a studio shot, catalog shot, isolated product shot, white-background shot, pedestal shot, minimal product shot or clean ecommerce product shot.',
+  'Do NOT remove the main supporting props from the reference.',
+  'Keep the same main supporting props visible unless physically impossible.',
+  'If the reference is a car-seat lifestyle set, the variation must remain a car-seat lifestyle set.',
+  'If the reference is a car-console setup, the variation must remain a car-console setup.',
+  'If the reference is a desk setup, the variation must remain a desk setup.',
+  'If the reference is a bed or handheld scene, the variation must remain a bed or handheld scene.',
+  'If the reference is a flat lay, the variation must remain a flat lay.',
+  'If the reference includes a phone, cup, cosmetic tube, bag, notebook, glass, coffee, pouch or other key supporting props, keep those prop roles in the variation.',
+  'The variation may subtly move props or recolor 1 to 3 secondary props for harmony, but it must not abandon the reference scene.',
+].join('\n');
+
+const REFERENCE_VARIATION_PROP_RETENTION_RULES = [
+  'REFERENCE_VARIATION PROP RETENTION RULE:',
+  'Identify the main supporting props in the reference image and preserve their roles in the variation.',
+  'Main supporting props are objects that define the lifestyle story, location, use context or color harmony of the reference.',
+  'Do not delete props that explain the scene.',
+  'Do not replace a lifestyle set with a single-product composition.',
+  'The uploaded product must remain the main commercial subject, but the supporting set must still feel like the reference set.',
 ].join('\n');
 
 const WORN_PRODUCT_INTEGRATION_RULES = [
@@ -1324,6 +1355,8 @@ const buildReferenceVariationEnvironmentRules = (): string =>
     REFERENCE_VISUAL_INTENTION_RULES,
     REFERENCE_LAYOUT_RULES,
     REFERENCE_VARIATION_CONTROL_RULES,
+    REFERENCE_VARIATION_SCENE_LOCK_RULES,
+    REFERENCE_VARIATION_PROP_RETENTION_RULES,
     PRODUCT_IDENTITY_RULES,
     PRODUCT_ANATOMY_LOCK_RULES,
     INTERACTION_ADAPTATION_RULES,
@@ -1338,9 +1371,9 @@ const buildReferenceVariationEnvironmentRules = (): string =>
     HUMAN_PRODUCT_HIERARCHY_RULES,
     WORN_PRODUCT_INTEGRATION_RULES,
     'Create a useful commercial alternative derived from the reference, not a new unrelated scene.',
-    'If REFERENCE_MATCH preserved exact placement, REFERENCE_VARIATION should provide a meaningful but controlled alternative.',
-    'Change one or two controlled elements only: crop, product placement, prop spacing, or secondary prop color harmony.',
-    'Keep the same lighting and background family from the reference.',
+    'If REFERENCE_MATCH preserved exact placement, REFERENCE_VARIATION should provide a meaningful but controlled alternative inside the same physical scene.',
+    'Change one or two controlled elements only: crop, product placement, prop spacing, camera distance, or secondary prop color harmony.',
+    'Keep the same location, same surface, same environment type, same lighting family, same background family and same main supporting props.',
     'Do not copy text, labels or branding from the reference product.',
   ]);
 
@@ -1482,14 +1515,14 @@ const getShotDefinition = (
 
     case 'REFERENCE_VARIATION':
       return {
-        composition: 'same reference idea with a controlled commercial variation; not a repeat of REFERENCE_MATCH',
-        framing: 'similar crop and camera distance with a controlled crop, spacing or product placement adjustment',
-        focus: 'same reference visual intention, product accuracy remains the priority',
-        productEmphasis: 'uploaded product identity remains the priority while producing a useful alternate image',
+        composition: 'same reference idea with a controlled commercial variation inside the same physical scene; not a repeat of REFERENCE_MATCH and not a new scene',
+        framing: 'similar reference framing with only controlled crop, camera distance, prop spacing or product placement adjustment',
+        focus: 'same reference visual intention, same physical environment, same supporting prop roles, product accuracy remains the priority',
+        productEmphasis: 'uploaded product identity remains the priority while producing a useful alternate image from the same reference set',
         environmentRules: buildReferenceVariationEnvironmentRules(),
         constraints: {
-          preserveProduct: `${basePreserve}; never change product anatomy to fit the reference`,
-          avoid: baseAvoid,
+          preserveProduct: `${basePreserve}; never change product anatomy to fit the reference; do not leave the reference scene`,
+          avoid: `${baseAvoid}, avoid isolated product shot, avoid minimal pedestal shot, avoid white background catalog shot, avoid removing reference props, avoid changing the physical environment`,
         },
       };
 
@@ -1582,6 +1615,8 @@ const buildReferencePromptRules = (shot: ShotPlan): string => {
     REFERENCE_VISUAL_INTENTION_RULES,
     REFERENCE_LAYOUT_RULES,
     REFERENCE_VARIATION_CONTROL_RULES,
+    REFERENCE_VARIATION_SCENE_LOCK_RULES,
+    REFERENCE_VARIATION_PROP_RETENTION_RULES,
   ]);
 };
 
@@ -1608,6 +1643,8 @@ const buildContextualReferenceRules = (shot: ShotPlan): string => {
   return joinPrompt([
     COORDINATED_SET_ACTIVE_HARMONY_RULES,
     SUPPORTING_PROP_RULES,
+    shot.type === 'REFERENCE_VARIATION' ? REFERENCE_VARIATION_SCENE_LOCK_RULES : '',
+    shot.type === 'REFERENCE_VARIATION' ? REFERENCE_VARIATION_PROP_RETENTION_RULES : '',
   ]);
 };
 
@@ -1676,7 +1713,9 @@ export const buildPromptPayloadsFromDirectorResult = (
         '',
         'FINAL HARD RULE:',
         input.referenceImage
-          ? 'Reference image controls scene, lighting, camera perspective, layout and visual intention. Product images control only product identity, product anatomy, product design, product color, product material and product branding. If reference interaction conflicts with product anatomy, change the interaction, never the product.'
+          ? shot.type === 'REFERENCE_VARIATION'
+            ? 'Reference variation must remain inside the same physical scene, same environment type, same surface/location, same main supporting props and same lifestyle concept from the reference. Product images control only product identity, product anatomy, product design, product color, product material and product branding. If reference interaction conflicts with product anatomy, change the interaction, never the product. Do not turn this into a studio, catalog, pedestal, white-background or isolated product shot.'
+            : 'Reference image controls scene, lighting, camera perspective, layout and visual intention. Product images control only product identity, product anatomy, product design, product color, product material and product branding. If reference interaction conflicts with product anatomy, change the interaction, never the product.'
           : 'Product images control only product identity, product anatomy, product design, product color, product material and product branding. Scene and composition must be newly generated.',
       ].filter(Boolean).join('\n'),
     };
