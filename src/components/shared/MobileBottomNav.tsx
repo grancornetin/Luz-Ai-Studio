@@ -87,7 +87,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = () => {
             <Bell size={isActive('/notifications') ? 24 : 22} />
             {unreadCount > 0 && (
               <span
-                className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-md"
+                className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-xs font-black rounded-full flex items-center justify-center shadow-md"
                 aria-hidden="true"
               >
                 {unreadCount > 99 ? '99+' : unreadCount}
