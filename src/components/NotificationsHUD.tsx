@@ -159,7 +159,7 @@ const NotificationsHUD: React.FC = () => {
         <button
           onClick={goToPanel}
           aria-label={`${inProgress.length} ${inProgress.length === 1 ? 'generación' : 'generaciones'} en curso`}
-          className="fixed right-4 md:right-6 bottom-24 md:bottom-24 z-[90] bg-white rounded-2xl shadow-2xl border border-slate-100 px-4 py-3 flex items-center gap-3 hover:shadow-indigo-200 hover:border-indigo-200 transition-all max-w-[280px] group"
+          className="fixed right-4 md:right-24 bottom-24 md:bottom-6 z-[950] bg-white rounded-2xl shadow-2xl border border-slate-100 px-4 py-3 flex items-center gap-3 hover:shadow-indigo-200 hover:border-indigo-200 transition-all max-w-[280px] group"
         >
           <div className="relative w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
             <Loader2 size={18} className="text-indigo-600 animate-spin" />

@@ -206,6 +206,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signOut = async () => {
+    const uid = auth.currentUser?.uid;
+    if (uid) {
+      const { generationHistoryService } = await import('../../services/generationHistoryService');
+      await generationHistoryService.clearLocalForUser(uid).catch(() => {});
+    }
     await firebaseSignOut(auth);
     setUser(null);
     setProfile(null);

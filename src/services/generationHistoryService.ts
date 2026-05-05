@@ -1,6 +1,6 @@
 // src/services/generationHistoryService.ts
 // Historial de generaciones con doble guardado:
-// 1) IndexedDB local: malla de seguridad inmediata, incluso si falla la API.
+// 1) IndexedDB local por usuario: aislada por uid, se borra al logout.
 // 2) /api/history: sincronizacion remota cuando el usuario esta autenticado.
 
 import { getAuth } from 'firebase/auth';
@@ -47,11 +47,16 @@ export const MODULE_LABELS: Record<string, string> = {
 };
 
 const API = '/api/history';
-const DB_NAME = 'luz_generation_history_db';
 const STORE_NAME = 'records';
 const DB_VERSION = 1;
 const LOCAL_MAX_ENTRIES = 200;
 const LEGACY_LS_KEY = 'luz_generation_history';
+
+// ── IndexedDB por usuario ─────────────────────────────────────────────────────
+
+function dbName(uid: string): string {
+  return `luz_history_${uid}`;
+}
 
 function canUseBrowserStorage(): boolean {
   return typeof window !== 'undefined' && typeof indexedDB !== 'undefined';
@@ -64,6 +69,150 @@ function getUid(): string {
   } catch { /* ignore */ }
   return '';
 }
+
+// Abre (o crea) la IndexedDB del usuario activo.
+function openHistoryDb(uid: string): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (!canUseBrowserStorage()) {
+      reject(new Error('IndexedDB no disponible'));
+      return;
+    }
+
+    const request = indexedDB.open(dbName(uid), DB_VERSION);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        store.createIndex('createdAt', 'createdAt', { unique: false });
+        store.createIndex('imageKey', 'imageKey', { unique: false });
+      }
+    };
+  });
+}
+
+async function withStore<T>(
+  uid: string,
+  mode: IDBTransactionMode,
+  fn: (store: IDBObjectStore) => IDBRequest<T> | void,
+): Promise<T | void> {
+  const db = await openHistoryDb(uid);
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, mode);
+    const store = tx.objectStore(STORE_NAME);
+    let request: IDBRequest<T> | void;
+
+    tx.oncomplete = () => {
+      db.close();
+      if (!request) resolve();
+    };
+    tx.onerror = () => {
+      const err = tx.error;
+      db.close();
+      reject(err);
+    };
+
+    request = fn(store);
+    if (request) {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    }
+  });
+}
+
+// ── CRUD local ────────────────────────────────────────────────────────────────
+
+async function getLocalRecords(uid: string): Promise<GenerationRecord[]> {
+  try {
+    const records = await withStore<GenerationRecord[]>(uid, 'readonly', store => store.getAll());
+    return (Array.isArray(records) ? records : [])
+      .map(normalizeRecord)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  } catch {
+    return loadLegacyLocalStorage();
+  }
+}
+
+async function putLocalRecord(uid: string, record: GenerationRecord): Promise<void> {
+  const normalized = normalizeRecord(record);
+  try {
+    const all = await getLocalRecords(uid);
+    const duplicate = all.find(r => r.id === normalized.id || r.imageKey === normalized.imageKey);
+    const merged = mergeRecord(duplicate, normalized);
+    await withStore(uid, 'readwrite', store => {
+      if (duplicate && duplicate.id !== merged.id) store.delete(duplicate.id);
+      store.put(merged);
+    });
+    await trimLocalHistory(uid);
+  } catch (err) {
+    saveLegacyLocalStorage(normalized);
+    throw err;
+  }
+}
+
+async function trimLocalHistory(uid: string): Promise<void> {
+  const records = await getLocalRecords(uid);
+  const extra = records.slice(LOCAL_MAX_ENTRIES);
+  if (!extra.length) return;
+  await withStore(uid, 'readwrite', store => {
+    extra.forEach(record => store.delete(record.id));
+  });
+}
+
+async function deleteLocalRecord(uid: string, id: string): Promise<void> {
+  try {
+    await withStore(uid, 'readwrite', store => { store.delete(id); });
+  } catch {
+    const updated = loadLegacyLocalStorage().filter(r => r.id !== id);
+    localStorage.setItem(LEGACY_LS_KEY, JSON.stringify(updated));
+  }
+}
+
+// Borra toda la IndexedDB del usuario (usado en logout).
+function deleteUserDb(uid: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (!canUseBrowserStorage()) { resolve(); return; }
+    const req = indexedDB.deleteDatabase(dbName(uid));
+    req.onsuccess = () => resolve();
+    req.onerror   = () => resolve(); // fallo silencioso — no bloquear logout
+    req.onblocked = () => resolve();
+  });
+}
+
+// ── Legacy localStorage ───────────────────────────────────────────────────────
+
+async function migrateLegacyLocalStorage(uid: string): Promise<void> {
+  const legacy = loadLegacyLocalStorage();
+  if (!legacy.length || !canUseBrowserStorage()) return;
+  try {
+    for (const record of legacy) await putLocalRecord(uid, record);
+    localStorage.removeItem(LEGACY_LS_KEY);
+  } catch { /* keep legacy copy if migration fails */ }
+}
+
+function loadLegacyLocalStorage(): GenerationRecord[] {
+  try {
+    const raw = localStorage.getItem(LEGACY_LS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map(normalizeRecord) : [];
+  } catch { return []; }
+}
+
+function saveLegacyLocalStorage(record: GenerationRecord): void {
+  try {
+    const existing = loadLegacyLocalStorage();
+    const normalized = normalizeRecord(record);
+    const withoutDuplicate = existing.filter(r => r.id !== normalized.id && r.imageKey !== normalized.imageKey);
+    localStorage.setItem(
+      LEGACY_LS_KEY,
+      JSON.stringify([normalized, ...withoutDuplicate].slice(0, 25)),
+    );
+  } catch { /* localStorage may be full; remote sync can still work */ }
+}
+
+// ── Helpers de datos ─────────────────────────────────────────────────────────
 
 function imageFingerprint(imageUrl: string): string {
   const raw = (imageUrl || '').trim();
@@ -103,139 +252,6 @@ function mergeRecord(oldRecord: GenerationRecord | undefined, nextRecord: Genera
   });
 }
 
-function openHistoryDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    if (!canUseBrowserStorage()) {
-      reject(new Error('IndexedDB no disponible'));
-      return;
-    }
-
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve(request.result);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-        store.createIndex('createdAt', 'createdAt', { unique: false });
-        store.createIndex('imageKey', 'imageKey', { unique: false });
-      }
-    };
-  });
-}
-
-async function withStore<T>(
-  mode: IDBTransactionMode,
-  fn: (store: IDBObjectStore) => IDBRequest<T> | void,
-): Promise<T | void> {
-  const db = await openHistoryDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, mode);
-    const store = tx.objectStore(STORE_NAME);
-    let request: IDBRequest<T> | void;
-
-    tx.oncomplete = () => {
-      db.close();
-      if (!request) resolve();
-    };
-    tx.onerror = () => {
-      const err = tx.error;
-      db.close();
-      reject(err);
-    };
-
-    request = fn(store);
-    if (request) {
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    }
-  });
-}
-
-async function getLocalRecords(): Promise<GenerationRecord[]> {
-  try {
-    const records = await withStore<GenerationRecord[]>('readonly', store => store.getAll());
-    return (Array.isArray(records) ? records : [])
-      .map(normalizeRecord)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  } catch {
-    return loadLegacyLocalStorage();
-  }
-}
-
-async function putLocalRecord(record: GenerationRecord): Promise<void> {
-  const normalized = normalizeRecord(record);
-  try {
-    const all = await getLocalRecords();
-    const duplicate = all.find(r => r.id === normalized.id || r.imageKey === normalized.imageKey);
-    const merged = mergeRecord(duplicate, normalized);
-    await withStore('readwrite', store => {
-      if (duplicate && duplicate.id !== merged.id) store.delete(duplicate.id);
-      store.put(merged);
-    });
-    await trimLocalHistory();
-  } catch (err) {
-    saveLegacyLocalStorage(normalized);
-    throw err;
-  }
-}
-
-async function trimLocalHistory(): Promise<void> {
-  const records = await getLocalRecords();
-  const extra = records.slice(LOCAL_MAX_ENTRIES);
-  if (!extra.length) return;
-  await withStore('readwrite', store => {
-    extra.forEach(record => store.delete(record.id));
-  });
-}
-
-async function deleteLocalRecord(id: string): Promise<void> {
-  try {
-    await withStore('readwrite', store => { store.delete(id); });
-  } catch {
-    const updated = loadLegacyLocalStorage().filter(r => r.id !== id);
-    localStorage.setItem(LEGACY_LS_KEY, JSON.stringify(updated));
-  }
-}
-
-async function clearLocalRecords(): Promise<void> {
-  try {
-    await withStore('readwrite', store => { store.clear(); });
-  } catch {
-    try { localStorage.removeItem(LEGACY_LS_KEY); } catch { /* ignore */ }
-  }
-}
-
-async function migrateLegacyLocalStorage(): Promise<void> {
-  const legacy = loadLegacyLocalStorage();
-  if (!legacy.length || !canUseBrowserStorage()) return;
-  try {
-    for (const record of legacy) await putLocalRecord(record);
-    localStorage.removeItem(LEGACY_LS_KEY);
-  } catch { /* keep legacy copy if migration fails */ }
-}
-
-function loadLegacyLocalStorage(): GenerationRecord[] {
-  try {
-    const raw = localStorage.getItem(LEGACY_LS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.map(normalizeRecord) : [];
-  } catch { return []; }
-}
-
-function saveLegacyLocalStorage(record: GenerationRecord): void {
-  try {
-    const existing = loadLegacyLocalStorage();
-    const normalized = normalizeRecord(record);
-    const withoutDuplicate = existing.filter(r => r.id !== normalized.id && r.imageKey !== normalized.imageKey);
-    localStorage.setItem(
-      LEGACY_LS_KEY,
-      JSON.stringify([normalized, ...withoutDuplicate].slice(0, 25)),
-    );
-  } catch { /* localStorage may be full; remote sync can still work */ }
-}
-
 function mergeRecords(primary: GenerationRecord[], secondary: GenerationRecord[]): GenerationRecord[] {
   const map = new Map<string, GenerationRecord>();
   [...secondary, ...primary].forEach(record => {
@@ -260,6 +276,8 @@ function stripHeavyLocalOnlyData(record: GenerationRecord): GenerationRecord {
   };
 }
 
+// ── API remota ────────────────────────────────────────────────────────────────
+
 async function call(action: string, payload: Record<string, unknown> = {}): Promise<any> {
   const uid = getUid();
   if (!uid) throw new Error('Usuario no autenticado');
@@ -280,10 +298,15 @@ async function call(action: string, payload: Record<string, unknown> = {}): Prom
   return res.json();
 }
 
+// ── API pública ───────────────────────────────────────────────────────────────
+
 export const generationHistoryService = {
 
   async save(record: Omit<GenerationRecord, 'id' | 'createdAt'> & Partial<Pick<GenerationRecord, 'id' | 'createdAt'>>): Promise<void> {
-    await migrateLegacyLocalStorage();
+    const uid = getUid();
+    if (!uid) return;
+
+    await migrateLegacyLocalStorage(uid);
 
     const id = record.id || `gen_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const newRecord = normalizeRecord({
@@ -293,16 +316,14 @@ export const generationHistoryService = {
       source: record.source || 'client',
     } as GenerationRecord);
 
-    await putLocalRecord(newRecord).catch(() => {});
+    await putLocalRecord(uid, newRecord).catch(() => {});
 
     try {
       await call('save', { record: stripHeavyLocalOnlyData(newRecord) });
-      await putLocalRecord({ ...newRecord, syncedAt: new Date().toISOString() }).catch(() => {});
+      await putLocalRecord(uid, { ...newRecord, syncedAt: new Date().toISOString() }).catch(() => {});
     } catch (err) {
-      // La copia local ya quedo guardada. El historial no debe bloquear el modulo.
       console.warn('[History] Remote sync failed; local copy preserved.', err);
     } finally {
-      const uid = getAuth().currentUser?.uid;
       if (uid) {
         checkFirstGeneration(uid).catch(() => {});
         rewardReferrer(uid).catch(() => {});
@@ -311,14 +332,17 @@ export const generationHistoryService = {
   },
 
   async getAll(limit = 100, offset = 0): Promise<GenerationRecord[]> {
-    await migrateLegacyLocalStorage();
-    const local = await getLocalRecords();
+    const uid = getUid();
+    if (!uid) return [];
+
+    await migrateLegacyLocalStorage(uid);
+    const local = await getLocalRecords(uid);
 
     try {
       const data = await call('list', { limit, offset });
       const remote = Array.isArray(data.entries) ? data.entries.map(normalizeRecord) : [];
       for (const record of remote) {
-        await putLocalRecord({ ...record, syncedAt: record.syncedAt || new Date().toISOString() }).catch(() => {});
+        await putLocalRecord(uid, { ...record, syncedAt: record.syncedAt || new Date().toISOString() }).catch(() => {});
       }
       return mergeRecords(remote, local).slice(offset, offset + limit);
     } catch {
@@ -327,17 +351,20 @@ export const generationHistoryService = {
   },
 
   async delete(id: string): Promise<void> {
-    await deleteLocalRecord(id);
+    const uid = getUid();
+    if (uid) await deleteLocalRecord(uid, id);
     await call('delete', { id });
   },
 
   async deleteBatch(ids: string[]): Promise<void> {
-    await Promise.all(ids.map(id => deleteLocalRecord(id)));
+    const uid = getUid();
+    if (uid) await Promise.all(ids.map(id => deleteLocalRecord(uid, id)));
     await call('deleteBatch', { ids });
   },
 
   async clear(): Promise<void> {
-    await clearLocalRecords();
+    const uid = getUid();
+    if (uid) await deleteUserDb(uid);
     await call('clear');
   },
 
@@ -345,8 +372,14 @@ export const generationHistoryService = {
     return call('stats');
   },
 
-  // Mantenido por compatibilidad con codigo que lo llama.
+  // Borra la IndexedDB local del usuario. Llamar en logout antes de firebaseSignOut.
+  async clearLocalForUser(uid: string): Promise<void> {
+    await deleteUserDb(uid);
+    try { localStorage.removeItem(LEGACY_LS_KEY); } catch { /* ignore */ }
+  },
+
   async trimHistory(_uid: string): Promise<void> {
-    await trimLocalHistory().catch(() => {});
+    const uid = getUid();
+    if (uid) await trimLocalHistory(uid).catch(() => {});
   },
 };
