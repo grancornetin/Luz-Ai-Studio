@@ -64,7 +64,7 @@ export const usePromptComposer = () => {
   const [error, setError] = useState<string | null>(null);
   const [showNoCredits, setShowNoCredits] = useState(false);
 
-  const { credits, isAdmin, deductCredits, user } = useAuth();
+  const { credits, isAdmin, deductCredits, refreshCredits, user } = useAuth();
   const { modelId, setModelId } = useModelSelection();
 
   const generate = useCallback(async () => {
@@ -160,11 +160,22 @@ export const usePromptComposer = () => {
 
     } catch (err: any) {
       setError(err?.message || 'Generation failed');
+      // El worker reembolsa en Firestore de forma asíncrona — polling breve
+      // para que el saldo en pantalla refleje el reembolso sin recargar.
+      if (!isAdmin) {
+        let attempts = 0;
+        const pollId = { ref: 0 };
+        pollId.ref = window.setInterval(async () => {
+          await refreshCredits();
+          attempts++;
+          if (attempts >= 5) clearInterval(pollId.ref);
+        }, 2000);
+      }
     } finally {
       setIsGenerating(false);
     }
 
-  }, [promptText, dna, slots, getActiveReferences, buildDNA, modelId, credits.available, isAdmin, deductCredits]);
+  }, [promptText, dna, slots, getActiveReferences, buildDNA, modelId, credits.available, isAdmin, deductCredits, refreshCredits]);
 
   const reset = useCallback(() => {
 
