@@ -138,7 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
           setIsNewUser(false);
         } else {
-          // Primera vez — crear perfil
+          // Primera vez — crear documento vía servidor (Admin SDK ignora Firestore rules)
           userProfile = {
             id:          firebaseUser.uid,
             email:       firebaseUser.email       || '',
@@ -150,7 +150,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             preferences: DEFAULT_PREFERENCES,
           };
           setIsNewUser(true);
-          await userService.initializeUser(firebaseUser.uid, userProfile.email, userProfile.displayName);
+          // Llamar al endpoint servidor que crea el doc con Admin SDK
+          const token = await firebaseUser.getIdToken();
+          await fetch('/api/user-init', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body:    JSON.stringify({ email: userProfile.email, displayName: userProfile.displayName }),
+          }).catch(err => console.warn('[AuthContext] user-init warning:', err));
         }
 
         setProfile(userProfile);
