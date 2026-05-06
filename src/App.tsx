@@ -228,7 +228,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
       <aside className={`fixed md:sticky top-0 left-0 h-screen bg-white border-r border-slate-100 z-50 transition-all duration-500 overflow-hidden flex flex-col ${collapsed ? 'w-0 border-none' : 'w-80 shadow-2xl'}`}>
         <div className="p-8 pb-6 flex items-center justify-between flex-shrink-0">
           <Link to="/dashboard" onClick={onNavigate} className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ background: '#F72C5B' }}><i className="fa-solid fa-bolt" /></div>
+            <img src="/icon-192.png" alt="Luz IA" style={{ width: 40, height: 40, objectFit: 'contain' }} />
             <h1 className="text-xl font-black text-slate-800 italic uppercase">LUZ IA</h1>
           </Link>
           <button onClick={onToggle} className="p-2 text-slate-400 transition-colors" onMouseOver={e => (e.currentTarget as HTMLElement).style.color = '#F72C5B'} onMouseOut={e => (e.currentTarget as HTMLElement).style.color = ''}><X size={20} /></button>
