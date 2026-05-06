@@ -72,10 +72,10 @@ const ProHeader: React.FC<{ title: string; subtitle: string; icon: string }> = (
 );
 
 const CLONE_WIZARD_STEPS = [
-  { id: 'target',    label: 'Target' },
-  { id: 'identity',  label: 'Identidad' },
-  { id: 'base',      label: 'Base' },
-  { id: 'outfit',    label: 'Outfit' },
+  { id: 'target',    label: 'Foto objetivo' },
+  { id: 'identity',  label: 'Tu modelo' },
+  { id: 'base',      label: 'Generar' },
+  { id: 'outfit',    label: 'Personalizar' },
 ];
 
 type ProSlotType = 'target' | 'face' | 'body' | 'outfit' | 'generic';

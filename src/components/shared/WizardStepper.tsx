@@ -18,7 +18,7 @@ export const WizardStepper: React.FC<WizardStepperProps> = ({ steps, current, on
 
   return (
     <div className="bg-white border-b border-slate-100">
-      {/* Mobile — solo "Paso N de M" + barra de progreso */}
+      {/* Mobile — "Paso N de M" + barra de progreso */}
       <div className="md:hidden px-4 pt-3 pb-2">
         <div className="flex justify-between items-baseline mb-2">
           <span className="text-[10px] font-black text-pink-600 uppercase tracking-widest">
@@ -36,8 +36,8 @@ export const WizardStepper: React.FC<WizardStepperProps> = ({ steps, current, on
         </div>
       </div>
 
-      {/* Desktop — chips conectados con líneas */}
-      <div className="hidden md:flex items-center gap-0 px-4 py-4 overflow-hidden">
+      {/* Desktop — solo el paso activo muestra label; el resto solo el círculo */}
+      <div className="hidden md:flex items-center gap-2 px-5 py-4">
         {steps.map((s, i) => {
           const done = i < currentIndex;
           const active = i === currentIndex;
@@ -49,12 +49,13 @@ export const WizardStepper: React.FC<WizardStepperProps> = ({ steps, current, on
                 type="button"
                 onClick={() => canJump && onJump?.(i + 1)}
                 disabled={!canJump}
-                className={`flex items-center gap-2 py-1.5 px-1 bg-transparent border-0 transition-all min-w-0 ${
-                  active ? 'flex-shrink-0' : 'flex-shrink'
-                } ${canJump ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+                className={`flex items-center gap-2 bg-transparent border-0 transition-all flex-shrink-0 py-1 px-0 ${
+                  canJump ? 'cursor-pointer hover:opacity-75' : 'cursor-default'
+                }`}
               >
+                {/* Círculo */}
                 <div
-                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold transition-all flex-shrink-0 ${
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 transition-all ${
                     done
                       ? 'bg-emerald-500 text-white'
                       : active
@@ -64,25 +65,20 @@ export const WizardStepper: React.FC<WizardStepperProps> = ({ steps, current, on
                 >
                   {done ? <Check size={12} strokeWidth={3} /> : i + 1}
                 </div>
-                {/* Label: siempre visible en paso activo, oculto en inactivos cuando hay poco espacio */}
-                <span
-                  className={`text-xs tracking-tight transition-colors truncate ${
-                    active
-                      ? 'font-bold text-slate-900'
-                      : done
-                      ? 'font-semibold text-slate-700 hidden xl:inline'
-                      : 'font-semibold text-slate-400 hidden xl:inline'
-                  }`}
-                >
-                  {s.label}
-                </span>
+
+                {/* Label: solo en el paso activo */}
+                {active && (
+                  <span className="text-xs font-bold text-slate-900 tracking-tight whitespace-nowrap">
+                    {s.label}
+                  </span>
+                )}
               </button>
+
+              {/* Separador entre pasos: flecha ligera, ancho fijo */}
               {i < steps.length - 1 && (
-                <div
-                  className={`flex-1 h-[1.5px] mx-2 min-w-[12px] transition-colors duration-300 ${
-                    done ? 'bg-emerald-500' : 'bg-slate-200'
-                  }`}
-                />
+                <div className="flex-shrink-0 text-slate-300 text-[10px] font-bold select-none">
+                  ›
+                </div>
               )}
             </React.Fragment>
           );
