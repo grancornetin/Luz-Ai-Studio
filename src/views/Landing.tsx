@@ -13,12 +13,12 @@ const IMG = (path: string) => `/images/landing/${path}`;
 
 // Flujo "Recrear con inspiración" para Product Studio
 const PROD_INSPIRE_REFS = [
-  { src: IMG('prod_insp_ref1.jpg'), label: 'Tu producto · Vista 1' },
-  { src: IMG('prod_insp_ref2.jpg'), label: 'Tu producto · Vista 2' },
-  { src: IMG('prod_insp_ref3.jpg'), label: 'Tu producto · Vista 3' },
+  { src: IMG('prod_insp_ref1.JPG'), label: 'Tu producto · Vista 1' },
+  { src: IMG('prod_insp_ref2.JPG'), label: 'Tu producto · Vista 2' },
+  { src: IMG('prod_insp_ref3.JPG'), label: 'Tu producto · Vista 3' },
 ];
-const PROD_INSPIRE_INSPO = { src: IMG('prod_insp_inspo.jpg'), label: 'Foto inspiración' };
-const PROD_INSPIRE_RESULT = { src: IMG('prod_insp_result.jpg'), label: 'Resultado clonado' };
+const PROD_INSPIRE_INSPO = { src: IMG('prod_insp_inspo.JPG'), label: 'Foto inspiración' };
+const PROD_INSPIRE_RESULT = { src: IMG('prod_insp_result.PNG'), label: 'Resultado clonado' };
 
 // ── HERO IMAGES (portrait ratio 9:16, shown in phone cards) ──────────────────
 const HERO_KEYS = [
