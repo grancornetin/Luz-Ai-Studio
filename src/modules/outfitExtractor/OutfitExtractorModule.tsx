@@ -15,6 +15,7 @@ import { newSessionId } from '../../services/imageApiService';
 import { getNotification } from '../../services/notificationsService';
 import { useSearchParams } from 'react-router-dom';
 import { GenerateButton } from '../../components/shared/GenerateButton';
+import { WizardFooter } from '../../components/shared/WizardFooter';
 
 // Nuevos componentes base
 import { ImageSlot } from '../../components/shared/ImageSlot';
@@ -559,15 +560,12 @@ const OutfitExtractorModule: React.FC = () => {
                       ))}
                     </div>
 
-                    {/* Botón de "Isolar Selección" convertido a GenerateButton */}
-                    <GenerateButton
-                      onClick={confirmSelectionAndRender}
+                    <WizardFooter
+                      onBack={() => { setStep('idle'); setCurrentKit(null); }}
+                      onContinue={confirmSelectionAndRender}
+                      continueLabel={`Isolar (${selectedItemsCount})`}
                       disabled={selectedItemsCount === 0}
-                      label={`Isolar Selección (${selectedItemsCount})`}
-                      loadingLabel="Renderizando..."
-                      imageCount={selectedItemsCount}
-                      creditsAfter={creditsAfterRender}
-                      className="w-full py-6 rounded-[24px] text-xs uppercase tracking-[0.3em] shadow-xl transition-all active:scale-95 disabled:opacity-30"
+                      costInfo={selectedItemsCount > 0 ? { cost: renderCost, label: 'Costo total' } : undefined}
                     />
                   </section>
                 </div>

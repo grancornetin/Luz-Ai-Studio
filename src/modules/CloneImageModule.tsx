@@ -24,13 +24,14 @@ import { analyzeScene, DetectedObject } from '../services/sceneAnalysisService';
 import { ImageSlot } from '../components/shared/ImageSlot';
 import UploadDisclaimer from '../components/shared/UploadDisclaimer';
 import { cloneMasterStorage, type CloneMasterSession } from './cloneMaster/storage';
-import { GenerateButton } from '../components/shared/GenerateButton';
 import { useAuth } from '../modules/auth/AuthContext';
 import { GenerationProgress, type ProgressStep } from '../components/shared/GenerationProgress';
 import { ErrorDisplay, toAppError, type AppError } from '../components/shared/ErrorDisplay';
 import { REFUNDABLE_ERRORS, newSessionId } from '../services/imageApiService';
 import { getNotification } from '../services/notificationsService';
 import { useSearchParams } from 'react-router-dom';
+import { WizardStepper } from '../components/shared/WizardStepper';
+import { WizardFooter } from '../components/shared/WizardFooter';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -70,39 +71,12 @@ const ProHeader: React.FC<{ title: string; subtitle: string; icon: string }> = (
   </div>
 );
 
-const ProStepIndicator: React.FC<{ current: Step; setStep: (s: Step) => void; maxStep: number }> = ({ current, setStep, maxStep }) => (
-  <div className="flex gap-1 mb-8 bg-slate-50 p-1 rounded-2xl border border-slate-100">
-    {[1, 2, 3, 4].map((s) => {
-      const step = s as Step;
-      const isActive = current === step;
-      const isUnlocked = step <= maxStep;
-      
-      let label = "";
-      if (step === 1) label = "Target";
-      if (step === 2) label = "Identidad";
-      if (step === 3) label = "Base";
-      if (step === 4) label = "Outfit";
-
-      return (
-        <button
-          key={step}
-          onClick={() => isUnlocked && setStep(step)}
-          disabled={!isUnlocked}
-          className={`flex-1 py-3 rounded-xl t-meta transition-all ${
-            isActive
-              ? "bg-white text-brand-600 shadow-md border border-slate-100"
-              : isUnlocked
-              ? "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-              : "text-slate-300 cursor-not-allowed"
-          }`}
-        >
-          <span className="hidden md:inline">{step}. {label}</span>
-          <span className="md:hidden">{step}</span>
-        </button>
-      );
-    })}
-  </div>
-);
+const CLONE_WIZARD_STEPS = [
+  { id: 'target',    label: 'Target' },
+  { id: 'identity',  label: 'Identidad' },
+  { id: 'base',      label: 'Base' },
+  { id: 'outfit',    label: 'Outfit' },
+];
 
 type ProSlotType = 'target' | 'face' | 'body' | 'outfit' | 'generic';
 
@@ -626,8 +600,13 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 px-4 md:px-0">
           
           <div className="lg:col-span-4 space-y-6">
-            <section className="bg-white p-6 md:p-8 rounded-[40px] border border-slate-100 shadow-sm">
-              <ProStepIndicator current={step} setStep={setStep} maxStep={maxStep} />
+            <section className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+              <WizardStepper
+                steps={CLONE_WIZARD_STEPS}
+                current={step}
+                onJump={(s) => { if (s <= maxStep) setStep(s as Step); }}
+              />
+              <div className="p-6 md:p-8 flex-1 overflow-auto">
 
               {step === 1 && (
                 <div className="space-y-6 animate-in slide-in-from-left-4">
@@ -666,16 +645,6 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                   </div>
 
                   <UploadDisclaimer />
-
-                  <div className="pt-2">
-                    <button
-                      onClick={() => canGoToIdentity && setStep(2)}
-                      disabled={!canGoToIdentity}
-                      className="w-full py-5 bg-brand-600 text-white rounded-[24px] t-meta shadow-xl hover:bg-brand-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Continuar a Identidad
-                    </button>
-                  </div>
                 </div>
               )}
 
@@ -723,18 +692,6 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                     </div>
                   )}
 
-                  <div className="pt-4 flex gap-3">
-                    <button onClick={() => setStep(1)} className="px-6 py-4 bg-slate-100 text-slate-600 rounded-[20px] font-bold text-xs uppercase hover:bg-slate-200">
-                      <i className="fa-solid fa-arrow-left"></i>
-                    </button>
-                    <button 
-                      onClick={() => canGoToBase && setStep(3)} 
-                      disabled={!canGoToBase}
-                      className="flex-1 py-4 bg-brand-600 text-white rounded-[20px] t-meta shadow-xl hover:bg-brand-700 active:scale-95 transition-all disabled:opacity-50"
-                    >
-                      Confirmar Identidad
-                    </button>
-                  </div>
                 </div>
               )}
 
@@ -754,23 +711,11 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                      </div>
                   </div>
 
-                  <div className="pt-2">
-                    <GenerateButton
-                      onClick={handleGenerateBase}
-                      loading={loading}
-                      label="Generar Clonación"
-                      loadingLabel="Procesando..."
-                      imageCount={1}
-                      creditsAfter={creditsAfter}
-                      className="py-6 rounded-[24px]"
-                    />
+                  <div className="p-4 bg-brand-50 border border-brand-100 rounded-2xl text-center text-[10px] text-brand-700 font-semibold">
+                    <i className="fa-solid fa-coins mr-1.5"></i>
+                    Costo: 1 crédito · Quedarán {creditsAfter} cr
                   </div>
-                  
-                  {baseComposition && !loading && (
-                     <button onClick={() => setStep(4)} className="w-full py-4 bg-brand-50 text-brand-600 border border-brand-100 rounded-[20px] t-meta hover:bg-brand-100 transition-all">
-                        Continuar a Outfit <i className="fa-solid fa-arrow-right ml-2"></i>
-                     </button>
-                  )}
+
                 </div>
               )}
 
@@ -832,30 +777,44 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 pt-4">
-                    <button onClick={() => setStep(3)} className="py-4 bg-white border border-slate-200 text-slate-600 rounded-[20px] t-meta hover:bg-slate-50">
-                      Volver a Base
-                    </button>
-                    <button
-                      onClick={handleApplyOutfitsAndProducts}
-                      disabled={loading}
-                      className="py-4 bg-brand-600 text-white rounded-[20px] font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-brand-700 active:scale-95 transition-all disabled:opacity-50"
-                    >
-                      {loading ? "Aplicando..." : "Aplicar Cambios"}
-                    </button>
-                  </div>
                 </div>
               )}
 
               {error && (
-                <ErrorDisplay
-                  error={error}
-                  creditsRefunded={creditsRefunded}
-                  onRetry={step === 3 ? handleGenerateBase : handleApplyOutfitsAndProducts}
-                  onDismiss={() => setError(null)}
-                />
+                <div className="px-6 pb-4">
+                  <ErrorDisplay
+                    error={error}
+                    creditsRefunded={creditsRefunded}
+                    onRetry={step === 3 ? handleGenerateBase : handleApplyOutfitsAndProducts}
+                    onDismiss={() => setError(null)}
+                  />
+                </div>
               )}
 
+              </div>{/* fin del div interno */}
+
+              <WizardFooter
+                onBack={step > 1 ? () => setStep((step - 1) as Step) : undefined}
+                onContinue={() => {
+                  if (step === 1 && canGoToIdentity) setStep(2);
+                  else if (step === 2 && canGoToBase) setStep(3);
+                  else if (step === 3) handleGenerateBase();
+                  else if (step === 4) handleApplyOutfitsAndProducts();
+                }}
+                continueLabel={
+                  step === 3 ? 'Generar Base' :
+                  step === 4 ? 'Aplicar Cambios' :
+                  'Continuar'
+                }
+                disabled={
+                  step === 1 ? !canGoToIdentity :
+                  step === 2 ? !canGoToBase :
+                  step === 3 ? loading :
+                  step === 4 ? loading :
+                  false
+                }
+                loading={loading && (step === 3 || step === 4)}
+              />
             </section>
           </div>
 
