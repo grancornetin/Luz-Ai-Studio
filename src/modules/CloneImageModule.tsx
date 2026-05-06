@@ -597,8 +597,66 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
           </div>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 px-4 md:px-0">
-          
+        {/* ── Pantalla de generando: ocupa todo el ancho, mismo layout que Product Generator ── */}
+        {loading && step === 3 && (
+          <div className="px-4 md:px-0 bg-white rounded-[28px] md:rounded-[36px] shadow-sm border border-slate-100 overflow-hidden">
+            <WizardStepper
+              steps={CLONE_WIZARD_STEPS}
+              current={step}
+              onJump={undefined}
+            />
+            <div className="p-4 md:p-8">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-7 items-start">
+                {/* Izquierda: pasos narrados */}
+                <div className="md:col-span-5 lg:col-span-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 rounded-full bg-pink-500 animate-pulse" />
+                    <span className="text-[10px] font-black text-pink-600 uppercase tracking-[0.18em]">
+                      Generando · no cierres esta ventana
+                    </span>
+                  </div>
+                  <h2 className="t-display text-[24px] md:text-[28px] text-slate-900 leading-tight">
+                    Clonando escena
+                  </h2>
+                  <div className="text-[13px] text-slate-500 mt-1 mb-4">
+                    1 imagen · Scene Clone
+                  </div>
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-[18px]">
+                    <GenerationProgress
+                      steps={CLONE_STEPS}
+                      currentStepIndex={cloneStepIndex}
+                      etaSeconds={cloneEta}
+                    />
+                  </div>
+                  <div className="mt-3 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5]">
+                    💡 Podés cerrar la ventana — te avisamos cuando termine.
+                  </div>
+                </div>
+                {/* Derecha: tarjeta de imagen en vivo */}
+                <div className="md:col-span-7 lg:col-span-8">
+                  <div className="flex justify-between items-baseline mb-3.5">
+                    <div>
+                      <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.14em] mb-1">En vivo</div>
+                      <h3 className="t-display text-[20px] md:text-[22px] text-slate-900 normal-case italic">
+                        0 de 1 listas
+                      </h3>
+                    </div>
+                  </div>
+                  <div className="relative aspect-[3/4] max-w-xs rounded-2xl overflow-hidden border-2 border-pink-500 bg-slate-100 animate-pulse">
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="bg-white/95 rounded-full px-3.5 py-1.5 text-[10px] font-bold text-pink-600 tracking-[0.12em] uppercase">
+                        EN VIVO
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className={`grid grid-cols-1 lg:grid-cols-12 gap-8 px-4 md:px-0 ${loading && step === 3 ? 'hidden' : ''}`}>
+
           <div className="lg:col-span-4 space-y-6">
             <section className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
               <WizardStepper
@@ -695,27 +753,51 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                 </div>
               )}
 
-              {step === 3 && (
-                <div className="space-y-6 animate-in slide-in-from-left-4">
+              {step === 3 && !loading && (
+                <div className="space-y-5 animate-in slide-in-from-left-4">
                   <ProHeader title="Generar Base" subtitle="Fusión de Escena + Identidad" icon="fa-wand-magic-sparkles" />
-                  
-                  <div className="p-6 bg-slate-50 rounded-[24px] border border-slate-200 text-center space-y-4">
-                     <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm text-2xl">
-                        🚀
-                     </div>
-                     <div>
-                        <h3 className="t-title-sm text-slate-900">Listo para procesar</h3>
-                        <p className="text-[10px] text-slate-500 font-medium mt-1 leading-relaxed px-4">
-                          La IA clonará la escena del target inyectando la identidad biométrica de tus referencias.
-                        </p>
-                     </div>
+
+                  {/* Panel de costo — mismo diseño que Step4Type de Product Generator */}
+                  <div className="relative bg-slate-900 text-white rounded-2xl p-5 overflow-hidden">
+                    <div
+                      className="absolute -top-10 -right-10 w-[140px] h-[140px] rounded-full pointer-events-none"
+                      style={{ background: 'rgba(124,58,237,0.3)', filter: 'blur(40px)' }}
+                    />
+                    <div className="relative">
+                      <div className="text-[10px] font-bold text-pink-300 uppercase tracking-[0.14em] mb-3.5">
+                        Resumen del costo
+                      </div>
+                      <div className="flex flex-col gap-2 mb-3.5 text-[13px]">
+                        <div className="flex justify-between">
+                          <span className="opacity-70">Sujetos</span>
+                          <span className="font-semibold">{enableSecondSubject ? '2 personas' : '1 persona'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="opacity-70">Formato</span>
+                          <span className="font-semibold">{aspectRatio}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="opacity-70">Imágenes</span>
+                          <span className="font-semibold">1</span>
+                        </div>
+                        <div className="h-px bg-white/10 my-1.5" />
+                        <div className="flex justify-between items-baseline">
+                          <span className="opacity-85 text-[13px]">Total</span>
+                          <span className="t-display text-[36px] tracking-tight leading-none normal-case not-italic">
+                            {CLONE_COST}{' '}
+                            <span className="text-sm opacity-70 font-semibold normal-case">cr</span>
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-[11px] leading-[1.5] opacity-70">
+                        Te quedarán {creditsAfter} cr
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="p-4 bg-brand-50 border border-brand-100 rounded-2xl text-center text-[10px] text-brand-700 font-semibold">
-                    <i className="fa-solid fa-coins mr-1.5"></i>
-                    Costo: 1 crédito · Quedarán {creditsAfter} cr
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5 text-[11.5px] text-emerald-900 leading-[1.55]">
+                    <strong>Sin sorpresas.</strong> Solo se descuenta si la generación se completa. Reembolso automático si falla.
                   </div>
-
                 </div>
               )}
 
