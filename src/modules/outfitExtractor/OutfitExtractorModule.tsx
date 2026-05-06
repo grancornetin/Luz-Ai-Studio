@@ -294,6 +294,28 @@ const OutfitExtractorModule: React.FC = () => {
     }
   };
 
+  // Guarda solo las prendas individuales en la biblioteca, sin generar la imagen de kit final.
+  // No cuesta créditos adicionales.
+  const saveItemsOnly = async () => {
+    if (!currentKit) return;
+    const itemsToSave: SavedOutfitItem[] = currentKit.items
+      .filter(it => it.selected && it.status === 'done' && it.imageUrl)
+      .map(it => ({
+        id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        kitId: currentKit.id,
+        name: it.name,
+        category: it.category,
+        description: it.description,
+        visualDescription: it.visualDescription,
+        imageUrl: it.imageUrl!,
+        createdAt: Date.now(),
+      }));
+    if (itemsToSave.length === 0) return;
+    await outfitStorage.saveItems(itemsToSave);
+    await loadLibrary();
+    setStep('final_kit');
+  };
+
   const downloadAll = async (kit: OutfitKit | null = currentKit) => {
     if (!kit) return;
     setIsZipping(true);
@@ -606,7 +628,7 @@ const OutfitExtractorModule: React.FC = () => {
                         ))}
                       </div>
 
-                      {/* Panel de costo — mismo estilo que Product Generator / Clone Scene */}
+                      {/* Panel de costo */}
                       {selectedItemsCount > 0 && (
                         <div className="relative bg-slate-900 text-white rounded-2xl p-4 overflow-hidden">
                           <div className="absolute -top-8 -right-8 w-[120px] h-[120px] rounded-full pointer-events-none" style={{ background: 'rgba(124,58,237,0.3)', filter: 'blur(36px)' }} />
@@ -616,12 +638,12 @@ const OutfitExtractorModule: React.FC = () => {
                             </div>
                             <div className="flex flex-col gap-1.5 mb-3 text-[12px]">
                               <div className="flex justify-between">
-                                <span className="opacity-70">Prendas</span>
-                                <span className="font-semibold">{selectedItemsCount}</span>
+                                <span className="opacity-70">{selectedItemsCount} {selectedItemsCount === 1 ? 'prenda' : 'prendas'} × {CREDIT_COSTS.OUTFIT_PER_GARMENT} cr</span>
+                                <span className="font-semibold">{renderCost} cr</span>
                               </div>
-                              <div className="flex justify-between">
-                                <span className="opacity-70">Por prenda</span>
-                                <span className="font-semibold">{CREDIT_COSTS.OUTFIT_PER_GARMENT} cr</span>
+                              <div className="flex justify-between text-emerald-400">
+                                <span>Kit final (imagen compuesta)</span>
+                                <span className="font-bold">Gratis</span>
                               </div>
                               <div className="h-px bg-white/10 my-1" />
                               <div className="flex justify-between items-baseline">
@@ -633,7 +655,7 @@ const OutfitExtractorModule: React.FC = () => {
                               </div>
                             </div>
                             <div className="text-[11px] leading-[1.5] opacity-70">
-                              Te quedarán {creditsAfterRender} cr
+                              Te quedarán {creditsAfterRender} cr · Podés guardar las prendas sin generar el kit final.
                             </div>
                           </div>
                         </div>
@@ -722,12 +744,35 @@ const OutfitExtractorModule: React.FC = () => {
                   />
                 )}
                 {step === 'reviewing_renders' && (
-                  <WizardFooter
-                    onBack={() => setStep('scan_overlay')}
-                    onContinue={composeFinalKit}
-                    continueLabel="Componer kit final"
-                    disabled={currentKit?.items.filter(i => i.selected && i.status === 'done').length === 0}
-                  />
+                  <div
+                    className="sticky bottom-0 z-10 bg-white border-t border-slate-200 px-4 py-3 flex flex-col gap-2"
+                    style={{ boxShadow: '0 -8px 24px rgba(15,23,42,0.04)' }}
+                  >
+                    {/* Opción 1: solo guardar prendas, sin kit */}
+                    <button
+                      type="button"
+                      onClick={saveItemsOnly}
+                      disabled={currentKit?.items.filter(i => i.selected && i.status === 'done').length === 0}
+                      className="w-full py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      <i className="fa-solid fa-floppy-disk text-slate-400" />
+                      Guardar prendas en biblioteca (sin kit)
+                    </button>
+                    {/* Opción 2: generar imagen compuesta + guardar todo */}
+                    <button
+                      type="button"
+                      onClick={composeFinalKit}
+                      disabled={currentKit?.items.filter(i => i.selected && i.status === 'done').length === 0}
+                      style={{ touchAction: 'manipulation' }}
+                      className="w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 bg-gradient-to-br from-violet-600 to-pink-600 text-white shadow-[0_12px_28px_rgba(124,58,237,0.32)] active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+                    >
+                      Generar kit final (imagen compuesta)
+                      <i className="fa-solid fa-arrow-right text-sm" />
+                    </button>
+                    <p className="text-center text-[9px] text-slate-400">
+                      El kit final es gratis — genera una imagen con todas las prendas juntas
+                    </p>
+                  </div>
                 )}
                 {step === 'final_kit' && (
                   <WizardFooter
