@@ -37,7 +37,7 @@ export const WizardStepper: React.FC<WizardStepperProps> = ({ steps, current, on
       </div>
 
       {/* Desktop — chips conectados con líneas */}
-      <div className="hidden md:flex items-center gap-0 px-7 py-4">
+      <div className="hidden md:flex items-center gap-0 px-4 py-4 overflow-hidden">
         {steps.map((s, i) => {
           const done = i < currentIndex;
           const active = i === currentIndex;
@@ -49,12 +49,12 @@ export const WizardStepper: React.FC<WizardStepperProps> = ({ steps, current, on
                 type="button"
                 onClick={() => canJump && onJump?.(i + 1)}
                 disabled={!canJump}
-                className={`flex items-center gap-2.5 py-1.5 px-1 bg-transparent border-0 transition-all flex-shrink-0 ${
-                  canJump ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
-                }`}
+                className={`flex items-center gap-2 py-1.5 px-1 bg-transparent border-0 transition-all min-w-0 ${
+                  active ? 'flex-shrink-0' : 'flex-shrink'
+                } ${canJump ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
               >
                 <div
-                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold transition-all flex-shrink-0 ${
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold transition-all flex-shrink-0 ${
                     done
                       ? 'bg-emerald-500 text-white'
                       : active
@@ -62,15 +62,16 @@ export const WizardStepper: React.FC<WizardStepperProps> = ({ steps, current, on
                       : 'bg-white border-[1.5px] border-slate-200 text-slate-400'
                   }`}
                 >
-                  {done ? <Check size={14} strokeWidth={3} /> : i + 1}
+                  {done ? <Check size={12} strokeWidth={3} /> : i + 1}
                 </div>
+                {/* Label: siempre visible en paso activo, oculto en inactivos cuando hay poco espacio */}
                 <span
-                  className={`text-xs tracking-tight transition-colors ${
+                  className={`text-xs tracking-tight transition-colors truncate ${
                     active
                       ? 'font-bold text-slate-900'
                       : done
-                      ? 'font-semibold text-slate-700'
-                      : 'font-semibold text-slate-400'
+                      ? 'font-semibold text-slate-700 hidden xl:inline'
+                      : 'font-semibold text-slate-400 hidden xl:inline'
                   }`}
                 >
                   {s.label}
@@ -78,7 +79,7 @@ export const WizardStepper: React.FC<WizardStepperProps> = ({ steps, current, on
               </button>
               {i < steps.length - 1 && (
                 <div
-                  className={`flex-1 h-[1.5px] mx-3.5 min-w-[20px] transition-colors duration-300 ${
+                  className={`flex-1 h-[1.5px] mx-2 min-w-[12px] transition-colors duration-300 ${
                     done ? 'bg-emerald-500' : 'bg-slate-200'
                   }`}
                 />
