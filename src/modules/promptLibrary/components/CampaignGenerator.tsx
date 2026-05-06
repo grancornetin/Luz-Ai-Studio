@@ -18,6 +18,7 @@ interface CampaignGeneratorProps {
   basePrompt: string;
   dna: PromptDNA;
   references: string[];
+  copilotPreset?: Record<string, string>;
 }
 
 // ── Tipos de campaña ──────────────────────────────────────────
@@ -138,15 +139,15 @@ Output ONLY a valid JSON array, no markdown, no explanation:
 }
 
 // ── Componente principal ──────────────────────────────────────
-const CampaignGenerator: React.FC<CampaignGeneratorProps> = ({ basePrompt, dna, references }) => {
+const CampaignGenerator: React.FC<CampaignGeneratorProps> = ({ basePrompt, dna, references, copilotPreset }) => {
   const { user } = useAuth();
 
-  // Brief state
-  const [campaignType,        setCampaignType]        = useState<CampaignType>('product');
-  const [objective,           setObjective]           = useState<Objective>('sell');
-  const [audience,            setAudience]            = useState<Audience>('general');
-  const [productDescription,  setProductDescription]  = useState('');
-  const [imageCount,          setImageCount]          = useState(3);
+  // Brief state — initialize from copilot preset if present
+  const [campaignType,        setCampaignType]        = useState<CampaignType>((copilotPreset?.campaignType as CampaignType) || 'product');
+  const [objective,           setObjective]           = useState<Objective>((copilotPreset?.objective as Objective) || 'sell');
+  const [audience,            setAudience]            = useState<Audience>((copilotPreset?.audience as Audience) || 'general');
+  const [productDescription,  setProductDescription]  = useState(copilotPreset?.productDescription ? decodeURIComponent(copilotPreset.productDescription) : '');
+  const [imageCount,          setImageCount]          = useState(copilotPreset?.imageCount ? parseInt(copilotPreset.imageCount) : 3);
 
   // Flow state
   const [step,        setStep]        = useState<Step>('brief');

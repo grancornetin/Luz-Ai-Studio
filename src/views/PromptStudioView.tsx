@@ -27,6 +27,10 @@ const PromptStudioView: React.FC = () => {
   const [initialDNA,     setInitialDNA]     = useState<PromptDNA | undefined>();
   const [originPromptId, setOriginPromptId] = useState<string | undefined>();
 
+  // ── Copilot preset from URL params (set by ProjectCopilot) ──
+  const [copilotPreset, setCopilotPreset] = useState<Record<string, string> | undefined>();
+  const [copilotBanner, setCopilotBanner] = useState(false);
+
   useEffect(() => {
     const state = location.state as any;
     if (state) {
@@ -34,6 +38,18 @@ const PromptStudioView: React.FC = () => {
       if (state.initialDNA)     setInitialDNA(state.initialDNA);
       if (state.originPromptId) setOriginPromptId(state.originPromptId);
       window.history.replaceState({}, document.title);
+    }
+
+    // Read copilot preset from URL search params
+    const params = new URLSearchParams(location.search);
+    const mode   = params.get('mode');
+    if (mode) {
+      const preset: Record<string, string> = {};
+      params.forEach((v, k) => { preset[k] = v; });
+      setCopilotPreset(preset);
+      setCopilotBanner(true);
+      // Clean URL without reload
+      window.history.replaceState({}, document.title, location.pathname);
     }
   }, [location]);
 
@@ -119,6 +135,24 @@ const PromptStudioView: React.FC = () => {
         </div>
       </header>
 
+      {/* ── COPILOT BANNER ──────────────────────────────────── */}
+      {copilotBanner && (
+        <div className="bg-indigo-600 text-white px-6 py-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <Sparkles className="w-4 h-4 flex-shrink-0" />
+            <p className="text-xs font-black uppercase tracking-widest">
+              Configurado por tu copiloto — puedes ajustar antes de generar
+            </p>
+          </div>
+          <button
+            onClick={() => setCopilotBanner(false)}
+            className="text-white/70 hover:text-white text-xs font-bold uppercase tracking-widest transition-colors flex-shrink-0"
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
+
       {/* ── MAIN ────────────────────────────────────────────── */}
       <main className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12 py-8 md:py-10">
         <PromptComposer
@@ -126,6 +160,7 @@ const PromptStudioView: React.FC = () => {
           initialPrompt={initialPrompt}
           initialDNA={initialDNA}
           originPromptId={originPromptId}
+          copilotPreset={copilotPreset}
         />
       </main>
 

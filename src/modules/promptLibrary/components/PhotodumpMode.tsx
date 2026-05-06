@@ -16,6 +16,7 @@ interface PhotodumpModeProps {
   basePrompt: string;
   dna: PromptDNA;
   references: string[];
+  copilotPreset?: Record<string, string>;
 }
 
 // ── Tipos de narrativa ────────────────────────────────────────
@@ -133,14 +134,14 @@ Output ONLY a valid JSON array, no markdown, no explanation:
 }
 
 // ── Componente principal ──────────────────────────────────────
-const PhotodumpMode: React.FC<PhotodumpModeProps> = ({ basePrompt, dna, references }) => {
+const PhotodumpMode: React.FC<PhotodumpModeProps> = ({ basePrompt, dna, references, copilotPreset }) => {
   const { user } = useAuth();
 
-  // Brief state
-  const [narrative,    setNarrative]    = useState<Narrative>('day');
-  const [protagonist,  setProtagonist]  = useState<Protagonist>('person');
-  const [customStory,  setCustomStory]  = useState('');
-  const [count,        setCount]        = useState(4);
+  // Brief state — initialize from copilot preset if present
+  const [narrative,    setNarrative]    = useState<Narrative>((copilotPreset?.narrative as Narrative) || 'day');
+  const [protagonist,  setProtagonist]  = useState<Protagonist>((copilotPreset?.protagonist as Protagonist) || 'person');
+  const [customStory,  setCustomStory]  = useState(copilotPreset?.customStory ? decodeURIComponent(copilotPreset.customStory) : '');
+  const [count,        setCount]        = useState(copilotPreset?.count ? parseInt(copilotPreset.count) : 4);
 
   // Flow state
   const [step,         setStep]         = useState<Step>('brief');

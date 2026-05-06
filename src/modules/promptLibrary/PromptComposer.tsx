@@ -31,6 +31,8 @@ interface PromptComposerProps {
   initialPrompt?: string;
   initialDNA?: PromptDNA;
   originPromptId?: string;
+  /** Preset from ProjectCopilot via URL params — auto-applies mode and config */
+  copilotPreset?: Record<string, string>;
 }
 
 const extractTokens = (text?: string): string[] => {
@@ -202,6 +204,7 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
   initialPrompt,
   initialDNA,
   originPromptId,
+  copilotPreset,
 }) => {
   const {
     promptText, setPromptText,
@@ -217,6 +220,18 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
   const [showAdvanced, setShowAdvanced] = React.useState(false);
   const [outputMode, setOutputMode]     = React.useState<OutputMode>('standard');
   const [activeTab, setActiveTab]       = React.useState<'inputs' | 'results'>('inputs');
+
+  // Apply copilot preset on mount
+  React.useEffect(() => {
+    if (!copilotPreset) return;
+    const mode = copilotPreset.mode as OutputMode;
+    if (mode === 'campaign' || mode === 'photodump' || mode === 'standard') {
+      setOutputMode(mode);
+    }
+    if (copilotPreset.prompt) {
+      setPromptText(decodeURIComponent(copilotPreset.prompt));
+    }
+  }, [copilotPreset]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const plan = credits?.plan ?? 'free';
   const canUseBatch = isAdmin || ['pro', 'studio', 'starter'].includes(plan);
@@ -444,6 +459,7 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
                     basePrompt={safePromptText}
                     dna={dna}
                     references={activeReferenceUrls}
+                    copilotPreset={copilotPreset}
                   />
                 </div>
               )}
@@ -455,6 +471,7 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
                     basePrompt={safePromptText}
                     dna={dna}
                     references={activeReferenceUrls}
+                    copilotPreset={copilotPreset}
                   />
                 </div>
               )}
