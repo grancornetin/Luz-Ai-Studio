@@ -251,6 +251,8 @@ const OutfitExtractorModule: React.FC = () => {
 
   const composeFinalKit = async () => {
     if (!currentKit) return;
+    const ok = await checkAndDeduct(CREDIT_COSTS.OUTFIT_PER_GARMENT);
+    if (!ok) return;
     setStep('composing');
     setLoadingMsg('Componiendo tu kit final...');
     try {
@@ -266,7 +268,7 @@ const OutfitExtractorModule: React.FC = () => {
         imageUrl: finalUrl,
         module: 'outfit_extractor',
         moduleLabel: 'Outfit Extractor (Final Kit)',
-        creditsUsed: 0,
+        creditsUsed: CREDIT_COSTS.OUTFIT_PER_GARMENT,
         promptText: 'Final composition',
       }).catch(console.error);
 
@@ -641,13 +643,13 @@ const OutfitExtractorModule: React.FC = () => {
                                 <span className="opacity-70">{selectedItemsCount} {selectedItemsCount === 1 ? 'prenda' : 'prendas'} × {CREDIT_COSTS.OUTFIT_PER_GARMENT} cr</span>
                                 <span className="font-semibold">{renderCost} cr</span>
                               </div>
-                              <div className="flex justify-between text-emerald-400">
+                              <div className="flex justify-between opacity-60">
                                 <span>Kit final (imagen compuesta)</span>
-                                <span className="font-bold">Gratis</span>
+                                <span className="font-semibold">{CREDIT_COSTS.OUTFIT_PER_GARMENT} cr (opcional)</span>
                               </div>
                               <div className="h-px bg-white/10 my-1" />
                               <div className="flex justify-between items-baseline">
-                                <span className="opacity-85">Total</span>
+                                <span className="opacity-85">Solo renders</span>
                                 <span className="t-display text-[28px] tracking-tight leading-none normal-case not-italic">
                                   {renderCost}{' '}
                                   <span className="text-xs opacity-70 font-semibold normal-case">cr</span>
@@ -655,7 +657,7 @@ const OutfitExtractorModule: React.FC = () => {
                               </div>
                             </div>
                             <div className="text-[11px] leading-[1.5] opacity-70">
-                              Te quedarán {creditsAfterRender} cr · Podés guardar las prendas sin generar el kit final.
+                              Te quedarán {creditsAfterRender} cr · El kit final se cobra aparte si lo generás.
                             </div>
                           </div>
                         </div>
@@ -766,11 +768,11 @@ const OutfitExtractorModule: React.FC = () => {
                       style={{ touchAction: 'manipulation' }}
                       className="w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 bg-gradient-to-br from-violet-600 to-pink-600 text-white shadow-[0_12px_28px_rgba(124,58,237,0.32)] active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
                     >
-                      Generar kit final (imagen compuesta)
+                      Generar kit final · {CREDIT_COSTS.OUTFIT_PER_GARMENT} cr
                       <i className="fa-solid fa-arrow-right text-sm" />
                     </button>
                     <p className="text-center text-[9px] text-slate-400">
-                      El kit final es gratis — genera una imagen con todas las prendas juntas
+                      El kit final genera una imagen con todas las prendas juntas
                     </p>
                   </div>
                 )}
