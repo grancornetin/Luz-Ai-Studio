@@ -1,90 +1,153 @@
 /**
  * ProjectCopilot.tsx
- * Copiloto estratégico embebido en la vista de proyecto.
- * Analiza imágenes del proyecto, hace preguntas inteligentes,
- * propone planes y navega al módulo correcto con todo pre-configurado.
+ * Copiloto estratégico embebido en el workspace del proyecto.
+ * Mejoras: memoria entre sesiones, análisis de imágenes del proyecto,
+ * generador de captions, checklist de campaña, análisis de resultados.
  */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Sparkles, Send, Loader2, ImagePlus, XCircle,
-  RotateCcw, ChevronRight, ArrowRight,
+  RotateCcw, ChevronRight, ArrowRight, Copy, Check,
+  Instagram, Hash, ShoppingBag, Play,
 } from 'lucide-react';
-import { Project } from '../../services/projectService';
+import {
+  Project, ProjectMessage, ProjectBrief, ChecklistItem, CalendarEntry,
+  saveConversation, saveBrief, saveChecklist, saveCalendar,
+} from '../../services/projectService';
+import { v4 as uuidv4 } from 'uuid';
 
-// ── Tipos ─────────────────────────────────────────────────────
-interface CopilotMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  imageUrls?: string[];       // imágenes adjuntas por el usuario
-  actions?: CopilotAction[];  // botones de acción propuestos
-}
+// ── Tipos internos ────────────────────────────────────────────
+
+type ActionModule = 'campaign' | 'photodump' | 'ugc' | 'catalog' | 'prompt';
 
 interface CopilotAction {
+  type?: 'navigate' | 'captions' | 'checklist' | 'calendar' | 'analyze';
   label: string;
   description: string;
-  module: 'campaign' | 'photodump' | 'ugc' | 'catalog' | 'prompt';
-  params: Record<string, string>;
+  module?: ActionModule;
+  params?: Record<string, string>;
+  // Para captions
+  captions?: GeneratedCaptions;
+  // Para checklist
+  checklist?: ChecklistItem[];
+  // Para calendario
+  calendar?: CalendarEntry[];
+}
+
+interface GeneratedCaptions {
+  instagram: string;
+  tiktok: string;
+  ecommerce: string;
+  hashtags: string;
 }
 
 interface ProjectCopilotProps {
   project: Project;
+  onChecklistUpdate?: (checklist: ChecklistItem[]) => void;
+  onCalendarUpdate?: (calendar: CalendarEntry[]) => void;
 }
 
-// ── System prompt del copiloto estratégico ────────────────────
+// ── System prompt ─────────────────────────────────────────────
+
 function buildSystemPrompt(project: Project): string {
   const itemsSummary = project.items.length > 0
-    ? `El proyecto tiene ${project.items.length} imagen(es): ${project.items.map(i => `[${i.type}: módulo ${i.module}]`).join(', ')}.`
+    ? `El proyecto tiene ${project.items.length} imagen(es): ${project.items.map(i => `[${i.type}: ${i.module}]`).join(', ')}.`
     : 'El proyecto aún no tiene imágenes.';
 
+  const resultItems = project.items.filter(i => i.type === 'result');
+  const refItems    = project.items.filter(i => i.type === 'reference');
+
+  const briefContext = project.brief
+    ? `BRIEF CONOCIDO DEL PROYECTO:\n- Producto: ${project.brief.productDescription}\n- Objetivo: ${project.brief.goal}\n- Audiencia: ${project.brief.audience}\n- Plataforma: ${project.brief.platform}`
+    : 'Aún no hay brief definido para este proyecto.';
+
+  const checklistContext = project.checklist && project.checklist.length > 0
+    ? `PLAN DE CONTENIDO ACTUAL:\n${project.checklist.map(i => `- [${i.status}] ${i.label}`).join('\n')}`
+    : '';
+
+  const calendarContext = project.calendar && project.calendar.length > 0
+    ? `CALENDARIO ACTIVO: ${project.calendar.length} entradas, ${project.calendar.filter(e => e.status === 'done').length} completadas.`
+    : '';
+
   return `Eres el copiloto estratégico de LUZ IA Studio para el proyecto "${project.name}".
-Tu rol es actuar como un director creativo y estratega de marketing digital especializado en emprendedores LATAM que venden productos físicos en Instagram, TikTok y e-commerce.
+Tu rol es actuar como director creativo y estratega de marketing digital para emprendedoras LATAM que venden productos físicos.
 
 CONTEXTO DEL PROYECTO:
 ${itemsSummary}
+- Referencias subidas: ${refItems.length}
+- Generaciones completadas: ${resultItems.length}
+${briefContext}
+${checklistContext}
+${calendarContext}
 
 TU PERSONALIDAD:
-- Directa, cálida y sin jerga técnica. Hablás como una asesora de confianza, no como un robot.
-- Hacés UNA pregunta a la vez, no tres juntas.
-- Cuando tenés suficiente información, proponés un plan concreto y específico — nunca genérico.
-- Entendés que Sofi (tu usuario típico) hace todo sola, tiene poco tiempo y quiere resultados que vendan.
+- Directa, cálida, sin jerga técnica. Como una asesora de confianza.
+- Hacés UNA pregunta a la vez, nunca tres juntas.
+- Cuando tenés suficiente info, proponés planes concretos, nunca genéricos.
+- Entendés que tu usuaria hace todo sola, tiene poco tiempo y quiere resultados que vendan.
+- Si ya tenés brief guardado, lo usás directamente sin volver a preguntar lo mismo.
 
-MÓDULOS DE LA APP QUE PODÉS RECOMENDAR:
-1. CAMPAIGN MODE (/prompt-studio?mode=campaign) — Para crear 3-5 imágenes de campaña con dirección creativa profesional. Parámetros: campaignType (product/brand/social/ecommerce), objective (sell/awareness/launch/engagement), audience (general/young/professional/luxury/family), imageCount (3/4/5), productDescription (texto URL-encoded), prompt (texto URL-encoded).
-2. PHOTODUMP MODE (/prompt-studio?mode=photodump) — Para crear un set de imágenes con narrativa visual orgánica. Parámetros: narrative (day/journey/brand/character/custom), protagonist (person/product/both), count (3/4/5/6), customStory (texto URL-encoded), prompt (texto URL-encoded).
-3. UGC STUDIO (/studio-pro) — Para crear contenido estilo creador real con un avatar/modelo. Ideal cuando tiene foto de su cara y quiere parecer que usa el producto.
-4. PRODUCT CATALOG (/productos) — Para fotos de producto profesionales sobre fondo limpio o lifestyle. Requiere 1-4 fotos del producto.
-5. PROMPT STUDIO (/prompt-studio) — Para generación libre avanzada.
+MÓDULOS DISPONIBLES:
+1. CAMPAIGN MODE → /prompt-studio?mode=campaign
+   Params: campaignType(product/brand/social/ecommerce), objective(sell/awareness/launch/engagement), audience(general/young/professional/luxury/family), imageCount(3/4/5), productDescription(URL-encoded), prompt(URL-encoded)
+2. PHOTODUMP MODE → /prompt-studio?mode=photodump
+   Params: narrative(day/journey/brand/character/custom), protagonist(person/product/both), count(3/4/5/6), customStory(URL-encoded), prompt(URL-encoded)
+3. UGC STUDIO → /studio-pro
+4. PRODUCT CATALOG → /productos
+5. PROMPT STUDIO → /prompt-studio
 
-CUÁNDO RECOMENDAR CADA MÓDULO:
-- Tiene producto + quiere vender en Instagram → Campaign Mode (lanzamiento de producto)
-- Quiere contenido orgánico tipo influencer → Photodump Mode (narrativa "día con el producto")
-- Tiene foto de su cara + quiere aparecer usando el producto → UGC Studio (foco PRODUCT)
-- Solo quiere fotos de catálogo limpias → Product Catalog
-- Quiere total control creativo → Prompt Studio standard
+CUÁNDO USAR CADA MÓDULO:
+- Producto + vender en redes → Campaign (lanzamiento)
+- Contenido orgánico estilo influencer → Photodump
+- Aparecer usando el producto → UGC Studio
+- Solo fotos de catálogo → Product Catalog
 
-FORMATO DE TUS RESPUESTAS:
-- Texto plano conversacional. Sin markdown, sin asteriscos, sin listas con guiones.
-- Para steps o puntos, usá números simples: 1. 2. 3.
-- Cuando proponés un plan, terminá SIEMPRE con la sección: [ACCIONES] seguida de JSON válido.
-- Ese JSON es un array de acciones que la app convierte en botones.
+CAPACIDADES ESPECIALES — usálas cuando el contexto lo pida:
 
-FORMATO DE ACCIONES (cuando estés listo para proponer):
+A) GENERAR CAPTIONS: Cuando la usuaria ya tiene imágenes generadas o pide texto para publicar.
+   Devolvé el bloque [CAPTIONS] con JSON.
+
+B) CREAR CHECKLIST: Cuando proponés un plan con múltiples pasos o módulos.
+   Devolvé el bloque [CHECKLIST] con JSON.
+
+C) CREAR CALENDARIO: Cuando la usuaria pide un plan semanal, calendario de contenido o quiere publicar X veces por semana/mes.
+   Devolvé el bloque [CALENDAR] con JSON. Usá fechas reales a partir de hoy.
+   Hoy es: ${new Date().toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
+
+D) ANALIZAR RESULTADOS: Cuando hay imágenes de tipo "result" en el proyecto y la usuaria pregunta qué hacer con ellas.
+   Analizá y decile para qué sirve cada una (feed, stories, ads, catálogo).
+
+FORMATO DE BLOQUES ESPECIALES (al final del texto, nunca en el medio):
+
+Para navegación a módulo:
 [ACCIONES]
-[{"label":"Ir a Campaign →","description":"Campaña de lanzamiento, 4 imágenes, audiencia jóvenes","module":"campaign","params":{"mode":"campaign","campaignType":"product","objective":"sell","audience":"young","imageCount":"4","productDescription":"chaqueta de cuero marrón"}}]
+[{"type":"navigate","label":"Ir a Campaign →","description":"Campaña de lanzamiento, 4 imágenes","module":"campaign","params":{"mode":"campaign","campaignType":"product","objective":"sell","audience":"young","imageCount":"4","productDescription":"crema hidratante"}}]
 
-REGLAS:
-- No propongas acciones hasta tener al menos: qué producto es, cuál es el objetivo y para quién.
-- Si el usuario sube una imagen, analizala en relación al producto y el objetivo.
-- Máximo 2-3 acciones por respuesta — no abrumes.
-- Siempre que propongas un prompt base para el módulo, incluyelo como parámetro "prompt" URL-encoded.
-- Si no sabés algo, preguntá. Pero UNA sola pregunta por turno.
-- No hables de precios, créditos ni técnico interno.
-- Responde siempre en el idioma del usuario.`;
+Para captions:
+[CAPTIONS]
+{"instagram":"caption de instagram con emojis y tono cercano","tiktok":"caption más corto y energético para TikTok","ecommerce":"descripción de producto más formal para tienda online","hashtags":"#hashtag1 #hashtag2 #hashtag3 #hashtag4 #hashtag5"}
+
+Para checklist:
+[CHECKLIST]
+[{"id":"1","label":"Campaña de lanzamiento — 4 imágenes","module":"campaign","params":{"mode":"campaign","campaignType":"product"},"status":"pending","createdAt":${Date.now()}},{"id":"2","label":"Photodump lifestyle — 4 imágenes","module":"photodump","params":{"mode":"photodump","narrative":"day"},"status":"pending","createdAt":${Date.now()}}]
+
+Para calendario semanal:
+[CALENDAR]
+[{"id":"1","date":"2026-05-07","dayLabel":"Jueves 7 mayo","contentType":"Campaña de lanzamiento","module":"campaign","params":{"mode":"campaign","campaignType":"product"},"prompt":"product shot...","status":"pending"},{"id":"2","date":"2026-05-09","dayLabel":"Sábado 9 mayo","contentType":"Photodump lifestyle","module":"photodump","params":{"mode":"photodump","narrative":"day"},"prompt":"lifestyle...","status":"pending"}]
+
+REGLAS IMPORTANTES:
+- No propongas acciones de navegación hasta tener: producto, objetivo y plataforma.
+- Máximo 2-3 acciones por respuesta.
+- Si ya hay brief guardado, arrancá directo con propuestas — no repitas preguntas ya respondidas.
+- Si hay resultados en el proyecto (imágenes generadas), ofrecé analizarlos o crear captions.
+- Los calendarios deben tener entre 5 y 14 entradas (nunca más).
+- Responde siempre en el idioma del usuario.
+- Texto plano conversacional. Sin markdown, sin asteriscos.`;
 }
 
 // ── Compresión de imagen ──────────────────────────────────────
+
 async function compressImage(file: File): Promise<{ data: string; mimeType: string; preview: string }> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -101,9 +164,7 @@ async function compressImage(file: File): Promise<{ data: string; mimeType: stri
       canvas.width = width; canvas.height = height;
       canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
-      const preview = dataUrl;
-      const data = dataUrl.split(',')[1];
-      resolve({ data, mimeType: 'image/jpeg', preview });
+      resolve({ data: dataUrl.split(',')[1], mimeType: 'image/jpeg', preview: dataUrl });
     };
     img.onerror = reject;
     img.src = url;
@@ -111,9 +172,10 @@ async function compressImage(file: File): Promise<{ data: string; mimeType: stri
 }
 
 // ── Llamada a Gemini ──────────────────────────────────────────
+
 async function callCopilot(
   systemPrompt: string,
-  messages: CopilotMessage[],
+  messages: ProjectMessage[],
   imageData?: { data: string; mimeType: string },
 ): Promise<string> {
   const history = messages
@@ -127,7 +189,6 @@ async function callCopilot(
     prompt: fullPrompt,
     model: 'gemini-2.5-flash',
   };
-
   if (imageData) {
     body.images    = [imageData.data];
     body.mimeTypes = [imageData.mimeType];
@@ -138,31 +199,101 @@ async function callCopilot(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-
   if (!res.ok) throw new Error(`API error ${res.status}`);
   const data = await res.json();
   if (!data.success) throw new Error(data.error || 'Error en el copiloto');
   return data.text || '';
 }
 
-// ── Parser de respuesta: separa texto de acciones ─────────────
-function parseResponse(raw: string): { text: string; actions: CopilotAction[] } {
-  const marker = '[ACCIONES]';
-  const idx = raw.indexOf(marker);
-  if (idx === -1) return { text: cleanText(raw), actions: [] };
+// ── Parser de respuesta ───────────────────────────────────────
 
-  const textPart    = raw.slice(0, idx).trim();
-  const actionsPart = raw.slice(idx + marker.length).trim();
+interface ParsedResponse {
+  text: string;
+  actions: CopilotAction[];
+  brief?: Partial<ProjectBrief>;
+}
 
-  let actions: CopilotAction[] = [];
-  try {
-    const match = actionsPart.match(/\[[\s\S]*\]/);
-    if (match) actions = JSON.parse(match[0]);
-  } catch {
-    // si no parsea, no hay acciones
+function parseResponse(raw: string, currentBrief?: ProjectBrief): ParsedResponse {
+  const actions: CopilotAction[] = [];
+  let text = raw;
+
+  // Extraer y remover cada bloque especial
+  const extractBlock = (marker: string): string | null => {
+    const idx = text.indexOf(marker);
+    if (idx === -1) return null;
+    const after = text.slice(idx + marker.length).trim();
+    text = text.slice(0, idx).trim();
+    return after;
+  };
+
+  const actionsRaw   = extractBlock('[ACCIONES]');
+  const captionsRaw  = extractBlock('[CAPTIONS]');
+  const checklistRaw = extractBlock('[CHECKLIST]');
+  const calendarRaw  = extractBlock('[CALENDAR]');
+
+  if (actionsRaw) {
+    try {
+      const match = actionsRaw.match(/\[[\s\S]*?\]/);
+      if (match) {
+        const parsed: CopilotAction[] = JSON.parse(match[0]);
+        actions.push(...parsed.map(a => ({ ...a, type: 'navigate' as const })));
+      }
+    } catch { /* silencioso */ }
   }
 
-  return { text: cleanText(textPart), actions };
+  if (captionsRaw) {
+    try {
+      const match = captionsRaw.match(/\{[\s\S]*?\}/);
+      if (match) {
+        const captions: GeneratedCaptions = JSON.parse(match[0]);
+        actions.push({
+          type: 'captions',
+          label: 'Captions generados',
+          description: 'Listos para copiar y publicar',
+          captions,
+        });
+      }
+    } catch { /* silencioso */ }
+  }
+
+  if (checklistRaw) {
+    try {
+      const match = checklistRaw.match(/\[[\s\S]*\]/);
+      if (match) {
+        const checklist: ChecklistItem[] = JSON.parse(match[0]);
+        actions.push({
+          type: 'checklist',
+          label: 'Plan de contenido',
+          description: `${checklist.length} tareas generadas`,
+          checklist,
+        });
+      }
+    } catch { /* silencioso */ }
+  }
+
+  if (calendarRaw) {
+    try {
+      const match = calendarRaw.match(/\[[\s\S]*\]/);
+      if (match) {
+        const calendar: CalendarEntry[] = JSON.parse(match[0]);
+        actions.push({
+          type: 'calendar',
+          label: 'Calendario de contenido',
+          description: `${calendar.length} días programados`,
+          calendar,
+        });
+      }
+    } catch { /* silencioso */ }
+  }
+
+  // Intentar extraer brief de la conversación
+  let brief: Partial<ProjectBrief> | undefined;
+  const lowerText = text.toLowerCase();
+  if (!currentBrief?.productDescription && (lowerText.includes('producto') || lowerText.includes('vender'))) {
+    // El brief se extrae via un análisis posterior si hay suficiente info
+  }
+
+  return { text: cleanText(text), actions, brief };
 }
 
 function cleanText(text: string): string {
@@ -176,68 +307,236 @@ function cleanText(text: string): string {
 }
 
 // ── Sugerencias iniciales ─────────────────────────────────────
+
 const INITIAL_SUGGESTIONS = [
   'Quiero vender mi producto en Instagram',
-  'Necesito contenido para lanzar un producto nuevo',
-  'Quiero hacer fotos de catálogo profesionales',
-  'Ayúdame a planear contenido para esta semana',
+  'Crea un calendario de contenido para esta semana',
+  'Necesito captions para mis imágenes',
+  'Ayúdame a planear contenido para el lanzamiento',
 ];
 
+// ── Sub-componente: Panel de Captions ─────────────────────────
+
+const CaptionsPanel: React.FC<{ captions: GeneratedCaptions }> = ({ captions }) => {
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const copy = (key: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const entries = [
+    { key: 'instagram', icon: <Instagram className="w-3.5 h-3.5" />, label: 'Instagram', color: 'text-pink-400', value: captions.instagram },
+    { key: 'tiktok',    icon: <Play className="w-3.5 h-3.5" />,      label: 'TikTok',    color: 'text-cyan-400',  value: captions.tiktok },
+    { key: 'ecommerce', icon: <ShoppingBag className="w-3.5 h-3.5" />, label: 'Tienda',  color: 'text-emerald-400', value: captions.ecommerce },
+    { key: 'hashtags',  icon: <Hash className="w-3.5 h-3.5" />,      label: 'Hashtags',  color: 'text-violet-400', value: captions.hashtags },
+  ];
+
+  return (
+    <div className="space-y-2 mt-2">
+      {entries.map(e => (
+        <div key={e.key} className="bg-white/5 border border-white/10 rounded-xl p-3">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className={`flex items-center gap-1.5 ${e.color}`}>
+              {e.icon}
+              <span className="text-[9px] font-black uppercase tracking-widest">{e.label}</span>
+            </div>
+            <button
+              onClick={() => copy(e.key, e.value)}
+              className="w-6 h-6 bg-white/5 hover:bg-white/15 text-slate-500 hover:text-white rounded-lg flex items-center justify-center transition-all"
+            >
+              {copied === e.key ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-300 leading-relaxed">{e.value}</p>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ── Sub-componente: Checklist inline ─────────────────────────
+
+const ChecklistPreview: React.FC<{
+  checklist: ChecklistItem[];
+  onSave: (checklist: ChecklistItem[]) => void;
+}> = ({ checklist, onSave }) => {
+  const [items, setItems] = useState(checklist);
+  const [saved, setSaved] = useState(false);
+
+  const toggle = (id: string) => {
+    setItems(prev => prev.map(i =>
+      i.id === id ? { ...i, status: i.status === 'done' ? 'pending' : 'done' } : i
+    ));
+  };
+
+  const handleSave = () => {
+    onSave(items);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  return (
+    <div className="mt-2 bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
+      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Plan de contenido</p>
+      {items.map(item => (
+        <div key={item.id} className="flex items-center gap-2">
+          <button
+            onClick={() => toggle(item.id)}
+            className={`w-4 h-4 rounded flex-shrink-0 border-2 flex items-center justify-center transition-all ${
+              item.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-slate-600'
+            }`}
+          >
+            {item.status === 'done' && <Check className="w-2.5 h-2.5 text-white" />}
+          </button>
+          <span className={`text-[11px] flex-1 ${item.status === 'done' ? 'text-slate-500 line-through' : 'text-slate-300'}`}>
+            {item.label}
+          </span>
+        </div>
+      ))}
+      <button
+        onClick={handleSave}
+        className="w-full mt-1 py-2 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/30 rounded-lg text-[10px] font-black text-indigo-300 uppercase tracking-widest transition-all flex items-center justify-center gap-1.5"
+      >
+        {saved ? <><Check className="w-3 h-3" /> Guardado</> : 'Guardar en el proyecto'}
+      </button>
+    </div>
+  );
+};
+
+// ── Sub-componente: Calendario preview inline ─────────────────
+
+const CalendarPreview: React.FC<{
+  calendar: CalendarEntry[];
+  onSave: (calendar: CalendarEntry[]) => void;
+}> = ({ calendar, onSave }) => {
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = () => {
+    onSave(calendar);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const moduleColor: Record<string, string> = {
+    campaign:  'bg-brand-600/20 border-brand-500/30 text-brand-300',
+    photodump: 'bg-violet-600/20 border-violet-500/30 text-violet-300',
+    ugc:       'bg-emerald-600/20 border-emerald-500/30 text-emerald-300',
+    catalog:   'bg-sky-600/20 border-sky-500/30 text-sky-300',
+    prompt:    'bg-slate-600/20 border-slate-500/30 text-slate-300',
+  };
+
+  return (
+    <div className="mt-2 bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
+      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Calendario generado</p>
+      <div className="space-y-1.5 max-h-48 overflow-y-auto">
+        {calendar.map(entry => (
+          <div key={entry.id} className={`flex items-start gap-2 p-2 rounded-lg border ${moduleColor[entry.module] || moduleColor.prompt}`}>
+            <div className="flex-shrink-0 text-center min-w-[36px]">
+              <p className="text-[8px] font-black uppercase opacity-70">{entry.dayLabel.split(' ')[0]}</p>
+              <p className="text-sm font-black leading-none">{entry.dayLabel.split(' ')[1]}</p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-tight leading-tight">{entry.contentType}</p>
+              <p className="text-[9px] opacity-60 truncate mt-0.5">{entry.prompt}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <button
+        onClick={handleSave}
+        className="w-full mt-1 py-2 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/30 rounded-lg text-[10px] font-black text-indigo-300 uppercase tracking-widest transition-all flex items-center justify-center gap-1.5"
+      >
+        {saved ? <><Check className="w-3 h-3" /> Guardado</> : 'Guardar calendario'}
+      </button>
+    </div>
+  );
+};
+
 // ── Componente principal ──────────────────────────────────────
-const ProjectCopilot: React.FC<ProjectCopilotProps> = ({ project }) => {
+
+const ProjectCopilot: React.FC<ProjectCopilotProps> = ({
+  project,
+  onChecklistUpdate,
+  onCalendarUpdate,
+}) => {
   const navigate = useNavigate();
 
-  const [messages,      setMessages]      = useState<CopilotMessage[]>([]);
-  const [input,         setInput]         = useState('');
-  const [loading,       setLoading]       = useState(false);
-  const [pendingImage,  setPendingImage]  = useState<{ file: File; preview: string; data: string; mimeType: string } | null>(null);
-  const [compressing,   setCompressing]   = useState(false);
+  const [messages,     setMessages]     = useState<ProjectMessage[]>([]);
+  const [input,        setInput]        = useState('');
+  const [loading,      setLoading]      = useState(false);
+  const [pendingImage, setPendingImage] = useState<{ file: File; preview: string; data: string; mimeType: string } | null>(null);
+  const [compressing,  setCompressing]  = useState(false);
+  const [initialized,  setInitialized]  = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLInputElement>(null);
   const fileInputRef   = useRef<HTMLInputElement>(null);
+  // Ref para evitar guardar en Firestore durante la carga inicial
+  const skipSaveRef    = useRef(true);
 
-  // Saludo inicial
+  // ── Cargar conversación guardada al montar ───────────────────
   useEffect(() => {
-    setMessages([{
-      id: 'welcome',
-      role: 'assistant',
-      content: `Hola! Soy tu copiloto para el proyecto "${project.name}".\n\nSubí una foto de tu producto o contame qué querés lograr, y te ayudo a crear un plan de contenido concreto paso a paso.`,
-    }]);
-  }, [project.id]);
+    skipSaveRef.current = true;
 
+    if (project.conversation && project.conversation.length > 0) {
+      setMessages(project.conversation);
+    } else {
+      // Saludo inicial — personalizado si hay brief
+      const greeting = project.brief?.productDescription
+        ? `¡Hola de nuevo! Seguimos con "${project.name}".\n\nRecuerdo que estamos trabajando con ${project.brief.productDescription} para ${project.brief.goal}. ¿Continuamos desde donde dejamos o querés explorar algo nuevo?`
+        : `Hola! Soy tu copiloto para el proyecto "${project.name}".\n\nSubí una foto de tu producto o contame qué querés lograr, y te ayudo a crear un plan de contenido concreto paso a paso.`;
+
+      setMessages([{ id: 'welcome', role: 'assistant', content: greeting, timestamp: Date.now() }]);
+    }
+
+    setInitialized(true);
+    // Permitir guardado después de un tick
+    setTimeout(() => { skipSaveRef.current = false; }, 100);
+  }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Scroll automático ────────────────────────────────────────
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // ── Guardar conversación en Firestore (debounced) ─────────────
+  useEffect(() => {
+    if (!initialized || skipSaveRef.current || messages.length === 0) return;
+    const timer = setTimeout(() => {
+      saveConversation(project.id, messages).catch(() => {});
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [messages, project.id, initialized]);
+
+  // ── Adjuntar imagen ──────────────────────────────────────────
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (!file || !file.type.startsWith('image/')) return;
-
     setCompressing(true);
     try {
       const compressed = await compressImage(file);
       setPendingImage({ file, ...compressed });
-    } catch {
-      // silencioso
-    } finally {
-      setCompressing(false);
-    }
+    } catch { /* silencioso */ }
+    finally { setCompressing(false); }
   };
 
+  // ── Enviar mensaje ────────────────────────────────────────────
   const sendMessage = useCallback(async (text?: string) => {
     const content = (text ?? input).trim();
     if ((!content && !pendingImage) || loading) return;
 
-    const imageData = pendingImage ? { data: pendingImage.data, mimeType: pendingImage.mimeType } : undefined;
+    const imageData  = pendingImage ? { data: pendingImage.data, mimeType: pendingImage.mimeType } : undefined;
     const previewUrl = pendingImage?.preview;
 
-    const userMsg: CopilotMessage = {
-      id: Date.now().toString(),
+    const userMsg: ProjectMessage = {
+      id: uuidv4(),
       role: 'user',
       content: content || '(imagen adjunta)',
       imageUrls: previewUrl ? [previewUrl] : undefined,
+      timestamp: Date.now(),
     };
 
     setMessages(prev => [...prev, userMsg]);
@@ -249,60 +548,94 @@ const ProjectCopilot: React.FC<ProjectCopilotProps> = ({ project }) => {
       const systemPrompt = buildSystemPrompt(project);
       const history = [...messages, userMsg].filter(m => m.id !== 'welcome');
       const raw = await callCopilot(systemPrompt, history, imageData);
-      const { text, actions } = parseResponse(raw);
+      const { text: replyText, actions } = parseResponse(raw, project.brief);
 
-      setMessages(prev => [...prev, {
-        id: Date.now().toString() + 'r',
+      const assistantMsg: ProjectMessage = {
+        id: uuidv4(),
         role: 'assistant',
-        content: text,
+        content: replyText,
         actions: actions.length > 0 ? actions : undefined,
-      }]);
+        timestamp: Date.now(),
+      };
+
+      setMessages(prev => [...prev, assistantMsg]);
+
+      // Auto-guardar brief si el copiloto lo detectó (heurística básica)
+      tryExtractAndSaveBrief(content, replyText, project);
+
     } catch {
       setMessages(prev => [...prev, {
-        id: Date.now().toString() + 'e',
+        id: uuidv4(),
         role: 'assistant',
         content: 'No pude conectarme en este momento. Intentá de nuevo.',
+        timestamp: Date.now(),
       }]);
     } finally {
       setLoading(false);
     }
   }, [input, messages, loading, pendingImage, project]);
 
+  // ── Heurística para extraer brief de la conversación ─────────
+  const tryExtractAndSaveBrief = (userText: string, _replyText: string, proj: Project) => {
+    if (proj.brief?.productDescription) return; // ya hay brief
+    // Si el usuario mencionó algo que parezca un producto, intentar guardarlo parcialmente
+    const hasProduct  = userText.length > 10;
+    const hasObjective = /vend|lanzar|promover|publicar|instagram|tiktok/i.test(userText);
+    if (hasProduct && hasObjective) {
+      saveBrief(proj.id, {
+        productDescription: userText.slice(0, 120),
+        goal: 'vender en redes sociales',
+        audience: 'general',
+        platform: /tiktok/i.test(userText) ? 'TikTok' : 'Instagram',
+        suggestedModules: ['campaign', 'photodump'],
+      }).catch(() => {});
+    }
+  };
+
+  // ── Ejecutar acción del copiloto ──────────────────────────────
   const handleAction = (action: CopilotAction) => {
-    // Construir URL con params del preset
-    const params = new URLSearchParams(action.params);
-    const routes: Record<string, string> = {
-      campaign:  '/prompt-studio',
-      photodump: '/prompt-studio',
-      prompt:    '/prompt-studio',
-      ugc:       '/studio-pro',
-      catalog:   '/productos',
-    };
-    const base = routes[action.module] ?? '/prompt-studio';
-    navigate(`${base}?${params.toString()}`);
+    if (action.type === 'navigate' && action.module && action.params) {
+      const routes: Record<ActionModule, string> = {
+        campaign:  '/prompt-studio',
+        photodump: '/prompt-studio',
+        prompt:    '/prompt-studio',
+        ugc:       '/studio-pro',
+        catalog:   '/productos',
+      };
+      navigate(`${routes[action.module]}?${new URLSearchParams(action.params).toString()}`);
+    }
+  };
+
+  const handleChecklistSave = async (checklist: ChecklistItem[]) => {
+    await saveChecklist(project.id, checklist).catch(() => {});
+    onChecklistUpdate?.(checklist);
+  };
+
+  const handleCalendarSave = async (calendar: CalendarEntry[]) => {
+    await saveCalendar(project.id, calendar).catch(() => {});
+    onCalendarUpdate?.(calendar);
   };
 
   const reset = () => {
-    setMessages([{
-      id: 'welcome',
-      role: 'assistant',
-      content: `Hola! Soy tu copiloto para el proyecto "${project.name}".\n\nSubí una foto de tu producto o contame qué querés lograr.`,
-    }]);
+    skipSaveRef.current = true;
+    const greeting = `Hola! Empecemos de nuevo con el proyecto "${project.name}". ¿En qué te ayudo?`;
+    setMessages([{ id: 'welcome', role: 'assistant', content: greeting, timestamp: Date.now() }]);
     setInput('');
     setPendingImage(null);
+    setTimeout(() => { skipSaveRef.current = false; }, 100);
   };
 
   const canSend = (input.trim().length > 0 || !!pendingImage) && !loading && !compressing;
 
-  // ── Render de un mensaje del asistente ───────────────────────
-  const renderAssistantText = (text: string) =>
+  // ── Render texto del asistente ────────────────────────────────
+  const renderText = (text: string) =>
     text.split('\n').map((line, i) => {
       if (!line.trim()) return <br key={i} />;
-      const numbered = line.match(/^(\d+)\.\s+(.+)$/);
-      if (numbered) return (
+      const n = line.match(/^(\d+)\.\s+(.+)$/);
+      if (n) return (
         <div key={i} className="flex gap-2 my-1">
-          <span className="text-indigo-500 font-black flex-shrink-0">{numbered[1]}.</span>
-          <span>{numbered[2]}</span>
+          <span className="text-indigo-400 font-black flex-shrink-0">{n[1]}.</span>
+          <span>{n[2]}</span>
         </div>
       );
       return <span key={i} className="block">{line}</span>;
@@ -318,7 +651,9 @@ const ProjectCopilot: React.FC<ProjectCopilotProps> = ({ project }) => {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-xs font-black text-white uppercase tracking-widest leading-none">Copiloto del proyecto</p>
-          <p className="text-[9px] font-bold text-indigo-200 uppercase tracking-widest mt-0.5">Director creativo · Estratega de contenido</p>
+          <p className="text-[9px] font-bold text-indigo-200 uppercase tracking-widest mt-0.5">
+            {project.brief ? `Producto conocido · ${project.brief.platform}` : 'Director creativo · Estratega de contenido'}
+          </p>
         </div>
         {messages.length > 1 && (
           <button
@@ -341,48 +676,57 @@ const ProjectCopilot: React.FC<ProjectCopilotProps> = ({ project }) => {
               </div>
             )}
             <div className="max-w-[88%] space-y-2">
-              {/* Imagen adjunta por usuario */}
               {msg.imageUrls?.map((url, i) => (
                 <img key={i} src={url} alt="adjunto" className="rounded-xl max-h-40 object-cover w-full border border-white/10" />
               ))}
 
-              {/* Burbuja de texto */}
               <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                 msg.role === 'user'
                   ? 'bg-indigo-600 text-white rounded-tr-sm'
                   : 'bg-white/8 text-slate-200 rounded-tl-sm border border-white/10'
               }`}>
                 {msg.role === 'assistant'
-                  ? <div className="text-sm leading-relaxed space-y-0.5">{renderAssistantText(msg.content)}</div>
+                  ? <div className="text-sm leading-relaxed space-y-0.5">{renderText(msg.content)}</div>
                   : <p>{msg.content}</p>
                 }
               </div>
 
-              {/* Botones de acción del copiloto */}
+              {/* Acciones del copiloto */}
               {msg.actions && msg.actions.length > 0 && (
                 <div className="space-y-2 pt-1">
-                  {msg.actions.map((action, i) => (
-                    <button
-                      key={i}
-                      onClick={() => handleAction(action)}
-                      className="w-full text-left bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 hover:border-indigo-500/60 rounded-xl px-4 py-3 transition-all group"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-xs font-black text-indigo-300 uppercase tracking-tight">{action.label}</p>
-                          <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">{action.description}</p>
+                  {(msg.actions as CopilotAction[]).map((action, i) => {
+                    if (action.type === 'captions' && action.captions) {
+                      return <CaptionsPanel key={i} captions={action.captions} />;
+                    }
+                    if (action.type === 'checklist' && action.checklist) {
+                      return <ChecklistPreview key={i} checklist={action.checklist} onSave={handleChecklistSave} />;
+                    }
+                    if (action.type === 'calendar' && action.calendar) {
+                      return <CalendarPreview key={i} calendar={action.calendar} onSave={handleCalendarSave} />;
+                    }
+                    // navigate
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => handleAction(action)}
+                        className="w-full text-left bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 hover:border-indigo-500/60 rounded-xl px-4 py-3 transition-all group"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-xs font-black text-indigo-300 uppercase tracking-tight">{action.label}</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">{action.description}</p>
+                          </div>
+                          <ArrowRight className="w-4 h-4 text-indigo-400 flex-shrink-0 group-hover:translate-x-0.5 transition-transform" />
                         </div>
-                        <ArrowRight className="w-4 h-4 text-indigo-400 flex-shrink-0 group-hover:translate-x-0.5 transition-transform" />
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
           </div>
         ))}
 
-        {/* Loading */}
         {(loading || compressing) && (
           <div className="flex gap-2.5">
             <div className="w-6 h-6 bg-indigo-600/30 border border-indigo-500/30 rounded-full flex items-center justify-center flex-shrink-0">

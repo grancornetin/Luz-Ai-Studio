@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { MISSIONS, getUserMissions, completeMission, isMissionOnCooldown, type UserMissions } from '../services/missionsService';
 import { getReferralStats, redeemSpecialCode } from '../services/referralService';
+import DailyInspiration from '../components/DailyInspiration';
 
 // creditsGemini: costo con Nano Banana 2 | creditsSeedream: costo con Seedream
 // null = precio fijo (no varía con el modelo) | 0 = gratis
@@ -592,6 +593,9 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
           </div>
         ))}
       </div>
+
+      {/* ── INSPIRACIÓN DIARIA ── */}
+      <DailyInspiration userName={displayName} plan={planName} />
 
       {/* ── QUICK ACTIONS 2×2 ── */}
       <div className="space-y-3">
