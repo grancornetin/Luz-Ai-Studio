@@ -65,6 +65,14 @@ const TOPUP_CREDITS: Record<string, number> = {
   'pdt_0NdkeuaAdzWxtjjWcyX4D': 1200,
 };
 
+// Pro-credit top-ups — actualizar IDs cuando estén creados en Dodo
+const TOPUP_PRO_CREDITS: Record<string, number> = {
+  // 'PENDING': 20,   // PRO_TOPUP_20  — $5.99
+  // 'PENDING': 60,   // PRO_TOPUP_60  — $14.99
+  // 'PENDING': 150,  // PRO_TOPUP_150 — $34.99
+  // 'PENDING': 400,  // PRO_TOPUP_400 — $79.99
+};
+
 // ── Verificación de firma ─────────────────────────────────────────────────────
 
 function verifySignature(rawBody: string, signature: string): boolean {
@@ -99,8 +107,10 @@ async function handlePaymentSucceeded(data: any): Promise<void> {
     return;
   }
 
-  const credits = TOPUP_CREDITS[productId];
-  if (!credits) {
+  const credits    = TOPUP_CREDITS[productId];
+  const proCredits = TOPUP_PRO_CREDITS[productId];
+
+  if (!credits && !proCredits) {
     console.log(`[Dodo Webhook] payment.succeeded: product ${productId} is not a top-up, skipping`);
     return;
   }
@@ -110,25 +120,42 @@ async function handlePaymentSucceeded(data: any): Promise<void> {
     const snap = await tx.get(userRef);
     if (!snap.exists) throw new Error(`User ${userId} not found`);
 
-    tx.update(userRef, {
-      topUpCredits:        FieldValue.increment(credits),
-      'credits.available': FieldValue.increment(credits),
-    });
+    if (credits) {
+      tx.update(userRef, {
+        topUpCredits:        FieldValue.increment(credits),
+        'credits.available': FieldValue.increment(credits),
+      });
+      const txRef = db.collection('users').doc(userId)
+        .collection('creditTransactions').doc(`topup_${Date.now()}`);
+      tx.set(txRef, {
+        type:      'topup',
+        amount:    credits,
+        productId,
+        paymentId: data.payment_id || data.id,
+        createdAt: FieldValue.serverTimestamp(),
+        note:      `Top-up de ${credits} créditos`,
+      });
+    }
 
-    const txRef = db
-      .collection('users').doc(userId)
-      .collection('creditTransactions').doc(`topup_${Date.now()}`);
-    tx.set(txRef, {
-      type:      'topup',
-      amount:    credits,
-      productId,
-      paymentId: data.payment_id || data.id,
-      createdAt: FieldValue.serverTimestamp(),
-      note:      `Top-up de ${credits} créditos`,
-    });
+    if (proCredits) {
+      tx.update(userRef, {
+        'credits.proCredits': FieldValue.increment(proCredits),
+      });
+      const txRef = db.collection('users').doc(userId)
+        .collection('creditTransactions').doc(`pro_topup_${Date.now()}`);
+      tx.set(txRef, {
+        type:      'pro_topup',
+        amount:    proCredits,
+        productId,
+        paymentId: data.payment_id || data.id,
+        createdAt: FieldValue.serverTimestamp(),
+        note:      `Top-up de ${proCredits} pro-credits (Campaign/Photodump)`,
+      });
+    }
   });
 
-  console.log(`[Dodo Webhook] +${credits} top-up credits → user ${userId}`);
+  if (credits)    console.log(`[Dodo Webhook] +${credits} top-up credits → user ${userId}`);
+  if (proCredits) console.log(`[Dodo Webhook] +${proCredits} pro-credits → user ${userId}`);
 
   // Si el usuario tiene referidor, darle créditos
   const userSnap = await userRef.get();

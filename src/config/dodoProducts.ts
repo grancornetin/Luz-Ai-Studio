@@ -13,12 +13,18 @@ export const DODO_PRODUCTS = {
   PRO_YEARLY: 'pdt_0Ndkep4Tk7VvkaXGgoeJm',
   STUDIO_YEARLY: 'pdt_0NdkeqknL77gFkeCJtAzR',
 
-  // Top-ups (recargas)
+  // Top-ups de créditos normales
   TOPUP_30: 'pdt_0NdkerVP1qcaNPz5mEAtL',
   TOPUP_80: 'pdt_0NdkesPrt2T90Vx7Cgyao',
   TOPUP_200: 'pdt_0NdkestYwa7zXpYriJlqD',
   TOPUP_500: 'pdt_0NdkeuBMXieJkr4jjoaVu',
   TOPUP_1200: 'pdt_0NdkeuaAdzWxtjjWcyX4D',
+
+  // Top-ups de pro-credits (Campaign / Photodump) — IDs pendientes de crear en Dodo
+  PRO_TOPUP_20: 'PENDING',
+  PRO_TOPUP_60: 'PENDING',
+  PRO_TOPUP_150: 'PENDING',
+  PRO_TOPUP_400: 'PENDING',
 } as const;
 
 export type ProductKey = keyof typeof DODO_PRODUCTS;

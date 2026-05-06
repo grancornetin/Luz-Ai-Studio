@@ -11,7 +11,7 @@ import { useAuth } from '../modules/auth/AuthContext';
 import {
   Zap, TrendingUp, User, Package, AlertCircle,
   Crown, ArrowRight, Sparkles, Clock, Images,
-  Settings, FileText, Mail, CreditCard, UserCircle, Gift, ShoppingCart, Tag, LogOut
+  Settings, FileText, Mail, CreditCard, UserCircle, Gift, ShoppingCart, Tag, LogOut, FolderOpen
 } from 'lucide-react';
 import { MISSIONS, getUserMissions, completeMission, isMissionOnCooldown, type UserMissions } from '../services/missionsService';
 import { getReferralStats, redeemSpecialCode } from '../services/referralService';
@@ -679,7 +679,7 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
           <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">Acceso Rápido</h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
           {/* PROMPT GALLERY CARD */}
           <div
@@ -739,6 +739,35 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
                 )}
               </div>
               <div className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center text-slate-300 group-hover:bg-slate-900 group-hover:text-white group-hover:border-slate-900 transition-all flex-shrink-0 mt-1">
+                <ArrowRight size={16} className="-rotate-45 group-hover:rotate-0 transition-transform" />
+              </div>
+            </div>
+          </div>
+
+          {/* PROJECTS CARD */}
+          <div
+            onClick={() => navigate('/projects')}
+            className="group relative bg-gradient-to-br from-emerald-500 to-teal-600 p-6 md:p-8 rounded-[32px] cursor-pointer hover:scale-[1.02] hover:shadow-2xl hover:shadow-emerald-200 transition-all overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+            <div className="absolute bottom-0 left-0 w-20 h-20 bg-black/10 rounded-full translate-y-1/2 -translate-x-1/2" />
+
+            <div className="relative z-10 flex items-start justify-between gap-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                    <FolderOpen className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="t-display text-lg text-white">Mis Proyectos</h3>
+                    <p className="t-meta text-emerald-200">Workspace</p>
+                  </div>
+                </div>
+                <p className="text-sm text-emerald-100 font-medium leading-relaxed max-w-xs">
+                  Organiza campañas, guarda imágenes y planifica contenido con el copiloto.
+                </p>
+              </div>
+              <div className="w-9 h-9 rounded-full border border-white/30 flex items-center justify-center text-white/60 group-hover:bg-white group-hover:text-emerald-600 transition-all flex-shrink-0 mt-1">
                 <ArrowRight size={16} className="-rotate-45 group-hover:rotate-0 transition-transform" />
               </div>
             </div>
