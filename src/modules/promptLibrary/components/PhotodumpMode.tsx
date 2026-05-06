@@ -4,6 +4,8 @@ import {
   BookOpen, ChevronRight, ChevronLeft,
   Copy, Check, Sparkles, Hash,
 } from 'lucide-react';
+import ModuleTutorial from '../../../components/shared/ModuleTutorial';
+import { TUTORIAL_CONFIGS } from '../../../components/shared/tutorialConfigs';
 import { generationService, GenerationProgress } from '../services/generationService';
 import { PromptDNA } from '../types/promptTypes';
 import { downloadAsZip } from '../../../utils/imageUtils';
@@ -252,9 +254,12 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({ basePrompt, dna, referenc
 
       {/* Header */}
       <div className="space-y-1">
-        <div className="flex items-center gap-2">
-          <Images className="w-5 h-5 text-violet-400" />
-          <h3 className="text-sm font-black text-white uppercase tracking-tighter italic">Photodump Mode</h3>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Images className="w-5 h-5 text-violet-400" />
+            <h3 className="text-sm font-black text-white uppercase tracking-tighter italic">Photodump Mode</h3>
+          </div>
+          <ModuleTutorial moduleId="photodumpMode" steps={TUTORIAL_CONFIGS.photodumpMode} label="¿Cómo funciona?" compact />
         </div>
         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
           Cuenta una historia visual · IA como director de narrativa

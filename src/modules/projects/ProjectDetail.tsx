@@ -8,6 +8,8 @@ import {
   ArrowLeft, Download, Trash2, Image as ImageIcon,
   Pencil, Check, X, Upload, MessageSquare, Images, CalendarDays,
 } from 'lucide-react';
+import ModuleTutorial from '../../components/shared/ModuleTutorial';
+import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
 import { readAndCompressFile } from '../../utils/imageUtils';
 import ProjectCopilot from './ProjectCopilot';
@@ -223,6 +225,7 @@ const ProjectDetail: React.FC = () => {
         )}
 
         <div className="flex items-center gap-2 flex-shrink-0">
+          <ModuleTutorial moduleId="projectCopilot" steps={TUTORIAL_CONFIGS.projectCopilot} label="¿Cómo funciona?" compact />
           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest hidden sm:block">
             {project.items.length} imagen{project.items.length !== 1 ? 'es' : ''}
           </span>

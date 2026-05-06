@@ -13,6 +13,8 @@ import { useScrollFAB } from '../../../hooks/useScrollFAB';
 import { newSessionId } from '../../../services/imageApiService';
 import { useAuth } from '../../auth/AuthContext';
 import { geminiService } from '../../../services/geminiService';
+import ModuleTutorial from '../../../components/shared/ModuleTutorial';
+import { TUTORIAL_CONFIGS } from '../../../components/shared/tutorialConfigs';
 
 interface CampaignGeneratorProps {
   basePrompt: string;
@@ -260,9 +262,12 @@ const CampaignGenerator: React.FC<CampaignGeneratorProps> = ({ basePrompt, dna, 
 
       {/* Header */}
       <div className="space-y-1">
-        <div className="flex items-center gap-2">
-          <Megaphone className="w-5 h-5 text-brand-500" />
-          <h3 className="text-sm font-black text-white uppercase tracking-tighter italic">Campaign Generator</h3>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Megaphone className="w-5 h-5 text-brand-500" />
+            <h3 className="text-sm font-black text-white uppercase tracking-tighter italic">Campaign Generator</h3>
+          </div>
+          <ModuleTutorial moduleId="campaignMode" steps={TUTORIAL_CONFIGS.campaignMode} label="¿Cómo funciona?" compact />
         </div>
         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
           Define tu campaña · IA actúa como director creativo

@@ -225,6 +225,118 @@ export const TUTORIAL_CONFIGS: Record<string, TutorialStep[]> = {
     },
   ],
 
+  // ── CAMPAIGN MODE ────────────────────────
+  campaignMode: [
+    {
+      icon: 'fa-megaphone',
+      color: 'bg-brand-600 text-white',
+      title: '¿Qué es Campaign Mode?',
+      description: 'Es un director creativo de marketing dentro de la app. No genera imágenes al azar — primero entiende tu campaña (producto, objetivo, audiencia) y luego construye un set coherente de imágenes listas para publicar o usar en anuncios.',
+    },
+    {
+      icon: 'fa-pen-to-square',
+      color: 'bg-violet-600 text-white',
+      title: 'Paso 1 — Define el brief',
+      description: 'Primero escribí el prompt base del sujeto en el compositor de arriba (ej: "mujer sosteniendo una crema hidratante"). Después en Campaign completá: descripción del producto, tipo de campaña, objetivo y audiencia. Esto le da contexto real a la IA.',
+      tip: 'Cuanto más específica sea la descripción del producto, más relevantes serán las escenas generadas.',
+    },
+    {
+      icon: 'fa-layer-group',
+      color: 'bg-blue-600 text-white',
+      title: 'Paso 2 — Elige el tipo de campaña',
+      description: 'Hay 4 tipos: Lanzamiento de producto (hero shot + detalle + lifestyle + CTA), Posicionamiento de marca (aspiracional + valores), Contenido para RRSS (optimizado para carrusel y stories), y E-commerce (ángulos de producto + contexto de uso).',
+    },
+    {
+      icon: 'fa-wand-magic-sparkles',
+      color: 'bg-emerald-600 text-white',
+      title: 'Paso 3 — La IA actúa como directora creativa',
+      description: 'Gemini analiza tu brief y genera automáticamente las escenas: define la composición, el ambiente, la luz y el ángulo de cada imagen. Vos no escribís las escenas — la IA las diseña según el tipo de campaña y audiencia.',
+      tip: 'Podés generar 3, 4 o 5 imágenes por campaña. Empezá con 3 para probar el resultado antes de hacer el set completo.',
+    },
+    {
+      icon: 'fa-copy',
+      color: 'bg-slate-700 text-white',
+      title: 'Paso 4 — Resultados listos para publicar',
+      description: 'Cada imagen viene con: titular de anuncio listo para copiar, caption para redes sociales, y el prompt técnico que se usó (para reutilizar). Al final podés descargar todo como ZIP.',
+      tip: 'Los captions y titulares los genera la IA en español y adaptados al tono de tu audiencia. Podés usarlos directamente o ajustarlos.',
+    },
+  ],
+
+  // ── PHOTODUMP MODE ────────────────────────
+  photodumpMode: [
+    {
+      icon: 'fa-images',
+      color: 'bg-violet-600 text-white',
+      title: '¿Qué es Photodump Mode?',
+      description: 'Es un creador de sets de imágenes con narrativa visual — como el photodump de un influencer real, no fotos sueltas. Cada set cuenta una historia progresiva: apertura, desarrollo y cierre. Ideal para carruseles de Instagram.',
+    },
+    {
+      icon: 'fa-book-open',
+      color: 'bg-indigo-600 text-white',
+      title: 'Paso 1 — Elegí la narrativa',
+      description: 'Hay 5 tipos de historia: "Un día con el producto" (mañana a noche con el producto), "Viaje o experiencia" (llegada, exploración, cierre), "Mundo de marca" (estética y valores), "El personaje y su mundo" (lifestyle del influencer), o escribís tu propia historia.',
+      tip: 'Para productos: "Un día con el producto" funciona muy bien. Para influencers: "El personaje y su mundo". Para viajes y experiencias gastronómicas: "Viaje o experiencia".',
+    },
+    {
+      icon: 'fa-user-circle',
+      color: 'bg-emerald-600 text-white',
+      title: 'Paso 2 — Elegí el protagonista',
+      description: 'Tres opciones: Persona / Influencer (la persona es el centro), Producto / Objeto (el producto es el héroe visual), o Persona + Producto (ambos comparten protagonismo). Esto cambia cómo la IA diseña cada escena del set.',
+    },
+    {
+      icon: 'fa-film',
+      color: 'bg-pink-600 text-white',
+      title: 'Paso 3 — El arco narrativo',
+      description: 'La IA construye un arco real: la primera imagen es el gancho visual (apertura), las del medio desarrollan la historia con ángulos variados (close-up, detalle, ambiental), y la última es el cierre memorable.',
+      tip: 'Si subís una referencia de persona en los slots del compositor, la IA preserva la identidad facial en todo el set.',
+    },
+    {
+      icon: 'fa-hashtag',
+      color: 'bg-slate-700 text-white',
+      title: 'Paso 4 — Set listo con captions',
+      description: 'Cada imagen viene con su propio caption y hashtags adaptados al momento narrativo. También se muestra el orden sugerido para el carrusel. Descargás todo como ZIP.',
+      tip: 'Los captions son cortos y conversacionales — están pensados para sonar naturales, no como copy de empresa.',
+    },
+  ],
+
+  // ── PROYECTOS + COPILOTO ──────────────────
+  projectCopilot: [
+    {
+      icon: 'fa-folder-open',
+      color: 'bg-indigo-600 text-white',
+      title: '¿Qué es un Proyecto?',
+      description: 'Un proyecto es tu espacio de trabajo para una campaña, producto o idea específica. Agrupa tus imágenes de referencia, tus generaciones, tu plan de contenido y las conversaciones con el copiloto — todo en un solo lugar.',
+    },
+    {
+      icon: 'fa-robot',
+      color: 'bg-violet-600 text-white',
+      title: 'El Copiloto estratégico',
+      description: 'El copiloto no es un chatbot genérico — es tu directora creativa y estratega de marketing. Analizá tus imágenes, hace preguntas clave, propone planes concretos y te lleva directo al módulo correcto con todo pre-configurado.',
+      tip: 'Subí una foto de tu producto en el chat. El copiloto la analiza y propone qué hacer con ella antes de que vos lo preguntes.',
+    },
+    {
+      icon: 'fa-arrow-right',
+      color: 'bg-emerald-600 text-white',
+      title: 'Acciones directas con un clic',
+      description: 'Cuando el copiloto propone un plan, aparecen botones de acción. Al hacer clic, te lleva al módulo correspondiente (Campaign, Photodump, UGC Studio) con toda la configuración ya cargada. Solo presionás Generar.',
+      tip: 'El banner "Configurado por tu copiloto" que aparece en el módulo confirma que el preset llegó correctamente.',
+    },
+    {
+      icon: 'fa-list-check',
+      color: 'bg-amber-600 text-white',
+      title: 'Plan de contenido y Calendario',
+      description: 'El copiloto puede generar un plan de contenido (checklist de qué crear) y un calendario semanal. Ambos se guardan en el proyecto. Marcás cada tarea como hecha y el sistema registra tu racha de días consecutivos.',
+      tip: 'Pedile al copiloto: "Crea un calendario de contenido para esta semana" y va a generar entre 5 y 7 entradas con módulo y prompt sugerido para cada día.',
+    },
+    {
+      icon: 'fa-pen-nib',
+      color: 'bg-pink-600 text-white',
+      title: 'Captions y textos listos',
+      description: 'Cuando ya tenés imágenes generadas, el copiloto puede crear los textos para publicar: caption para Instagram, versión para TikTok, descripción para tu tienda online y hashtags por nicho. Todo copiable con un clic.',
+      tip: 'El copiloto recuerda tu proyecto entre sesiones: la próxima vez que lo abras, ya sabe de qué producto es y cuál es tu objetivo.',
+    },
+  ],
+
   // ── AI GENERATOR (PROMPT STUDIO) ─────────
   aiGenerator: [
     {
@@ -241,17 +353,18 @@ export const TUTORIAL_CONFIGS: Record<string, TutorialStep[]> = {
       tip: 'Para usar un modelo de tu Biblioteca: descárgalo desde allí y súbelo en el slot "Persona 1".',
     },
     {
-      icon: 'fa-film',
+      icon: 'fa-megaphone',
       color: 'bg-blue-600 text-white',
-      title: 'Modo Campaign — Set coherente',
-      description: 'Define el concepto de la campaña y describe cada escena. La IA genera todas las imágenes manteniendo coherencia de identidad y estilo entre ellas.',
+      title: 'Modo Campaign — Campaña de marketing',
+      description: 'Definís el brief (producto, objetivo, audiencia) y la IA actúa como directora creativa: diseña las escenas, genera las imágenes y entrega captions y titulares de anuncio listos para copiar. Tiene su propio tutorial dentro del modo.',
+      tip: 'Pulsá "¿Cómo funciona?" dentro del modo Campaign para ver el tutorial detallado.',
     },
     {
       icon: 'fa-images',
       color: 'bg-violet-600 text-white',
-      title: 'Modo Photodump — Set de escenas',
-      description: 'Escribe un prompt con el contexto general (ej: "@persona1 visitando Nueva York") y sube tu referencia de persona. La IA genera un set de escenas variadas y coherentes con ese contexto.',
-      tip: 'Elige la "Variación de escena": Sutil (mismo lugar, ángulos distintos), Media (diferentes sub-locaciones), Bold (escenas y momentos completamente distintos).',
+      title: 'Modo Photodump — Historia visual',
+      description: 'Elegís una narrativa (un día con el producto, viaje, mundo de marca...) y la IA construye un set de imágenes con arco narrativo real: apertura, desarrollo y cierre. Cada imagen trae su propio caption. Tiene su propio tutorial dentro del modo.',
+      tip: 'Pulsá "¿Cómo funciona?" dentro del modo Photodump para ver el tutorial detallado.',
     },
     {
       icon: 'fa-users',
