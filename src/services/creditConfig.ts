@@ -59,6 +59,39 @@ export const CREDIT_COSTS = {
 
 export type CreditCostKey = keyof typeof CREDIT_COSTS;
 
+// ── PRO-CREDITS (tokens especiales para Campaign y Photodump) ────────────────
+// Son una segunda moneda incluida en cada plan.
+// No se mezclan con créditos normales — se consumen 1 por sesión generada.
+// Las imágenes dentro de la sesión siguen costando créditos normales.
+
+export const PRO_CREDIT_COSTS = {
+  CAMPAIGN_SESSION:  1,   // 1 pro-credit por sesión Campaign (más las imágenes en créditos normales)
+  PHOTODUMP_SESSION: 1,   // 1 pro-credit por sesión Photodump
+} as const;
+
+/** Pro-credits incluidos por plan al renovar. */
+export const PLAN_PRO_CREDITS: Record<string, number> = {
+  free:    2,     // 2 sesiones de prueba, nunca se renuevan
+  weekly:  5,     // 5 sesiones/semana
+  starter: 10,    // 10 sesiones/mes
+  pro:     50,    // 50 sesiones/mes
+  studio:  150,   // 150 sesiones/mes
+  admin:   999999,
+};
+
+/** Top-up packs especiales de pro-credits. */
+export const PRO_CREDIT_TOPUPS = [
+  { id: 'pro_topup_5',   proCredits: 5,   priceUSD: 2.99,  priceCLP: 2990  },
+  { id: 'pro_topup_15',  proCredits: 15,  priceUSD: 7.99,  priceCLP: 7990  },
+  { id: 'pro_topup_50',  proCredits: 50,  priceUSD: 22.99, priceCLP: 22990 },
+  { id: 'pro_topup_150', proCredits: 150, priceUSD: 59.99, priceCLP: 59990 },
+] as const;
+
+export type ProCreditTopup = typeof PRO_CREDIT_TOPUPS[number];
+
+/** Planes que tienen acceso a Campaign y Photodump. */
+export const MODULES_WITH_PRO_ACCESS = ['free', 'weekly', 'starter', 'pro', 'studio', 'admin'] as const;
+
 // ── PLANES ────────────────────────────────────────────────────────────────────
 
 export const PLANS = {
@@ -66,6 +99,7 @@ export const PLANS = {
     id: 'free',
     label: 'Free',
     credits: 20,
+    proCredits: 2,
     priceMonthly: 0,
     priceAnchor: null,
     renews: false,
@@ -74,6 +108,7 @@ export const PLANS = {
     description: 'Para explorar la plataforma',
     features: [
       '20 créditos (única vez)',
+      '2 sesiones Campaign/Photodump de prueba',
       'Acceso a todos los módulos',
       'Misiones para ganar créditos gratis',
     ],
@@ -82,6 +117,7 @@ export const PLANS = {
     id: 'weekly',
     label: 'Semanal',
     credits: 60,
+    proCredits: 5,
     priceMonthly: 4.99,
     priceAnchor: 6.99,
     renews: true,
@@ -90,6 +126,7 @@ export const PLANS = {
     description: 'Para uso casual semanal',
     features: [
       '60 créditos/semana',
+      '5 sesiones Campaign/Photodump por semana',
       'Acceso a todos los módulos',
       'Revelado de prompts con costo (1 crédito)',
     ],
@@ -98,6 +135,7 @@ export const PLANS = {
     id: 'starter',
     label: 'Starter',
     credits: 200,
+    proCredits: 10,
     priceMonthly: 14.99,
     priceAnchor: 19.99,
     renews: true,
@@ -106,6 +144,7 @@ export const PLANS = {
     description: 'Para creadores independientes',
     features: [
       '200 créditos/mes',
+      '10 sesiones Campaign/Photodump/mes',
       'Acceso a todos los módulos',
       'Revelado de prompts con costo (1 crédito)',
       'Soporte por email',
@@ -115,6 +154,7 @@ export const PLANS = {
     id: 'pro',
     label: 'Pro',
     credits: 500,
+    proCredits: 50,
     priceMonthly: 39.99,
     priceAnchor: 49.99,
     renews: true,
@@ -123,8 +163,8 @@ export const PLANS = {
     description: 'Para agencias y equipos creativos',
     features: [
       '500 créditos/mes',
+      '50 sesiones Campaign/Photodump/mes',
       'Revelado de prompts GRATIS',
-      'Campaign Generator ilimitado',
       'Soporte prioritario',
     ],
   },
@@ -132,6 +172,7 @@ export const PLANS = {
     id: 'studio',
     label: 'Studio',
     credits: 1200,
+    proCredits: 150,
     priceMonthly: 99.99,
     priceAnchor: 129.99,
     renews: true,
@@ -140,6 +181,7 @@ export const PLANS = {
     description: 'Para producción a escala',
     features: [
       '1200 créditos/mes',
+      '150 sesiones Campaign/Photodump/mes',
       'Revelado de prompts GRATIS',
       'Prioridad de generación',
       'Soporte chat dedicado',
@@ -149,6 +191,7 @@ export const PLANS = {
     id: 'admin',
     label: 'Admin',
     credits: 999999,
+    proCredits: 999999,
     priceMonthly: 0,
     priceAnchor: null,
     renews: false,
@@ -157,6 +200,7 @@ export const PLANS = {
     description: 'Acceso total',
     features: [
       'Créditos ilimitados',
+      'Sesiones Campaign/Photodump ilimitadas',
       'Revelado de prompts gratis',
       'Panel de administración',
     ],

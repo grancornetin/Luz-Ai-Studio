@@ -8,6 +8,8 @@ import {
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
 import { userService, UserCredits, UserStats, PLAN_CREDITS } from '../../services/userService';
+import { deductProCredit as _deductProCredit, refundProCredit as _refundProCredit } from '../../services/creditsService';
+import { PLAN_PRO_CREDITS } from '../../services/creditConfig';
 import { handleFirestoreError, OperationType } from '../../services/firestoreUtils';
 import { autoCheckMissions } from '../../services/missionsService';
 import { runMigration } from '../../utils/migratePrompts';
@@ -58,7 +60,7 @@ interface AuthContextType {
   isAdmin: boolean;
   hasCredits: boolean;
   isNewUser: boolean;
-  previewPlan: string | null;          // solo admin: plan que está simulando
+  previewPlan: string | null;
   setPreviewPlan: (p: string | null) => void;
   markOnboardingDone: () => Promise<void>;
   updateProfile: (data: Partial<Omit<UserProfile, 'id' | 'email' | 'role'>>) => Promise<void>;
@@ -66,6 +68,10 @@ interface AuthContextType {
   deductCredits: (amount: number) => Promise<boolean>;
   refreshCredits: () => Promise<void>;
   signOut: () => Promise<void>;
+  // Pro-credits para Campaign y Photodump
+  proCredits: number;
+  deductProCredit: () => Promise<boolean>;
+  refundProCredit: () => Promise<boolean>;
 }
 
 const DEFAULT_CREDITS: UserCredits = { available: 0, used: 0, plan: 'free' };
@@ -85,6 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading]     = useState(true);
   const [isNewUser, setIsNewUser] = useState(false);
   const [previewPlan, setPreviewPlanState] = useState<string | null>(null);
+  const [proCredits, setProCredits] = useState(0);
 
   const setPreviewPlan = (p: string | null) => setPreviewPlanState(p);
 
@@ -161,13 +168,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         setProfile(userProfile);
 
-        // ── Cargar créditos y stats en paralelo ──
+        // ── Cargar créditos, stats y pro-credits en paralelo ──
         const [userCredits, userStats] = await Promise.all([
           userService.getCredits(firebaseUser.uid),
           userService.getStats(firebaseUser.uid),
         ]);
         setCredits(userCredits);
         setStats(userStats);
+
+        // Pro-credits: leer desde Firestore directamente (campo proCreditsAvailable)
+        try {
+          const userDocSnap = await getDoc(doc(db, 'users', firebaseUser.uid));
+          if (userDocSnap.exists()) {
+            const d = userDocSnap.data();
+            const planKey = (d.plan || 'free') as string;
+            const periodPro = PLAN_PRO_CREDITS[planKey] ?? 0;
+            const usedPro   = d.proCreditsUsedThisPeriod ?? 0;
+            const topUpPro  = d.proTopUpCredits ?? 0;
+            setProCredits(Math.max(0, periodPro - usedPro) + topUpPro);
+          }
+        } catch {
+          // non-blocking
+        }
 
         // ── Auto-verificar misiones (fire-and-forget) ──
         autoCheckMissions(
@@ -261,6 +283,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ]);
     setCredits(newCredits);
     setStats(newStats);
+    // Refrescar pro-credits también
+    try {
+      const snap = await getDoc(doc(db, 'users', user.uid));
+      if (snap.exists()) {
+        const d = snap.data();
+        const planKey = (d.plan || 'free') as string;
+        const periodPro = PLAN_PRO_CREDITS[planKey] ?? 0;
+        const usedPro   = d.proCreditsUsedThisPeriod ?? 0;
+        const topUpPro  = d.proTopUpCredits ?? 0;
+        setProCredits(Math.max(0, periodPro - usedPro) + topUpPro);
+      }
+    } catch { /* non-blocking */ }
+  };
+
+  const handleDeductProCredit = async (): Promise<boolean> => {
+    if (!user) return false;
+    if (isAdmin && !previewPlan) return true;
+    const ok = await _deductProCredit(user.uid);
+    if (ok) setProCredits(p => Math.max(0, p - 1));
+    return ok;
+  };
+
+  const handleRefundProCredit = async (): Promise<boolean> => {
+    if (!user) return false;
+    if (isAdmin && !previewPlan) return true;
+    const ok = await _refundProCredit(user.uid);
+    if (ok) setProCredits(p => p + 1);
+    return ok;
   };
 
   const isAdmin = profile?.role === 'admin';
@@ -272,6 +322,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const hasCredits = (isAdmin && !previewPlan) || effectiveCredits.available > 0;
 
+  const effectiveProCredits = (isAdmin && !previewPlan) ? 999999 : proCredits;
+
   return (
     <AuthContext.Provider value={{
       user, profile, credits: effectiveCredits, stats, loading,
@@ -279,6 +331,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       previewPlan, setPreviewPlan,
       markOnboardingDone, updateProfile, deductCredit, deductCredits,
       refreshCredits, signOut,
+      proCredits: effectiveProCredits,
+      deductProCredit: handleDeductProCredit,
+      refundProCredit: handleRefundProCredit,
     }}>
       {children}
     </AuthContext.Provider>

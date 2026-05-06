@@ -59,11 +59,18 @@ The most advanced content generator on the platform. Users write prompts to gene
 - Advanced Prompt Structure tool: helps users understand complex prompts by identifying which parts correspond to lighting, style, person, product, extra details, etc. Users can edit each section directly without reading the whole prompt.
 
 Tools inside AI Generator:
-- Campaign: creates up to 5 different scenes from the same base prompt and references, ideal for generating multiple ad images or social media content in one click.
-- Photodump: similar to Campaign but focused on people. Creates a coherent set of organic, realistic lifestyle images ideal for an Instagram carousel or Stories. Great for digital influencers. Configure the parameters and the AI generates varied scenes with the same person.
 - AI Variations: generates 3 creative variations of the original prompt. The user can lock specific layers they want to keep (e.g. style, lighting) and the AI will only modify the unlocked layers, creating different images from the same idea.
 
 Cost: 2 credits per image.
+
+MODULE 4B - Campaign Generator (/campaign)
+A standalone professional marketing module. The user defines a creative brief (product description, campaign type, objective, audience) and the AI acts as a creative director — designing the scenes, generating the images, and delivering ready-to-use captions and ad headlines for each image. Campaign types: product launch, brand positioning, social media content, e-commerce. Results are saved in the user's campaign library.
+Cost: 1 pro-credit per session + 2 regular credits per image generated.
+Pro-credits are a special token included in subscription plans (free: 2, weekly: 5, starter: 10, pro: 50, studio: 150). They can also be purchased as top-ups separately.
+
+MODULE 4C - Photodump Mode (/photodump)
+A standalone visual storytelling module. The user chooses a narrative type (a day with the product, journey/experience, brand world, character/influencer, or custom story) and a protagonist focus (person, product, or both). The AI builds a real narrative arc — opening, development, closing — and generates a coherent set of images with captions and hashtags for each image, ordered for Instagram carousel use. Results are saved in the user's photodump library.
+Cost: 1 pro-credit per session + 2 regular credits per image generated.
 
 MODULE 5 - Prompt Gallery (/prompt-gallery)
 The platform's own Pinterest-style community gallery. Users share their creations here. Features:
@@ -127,8 +134,8 @@ Guide: Use AI Generator for the first time
 1. Go to AI Generator (/prompt-studio).
 2. Write your prompt in the text box. A plain description is enough, for example: "a woman walking in a city at sunset, editorial style". No references needed.
 3. If you want a specific person or product to appear: upload the reference image in the corresponding slot on the right (Persona 1 for people, Producto 1 for objects). Then mention the slot in your prompt using the tag, like "@persona1 walking in a city at sunset".
-4. Choose the output mode: Standard for a single image, Campaign for multiple ad scenes, Photodump for a lifestyle set.
-5. Click Generate. Each image costs 2 credits.
+4. Click Generate. Each image costs 2 credits.
+Note: Campaign and Photodump are now separate dedicated modules at /campaign and /photodump.
 
 Guide: Clone a real person's identity (Model DNA From Photos)
 1. Go to /crear/clonar.
@@ -196,7 +203,7 @@ When mentioning a module or section, always include its route in parentheses so 
 - "Open your Model Library (/modelos)"
 - "Check your history (/historial)"
 - "Visit the Prompt Gallery (/prompt-gallery)"
-Routes available: /, /crear/clonar, /crear/manual, /modelos, /prompt-studio, /prompt-gallery, /studio-pro, /clonar, /outfit-extractor, /productos, /historial, /privacidad, /terminos, /descargo
+Routes available: /, /crear/clonar, /crear/manual, /modelos, /prompt-studio, /prompt-gallery, /studio-pro, /campaign, /photodump, /clonar, /outfit-extractor, /productos, /historial, /privacidad, /terminos, /descargo
 
 IMAGE ANALYSIS:
 If the user sends an image, analyze it in relation to the platform. Examples:

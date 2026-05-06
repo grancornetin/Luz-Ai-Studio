@@ -7,15 +7,13 @@ import GeneratedImages from './components/GeneratedImages';
 import PromptTemplateSelector from './components/PromptTemplateSelector';
 import PromptHistory, { historyStorage } from './components/PromptHistory';
 import PromptVariations from './components/PromptVariations';
-import CampaignGenerator from './components/CampaignGenerator';
-import PhotodumpMode from './components/PhotodumpMode';
 import NoCreditsModal from '../../components/shared/NoCreditsModal';
 
 import { usePromptComposer } from './hooks/usePromptComposer';
 import { PromptDNA } from './types/promptTypes';
 
 import {
-  Sparkles, ChevronDown, Zap, Megaphone, Images,
+  Sparkles, ChevronDown,
   Settings, Layers, History, AlertTriangle, RefreshCw,
 } from 'lucide-react';
 import { formatPrompt } from './utils/promptAutoFormatter';
@@ -23,7 +21,6 @@ import { ModelSelector } from '../../components/shared/ModelSelector';
 import { useAuth } from '../../modules/auth/AuthContext';
 import { imageCost } from '../../services/creditConfig';
 
-type OutputMode = 'standard' | 'campaign' | 'photodump';
 
 interface PromptComposerProps {
   onPublish: (imageUrl: string, promptText: string, promptDNA: PromptDNA) => void;
@@ -93,108 +90,6 @@ const ErrorBanner: React.FC<{ message: string; onRetry?: () => void }> = ({ mess
   </div>
 );
 
-// ── Output mode selector — pills en desktop, dropdown en mobile ──────
-const OutputModeSelector: React.FC<{
-  outputMode: OutputMode;
-  setOutputMode: (m: OutputMode) => void;
-  canUseBatch: boolean;
-  isLimited: boolean;
-}> = ({ outputMode, setOutputMode, canUseBatch, isLimited }) => {
-  const [dropdownOpen, setDropdownOpen] = React.useState(false);
-  const dropdownRef = React.useRef<HTMLDivElement>(null);
-
-  const tabs = [
-    { id: 'standard'  as OutputMode, Icon: Zap,       label: 'Standard',  color: 'bg-brand-600',  shadow: 'shadow-[0_8px_20px_-8px_rgba(255,116,139,0.6)]', unlocked: true },
-    { id: 'campaign'  as OutputMode, Icon: Megaphone, label: 'Campaign',  color: 'bg-violet-600', shadow: 'shadow-[0_8px_20px_-8px_rgba(124,58,237,0.6)]',  unlocked: canUseBatch },
-    { id: 'photodump' as OutputMode, Icon: Images,    label: 'Photodump', color: 'bg-pink-600',   shadow: 'shadow-[0_8px_20px_-8px_rgba(219,39,119,0.6)]',  unlocked: canUseBatch },
-  ];
-
-  const active = tabs.find(t => t.id === outputMode)!;
-
-  // Cierra dropdown al hacer click fuera
-  React.useEffect(() => {
-    if (!dropdownOpen) return;
-    const handle = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handle);
-    return () => document.removeEventListener('mousedown', handle);
-  }, [dropdownOpen]);
-
-  return (
-    <>
-      {/* ── MOBILE: dropdown ───────────────────────────────── */}
-      <div ref={dropdownRef} className="relative sm:hidden flex-shrink-0">
-        <button
-          onClick={() => setDropdownOpen(o => !o)}
-          className={`w-full flex items-center justify-between gap-2 px-4 py-3 rounded-2xl text-white text-[11px] font-black uppercase tracking-widest transition-all ${active.color} ${active.shadow}`}
-        >
-          <div className="flex items-center gap-2">
-            <active.Icon className="w-4 h-4" />
-            <span>{active.label}</span>
-          </div>
-          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`} />
-        </button>
-
-        {dropdownOpen && (
-          <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl z-20 animate-in fade-in slide-in-from-top-2 duration-150">
-            {tabs.map(t => {
-              const isActive = outputMode === t.id;
-              return (
-                <button
-                  key={t.id}
-                  disabled={!t.unlocked}
-                  onClick={() => { if (t.unlocked) { setOutputMode(t.id); setDropdownOpen(false); } }}
-                  className={`w-full flex items-center gap-3 px-4 py-3.5 text-[11px] font-black uppercase tracking-widest transition-all ${
-                    isActive
-                      ? 'text-white bg-white/10'
-                      : !t.unlocked
-                      ? 'text-slate-600 cursor-not-allowed'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  <t.Icon className="w-4 h-4 flex-shrink-0" />
-                  <span className="flex-1 text-left">{t.label}</span>
-                  {!t.unlocked && <span className="text-[8px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full font-black">PRO</span>}
-                  {t.unlocked && isLimited && !isActive && <span className="text-[8px] bg-amber-500/70 text-white px-1.5 py-0.5 rounded-full font-black">LIM</span>}
-                  {isActive && <div className={`w-2 h-2 rounded-full ${t.color}`} />}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ── DESKTOP: pills ─────────────────────────────────── */}
-      <div className="hidden sm:flex bg-slate-800/80 p-1.5 rounded-2xl gap-1 flex-shrink-0">
-        {tabs.map(t => {
-          const isActive = outputMode === t.id;
-          return (
-            <button
-              key={t.id}
-              onClick={() => t.unlocked && setOutputMode(t.id)}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                !t.unlocked
-                  ? 'text-slate-600 cursor-not-allowed opacity-60'
-                  : isActive
-                  ? `${t.color} ${t.shadow} text-white`
-                  : 'text-slate-500 hover:text-slate-300'
-              }`}
-            >
-              <t.Icon className="w-3.5 h-3.5" />
-              <span>{t.label}</span>
-              {!t.unlocked && <span className="text-[8px] bg-amber-500 text-white px-1 rounded font-black">PRO</span>}
-              {t.unlocked && isLimited && !isActive && <span className="text-[8px] bg-amber-500/70 text-white px-1 rounded font-black">LIM</span>}
-            </button>
-          );
-        })}
-      </div>
-    </>
-  );
-};
-
 // ════════════════════════════════════════════════════════════════
 // PromptComposer
 // ════════════════════════════════════════════════════════════════
@@ -217,24 +112,17 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
   const { credits, isAdmin } = useAuth();
 
   const [showAdvanced, setShowAdvanced] = React.useState(false);
-  const [outputMode, setOutputMode]     = React.useState<OutputMode>('standard');
   const [activeTab, setActiveTab]       = React.useState<'inputs' | 'results'>('inputs');
 
   // Apply copilot preset on mount
   React.useEffect(() => {
     if (!copilotPreset) return;
-    const mode = copilotPreset.mode as OutputMode;
-    if (mode === 'campaign' || mode === 'photodump' || mode === 'standard') {
-      setOutputMode(mode);
-    }
     if (copilotPreset.prompt) {
       setPromptText(decodeURIComponent(copilotPreset.prompt));
     }
   }, [copilotPreset]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const plan = credits?.plan ?? 'free';
-  const canUseBatch = isAdmin || ['pro', 'studio', 'starter'].includes(plan);
-  const isLimited   = !isAdmin && plan === 'starter';
 
   const safePromptText = typeof promptText === 'string' ? promptText : '';
   const usedTokens     = extractTokens(safePromptText);
@@ -322,29 +210,20 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
                 onAutoFormat={handleAutoFormat}
               />
 
-              {/* Modelo + Generar (solo en modo standard) */}
-              {outputMode === 'standard' && (
-                <div className="space-y-4">
-                  <ModelSelector value={modelId} onChange={setModelId} disabled={isGenerating} />
-                  <GenerateButton
-                    onClick={generate}
-                    loading={isGenerating}
-                    disabled={!safePromptText.trim() || !hasEnoughCredits}
-                    label="Generar imagen"
-                    loadingLabel="Sintetizando DNA…"
-                    imageCount={1}
-                    creditsAfter={creditsAfter}
-                  />
-                  {error && <ErrorBanner message={error} onRetry={generate} />}
-                </div>
-              )}
-
-              {/* Aviso modo no-standard */}
-              {outputMode !== 'standard' && (
-                <div className="text-center text-[11px] text-slate-400 py-3 px-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50">
-                  Modo <strong className={outputMode === 'campaign' ? 'text-violet-600' : 'text-pink-600'}>{outputMode}</strong> — la generación se controla desde el panel derecho.
-                </div>
-              )}
+              {/* Modelo + Generar */}
+              <div className="space-y-4">
+                <ModelSelector value={modelId} onChange={setModelId} disabled={isGenerating} />
+                <GenerateButton
+                  onClick={generate}
+                  loading={isGenerating}
+                  disabled={!safePromptText.trim() || !hasEnoughCredits}
+                  label="Generar imagen"
+                  loadingLabel="Sintetizando DNA…"
+                  imageCount={1}
+                  creditsAfter={creditsAfter}
+                />
+                {error && <ErrorBanner message={error} onRetry={generate} />}
+              </div>
             </section>
 
             {/* REFERENCIAS */}
@@ -431,48 +310,13 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
           {/* ══════════════ RIGHT PANEL (sticky) ══════════════ */}
           <div className={`lg:sticky lg:top-6 ${activeTab === 'inputs' ? 'hidden lg:block' : 'block'}`}>
             <div className="bg-slate-900 rounded-[56px] p-6 md:p-10 min-h-[600px] flex flex-col gap-5 shadow-2xl border-8 border-slate-800">
-
-              <OutputModeSelector
-                outputMode={outputMode}
-                setOutputMode={setOutputMode}
-                canUseBatch={canUseBatch}
-                isLimited={isLimited}
-              />
-
-              {/* Standard */}
-              {outputMode === 'standard' && (
-                generatedImages.length === 0 && !isGenerating
-                  ? <EmptyOutputState />
-                  : <GeneratedImages
-                      images={generatedImages}
-                      onPublish={(img) => onPublish(img, safePromptText, dna)}
-                    />
-              )}
-
-              {/* Campaign */}
-              {outputMode === 'campaign' && (
-                <div className="flex-1 overflow-y-auto">
-                  <CampaignGenerator
-                    basePrompt={safePromptText}
-                    dna={dna}
-                    references={activeReferenceUrls}
-                    copilotPreset={copilotPreset}
+              {generatedImages.length === 0 && !isGenerating
+                ? <EmptyOutputState />
+                : <GeneratedImages
+                    images={generatedImages}
+                    onPublish={(img) => onPublish(img, safePromptText, dna)}
                   />
-                </div>
-              )}
-
-              {/* Photodump */}
-              {outputMode === 'photodump' && (
-                <div className="flex-1 overflow-y-auto">
-                  <PhotodumpMode
-                    basePrompt={safePromptText}
-                    dna={dna}
-                    references={activeReferenceUrls}
-                    copilotPreset={copilotPreset}
-                  />
-                </div>
-              )}
-
+              }
             </div>
           </div>
 

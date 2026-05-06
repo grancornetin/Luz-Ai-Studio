@@ -39,11 +39,15 @@ async function callCreditsApi(action: string, payload: Record<string, unknown> =
 export type PlanId = 'free' | 'explorer' | 'starter' | 'pro' | 'studio' | 'admin';
 
 export interface UserCreditsDoc {
-  plan:                  PlanId;
-  planValidUntil?:       Timestamp;
-  creditsUsedThisPeriod: number;
-  topUpCredits:          number;
-  lastPeriodReset?:      Timestamp;
+  plan:                    PlanId;
+  planValidUntil?:         Timestamp;
+  creditsUsedThisPeriod:   number;
+  topUpCredits:            number;
+  lastPeriodReset?:        Timestamp;
+  // Pro-credits (Campaign/Photodump sessions)
+  proCreditsAvailable?:    number;
+  proCreditsUsedThisPeriod?: number;
+  proTopUpCredits?:        number;
 }
 
 // ── Límites por plan ──────────────────────────────────────────────────────────
@@ -144,7 +148,6 @@ export async function addTopUpCredits(_uid: string, amount: number, missionId: s
 }
 
 // ── getEffectiveCredits ───────────────────────────────────────────────────────
-// Devuelve los créditos disponibles efectivos para mostrar en UI.
 
 export async function getEffectiveCredits(uid: string): Promise<{
   available: number;
@@ -152,6 +155,8 @@ export async function getEffectiveCredits(uid: string): Promise<{
   period: number;
   periodUsed: number;
   plan: PlanId;
+  proCredits: number;
+  proTopUp: number;
 }> {
   const u      = await getUserCreditsDoc(uid);
   const limit  = getPeriodLimit(u.plan);
@@ -163,6 +168,29 @@ export async function getEffectiveCredits(uid: string): Promise<{
     period,
     periodUsed: u.creditsUsedThisPeriod,
     plan:       u.plan,
+    proCredits: (u.proCreditsAvailable ?? 0) + (u.proTopUpCredits ?? 0),
+    proTopUp:   u.proTopUpCredits ?? 0,
   };
+}
+
+// ── deductProCredit ───────────────────────────────────────────────────────────
+// Descuenta 1 pro-credit por sesión Campaign o Photodump.
+
+export async function deductProCredit(_uid: string): Promise<boolean> {
+  try {
+    const data = await callCreditsApi('deductPro', { cost: 1 });
+    return data?.ok === true;
+  } catch {
+    return false;
+  }
+}
+
+export async function refundProCredit(_uid: string): Promise<boolean> {
+  try {
+    const data = await callCreditsApi('refundPro', { cost: 1 });
+    return data?.ok === true;
+  } catch {
+    return false;
+  }
 }
 

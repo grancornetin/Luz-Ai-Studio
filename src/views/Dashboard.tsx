@@ -99,6 +99,36 @@ const MODULE_GROUPS = [
     ]
   },
   {
+    groupLabel: 'Campañas Pro',
+    groupColor: 'bg-brand-600',
+    modules: [
+      {
+        path: '/campaign',
+        title: 'CAMPAIGN GENERATOR',
+        subtitle: 'Director creativo IA',
+        description: 'Brief → escenas → imágenes + captions y titulares de anuncio. La IA diseña la campaña completa.',
+        icon: 'fa-megaphone',
+        accent: 'text-brand-600',
+        bg: 'bg-brand-50',
+        creditsGemini: 2,
+        creditsSeedream: null,
+        proCredit: true,
+      },
+      {
+        path: '/photodump',
+        title: 'PHOTODUMP MODE',
+        subtitle: 'Storyteller visual',
+        description: 'Sets de imágenes con narrativa real — como el photodump de un influencer. Captions incluidos.',
+        icon: 'fa-images',
+        accent: 'text-violet-600',
+        bg: 'bg-violet-50',
+        creditsGemini: 2,
+        creditsSeedream: null,
+        proCredit: true,
+      },
+    ]
+  },
+  {
     groupLabel: 'Herramientas',
     groupColor: 'bg-slate-700',
     modules: [
@@ -147,7 +177,7 @@ const PREVIEW_PLANS = ['free', 'weekly', 'starter', 'pro', 'studio'] as const;
 
 const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) => {
   const navigate = useNavigate();
-  const { profile, credits, stats, isAdmin, user, previewPlan, setPreviewPlan, signOut } = useAuth();
+  const { profile, credits, stats, isAdmin, user, previewPlan, setPreviewPlan, signOut, proCredits } = useAuth();
   const [activeTab, setActiveTab]     = useState<DashTab>('home');
   const [missions, setMissions]       = useState<UserMissions>({});
   const [completing, setCompleting]   = useState<string | null>(null);
@@ -565,7 +595,23 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
               />
             </div>
           )}
-          <div className="flex items-center justify-between mt-4 relative">
+          {/* Pro-credits indicator */}
+          <div className="mt-4 pt-4 border-t border-white/20 relative flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-white opacity-80" />
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest opacity-70">Pro-credits</p>
+                <p className="text-sm font-black leading-none">{isAdmin ? '∞' : proCredits} sesiones Campaign/Photodump</p>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/buy-credits')}
+              className="px-2.5 py-1.5 bg-white/20 hover:bg-white/30 text-white rounded-lg text-[9px] font-black uppercase tracking-widest transition-all"
+            >
+              + Comprar
+            </button>
+          </div>
+          <div className="flex items-center justify-between mt-3 relative">
             <span className="text-[10px] opacity-75">
               {isAdmin ? 'Acceso ilimitado' : `Plan ${planName}`}
             </span>
@@ -734,7 +780,15 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
                     </div>
                   )}
                 </div>
-                {mod.creditsGemini > 0 && (
+                {(mod as any).proCredit && (
+                  <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
+                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-brand-50 border border-brand-100 text-brand-600 rounded-lg text-[9px] font-black uppercase tracking-wide">
+                      <Zap className="w-2.5 h-2.5" />
+                      {isAdmin ? '∞' : proCredits} sesiones
+                    </span>
+                  </div>
+                )}
+                {!(mod as any).proCredit && mod.creditsGemini > 0 && (
                   <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
                     <Zap className="w-3 h-3 text-amber-400" />
                     <span className="t-meta whitespace-nowrap">{mod.creditsGemini} cr.</span>

@@ -49,6 +49,8 @@ import { startNotificationsListener, stopNotificationsListener } from './hooks/u
 import { AvatarProfile, ProductProfile } from './types';
 
 const NotificationsPanel = lazy(() => import('./views/NotificationsPanel'));
+const CampaignModule     = lazy(() => import('./modules/campaign/CampaignModule'));
+const PhotodumpModule    = lazy(() => import('./modules/photodump/PhotodumpModule'));
 
 const PLAN_STYLES: Record<string, { label: string; className: string }> = {
   free:    { label: 'Free',    className: 'bg-slate-100 text-slate-500' },
@@ -76,6 +78,14 @@ const MENU_GROUPS = [
       { path: '/prompt-gallery',  label: 'Galería de prompts',  sublabel: 'Prompt Gallery', icon: 'fa-images' },
       { path: '/studio-pro',      label: 'Contenido para redes',sublabel: 'UGC Studio',     icon: 'fa-mobile-screen-button' },
       { path: '/clonar',          label: 'Clonar escena',       sublabel: 'Scene Clone',    icon: 'fa-clone' },
+    ]
+  },
+  {
+    label: 'Campañas Pro',
+    icon: 'fa-megaphone',
+    items: [
+      { path: '/campaign',  label: 'Campaign Generator', sublabel: 'Director creativo IA', icon: 'fa-megaphone' },
+      { path: '/photodump', label: 'Photodump Mode',     sublabel: 'Storyteller visual',   icon: 'fa-images' },
     ]
   },
   {
@@ -415,6 +425,8 @@ const AppContent: React.FC = () => {
                   <Route path="/prompt-studio"  element={<PromptStudioView />} />
                   <Route path="/prompt-gallery" element={<PromptGalleryView />} />
                   <Route path="/studio-pro"     element={<ContentStudioProModule />} />
+                  <Route path="/campaign"       element={<CampaignModule />} />
+                  <Route path="/photodump"      element={<PhotodumpModule />} />
                   <Route path="/outfit-extractor" element={<OutfitExtractorModule />} />
                   <Route path="/clonar"         element={<CloneImageModule />} />
                   <Route path="/pricing"        element={<Pricing />} />
