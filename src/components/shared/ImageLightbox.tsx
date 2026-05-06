@@ -1,5 +1,5 @@
-import React, { useEffect, useCallback, useState } from 'react';
-import { X, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import React, { useEffect, useCallback, useState, useRef } from 'react';
+import { X, ChevronLeft, ChevronRight, Download, Share2 } from 'lucide-react';
 
 interface ImageLightboxProps {
   images: string[];
@@ -23,158 +23,190 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
   extraButton,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const [dragX, setDragX]     = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
 
   const currentImage = images[currentIndex];
   const hasPrev = currentIndex > 0;
   const hasNext = currentIndex < images.length - 1;
 
   const goPrev = useCallback(() => {
-    if (hasPrev) setCurrentIndex((i) => i - 1);
+    if (hasPrev) setCurrentIndex(i => i - 1);
   }, [hasPrev]);
 
   const goNext = useCallback(() => {
-    if (hasNext) setCurrentIndex((i) => i + 1);
+    if (hasNext) setCurrentIndex(i => i + 1);
   }, [hasNext]);
 
+  // Keyboard
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
       if (e.key === 'ArrowLeft') goPrev();
       if (e.key === 'ArrowRight') goNext();
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, [goPrev, goNext, onClose]);
 
+  // Lock body scroll
   useEffect(() => {
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };
   }, []);
 
+  // Touch handlers con umbral de swipe
   const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchStart(e.touches[0].clientX);
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const dx = e.touches[0].clientX - touchStartX.current;
+    const dy = Math.abs(e.touches[0].clientY - (touchStartY.current ?? 0));
+    // Solo arrastrar si el movimiento es más horizontal que vertical
+    if (dy < Math.abs(dx)) setDragX(dx);
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStart === null) return;
-    const diff = e.changedTouches[0].clientX - touchStart;
-    if (Math.abs(diff) > 50) {
-      if (diff > 0) goPrev();
+    if (touchStartX.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    if (Math.abs(dx) > 50) {
+      if (dx > 0) goPrev();
       else goNext();
     }
-    setTouchStart(null);
+    setDragX(0);
+    setIsDragging(false);
+    touchStartX.current = null;
+    touchStartY.current = null;
   };
 
   const handleDownload = () => {
     if (onDownload) {
       onDownload(currentImage, currentIndex);
     } else {
-      const link = document.createElement('a');
-      link.href = currentImage;
-      link.download = `image-${Date.now()}.jpg`;
-      link.click();
+      const a = document.createElement('a');
+      a.href = currentImage;
+      a.download = `imagen-${Date.now()}.jpg`;
+      a.click();
     }
-  };
-
-  const handleExtra = () => {
-    extraButton?.onClick(currentImage, currentIndex);
   };
 
   return (
     <div
-      className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex items-center justify-center"
-      onClick={onClose}
+      className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex flex-col"
       onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Close button */}
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 z-10 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
-        style={{ minWidth: 44, minHeight: 44 }}
-      >
-        <X size={24} />
-      </button>
-
-      {/* Download button */}
-      <button
-        onClick={handleDownload}
-        className="absolute top-4 right-16 z-10 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
-        style={{ minWidth: 44, minHeight: 44 }}
-      >
-        <Download size={24} />
-      </button>
-
-      {/* Extra button (e.g. Publish) */}
-      {extraButton && (
+      {/* ── BARRA SUPERIOR ────────────────────────────────── */}
+      <div className="flex-shrink-0 flex items-center justify-between px-4 pt-4 pb-2 safe-area-top">
+        {/* Contador */}
+        <div className="text-white/60 text-[11px] font-black uppercase tracking-widest">
+          {currentIndex + 1} / {images.length}
+          {metadata?.label && <span className="ml-2 text-white/40">· {metadata.label}</span>}
+        </div>
+        {/* Cerrar */}
         <button
-          onClick={handleExtra}
-          className="absolute top-4 right-28 z-10 p-2 bg-indigo-600 hover:bg-indigo-700 rounded-full text-white transition-colors flex items-center gap-1.5"
-          style={{ minWidth: 44, minHeight: 44 }}
+          onClick={onClose}
+          className="w-10 h-10 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full flex items-center justify-center text-white transition-colors"
         >
-          {extraButton.icon || <span>{extraButton.label}</span>}
+          <X size={20} />
         </button>
+      </div>
+
+      {/* ── IMAGEN CENTRAL ────────────────────────────────── */}
+      <div className="flex-1 flex items-center justify-center relative overflow-hidden px-2">
+        {/* Flecha prev — solo desktop */}
+        {hasPrev && (
+          <button
+            onClick={goPrev}
+            className="absolute left-2 z-10 hidden sm:flex w-11 h-11 bg-white/10 hover:bg-white/20 rounded-full items-center justify-center text-white transition-colors"
+          >
+            <ChevronLeft size={26} />
+          </button>
+        )}
+
+        {/* Imagen con drag visual */}
+        <div
+          className="relative max-w-full max-h-full flex items-center justify-center"
+          style={{
+            transform: isDragging ? `translateX(${dragX * 0.3}px)` : 'none',
+            transition: isDragging ? 'none' : 'transform 0.2s ease',
+          }}
+          onClick={(e) => {
+            // Solo cerrar si el click es directamente en el fondo oscuro, no en la imagen
+            if (e.target === e.currentTarget) onClose();
+          }}
+        >
+          <img
+            key={currentIndex}
+            src={currentImage}
+            alt={`Imagen ${currentIndex + 1}`}
+            className="max-w-full max-h-[75vh] sm:max-h-[85vh] object-contain rounded-xl shadow-2xl select-none animate-in fade-in duration-200"
+            draggable={false}
+          />
+        </div>
+
+        {/* Flecha next — solo desktop */}
+        {hasNext && (
+          <button
+            onClick={goNext}
+            className="absolute right-2 z-10 hidden sm:flex w-11 h-11 bg-white/10 hover:bg-white/20 rounded-full items-center justify-center text-white transition-colors"
+          >
+            <ChevronRight size={26} />
+          </button>
+        )}
+
+        {/* Hint swipe — solo mobile, desaparece al inicio */}
+        {images.length > 1 && (
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-white/25 text-[9px] font-bold uppercase tracking-widest sm:hidden pointer-events-none">
+            ← desliza →
+          </div>
+        )}
+      </div>
+
+      {/* ── DOTS ──────────────────────────────────────────── */}
+      {images.length > 1 && (
+        <div className="flex-shrink-0 flex justify-center gap-1.5 py-2">
+          {images.map((_, idx) => (
+            <button
+              key={idx}
+              onClick={() => setCurrentIndex(idx)}
+              className={`rounded-full transition-all duration-200 ${
+                idx === currentIndex
+                  ? 'w-5 h-2 bg-white'
+                  : 'w-2 h-2 bg-white/30 hover:bg-white/50'
+              }`}
+            />
+          ))}
+        </div>
       )}
 
-      {/* Image container */}
-      <div
-        className="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <img
-          src={currentImage}
-          alt={`Imagen ${currentIndex + 1}`}
-          className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
-        />
+      {/* ── BARRA INFERIOR DE ACCIONES ────────────────────── */}
+      <div className="flex-shrink-0 flex items-center gap-2 px-4 pb-6 pt-2 safe-area-bottom">
+        {/* Descarga */}
+        <button
+          onClick={handleDownload}
+          className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-white/10 hover:bg-white/18 active:bg-white/25 border border-white/10 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all"
+        >
+          <Download size={16} />
+          Descargar
+        </button>
 
-        {images.length > 1 && (
-          <>
-            {hasPrev && (
-              <button
-                onClick={goPrev}
-                className="absolute left-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
-                style={{ minWidth: 44, minHeight: 44 }}
-              >
-                <ChevronLeft size={32} />
-              </button>
-            )}
-            {hasNext && (
-              <button
-                onClick={goNext}
-                className="absolute right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
-                style={{ minWidth: 44, minHeight: 44 }}
-              >
-                <ChevronRight size={32} />
-              </button>
-            )}
-          </>
-        )}
-
-        {images.length > 1 && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-            {images.map((_, idx) => (
-              <button
-                key={idx}
-                onClick={() => setCurrentIndex(idx)}
-                className={`w-2 h-2 rounded-full transition-all ${
-                  idx === currentIndex ? 'bg-white w-4' : 'bg-white/40 hover:bg-white/60'
-                }`}
-              />
-            ))}
-          </div>
-        )}
-
-        {metadata && (
-          <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm rounded-lg px-3 py-1.5 text-white text-xs">
-            {metadata.label && <span>{metadata.label}</span>}
-            {metadata.date && <span className="ml-2 opacity-70">{metadata.date}</span>}
-            {metadata.credits && (
-              <span className="ml-2 bg-brand-600 px-1.5 py-0.5 rounded">
-                {metadata.credits} créditos
-              </span>
-            )}
-          </div>
+        {/* Extra (Publicar, etc.) */}
+        {extraButton && (
+          <button
+            onClick={() => extraButton.onClick(currentImage, currentIndex)}
+            className="flex-[1.4] flex items-center justify-center gap-2 py-3.5 bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-[0_8px_24px_-8px_rgba(255,116,139,0.5)] transition-all"
+          >
+            {extraButton.icon ?? <Share2 size={16} />}
+            {extraButton.label}
+          </button>
         )}
       </div>
     </div>

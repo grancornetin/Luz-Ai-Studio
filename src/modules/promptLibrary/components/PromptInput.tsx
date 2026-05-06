@@ -1,145 +1,175 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { WandSparkles } from 'lucide-react';
 
 interface PromptInputProps {
   value: string;
   onChange: (value: string) => void;
+  onAutoFormat?: () => void;
   placeholder?: string;
 }
 
 const MAX_HEIGHT = 260;
 
-const suggestions = [
-  "person1",
-  "person2",
-  "person3",
-  "person4",
-  "product1",
-  "product2",
-  "product3",
-  "product4"
+const SLOT_SUGGESTIONS = [
+  'person1', 'person2', 'person3', 'person4',
+  'product1', 'product2', 'product3', 'product4',
 ];
 
-const PromptInput: React.FC<PromptInputProps> = ({ value, onChange, placeholder }) => {
-
+const PromptInput: React.FC<PromptInputProps> = ({ value, onChange, onAutoFormat, placeholder }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mirrorRef   = useRef<HTMLDivElement>(null);
+  const [showMenu,   setShowMenu]   = useState(false);
+  const [filtered,   setFiltered]   = useState<string[]>([]);
+  const [cursorPos,  setCursorPos]  = useState(0);
+  const [isFocused,  setIsFocused]  = useState(false);
 
-  const [showMenu, setShowMenu] = useState(false);
-  const [filtered, setFiltered] = useState<string[]>([]);
-  const [cursorPos, setCursorPos] = useState(0);
-
+  // Auto-resize textarea
   useEffect(() => {
-
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    textarea.style.height = "auto";
-
-    const newHeight = Math.min(textarea.scrollHeight, MAX_HEIGHT);
-    textarea.style.height = `${newHeight}px`;
-
-    textarea.style.overflowY =
-      textarea.scrollHeight > MAX_HEIGHT ? "auto" : "hidden";
-
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
+    el.style.overflowY = el.scrollHeight > MAX_HEIGHT ? 'auto' : 'hidden';
   }, [value]);
 
+  // Sync mirror scroll with textarea scroll
+  const syncScroll = useCallback(() => {
+    if (textareaRef.current && mirrorRef.current) {
+      mirrorRef.current.scrollTop = textareaRef.current.scrollTop;
+    }
+  }, []);
+
   const handleChange = (text: string) => {
-
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const pos = textarea.selectionStart;
+    const el = textareaRef.current;
+    if (!el) return;
+    const pos = el.selectionStart;
     setCursorPos(pos);
-
     onChange(text);
-
     const beforeCursor = text.slice(0, pos);
     const match = beforeCursor.match(/@(\w*)$/);
-
     if (match) {
-
       const query = match[1].toLowerCase();
-
-      const results = suggestions.filter(s =>
-        s.toLowerCase().startsWith(query)
-      );
-
-      setFiltered(results);
+      setFiltered(SLOT_SUGGESTIONS.filter(s => s.toLowerCase().startsWith(query)));
       setShowMenu(true);
-
     } else {
-
       setShowMenu(false);
-
     }
-
   };
 
   const insertSuggestion = (suggestion: string) => {
-
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const text = value;
-
-    const before = text.slice(0, cursorPos);
-    const after = text.slice(cursorPos);
-
-    const newBefore = before.replace(/@\w*$/, `@${suggestion}`);
-
-    const newText = newBefore + after;
-
-    onChange(newText);
-
+    const el = textareaRef.current;
+    if (!el) return;
+    const before = value.slice(0, cursorPos).replace(/@\w*$/, `@${suggestion}`);
+    onChange(before + value.slice(cursorPos));
     setShowMenu(false);
-
-    setTimeout(() => {
-      textarea.focus();
-    }, 0);
+    setTimeout(() => el.focus(), 0);
   };
 
+  // Render text with @token highlights as HTML for the mirror layer
+  const renderHighlighted = (text: string) => {
+    if (!text) return '';
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/(@\w+)/g, '<mark style="background:transparent;color:var(--brand-600,#FF748B);font-weight:600;">$1</mark>')
+      // preserve newlines and spaces for mirror
+      .replace(/\n/g, '<br>')
+      .replace(/ /g, '&nbsp;');
+  };
+
+  const tokenCount = (value.match(/@\w+/g) || []).length;
+
   return (
+    <div className="relative">
+      <div
+        className={`relative rounded-3xl border-2 transition-all duration-200 overflow-hidden ${
+          isFocused
+            ? 'border-brand-400 shadow-[0_0_0_4px_rgba(255,116,139,0.12)] bg-white'
+            : 'border-slate-100 bg-slate-50'
+        }`}
+      >
+        {/* Mirror layer for token highlights — sits behind textarea */}
+        <div
+          ref={mirrorRef}
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none select-none overflow-hidden"
+          style={{
+            padding: '24px 24px 64px',
+            fontSize: 14,
+            lineHeight: '1.6',
+            fontFamily: 'inherit',
+            fontWeight: 500,
+            color: 'transparent',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            overflowY: 'hidden',
+          }}
+          dangerouslySetInnerHTML={{ __html: renderHighlighted(value) || '' }}
+        />
 
-    <div className="relative group">
+        {/* Real textarea — transparent text so mirror shows through */}
+        <textarea
+          ref={textareaRef}
+          value={value}
+          onChange={e => handleChange(e.target.value)}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => { setIsFocused(false); setShowMenu(false); }}
+          onScroll={syncScroll}
+          placeholder={placeholder || 'Escribe tu visión. Usa @ para invocar referencias, o aplica una plantilla arriba para empezar.'}
+          className="relative w-full bg-transparent outline-none resize-none leading-relaxed font-medium text-slate-800 placeholder:text-slate-400 placeholder:font-normal"
+          style={{
+            padding: '24px 24px 64px',
+            fontSize: 14,
+            minHeight: 140,
+            maxHeight: MAX_HEIGHT,
+            caretColor: 'var(--brand-600, #FF748B)',
+            color: value ? 'var(--slate-800, #1e293b)' : undefined,
+            // Hide text visually when mirror is active (highlights replace it)
+            WebkitTextFillColor: value ? 'transparent' : undefined,
+          }}
+        />
 
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={(e) => handleChange(e.target.value)}
-        placeholder={placeholder || "Escribe tu prompt aquí... usa @ para sugerencias"}
-        className="w-full bg-slate-50 border-2 border-slate-100 rounded-3xl p-6 text-slate-700 font-medium focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 transition-all outline-none min-h-[140px] resize-none leading-relaxed"
-        style={{ maxHeight: `${MAX_HEIGHT}px` }}
-      />
-
-      {showMenu && filtered.length > 0 && (
-
-        <div className="absolute left-6 bottom-16 bg-white border border-slate-200 shadow-xl rounded-xl p-2 z-20">
-
-          {filtered.map(s => (
-
-            <div
-              key={s}
-              onClick={() => insertSuggestion(s)}
-              className="px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-brand-50 rounded-lg cursor-pointer"
+        {/* Footer */}
+        <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-white/80 backdrop-blur-sm">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              {value.length} car.
+            </span>
+            {tokenCount > 0 && (
+              <span className="text-[10px] font-black text-brand-600 uppercase tracking-widest">
+                · {tokenCount} token{tokenCount !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+          {value.trim() && onAutoFormat && (
+            <button
+              type="button"
+              onClick={onAutoFormat}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-brand-600 bg-white border border-slate-100 hover:border-brand-200 rounded-full shadow-sm transition-all active:scale-95"
             >
-              @{s}
-            </div>
-
-          ))}
-
+              <WandSparkles className="w-3 h-3" />
+              Auto-format
+            </button>
+          )}
         </div>
-
-      )}
-
-      <div className="absolute bottom-4 right-6 flex items-center gap-2 pointer-events-none opacity-0 group-focus-within:opacity-100 transition-opacity">
-
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-          DNA Analysis Active
-        </span>
-
-        <div className="w-2 h-2 rounded-full bg-accent-500 animate-pulse"></div>
-
       </div>
 
+      {/* @mention dropdown */}
+      {showMenu && filtered.length > 0 && (
+        <div className="absolute left-4 z-30 mt-1 bg-white border border-slate-200 shadow-xl rounded-2xl p-2 min-w-[160px]">
+          {filtered.map(s => (
+            <button
+              key={s}
+              type="button"
+              onMouseDown={e => { e.preventDefault(); insertSuggestion(s); }}
+              className="w-full text-left px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-brand-50 hover:text-brand-700 rounded-xl transition-colors"
+            >
+              @{s}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

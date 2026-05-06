@@ -51,11 +51,11 @@ const NoCreditsModal: React.FC<NoCreditsModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-[500] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="bg-white w-full max-w-md rounded-[36px] shadow-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-200"
+        className="bg-white w-full sm:max-w-md rounded-t-[32px] sm:rounded-[36px] shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 fade-in duration-200 max-h-[90vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* HEADER */}
@@ -83,7 +83,7 @@ const NoCreditsModal: React.FC<NoCreditsModalProps> = ({
         </div>
 
         {/* BODY */}
-        <div className="p-6 space-y-5">
+        <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
 
           <p className="text-sm text-slate-600 font-medium leading-relaxed">
             Para continuar generando imágenes elige un plan. Los créditos se renuevan cada mes y nunca expiran durante el período de suscripción.

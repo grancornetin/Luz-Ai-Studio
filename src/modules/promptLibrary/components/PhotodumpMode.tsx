@@ -9,8 +9,6 @@ import { generationService, GenerationProgress } from '../services/generationSer
 import { PromptDNA } from '../types/promptTypes';
 import { downloadAsZip } from '../../../utils/imageUtils';
 import { ImageLightbox } from '../../../components/shared/ImageLightbox';
-import { FloatingActionBar } from '../../../components/shared/FloatingActionBar';
-import { useScrollFAB } from '../../../hooks/useScrollFAB';
 import { geminiService } from '../../../services/geminiService';
 import { newSessionId } from '../../../services/imageApiService';
 import { useAuth } from '../../auth/AuthContext';
@@ -102,8 +100,6 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({ basePrompt, dna, referenc
   const [error, setError]         = useState<string | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
-  const { isVisible: fabVisible } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: false });
-
   const hasReferences = references.length > 0;
 
   const handleGenerate = async () => {
@@ -275,44 +271,74 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({ basePrompt, dna, referenc
 
       {/* RESULTS */}
       {results.length > 0 && (
-        <div className="space-y-3">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            {results.length} imágenes · Photodump completo
-          </p>
-          <div className="columns-2 gap-3 space-y-3">
+        <div className="space-y-4">
+          {/* Header con contador y ZIP */}
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              {results.length} imágenes · Photodump completo
+            </p>
+            <button
+              onClick={downloadAllZip}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/8 hover:bg-white/15 border border-white/10 text-white text-[10px] font-black uppercase tracking-widest transition-all"
+            >
+              <Download className="w-3.5 h-3.5" />
+              ZIP
+            </button>
+          </div>
+
+          {/* Grid de miniaturas — 2 col en desktop, 2 col en mobile */}
+          <div className="grid grid-cols-2 gap-2.5">
             {results.map((img, i) => (
               <div
                 key={i}
-                className="group relative rounded-2xl overflow-hidden bg-slate-800 break-inside-avoid cursor-pointer"
+                className="group relative rounded-2xl overflow-hidden bg-slate-800 cursor-pointer border border-white/6 hover:border-white/20 transition-all"
+                style={{ aspectRatio: '3/4' }}
                 onClick={() => { setLightboxIndex(i); setLightboxOpen(true); }}
               >
-                <img src={img} className="w-full object-cover" alt={`Photodump ${i + 1}`} />
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <img src={img} className="w-full h-full object-cover" alt={`Photodump ${i + 1}`} />
+                {/* Badge número */}
+                <div className="absolute top-2 left-2 bg-slate-900/80 text-white text-[8px] font-black px-1.5 py-0.5 rounded-md">
+                  {i + 1}
+                </div>
+                {/* Overlay hover */}
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                   <button
-                    onClick={(e) => { e.stopPropagation(); downloadImage(img, i); }}
-                    className="bg-white/20 backdrop-blur-md text-white p-2 rounded-xl hover:bg-white/30"
+                    onClick={e => { e.stopPropagation(); downloadImage(img, i); }}
+                    className="bg-white/20 backdrop-blur-md text-white p-2 rounded-xl hover:bg-white/35 transition-colors"
+                    title="Descargar"
                   >
                     <Download className="w-4 h-4" />
                   </button>
                 </div>
               </div>
             ))}
+            {/* Placeholders mientras genera */}
             {isGenerating && progress && Array.from({
               length: Math.max(0, progress.total - results.length)
             }).map((_, i) => (
               <div
                 key={`ph-${i}`}
-                className={`aspect-[3/4] rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center break-inside-avoid ${
-                  i === 0 ? 'border-violet-500/50 animate-pulse' : ''
+                className={`rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center ${
+                  i === 0 ? 'border-violet-500/40 animate-pulse' : ''
                 }`}
+                style={{ aspectRatio: '3/4' }}
               >
                 {i === 0
-                  ? <Loader2 className="w-5 h-5 text-violet-500 animate-spin" />
-                  : <Image className="w-5 h-5 text-slate-700" />
+                  ? <Loader2 className="w-5 h-5 text-violet-400 animate-spin" />
+                  : <Image className="w-4 h-4 text-slate-700" />
                 }
               </div>
             ))}
           </div>
+
+          {/* Botón ZIP secundario al pie — siempre visible en mobile */}
+          <button
+            onClick={downloadAllZip}
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-pink-600 text-white text-[10px] font-black uppercase tracking-widest shadow-lg hover:opacity-90 active:scale-[0.98] transition-all"
+          >
+            <Download className="w-4 h-4" />
+            Descargar todo como ZIP ({results.length} imágenes)
+          </button>
         </div>
       )}
 
@@ -324,20 +350,6 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({ basePrompt, dna, referenc
           onClose={() => setLightboxOpen(false)}
           onDownload={(url, idx) => downloadImage(url, idx)}
           metadata={{ label: 'Photodump' }}
-        />
-      )}
-
-      {/* FAB */}
-      {results.length > 0 && fabVisible && (
-        <FloatingActionBar
-          isVisible={true}
-          primaryAction={{
-            label: 'Descargar ZIP',
-            icon: <Download className="w-4 h-4" />,
-            onClick: downloadAllZip,
-          }}
-          onClearSelection={() => setResults([])}
-          selectedCount={0}
         />
       )}
     </div>
