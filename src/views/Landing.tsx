@@ -332,7 +332,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border mb-7" style={{ background: 'rgba(124,58,237,0.12)', borderColor: 'rgba(124,58,237,0.3)', fontSize: 10, fontWeight: 700, color: 'rgba(232,121,249,0.9)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>
             <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#E879F9' }} />
-            Lo que antes costaba $500. Ahora cuesta $15.
+            De foto de celular a contenido profesional. En minutos.
           </div>
 
           {/* H1 — each line is nowrap, font-size forces fit */}
