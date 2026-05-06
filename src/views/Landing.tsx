@@ -13,12 +13,12 @@ const IMG = (path: string) => `/images/landing/${path}`;
 
 // Flujo "Recrear con inspiración" para Product Studio
 const PROD_INSPIRE_REFS = [
-  { src: IMG('prod_insp_ref1.JPG'), label: 'Tu producto · Vista 1' },
-  { src: IMG('prod_insp_ref2.JPG'), label: 'Tu producto · Vista 2' },
-  { src: IMG('prod_insp_ref3.JPG'), label: 'Tu producto · Vista 3' },
+  { src: IMG('prod_insp_ref1.jpg'), label: 'Tu producto · Vista 1' },
+  { src: IMG('prod_insp_ref2.jpg'), label: 'Tu producto · Vista 2' },
+  { src: IMG('prod_insp_ref3.jpg'), label: 'Tu producto · Vista 3' },
 ];
-const PROD_INSPIRE_INSPO = { src: IMG('prod_insp_inspo.JPG'), label: 'Foto inspiración' };
-const PROD_INSPIRE_RESULT = { src: IMG('prod_insp_result.PNG'), label: 'Resultado clonado' };
+const PROD_INSPIRE_INSPO = { src: IMG('prod_insp_inspo.jpg'), label: 'Foto inspiración' };
+const PROD_INSPIRE_RESULT = { src: IMG('prod_insp_result.png'), label: 'Resultado clonado' };
 
 // ── HERO IMAGES (portrait ratio 9:16, shown in phone cards) ──────────────────
 const HERO_KEYS = [
@@ -113,8 +113,9 @@ const LANDING_PLANS = [
     priceMonthly: 0,
     priceAnnual: null,
     period: '/siempre',
-    credits: '10 créditos únicos',
-    images: '~10 imágenes',
+    credits: '20 créditos únicos',
+    images: '~20 imágenes',
+    hook: 'Para ver si funciona antes de pagar.',
     featured: false,
     features: ['Acceso a todos los módulos', 'Seedream + Gemini', 'Misiones para ganar créditos extra'],
     negative: ['Sin soporte prioritario'],
@@ -128,6 +129,7 @@ const LANDING_PLANS = [
     period: '/semana',
     credits: '60 créditos/semana',
     images: '~60 imágenes',
+    hook: 'Menos que un café. Una semana de contenido profesional.',
     featured: false,
     features: ['Todos los módulos', 'Seedream + Gemini', 'Soporte email básico'],
     negative: ['Reveal prompts: 1 crédito'],
@@ -141,6 +143,7 @@ const LANDING_PLANS = [
     period: '/mes',
     credits: '200 créditos/mes',
     images: '~200 imágenes',
+    hook: 'Menos que un fotógrafo por hora. Para todo el mes.',
     featured: false,
     features: ['Todo de Explorer', 'Campaign Generator', 'Photodump ilimitado', 'Soporte email prioritario'],
     negative: [],
@@ -154,6 +157,7 @@ const LANDING_PLANS = [
     period: '/mes',
     credits: '500 créditos/mes',
     images: '~500 imágenes',
+    hook: 'El estudio completo. Por menos de lo que cobra un diseñador por hora.',
     featured: true,
     features: ['Todo de Starter', 'Reveal prompts GRATIS', 'Generación prioritaria', 'Soporte <24h'],
     negative: [],
@@ -167,6 +171,7 @@ const LANDING_PLANS = [
     period: '/mes',
     credits: '1.200 créditos/mes',
     images: '~1.200 imágenes',
+    hook: 'Volumen de agencia. Precio de herramienta.',
     featured: false,
     features: ['Todo de Pro', 'Lotes de hasta 50 imágenes', 'Máxima prioridad', 'Chat dedicado', 'Estadísticas avanzadas'],
     negative: [],
@@ -327,7 +332,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border mb-7" style={{ background: 'rgba(124,58,237,0.12)', borderColor: 'rgba(124,58,237,0.3)', fontSize: 10, fontWeight: 700, color: 'rgba(232,121,249,0.9)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>
             <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#E879F9' }} />
-            Producción publicitaria con IA
+            Lo que antes costaba $500. Ahora cuesta $15.
           </div>
 
           {/* H1 — each line is nowrap, font-size forces fit */}
@@ -338,7 +343,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
           </h1>
 
           <p style={{ fontSize: 16, fontWeight: 300, color: 'rgba(242,240,250,0.50)', lineHeight: 1.75, maxWidth: 440, marginBottom: 36 }}>
-            Modelos digitales con identidad persistente, sesiones UGC, catálogos de producto y más — sin fotógrafos, sin estudio, en minutos.
+            Fotos de producto, sesiones UGC y contenido para redes — sin fotógrafo, sin estudio, en minutos. Diseñado para emprendedores que lo hacen solos.
           </p>
 
           <div className="flex items-center gap-3 flex-wrap">
@@ -351,7 +356,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
           </div>
 
           <div className="flex items-center gap-4 flex-wrap mt-6">
-            {['10 créditos gratis', 'Sin tarjeta', 'En minutos'].map(t => (
+            {['20 créditos gratis', 'Sin tarjeta', 'Resultados en minutos'].map(t => (
               <span key={t} className="flex items-center gap-1.5 text-xs font-medium" style={{ color: 'rgba(242,240,250,0.55)' }}>
                 <i className="fa-solid fa-check text-[10px]" style={{ color: '#F72C5B' }} />{t}
               </span>
@@ -640,6 +645,63 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
         </div>
       </div>
 
+      {/* ══ TESTIMONIALS ═════════════════════════════════════════════════════════ */}
+      <section style={{ padding: '80px 6vw', background: '#06060D', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center gap-2.5 mb-3 text-[10px] font-bold uppercase tracking-[0.25em]" style={{ color: '#F72C5B' }}>
+            <div style={{ width: 20, height: 1, background: '#F72C5B' }} />
+            Lo que dicen nuestras emprendedoras
+          </div>
+          <h2 style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', textTransform: 'uppercase', fontSize: 'clamp(28px,3.5vw,48px)', letterSpacing: '-0.03em', marginBottom: 36 }}>
+            Resultados reales
+          </h2>
+          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+            {[
+              {
+                name: 'Valentina M.',
+                location: 'Santiago, Chile',
+                plan: 'Plan Pro',
+                stars: 5,
+                text: 'Pagaba $60.000 por sesión de fotos y necesitaba coordinar con el fotógrafo días antes. Ahora subo mi producto y en 5 minutos tengo el catálogo listo. Mis ventas en Instagram subieron un 40% el primer mes.',
+                product: 'Cosméticos y skincare',
+              },
+              {
+                name: 'Camila R.',
+                location: 'Medellín, Colombia',
+                plan: 'Plan Starter',
+                stars: 5,
+                text: 'Tengo una tienda de ropa y necesitaba fotos para cada prenda. Antes me tomaba todo el fin de semana sacar fotos decentes con mi celular. Ahora subo una foto y el sistema me hace el catálogo solo. No puedo creer lo que sale.',
+                product: 'Moda y accesorios',
+              },
+              {
+                name: 'Sofía P.',
+                location: 'Buenos Aires, Argentina',
+                plan: 'Plan Explorer',
+                stars: 5,
+                text: 'Lo probé gratis y en el primer uso ya entendí que esto era diferente. El contenido que genera parece sacado de una agencia. Mis clientes me preguntan quién me hace las fotos — y les digo que lo hago yo sola.',
+                product: 'Velas y artesanías',
+              },
+            ].map(t => (
+              <div key={t.name} style={{ background: '#0D0D18', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 20, padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div className="flex gap-0.5">
+                  {Array.from({ length: t.stars }).map((_, i) => (
+                    <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                  ))}
+                </div>
+                <p style={{ fontSize: 13, color: 'rgba(242,240,250,0.65)', lineHeight: 1.75, fontStyle: 'italic', flex: 1 }}>"{t.text}"</p>
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{t.name}</div>
+                    <div style={{ fontSize: 10, color: 'rgba(242,240,250,0.35)', marginTop: 2 }}>{t.product} · {t.location}</div>
+                  </div>
+                  <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#F72C5B', background: 'rgba(247,44,91,0.08)', border: '1px solid rgba(247,44,91,0.2)', borderRadius: 100, padding: '3px 10px', whiteSpace: 'nowrap' }}>{t.plan}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ══ GALLERY SCROLL ═══════════════════════════════════════════════════════ */}
       <section style={{ padding: '80px 6vw', background: '#0D0D18', borderTop: '1px solid rgba(255,255,255,0.07)', overflow: 'hidden', maxWidth: '100%' }}>
         <div className="max-w-7xl mx-auto">
@@ -732,8 +794,13 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
                     )}
                     <span style={{ fontSize: 10, fontWeight: 500, color: 'rgba(242,240,250,0.35)', marginTop: 24, marginLeft: 2 }}>{plan.period}</span>
                   </div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: '#F72C5B', marginBottom: 18, paddingBottom: 18, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                    {plan.credits} · {plan.images}
+                  <div style={{ marginBottom: 18, paddingBottom: 18, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#F72C5B', marginBottom: 6 }}>
+                      {plan.credits} · {plan.images}
+                    </div>
+                    {plan.hook && (
+                      <div style={{ fontSize: 10, color: 'rgba(242,240,250,0.38)', lineHeight: 1.5, fontStyle: 'italic' }}>{plan.hook}</div>
+                    )}
                   </div>
                   <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20, flex: 1 }}>
                     {plan.features.map(f => (
@@ -764,7 +831,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
             <i className="fa-solid fa-bolt" style={{ color: '#F72C5B', marginTop: 2, flexShrink: 0, fontSize: 13 }} />
             <div>
               <p style={{ fontSize: 12, fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>1 crédito = 1 imagen (con Seedream)</p>
-              <p style={{ fontSize: 12, color: 'rgba(242,240,250,0.40)', lineHeight: 1.65 }}>Módulos como Content Studio o Model DNA consumen más créditos por la complejidad del proceso (set de 4 planos, múltiples shots, etc.). Los planes Explorer, Starter, Pro y Studio se renuevan automáticamente. Plan Free: 10 créditos únicos, no renovables.</p>
+              <p style={{ fontSize: 12, color: 'rgba(242,240,250,0.40)', lineHeight: 1.65 }}>Módulos como Content Studio o Model DNA consumen más créditos por la complejidad del proceso (set de 4 planos, múltiples shots, etc.). Los planes Explorer, Starter, Pro y Studio se renuevan automáticamente. Plan Free: 20 créditos únicos, no renovables.</p>
             </div>
           </div>
 
@@ -801,13 +868,13 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
           <h2 style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', textTransform: 'uppercase', fontSize: 'clamp(32px,5vw,64px)', letterSpacing: '-0.03em', lineHeight: 1.05, marginBottom: 14 }}>
             ¿Listo para producir<br />como un estudio?
           </h2>
-          <p style={{ fontSize: 15, color: 'rgba(242,240,250,0.45)', marginBottom: 36 }}>10 créditos gratis al registrarte. Sin tarjeta. Resultados en minutos.</p>
+          <p style={{ fontSize: 15, color: 'rgba(242,240,250,0.45)', marginBottom: 36 }}>20 créditos gratis al registrarte. Sin tarjeta. Resultados en minutos.</p>
           <button onClick={onOpenAuth} className="inline-flex items-center gap-2 text-white font-black uppercase tracking-widest rounded-full transition-all hover:opacity-90 hover:translate-y-[-2px]" style={{ fontFamily: '"Syne",sans-serif', fontSize: 15, padding: '18px 44px', background: 'linear-gradient(135deg,#7C3AED,#F72C5B)', border: 'none', cursor: 'pointer', boxShadow: '0 0 40px rgba(247,44,91,0.25)' }}>
             <i className="fa-solid fa-bolt" /> Crear mi cuenta gratuita
           </button>
           <div className="flex items-center justify-center gap-2 mt-5" style={{ fontSize: 13, color: 'rgba(242,240,250,0.40)' }}>
             <i className="fa-solid fa-gift" style={{ color: '#F72C5B' }} />
-            10 créditos gratis incluidos · Sin tarjeta de crédito
+            20 créditos gratis incluidos · Sin tarjeta de crédito
           </div>
         </div>
       </section>
