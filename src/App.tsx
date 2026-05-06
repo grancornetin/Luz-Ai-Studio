@@ -97,9 +97,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     return (
       <div className="flex items-center justify-center min-h-screen w-full" style={{ background: '#06060D' }}>
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl flex items-center justify-center animate-pulse" style={{ background: '#F72C5B' }}>
-            <i className="fa-solid fa-bolt text-white text-xl"></i>
-          </div>
+          <img src="/icon-192.png" alt="Luz IA" className="animate-pulse" style={{ width: 64, height: 64, objectFit: 'contain' }} />
           <p className="text-xs font-black uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.3)' }}>Cargando...</p>
         </div>
       </div>
@@ -119,9 +117,7 @@ const LoginWall: React.FC<{ onOpen: () => void }> = ({ onOpen }) => {
     return (
       <div className="flex items-center justify-center min-h-screen w-full" style={{ background: '#06060D' }}>
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl flex items-center justify-center animate-pulse" style={{ background: '#F72C5B' }}>
-            <i className="fa-solid fa-bolt text-white text-xl"></i>
-          </div>
+          <img src="/icon-192.png" alt="Luz IA" className="animate-pulse" style={{ width: 64, height: 64, objectFit: 'contain' }} />
           <p className="text-xs font-black uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.3)' }}>Cargando sesión...</p>
         </div>
       </div>
@@ -132,9 +128,7 @@ const LoginWall: React.FC<{ onOpen: () => void }> = ({ onOpen }) => {
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
       <div className="max-w-md w-full space-y-8 text-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-20 h-20 rounded-[28px] flex items-center justify-center" style={{ background: '#F72C5B', boxShadow: '0 20px 60px rgba(247,44,91,0.35)' }}>
-            <i className="fa-solid fa-bolt text-white text-3xl"></i>
-          </div>
+          <img src="/favicon.png" alt="Luz IA" style={{ width: 80, height: 80, objectFit: 'contain', filter: 'drop-shadow(0 20px 40px rgba(247,44,91,0.4))' }} />
           <div>
             <h1 className="text-4xl font-black text-slate-900 uppercase italic tracking-tighter">LUZ IA</h1>
             <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mt-1">Plataforma de creación publicitaria con IA</p>
