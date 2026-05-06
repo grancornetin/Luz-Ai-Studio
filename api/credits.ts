@@ -118,6 +118,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ ok });
     }
 
+    // ── refund ─────────────────────────────────────────────────────────────────
+    // Devuelve créditos cuando una generación falla. Espejo exacto de deduct:
+    // revierte primero creditsUsedThisPeriod, luego topUpCredits si hace falta.
+    if (action === 'refund') {
+      const cost = Number(payload?.cost);
+      if (!cost || cost <= 0) return res.status(400).json({ error: 'Invalid cost' });
+
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(userRef);
+        if (!snap.exists) throw new Error('User not found');
+
+        const d    = snap.data()!;
+        if (d.plan === 'admin') return;
+
+        const used  = Number(d.creditsUsedThisPeriod) || 0;
+        const topUp = Number(d.topUpCredits)          || 0;
+
+        // Revertir en orden inverso al descuento: período primero, topUp después
+        const periodRefund = Math.min(cost, used);
+        const topUpRefund  = cost - periodRefund;
+
+        const updates: Record<string, any> = {
+          'credits.available': FieldValue.increment(cost),
+        };
+        if (periodRefund > 0) updates.creditsUsedThisPeriod = Math.max(0, used - periodRefund);
+        if (topUpRefund  > 0) updates.topUpCredits          = topUp + topUpRefund;
+
+        tx.update(userRef, updates);
+      });
+
+      return res.status(200).json({ ok: true });
+    }
+
     // ── resetPeriod ────────────────────────────────────────────────────────────
     // Comprueba si el período del usuario ya venció y resetea el contador.
     // El cliente lo llama al cargar créditos; el server decide si aplica.

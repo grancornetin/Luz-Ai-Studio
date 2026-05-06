@@ -9,6 +9,7 @@ import { promptBuilder } from '../services/promptBuilder';
 import { payloadValidator } from '../services/payloadValidator';
 import { useAuth } from '../../auth/AuthContext';
 import { CREDIT_COSTS, imageCost } from '../../../services/creditConfig';
+import { refundCredits } from '../../../services/creditsService';
 import { useModelSelection } from '../../../hooks/useModelSelection';
 import { newSessionId } from '../../../services/imageApiService';
 
@@ -160,16 +161,9 @@ export const usePromptComposer = () => {
 
     } catch (err: any) {
       setError(err?.message || 'Generation failed');
-      // El worker reembolsa en Firestore de forma asíncrona — polling breve
-      // para que el saldo en pantalla refleje el reembolso sin recargar.
       if (!isAdmin) {
-        let attempts = 0;
-        const pollId = { ref: 0 };
-        pollId.ref = window.setInterval(async () => {
-          await refreshCredits();
-          attempts++;
-          if (attempts >= 5) clearInterval(pollId.ref);
-        }, 2000);
+        await refundCredits(user!.uid, creditCost);
+        await refreshCredits();
       }
     } finally {
       setIsGenerating(false);

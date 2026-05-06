@@ -113,7 +113,7 @@ export async function reportShotResult(input: ReportShotInput): Promise<void> {
   const admin = await getAdmin();
   if (!admin) return; // no-op si Firebase Admin no está disponible
 
-  const { db, FieldValue } = admin;
+  const { db } = admin;
   const {
     uid, sessionId, module: moduleName, moduleLabel,
     totalShots, shotIndex, shotStatus, imageUrl, error, metadata = {},
@@ -129,16 +129,9 @@ export async function reportShotResult(input: ReportShotInput): Promise<void> {
     .collection('users').doc(uid)
     .collection('notifications').doc(sessionId);
 
-  const userRef = db.collection('users').doc(uid);
-
   try {
     await db.runTransaction(async (tx: any) => {
-      // Todas las lecturas primero — Firestore requiere que no haya
-      // escrituras antes de lecturas dentro de la misma transacción.
-      const [snap, userSnap] = await Promise.all([
-        tx.get(notifRef),
-        tx.get(userRef),
-      ]);
+      const snap = await tx.get(notifRef);
       const now = Date.now();
 
       const newShot: ShotRecord = {
@@ -149,28 +142,11 @@ export async function reportShotResult(input: ReportShotInput): Promise<void> {
         ...(error ? { error } : {}),
       };
 
-      // Helper: espejo exacto de la lógica de descuento en api/credits.ts.
-      // El descuento usa primero suscripción (período) y luego topUp como respaldo,
-      // así que el reembolso devuelve primero al período y el resto al topUp.
-      const buildRefundUpdate = (amount: number): Record<string, any> => {
-        if (!userSnap.exists) return {};
-        const d    = userSnap.data();
-        const used = Number(d.creditsUsedThisPeriod) || 0;
-        const topUp = Number(d.topUpCredits) || 0;
-
-        const periodRefund = Math.min(amount, used);
-        const topUpRefund  = amount - periodRefund;
-
-        const upd: Record<string, any> = {
-          'credits.available': FieldValue.increment(amount),
-        };
-        if (periodRefund > 0) upd.creditsUsedThisPeriod = Math.max(0, used - periodRefund);
-        if (topUpRefund  > 0) upd.topUpCredits          = topUp + topUpRefund;
-        return upd;
-      };
+      // El reembolso de créditos lo hace el cliente vía /api/credits?action=refund
+      // inmediatamente al detectar el fallo. El worker solo registra la notificación
+      // para el panel de avisos — no toca créditos para evitar duplicados.
 
       if (!snap.exists) {
-        // Primer (y único) shot que reporta — crear la notificación.
         const isSingleFailure = shotStatus === 'failed' && totalShots === 1;
         tx.set(notifRef, {
           id: sessionId,
@@ -189,11 +165,6 @@ export async function reportShotResult(input: ReportShotInput): Promise<void> {
           createdAt: now,
           updatedAt: now,
         });
-
-        if (isSingleFailure) {
-          const refundUpd = buildRefundUpdate(creditsPerShot);
-          if (Object.keys(refundUpd).length > 0) tx.update(userRef, refundUpd);
-        }
         return;
       }
 
@@ -201,7 +172,6 @@ export async function reportShotResult(input: ReportShotInput): Promise<void> {
       const data = snap.data() || {};
       const existingShots: ShotRecord[] = Array.isArray(data.shots) ? data.shots : [];
 
-      // Idempotencia: no duplicar si este shot ya fue reportado
       if (existingShots.some(s => s.index === shotIndex)) {
         console.log(`[Notifications] Shot ${shotIndex} of session ${sessionId} already reported — skipping`);
         return;
@@ -216,7 +186,7 @@ export async function reportShotResult(input: ReportShotInput): Promise<void> {
       let creditsToRefund = 0;
 
       if (allReported) {
-        if (failedCount === 0)      newStatus = 'completed';
+        if (failedCount === 0)         newStatus = 'completed';
         else if (completedCount === 0) newStatus = 'failed';
         else                           newStatus = 'partial';
         creditsToRefund = failedCount * creditsPerShot;
@@ -232,11 +202,6 @@ export async function reportShotResult(input: ReportShotInput): Promise<void> {
       if (creditsToRefund > 0) update.creditsRefunded = creditsToRefund;
 
       tx.update(notifRef, update);
-
-      if (creditsToRefund > 0) {
-        const refundUpd = buildRefundUpdate(creditsToRefund);
-        if (Object.keys(refundUpd).length > 0) tx.update(userRef, refundUpd);
-      }
     });
   } catch (err: any) {
     console.error(`[Notifications] reportShotResult failed for session ${sessionId}:`, err.message);

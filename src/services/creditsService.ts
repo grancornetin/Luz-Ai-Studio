@@ -125,6 +125,16 @@ export async function deductCredits(_uid: string, cost: number): Promise<boolean
   }
 }
 
+export async function refundCredits(_uid: string, cost: number): Promise<boolean> {
+  if (cost <= 0) return true;
+  try {
+    const data = await callCreditsApi('refund', { cost });
+    return data?.ok === true;
+  } catch {
+    return false;
+  }
+}
+
 // ── addTopUpCredits ───────────────────────────────────────────────────────────
 // Solo se llama para recompensas de misiones. Delega al servidor.
 // Los top-ups reales de pago pasan por api/webhooks/dodopayments.ts.
