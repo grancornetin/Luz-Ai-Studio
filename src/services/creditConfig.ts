@@ -65,15 +65,15 @@ export const PLANS = {
   free: {
     id: 'free',
     label: 'Free',
-    credits: 10,
+    credits: 20,
     priceMonthly: 0,
     priceAnchor: null,
     renews: false,
     color: 'slate',
-    approxImages: '~5–10 imágenes',
+    approxImages: '~10–20 imágenes',
     description: 'Para explorar la plataforma',
     features: [
-      '10 créditos (única vez)',
+      '20 créditos (única vez)',
       'Acceso a todos los módulos',
       'Misiones para ganar créditos gratis',
     ],

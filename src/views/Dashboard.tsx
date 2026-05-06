@@ -26,8 +26,8 @@ const MODULE_GROUPS = [
       {
         path: '/crear/clonar',
         title: 'CREAR MODELO',
-        subtitle: 'desde fotos',
-        description: 'Extrae el ADN biométrico de fotos reales para crear un modelo digital fiel.',
+        subtitle: 'desde tus fotos',
+        description: 'Crea tu modelo digital a partir de fotos reales. Úsalo en todos los módulos.',
         icon: 'fa-camera',
         accent: 'text-indigo-600',
         bg: 'bg-indigo-50',
@@ -38,7 +38,7 @@ const MODULE_GROUPS = [
         path: '/crear/manual',
         title: 'CREAR MODELO',
         subtitle: 'desde cero',
-        description: 'Diseña una identidad digital 100% nueva configurando cada rasgo.',
+        description: 'Diseña el modelo perfecto para tu marca sin necesitar fotos de nadie.',
         icon: 'fa-sliders',
         accent: 'text-violet-600',
         bg: 'bg-violet-50',
@@ -48,8 +48,8 @@ const MODULE_GROUPS = [
       {
         path: '/modelos',
         title: 'MIS MODELOS',
-        subtitle: 'Avatares guardados',
-        description: 'Accede a todos tus modelos creados y úsalos en cualquier módulo.',
+        subtitle: 'Tus modelos guardados',
+        description: 'Accede a todos tus modelos y úsalos en cualquier módulo cuando quieras.',
         icon: 'fa-user-astronaut',
         accent: 'text-purple-600',
         bg: 'bg-purple-50',
@@ -64,9 +64,9 @@ const MODULE_GROUPS = [
     modules: [
       {
         path: '/prompt-studio',
-        title: 'GENERADOR CON IA',
-        subtitle: 'Prompt Studio',
-        description: 'Crea imágenes con prompts avanzados, campañas y generación masiva.',
+        title: 'CREAR IMAGEN LIBRE',
+        subtitle: 'Describe lo que quieres',
+        description: 'Describe la imagen que necesitas y la IA la genera. Con galería de ejemplos listos para usar.',
         icon: 'fa-wand-magic-sparkles',
         accent: 'text-indigo-600',
         bg: 'bg-indigo-50',
@@ -76,8 +76,8 @@ const MODULE_GROUPS = [
       {
         path: '/studio-pro',
         title: 'CONTENIDO PARA REDES',
-        subtitle: 'UGC & Social',
-        description: 'Genera contenido tipo smartphone orgánico con tu modelo e identidad de marca.',
+        subtitle: 'Fotos estilo iPhone real',
+        description: 'Crea fotos de redes que parecen sacadas de un iPhone real. Con tu modelo, tu producto y tu estilo.',
         icon: 'fa-mobile-screen-button',
         accent: 'text-emerald-600',
         bg: 'bg-emerald-50',
@@ -87,8 +87,8 @@ const MODULE_GROUPS = [
       {
         path: '/clonar',
         title: 'CLONAR ESCENA',
-        subtitle: 'Scene Clone',
-        description: 'Replica una fotografía existente inyectando una nueva identidad.',
+        subtitle: 'Copia el estilo de cualquier foto',
+        description: 'Sube una foto que te guste y recrea ese mismo estilo con tu producto o modelo.',
         icon: 'fa-clone',
         accent: 'text-blue-600',
         bg: 'bg-blue-50',
@@ -104,8 +104,8 @@ const MODULE_GROUPS = [
       {
         path: '/outfit-extractor',
         title: 'EXTRAER PRENDAS',
-        subtitle: 'Outfit Extractor',
-        description: 'Separa cada prenda de un outfit y genera renders ghost individuales.',
+        subtitle: 'Separa tu ropa para catálogo',
+        description: 'Sube una foto con ropa y te damos cada prenda por separado, lista para publicar.',
         icon: 'fa-shirt',
         accent: 'text-purple-600',
         bg: 'bg-purple-50',
@@ -115,8 +115,8 @@ const MODULE_GROUPS = [
       {
         path: '/productos',
         title: 'FOTO DE PRODUCTO',
-        subtitle: 'Product Studio',
-        description: 'Analiza y genera fotografía comercial de tus productos.',
+        subtitle: 'Fotos de catálogo profesional',
+        description: 'Sube fotos simples de tu producto y obtén imágenes de catálogo listas para vender.',
         icon: 'fa-gem',
         accent: 'text-slate-700',
         bg: 'bg-slate-100',
@@ -229,7 +229,7 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
             <span>👋</span>
           </h1>
           <p className="t-body-sm mt-1">
-            Tu ecosistema de producción publicitaria está listo.
+            Tu estudio de contenido está listo. ¿Qué creamos hoy?
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -526,8 +526,8 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
             <h2 className="t-display text-3xl md:text-4xl text-slate-900">{displayName}</h2>
           </div>
           <p className="text-sm text-slate-500 font-medium leading-relaxed">
-            Tu ecosistema de producción publicitaria está listo.
-            {totalGens > 0 && <> Has generado <strong className="text-slate-700">{totalGens} imágenes</strong> en total.</>}
+            Tu estudio de contenido está listo. ¿Qué creamos hoy?
+            {totalGens > 0 && <> Ya generaste <strong className="text-slate-700">{totalGens} imágenes</strong> en total.</>}
           </p>
           <div className="flex flex-wrap gap-2 pt-1">
             <button
@@ -601,10 +601,10 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
         </div>
         <div className="grid grid-cols-2 gap-3">
           {[
-            { t: 'Modelo digital',   s: 'Desde tus fotos',   cost: '8 cr',     accent: 'text-violet-600', bg: 'bg-violet-50',  path: '/crear/clonar' },
-            { t: 'Contenido UGC',    s: 'Estilo iPhone',     cost: '12-28 cr', accent: 'text-pink-600',   bg: 'bg-pink-50',    path: '/studio-pro'   },
-            { t: 'Foto de producto', s: '5 ángulos pro',     cost: '2 cr/foto',accent: 'text-indigo-600', bg: 'bg-indigo-50',  path: '/productos'    },
-            { t: 'Clonar escena',    s: 'Tu cara aquí',      cost: '2 cr',     accent: 'text-emerald-600',bg: 'bg-emerald-50', path: '/clonar'       },
+            { t: 'Modelo digital',   s: 'Desde tus fotos',      cost: '8 cr',     accent: 'text-violet-600', bg: 'bg-violet-50',  path: '/crear/clonar' },
+            { t: 'Fotos para redes', s: 'Estilo iPhone real',   cost: '2-4 cr',   accent: 'text-pink-600',   bg: 'bg-pink-50',    path: '/studio-pro'   },
+            { t: 'Foto de producto', s: 'Lista para vender',    cost: '2 cr/foto',accent: 'text-indigo-600', bg: 'bg-indigo-50',  path: '/productos'    },
+            { t: 'Clonar escena',    s: 'Copia cualquier estilo',cost: '2 cr',    accent: 'text-emerald-600',bg: 'bg-emerald-50', path: '/clonar'       },
           ].map(a => (
             <button
               key={a.t}

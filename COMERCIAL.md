@@ -312,31 +312,31 @@ Usuarios que ya tienen experiencia con la plataforma y quieren más libertad cre
 
 ### Plan Gratis — "Para probar"
 - **20 créditos al registrarte** (único, no se renuevan)
-- Equivale a aproximadamente 10 imágenes en Prompt Studio
+- Equivale a aproximadamente 10–20 imágenes según el módulo
 - Acceso a todos los módulos para explorar
 - **Para quién:** Quien quiere ver si la plataforma funciona antes de comprometer dinero
 - **Conversión esperada:** El free tier debe dejar al usuario con ganas de más, no satisfecho
 
-### Plan Semanal — $4.99 USD/semana
-- **60 créditos por semana** (240 al mes)
+### Plan Explorer — $4.99 USD/semana
+- **60 créditos por semana** (~60 imágenes/semana)
 - Para el emprendedor que publica contenido intensamente esta semana y la siguiente no necesita nada
 - Ideal para quienes tienen lanzamientos puntuales o campañas específicas
 - **Mensaje clave:** *"Menos que un café para una semana de contenido profesional"*
 
-### Plan Mensual Starter — $9.99 USD/mes
-- **200 créditos mensuales**
+### Plan Starter — $14.99 USD/mes
+- **200 créditos mensuales** (~200 imágenes/mes)
 - Para el emprendedor que publica con regularidad pero no todos los días
 - El plan de "mantenimiento" — siempre tiene contenido sin gastar de más
 - **Mensaje clave:** *"Menos que un fotógrafo por hora, para todo el mes"*
 
-### Plan Mensual Pro — $14.99 USD/mes *(el más vendible)*
-- **400 créditos mensuales**
+### Plan Pro — $39.99 USD/mes *(el más vendible)*
+- **500 créditos mensuales** (~500 imágenes/mes)
 - Para el emprendedor que publica diariamente y necesita variedad
-- Permite usar todos los módulos con frecuencia real
+- Incluye revelado de prompts gratis y generación prioritaria
 - **Mensaje clave:** *"El estudio de contenido completo, por menos de lo que cobra un diseñador por hora"*
 
-### Plan Studio — $39.99 USD/mes
-- **1500 créditos mensuales**
+### Plan Studio — $99.99 USD/mes
+- **1200 créditos mensuales** (~1200 imágenes/mes)
 - Para agencias, freelancers o marcas con catálogo amplio
 - Produce contenido para múltiples productos o múltiples clientes
 - **Mensaje clave:** *"Volumen de agencia, precio de herramienta"*
