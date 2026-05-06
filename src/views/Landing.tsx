@@ -302,9 +302,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
         scrolled ? 'py-3 bg-[#06060D]/96 backdrop-blur-xl border-b border-white/[0.06]' : 'py-5'
       }`}>
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#7C3AED,#F72C5B)', boxShadow: '0 0 16px rgba(247,44,91,0.3)', flexShrink: 0 }}>
-            <img src="/icon-192.png" alt="LUZ IA" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 3 }} />
-          </div>
+          <img src="/favicon.png" alt="LUZ IA" style={{ width: 32, height: 32, objectFit: 'contain', flexShrink: 0 }} />
           <span style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', letterSpacing: '-0.02em', fontSize: '18px', textTransform: 'uppercase' }}>LUZ IA</span>
         </div>
         <div className="hidden md:flex items-center gap-6">
@@ -882,9 +880,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
       {/* ══ FOOTER ═══════════════════════════════════════════════════════════════ */}
       <footer style={{ borderTop: '1px solid rgba(255,255,255,0.07)', padding: '36px 6vw', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
         <div className="flex items-center gap-2.5" style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', textTransform: 'uppercase', fontSize: 16, letterSpacing: '-0.02em' }}>
-          <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg,#7C3AED,#F72C5B)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
-            <img src="/icon-192.png" alt="LUZ IA" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 2 }} />
-          </div>
+          <img src="/favicon.png" alt="LUZ IA" style={{ width: 28, height: 28, objectFit: 'contain', flexShrink: 0 }} />
           LUZ IA
         </div>
         <div className="flex gap-6 flex-wrap">
