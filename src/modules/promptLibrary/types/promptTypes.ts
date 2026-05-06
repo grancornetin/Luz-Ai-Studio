@@ -103,17 +103,20 @@ export type SavedPrompt = {
 // ==============================
 // 🧩 REFERENCES
 // ==============================
-export type ReferenceType = 'product' | 'person' | 'style'
+export type ReferenceType = 'product' | 'person' | 'outfit' | 'scene'
 export type ReferencePriority = 'low' | 'medium' | 'high'
 export type ReferenceRole =
   | 'person1' | 'person2' | 'person3' | 'person4'
   | 'product1' | 'product2' | 'product3' | 'product4'
-  | 'style1'
+  | 'outfit1' | 'outfit2' | 'outfit3' | 'outfit4'
+  | 'scene1'
 
 export interface ReferenceSlot {
   id: string
   type: ReferenceType
   role?: ReferenceRole
+  /** For outfit slots: which person this outfit is assigned to */
+  personIndex?: 1 | 2 | 3 | 4
   imageUrl: string | null
   label: string
   priority?: ReferencePriority

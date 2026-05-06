@@ -337,6 +337,60 @@ export const TUTORIAL_CONFIGS: Record<string, TutorialStep[]> = {
     },
   ],
 
+  // ── PROMPT DNA ───────────────────────────
+  promptDNA: [
+    {
+      icon: 'fa-dna',
+      color: 'bg-brand-600 text-white',
+      title: '¿Qué es el Prompt DNA?',
+      description: 'El DNA descompone tu prompt en partes separadas: estilo, persona, producto, luz, fondo, composición y detalles. Te permite ver de un vistazo qué dice cada parte y cambiarlo sin tener que reescribir todo el prompt.',
+    },
+    {
+      icon: 'fa-hand-pointer',
+      color: 'bg-indigo-600 text-white',
+      title: 'Clic para editar cualquier bloque',
+      description: 'Cada bloque de colores representa una parte del prompt. Hacé clic en cualquiera para editarlo directamente. Confirmá con Enter o cancelá con Escape. El prompt se actualiza automáticamente.',
+      tip: 'Cada color tiene un significado: violeta = estilo, azul = persona, verde = producto, ámbar = luz, gris = fondo, rosa = composición, naranja = detalles.',
+    },
+    {
+      icon: 'fa-plus',
+      color: 'bg-emerald-600 text-white',
+      title: 'Agregar bloques vacíos',
+      description: 'Al final aparecen los bloques que el prompt no tiene todavía. Podés hacer clic en ellos para agregar esa dimensión al prompt — por ejemplo agregar una descripción de luz si el prompt no la tiene.',
+    },
+    {
+      icon: 'fa-lightbulb',
+      color: 'bg-amber-600 text-white',
+      title: '¿Cuándo usar el DNA?',
+      description: 'Cuando generaste una imagen que está "casi bien" pero algo no cierra. En lugar de reescribir todo, identificás qué bloque es el problema (ej: la composición) y cambiás solo eso. Mucho más rápido y preciso.',
+      tip: 'El bloque "Detalles" es el más flexible — ahí van los elementos técnicos específicos. Si algo sobra, borralo directamente del bloque.',
+    },
+  ],
+
+  // ── PLANTILLAS ────────────────────────────
+  promptTemplates: [
+    {
+      icon: 'fa-layer-group',
+      color: 'bg-slate-700 text-white',
+      title: '¿Qué son las plantillas?',
+      description: 'Las plantillas son puntos de partida profesionales para distintos tipos de fotografía. Cada plantilla trae un DNA pre-configurado con estilo, iluminación, composición y detalles listos para usar.',
+    },
+    {
+      icon: 'fa-eye',
+      color: 'bg-indigo-600 text-white',
+      title: 'Previsualizá antes de aplicar',
+      description: 'Al hacer clic en una plantilla se abre un modal con cada bloque del DNA visible. Podés leer qué trae la plantilla, entender si se adapta a lo que necesitás, y editarlo antes de aplicarlo.',
+      tip: 'No todas las plantillas van a encajar perfectamente. El paso de preview existe para que puedas ajustar — por ejemplo cambiar "front camera perspective" por "rear camera" si querés un look diferente.',
+    },
+    {
+      icon: 'fa-pencil',
+      color: 'bg-violet-600 text-white',
+      title: 'Editá lo que no aplica',
+      description: 'Hacé clic en cualquier bloque del modal para editarlo. El bloque "Detalles" suele tener referencias técnicas muy específicas (como "front camera wide angle") que a veces no aplican a tu caso — simplemente borrá o cambiá lo que no querés.',
+      tip: 'También podés vaciar un bloque si no lo necesitás. Por ejemplo si la plantilla tiene "portrait model" pero vos no estás incluyendo persona en el prompt.',
+    },
+  ],
+
   // ── AI GENERATOR (PROMPT STUDIO) ─────────
   aiGenerator: [
     {

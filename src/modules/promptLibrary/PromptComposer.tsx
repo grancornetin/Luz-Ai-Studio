@@ -1,7 +1,6 @@
 import React from 'react';
 import PromptInput from './components/PromptInput';
-import PromptDNAAnalyzer from './components/PromptDNAAnalyzer';
-import PromptDNAEditor from './components/PromptDNAEditor';
+import PromptDNAPanel from './components/PromptDNAPanel';
 import ReferenceSlots from './components/ReferenceSlots';
 import GenerateButton from '../../components/shared/GenerateButton';
 import GeneratedImages from './components/GeneratedImages';
@@ -208,7 +207,7 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
 }) => {
   const {
     promptText, setPromptText,
-    dna, slots,
+    dna, updateDNA, slots,
     uploadReference, removeReference, setPriority, toggleLock,
     generatedImages, isGenerating, error, generate,
     showNoCredits, closeNoCredits,
@@ -402,10 +401,8 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
               </button>
 
               {showAdvanced && (
-                <div className="space-y-7 mt-7 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <PromptDNAAnalyzer dna={dna} />
-                  <div className="h-px bg-slate-100" />
-                  <PromptDNAEditor dna={dna} onUpdate={() => {}} />
+                <div className="mt-7 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <PromptDNAPanel dna={dna} onUpdate={updateDNA} />
                 </div>
               )}
             </section>
