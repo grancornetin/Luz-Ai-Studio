@@ -176,11 +176,14 @@ person floating or appearing pasted onto the background
 `;
 
 // Negative prompt corto para shots derivados (evita timeout)
+// REFORZADO para evitar promediado del rostro
 const NEGATIVE_SHORT = `
 face replacement, identity change, different person, different face,
 different hair color, different hair texture, different eye color,
 different bone structure, averaging face with other references,
-using REF0 person instead of face reference person,
+blending features from REF0 and faceRef, using REF0 face instead of faceRef,
+interpolating between faceRef and REF0, different nose shape, different eye shape,
+different jaw line, different chin, different skin undertone,
 composite image, face pasted over body, face reference used as overlay,
 collage artifact, photomontage, reference image inserted as layer,
 beautification, skin smoothing, editorial look, studio lighting,
@@ -915,9 +918,6 @@ FORBIDDEN: scene redesign, person floating over background,
 }
 
 // ===================================================================
-// MOTOR DE GENERACIÓN CON POLLING
-// ===================================================================
-// ===================================================================
 // ADAPTADOR SEEDREAM — AISLADO DEL FLUJO GEMINI
 // ===================================================================
 // IMPORTANTE:
@@ -1024,6 +1024,9 @@ NEGATIVE:
 ${negativePrompt}`;
 }
 
+// ===================================================================
+// MOTOR DE GENERACIÓN CON POLLING
+// ===================================================================
 async function generateWithPolling(
   prompt: string,
   refs: (string | null)[],
@@ -1282,6 +1285,7 @@ UNIVERSAL RULES:
 
   // ──────────────────────────────────────────────────────────────
   // generateDerivedShotAsync — GENERA SHOT DERIVADO CON POLLING
+  // REFORZADO CONTRA DRIFT: orden de referencias, instrucción NO AVERAGE
   // ──────────────────────────────────────────────────────────────
   async generateDerivedShotAsync(
     image0: string,
@@ -1316,7 +1320,7 @@ UNIVERSAL RULES:
       console.warn(`[UGC] No directive found for ${shotKey}, usando fallback`);
       const fallbackPrompt = `
 ⚠️⚠️⚠️ IDENTITY LOCK — ABSOLUTE PRIORITY ⚠️⚠️⚠️
-References 2, 3, and 4 are the FACE IDENTITY. This is the ONLY person allowed.
+The face identity reference is the ONLY person allowed.
 Copy their face EXACTLY: bone structure, eye color/shape, hair color/texture, skin tone.
 Do NOT substitute, average, or replace this person for any reason.
 
@@ -1328,7 +1332,8 @@ Keep everything else identical to REF0 and the references.
 Same color temperature as REF0. Same ambient light. Same environment.
 Natural UGC aesthetic. NO beautification. NO studio polish.`;
 
-      const refs = [image0, faceRef, faceRef, faceRef];
+      // ORDEN CORREGIDO: faceRef primero y repetido, luego image0
+      const refs = [faceRef, faceRef, faceRef, image0];
       if (outfitRef) refs.push(outfitRef);
       if (productRef && productIsRelevant !== false) refs.push(productRef);
       if (sceneRef) refs.push(sceneRef);
@@ -1372,8 +1377,14 @@ The body may change position. The face NEVER changes.
     const prompt = `
 ⚠️⚠️⚠️ IDENTITY LOCK — READ THIS FIRST BEFORE ANYTHING ELSE ⚠️⚠️⚠️
 
-References 2 and 3 in this request are the FACE IDENTITY.
-This is the ONLY person permitted in this image.
+🔴🔴🔴 CRITICAL: DO NOT AVERAGE THIS FACE WITH REF0 OR ANY OTHER IMAGE.
+The face reference images in this request are the ONLY source of truth for identity.
+If REF0 shows a slightly different angle, IGNORE REF0's face and use ONLY the face reference.
+DO NOT create a blended or averaged face. The face reference is the ground truth. 🔴🔴🔴
+
+The face identity reference appears MULTIPLE TIMES at the beginning of the reference list.
+This is intentional. It means: this face is NON-NEGOTIABLE. Override everything else.
+
 - Copy their face EXACTLY: bone structure, eye shape, eye color, nose, lips, jaw, chin, brow shape.
 - Copy their hair EXACTLY: color, texture, length, wave pattern.
 - Copy their skin tone EXACTLY: undertone, warmth, complexion.
@@ -1387,8 +1398,8 @@ ${driftGuard}
 CREATE A NEW PHOTO FROM THE SAME SESSION AS REF0.
 
 REFERENCE GUIDE:
-- REF0 (ref 1): establishes the environment, lighting, and visual world of the session.
-- FACE REF (refs 2 and 3): establishes the IDENTITY. This OVERRIDES REF0 for who the person is.
+- FACE REF (first images): establishes the IDENTITY. This OVERRIDES REF0 for who the person is.
+- REF0 (later image): establishes the environment, lighting, and visual world of the session.
 ${outfitRef ? '- OUTFIT REF: establishes the exact garments. Must be reproduced identically.' : ''}
 ${productRef ? '- PRODUCT REF: establishes the exact product. Must be reproduced identically.' : ''}
 ${sceneRef ? '- SCENE REF: establishes the exact environment. Must be reproduced identically.' : ''}
@@ -1419,7 +1430,7 @@ ${ref0AnalysisBlock}
 ${directivePrompt}
 
 FINAL CHECKLIST (apply before finalizing):
-✓ The person's face matches face references (refs 2 and 3) exactly.
+✓ The person's face matches face references exactly.
 ✓ The outfit matches outfit reference (if provided) exactly.
 ✓ The product matches product reference (if provided) exactly.
 ✓ The scene matches scene/REF0 exactly — no redesign.
@@ -1428,10 +1439,9 @@ FINAL CHECKLIST (apply before finalizing):
 ✓ Natural UGC iPhone quality — real skin texture, organic lighting.
 ✓ The shot role is correctly executed (no role mixing).`;
 
-    // IDENTITY-FIRST refs: REF0 primero (establece el mundo visual),
-    // luego faceRef TRES veces para que el modelo lo priorice sobre cualquier otra referencia.
-    // El número de repeticiones del faceRef compensa el peso que el modelo da a REF0.
-    const refs: (string | null)[] = [image0, faceRef, faceRef, faceRef];
+    // ORDEN CORREGIDO: faceRef primero y repetido, luego image0
+    // Esto da máximo peso a la identidad facial sobre el contexto visual de REF0
+    const refs: (string | null)[] = [faceRef, faceRef, faceRef, image0];
     if (outfitRef) refs.push(outfitRef);
     if (productRef && productIsRelevant !== false) refs.push(productRef);
     if (sceneRef) refs.push(sceneRef);

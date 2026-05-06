@@ -30,8 +30,8 @@ const CheckoutSuccess       = lazy(() => import('./views/CheckoutSuccess'));
 const CheckoutCancel        = lazy(() => import('./views/CheckoutCancel'));
 
 const LazyFallback = (
-  <div className="flex items-center justify-center h-screen">
-    <div className="animate-spin w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full" />
+  <div className="flex items-center justify-center h-screen bg-[#06060D]">
+    <div className="animate-spin w-8 h-8 border-4 border-t-transparent rounded-full" style={{ borderColor: '#F72C5B', borderTopColor: 'transparent' }} />
   </div>
 );
 
@@ -95,12 +95,12 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   const { user, loading } = useAuth();
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen w-full bg-slate-50">
-        <div className="flex flex-col items-center gap-4 opacity-40">
-          <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center animate-pulse">
+      <div className="flex items-center justify-center min-h-screen w-full" style={{ background: '#06060D' }}>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center animate-pulse" style={{ background: '#F72C5B' }}>
             <i className="fa-solid fa-bolt text-white text-xl"></i>
           </div>
-          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Cargando...</p>
+          <p className="text-xs font-black uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.3)' }}>Cargando...</p>
         </div>
       </div>
     );
@@ -117,12 +117,12 @@ const LoginWall: React.FC<{ onOpen: () => void }> = ({ onOpen }) => {
   // para evitar que el usuario vea "Iniciar sesión" después de autenticarse.
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen w-full bg-slate-50">
-        <div className="flex flex-col items-center gap-4 opacity-40">
-          <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center animate-pulse">
+      <div className="flex items-center justify-center min-h-screen w-full" style={{ background: '#06060D' }}>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center animate-pulse" style={{ background: '#F72C5B' }}>
             <i className="fa-solid fa-bolt text-white text-xl"></i>
           </div>
-          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Cargando sesión...</p>
+          <p className="text-xs font-black uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.3)' }}>Cargando sesión...</p>
         </div>
       </div>
     );
@@ -132,7 +132,7 @@ const LoginWall: React.FC<{ onOpen: () => void }> = ({ onOpen }) => {
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
       <div className="max-w-md w-full space-y-8 text-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-20 h-20 bg-indigo-600 rounded-[28px] flex items-center justify-center shadow-2xl shadow-indigo-200">
+          <div className="w-20 h-20 rounded-[28px] flex items-center justify-center" style={{ background: '#F72C5B', boxShadow: '0 20px 60px rgba(247,44,91,0.35)' }}>
             <i className="fa-solid fa-bolt text-white text-3xl"></i>
           </div>
           <div>
@@ -142,31 +142,34 @@ const LoginWall: React.FC<{ onOpen: () => void }> = ({ onOpen }) => {
         </div>
         <div className="grid grid-cols-2 gap-3 text-left">
           {[
-            { icon: 'fa-wand-magic-sparkles', label: 'Generador con IA',    color: 'bg-indigo-50 text-indigo-600' },
-            { icon: 'fa-dna',                 label: 'Crear modelo',         color: 'bg-purple-50 text-purple-600' },
-            { icon: 'fa-clone',               label: 'Clonar escena',        color: 'bg-blue-50 text-blue-600' },
-            { icon: 'fa-mobile-screen-button', label: 'Contenido para redes', color: 'bg-emerald-50 text-emerald-600' },
+            { icon: 'fa-wand-magic-sparkles',  label: 'Generador con IA',     color: 'rgba(247,44,91,0.08)',  iconColor: '#F72C5B' },
+            { icon: 'fa-dna',                  label: 'Crear modelo',          color: 'rgba(124,58,237,0.08)', iconColor: '#7C3AED' },
+            { icon: 'fa-clone',                label: 'Clonar escena',         color: 'rgba(99,179,237,0.1)',  iconColor: '#63B3ED' },
+            { icon: 'fa-mobile-screen-button', label: 'Contenido para redes',  color: 'rgba(16,185,129,0.08)', iconColor: '#10B981' },
           ].map((item, i) => (
             <div key={i} className="bg-white p-4 rounded-2xl border border-slate-100 flex items-center gap-3">
-              <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${item.color}`}>
-                <i className={`fa-solid ${item.icon} text-sm`}></i>
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: item.color }}>
+                <i className={`fa-solid ${item.icon} text-sm`} style={{ color: item.iconColor }}></i>
               </div>
               <span className="text-xs font-black text-slate-700 uppercase tracking-tight">{item.label}</span>
             </div>
           ))}
         </div>
-        <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4">
-          <p className="text-xs font-black text-indigo-600 uppercase tracking-widest">🎁 20 créditos gratuitos al registrarte</p>
+        <div className="rounded-2xl p-4" style={{ background: 'rgba(247,44,91,0.08)', border: '1px solid rgba(247,44,91,0.2)' }}>
+          <p className="text-xs font-black uppercase tracking-widest" style={{ color: '#F72C5B' }}>🎁 20 créditos gratuitos al registrarte</p>
         </div>
-        <button onClick={onOpen} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200">
+        <button onClick={onOpen} className="w-full py-5 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all" style={{ background: '#F72C5B', boxShadow: '0 8px 30px rgba(247,44,91,0.3)' }}
+          onMouseOver={e => (e.currentTarget as HTMLElement).style.opacity = '0.9'}
+          onMouseOut={e => (e.currentTarget as HTMLElement).style.opacity = '1'}
+        >
           Ingresar / Crear cuenta
         </button>
         <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
-          <Link to="/privacidad" className="text-xs font-bold text-slate-400 hover:text-indigo-600 uppercase tracking-widest transition-colors">Privacidad</Link>
+          <Link to="/privacidad" className="text-xs font-bold text-slate-400 uppercase tracking-widest transition-colors" style={{}} onMouseOver={e => (e.currentTarget as HTMLElement).style.color = '#F72C5B'} onMouseOut={e => (e.currentTarget as HTMLElement).style.color = ''}>Privacidad</Link>
           <span className="text-slate-300 text-xs">·</span>
-          <Link to="/terminos"    className="text-xs font-bold text-slate-400 hover:text-indigo-600 uppercase tracking-widest transition-colors">Términos</Link>
+          <Link to="/terminos"    className="text-xs font-bold text-slate-400 uppercase tracking-widest transition-colors" onMouseOver={e => (e.currentTarget as HTMLElement).style.color = '#F72C5B'} onMouseOut={e => (e.currentTarget as HTMLElement).style.color = ''}>Términos</Link>
           <span className="text-slate-300 text-xs">·</span>
-          <Link to="/descargo"    className="text-xs font-bold text-slate-400 hover:text-indigo-600 uppercase tracking-widest transition-colors">Contacto</Link>
+          <Link to="/descargo"    className="text-xs font-bold text-slate-400 uppercase tracking-widest transition-colors" onMouseOver={e => (e.currentTarget as HTMLElement).style.color = '#F72C5B'} onMouseOut={e => (e.currentTarget as HTMLElement).style.color = ''}>Contacto</Link>
         </div>
       </div>
     </div>
@@ -192,7 +195,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
       key={path}
       to={path}
       onClick={onNavigate}
-      className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${isActive(path) ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}
+      className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${isActive(path) ? 'text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}
+      style={isActive(path) ? { background: '#F72C5B' } : {}}
     >
       <i className={`fa-solid ${icon} text-xs`} />
       <span className="text-xs font-black uppercase tracking-widest">{label}</span>
@@ -206,12 +210,13 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
       <Link
         to="/notifications"
         onClick={onNavigate}
-        className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${active ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}
+        className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${active ? 'text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}
+        style={active ? { background: '#F72C5B' } : {}}
       >
         <div className="relative">
           <Bell size={14} />
           {unreadCount > 0 && (
-            <span className={`absolute -top-2 -right-2 min-w-[16px] h-[16px] px-1 text-[9px] font-black rounded-full flex items-center justify-center shadow-md ${active ? 'bg-white text-indigo-600' : 'bg-rose-500 text-white'}`}>
+            <span className={`absolute -top-2 -right-2 min-w-[16px] h-[16px] px-1 text-[9px] font-black rounded-full flex items-center justify-center shadow-md`} style={active ? { background: 'white', color: '#F72C5B' } : { background: '#F72C5B', color: 'white' }}>
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
@@ -229,10 +234,10 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
       <aside className={`fixed md:sticky top-0 left-0 h-screen bg-white border-r border-slate-100 z-50 transition-all duration-500 overflow-hidden flex flex-col ${collapsed ? 'w-0 border-none' : 'w-80 shadow-2xl'}`}>
         <div className="p-8 pb-6 flex items-center justify-between flex-shrink-0">
           <Link to="/dashboard" onClick={onNavigate} className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white"><i className="fa-solid fa-bolt" /></div>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ background: '#F72C5B' }}><i className="fa-solid fa-bolt" /></div>
             <h1 className="text-xl font-black text-slate-800 italic uppercase">LUZ IA</h1>
           </Link>
-          <button onClick={onToggle} className="p-2 text-slate-400 hover:text-indigo-600"><X size={20} /></button>
+          <button onClick={onToggle} className="p-2 text-slate-400 transition-colors" onMouseOver={e => (e.currentTarget as HTMLElement).style.color = '#F72C5B'} onMouseOut={e => (e.currentTarget as HTMLElement).style.color = ''}><X size={20} /></button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 space-y-6 pb-4">
@@ -262,10 +267,10 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
         <div className="flex-shrink-0 p-5 border-t border-slate-100">
           <div className="bg-slate-50 rounded-2xl p-4 space-y-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0" style={{ background: 'rgba(247,44,91,0.1)' }}>
                 {profile?.photoURL
                   ? <img src={profile.photoURL} alt="" className="w-full h-full object-cover" />
-                  : <UserIcon size={18} className="text-indigo-500" />
+                  : <UserIcon size={18} style={{ color: '#F72C5B' }} />
                 }
               </div>
               <div className="flex-1 min-w-0">

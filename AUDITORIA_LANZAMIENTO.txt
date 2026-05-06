@@ -185,7 +185,7 @@ Infra: Upstash Redis + QStash + Vercel Serverless
 Estos flujos deben testearse manualmente en el navegador antes de declarar
 la app lista para producción:
 
-[ ] FLUJO 1 — Registro → Onboarding → Primera generación
+[x] FLUJO 1 — Registro → Onboarding → Primera generación
     1. Abre la app en modo incógnito (sesión limpia)
     2. Haz click en "Ingresar" desde la landing
     3. Regístrate con un email nuevo (no el tuyo)
@@ -195,7 +195,7 @@ la app lista para producción:
     7. Genera una imagen en cualquier módulo
     8. Verifica que aparece en /historial
 
-[ ] FLUJO 2 — Sin créditos → Upgrade → Pago → Confirmación
+[x] FLUJO 2 — Sin créditos → Upgrade → Pago → Confirmación
     1. Con un usuario de prueba con 0 créditos, intenta generar
     2. Verifica que aparece NoCreditsModal (con precios correctos post-fix)
     3. Navega a /pricing
