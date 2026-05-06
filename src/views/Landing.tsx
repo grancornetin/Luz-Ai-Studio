@@ -11,6 +11,15 @@ import { useCurrency } from '../hooks/useCurrency';
 
 const IMG = (path: string) => `/images/landing/${path}`;
 
+// Flujo "Recrear con inspiración" para Product Studio
+const PROD_INSPIRE_REFS = [
+  { src: IMG('prod_insp_ref1.jpg'), label: 'Tu producto · Vista 1' },
+  { src: IMG('prod_insp_ref2.jpg'), label: 'Tu producto · Vista 2' },
+  { src: IMG('prod_insp_ref3.jpg'), label: 'Tu producto · Vista 3' },
+];
+const PROD_INSPIRE_INSPO = { src: IMG('prod_insp_inspo.jpg'), label: 'Foto inspiración' };
+const PROD_INSPIRE_RESULT = { src: IMG('prod_insp_result.jpg'), label: 'Resultado clonado' };
+
 // ── HERO IMAGES (portrait ratio 9:16, shown in phone cards) ──────────────────
 const HERO_KEYS = [
   'hero_h7','hero_u6','hero_h5','hero_u3b','hero_h6',
@@ -88,9 +97,9 @@ const MODULES = [
     accent: '#F6AD55',
     accentBg: 'rgba(246,173,85,0.12)',
     name: 'Product Studio',
-    sub: 'Fotografía Comercial',
-    desc: 'Sube fotos reales de tu producto y genera un set de 5 ángulos comerciales con IA. Fotografía profesional sin estudio físico.',
-    features: ['Análisis automático del producto', '5 ángulos: Hero, 45°, Funcional, Detalle, Lifestyle', 'Estilo Comercial u Orgánico', 'Catálogo guardado'],
+    sub: 'Fotografía Comercial · Inspiración IA',
+    desc: 'Sube fotos reales de tu producto y genera sets comerciales profesionales con IA. O sube una foto de inspiración y el sistema clona la escena con tu producto — sin fotógrafo, sin estudio.',
+    features: ['Análisis automático por IA (categoría, material, estructura)', 'Modo Pack: múltiples ángulos Hero, 45°, Detalle, Lifestyle', 'Modo Grid: collage automático listo para publicar', 'Recrear inspiración: clona cualquier escena con tu producto', 'Catálogo guardado con descarga ZIP'],
     refs:    [{ src: IMG('prod_ref.jpg'), label: 'Foto Real' }],
     results: [{ src: IMG('prod_hero.jpg'), label: 'Hero Shot' }, { src: IMG('prod_ang.jpg'), label: 'Ángulo' }, { src: IMG('prod_life.jpg'), label: 'Lifestyle' }],
   },
@@ -247,6 +256,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
   const [lbSrc, setLbSrc] = useState<string | null>(null);
   const [cardImgs, setCardImgs] = useState([0, 1, 2]);
   const [scrolled, setScrolled] = useState(false);
+  const [productFlowMode, setProductFlowMode] = useState<'standard' | 'inspire'>('standard');
 
   // Nav scroll effect
   useEffect(() => {
@@ -287,8 +297,8 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
         scrolled ? 'py-3 bg-[#06060D]/96 backdrop-blur-xl border-b border-white/[0.06]' : 'py-5'
       }`}>
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm" style={{ background: 'linear-gradient(135deg,#7C3AED,#F72C5B)', boxShadow: '0 0 16px rgba(247,44,91,0.3)' }}>
-            <i className="fa-solid fa-bolt" />
+          <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#7C3AED,#F72C5B)', boxShadow: '0 0 16px rgba(247,44,91,0.3)', flexShrink: 0 }}>
+            <img src="/icon-192.png" alt="LUZ IA" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 3 }} />
           </div>
           <span style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', letterSpacing: '-0.02em', fontSize: '18px', textTransform: 'uppercase' }}>LUZ IA</span>
         </div>
@@ -375,9 +385,6 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
                 transition: 'all 0.3s ease',
               }}>
                 <img src={IMG(`${key}.jpg`)} alt="" style={{ width: '100%', aspectRatio: '9/16', objectFit: 'cover', display: 'block', transition: 'opacity 0.8s ease' }} loading="eager" />
-                <div style={{ position: 'absolute', bottom: 10, left: 10, right: 10, background: 'rgba(6,6,13,0.82)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '6px 10px', fontFamily: '"Syne",sans-serif', fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'rgba(242,240,250,0.5)' }}>
-                  {labels[idx].split('·')[0].trim()} <span style={{ color: '#F72C5B' }}>·</span> {labels[idx].split('·')[1]?.trim()}
-                </div>
               </div>
             );
           })}
@@ -403,11 +410,11 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
         body { overflow-x: clip; width: 100%; max-width: 100%; }
 
         /* H1 responsive — guaranteed no wrap at any breakpoint */
-        .landing-h1 { font-size: 56px; }
-        @media (max-width: 1024px) { .landing-h1 { font-size: 48px; } }
-        @media (max-width: 768px)  { .landing-h1 { font-size: 36px; } }
-        @media (max-width: 390px)  { .landing-h1 { font-size: 32px; } }
-        @media (max-width: 350px)  { .landing-h1 { font-size: 28px; } }
+        .landing-h1 { font-size: 48px; }
+        @media (max-width: 1024px) { .landing-h1 { font-size: 40px; } }
+        @media (max-width: 768px)  { .landing-h1 { font-size: 30px; } }
+        @media (max-width: 390px)  { .landing-h1 { font-size: 26px; } }
+        @media (max-width: 350px)  { .landing-h1 { font-size: 23px; } }
 
         /* Prevent ANY element from causing horizontal scroll */
         section, div, header, nav, footer {
@@ -494,51 +501,127 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
                   </div>
                 )}
 
-                {/* References */}
-                {activeMod.refs.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(242,240,250,0.28)' }}>
-                        {activeMod.id === 'studio' ? 'Referencias · Avatar · Producto · Escena · Outfit' : 'Referencia'}
-                      </span>
-                      <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.07)' }} />
-                    </div>
-                    <div className="flex gap-2.5">
-                      {activeMod.refs.map(ref => (
-                        <div key={ref.label} onClick={() => openLB(ref.src)} className="flex-1 relative rounded-xl overflow-hidden cursor-pointer transition-all hover:scale-[1.02] border" style={{ border: '1px solid rgba(255,255,255,0.08)', minWidth: 0 }}>
-                          <img src={ref.src} alt={ref.label} className="w-full block object-cover" style={{ height: activeMod.id === 'studio' ? 110 : 150, objectFit: activeMod.id === 'studio' && ref.label === 'Producto' ? 'contain' : 'cover', background: ref.label === 'Producto' ? '#14141F' : undefined, padding: ref.label === 'Producto' ? 8 : undefined }} loading="lazy" />
-                          <div style={{ position: 'absolute', top: 6, left: 6, background: 'rgba(0,0,0,0.75)', borderRadius: 5, padding: '2px 7px', fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.55)' }}>{ref.label}</div>
-                        </div>
-                      ))}
-                    </div>
+                {/* Toggler Product Studio */}
+                {activeMod.id === 'product' && (
+                  <div className="flex items-center gap-0 rounded-full p-1 self-start" style={{ background: '#14141F', border: '1px solid rgba(255,255,255,0.07)' }}>
+                    {([['standard', 'Pack / Grid'], ['inspire', 'Recrear inspiración']] as const).map(([mode, label]) => (
+                      <button key={mode} onClick={() => setProductFlowMode(mode)}
+                        className="font-black uppercase text-[9px] tracking-widest rounded-full transition-all"
+                        style={{ padding: '6px 14px', fontFamily: '"Syne",sans-serif', border: 'none', cursor: 'pointer', background: productFlowMode === mode ? 'linear-gradient(135deg,#7C3AED,#F72C5B)' : 'transparent', color: productFlowMode === mode ? '#fff' : 'rgba(242,240,250,0.45)', whiteSpace: 'nowrap' }}
+                      >{label}</button>
+                    ))}
                   </div>
                 )}
 
-                {/* Results */}
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: '#F72C5B' }}>
-                      {activeMod.id === 'clone' ? 'Resultado clonado' : activeMod.id === 'studio' ? 'Resultados · Master · Shot 1 · Shot 2' : 'Resultados generados'}
-                    </span>
-                    <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.07)' }} />
-                  </div>
-                  <div className="flex gap-2.5" style={activeMod.id === 'clone' ? { display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 10 } : {}}>
-                    {activeMod.results.map((res, i) => (
-                      <div key={res.label} onClick={() => openLB(res.src)}
-                        className="relative rounded-xl overflow-hidden cursor-pointer transition-all hover:scale-[1.02]"
-                        style={{
-                          flex: activeMod.id === 'clone' ? undefined : 1,
-                          border: `1.5px solid ${activeMod.id === 'clone' && i === activeMod.results.length - 1 ? '#F72C5B' : 'rgba(247,44,91,0.3)'}`,
-                          boxShadow: activeMod.id === 'clone' && i === activeMod.results.length - 1 ? '0 0 20px rgba(247,44,91,0.2)' : undefined,
-                          minWidth: 0,
-                        }}
-                      >
-                        <img src={res.src} alt={res.label} className="w-full block object-cover" style={{ height: activeMod.id === 'product' ? 130 : 160 }} loading="lazy" />
-                        <div style={{ position: 'absolute', top: 6, left: 6, background: 'rgba(247,44,91,0.75)', borderRadius: 5, padding: '2px 7px', fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'white' }}>{res.label}</div>
+                {/* Flujo inspiración Product Studio */}
+                {activeMod.id === 'product' && productFlowMode === 'inspire' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {/* Paso 1: fotos del producto */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(242,240,250,0.28)' }}>1 · Fotos de tu producto</span>
+                        <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.07)' }} />
                       </div>
-                    ))}
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {PROD_INSPIRE_REFS.map(ref => (
+                          <div key={ref.label} onClick={() => openLB(ref.src)} style={{ flex: 1, aspectRatio: '3/4', borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer', minWidth: 0, transition: 'transform 0.2s' }}
+                            onMouseOver={e => (e.currentTarget as HTMLElement).style.transform = 'scale(1.03)'}
+                            onMouseOut={e => (e.currentTarget as HTMLElement).style.transform = 'scale(1)'}
+                          >
+                            <img src={ref.src} alt={ref.label} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} loading="lazy" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Paso 2: foto inspiración → resultado */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(242,240,250,0.28)' }}>2 · Foto de inspiración</span>
+                        <i className="fa-solid fa-arrow-right" style={{ fontSize: 9, color: '#F72C5B' }} />
+                        <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: '#F72C5B' }}>3 · Tu resultado</span>
+                        <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.07)' }} />
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <div onClick={() => openLB(PROD_INSPIRE_INSPO.src)} style={{ flex: 1, aspectRatio: '3/4', borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer', minWidth: 0, transition: 'transform 0.2s' }}
+                          onMouseOver={e => (e.currentTarget as HTMLElement).style.transform = 'scale(1.03)'}
+                          onMouseOut={e => (e.currentTarget as HTMLElement).style.transform = 'scale(1)'}
+                        >
+                          <img src={PROD_INSPIRE_INSPO.src} alt={PROD_INSPIRE_INSPO.label} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} loading="lazy" />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', color: '#F72C5B', fontSize: 18 }}>
+                          <i className="fa-solid fa-arrow-right" />
+                        </div>
+                        <div onClick={() => openLB(PROD_INSPIRE_RESULT.src)} style={{ flex: 1, aspectRatio: '3/4', borderRadius: 12, overflow: 'hidden', border: '1.5px solid #F72C5B', cursor: 'pointer', minWidth: 0, boxShadow: '0 0 20px rgba(247,44,91,0.2)', transition: 'transform 0.2s' }}
+                          onMouseOver={e => (e.currentTarget as HTMLElement).style.transform = 'scale(1.03)'}
+                          onMouseOut={e => (e.currentTarget as HTMLElement).style.transform = 'scale(1)'}
+                        >
+                          <img src={PROD_INSPIRE_RESULT.src} alt={PROD_INSPIRE_RESULT.label} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} loading="lazy" />
+                        </div>
+                      </div>
+                    </div>
+                    {/* Mensaje de venta */}
+                    <div style={{ background: 'rgba(247,44,91,0.06)', border: '1px solid rgba(247,44,91,0.18)', borderRadius: 12, padding: '10px 14px', fontSize: 11, color: 'rgba(242,240,250,0.55)', lineHeight: 1.6, fontStyle: 'italic' }}>
+                      <i className="fa-solid fa-bolt" style={{ color: '#F72C5B', marginRight: 6 }} />
+                      Sin inspiración propia no hay problema — el sistema lo hace por ti. Nunca más te quedarás sin ideas.
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <>
+                    {/* References — flujo estándar */}
+                    {activeMod.refs.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(242,240,250,0.28)' }}>
+                            {activeMod.id === 'studio' ? 'Referencias' : 'Referencia'}
+                          </span>
+                          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.07)' }} />
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          {activeMod.refs.map(ref => (
+                            <div key={ref.label} onClick={() => openLB(ref.src)}
+                              style={{ flex: 1, aspectRatio: '3/4', borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer', minWidth: 0, transition: 'transform 0.2s', background: ref.label === 'Producto' ? '#14141F' : undefined }}
+                              onMouseOver={e => (e.currentTarget as HTMLElement).style.transform = 'scale(1.03)'}
+                              onMouseOut={e => (e.currentTarget as HTMLElement).style.transform = 'scale(1)'}
+                            >
+                              <img src={ref.src} alt={ref.label} style={{ width: '100%', height: '100%', objectFit: ref.label === 'Producto' ? 'contain' : 'cover', padding: ref.label === 'Producto' ? 8 : undefined, display: 'block' }} loading="lazy" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Results — flujo estándar */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: '#F72C5B' }}>
+                          {activeMod.id === 'clone' ? 'Resultado clonado' : activeMod.id === 'studio' ? 'Resultados' : 'Resultados generados'}
+                        </span>
+                        <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.07)' }} />
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {activeMod.results.map((res, i) => (
+                          <div key={res.label} onClick={() => openLB(res.src)}
+                            style={{
+                              flex: 1,
+                              aspectRatio: '3/4',
+                              borderRadius: 12,
+                              overflow: 'hidden',
+                              border: `1.5px solid ${activeMod.id === 'clone' && i === activeMod.results.length - 1 ? '#F72C5B' : 'rgba(247,44,91,0.3)'}`,
+                              boxShadow: activeMod.id === 'clone' && i === activeMod.results.length - 1 ? '0 0 20px rgba(247,44,91,0.2)' : undefined,
+                              cursor: 'pointer',
+                              minWidth: 0,
+                              transition: 'transform 0.2s',
+                            }}
+                            onMouseOver={e => (e.currentTarget as HTMLElement).style.transform = 'scale(1.03)'}
+                            onMouseOut={e => (e.currentTarget as HTMLElement).style.transform = 'scale(1)'}
+                          >
+                            <img src={res.src} alt={res.label} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} loading="lazy" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -617,7 +700,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
 
           {/* Plans grid */}
           <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
-            {LANDING_PLANS.map(plan => {
+            {LANDING_PLANS.filter(plan => !billingAnnual || plan.priceAnnual !== null).map(plan => {
               const price = billingAnnual && plan.priceAnnual !== null ? plan.priceAnnual : plan.priceMonthly;
               const [whole, cents] = price === 0 ? ['0', null] : String(price.toFixed(2)).split('.');
 
@@ -732,8 +815,8 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
       {/* ══ FOOTER ═══════════════════════════════════════════════════════════════ */}
       <footer style={{ borderTop: '1px solid rgba(255,255,255,0.07)', padding: '36px 6vw', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
         <div className="flex items-center gap-2.5" style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', textTransform: 'uppercase', fontSize: 16, letterSpacing: '-0.02em' }}>
-          <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg,#7C3AED,#F72C5B)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>
-            <i className="fa-solid fa-bolt text-white" />
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg,#7C3AED,#F72C5B)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
+            <img src="/icon-192.png" alt="LUZ IA" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 2 }} />
           </div>
           LUZ IA
         </div>
