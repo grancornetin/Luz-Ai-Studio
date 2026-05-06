@@ -645,15 +645,49 @@ const OutfitExtractorModule: React.FC = () => {
                     </div>
                   )}
 
-                  {/* PASO 3: renders listos */}
+                  {/* PASO 3: renders listos — selección para kit final */}
                   {step === 'reviewing_renders' && currentKit && (
-                    <div className="space-y-5 animate-in slide-in-from-left-4">
-                      <StepHeader title="Renders listos" subtitle="Revisá cada prenda generada" icon="fa-images" />
-                      <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-[12px] text-emerald-900">
-                        <strong>{currentKit.items.filter(i => i.selected && i.status === 'done').length}</strong> de <strong>{selectedItemsCount}</strong> prendas generadas correctamente.
+                    <div className="space-y-4 animate-in slide-in-from-left-4">
+                      <StepHeader title="Renders listos" subtitle="Elegí cuáles van al kit final" icon="fa-images" />
+
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-[11px] text-emerald-900">
+                        <strong>{currentKit.items.filter(i => i.selected && i.status === 'done').length}</strong> de <strong>{selectedItemsCount}</strong> prendas listas. Tocá una para incluirla o quitarla del kit.
                       </div>
-                      <p className="text-[11px] text-slate-500 leading-relaxed">
-                        Cuando estés conforme, generamos la imagen final con todas las prendas juntas.
+
+                      {/* Lista de prendas con toggle de inclusión */}
+                      <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+                        {currentKit.items.filter(i => i.status === 'done' || i.status === 'error').map(item => (
+                          <div
+                            key={item.id}
+                            onClick={() => item.status === 'done' && toggleItemSelection(item.id)}
+                            className={`flex items-center gap-3 p-3 rounded-2xl border-2 transition-all ${
+                              item.status === 'error'
+                                ? 'border-red-100 bg-red-50 opacity-60 cursor-not-allowed'
+                                : item.selected
+                                ? 'border-brand-600 bg-brand-50 cursor-pointer'
+                                : 'border-slate-100 bg-slate-50 opacity-50 cursor-pointer'
+                            }`}
+                          >
+                            {/* Miniatura */}
+                            <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0">
+                              {item.imageUrl
+                                ? <img src={item.imageUrl} className="w-full h-full object-contain" />
+                                : <div className="w-full h-full flex items-center justify-center"><i className="fa-solid fa-xmark text-red-400 text-xs" /></div>}
+                            </div>
+                            <p className="text-[11px] font-black text-slate-900 uppercase truncate flex-1">{item.name}</p>
+                            {item.status === 'error'
+                              ? <span className="text-[9px] text-red-400 font-bold uppercase">Error</span>
+                              : (
+                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${item.selected ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-200'}`}>
+                                  {item.selected && <i className="fa-solid fa-check text-[9px]" />}
+                                </div>
+                              )}
+                          </div>
+                        ))}
+                      </div>
+
+                      <p className="text-[10px] text-slate-400 leading-relaxed">
+                        Al componer el kit, las prendas seleccionadas se guardan automáticamente en tu Biblioteca.
                       </p>
                     </div>
                   )}
@@ -755,19 +789,47 @@ const OutfitExtractorModule: React.FC = () => {
                 </div>
               )}
 
-              {/* Reviewing renders: grilla de prendas */}
+              {/* Reviewing renders: grilla de prendas con toggle de selección */}
               {step === 'reviewing_renders' && currentKit && (
-                <div className="space-y-6">
+                <div className="space-y-4">
+                  <div className="flex items-baseline justify-between mb-1">
+                    <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.14em]">Tocá para incluir / quitar</div>
+                    <div className="text-[11px] font-semibold text-slate-500">
+                      {currentKit.items.filter(i => i.selected && i.status === 'done').length} seleccionadas
+                    </div>
+                  </div>
                   <div className={`grid gap-4 ${selectedItemsCount <= 4 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'}`}>
-                    {currentKit.items.filter(i => i.selected).map(item => (
-                      <div key={item.id} className="bg-white p-3 rounded-[28px] border-2 border-brand-100 shadow-sm space-y-3 group">
-                        <div className="aspect-[3/4] bg-slate-50 rounded-[20px] overflow-hidden relative cursor-pointer" onClick={() => item.imageUrl && openLightbox([item.imageUrl], 0, item.name)}>
+                    {currentKit.items.filter(i => i.status === 'done' || i.status === 'error').map(item => (
+                      <div
+                        key={item.id}
+                        onClick={() => item.status === 'done' && toggleItemSelection(item.id)}
+                        className={`bg-white p-3 rounded-[28px] border-4 shadow-sm space-y-3 group transition-all ${
+                          item.status === 'error'
+                            ? 'border-red-100 opacity-50 cursor-not-allowed'
+                            : item.selected
+                            ? 'border-brand-600 cursor-pointer'
+                            : 'border-slate-100 opacity-60 cursor-pointer hover:opacity-80'
+                        }`}
+                      >
+                        <div className="aspect-[3/4] bg-slate-50 rounded-[20px] overflow-hidden relative">
                           {item.imageUrl
-                            ? <img src={item.imageUrl} className="w-full h-full object-contain hover:scale-105 transition-transform duration-500" />
-                            : <div className="w-full h-full flex items-center justify-center"><div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>}
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                            <i className="fa-solid fa-expand text-white text-lg" />
-                          </div>
+                            ? <img src={item.imageUrl} className="w-full h-full object-contain" />
+                            : <div className="w-full h-full flex items-center justify-center"><i className="fa-solid fa-xmark text-red-300 text-2xl" /></div>}
+                          {/* Checkmark de selección */}
+                          {item.selected && item.status === 'done' && (
+                            <div className="absolute top-2 right-2 w-7 h-7 bg-brand-600 text-white rounded-full flex items-center justify-center shadow-lg">
+                              <i className="fa-solid fa-check text-[10px]" />
+                            </div>
+                          )}
+                          {/* Botón de expandir (sin propagar el toggle) */}
+                          {item.imageUrl && (
+                            <div
+                              className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                              onClick={e => { e.stopPropagation(); openLightbox([item.imageUrl!], 0, item.name); }}
+                            >
+                              <i className="fa-solid fa-expand text-white text-lg" />
+                            </div>
+                          )}
                         </div>
                         <p className="text-[9px] font-black text-slate-900 uppercase truncate text-center px-1">{item.name}</p>
                       </div>
