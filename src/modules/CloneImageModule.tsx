@@ -15,7 +15,7 @@ import ModuleTutorial from "../components/shared/ModuleTutorial";
 import { TUTORIAL_CONFIGS } from "../components/shared/tutorialConfigs";
 import { useCreditGuard } from "../../hooks/useCreditGuard";
 import NoCreditsModal from "../components/shared/NoCreditsModal";
-import { CREDIT_COSTS, MODEL_CREDIT_COST } from "../services/creditConfig";
+import { CREDIT_COSTS } from "../services/creditConfig";
 import { readAndCompressFile, downloadAsZip } from '../utils/imageUtils';
 import { ImageLightbox } from '../components/shared/ImageLightbox';
 import { FloatingActionBar } from '../components/shared/FloatingActionBar';
@@ -251,6 +251,11 @@ export default function CloneImageModule() {
     { id: 'biolock', label: 'Reconociendo identidad facial' },
     { id: 'synth',   label: 'Sintetizando composición' },
   ];
+  const APPLY_STEPS: ProgressStep[] = [
+    { id: 'outfit',  label: 'Aplicando nuevo outfit' },
+    { id: 'identity', label: 'Ajustando identidad facial' },
+    { id: 'finish',  label: 'Finalizando imagen' },
+  ];
   const [cloneStepIndex, setCloneStepIndex] = useState(0);
   const [cloneEta, setCloneEta]             = useState(0);
   const cloneEtaRef   = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -422,6 +427,18 @@ export default function CloneImageModule() {
     setCreditsRefunded(false);
     setLoading(true);
 
+    // Iniciar progreso narrado para step 4
+    setCloneStepIndex(0);
+    cloneStartRef.current = Date.now();
+    setCloneEta(45);
+    if (cloneEtaRef.current) clearInterval(cloneEtaRef.current);
+    cloneEtaRef.current = setInterval(() => {
+      const elapsed = (Date.now() - cloneStartRef.current) / 1000;
+      setCloneEta(Math.max(0, Math.round(45 - elapsed)));
+    }, 1000);
+    cloneT1Ref.current = setTimeout(() => setCloneStepIndex(1), 2000);
+    cloneT2Ref.current = setTimeout(() => setCloneStepIndex(2), 5000);
+
     try {
       const safeTarget = toBase64OrThrow(baseComposition, "composición base");
       const safeFace = toBase64OrThrow(face1, "cara del sujeto 1");
@@ -489,6 +506,11 @@ export default function CloneImageModule() {
     } catch (e: any) {
       setError(toAppError(e));
     } finally {
+      if (cloneEtaRef.current) { clearInterval(cloneEtaRef.current); cloneEtaRef.current = null; }
+      if (cloneT1Ref.current)  { clearTimeout(cloneT1Ref.current);  cloneT1Ref.current  = null; }
+      if (cloneT2Ref.current)  { clearTimeout(cloneT2Ref.current);  cloneT2Ref.current  = null; }
+      setCloneStepIndex(APPLY_STEPS.length - 1);
+      setCloneEta(0);
       setLoading(false);
     }
   }
@@ -598,7 +620,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
         </header>
 
         {/* ── Pantalla de generando: ocupa todo el ancho, mismo layout que Product Generator ── */}
-        {loading && step === 3 && (
+        {loading && (step === 3 || step === 4) && (
           <div className="px-4 md:px-0 bg-white rounded-[28px] md:rounded-[36px] shadow-sm border border-slate-100 overflow-hidden">
             <WizardStepper
               steps={CLONE_WIZARD_STEPS}
@@ -616,14 +638,14 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                     </span>
                   </div>
                   <h2 className="t-display text-[24px] md:text-[28px] text-slate-900 leading-tight">
-                    Clonando escena
+                    {step === 4 ? 'Aplicando cambios' : 'Clonando escena'}
                   </h2>
                   <div className="text-[13px] text-slate-500 mt-1 mb-4">
                     1 imagen · Scene Clone
                   </div>
                   <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-[18px]">
                     <GenerationProgress
-                      steps={CLONE_STEPS}
+                      steps={step === 4 ? APPLY_STEPS : CLONE_STEPS}
                       currentStepIndex={cloneStepIndex}
                       etaSeconds={cloneEta}
                     />
@@ -655,7 +677,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
           </div>
         )}
 
-        <div className={`grid grid-cols-1 lg:grid-cols-12 gap-8 px-4 md:px-0 ${loading && step === 3 ? 'hidden' : ''}`}>
+        <div className={`grid grid-cols-1 lg:grid-cols-12 gap-8 px-4 md:px-0 ${loading && (step === 3 || step === 4) ? 'hidden' : ''}`}>
 
           <div className="lg:col-span-4 space-y-6">
             <section className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
@@ -918,15 +940,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
               </div>
 
               <div className="flex-1 relative rounded-[32px] overflow-hidden bg-slate-950/50 flex items-center justify-center border border-white/5 group">
-                 {loading ? (
-                   <div className="w-full max-w-sm mx-auto py-8 px-2">
-                     <GenerationProgress
-                       steps={CLONE_STEPS}
-                       currentStepIndex={cloneStepIndex}
-                       etaSeconds={cloneEta}
-                     />
-                   </div>
-                 ) : activePreview ? (
+                 {activePreview ? (
                    <div className="relative w-full h-full p-4 md:p-8 cursor-zoom-in" onClick={openLightbox}>
                       <img src={activePreview} className="w-full h-full object-contain drop-shadow-2xl" alt="Preview" />
                       <div className="absolute bottom-8 right-8 flex gap-3 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-4 group-hover:translate-y-0">
