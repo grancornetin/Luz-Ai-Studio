@@ -36,3 +36,10 @@ export const TOPUP_TO_PRODUCT: Record<string, ProductKey> = {
   topup_500:  'TOPUP_500',
   topup_1200: 'TOPUP_1200',
 };
+
+export const PRO_TOPUP_TO_PRODUCT: Record<string, ProductKey> = {
+  pro_topup_20:  'PRO_TOPUP_20',
+  pro_topup_60:  'PRO_TOPUP_60',
+  pro_topup_150: 'PRO_TOPUP_150',
+  pro_topup_400: 'PRO_TOPUP_400',
+};

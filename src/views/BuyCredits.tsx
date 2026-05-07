@@ -1,10 +1,10 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Zap, ArrowLeft, DollarSign, TrendingDown } from 'lucide-react';
-import { TOP_UP_PACKAGES } from '../services/creditConfig';
+import { Zap, Megaphone, ArrowLeft, DollarSign, TrendingDown } from 'lucide-react';
+import { TOP_UP_PACKAGES, PRO_CREDIT_TOPUPS } from '../services/creditConfig';
 import { useCurrency } from '../hooks/useCurrency';
 import { useAuth } from '../modules/auth/AuthContext';
-import { buildCheckoutUrl, TOPUP_TO_PRODUCT, type ProductKey } from '../services/checkoutService';
+import { buildCheckoutUrl, TOPUP_TO_PRODUCT, PRO_TOPUP_TO_PRODUCT, type ProductKey } from '../services/checkoutService';
 
 export default function BuyCredits() {
   const navigate         = useNavigate();
@@ -14,6 +14,14 @@ export default function BuyCredits() {
   const handleBuy = (pkgId: string) => {
     if (!user?.uid) { navigate('/login'); return; }
     const productKey = TOPUP_TO_PRODUCT[pkgId] as ProductKey | undefined;
+    if (!productKey) return;
+    const url = buildCheckoutUrl(productKey, user.uid);
+    window.location.href = url;
+  };
+
+  const handleBuyPro = (pkgId: string) => {
+    if (!user?.uid) { navigate('/login'); return; }
+    const productKey = PRO_TOPUP_TO_PRODUCT[pkgId] as ProductKey | undefined;
     if (!productKey) return;
     const url = buildCheckoutUrl(productKey, user.uid);
     window.location.href = url;
@@ -112,6 +120,84 @@ export default function BuyCredits() {
           );
         })}
       </div>
+
+      {/* Pro-credits (Campaign / Photodump) */}
+      <section className="space-y-5">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-violet-100 rounded-xl flex items-center justify-center flex-shrink-0">
+            <Megaphone className="w-5 h-5 text-violet-600" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-slate-900 tracking-tighter uppercase italic">
+              Recargar Pro-credits
+            </h2>
+            <p className="text-xs font-medium text-slate-500">
+              Cada pro-credit = 1 sesión Campaign o Photodump. Las imágenes de la sesión siguen costando créditos normales.
+            </p>
+          </div>
+        </div>
+
+        {/* Saldo actual pro-credits */}
+        <div className="flex items-center gap-4 bg-violet-50 border border-violet-100 rounded-2xl px-6 py-4">
+          <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center flex-shrink-0">
+            <Megaphone className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <p className="text-[10px] font-black text-violet-400 uppercase tracking-widest">Pro-credits disponibles</p>
+            <p className="text-2xl font-black text-violet-700">{credits?.proCredits ?? 0}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {PRO_CREDIT_TOPUPS.map((pkg) => {
+            const pricePerSession = pkg.priceUSD / pkg.proCredits;
+            const isBest = pkg.proCredits === 150;
+
+            return (
+              <div
+                key={pkg.id}
+                className={`bg-white rounded-[28px] border p-6 flex flex-col gap-4 relative transition-all hover:shadow-lg ${
+                  isBest ? 'border-violet-300 shadow-lg shadow-violet-50 ring-2 ring-violet-400' : 'border-slate-100'
+                }`}
+              >
+                {isBest && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-violet-600 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow">
+                    Mejor valor
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-violet-50 rounded-2xl flex items-center justify-center">
+                    <Megaphone className="w-6 h-6 text-violet-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-black text-slate-900">{pkg.proCredits}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">sesiones</p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-3xl font-black text-slate-900">{format(pkg.priceUSD)}</p>
+                  <p className="text-[10px] text-slate-400 font-bold mt-0.5">
+                    {format(pricePerSession)} por sesión
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => handleBuyPro(pkg.id)}
+                  className={`w-full py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                    isBest
+                      ? 'bg-violet-600 text-white hover:bg-violet-700 shadow-lg shadow-violet-100'
+                      : 'bg-slate-900 text-white hover:bg-slate-700'
+                  }`}
+                >
+                  Comprar ahora
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
       {/* Referencia de costos */}
       <div className="bg-slate-50 rounded-[28px] border border-slate-100 p-8 space-y-4">

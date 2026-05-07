@@ -1,6 +1,6 @@
 // src/components/shared/WalletPill.tsx
 import React from 'react';
-import { Zap, TrendingUp, ShoppingBag, Crown } from 'lucide-react';
+import { Zap, Megaphone, TrendingUp, ShoppingBag, Crown } from 'lucide-react';
 import { useAuth } from '../../modules/auth/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -66,7 +66,7 @@ export const WalletPill: React.FC<WalletPillProps> = ({
 
   return (
     <div className={`relative flex items-center gap-3 ${className}`}>
-      {/* SALDO */}
+      {/* SALDO créditos normales */}
       <div
         className="flex items-center gap-2 bg-gradient-to-r from-slate-900 to-slate-800 text-white px-4 py-2 rounded-full shadow-lg border border-white/10 hover:shadow-xl transition-all cursor-default"
         title="Créditos disponibles"
@@ -74,7 +74,19 @@ export const WalletPill: React.FC<WalletPillProps> = ({
         <Zap className="w-4 h-4 text-amber-400" />
         <span className="text-sm font-bold">{credits.available}</span>
         <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-          créditos
+          cr.
+        </span>
+      </div>
+
+      {/* SALDO pro-credits */}
+      <div
+        className="flex items-center gap-2 bg-gradient-to-r from-violet-700 to-violet-600 text-white px-4 py-2 rounded-full shadow-lg border border-white/10 hover:shadow-xl transition-all cursor-default"
+        title="Pro-credits para Campaign y Photodump"
+      >
+        <Megaphone className="w-4 h-4 text-violet-200" />
+        <span className="text-sm font-bold">{credits.proCredits ?? 0}</span>
+        <span className="text-[10px] font-black uppercase tracking-wider text-violet-300">
+          pro
         </span>
       </div>
 

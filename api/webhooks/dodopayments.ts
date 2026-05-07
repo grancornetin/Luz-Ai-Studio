@@ -65,12 +65,11 @@ const TOPUP_CREDITS: Record<string, number> = {
   'pdt_0NdkeuaAdzWxtjjWcyX4D': 1200,
 };
 
-// Pro-credit top-ups — actualizar IDs cuando estén creados en Dodo
 const TOPUP_PRO_CREDITS: Record<string, number> = {
-  // 'PENDING': 20,   // PRO_TOPUP_20  — $5.99
-  // 'PENDING': 60,   // PRO_TOPUP_60  — $14.99
-  // 'PENDING': 150,  // PRO_TOPUP_150 — $34.99
-  // 'PENDING': 400,  // PRO_TOPUP_400 — $79.99
+  'pdt_0NeL68ULx3cZIAFCLYVCy': 20,   // PRO_TOPUP_20  — $5.99
+  'pdt_0NeL6FzjcMfB81pb7U8dx': 60,   // PRO_TOPUP_60  — $14.99
+  'pdt_0NeL6NFWLSfTo57RJXzOQ': 150,  // PRO_TOPUP_150 — $34.99
+  'pdt_0NeL6U6U7QmzQzczCaCJx': 400,  // PRO_TOPUP_400 — $79.99
 };
 
 // ── Verificación de firma ─────────────────────────────────────────────────────
