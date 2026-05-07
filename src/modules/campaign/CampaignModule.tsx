@@ -12,7 +12,7 @@ import { downloadAsZip } from '../../utils/imageUtils';
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
 import { newSessionId } from '../../services/imageApiService';
 import { buildCampaignPlan } from './campaignService';
-import { downloadCampaignPdf } from './campaignPdfService';
+import { downloadCampaignPdf, downloadCampaignHtml } from './campaignPdfService';
 import { campaignStorage } from './campaignStorage';
 import {
   CampaignSet, CampaignChannel, CampaignImageSlot, ImageSlotRole,
@@ -82,68 +82,100 @@ const UpgradeWall: React.FC<{ proCredits: number }> = ({ proCredits }) => {
   );
 };
 
-// ─── ImageUploadSlot ──────────────────────────────────────────
+// ─── ImageUploadSlot — múltiples imágenes por rol ────────────
+const MAX_TOTAL_SLOTS = 8;
+
 const ImageUploadSlot: React.FC<{
-  role: ImageSlotRole;
-  value: string;
-  onChange: (base64: string) => void;
-  onRemove: () => void;
-}> = ({ role, value, onChange, onRemove }) => {
+  role:     ImageSlotRole;
+  images:   string[];
+  onChange: (images: string[]) => void;
+  totalUsed: number;
+}> = ({ role, images, onChange, totalUsed }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const meta = IMAGE_SLOT_META[role];
+  const canAddMore = totalUsed < MAX_TOTAL_SLOTS;
 
-  const handleFile = (file: File) => {
-    if (!file.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.onload = e => onChange(e.target?.result as string);
-    reader.readAsDataURL(file);
+  const handleFiles = (files: FileList) => {
+    const available = MAX_TOTAL_SLOTS - totalUsed;
+    const toProcess = Array.from(files).slice(0, available);
+    toProcess.forEach(file => {
+      if (!file.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        onChange([...images, e.target?.result as string]);
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
+    if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+  };
+
+  const removeImage = (idx: number) => {
+    onChange(images.filter((_, i) => i !== idx));
   };
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em] flex items-center gap-1.5">
-        <span>{meta.icon}</span> {meta.label}
-      </div>
-      {value ? (
-        <div className="relative aspect-square rounded-2xl overflow-hidden group">
-          <img src={value} alt={meta.label} className="w-full h-full object-cover" />
-          <button
-            type="button"
-            onClick={onRemove}
-            className="absolute top-2 right-2 w-6 h-6 bg-black/60 hover:bg-black/80 text-white rounded-full flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
-          >
-            <X size={10} strokeWidth={3} />
-          </button>
-          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5">
-            <p className="text-[8px] font-bold text-white uppercase tracking-wider truncate">{meta.label}</p>
-          </div>
+    <div className="flex flex-col gap-2">
+      {/* Etiqueta del rol */}
+      <div className="flex items-center justify-between">
+        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em] flex items-center gap-1.5">
+          <span>{meta.icon}</span> {meta.label}
         </div>
-      ) : (
+        {images.length > 0 && (
+          <span className="text-[9px] font-bold text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded-full">
+            {images.length}
+          </span>
+        )}
+      </div>
+
+      {/* Grid de imágenes subidas */}
+      {images.length > 0 && (
+        <div className="grid grid-cols-2 gap-1.5">
+          {images.map((src, idx) => (
+            <div key={idx} className="relative aspect-square rounded-xl overflow-hidden group">
+              <img src={src} alt={`${meta.label} ${idx + 1}`} className="w-full h-full object-cover" />
+              <button
+                type="button"
+                onClick={() => removeImage(idx)}
+                className="absolute top-1 right-1 w-5 h-5 bg-black/70 hover:bg-black/90 text-white rounded-full flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
+              >
+                <X size={8} strokeWidth={3} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Botón agregar */}
+      {canAddMore && (
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
           onDrop={handleDrop}
           onDragOver={e => e.preventDefault()}
-          className="aspect-square rounded-2xl border-2 border-dashed border-slate-200 hover:border-brand-400 bg-slate-50 hover:bg-brand-50 flex flex-col items-center justify-center gap-1.5 transition-all group"
+          className={`rounded-2xl border-2 border-dashed transition-all group flex flex-col items-center justify-center gap-1.5 py-3
+            ${images.length === 0
+              ? 'border-slate-200 hover:border-brand-400 bg-slate-50 hover:bg-brand-50'
+              : 'border-slate-200 hover:border-brand-300 bg-white hover:bg-brand-50'
+            }`}
         >
-          <ImageIcon className="w-5 h-5 text-slate-300 group-hover:text-brand-400 transition-colors" />
+          <Plus className="w-4 h-4 text-slate-300 group-hover:text-brand-400 transition-colors" />
           <span className="text-[9px] font-semibold text-slate-400 group-hover:text-brand-500 text-center leading-tight px-2">
-            {meta.description}
+            {images.length === 0 ? meta.description : 'Agregar otra'}
           </span>
         </button>
       )}
+
       <input
         ref={inputRef}
         type="file"
         accept="image/*"
+        multiple
         className="hidden"
-        onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+        onChange={e => { if (e.target.files?.length) handleFiles(e.target.files); e.target.value = ''; }}
       />
     </div>
   );
@@ -154,11 +186,11 @@ const CampaignModule: React.FC = () => {
   const { user, credits, isAdmin, deductCredits, refreshCredits, proCredits, deductProCredit, refundProCredit } = useAuth();
 
   // ── State: brief
-  const [idea,     setIdea]     = useState('');
-  const [canales,  setCanales]  = useState<CampaignChannel[]>(['instagram_feed']);
+  const [idea,       setIdea]       = useState('');
+  const [canales,    setCanales]    = useState<CampaignChannel[]>(['instagram_feed']);
   const [imageCount, setImageCount] = useState(4);
-  const [slots,    setSlots]    = useState<Record<ImageSlotRole, string>>({
-    product: '', inspiration: '', brand: '', model: '',
+  const [slots,      setSlots]      = useState<Record<ImageSlotRole, string[]>>({
+    product: [], inspiration: [], brand: [], model: [],
   });
 
   // ── State: wizard
@@ -193,8 +225,9 @@ const CampaignModule: React.FC = () => {
   const insufficient    = !isAdmin && (credits?.available ?? 0) < imageCreditCost;
 
   const activeSlots: CampaignImageSlot[] = SLOT_ROLES
-    .filter(r => slots[r])
-    .map(r => ({ role: r, base64: slots[r] }));
+    .flatMap(r => slots[r].map(base64 => ({ role: r, base64 })));
+
+  const totalSlotsUsed = SLOT_ROLES.reduce((sum, r) => sum + slots[r].length, 0);
 
   // ── Validaciones
   const canStep1 = idea.trim().length >= 10;
@@ -224,6 +257,10 @@ const CampaignModule: React.FC = () => {
 
   const resetCreator = () => {
     setStep(1);
+    setIdea('');
+    setCanales(['instagram_feed']);
+    setImageCount(4);
+    setSlots({ product: [], inspiration: [], brand: [], model: [] });
     setCurrentSet(null);
     setError(null);
     setProgress(null);
@@ -281,18 +318,28 @@ const CampaignModule: React.FC = () => {
     setProgressStepIndex(0);
 
     try {
-      // Paso 1-3: Gemini construye el plan estratégico completo
+      // Paso 1: Gemini construye el plan estratégico completo
       setProgressStepIndex(1);
+      console.log('[Campaign] buildCampaignPlan start', { idea, canales, imageCount, slots: activeSlots.length });
       const plan = await buildCampaignPlan(idea, canales, imageCount, activeSlots);
+      console.log('[Campaign] plan recibido', { piezas: plan.piezas.length, concepto: plan.concepto });
 
-      // Paso 4: generar imágenes
+      if (!plan.piezas || plan.piezas.length === 0) {
+        throw new Error('No se pudo construir el plan de campaña. Intentá de nuevo.');
+      }
+
+      // Paso 2: generar imágenes
       setProgressStepIndex(3);
       const imagePrompts = plan.piezas.map(p =>
         `${p.imagePrompt}, professional photography, high quality, commercial style`,
       );
+
+      // Referencias: producto + modelo van como referencias visuales para la IA
       const references = activeSlots
-        .filter(s => s.role === 'inspiration' || s.role === 'brand')
+        .filter(s => s.role === 'product' || s.role === 'inspiration' || s.role === 'brand' || s.role === 'model')
         .map(s => s.base64);
+
+      console.log('[Campaign] generateBatch start', { prompts: imagePrompts.length, references: references.length });
 
       const images = await generationService.generateBatch(
         imagePrompts,
@@ -307,9 +354,11 @@ const CampaignModule: React.FC = () => {
           sessionId:   newSessionId(),
           module:      'campaign',
           moduleLabel: 'Campaign Generator',
-          metadata:    { canales, imageCount },
+          metadata:    { imageCount },
         },
       );
+
+      console.log('[Campaign] imágenes generadas', images.length, images.map(u => u?.slice(0, 60)));
 
       // Paso 5: captions + calendario (ya vienen del plan)
       setProgressStepIndex(5);
@@ -336,11 +385,13 @@ const CampaignModule: React.FC = () => {
       setStep(5);
       await refreshCredits();
     } catch (err: any) {
-      setError(err?.message || 'Error generando la campaña.');
+      console.error('[Campaign] handleGenerate error:', err);
+      const msg = err?.message || err?.toString() || 'Error desconocido';
+      setError(`Error generando la campaña: ${msg}`);
       if (!isAdmin) {
-        await refundProCredit();
-        await deductCredits(-imageCreditCost);
-        await refreshCredits();
+        await refundProCredit().catch(() => {});
+        await deductCredits(-imageCreditCost).catch(() => {});
+        await refreshCredits().catch(() => {});
       }
       setStep(3);
     } finally {
@@ -460,25 +511,29 @@ const CampaignModule: React.FC = () => {
                             ¿Tenés imágenes para usar?{' '}
                             <span className="text-slate-400 font-medium normal-case tracking-normal">(opcional pero recomendado)</span>
                           </label>
-                          {activeSlots.length > 0 && (
-                            <span className="text-[10px] font-bold text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full">
-                              {activeSlots.length} subida{activeSlots.length > 1 ? 's' : ''}
-                            </span>
-                          )}
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            totalSlotsUsed >= MAX_TOTAL_SLOTS
+                              ? 'bg-slate-100 text-slate-500'
+                              : totalSlotsUsed > 0
+                              ? 'bg-brand-50 text-brand-600'
+                              : 'bg-slate-50 text-slate-400'
+                          }`}>
+                            {totalSlotsUsed}/{MAX_TOTAL_SLOTS} imágenes
+                          </span>
                         </div>
-                        <div className="grid grid-cols-4 gap-3">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                           {SLOT_ROLES.map(role => (
                             <ImageUploadSlot
                               key={role}
                               role={role}
-                              value={slots[role]}
-                              onChange={base64 => setSlots(prev => ({ ...prev, [role]: base64 }))}
-                              onRemove={() => setSlots(prev => ({ ...prev, [role]: '' }))}
+                              images={slots[role]}
+                              onChange={imgs => setSlots(prev => ({ ...prev, [role]: imgs }))}
+                              totalUsed={totalSlotsUsed}
                             />
                           ))}
                         </div>
                         <p className="text-[11px] text-slate-400 mt-2 leading-[1.5]">
-                          La IA va a analizar estas imágenes para entender tu producto, tu estética y tu marca antes de crear la campaña.
+                          Podés subir hasta 8 imágenes en total. La IA las analiza para entender tu producto, estética y marca antes de crear la campaña.
                         </p>
                       </div>
                     </div>
@@ -676,7 +731,7 @@ const CampaignModule: React.FC = () => {
                             </div>
                             <div className="flex justify-between">
                               <span className="opacity-70">Referencias</span>
-                              <span className="font-semibold">{activeSlots.length} imágenes</span>
+                              <span className="font-semibold">{totalSlotsUsed} imagen{totalSlotsUsed !== 1 ? 'es' : ''}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="opacity-70">Sesión</span>
@@ -810,10 +865,18 @@ const CampaignModule: React.FC = () => {
                       </button>
                       <button
                         type="button"
+                        onClick={() => downloadCampaignHtml(currentSet)}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-700 transition-colors"
+                        title="Kit interactivo — abrilo en el browser para usar los checkboxes y copiar hashtags"
+                      >
+                        <FileText size={14} /> Kit HTML
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => downloadCampaignPdf(currentSet)}
                         className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-colors"
                       >
-                        <FileText size={14} /> Descargar PDF
+                        <Download size={14} /> PDF
                       </button>
                       <button
                         type="button"
@@ -1114,12 +1177,16 @@ const CampaignModule: React.FC = () => {
                       </p>
                     </div>
                     <div className="flex gap-2 flex-shrink-0 ml-4">
-                      <button type="button" onClick={() => downloadCampaignPdf(set)}
-                        className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl flex items-center justify-center transition-all" title="Descargar PDF">
+                      <button type="button" onClick={() => downloadCampaignHtml(set)}
+                        className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl flex items-center justify-center transition-all" title="Kit HTML interactivo">
                         <FileText className="w-4 h-4" />
                       </button>
+                      <button type="button" onClick={() => downloadCampaignPdf(set)}
+                        className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl flex items-center justify-center transition-all" title="Descargar PDF">
+                        <Download className="w-4 h-4" />
+                      </button>
                       <button type="button" onClick={() => downloadSetZip(set)}
-                        className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl flex items-center justify-center transition-all" title="Descargar ZIP">
+                        className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl flex items-center justify-center transition-all" title="Descargar imágenes ZIP">
                         <Download className="w-4 h-4" />
                       </button>
                       <button type="button" onClick={() => deleteSet(set.id)} disabled={deletingId === set.id}
