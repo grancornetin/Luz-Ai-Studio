@@ -1,13 +1,134 @@
 import { geminiService } from '../../services/geminiService';
+import { imageApiService, extractImageRef } from '../../services/imageApiService';
 import {
   CampaignChannel, CampaignImageSlot, CampaignPiece, CampaignPlan,
   CAMPAIGN_CHANNEL_META,
 } from './types';
 
-// ─── buildCampaignPlan ────────────────────────────────────────────────────────
-// Piensa como una agencia senior: estrategia → concepto → calendario → copy.
-// Devuelve un CampaignPlan completo con piezas listas para generar imágenes.
+// ─────────────────────────────────────────────────────────────────────────────
+// CAMPAIGN DIRECTOR SERVICE
+//
+// Arquitectura inspirada en UGC Studio:
+//   1. Gemini 2.5 analiza el brief + imágenes de referencia → construye el plan
+//      estratégico completo (concepto, piezas, copy, hashtags, calendario)
+//   2. Por cada pieza, se construye un prompt de imagen con los mismos locks
+//      de identidad/producto/marca que usa UGC Studio
+//   3. Las referencias se pasan estratificadas: producto primero (2x), luego
+//      inspiración, luego marca — igual que UGC duplica la cara para reforzar
+//   4. La generación usa imageApiService directamente (mismo path que UGC)
+// ─────────────────────────────────────────────────────────────────────────────
 
+// ─── Negative prompt compartido con UGC Studio ───────────────
+const CAMPAIGN_NEGATIVE = [
+  'blurry', 'distorted', 'low quality', 'bad anatomy',
+  'extra fingers', 'deformed hands', 'mutated body',
+  'bad lighting', 'low resolution', 'overexposed', 'underexposed',
+  'ugly', 'poor composition', 'watermark', 'text overlay',
+  'collage', 'composite artifacts', 'identity mixing',
+  'face distortion', 'skin smoothing', 'beauty filter',
+  'airbrushed', 'editorial over-processing', 'plastic skin',
+  'wrong product', 'different brand', 'color drift',
+].join(', ');
+
+// ─── Lock system para campaña (versión campaign de UGC LOCK_SYSTEM) ──────────
+function buildCampaignLockSystem(slots: CampaignImageSlot[]): string {
+  const hasProduct     = slots.some(s => s.role === 'product');
+  const hasModel       = slots.some(s => s.role === 'model');
+  const hasBrand       = slots.some(s => s.role === 'brand');
+  const hasInspiration = slots.some(s => s.role === 'inspiration');
+
+  const locks: string[] = [];
+
+  if (hasProduct) locks.push(`🔒 PRODUCT LOCK:
+- The product shown in the PRODUCT REFERENCE must appear EXACTLY as-is.
+- Same shape, same color, same materials, same label/packaging details.
+- NO reinterpretation. NO generic version. NO different product.
+- If the product has text or logo, reproduce it faithfully.`);
+
+  if (hasModel) locks.push(`🔒🔒🔒 IDENTITY LOCK (ABSOLUTE PRIORITY):
+- The MODEL REFERENCE defines the ONLY person allowed in this image.
+- Same face, bone structure, skin tone, hair color, texture, eye color. EXACT.
+- NO face replacement, NO identity drift, NO different person.
+- DO NOT composite or paste the face reference — generate the person naturally.`);
+
+  if (hasBrand) locks.push(`🔒 BRAND LOCK:
+- The BRAND REFERENCE defines the visual identity: colors, style, aesthetic.
+- Maintain color palette coherence with brand reference.
+- NO clashing colors. NO visual style that contradicts the brand.`);
+
+  if (hasInspiration) locks.push(`🔒 STYLE LOCK:
+- The INSPIRATION REFERENCE defines the visual mood, lighting, and composition style.
+- Match the lighting direction, color temperature, and overall aesthetic.
+- DO NOT copy the exact scene — use it as MOOD and STYLE reference only.`);
+
+  if (locks.length === 0) return '';
+
+  return `
+╔══════════════════════════════════════════════════════════════════╗
+║           CAMPAIGN LOCK SYSTEM (NON-NEGOTIABLE)                 ║
+╚══════════════════════════════════════════════════════════════════╝
+
+${locks.join('\n\n')}
+
+🔒 VISUAL CONTINUITY LOCK (ALL PIECES MUST FEEL FROM SAME SESSION):
+- Same color temperature across all images.
+- Same overall lighting quality — do NOT shift warm/cool between pieces.
+- Same aesthetic tone — every piece must feel like the same campaign.
+- No Instagram-style color grading. No vignetting. No filters.
+`;
+}
+
+// ─── Construye el prompt de imagen para una pieza específica ──
+function buildImagePrompt(
+  piece: CampaignPiece,
+  slots: CampaignImageSlot[],
+  campaignConcept: string,
+  channelLabel: string,
+): string {
+  const hasProduct     = slots.some(s => s.role === 'product');
+  const hasModel       = slots.some(s => s.role === 'model');
+  const hasInspiration = slots.some(s => s.role === 'inspiration');
+  const hasBrand       = slots.some(s => s.role === 'brand');
+
+  const refGuide = [
+    hasModel       && '- FIRST IMAGES: MODEL REFERENCE — defines the person\'s identity. Use EXACTLY.',
+    hasProduct     && '- PRODUCT REFERENCE: defines the exact product to show.',
+    hasInspiration && '- INSPIRATION REFERENCE: defines the mood, lighting style, and aesthetic.',
+    hasBrand       && '- BRAND REFERENCE: defines color palette and visual identity.',
+  ].filter(Boolean).join('\n');
+
+  const lockSystem = buildCampaignLockSystem(slots);
+
+  return `You are a professional commercial photographer and creative director.
+Generate a high-quality campaign image for the following brief.
+
+CAMPAIGN CONCEPT: "${campaignConcept}"
+PIECE ROLE: ${piece.rol}
+CHANNEL: ${channelLabel}
+DAY: ${piece.dia} of 7
+
+${refGuide ? `REFERENCE GUIDE:\n${refGuide}\n` : ''}
+
+VISUAL DIRECTION:
+${piece.imagePrompt}
+
+TECHNICAL REQUIREMENTS:
+- Professional commercial photography quality
+- ${channelLabel === 'Instagram Stories' || channelLabel === 'TikTok' ? 'Vertical format (9:16 feel), mobile-first composition' : 'Clean, editorial composition'}
+- Natural lighting preferred over studio unless brief specifies otherwise
+- High resolution, sharp focus on hero element
+- ${hasModel ? 'Person is STATIC — no mid-walk, no blurred motion' : 'Product centered and well-lit'}
+- Authentic, not over-processed — real quality, not AI-obvious
+
+${lockSystem}
+
+FINAL CHECKLIST:
+${hasProduct ? '✓ Product matches product reference exactly\n' : ''}${hasModel ? '✓ Person matches model reference exactly\n' : ''}${hasInspiration ? '✓ Mood and lighting matches inspiration reference\n' : ''}${hasBrand ? '✓ Color palette coherent with brand reference\n' : ''}✓ Image feels professional and campaign-ready
+✓ Suitable for ${channelLabel}
+✓ Represents "${piece.rol}" role in the campaign narrative`;
+}
+
+// ─── buildCampaignPlan — el "director creativo" ───────────────
 export async function buildCampaignPlan(
   idea:       string,
   canales:    CampaignChannel[],
@@ -23,44 +144,57 @@ export async function buildCampaignPlan(
   const hasModel       = slots.some(s => s.role === 'model');
 
   const slotsContext = [
-    hasProduct     && '- Se adjunta foto del PRODUCTO a promocionar. Analizá colores, forma, tipo de producto y contexto de uso.',
-    hasInspiration && '- Se adjunta foto de INSPIRACIÓN / estética deseada. Usá ese estilo visual como referencia.',
-    hasBrand       && '- Se adjunta imagen de MARCA (logo/packaging). Mantené coherencia de colores y personalidad.',
-    hasModel       && '- Se adjunta foto del MODELO / avatar protagonista. Incluí esa persona en las escenas que corresponda.',
+    hasProduct     && '- PRODUCT IMAGE attached: analyze the product type, colors, packaging, and commercial positioning.',
+    hasInspiration && '- INSPIRATION IMAGE attached: analyze the visual mood, lighting style, color palette, and aesthetic.',
+    hasBrand       && '- BRAND IMAGE attached: analyze brand colors, style, and visual identity.',
+    hasModel       && '- MODEL/AVATAR IMAGE attached: this person will star in the campaign.',
   ].filter(Boolean).join('\n');
 
-  const prompt = `Sos una directora creativa y estratega de marketing senior especializada en marcas latinoamericanas de e-commerce, moda, cosmética y lifestyle. Tu trabajo es crear campañas que compiten con grandes agencias pero que una emprendedora sola puede ejecutar sin frustrarse.
+  const prompt = `You are a senior creative director, marketing strategist, and prompt engineer specialized in Latin American e-commerce brands (fashion, cosmetics, lifestyle, artisan products).
 
-BRIEF DE LA EMPRENDEDORA:
+Your job: analyze the brief below and design a complete campaign plan that a solo entrepreneur can execute in 7 days without feeling overwhelmed.
+
+═══════════════════════════════════════════════
+BRAND BRIEF (written by the entrepreneur):
 "${idea}"
+═══════════════════════════════════════════════
 
-CANALES DONDE VA A PUBLICAR: ${canalesLabel}
-CANTIDAD DE IMÁGENES A GENERAR: ${imageCount}
-${slotsContext ? `\nIMÁGENES DE REFERENCIA ADJUNTAS:\n${slotsContext}` : ''}
+PUBLISHING CHANNELS: ${canalesLabel}
+NUMBER OF IMAGES TO GENERATE: ${imageCount}
+${slotsContext ? `\nVISUAL REFERENCES PROVIDED:\n${slotsContext}` : ''}
 
-TU TAREA:
-Diseñá una campaña completa y ejecutable. Tenés que pensar como agencia pero entregar algo que una persona sola pueda implementar en 7 días sin frustrarse.
+YOUR TASK — think step by step:
 
-REGLAS ESTRICTAS:
-1. El plan tiene exactamente ${imageCount} piezas — ni más, ni menos.
-2. Distribuí las piezas entre los días 1 al 7 de forma lógica (no más de 2 piezas por día).
-3. Distribuí las piezas entre los canales seleccionados: ${canalesLabel}.
-4. Cada pieza tiene un ROL narrativo claro en la historia de la campaña.
-5. El copy debe sonar humano, cercano, en español latinoamericano. NUNCA genérico.
-6. Las instrucciones para Sofi deben ser simples, concretas, de una sola acción.
-7. Los hashtags deben ser reales y específicos al nicho, NO genéricos como #moda o #emprendedor.
-8. imagePrompt en inglés, descriptivo y visual, pensado para generar con IA.
+1. UNDERSTAND what this entrepreneur actually needs (launch? sale? awareness? engagement?)
+2. DEFINE a strong creative concept — the emotional thread that ties all pieces together
+3. BUILD a narrative arc: tension → revelation → transformation (like a 3-act story)
+4. DISTRIBUTE ${imageCount} pieces across 7 days and the selected channels
+5. WRITE copy that sounds human, warm, in Latin American Spanish — never generic
+6. CREATE strategic hashtags specific to this niche — not #emprendedora or #negocio
+7. For each piece, write an imagePrompt in ENGLISH that a Gemini image model can execute
+   — the imagePrompt must be specific, visual, directional (lighting, composition, mood, subject)
+   — if references were provided, the imagePrompt must reference them explicitly
+   — format: "Commercial photography. [Subject/hero]. [Composition]. [Lighting]. [Mood]. [Channel context]."
 
-ESTRUCTURA DE RESPUESTA — devolvé SOLO JSON válido sin markdown:
+STRICT RULES:
+- Exactly ${imageCount} pieces — no more, no less
+- Max 2 pieces per day across 7 days
+- Each piece has a CLEAR NARRATIVE ROLE (Teaser / Launch / Benefit / Trust / Urgency / Close / Bonus)
+- Copy must feel written by a real person, not AI — include emotion, specificity, real CTAs
+- Instructions for Sofi must be ONE simple action ("Publicá esto el lunes a las 19hs. Respondé todos los comentarios en la primera hora.")
+- Hashtags must be REAL and NICHE-SPECIFIC — research the product category
+- imagePrompt in English, 2-3 sentences, highly visual and specific
+
+RESPOND ONLY WITH VALID JSON (no markdown, no explanation):
 {
-  "concepto": "El hilo conductor creativo de toda la campaña (1 oración)",
-  "promesa": "Qué le prometés al cliente de Sofi con esta campaña (1 oración)",
-  "tagline": "Frase memorable de la campaña (máx 8 palabras)",
+  "concepto": "The creative thread — 1 sentence, evocative",
+  "promesa": "What this campaign promises to Sofi's customer — 1 sentence",
+  "tagline": "Memorable campaign phrase — max 8 words in Spanish",
   "duracionDias": 7,
-  "resumen": "2-3 oraciones que explican a Sofi qué debe hacer con este kit y por qué va a funcionar",
-  "hashtagsComunidad": ["hashtag1", "hashtag2", "hashtag3"],
-  "hashtagsNicho": ["hashtag4", "hashtag5", "hashtag6", "hashtag7"],
-  "hashtagsColarga": ["hashtag8", "hashtag9", "hashtag10"],
+  "resumen": "2-3 sentences telling Sofi exactly what to do with this kit and why it will work",
+  "hashtagsComunidad": ["#tag1", "#tag2", "#tag3"],
+  "hashtagsNicho": ["#tag4", "#tag5", "#tag6", "#tag7"],
+  "hashtagsColarga": ["#tag8", "#tag9", "#tag10"],
   "piezas": [
     {
       "id": "pieza_1",
@@ -68,62 +202,150 @@ ESTRUCTURA DE RESPUESTA — devolvé SOLO JSON válido sin markdown:
       "semana": 1,
       "canal": "instagram_feed",
       "rol": "Teaser",
-      "imagePrompt": "Visual description in English for AI image generation, 1-2 sentences, specific lighting, mood, composition",
-      "titular": "Frase corta de impacto (máx 60 caracteres)",
-      "caption": "Texto completo del post adaptado al canal, con emojis si corresponde, máx 200 caracteres",
-      "cta": "Llamado a la acción específico para este post (máx 40 caracteres)",
+      "imagePrompt": "Commercial photography. [Specific visual description in English]. [Composition]. [Lighting]. [Mood]. Optimized for Instagram Feed.",
+      "titular": "Short impactful headline (max 60 chars in Spanish)",
+      "caption": "Full post text in Latin American Spanish, with emojis if natural, max 200 chars",
+      "cta": "Specific call to action (max 40 chars)",
       "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4"],
-      "instruccion": "Instrucción simple y concreta para Sofi sobre cuándo y cómo publicar esta pieza",
+      "instruccion": "One simple, specific action for Sofi to take",
       "horaRecomendada": "19:00"
     }
   ]
 }`;
 
   try {
+    console.log('[CampaignDirector] buildCampaignPlan start', { slots: slots.length, canales, imageCount });
     const raw = await geminiService.generateCampaignPlan(prompt, slots);
+    console.log('[CampaignDirector] Gemini raw response length:', raw?.length);
+
     const cleaned = (typeof raw === 'string' ? raw : JSON.stringify(raw))
       .replace(/```json|```/g, '').trim();
     const match = cleaned.match(/\{[\s\S]*\}/);
 
     if (match) {
       const parsed = JSON.parse(match[0]);
-      if (parsed?.piezas && Array.isArray(parsed.piezas)) {
-        // Asegurar que imageUrl esté vacío (se llena después de generar)
+      if (parsed?.piezas && Array.isArray(parsed.piezas) && parsed.piezas.length > 0) {
         parsed.piezas = parsed.piezas.slice(0, imageCount).map((p: any, i: number) => ({
           ...p,
           id:       p.id       ?? `pieza_${i + 1}`,
           imageUrl: '',
           hashtags: Array.isArray(p.hashtags) ? p.hashtags : [],
         }));
+        console.log('[CampaignDirector] Plan construido:', { concepto: parsed.concepto, piezas: parsed.piezas.length });
         return parsed as CampaignPlan;
       }
     }
+    throw new Error('Gemini returned invalid plan structure');
   } catch (err) {
-    console.warn('[campaignService] buildCampaignPlan failed:', err);
+    console.warn('[CampaignDirector] buildCampaignPlan failed, using fallback:', err);
+    return buildFallbackPlan(idea, canales, imageCount);
   }
-
-  // Fallback básico si Gemini falla
-  return buildFallbackPlan(idea, canales, imageCount);
 }
 
-// ─── Fallback ────────────────────────────────────────────────────────────────
+// ─── generateCampaignImages — generación con refs estratificadas ──────────────
+// Mismo approach que UGC Studio: producto duplicado para mayor peso,
+// luego inspiración y marca como contexto visual.
+export async function generateCampaignImages(
+  plan:       CampaignPlan,
+  slots:      CampaignImageSlot[],
+  sessionParams: {
+    uid?:         string;
+    sessionId?:   string;
+  },
+  onProgress?: (completed: number, total: number) => void,
+): Promise<string[]> {
 
+  const productSlots     = slots.filter(s => s.role === 'product');
+  const modelSlots       = slots.filter(s => s.role === 'model');
+  const inspirationSlots = slots.filter(s => s.role === 'inspiration');
+  const brandSlots       = slots.filter(s => s.role === 'brand');
+
+  // Estratificación de referencias — igual que UGC:
+  // Modelo duplicado para máximo peso de identidad
+  // Producto duplicado para respeto del objeto
+  // Inspiración y marca como contexto secundario
+  const buildRefs = (): Array<{ data: string; mimeType: string }> => {
+    const refs: string[] = [];
+
+    // Modelo primero (identidad) — duplicado si existe
+    modelSlots.forEach(s => refs.push(s.base64));
+    if (modelSlots.length > 0) refs.push(modelSlots[0].base64); // duplicar
+
+    // Producto (héroe visual) — duplicado si existe
+    productSlots.forEach(s => refs.push(s.base64));
+    if (productSlots.length > 0) refs.push(productSlots[0].base64); // duplicar
+
+    // Inspiración (mood/estilo)
+    inspirationSlots.forEach(s => refs.push(s.base64));
+
+    // Marca (paleta/identidad visual)
+    brandSlots.forEach(s => refs.push(s.base64));
+
+    return refs
+      .filter(Boolean)
+      .map((b64, i) => {
+        try { return extractImageRef(b64, `campaignRef[${i}]`); }
+        catch { return null; }
+      })
+      .filter(Boolean) as Array<{ data: string; mimeType: string }>;
+  };
+
+  const refs = buildRefs();
+  const total = plan.piezas.length;
+
+  console.log('[CampaignDirector] generateCampaignImages', {
+    total,
+    refs: refs.length,
+    hasModel: modelSlots.length > 0,
+    hasProduct: productSlots.length > 0,
+  });
+
+  // Determinar aspect ratio por canal — igual que UGC usa 3:4
+  const getAspectRatio = (canal: CampaignChannel): '3:4' | '9:16' | '1:1' | '4:3' => {
+    if (canal === 'instagram_stories' || canal === 'tiktok') return '9:16';
+    if (canal === 'whatsapp') return '1:1';
+    return '3:4';
+  };
+
+  const jobs = plan.piezas.map((pieza, i) => ({
+    prompt:          buildImagePrompt(pieza, slots, plan.concepto, CAMPAIGN_CHANNEL_META[pieza.canal].label),
+    negative:        CAMPAIGN_NEGATIVE,
+    referenceImages: refs,
+    aspectRatio:     getAspectRatio(pieza.canal),
+    module:          'campaign',
+    moduleLabel:     'Campaign Generator',
+    shotIndex:       i,
+    totalShots:      total,
+    uid:             sessionParams.uid,
+    sessionId:       sessionParams.sessionId,
+    metadata:        { role: pieza.rol, dia: pieza.dia, canal: pieza.canal },
+  }));
+
+  const results = await imageApiService.generateBatch(jobs, (done, t) => {
+    onProgress?.(done, t);
+  });
+
+  return results.map(r => r ?? '');
+}
+
+// ─── Fallback si Gemini falla ─────────────────────────────────
 function buildFallbackPlan(
   idea:       string,
   canales:    CampaignChannel[],
   imageCount: number,
 ): CampaignPlan {
   const roles = ['Teaser', 'Lanzamiento', 'Beneficio', 'Confianza', 'Conversión', 'Recordatorio', 'Cierre', 'Bonus'];
+
   const piezas: CampaignPiece[] = Array.from({ length: imageCount }, (_, i) => ({
     id:              `pieza_${i + 1}`,
     dia:             Math.min(i + 1, 7),
     semana:          1,
     canal:           canales[i % canales.length],
     rol:             roles[i] ?? `Escena ${i + 1}`,
-    imagePrompt:     'product on clean surface, soft studio lighting, professional e-commerce style, warm tones',
+    imagePrompt:     'Commercial photography. Product on clean neutral surface, soft warm studio lighting, shallow depth of field. Professional e-commerce style. High resolution.',
     imageUrl:        '',
-    titular:         `Descubrí lo nuevo`,
-    caption:         `Algo especial para vos. ✨ No te lo pierdas.`,
+    titular:         'Descubrí lo nuevo',
+    caption:         'Algo especial para vos. ✨ No te lo pierdas.',
     cta:             'Escribime al DM',
     hashtags:        ['#emprendedora', '#tiendaonline', '#nuevoproducto'],
     instruccion:     `Publicá esta imagen el día ${Math.min(i + 1, 7)} a las 19:00hs.`,

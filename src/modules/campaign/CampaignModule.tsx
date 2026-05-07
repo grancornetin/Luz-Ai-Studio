@@ -7,11 +7,11 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-import { generationService, GenerationProgress } from '../promptLibrary/services/generationService';
+import { GenerationProgress } from '../promptLibrary/services/generationService';
 import { downloadAsZip } from '../../utils/imageUtils';
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
 import { newSessionId } from '../../services/imageApiService';
-import { buildCampaignPlan } from './campaignService';
+import { buildCampaignPlan, generateCampaignImages } from './campaignService';
 import { downloadCampaignPdf, downloadCampaignHtml } from './campaignPdfService';
 import { campaignStorage } from './campaignStorage';
 import {
@@ -328,37 +328,21 @@ const CampaignModule: React.FC = () => {
         throw new Error('No se pudo construir el plan de campaña. Intentá de nuevo.');
       }
 
-      // Paso 2: generar imágenes
+      // Paso 2: generar imágenes con el director creativo de campaña
       setProgressStepIndex(3);
-      const imagePrompts = plan.piezas.map(p =>
-        `${p.imagePrompt}, professional photography, high quality, commercial style`,
-      );
+      console.log('[Campaign] generateCampaignImages start', { piezas: plan.piezas.length, slots: activeSlots.length });
 
-      // Referencias: producto + modelo van como referencias visuales para la IA
-      const references = activeSlots
-        .filter(s => s.role === 'product' || s.role === 'inspiration' || s.role === 'brand' || s.role === 'model')
-        .map(s => s.base64);
-
-      console.log('[Campaign] generateBatch start', { prompts: imagePrompts.length, references: references.length });
-
-      const images = await generationService.generateBatch(
-        imagePrompts,
-        references,
-        undefined,
-        (p) => {
-          setProgress(p);
-          if (p.completed === p.total) setProgressStepIndex(4);
-        },
-        {
-          uid:         user?.uid,
-          sessionId:   newSessionId(),
-          module:      'campaign',
-          moduleLabel: 'Campaign Generator',
-          metadata:    { imageCount },
+      const images = await generateCampaignImages(
+        plan,
+        activeSlots,
+        { uid: user?.uid, sessionId: newSessionId() },
+        (done, total) => {
+          setProgress({ total, completed: done, current: done - 1 });
+          if (done === total) setProgressStepIndex(4);
         },
       );
 
-      console.log('[Campaign] imágenes generadas', images.length, images.map(u => u?.slice(0, 60)));
+      console.log('[Campaign] imágenes generadas:', images.length, images.filter(Boolean).length, 'con URL');
 
       // Paso 5: captions + calendario (ya vienen del plan)
       setProgressStepIndex(5);
@@ -867,9 +851,9 @@ const CampaignModule: React.FC = () => {
                         type="button"
                         onClick={() => downloadCampaignHtml(currentSet)}
                         className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-700 transition-colors"
-                        title="Kit interactivo — abrilo en el browser para usar los checkboxes y copiar hashtags"
+                        title="Descargá una versión interactiva del kit — abrila desde tu PC para marcar el progreso, copiar textos y exportar PDF"
                       >
-                        <FileText size={14} /> Kit HTML
+                        <FileText size={14} /> Versión interactiva
                       </button>
                       <button
                         type="button"
@@ -1178,7 +1162,7 @@ const CampaignModule: React.FC = () => {
                     </div>
                     <div className="flex gap-2 flex-shrink-0 ml-4">
                       <button type="button" onClick={() => downloadCampaignHtml(set)}
-                        className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl flex items-center justify-center transition-all" title="Kit HTML interactivo">
+                        className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl flex items-center justify-center transition-all" title="Versión interactiva — abrila desde tu PC">
                         <FileText className="w-4 h-4" />
                       </button>
                       <button type="button" onClick={() => downloadCampaignPdf(set)}

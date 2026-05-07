@@ -434,6 +434,19 @@ function buildPiecePage(pieza: CampaignPiece, index: number, total: number, imag
         <div class="piece-qhbox-title">📌 Qué hacer hoy</div>
         <div class="piece-qhbox-text">${esc(pieza.instruccion)}</div>
       </div>
+
+      <details style="margin-top:16px">
+        <summary style="font-family:var(--font-body);font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;user-select:none">
+          <span style="font-size:9px">▶</span> Ver prompt de imagen (para usar en Prompt Studio)
+        </summary>
+        <div style="margin-top:8px;background:#f1f5f9;border:1px solid var(--border);border-radius:var(--r-sm);padding:14px 16px;position:relative">
+          <div style="font-family:monospace;font-size:11px;line-height:1.6;color:#475569;white-space:pre-wrap;word-break:break-word">${esc(pieza.imagePrompt)}</div>
+          <button onclick="copyPrompt(this)" data-prompt="${esc(pieza.imagePrompt)}"
+            style="position:absolute;top:10px;right:10px;background:var(--fucsia);color:white;border:none;border-radius:6px;padding:4px 10px;font-family:var(--font-body);font-size:10px;font-weight:600;cursor:pointer;letter-spacing:0.05em">
+            Copiar
+          </button>
+        </div>
+      </details>
     </div>
     ${pageFooter(pageNum)}
   </div>`;
@@ -551,27 +564,70 @@ ${pages}
 <div id="toast" style="position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--black);color:white;padding:10px 20px;border-radius:100px;font-family:var(--font-body);font-size:13px;font-weight:500;border:1px solid rgba(247,44,91,0.4);opacity:0;transition:all 0.25s;pointer-events:none;z-index:9999;">✓ Copiado al portapapeles</div>
 
 <script>
+// ── Persistencia de checkboxes con localStorage ──────────────
+const STORAGE_KEY = 'luzIA_campaign_checks_${set.id}';
+
+function saveChecks() {
+  const checks = {};
+  document.querySelectorAll('.cal-check').forEach((el, i) => {
+    checks[i] = el.classList.contains('done');
+  });
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(checks)); } catch(e) {}
+}
+
+function loadChecks() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return;
+    const checks = JSON.parse(saved);
+    document.querySelectorAll('.cal-check').forEach((el, i) => {
+      if (checks[i]) {
+        el.classList.add('done');
+        const row = el.closest('.cal-row');
+        if (row) row.style.opacity = '0.55';
+      }
+    });
+  } catch(e) {}
+}
+
 function toggleCheck(el) {
   el.classList.toggle('done');
   const row = el.closest('.cal-row');
   if (el.classList.contains('done')) row.style.opacity = '0.55';
   else row.style.opacity = '';
+  saveChecks();
+}
+
+// Cargar estado guardado al abrir el archivo
+document.addEventListener('DOMContentLoaded', loadChecks);
+
+// ── Copiar hashtag ────────────────────────────────────────────
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = '✓ ' + msg;
+  toast.style.opacity = '1';
+  toast.style.transform = 'translateX(-50%) translateY(0)';
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(-50%) translateY(20px)';
+  }, 2000);
 }
 
 function copyTag(el) {
   const text = el.textContent.trim();
+  navigator.clipboard.writeText(text).then(() => showToast(text + ' copiado'));
+}
+
+function copyPrompt(el) {
+  const text = el.dataset.prompt || '';
   navigator.clipboard.writeText(text).then(() => {
-    const toast = document.getElementById('toast');
-    toast.textContent = '✓ ' + text + ' copiado';
-    toast.style.opacity = '1';
-    toast.style.transform = 'translateX(-50%) translateY(0)';
-    setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateX(-50%) translateY(20px)';
-    }, 2000);
+    showToast('Prompt copiado — pegalo en Prompt Studio');
+    el.textContent = '✓ Copiado';
+    setTimeout(() => { el.textContent = 'Copiar'; }, 2000);
   });
 }
 
+// ── Exportar PDF ──────────────────────────────────────────────
 async function exportPDF() {
   const btn = document.querySelector('.btn-pdf');
   btn.textContent = '⏳ Generando PDF...';
@@ -595,7 +651,7 @@ async function exportPDF() {
     console.error(e);
     alert('Error al generar PDF. Usá el botón Imprimir como alternativa.');
   }
-  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:15px;height:15px"><path d="M12 16V8m0 8-3-3m3 3 3-3M20 20H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2Z"/></svg> Exportar PDF';
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:15px;height:15px"><path d="M12 16V8m0 8-3-3m3 3 3-3M20 20H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2Z"/></svg> Exportar PDF';
   btn.disabled = false;
 }
 </script>
