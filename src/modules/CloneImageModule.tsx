@@ -303,6 +303,21 @@ export default function CloneImageModule() {
   const canGoToBase = !!face1 && !!body1 && (!enableSecondSubject || (!!face2 && !!body2));
   const canGoToOutfit = !!baseComposition;
 
+  const activeProductOverrides = detectedProducts.filter(p => p.replacementImage);
+  const hasOutfit1Change = !!replaceOutfit1 && !!normalizeImageInput(outfit1);
+  const hasOutfit2Change = !!enableSecondSubject && !!replaceOutfit2 && !!normalizeImageInput(outfit2);
+  const hasProductChanges = activeProductOverrides.length > 0;
+  const hasFinalChanges = hasOutfit1Change || hasOutfit2Change || hasProductChanges;
+  const needsOutfit1Image = !!replaceOutfit1 && !normalizeImageInput(outfit1);
+  const needsOutfit2Image = !!enableSecondSubject && !!replaceOutfit2 && !normalizeImageInput(outfit2);
+  const canApplyFinalChanges = !!baseComposition && hasFinalChanges && !needsOutfit1Image && !needsOutfit2Image;
+  const finalCreditsAfter = Math.max(0, credits.available - CLONE_COST);
+  const finalChangeSummary = [
+    hasOutfit1Change ? 'Outfit S1' : null,
+    hasOutfit2Change ? 'Outfit S2' : null,
+    hasProductChanges ? `${activeProductOverrides.length} producto${activeProductOverrides.length === 1 ? '' : 's'}` : null,
+  ].filter(Boolean).join(' + ') || 'Sin cambios seleccionados';
+
   useMemo(() => {
     let m = 1;
     if (canGoToIdentity) m = 2;
@@ -423,8 +438,28 @@ export default function CloneImageModule() {
 
   async function handleApplyOutfitsAndProducts() {
     if (!baseComposition) return;
+
     setError(null);
     setCreditsRefunded(false);
+
+    if (needsOutfit1Image) {
+      setError(toAppError(new Error('Activaste Cambiar Outfit S1, pero falta subir la imagen del outfit.')));
+      return;
+    }
+
+    if (needsOutfit2Image) {
+      setError(toAppError(new Error('Activaste Cambiar Outfit S2, pero falta subir la imagen del outfit.')));
+      return;
+    }
+
+    if (!hasFinalChanges) {
+      setError(toAppError(new Error('Selecciona al menos un cambio: outfit S1, outfit S2 o reemplazo de producto.')));
+      return;
+    }
+
+    const ok = await checkAndDeduct(CREDIT_COSTS.CLONE_IMAGE);
+    if (!ok) return;
+
     setLoading(true);
 
     // Iniciar progreso narrado para step 4
@@ -443,8 +478,6 @@ export default function CloneImageModule() {
       const safeTarget = toBase64OrThrow(baseComposition, "composición base");
       const safeFace = toBase64OrThrow(face1, "cara del sujeto 1");
       const safeBody = toBase64OrThrow(body1, "cuerpo del sujeto 1");
-
-      const activeProductOverrides = detectedProducts.filter(p => p.replacementImage);
 
       const payload: CloneImageParams = {
         targetImage: safeTarget,
@@ -486,7 +519,7 @@ export default function CloneImageModule() {
         imageUrl: img,
         module: 'scene_clone',
         moduleLabel: 'Scene Clone (Final)',
-        creditsUsed: 0,
+        creditsUsed: CREDIT_COSTS.CLONE_IMAGE,
         promptText: `Clonación final con aplicación de outfits y productos`
       }).catch(console.error);
 
@@ -504,7 +537,12 @@ export default function CloneImageModule() {
         return updated;
       });
     } catch (e: any) {
-      setError(toAppError(e));
+      const appErr = toAppError(e);
+      setError(appErr);
+      if (REFUNDABLE_ERRORS.has(appErr.code as any)) {
+        const refunded = await refundCredits(CREDIT_COSTS.CLONE_IMAGE);
+        setCreditsRefunded(refunded);
+      }
     } finally {
       if (cloneEtaRef.current) { clearInterval(cloneEtaRef.current); cloneEtaRef.current = null; }
       if (cloneT1Ref.current)  { clearTimeout(cloneT1Ref.current);  cloneT1Ref.current  = null; }
@@ -818,7 +856,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                   </div>
 
                   <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5 text-[11.5px] text-emerald-900 leading-[1.55]">
-                    <strong>Sin sorpresas.</strong> Solo se descuenta si la generación se completa. Reembolso automático si falla.
+                    <strong>Sin sorpresas.</strong> Esta generación consume créditos. Reembolso automático si falla por un error reembolsable.
                   </div>
                 </div>
               )}
@@ -826,6 +864,61 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
               {step === 4 && (
                 <div className="space-y-6 animate-in slide-in-from-left-4">
                   <ProHeader title="Outfit & Productos" subtitle="Personalización de elementos" icon="fa-shirt" />
+
+                  <div className="relative bg-slate-900 text-white rounded-2xl p-5 overflow-hidden">
+                    <div
+                      className="absolute -top-10 -right-10 w-[140px] h-[140px] rounded-full pointer-events-none"
+                      style={{ background: 'rgba(236,72,153,0.28)', filter: 'blur(40px)' }}
+                    />
+                    <div className="relative">
+                      <div className="text-[10px] font-bold text-pink-300 uppercase tracking-[0.14em] mb-3.5">
+                        Imagen final · Consume créditos
+                      </div>
+                      <div className="flex flex-col gap-2 mb-3.5 text-[13px]">
+                        <div className="flex justify-between gap-4">
+                          <span className="opacity-70">Cambios</span>
+                          <span className="font-semibold text-right">{finalChangeSummary}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="opacity-70">Imágenes</span>
+                          <span className="font-semibold">1 imagen final</span>
+                        </div>
+                        <div className="h-px bg-white/10 my-1.5" />
+                        <div className="flex justify-between items-baseline">
+                          <span className="opacity-85 text-[13px]">Total</span>
+                          <span className="t-display text-[36px] tracking-tight leading-none normal-case not-italic">
+                            {CLONE_COST}{' '}
+                            <span className="text-sm opacity-70 font-semibold normal-case">cr</span>
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-[11px] leading-[1.5] opacity-70">
+                        Te quedarán {finalCreditsAfter} cr
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-[11.5px] text-amber-900 leading-[1.55]">
+                    <strong>Importante:</strong> aplicar outfits o productos genera una nueva imagen final y consume {CLONE_COST} cr. Si la generación falla por un error reembolsable, se devuelve automáticamente.
+                  </div>
+
+                  {!hasFinalChanges && !needsOutfit1Image && !needsOutfit2Image && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[11.5px] text-slate-600 leading-[1.55]">
+                      Selecciona al menos un cambio antes de generar: activa un outfit y sube su imagen, o sube un producto de reemplazo.
+                    </div>
+                  )}
+
+                  {needsOutfit1Image && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-[11.5px] text-red-700 leading-[1.55]">
+                      Falta subir la imagen del outfit para el Sujeto 1.
+                    </div>
+                  )}
+
+                  {needsOutfit2Image && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-[11.5px] text-red-700 leading-[1.55]">
+                      Falta subir la imagen del outfit para el Sujeto 2.
+                    </div>
+                  )}
                   
                   <div className="space-y-4">
                     <div className={`p-4 rounded-[24px] border transition-all ${replaceOutfit1 ? 'bg-brand-50 border-brand-200' : 'bg-white border-slate-200'}`}>
@@ -906,15 +999,15 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                   else if (step === 4) handleApplyOutfitsAndProducts();
                 }}
                 continueLabel={
-                  step === 3 ? 'Generar Base' :
-                  step === 4 ? 'Aplicar Cambios' :
+                  step === 3 ? `Generar Base · ${CLONE_COST} cr` :
+                  step === 4 ? `Aplicar Cambios · ${CLONE_COST} cr` :
                   'Continuar'
                 }
                 disabled={
                   step === 1 ? !canGoToIdentity :
                   step === 2 ? !canGoToBase :
                   step === 3 ? loading :
-                  step === 4 ? loading :
+                  step === 4 ? loading || !canApplyFinalChanges :
                   false
                 }
                 loading={loading && (step === 3 || step === 4)}
