@@ -23,6 +23,7 @@
     "firebase-admin": "^13.8.0",
     "fuse.js": "^7.3.0",
     "google-auth-library": "^9.15.1",
+    "jspdf": "^4.2.1",
     "jszip": "^3.10.1",
     "lucide-react": "^0.577.0",
     "motion": "^12.35.0",
