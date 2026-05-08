@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-import { generationService } from '../promptLibrary/services/generationService';
 import { downloadAsZip } from '../../utils/imageUtils';
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
 import { ImageSlot } from '../../components/shared/ImageSlot';
@@ -22,7 +21,11 @@ import {
   PhotodumpRefs, NARRATIVE_META, PROTAGONIST_META, DESTINO_META, STORY_ARC_META,
 } from './types';
 import {
-  buildPhotodumpDirectorPlan, buildFinalPrompt, getRefsAsArray,
+  buildPhotodumpSessionPlan,
+  generatePhotodumpREF0,
+  generatePhotodumpShot,
+  generatePhotodumpCaptions,
+  getRefsAsArray,
 } from './photodumpDirectorService';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
@@ -43,10 +46,11 @@ const WIZARD_STEP_DEFS = [
 ];
 
 const GENERATION_STEPS: ProgressStep[] = [
-  { id: 'refs',     label: 'Analizando referencias visuales' },
-  { id: 'director', label: 'Director armando la historia'    },
-  { id: 'generate', label: 'Generando imágenes del set'      },
-  { id: 'done',     label: 'Historia visual lista'           },
+  { id: 'plan',     label: 'Armando la estructura narrativa'    },
+  { id: 'ref0',     label: 'Generando imagen ancla del set'     },
+  { id: 'shots',    label: 'Generando imágenes de la historia'  },
+  { id: 'captions', label: 'Escribiendo captions y hashtags'    },
+  { id: 'done',     label: 'Historia visual lista'              },
 ];
 
 const CREDITS_PER_IMAGE = 2;
@@ -132,8 +136,8 @@ const PhotodumpModule: React.FC = () => {
   const [lightboxIndex,  setLightboxIndex]  = useState(0);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
 
-  // ── Costos ────────────────────────────────────────────────
-  const imageCreditCost = count * CREDITS_PER_IMAGE;
+  // ── Costos — count shots + 1 REF0 ancla ─────────────────
+  const imageCreditCost = (count + 1) * CREDITS_PER_IMAGE;
   const insufficient    = !isAdmin && (credits?.available ?? 0) < imageCreditCost;
   const hasProCredits   = isAdmin || proCredits > 0;
   const creditsAfter    = Math.max(0, (credits?.available ?? 0) - imageCreditCost);
@@ -203,51 +207,51 @@ const PhotodumpModule: React.FC = () => {
     setProgress({ total: count, completed: 0 });
 
     try {
-      // Paso 1: director analiza el protagonista y construye el Story Arc con locks de identidad
+      const sessionId = newSessionId();
+      const sessionParams = { uid: user?.uid, sessionId };
+
+      // Paso 1: armar plan narrativo (shot directives)
       setProgressStepIndex(0);
-      const plan = await buildPhotodumpDirectorPlan(
-        basePrompt, narrative, protagonist, destino, customStory, count, refs,
-      );
+      const plan = await buildPhotodumpSessionPlan(narrative, protagonist, destino, basePrompt);
+      const shots = plan.shots.slice(0, count);
 
-      // Paso 2: construir prompts finales
+      // Paso 2: generar imagen ancla REF0
       setProgressStepIndex(1);
-      const finalPrompts = plan.scenes.map(scene =>
-        buildFinalPrompt(basePrompt, scene, plan.protagonistAnalysis, refs, destino),
+      const { imageUrl: ref0Url, ref0Analysis } = await generatePhotodumpREF0(
+        refs, narrative, protagonist, destino, basePrompt, sessionParams,
       );
+      setPartialImages([ref0Url]);
 
-      // Paso 3: generar imágenes pasando las refs como ancla visual
+      // Paso 3: generar shots narrativos en paralelo controlado
       setProgressStepIndex(2);
-      const refsArray = getRefsAsArray(refs);
+      const shotUrls: string[] = [];
+      for (let i = 0; i < shots.length; i++) {
+        const url = await generatePhotodumpShot(
+          shots[i], refs, ref0Url, ref0Analysis,
+          basePrompt, narrative, destino, sessionParams,
+        );
+        shotUrls.push(url);
+        setPartialImages(prev => [...prev, url]);
+        setProgress({ total: shots.length, completed: i + 1 });
+      }
 
-      const images = await generationService.generateBatchFlash(
-        finalPrompts,
-        refsArray,
-        undefined,
-        (p) => {
-          setProgress({ total: p.total, completed: p.completed });
-        },
-        {
-          uid: user?.uid,
-          sessionId: newSessionId(),
-          module: 'photodump',
-          moduleLabel: 'Photodump Mode',
-          metadata: { narrative, protagonist, destino, count },
-        },
-      );
-
+      // Paso 4: generar captions y hashtags
       setProgressStepIndex(3);
+      const captions = await generatePhotodumpCaptions(basePrompt, narrative, shots);
+
+      setProgressStepIndex(4);
 
       const set: PhotodumpSet = {
         id:          Date.now().toString(),
         createdAt:   Date.now(),
         basePrompt, narrative, protagonist, destino, customStory, count,
         refs: { avatarRef: null, productRef: null, outfitRef: null, sceneRef: null },
-        images: images.filter(Boolean).map((url, i) => ({
+        images: shotUrls.filter(Boolean).map((url, i) => ({
           imageUrl: url,
-          moment:   plan.scenes[i]?.moment   ?? `Momento ${i + 1}`,
-          caption:  plan.scenes[i]?.caption  ?? '',
-          hashtags: plan.scenes[i]?.hashtags ?? '',
-          prompt:   finalPrompts[i]          ?? '',
+          moment:   captions[i]?.moment   ?? `Momento ${i + 1}`,
+          caption:  captions[i]?.caption  ?? '',
+          hashtags: captions[i]?.hashtags ?? '',
+          prompt:   shots[i]?.purpose     ?? '',
           order:    i + 1,
         })),
       };
@@ -647,8 +651,12 @@ const PhotodumpModule: React.FC = () => {
                           <div className="text-[10px] font-bold text-pink-300 uppercase tracking-[0.14em] mb-3.5">Resumen del costo</div>
                           <div className="flex flex-col gap-2 mb-3.5 text-[13px]">
                             <div className="flex justify-between items-baseline">
-                              <span className="opacity-70">{count} imágenes × {CREDITS_PER_IMAGE} cr</span>
-                              <span className="font-semibold">{imageCreditCost} cr</span>
+                              <span className="opacity-70">1 imagen ancla (REF0)</span>
+                              <span className="font-semibold">{CREDITS_PER_IMAGE} cr</span>
+                            </div>
+                            <div className="flex justify-between items-baseline">
+                              <span className="opacity-70">{count} imágenes del set</span>
+                              <span className="font-semibold">{count * CREDITS_PER_IMAGE} cr</span>
                             </div>
                             <div className="flex justify-between items-baseline">
                               <span className="opacity-70">Sesión</span>
