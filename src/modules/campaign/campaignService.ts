@@ -421,7 +421,7 @@ export async function generateCampaignImages(
   slots:       CampaignImageSlot[],
   anchorImage: string,
   sessionParams: { uid?: string; sessionId?: string },
-  onProgress?: (done: number, total: number) => void,
+  onProgress?: (done: number, total: number, partialUrls?: string[]) => void,
 ): Promise<string[]> {
   const selected = selectBestRefs(slots);
   const refs     = buildStratifiedRefs(selected, anchorImage);
@@ -442,25 +442,34 @@ export async function generateCampaignImages(
     hasProduct: selected.productRefs.length > 0,
   });
 
-  const jobs = plan.piezas.map((pieza, i) => ({
-    prompt:          buildDerivedImagePrompt(pieza, plan, selected, hasAnchor),
-    negative:        CAMPAIGN_NEGATIVE,
-    referenceImages: refs,
-    aspectRatio:     getAspectRatio(pieza.canal),
-    module:          'campaign',
-    moduleLabel:     'Campaign Generator',
-    shotIndex:       i,
-    totalShots:      total,
-    uid:             sessionParams.uid,
-    sessionId:       sessionParams.sessionId,
-    metadata:        { role: pieza.rol, dia: pieza.dia, canal: pieza.canal },
-  }));
+  // Generamos cada pieza individualmente para poder mostrar URLs en tiempo real
+  const partialResults: string[] = Array(total).fill('');
 
-  const results = await imageApiService.generateBatch(jobs, (done, t) => {
-    onProgress?.(done, t);
-  });
+  const generateOne = async (pieza: CampaignPiece, index: number): Promise<string> => {
+    const url = await imageApiService.generateImage({
+      prompt:          buildDerivedImagePrompt(pieza, plan, selected, hasAnchor),
+      negative:        CAMPAIGN_NEGATIVE,
+      referenceImages: refs,
+      aspectRatio:     getAspectRatio(pieza.canal),
+      module:          'campaign',
+      moduleLabel:     'Campaign Generator',
+      shotIndex:       index,
+      totalShots:      total,
+      uid:             sessionParams.uid,
+      sessionId:       sessionParams.sessionId,
+      metadata:        { role: pieza.rol, dia: pieza.dia, canal: pieza.canal },
+    });
+    partialResults[index] = url ?? '';
+    const done = partialResults.filter(Boolean).length;
+    onProgress?.(done, total, [...partialResults]);
+    return url ?? '';
+  };
 
-  return results.map(r => r ?? '');
+  const settled = await Promise.allSettled(
+    plan.piezas.map((pieza, i) => generateOne(pieza, i))
+  );
+
+  return settled.map(r => r.status === 'fulfilled' ? r.value : '');
 }
 
 // ─── Fallback ─────────────────────────────────────────────────

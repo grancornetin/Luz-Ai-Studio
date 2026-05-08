@@ -180,6 +180,7 @@ const CampaignModule: React.FC = () => {
   const [error,             setError]             = useState<string | null>(null);
   const [currentSet,        setCurrentSet]        = useState<CampaignSet | null>(null);
   const [campaignPlan,      setCampaignPlan]      = useState<any>(null);
+  const [partialImages,     setPartialImages]     = useState<string[]>([]);
 
   // Results UI state
   const [expandedPieza, setExpandedPieza] = useState<string | null>(null);
@@ -236,7 +237,7 @@ const CampaignModule: React.FC = () => {
     setSlots({ product: [], inspiration: [], brand: [], model: [] });
     setAnchorOptions([]); setSelectedAnchor(''); setCampaignPlan(null);
     setCurrentSet(null); setError(null); setProgress(null);
-    setProgressStepIndex(0); setIsGenerating(false);
+    setProgressStepIndex(0); setIsGenerating(false); setPartialImages([]);
     setExpandedPieza(null); setActiveTab2('plan');
   };
 
@@ -368,6 +369,7 @@ const CampaignModule: React.FC = () => {
     setIsGenerating(true);
     setError(null);
     setCurrentSet(null);
+    setPartialImages([]);
     setProgressSteps(CAMPAIGN_PROGRESS_STEPS);
     setProgress({ total: imageCount, completed: 0, current: 0 });
     setProgressStepIndex(0);
@@ -377,8 +379,9 @@ const CampaignModule: React.FC = () => {
       const images = await generateCampaignImages(
         campaignPlan, activeSlots, selectedAnchor,
         { uid: user?.uid, sessionId: newSessionId() },
-        (done, total) => {
+        (done, total, partialUrls) => {
           setProgress({ total, completed: done, current: done - 1 });
+          if (partialUrls) setPartialImages([...partialUrls]);
           if (done === total) setProgressStepIndex(2);
         },
       );
@@ -862,13 +865,31 @@ const CampaignModule: React.FC = () => {
                       </div>
                       <div className={`grid gap-3 ${imageCount <= 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3 md:grid-cols-4'}`}>
                         {Array.from({ length: imageCount }).map((_, i) => {
-                          const done   = progress ? i < progress.completed : false;
-                          const active = progress ? i === progress.completed && isGenerating : false;
+                          const imgUrl = partialImages[i] ?? '';
+                          const done   = !!imgUrl;
+                          const active = !done && progress ? i === progress.completed && isGenerating : false;
                           return (
                             <div key={i} className={`relative aspect-[3/4] rounded-2xl overflow-hidden transition-all ${done ? 'fade-in shadow-md' : active ? 'border-2 border-brand-600 bg-slate-100 animate-pulse' : 'bg-slate-100'}`}>
-                              {active && <div className="absolute inset-0 flex items-center justify-center"><div className="bg-white/95 rounded-full px-3.5 py-1.5 text-[10px] font-bold text-brand-600 tracking-[0.12em] uppercase">EN VIVO</div></div>}
-                              {done && <div className="absolute inset-0 bg-gradient-to-br from-brand-50 to-violet-50 flex items-center justify-center"><div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center"><Check className="w-4 h-4 text-white" strokeWidth={3} /></div></div>}
-                              {!done && !active && <div className="absolute top-2 left-2 text-[10px] text-slate-400 font-semibold">{i + 1}</div>}
+                              {/* Imagen real cuando llega */}
+                              {imgUrl && (
+                                <img src={imgUrl} alt={`Pieza ${i + 1}`} className="w-full h-full object-cover" />
+                              )}
+                              {/* Indicador activo */}
+                              {active && !imgUrl && (
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <div className="bg-white/95 rounded-full px-3.5 py-1.5 text-[10px] font-bold text-brand-600 tracking-[0.12em] uppercase">Generando...</div>
+                                </div>
+                              )}
+                              {/* Número de pieza cuando está esperando */}
+                              {!done && !active && (
+                                <div className="absolute top-2 left-2 text-[10px] text-slate-400 font-semibold">{i + 1}</div>
+                              )}
+                              {/* Check cuando está lista */}
+                              {done && (
+                                <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shadow">
+                                  <Check className="w-3 h-3 text-white" strokeWidth={3} />
+                                </div>
+                              )}
                             </div>
                           );
                         })}
