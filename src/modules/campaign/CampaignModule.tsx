@@ -201,6 +201,27 @@ const CampaignModule: React.FC = () => {
   const [loadingSets, setLoadingSets] = useState(false);
   const [deletingId,  setDeletingId]  = useState<string | null>(null);
 
+  // Download state
+  const [downloadingHtml, setDownloadingHtml] = useState(false);
+  const [downloadingPdf,  setDownloadingPdf]  = useState(false);
+  const [downloadError,   setDownloadError]   = useState<string | null>(null);
+
+  const handleDownloadHtml = async (set: CampaignSet) => {
+    setDownloadingHtml(true);
+    setDownloadError(null);
+    try { await downloadCampaignHtml(set); }
+    catch (e: any) { setDownloadError(`Error al generar el archivo interactivo: ${e?.message ?? 'intentá de nuevo'}`); }
+    finally { setDownloadingHtml(false); }
+  };
+
+  const handleDownloadPdf = async (set: CampaignSet) => {
+    setDownloadingPdf(true);
+    setDownloadError(null);
+    try { await downloadCampaignPdf(set); }
+    catch (e: any) { setDownloadError(`Error al generar el PDF: ${e?.message ?? 'intentá de nuevo'}`); }
+    finally { setDownloadingPdf(false); }
+  };
+
   // Lightbox state
   const [lightboxOpen,   setLightboxOpen]   = useState(false);
   const [lightboxIndex,  setLightboxIndex]  = useState(0);
@@ -1051,20 +1072,32 @@ const CampaignModule: React.FC = () => {
                         className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-700 transition-colors">
                         <Download size={14} /> ZIP
                       </button>
-                      <button type="button" onClick={() => downloadCampaignHtml(currentSet)}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-700 transition-colors"
+                      <button type="button" onClick={() => handleDownloadHtml(currentSet)}
+                        disabled={downloadingHtml || downloadingPdf}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-700 transition-colors disabled:opacity-60 disabled:cursor-wait"
                         title="Descargá una versión interactiva del kit — abrila desde tu PC para marcar el progreso, copiar textos y exportar PDF">
-                        <FileText size={14} /> Versión interactiva
+                        {downloadingHtml
+                          ? <><div className="w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> Generando...</>
+                          : <><FileText size={14} /> Versión interactiva</>}
                       </button>
-                      <button type="button" onClick={() => downloadCampaignPdf(currentSet)}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-colors">
-                        <Download size={14} /> PDF
+                      <button type="button" onClick={() => handleDownloadPdf(currentSet)}
+                        disabled={downloadingHtml || downloadingPdf}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-colors disabled:opacity-60 disabled:cursor-wait">
+                        {downloadingPdf
+                          ? <><div className="w-3 h-3 border-2 border-white/50 border-t-white rounded-full animate-spin" /> Generando PDF...</>
+                          : <><Download size={14} /> PDF</>}
                       </button>
                       <button type="button" onClick={resetCreator}
                         className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-colors">
                         <Plus size={14} /> Nueva campaña
                       </button>
                     </div>
+                    {downloadError && (
+                      <div className="mt-2 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-rose-500 flex-shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-rose-700">{downloadError}</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Resumen ejecutivo */}
@@ -1325,13 +1358,13 @@ const CampaignModule: React.FC = () => {
                       </p>
                     </div>
                     <div className="flex gap-2 flex-shrink-0 ml-4">
-                      <button type="button" onClick={() => downloadCampaignHtml(set)}
-                        className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl flex items-center justify-center transition-all" title="Versión interactiva">
-                        <FileText className="w-4 h-4" />
+                      <button type="button" onClick={() => handleDownloadHtml(set)} disabled={downloadingHtml || downloadingPdf}
+                        className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-wait" title="Versión interactiva">
+                        {downloadingHtml ? <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> : <FileText className="w-4 h-4" />}
                       </button>
-                      <button type="button" onClick={() => downloadCampaignPdf(set)}
-                        className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl flex items-center justify-center transition-all" title="Descargar PDF">
-                        <Download className="w-4 h-4" />
+                      <button type="button" onClick={() => handleDownloadPdf(set)} disabled={downloadingHtml || downloadingPdf}
+                        className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-wait" title="Descargar PDF">
+                        {downloadingPdf ? <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> : <Download className="w-4 h-4" />}
                       </button>
                       <button type="button" onClick={() => downloadSetZip(set)}
                         className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl flex items-center justify-center transition-all" title="Descargar ZIP">

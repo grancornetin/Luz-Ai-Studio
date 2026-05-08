@@ -658,11 +658,45 @@ function buildConfigPage(set: CampaignSet, pageNum: number): string {
 
 // ─── Construye el HTML completo ───────────────────────────────
 
+// Comprime un data URL a un tamaño máximo para el HTML (evita archivos >50MB)
+async function compressForHtml(src: string, maxPx = 600, quality = 0.72): Promise<string> {
+  if (!src) return '';
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => resolve('');
+    img.src = src;
+  });
+}
+
 async function buildHtml(set: CampaignSet): Promise<string> {
-  // Convertir todas las URLs de imagen a base64
+  // Comprimir imágenes de piezas para el HTML (calidad suficiente para pantalla)
   const base64Images = await Promise.all(
-    set.plan.piezas.map(p => urlToBase64(p.imageUrl))
+    set.plan.piezas.map(p => compressForHtml(p.imageUrl, 800, 0.80))
   );
+
+  // Comprimir imágenes de referencia (solo para la página de config)
+  const compressedSlots = await Promise.all(
+    set.slots.map(async s => ({ ...s, base64: await compressForHtml(s.base64, 200, 0.70) }))
+  );
+  const compressedAnchor        = await compressForHtml(set.anchorImage, 300, 0.75);
+  const compressedAnchorOptions = await Promise.all(
+    (set.anchorOptions ?? []).map(a => compressForHtml(a, 300, 0.75))
+  );
+  const setForConfig: typeof set = {
+    ...set,
+    slots:         compressedSlots,
+    anchorImage:   compressedAnchor,
+    anchorOptions: compressedAnchorOptions,
+  };
 
   const lastPageNum = set.plan.piezas.length + 5;
   const pages = [
@@ -673,7 +707,7 @@ async function buildHtml(set: CampaignSet): Promise<string> {
       buildPiecePage(p, i, set.plan.piezas.length, base64Images[i])
     ),
     buildHashtagsPage(set, set.plan.piezas.length + 4),
-    buildConfigPage(set, lastPageNum),
+    buildConfigPage(setForConfig, lastPageNum),
   ].join('\n');
 
   const campaignTitle = esc(set.plan.tagline || 'Kit de Campaña');
