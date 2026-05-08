@@ -126,15 +126,24 @@ export const geminiService = {
   // ── Campaign Plan — análisis multimodal con imágenes de referencia ──────────
   async generateCampaignPlan(prompt: string, slots: { base64: string }[]): Promise<string> {
     try {
-      const extracted = slots.map((s, i) => extractImageRef(s.base64, `campaignSlot[${i}]`));
+      // Máximo 4 imágenes para el plan — 1 por rol, comprimidas para evitar 413
+      const uniqueSlots = slots.slice(0, 4);
+      const compressed  = await Promise.all(
+        uniqueSlots.map(async (s, i) => {
+          const { compressImageForUpload } = await import('../utils/imageUtils');
+          const small = await compressImageForUpload(s.base64, 512, 0.75).catch(() => s.base64);
+          return extractImageRef(small, `campaignSlot[${i}]`);
+        })
+      );
+
       const payload: Parameters<typeof callContentApi>[0] = {
         action: 'generateCampaignPlan',
         prompt,
         model:  'gemini-2.5-flash',
       };
-      if (extracted.length > 0) {
-        payload.images    = extracted.map(e => e.data);
-        payload.mimeTypes = extracted.map(e => e.mimeType);
+      if (compressed.length > 0) {
+        payload.images    = compressed.map(e => e.data);
+        payload.mimeTypes = compressed.map(e => e.mimeType);
       }
       const result = await callContentApi(payload);
       return result.text || '';

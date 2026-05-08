@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-import { downloadAsZip } from '../../utils/imageUtils';
+import { downloadAsZip, readAndCompressFile } from '../../utils/imageUtils';
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
 import { newSessionId } from '../../services/imageApiService';
 import { buildCampaignPlan, generateAnchorImages, generateCampaignImages } from './campaignService';
@@ -103,9 +103,9 @@ const ImageUploadSlot: React.FC<{
     const available = MAX_TOTAL_SLOTS - totalUsed;
     Array.from(files).slice(0, available).forEach(file => {
       if (!file.type.startsWith('image/')) return;
-      const reader = new FileReader();
-      reader.onload = e => onChange([...images, e.target?.result as string]);
-      reader.readAsDataURL(file);
+      readAndCompressFile(file).then(compressed => {
+        onChange([...images, compressed]);
+      });
     });
   };
 

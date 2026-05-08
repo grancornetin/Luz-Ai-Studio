@@ -1,5 +1,6 @@
 import { geminiService } from '../../services/geminiService';
 import { imageApiService, extractImageRef } from '../../services/imageApiService';
+import { compressImageForUpload } from '../../utils/imageUtils';
 import {
   CampaignChannel, CampaignImageSlot, CampaignPiece, CampaignPlan,
   CAMPAIGN_CHANNEL_META, ANCHOR_IMAGE_COUNT,
@@ -65,37 +66,41 @@ function selectBestRefs(slots: CampaignImageSlot[]): {
 // Mismo orden que UGC Studio: identidad primero (duplicada), luego
 // producto (duplicado), luego ancla/contexto, luego estilo/marca.
 
-function buildStratifiedRefs(
+async function buildStratifiedRefsCompressed(
   selected: ReturnType<typeof selectBestRefs>,
   anchorImage?: string,
-): Array<{ data: string; mimeType: string }> {
+): Promise<Array<{ data: string; mimeType: string }>> {
   const raw: string[] = [];
 
   // 1. Modelo — identidad, duplicado para máximo peso
   if (selected.modelRef) {
     raw.push(selected.modelRef.base64);
-    raw.push(selected.modelRef.base64); // duplicar
+    raw.push(selected.modelRef.base64);
   }
 
   // 2. Producto — visual hero, duplicado si solo hay 1
   selected.productRefs.forEach(r => raw.push(r.base64));
   if (selected.productRefs.length === 1) {
-    raw.push(selected.productRefs[0].base64); // duplicar si solo 1
+    raw.push(selected.productRefs[0].base64);
   }
 
-  // 3. Ancla elegida por Sofi (REF0) — define la sesión visual
+  // 3. Ancla elegida por Sofi (REF0)
   if (anchorImage) raw.push(anchorImage);
 
-  // 4. Inspiración — mood/estilo secundario
+  // 4. Inspiración
   if (selected.inspirationRef) raw.push(selected.inspirationRef.base64);
 
-  // 5. Marca — paleta/identidad visual
+  // 5. Marca
   if (selected.brandRef) raw.push(selected.brandRef.base64);
 
-  // Nunca pasar más de 10 referencias (límite Gemini)
-  return raw
-    .filter(Boolean)
-    .slice(0, 10)
+  // Comprimir todas antes de enviar — evita 413
+  const compressed = await Promise.all(
+    raw.filter(Boolean).slice(0, 10).map(b64 =>
+      compressImageForUpload(b64, 768, 0.80).catch(() => b64)
+    )
+  );
+
+  return compressed
     .map((b64, i) => {
       try { return extractImageRef(b64, `campaignRef[${i}]`); }
       catch { return null; }
@@ -378,7 +383,7 @@ export async function generateAnchorImages(
   onProgress?: (done: number, total: number, partialUrls?: string[]) => void,
 ): Promise<string[]> {
   const selected = selectBestRefs(slots);
-  const refs     = buildStratifiedRefs(selected);
+  const refs     = await buildStratifiedRefsCompressed(selected);
 
   // Generamos las 2 anclas en paralelo pero capturamos cada URL al terminar
   // para poder mostrarlas en la UI en tiempo real
@@ -424,7 +429,7 @@ export async function generateCampaignImages(
   onProgress?: (done: number, total: number, partialUrls?: string[]) => void,
 ): Promise<string[]> {
   const selected = selectBestRefs(slots);
-  const refs     = buildStratifiedRefs(selected, anchorImage);
+  const refs     = await buildStratifiedRefsCompressed(selected, anchorImage);
   const hasAnchor = !!anchorImage;
   const total     = plan.piezas.length;
 
