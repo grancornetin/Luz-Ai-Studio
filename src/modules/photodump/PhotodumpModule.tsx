@@ -122,9 +122,7 @@ const PhotodumpModule: React.FC = () => {
   const [currentSet,        setCurrentSet]        = useState<PhotodumpSet | null>(null);
 
   // Resultados UI
-  const [expandedIdx,     setExpandedIdx]     = useState<number | null>(null);
-  const [copiedKey,       setCopiedKey]       = useState<string | null>(null);
-  const [activeResultTab, setActiveResultTab] = useState<'images' | 'captions' | 'hashtags'>('images');
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   // Library
   const [sets,        setSets]        = useState<PhotodumpSet[]>([]);
@@ -177,7 +175,6 @@ const PhotodumpModule: React.FC = () => {
     setProtagonist('both'); setCustomStory(''); setCount(4); setDestino('feed');
     setCurrentSet(null); setError(null); setProgress(null);
     setProgressStepIndex(0); setIsGenerating(false); setPartialImages([]);
-    setExpandedIdx(null);
   };
 
   // ── GENERACIÓN PRINCIPAL ──────────────────────────────────
@@ -772,184 +769,150 @@ const PhotodumpModule: React.FC = () => {
 
               {/* ── PASO 5: RESULTADOS ──────────────────── */}
               {step === 5 && currentSet && (
-                <div className="fade-in p-4 md:p-8">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                <div className="fade-in p-4 md:p-6">
+
+                  {/* Header de resultados */}
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-5">
                     <div>
-                      <div className="flex items-center gap-2.5 mb-2 flex-wrap">
-                        <div className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center">
-                          <Check size={14} strokeWidth={3} />
+                      <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
+                        <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center">
+                          <Check size={12} strokeWidth={3} />
                         </div>
                         <span className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.18em]">
-                          Historia lista · {currentSet.images.length} imágenes
+                          Historia lista · {currentSet.images.length} imágenes · {NARRATIVE_META[currentSet.narrative].label}
                         </span>
                       </div>
-                      <h2 className="font-display font-extrabold italic uppercase tracking-tight text-[24px] md:text-[30px] text-slate-900 leading-[1.05]"
-                        style={{ fontFamily: 'Syne, Inter, sans-serif', letterSpacing: '-0.025em' }}>
-                        {NARRATIVE_META[currentSet.narrative].label}
-                      </h2>
-                      <p className="text-[13px] text-slate-500 mt-1 italic line-clamp-1">"{currentSet.basePrompt}"</p>
+                      <p className="text-[13px] text-slate-500 italic line-clamp-1">"{currentSet.basePrompt}"</p>
                     </div>
-                    <div className="flex gap-2 w-full md:w-auto flex-wrap">
+                    <div className="flex gap-2 flex-wrap">
                       <button type="button" onClick={() => downloadSetZip(currentSet)}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-700 transition-colors">
-                        <Download size={14} /> ZIP
+                        className="flex items-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-700 transition-colors">
+                        <Download size={13} /> ZIP
                       </button>
                       <button type="button" onClick={resetCreator}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-colors">
-                        <Plus size={14} /> Nuevo set
+                        className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors">
+                        <Plus size={13} /> Nuevo set
                       </button>
                     </div>
                   </div>
 
-                  {/* Orden de carrusel */}
-                  <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3.5 mb-6 flex gap-3">
-                    <span className="text-lg flex-shrink-0">📌</span>
-                    <div>
-                      <p className="text-[11px] font-bold text-amber-800 uppercase tracking-wider mb-1.5">Orden sugerido para el carrusel</p>
-                      <div className="flex flex-wrap gap-2">
-                        {currentSet.images.map((img, i) => (
-                          <div key={i} className="flex items-center gap-1.5 bg-white border border-amber-200 rounded-lg px-2 py-1">
-                            <span className="text-[9px] font-black text-amber-700">{i + 1}</span>
-                            <span className="text-[10px] text-slate-600">{img.moment}</span>
-                          </div>
-                        ))}
+                  {/* Panel de debug / reutilización */}
+                  <details className="mb-5 group">
+                    <summary className="flex items-center gap-2 cursor-pointer list-none bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-2xl px-4 py-3 transition-colors">
+                      <ImageIcon size={13} className="text-slate-400" />
+                      <span className="text-[11px] font-bold text-slate-600">Ver prompt y referencias usadas</span>
+                      <ChevronDown size={13} className="text-slate-400 ml-auto group-open:rotate-180 transition-transform" />
+                    </summary>
+                    <div className="mt-2 border border-slate-200 rounded-2xl p-4 space-y-3 bg-white">
+                      <div>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Brief</p>
+                        <p className="text-[12px] text-slate-700 bg-slate-50 rounded-xl px-3 py-2 leading-relaxed">{currentSet.basePrompt}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 text-[11px] text-slate-600">
+                        <div><span className="font-bold">Narrativa:</span> {NARRATIVE_META[currentSet.narrative]?.label}</div>
+                        <div><span className="font-bold">Destino:</span> {DESTINO_META[currentSet.destino ?? 'feed']?.label}</div>
+                        <div><span className="font-bold">Protagonista:</span> {PROTAGONIST_META[currentSet.protagonist]?.label}</div>
+                        <div><span className="font-bold">Imágenes:</span> {currentSet.images.length}</div>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Orden del carrusel</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {currentSet.images.map((img, i) => (
+                            <div key={i} className="flex items-center gap-1 bg-slate-100 rounded-lg px-2 py-0.5">
+                              <span className="text-[9px] font-black text-brand-600">{i + 1}</span>
+                              <span className="text-[9px] text-slate-500">{img.moment}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  </details>
 
-                  {/* Tabs */}
-                  <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl mb-6 w-fit">
-                    {([
-                      { id: 'images'   as const, label: 'Imágenes', icon: <ImageIcon size={12} /> },
-                      { id: 'captions' as const, label: 'Captions', icon: <BookOpen  size={12} /> },
-                      { id: 'hashtags' as const, label: 'Hashtags', icon: <Hash      size={12} /> },
-                    ]).map(t => (
-                      <button key={t.id} type="button" onClick={() => setActiveResultTab(t.id)}
-                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[11px] font-bold transition-all ${activeResultTab === t.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                        {t.icon} {t.label}
-                      </button>
+                  {/* Tarjetas grandes de imágenes */}
+                  <div className="space-y-8">
+                    {currentSet.images.map((img, i) => (
+                      <div key={i} className="bg-white border border-slate-100 rounded-[28px] overflow-hidden shadow-sm">
+                        {/* Imagen grande con zoom al click */}
+                        <div
+                          style={{ aspectRatio: DESTINO_META[currentSet.destino ?? 'feed'].aspectRatio }}
+                          className="relative cursor-zoom-in group overflow-hidden"
+                          onClick={() => openLightbox(currentSet.images.map(x => x.imageUrl), i)}
+                        >
+                          <img
+                            src={img.imageUrl}
+                            alt={img.moment}
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                          />
+                          {/* Overlay con número y momento */}
+                          <div className="absolute top-3 left-3 flex gap-2">
+                            <div className="bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-full">
+                              <span className="text-[10px] font-black text-white">#{i + 1}</span>
+                            </div>
+                            <div className="bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-full">
+                              <span className="text-[10px] font-semibold text-white">{img.moment}</span>
+                            </div>
+                          </div>
+                          {/* Botón de descarga en hover */}
+                          <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); const a = document.createElement('a'); a.href = img.imageUrl; a.download = `photodump_${i + 1}.png`; a.click(); }}
+                              className="bg-black/60 backdrop-blur-sm hover:bg-black/80 text-white rounded-xl px-3 py-1.5 text-[10px] font-bold flex items-center gap-1.5 transition-colors"
+                            >
+                              <Download size={11} /> Descargar
+                            </button>
+                          </div>
+                          {/* Icono zoom */}
+                          <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="bg-black/50 backdrop-blur-sm p-1.5 rounded-xl">
+                              <ImageIcon size={13} className="text-white" />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Bloque de texto debajo */}
+                        <div className="p-4 space-y-3">
+                          {/* Caption */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Caption</p>
+                              <button
+                                type="button"
+                                onClick={() => copyText(img.caption + '\n\n' + img.hashtags, `full-${i}`)}
+                                className="flex items-center gap-1 px-2.5 py-1 bg-brand-50 hover:bg-brand-100 text-brand-600 rounded-lg text-[9px] font-black uppercase tracking-wide transition-colors"
+                              >
+                                {copiedKey === `full-${i}` ? <><Check size={9} /> Copiado</> : <><Copy size={9} /> Copiar todo</>}
+                              </button>
+                            </div>
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-[14px] text-slate-800 flex-1 leading-relaxed">{img.caption}</p>
+                              <button
+                                type="button"
+                                onClick={() => copyText(img.caption, `cap-${i}`)}
+                                className="w-7 h-7 bg-slate-100 hover:bg-brand-50 text-slate-400 hover:text-brand-600 rounded-lg flex items-center justify-center transition-all flex-shrink-0 mt-0.5"
+                              >
+                                {copiedKey === `cap-${i}` ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Hashtags */}
+                          <div>
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[12px] text-violet-600 flex-1 leading-relaxed">{img.hashtags}</p>
+                              <button
+                                type="button"
+                                onClick={() => copyText(img.hashtags, `ht-${i}`)}
+                                className="w-7 h-7 bg-slate-100 hover:bg-violet-50 text-slate-400 hover:text-violet-600 rounded-lg flex items-center justify-center transition-all flex-shrink-0"
+                              >
+                                {copiedKey === `ht-${i}` ? <Check size={11} className="text-emerald-500" /> : <Hash size={11} />}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     ))}
                   </div>
-
-                  {/* Tab: Imágenes */}
-                  {activeResultTab === 'images' && (
-                    <div className="space-y-4">
-                      {currentSet.images.map((img, i) => {
-                        const isExpanded = expandedIdx === i;
-                        return (
-                          <div key={i} className="bg-white border border-slate-100 rounded-[24px] overflow-hidden shadow-sm">
-                            <button type="button" onClick={() => setExpandedIdx(isExpanded ? null : i)}
-                              className="w-full flex items-center gap-4 p-4 md:p-5 text-left hover:bg-slate-50 transition-colors">
-                              <div className="w-14 h-14 md:w-16 md:h-16 rounded-xl overflow-hidden flex-shrink-0 bg-slate-100 cursor-pointer"
-                                onClick={e => { e.stopPropagation(); openLightbox(currentSet.images.map(x => x.imageUrl), i); }}>
-                                <img src={img.imageUrl} alt={img.moment} className="w-full h-full object-cover" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                  <span className="text-[10px] font-black text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full uppercase tracking-wider">#{i + 1}</span>
-                                  <span className="text-[10px] text-slate-500">{img.moment}</span>
-                                </div>
-                                <p className="text-[13px] text-slate-700 line-clamp-1">{img.caption}</p>
-                              </div>
-                              <ChevronDown size={16} className={`text-slate-400 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                            </button>
-                            {isExpanded && (
-                              <div className="border-t border-slate-100 p-4 md:p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
-                                <div
-                                  style={{ aspectRatio: DESTINO_META[currentSet.destino ?? 'feed'].aspectRatio }}
-                                  className="rounded-2xl overflow-hidden cursor-pointer group relative"
-                                  onClick={() => openLightbox(currentSet.images.map(x => x.imageUrl), i)}>
-                                  <img src={img.imageUrl} alt={img.moment} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
-                                    <Download className="w-4 h-4 text-white" />
-                                  </div>
-                                </div>
-                                <div className="space-y-4">
-                                  <div>
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Caption</p>
-                                    <div className="flex items-start justify-between gap-2">
-                                      <p className="text-[13px] text-slate-800 flex-1 leading-relaxed">{img.caption}</p>
-                                      <button type="button" onClick={() => copyText(img.caption, `cap-${i}`)}
-                                        className="w-7 h-7 bg-slate-50 hover:bg-brand-50 text-slate-400 hover:text-brand-600 rounded-lg flex items-center justify-center transition-all flex-shrink-0">
-                                        {copiedKey === `cap-${i}` ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                                      </button>
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Hashtags</p>
-                                    <div className="flex items-start justify-between gap-2">
-                                      <p className="text-[11px] text-violet-700 bg-violet-50 rounded-xl px-3 py-2 flex-1 leading-relaxed">{img.hashtags}</p>
-                                      <button type="button" onClick={() => copyText(img.hashtags, `ht-${i}`)}
-                                        className="w-7 h-7 bg-slate-50 hover:bg-brand-50 text-slate-400 hover:text-brand-600 rounded-lg flex items-center justify-center transition-all flex-shrink-0">
-                                        {copiedKey === `ht-${i}` ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                                      </button>
-                                    </div>
-                                  </div>
-                                  <button type="button"
-                                    onClick={() => { const a = document.createElement('a'); a.href = img.imageUrl; a.download = `photodump_${i + 1}.png`; a.click(); }}
-                                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold transition-colors">
-                                    <Download size={13} /> Descargar imagen
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Tab: Captions */}
-                  {activeResultTab === 'captions' && (
-                    <div className="space-y-3">
-                      {currentSet.images.map((img, i) => (
-                        <div key={i} className="bg-white border border-slate-100 rounded-2xl p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex-1">
-                              <span className="text-[10px] font-black text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                                #{i + 1} · {img.moment}
-                              </span>
-                              <p className="text-[13px] text-slate-800 mt-2 leading-relaxed">{img.caption}</p>
-                            </div>
-                            <button type="button" onClick={() => copyText(img.caption, `cap2-${i}`)}
-                              className="w-8 h-8 bg-slate-50 hover:bg-brand-50 text-slate-400 hover:text-brand-600 rounded-xl flex items-center justify-center transition-all flex-shrink-0">
-                              {copiedKey === `cap2-${i}` ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                      <button type="button"
-                        onClick={() => copyText(currentSet.images.map((img, i) => `[${i + 1}] ${img.moment}\n${img.caption}`).join('\n\n'), 'all-captions')}
-                        className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold transition-colors">
-                        {copiedKey === 'all-captions' ? <><Check size={13} /> Copiados</> : <><Copy size={13} /> Copiar todos los captions</>}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Tab: Hashtags */}
-                  {activeResultTab === 'hashtags' && (
-                    <div className="space-y-3">
-                      {currentSet.images.map((img, i) => (
-                        <div key={i} className="bg-white border border-slate-100 rounded-2xl p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex-1">
-                              <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">#{i + 1} · {img.moment}</span>
-                              <p className="text-[12px] text-violet-700 mt-2 leading-relaxed">{img.hashtags}</p>
-                            </div>
-                            <button type="button" onClick={() => copyText(img.hashtags, `ht2-${i}`)}
-                              className="w-8 h-8 bg-slate-50 hover:bg-brand-50 text-slate-400 hover:text-brand-600 rounded-xl flex items-center justify-center transition-all flex-shrink-0">
-                              {copiedKey === `ht2-${i}` ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                      <button type="button"
-                        onClick={() => copyText(currentSet.images.map(img => img.hashtags).join(' '), 'all-hashtags')}
-                        className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white text-[11px] font-bold transition-colors">
-                        {copiedKey === 'all-hashtags' ? <><Check size={13} /> Copiados</> : <><Hash size={13} /> Copiar todos los hashtags</>}
-                      </button>
-                    </div>
-                  )}
 
                   {/* Footer */}
                   <div className="flex flex-col md:flex-row md:justify-between md:items-center mt-7 pt-5 border-t border-slate-200 gap-2 md:gap-3.5">

@@ -146,20 +146,26 @@ const PARADIGM_RULE = `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📸 PARADIGM (CRITICAL):
 
-You are NOT editing REF0.
-You are capturing a NEW photograph taken at the SAME moment as REF0.
-
-REF0 defines the reality of this session. Every shot is a new angle
-of that same physical reality.
+You are taking a new iPhone-style photo inside the same existing moment as REF0.
+REF0 defines the reality of this session. Every shot is a new angle of that same physical reality.
 
 Do NOT produce a slightly modified version of REF0.
 Do NOT add new elements, furniture, lighting, or backgrounds.
-Each image must feel like a photographer moved to a new position.
+Each image must feel like a friend or the person themselves moved to a new position with their phone.
+
+Preserve natural iPhone UGC realism: imperfect, organic, real-life capture.
+Avoid studio polish, beauty filter, editorial lighting, over-smooth skin.
 
 THIS IS NOT AN AD. THIS IS NOT A CATALOG SHOT.
-This is a real person's organic social media content — the kind
-an influencer posts to tell a story, connect with their audience,
-and make their life look genuinely lived-in and aspirational.
+This is real social media content — the kind someone posts to tell a story and connect with their audience.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚫 SINGLE IMAGE RULE (ABSOLUTE):
+Generate ONE single realistic photo. No collage. No grid. No reference board.
+Do NOT treat the reference images as a layout to copy or paste.
+Do NOT insert reference images into the output as layers or collage elements.
+Use references ONLY as visual constraints for identity, outfit, and scene.
+A grid or collage of multiple images is a HARD FAILURE.
 `;
 
 const STORY_MODE_DOMINANCE = `
@@ -541,11 +547,14 @@ ${protagonist === 'product'
 }
 
 SHOT: Natural medium shot (waist-up or 3/4 body). Authentic, candid, story-opening feel.
-The person looks like they are living their life — not posing for a brand.
+iPhone photo quality — handheld, natural light, real skin texture, no studio polish.
+The person looks like they are living their life — not posing for a photographer.
 Environment is real, light is natural or ambient, mood is aspirational but authentic.
 
 IDENTITY: Copy the face, hair, skin tone, and physical features EXACTLY from the reference images.
 OUTFIT: Copy the exact garments from the outfit reference — same color, fabric, fit.
+
+Natural iPhone quality. UGC feel. One photo. Not a collage. Not a grid.
 
 ${NEGATIVE_FULL}`;
 
@@ -656,6 +665,16 @@ SHOT IDENTITY:
 - REF0 (after face refs): establishes the visual world — same light, same scene, same color temp.
 - Outfit reference: EXACT same garments — same color, fabric, fit.
 - This shot is part of a STORY — it must connect to the same world as REF0.
+
+📱 iPhone UGC REALISM (NON-NEGOTIABLE):
+You are taking a new iPhone-style photo inside the same existing moment as REF0.
+Natural light, handheld imperfection, real skin texture, no studio polish.
+The result must look like someone captured this moment on their phone — not a photographer.
+Organic, imperfect, lived-in. NOT editorial. NOT advertising. NOT staged.
+
+🚫 ONE SINGLE IMAGE:
+Generate ONE photo. No collage. No grid. No side by side. No reference board.
+Do NOT paste reference images into the output. Use them only as visual constraints.
 
 ${NEGATIVE_SHORT}`;
 
