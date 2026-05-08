@@ -20,6 +20,15 @@ export interface PhotodumpImage {
   order:    number;
 }
 
+// Referencias estructuradas del protagonista (base64 data URIs)
+export interface PhotodumpRefs {
+  avatarRef:  string | null;  // persona / modelo
+  productRef: string | null;  // producto / objeto
+  outfitRef:  string | null;  // outfit / prendas
+  sceneRef:   string | null;  // escena / ambiente
+  sceneText?: string;         // descripción textual del lugar
+}
+
 export interface PhotodumpSet {
   id:          string;
   createdAt:   number;
@@ -30,11 +39,18 @@ export interface PhotodumpSet {
   destino:     PhotodumpDestino;
   customStory: string;
   count:       number;
-  // References (base64)
-  references:  string[];
+  // Referencias del protagonista
+  refs:        PhotodumpRefs;
   // Results
   images:      PhotodumpImage[];
 }
+
+// Qué slots mostrar según el protagonista elegido
+export const PROTAGONIST_SLOTS: Record<PhotodumpProtagonist, (keyof PhotodumpRefs)[]> = {
+  person:  ['avatarRef', 'sceneRef'],
+  product: ['productRef', 'outfitRef', 'sceneRef'],
+  both:    ['avatarRef', 'productRef', 'outfitRef', 'sceneRef'],
+};
 
 // ── Metadata ──────────────────────────────────────────────────
 

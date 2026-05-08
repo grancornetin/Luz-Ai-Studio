@@ -1,12 +1,13 @@
 /**
  * photodumpDirectorService.ts
  * Director visual para Photodump Mode.
- * Analiza referencias visuales y genera un Story Arc estructurado en 3 actos.
+ * Analiza referencias estructuradas del protagonista y genera un Story Arc en 3 actos
+ * donde la identidad visual (cara, producto, outfit, escena) es CONSISTENTE en toda la historia.
  */
 import { geminiService } from '../../services/geminiService';
 import {
   PhotodumpNarrative, PhotodumpProtagonist, PhotodumpDestino,
-  PhotodumpScene, NARRATIVE_META,
+  PhotodumpScene, PhotodumpRefs, NARRATIVE_META,
 } from './types';
 
 // ── Tipos internos ────────────────────────────────────────────
@@ -14,38 +15,35 @@ import {
 export type StoryBeat = 'hook' | 'development' | 'closing';
 
 export interface DirectorScene extends PhotodumpScene {
-  beat: StoryBeat;
-  arcPosition: number; // 1-based
-  aspectRatio: string; // "4/5" | "9/16"
+  beat:        StoryBeat;
+  arcPosition: number;
+  aspectRatio: string;
 }
 
-export interface VisualStyleAnalysis {
-  palette:     string;   // e.g. "warm neutrals, terracotta, cream"
-  lighting:    string;   // e.g. "soft golden hour, diffused natural"
-  mood:        string;   // e.g. "cozy, intimate, aspirational"
-  composition: string;   // e.g. "centered subjects, negative space"
-  rawSummary:  string;   // full Gemini summary for prompt injection
+export interface ProtagonistAnalysis {
+  avatarDescription:  string | null;  // "woman, long dark hair, light skin, approx 28yo"
+  productDescription: string | null;  // "small amber glass bottle with black dropper cap"
+  outfitDescription:  string | null;  // "oversized cream linen shirt, wide-leg beige trousers"
+  sceneDescription:   string | null;  // "modern minimal apartment, white walls, plants, golden light"
+  identityLock:       string;         // full lock string injected into every scene prompt
 }
 
 export interface PhotodumpDirectorPlan {
-  storyTitle:    string;
-  styleAnalysis: VisualStyleAnalysis | null;
-  scenes:        DirectorScene[];
+  storyTitle:           string;
+  protagonistAnalysis:  ProtagonistAnalysis;
+  scenes:               DirectorScene[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────
 
 function getAspectRatioInstruction(destino: PhotodumpDestino): string {
   if (destino === 'feed')    return 'Compose for 4:5 portrait format (Instagram feed). Subject fills 70-80% of frame.';
-  if (destino === 'stories') return 'Compose for 9:16 full vertical format (Stories/TikTok). Subject centered, breathing room top and bottom.';
+  if (destino === 'stories') return 'Compose for 9:16 full vertical format (Stories/TikTok). Subject centered with breathing room.';
   if (destino === 'tiktok')  return 'Compose for 9:16 full vertical format (TikTok cover). Bold framing, strong visual impact.';
   return 'Compose for portrait format.';
 }
 
 function getBeatDistribution(count: number): StoryBeat[] {
-  // Hook: 1 image always
-  // Closing: 1 image always
-  // Development: everything in between
   if (count <= 2) return ['hook', 'closing'];
   if (count === 3) return ['hook', 'development', 'closing'];
   const beats: StoryBeat[] = ['hook'];
@@ -54,105 +52,185 @@ function getBeatDistribution(count: number): StoryBeat[] {
   return beats;
 }
 
-// ── Análisis de referencias visuales ─────────────────────────
+function buildIdentityLock(analysis: ProtagonistAnalysis): string {
+  const parts: string[] = [];
+  if (analysis.avatarDescription)  parts.push(`🔒 PERSON IDENTITY LOCK: same person in every frame — ${analysis.avatarDescription}. Do NOT change face, hair, skin tone, or body type between images.`);
+  if (analysis.productDescription) parts.push(`🔒 PRODUCT LOCK: same product in every frame — ${analysis.productDescription}. Do NOT change product shape, color, or packaging.`);
+  if (analysis.outfitDescription)  parts.push(`🔒 OUTFIT LOCK: same outfit in every frame — ${analysis.outfitDescription}. Do NOT change clothing items, color, or fit.`);
+  if (analysis.sceneDescription)   parts.push(`🔒 SCENE ANCHOR: same environment or consistent ambient — ${analysis.sceneDescription}. Maintain lighting temperature and spatial feel.`);
+  return parts.join('\n');
+}
 
-export async function analyzeVisualReferences(
-  references: string[], // base64 images
-): Promise<VisualStyleAnalysis | null> {
-  if (!references || references.length === 0) return null;
+// ── Análisis del protagonista ─────────────────────────────────
 
-  const prompt = `You are a visual director analyzing reference images for a social media content shoot.
+export async function analyzeProtagonist(
+  refs:       PhotodumpRefs,
+  basePrompt: string,
+): Promise<ProtagonistAnalysis> {
 
-Analyze the provided reference image(s) and extract the visual style:
+  const hasAnyRef = refs.avatarRef || refs.productRef || refs.outfitRef || refs.sceneRef;
 
-1. COLOR PALETTE — dominant colors and tones (e.g. "warm neutrals, terracotta, sage green")
-2. LIGHTING — quality and direction (e.g. "soft golden hour, diffused window light, harsh studio")
-3. MOOD — emotional tone (e.g. "cozy and intimate", "aspirational lifestyle", "raw and authentic")
-4. COMPOSITION — framing patterns (e.g. "centered subjects, lots of negative space", "rule of thirds, layered depth")
+  if (!hasAnyRef) {
+    // Sin referencias visuales — extraer del texto del brief
+    const textPrompt = `From this description, extract concise visual descriptors for each element present.
+Description: "${basePrompt}"
 
-Output ONLY a valid JSON object, no markdown:
-{"palette":"...","lighting":"...","mood":"...","composition":"...","rawSummary":"One sentence combining all elements for use in an image generation prompt"}`;
-
-  try {
-    const raw = await geminiService.analyzeImageWithText(references[0], prompt);
-    const cleaned = raw.replace(/```json|```/g, '').trim();
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (match) {
-      const parsed = JSON.parse(match[0]);
-      if (parsed.palette && parsed.lighting && parsed.mood) {
-        return parsed as VisualStyleAnalysis;
+Output ONLY a valid JSON object:
+{
+  "avatarDescription": "brief visual description of the person if mentioned, or null",
+  "productDescription": "brief visual description of the product if mentioned, or null",
+  "outfitDescription": "brief visual description of the outfit if mentioned, or null",
+  "sceneDescription": "brief visual description of the location/environment if mentioned, or null"
+}`;
+    try {
+      const raw = await geminiService.generateText(textPrompt);
+      const match = raw.replace(/```json|```/g, '').trim().match(/\{[\s\S]*\}/);
+      if (match) {
+        const parsed = JSON.parse(match[0]);
+        const analysis: ProtagonistAnalysis = {
+          avatarDescription:  parsed.avatarDescription  || null,
+          productDescription: parsed.productDescription || null,
+          outfitDescription:  parsed.outfitDescription  || null,
+          sceneDescription:   parsed.sceneDescription   || (refs.sceneText || null),
+          identityLock:       '',
+        };
+        analysis.identityLock = buildIdentityLock(analysis);
+        return analysis;
       }
+    } catch (err) {
+      console.warn('[photodumpDirector] text analysis failed:', err);
     }
-  } catch (err) {
-    console.warn('[photodumpDirector] analyzeVisualReferences failed:', err);
+    return { avatarDescription: null, productDescription: null, outfitDescription: null, sceneDescription: refs.sceneText || null, identityLock: '' };
   }
 
-  return null;
+  // Con referencias visuales — analizar cada imagen disponible
+  const analyzePrompt = `You are a visual director analyzing reference images for a photo story.
+Extract precise, concise visual descriptors to be used as identity locks across all images.
+Be specific but brief — these will be injected into image generation prompts.
+
+Analyze the provided image and output ONLY a valid JSON object with the descriptor for the type of reference it represents:
+{
+  "description": "concise visual description (max 25 words): physical traits, colors, textures, shapes — whatever makes this element uniquely identifiable"
+}`;
+
+  const analysis: ProtagonistAnalysis = {
+    avatarDescription:  null,
+    productDescription: null,
+    outfitDescription:  null,
+    sceneDescription:   refs.sceneText || null,
+    identityLock:       '',
+  };
+
+  const analyses: Promise<void>[] = [];
+
+  if (refs.avatarRef) {
+    analyses.push(
+      geminiService.analyzeImageWithText(refs.avatarRef, analyzePrompt + '\nThis is a PERSON/AVATAR reference.')
+        .then(raw => {
+          const match = raw.replace(/```json|```/g, '').trim().match(/\{[\s\S]*\}/);
+          if (match) analysis.avatarDescription = JSON.parse(match[0]).description || null;
+        }).catch(() => {})
+    );
+  }
+
+  if (refs.productRef) {
+    analyses.push(
+      geminiService.analyzeImageWithText(refs.productRef, analyzePrompt + '\nThis is a PRODUCT reference.')
+        .then(raw => {
+          const match = raw.replace(/```json|```/g, '').trim().match(/\{[\s\S]*\}/);
+          if (match) analysis.productDescription = JSON.parse(match[0]).description || null;
+        }).catch(() => {})
+    );
+  }
+
+  if (refs.outfitRef) {
+    analyses.push(
+      geminiService.analyzeImageWithText(refs.outfitRef, analyzePrompt + '\nThis is an OUTFIT/CLOTHING reference.')
+        .then(raw => {
+          const match = raw.replace(/```json|```/g, '').trim().match(/\{[\s\S]*\}/);
+          if (match) analysis.outfitDescription = JSON.parse(match[0]).description || null;
+        }).catch(() => {})
+    );
+  }
+
+  if (refs.sceneRef) {
+    analyses.push(
+      geminiService.analyzeImageWithText(refs.sceneRef, analyzePrompt + '\nThis is a SCENE/ENVIRONMENT reference.')
+        .then(raw => {
+          const match = raw.replace(/```json|```/g, '').trim().match(/\{[\s\S]*\}/);
+          if (match) analysis.sceneDescription = JSON.parse(match[0]).description || null;
+        }).catch(() => {})
+    );
+  }
+
+  await Promise.allSettled(analyses);
+  analysis.identityLock = buildIdentityLock(analysis);
+  return analysis;
 }
 
 // ── Director principal ────────────────────────────────────────
 
 export async function buildPhotodumpDirectorPlan(
-  basePrompt:    string,
-  narrative:     PhotodumpNarrative,
-  protagonist:   PhotodumpProtagonist,
-  destino:       PhotodumpDestino,
-  customStory:   string,
-  count:         number,
-  styleAnalysis: VisualStyleAnalysis | null,
+  basePrompt:  string,
+  narrative:   PhotodumpNarrative,
+  protagonist: PhotodumpProtagonist,
+  destino:     PhotodumpDestino,
+  customStory: string,
+  count:       number,
+  refs:        PhotodumpRefs,
 ): Promise<PhotodumpDirectorPlan> {
 
+  // 1. Analizar el protagonista para generar los locks de identidad
+  const protagonistAnalysis = await analyzeProtagonist(refs, basePrompt);
+
   const storyContext = narrative === 'custom' ? customStory : NARRATIVE_META[narrative].label;
-  const beats = getBeatDistribution(count);
-  const aspectInstruction = getAspectRatioInstruction(destino);
+  const beats        = getBeatDistribution(count);
+  const aspectInstr  = getAspectRatioInstruction(destino);
 
-  const protagonistInstruction =
-    protagonist === 'person'  ? 'PROTAGONIST: A person/creator. Focus on their emotions, expressions, and genuine moments.' :
-    protagonist === 'product' ? 'PROTAGONIST: The product/object. Make it the visual star — textures, details, context of use.' :
-                                'PROTAGONIST: Both person and product. Show their relationship, the human using or enjoying it.';
-
-  const styleInstruction = styleAnalysis
-    ? `REFERENCE STYLE TO MATCH: ${styleAnalysis.rawSummary}. Palette: ${styleAnalysis.palette}. Lighting: ${styleAnalysis.lighting}. Mood: ${styleAnalysis.mood}. Composition: ${styleAnalysis.composition}.`
-    : 'STYLE: Authentic photorealistic UGC — organic, candid, not overly polished. Real-life feel.';
+  const protagonistInstr =
+    protagonist === 'person'  ? 'The person/creator is the protagonist. Emotions, expressions, and genuine moments are the core.' :
+    protagonist === 'product' ? 'The product/object is the hero. Show it from different angles, contexts, textures, and uses.' :
+                                'Both the person and the product share the story. Show their relationship, interaction, and moments together.';
 
   const beatDescriptions = beats.map((beat, i) => {
-    if (beat === 'hook')        return `Image ${i + 1} [HOOK]: The scroll-stopper. Visually striking opening that makes someone stop and look.`;
-    if (beat === 'closing')     return `Image ${i + 1} [CLOSING]: The memorable ending that generates saves, shares, or visits to the profile.`;
-    return `Image ${i + 1} [DEVELOPMENT]: Story progression — a different angle, texture, emotion, or moment that deepens the narrative.`;
+    if (beat === 'hook')    return `Image ${i + 1} [HOOK]: The scroll-stopper. Visually striking opening — the most compelling frame of the set.`;
+    if (beat === 'closing') return `Image ${i + 1} [CLOSING]: The memorable ending — a frame that makes the viewer save, share, or visit the profile.`;
+    return `Image ${i + 1} [DEVELOPMENT]: Story progression — a different angle, texture, emotion, or moment that deepens the narrative. Still the same protagonist.`;
   }).join('\n');
 
-  const prompt = `You are a visual director and social media storyteller creating a ${count}-image photodump.
+  const prompt = `You are a visual director creating a ${count}-image photo story (photodump/carousel) for Instagram/TikTok.
 
-SUBJECT / CONTEXT: "${basePrompt}"
+SUBJECT / BASE CONTEXT: "${basePrompt}"
 NARRATIVE ARC: ${storyContext}
-${protagonistInstruction}
-${styleInstruction}
-FORMAT: ${aspectInstruction}
+PROTAGONIST DIRECTION: ${protagonistInstr}
+FORMAT: ${aspectInstr}
 
-STORY STRUCTURE (3-act arc):
+IDENTITY LOCKS — These must be respected in EVERY single image:
+${protagonistAnalysis.identityLock || '(No visual references provided — infer identity from context and maintain consistency)'}
+
+STORY STRUCTURE:
 ${beatDescriptions}
 
-For each image, provide:
-1. "moment": story beat name (3-5 words, Spanish or mixed)
-2. "scenePrompt": precise visual direction in English (2-3 sentences). Include: environment, lighting quality, camera angle, specific action or element. Do NOT repeat the subject description.
-3. "caption": engaging caption in Spanish (max 150 chars, conversational tone, 1-2 emojis, authentic voice — not branded)
+For each image provide:
+1. "moment": story beat name in Spanish (3-5 words)
+2. "scenePrompt": visual direction in English (2-3 sentences). Describe: environment, lighting, camera angle, specific action. DO NOT describe the protagonist's identity — that is already locked. DO NOT say "same person" or repeat the locks.
+3. "caption": engaging caption in Spanish (max 150 chars, conversational, authentic voice, 1-2 emojis — sounds like a real person, NOT a brand)
 4. "hashtags": 5-7 hashtags mix Spanish/English as single string
-5. "beat": one of "hook", "development", or "closing"
+5. "beat": "hook" | "development" | "closing"
 
 Rules:
-- Each image must feel like a REAL photo from a real person, not an ad
-- Vary camera angles: wide establishing, medium candid, close-up detail, overhead, POV
-- Vary lighting across scenes (unless reference style dictates otherwise)
-- Captions must sound like a real person wrote them, not a brand
-- The set should feel like a cohesive story when swiped through
+- Every scene must feel like it belongs to the SAME STORY — same world, same day, same character arc
+- Vary camera angles across scenes: wide, medium, close-up, overhead, candid POV
+- Vary lighting quality across scenes while keeping the overall mood coherent
+- Captions should sound like someone talking to a friend, not writing an ad
 
 Output ONLY a valid JSON array, no markdown:
 [{"moment":"...","scenePrompt":"...","caption":"...","hashtags":"...","beat":"..."}]`;
 
   try {
-    const raw = await geminiService.generateText(prompt);
+    const raw     = await geminiService.generateText(prompt);
     const cleaned = raw.replace(/```json|```/g, '').trim();
-    const match = cleaned.match(/\[[\s\S]*\]/);
+    const match   = cleaned.match(/\[[\s\S]*\]/);
     if (match) {
       const parsed = JSON.parse(match[0]);
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -165,74 +243,75 @@ Output ONLY a valid JSON array, no markdown:
           arcPosition: i + 1,
           aspectRatio: destino === 'feed' ? '4/5' : '9/16',
         }));
-
-        // Best-effort title from Gemini
-        const storyTitle = `${NARRATIVE_META[narrative].label} · ${basePrompt.slice(0, 40)}`;
-
-        return { storyTitle, styleAnalysis, scenes };
+        return {
+          storyTitle:          `${NARRATIVE_META[narrative].label} · ${basePrompt.slice(0, 40)}`,
+          protagonistAnalysis,
+          scenes,
+        };
       }
     }
   } catch (err) {
     console.warn('[photodumpDirector] buildDirectorPlan failed:', err);
   }
 
-  // ── Fallback ─────────────────────────────────────────────────
-  return buildFallbackPlan(basePrompt, narrative, destino, count, beats, styleAnalysis);
+  return buildFallbackPlan(narrative, destino, count, beats, protagonistAnalysis, basePrompt);
 }
 
 function buildFallbackPlan(
-  basePrompt:    string,
-  narrative:     PhotodumpNarrative,
-  destino:       PhotodumpDestino,
-  count:         number,
-  beats:         StoryBeat[],
-  styleAnalysis: VisualStyleAnalysis | null,
+  narrative:           PhotodumpNarrative,
+  destino:             PhotodumpDestino,
+  count:               number,
+  beats:               StoryBeat[],
+  protagonistAnalysis: ProtagonistAnalysis,
+  basePrompt:          string,
 ): PhotodumpDirectorPlan {
-  const fallbackScenes: Omit<DirectorScene, 'arcPosition' | 'aspectRatio'>[] = [
-    { moment: 'La apertura',     scenePrompt: 'wide establishing shot, soft morning golden hour light, warm and inviting atmosphere, slight lens flare', caption: 'Así empieza todo ☀️',          hashtags: '#lifestyle #morning #aesthetic #organic #moments',     beat: 'hook'        },
-    { moment: 'El detalle',      scenePrompt: 'extreme close-up macro shot, shallow depth of field, soft diffused natural light, texture focus',         caption: 'Los detalles lo dicen todo ✨', hashtags: '#detail #texture #photography #authentic #ugc',          beat: 'development' },
-    { moment: 'El momento real', scenePrompt: 'candid medium shot, street level angle, natural ambient light, genuine unposed feeling',                  caption: 'Momentos así, todos los días 💫', hashtags: '#candid #reallife #moments #lifestyle #content',        beat: 'development' },
-    { moment: 'La textura',      scenePrompt: 'close-up texture and material study, overhead angle, clean natural light, editorial composition',          caption: 'La calidad se siente 🖤',       hashtags: '#quality #texture #editorial #aesthetic #premium',       beat: 'development' },
-    { moment: 'El ambiente',     scenePrompt: 'medium wide lifestyle shot, subject in natural environment, available light, depth and context',           caption: 'En mi elemento 🌿',             hashtags: '#lifestyle #vibes #aesthetic #authentic #daily',         beat: 'development' },
-    { moment: 'El cierre',       scenePrompt: 'atmospheric wide shot, dusk or golden hour, cinematic mood, emotional breathing room, memorable framing',  caption: 'Hasta la próxima 🌅',           hashtags: '#sunset #vibes #lifestyle #moments #organic',            beat: 'closing'     },
-  ];
-
   const ar = destino === 'feed' ? '4/5' : '9/16';
-  const scenes: DirectorScene[] = fallbackScenes.slice(0, count).map((s, i) => ({
-    ...s,
-    beat:        beats[i] ?? s.beat,
-    arcPosition: i + 1,
-    aspectRatio: ar,
-  }));
-
+  const fallback: Omit<DirectorScene, 'arcPosition' | 'aspectRatio'>[] = [
+    { moment: 'La apertura',     scenePrompt: 'wide establishing shot, soft morning golden hour light, warm atmosphere, slight lens flare',   caption: 'Así empieza todo ☀️',           hashtags: '#lifestyle #morning #aesthetic #organic #moments',      beat: 'hook'        },
+    { moment: 'El detalle',      scenePrompt: 'extreme close-up macro shot, shallow depth of field, soft diffused natural light, texture',    caption: 'Los detalles lo dicen todo ✨',  hashtags: '#detail #texture #photography #authentic #ugc',           beat: 'development' },
+    { moment: 'El momento real', scenePrompt: 'candid medium shot, street level angle, natural ambient light, genuine unposed feeling',       caption: 'Momentos así, todos los días 💫',hashtags: '#candid #reallife #moments #lifestyle #content',          beat: 'development' },
+    { moment: 'La textura',      scenePrompt: 'close-up texture and material study, overhead angle, clean natural light, editorial',          caption: 'La calidad se siente 🖤',        hashtags: '#quality #texture #editorial #aesthetic #premium',         beat: 'development' },
+    { moment: 'El ambiente',     scenePrompt: 'medium wide lifestyle shot, subject in natural environment, available light, depth and context',caption: 'En mi elemento 🌿',              hashtags: '#lifestyle #vibes #aesthetic #authentic #daily',           beat: 'development' },
+    { moment: 'El cierre',       scenePrompt: 'atmospheric wide shot, dusk or golden hour, cinematic mood, emotional breathing room',         caption: 'Hasta la próxima 🌅',            hashtags: '#sunset #vibes #lifestyle #moments #organic',             beat: 'closing'     },
+  ];
   return {
-    storyTitle:    `${NARRATIVE_META[narrative].label} · ${basePrompt.slice(0, 40)}`,
-    styleAnalysis,
-    scenes,
+    storyTitle:          `${NARRATIVE_META[narrative].label} · ${basePrompt.slice(0, 40)}`,
+    protagonistAnalysis,
+    scenes: fallback.slice(0, count).map((s, i) => ({
+      ...s, beat: beats[i] ?? s.beat, arcPosition: i + 1, aspectRatio: ar,
+    })),
   };
 }
 
-// ── Helpers de construcción de prompt final ───────────────────
+// ── Construcción del prompt final ─────────────────────────────
 
 export function buildFinalPrompt(
-  basePrompt:    string,
-  scene:         DirectorScene,
-  styleAnalysis: VisualStyleAnalysis | null,
-  destino:       PhotodumpDestino,
+  basePrompt:          string,
+  scene:               DirectorScene,
+  protagonistAnalysis: ProtagonistAnalysis,
+  refs:                PhotodumpRefs,
+  destino:             PhotodumpDestino,
 ): string {
-  const styleHint = styleAnalysis
-    ? `${styleAnalysis.lighting} light, ${styleAnalysis.palette} palette, ${styleAnalysis.mood} mood`
-    : 'photorealistic, authentic UGC style, organic feel';
+  const formatHint = destino === 'feed' ? 'portrait 4:5 composition' : 'vertical 9:16 full-frame composition';
 
-  const formatHint = destino === 'feed'
-    ? 'portrait 4:5 composition'
-    : 'vertical 9:16 full-frame composition';
+  // Locks de identidad compactos para el prompt de imagen
+  const lockParts: string[] = [];
+  if (protagonistAnalysis.avatarDescription)  lockParts.push(protagonistAnalysis.avatarDescription);
+  if (protagonistAnalysis.productDescription) lockParts.push(protagonistAnalysis.productDescription);
+  if (protagonistAnalysis.outfitDescription)  lockParts.push(protagonistAnalysis.outfitDescription);
+  if (protagonistAnalysis.sceneDescription)   lockParts.push(`in ${protagonistAnalysis.sceneDescription}`);
+  const identityContext = lockParts.join(', ');
 
   return [
-    basePrompt,
+    identityContext || basePrompt,
     scene.scenePrompt,
-    styleHint,
+    'photorealistic, authentic UGC style, organic feel, no text overlays',
     formatHint,
-    'photorealistic, high quality, no text overlays',
   ].filter(Boolean).join(', ');
+}
+
+// ── Helpers para la UI ────────────────────────────────────────
+
+export function getRefsAsArray(refs: PhotodumpRefs): string[] {
+  return [refs.avatarRef, refs.productRef, refs.outfitRef, refs.sceneRef].filter(Boolean) as string[];
 }

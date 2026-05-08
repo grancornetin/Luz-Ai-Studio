@@ -3,26 +3,26 @@
  * Diario visual orgánico — Photodump Mode 2.0
  * Diseño alineado con CampaignModule: fondo blanco, WizardStepper, layout dos columnas.
  */
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Images, Download, Check, Sparkles, Library, Trash2, Copy,
-  Plus, X, Hash, BookOpen, RefreshCw, AlertTriangle,
+  Plus, Hash, BookOpen, RefreshCw, AlertTriangle,
   Image as ImageIcon, ChevronDown,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { generationService } from '../promptLibrary/services/generationService';
-import { downloadAsZip, readAndCompressFile } from '../../utils/imageUtils';
+import { downloadAsZip } from '../../utils/imageUtils';
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
+import { ImageSlot } from '../../components/shared/ImageSlot';
 import { newSessionId } from '../../services/imageApiService';
 import { photodumpStorage } from './photodumpStorage';
 import {
   PhotodumpSet, PhotodumpNarrative, PhotodumpProtagonist, PhotodumpDestino,
-  NARRATIVE_META, PROTAGONIST_META, DESTINO_META, STORY_ARC_META,
+  PhotodumpRefs, NARRATIVE_META, PROTAGONIST_META, DESTINO_META, STORY_ARC_META,
 } from './types';
 import {
-  analyzeVisualReferences, buildPhotodumpDirectorPlan, buildFinalPrompt,
-  VisualStyleAnalysis,
+  buildPhotodumpDirectorPlan, buildFinalPrompt, getRefsAsArray,
 } from './photodumpDirectorService';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
@@ -50,7 +50,6 @@ const GENERATION_STEPS: ProgressStep[] = [
 ];
 
 const CREDITS_PER_IMAGE = 2;
-const MAX_REFS = 4;
 
 // ── UpgradeWall ───────────────────────────────────────────────
 const UpgradeWall: React.FC<{ proCredits: number }> = ({ proCredits }) => {
@@ -93,7 +92,9 @@ const PhotodumpModule: React.FC = () => {
 
   // Brief
   const [basePrompt,  setBasePrompt]  = useState('');
-  const [references,  setReferences]  = useState<string[]>([]);
+  const [refs, setRefs] = useState<PhotodumpRefs>({
+    avatarRef: null, productRef: null, outfitRef: null, sceneRef: null, sceneText: '',
+  });
 
   // Historia
   const [narrative,   setNarrative]   = useState<PhotodumpNarrative>('day');
@@ -115,7 +116,6 @@ const PhotodumpModule: React.FC = () => {
   const [partialImages,     setPartialImages]     = useState<string[]>([]);
   const [error,             setError]             = useState<string | null>(null);
   const [currentSet,        setCurrentSet]        = useState<PhotodumpSet | null>(null);
-  const [styleAnalysis,     setStyleAnalysis]     = useState<VisualStyleAnalysis | null>(null);
 
   // Resultados UI
   const [expandedIdx,     setExpandedIdx]     = useState<number | null>(null);
@@ -131,8 +131,6 @@ const PhotodumpModule: React.FC = () => {
   const [lightboxOpen,   setLightboxOpen]   = useState(false);
   const [lightboxIndex,  setLightboxIndex]  = useState(0);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
-
-  const refInputRef = useRef<HTMLInputElement>(null);
 
   // ── Costos ────────────────────────────────────────────────
   const imageCreditCost = count * CREDITS_PER_IMAGE;
@@ -168,22 +166,14 @@ const PhotodumpModule: React.FC = () => {
     await downloadAsZip(set.images.map(i => i.imageUrl), `photodump_${set.id.slice(-6)}.zip`, 'dump');
   };
 
+  const emptyRefs: PhotodumpRefs = { avatarRef: null, productRef: null, outfitRef: null, sceneRef: null, sceneText: '' };
+
   const resetCreator = () => {
-    setStep(1); setBasePrompt(''); setReferences([]); setNarrative('day');
+    setStep(1); setBasePrompt(''); setRefs(emptyRefs); setNarrative('day');
     setProtagonist('both'); setCustomStory(''); setCount(4); setDestino('feed');
     setCurrentSet(null); setError(null); setProgress(null);
     setProgressStepIndex(0); setIsGenerating(false); setPartialImages([]);
-    setExpandedIdx(null); setStyleAnalysis(null);
-  };
-
-  // ── Upload referencias ────────────────────────────────────
-  const handleRefFiles = async (files: FileList) => {
-    const canAdd = MAX_REFS - references.length;
-    if (canAdd <= 0) return;
-    const valid = Array.from(files).filter(f => f.type.startsWith('image/')).slice(0, canAdd);
-    if (!valid.length) return;
-    const compressed = await Promise.all(valid.map(f => readAndCompressFile(f)));
-    setReferences(prev => [...prev, ...compressed]);
+    setExpandedIdx(null);
   };
 
   // ── GENERACIÓN PRINCIPAL ──────────────────────────────────
@@ -213,29 +203,25 @@ const PhotodumpModule: React.FC = () => {
     setProgress({ total: count, completed: 0 });
 
     try {
-      // Paso 1: analizar referencias (si las hay)
+      // Paso 1: director analiza el protagonista y construye el Story Arc con locks de identidad
       setProgressStepIndex(0);
-      const analysis = references.length > 0
-        ? await analyzeVisualReferences(references)
-        : null;
-      setStyleAnalysis(analysis);
-
-      // Paso 2: director construye la historia
-      setProgressStepIndex(1);
       const plan = await buildPhotodumpDirectorPlan(
-        basePrompt, narrative, protagonist, destino, customStory, count, analysis,
+        basePrompt, narrative, protagonist, destino, customStory, count, refs,
       );
 
-      // Paso 3: construir prompts finales y generar
+      // Paso 2: construir prompts finales
+      setProgressStepIndex(1);
       const finalPrompts = plan.scenes.map(scene =>
-        buildFinalPrompt(basePrompt, scene, analysis, destino),
+        buildFinalPrompt(basePrompt, scene, plan.protagonistAnalysis, refs, destino),
       );
 
+      // Paso 3: generar imágenes pasando las refs como ancla visual
       setProgressStepIndex(2);
+      const refsArray = getRefsAsArray(refs);
 
       const images = await generationService.generateBatchFlash(
         finalPrompts,
-        references,
+        refsArray,
         undefined,
         (p) => {
           setProgress({ total: p.total, completed: p.completed });
@@ -255,7 +241,7 @@ const PhotodumpModule: React.FC = () => {
         id:          Date.now().toString(),
         createdAt:   Date.now(),
         basePrompt, narrative, protagonist, destino, customStory, count,
-        references:  [],
+        refs: { avatarRef: null, productRef: null, outfitRef: null, sceneRef: null },
         images: images.filter(Boolean).map((url, i) => ({
           imageUrl: url,
           moment:   plan.scenes[i]?.moment   ?? `Momento ${i + 1}`,
@@ -373,50 +359,58 @@ const PhotodumpModule: React.FC = () => {
                         </p>
                       </div>
 
-                      {/* Referencias visuales */}
+                      {/* Referencias del protagonista */}
                       <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em]">
-                            Referencias de estilo{' '}
-                            <span className="text-slate-400 font-medium normal-case tracking-normal">(opcional pero recomendado)</span>
-                          </label>
-                          {references.length > 0 && (
-                            <span className="text-[10px] font-bold text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full">
-                              {references.length}/{MAX_REFS}
-                            </span>
-                          )}
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-1">
+                          Referencias del protagonista{' '}
+                          <span className="text-slate-400 font-medium normal-case tracking-normal">(opcional — para mantener identidad consistente)</span>
+                        </label>
+                        <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
+                          Subí fotos del personaje, producto, outfit o lugar que aparecerán en toda la historia. El director analiza cada referencia y bloquea la identidad en cada imagen generada.
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <ImageSlot
+                            value={refs.avatarRef}
+                            onChange={v => setRefs(r => ({ ...r, avatarRef: v }))}
+                            slotType="person"
+                            aspectRatio="portrait"
+                            label="Persona"
+                            hint="Foto del personaje"
+                          />
+                          <ImageSlot
+                            value={refs.productRef}
+                            onChange={v => setRefs(r => ({ ...r, productRef: v }))}
+                            slotType="product"
+                            aspectRatio="portrait"
+                            label="Producto"
+                            hint="Foto del producto"
+                          />
+                          <ImageSlot
+                            value={refs.outfitRef}
+                            onChange={v => setRefs(r => ({ ...r, outfitRef: v }))}
+                            slotType="outfit"
+                            aspectRatio="portrait"
+                            label="Outfit"
+                            hint="Foto del outfit"
+                          />
+                          <ImageSlot
+                            value={refs.sceneRef}
+                            onChange={v => setRefs(r => ({ ...r, sceneRef: v }))}
+                            slotType="scene"
+                            aspectRatio="portrait"
+                            label="Escena"
+                            hint="Foto del lugar"
+                          />
                         </div>
-
-                        {references.length > 0 && (
-                          <div className="grid grid-cols-4 gap-2 mb-2">
-                            {references.map((src, i) => (
-                              <div key={i} className="relative aspect-square rounded-xl overflow-hidden group">
-                                <img src={src} alt="" className="w-full h-full object-cover" />
-                                <button type="button"
-                                  onClick={() => setReferences(prev => prev.filter((_, j) => j !== i))}
-                                  className="absolute top-1 right-1 w-5 h-5 bg-black/70 hover:bg-black/90 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
-                                  <X size={8} strokeWidth={3} />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
+                        {refs.sceneRef && (
+                          <input
+                            type="text"
+                            value={refs.sceneText ?? ''}
+                            onChange={e => setRefs(r => ({ ...r, sceneText: e.target.value }))}
+                            placeholder="Describe el lugar (opcional) — ej: departamento moderno con plantas, Buenos Aires"
+                            className="w-full mt-2 bg-white border border-slate-200 rounded-xl px-3 py-2 text-[12px] text-slate-700 outline-none focus:border-brand-400 transition-all"
+                          />
                         )}
-
-                        {references.length < MAX_REFS && (
-                          <button type="button"
-                            onClick={() => refInputRef.current?.click()}
-                            onDrop={e => { e.preventDefault(); if (e.dataTransfer.files.length) handleRefFiles(e.dataTransfer.files); }}
-                            onDragOver={e => e.preventDefault()}
-                            className="w-full rounded-2xl border-2 border-dashed border-slate-200 hover:border-brand-400 bg-slate-50 hover:bg-brand-50 transition-all flex flex-col items-center justify-center gap-1.5 py-5 group">
-                            <ImageIcon className="w-5 h-5 text-slate-300 group-hover:text-brand-400 transition-colors" />
-                            <span className="text-[10px] font-semibold text-slate-400 group-hover:text-brand-500 text-center leading-tight">
-                              Subí fotos que te gustan — el director las analiza para replicar ese estilo<br />
-                              <span className="text-slate-300">PNG, JPG · hasta {MAX_REFS} imágenes</span>
-                            </span>
-                          </button>
-                        )}
-                        <input ref={refInputRef} type="file" accept="image/*" multiple className="hidden"
-                          onChange={e => { if (e.target.files?.length) handleRefFiles(e.target.files); e.target.value = ''; }} />
                       </div>
                     </div>
 
@@ -608,14 +602,19 @@ const PhotodumpModule: React.FC = () => {
                           <Sparkles className="w-4 h-4 text-violet-600 flex-shrink-0 mt-0.5" />
                           <div>
                             <p className="text-[12px] font-bold text-violet-900 mb-1">Cómo funciona el proceso</p>
-                            <ol className="text-[11px] text-violet-700 leading-[1.6] space-y-1 list-none">
-                              {references.length > 0 && (
-                                <li><span className="font-bold">1.</span> El director <strong>analiza tus referencias</strong> para replicar el estilo visual</li>
-                              )}
-                              <li><span className="font-bold">{references.length > 0 ? '2' : '1'}.</span> La IA construye el <strong>arco narrativo en 3 actos</strong> (Gancho → Desarrollo → Cierre)</li>
-                              <li><span className="font-bold">{references.length > 0 ? '3' : '2'}.</span> Genera las <strong>{count} imágenes del set</strong> con estilo y narrativa coherentes</li>
-                              <li><span className="font-bold">{references.length > 0 ? '4' : '3'}.</span> Recibís imágenes + captions + hashtags listos para publicar</li>
-                            </ol>
+                            {(() => {
+                              const hasRefs = getRefsAsArray(refs).length > 0;
+                              return (
+                                <ol className="text-[11px] text-violet-700 leading-[1.6] space-y-1 list-none">
+                                  {hasRefs && (
+                                    <li><span className="font-bold">1.</span> El director <strong>analiza tus referencias</strong> y extrae los descriptores de identidad del protagonista</li>
+                                  )}
+                                  <li><span className="font-bold">{hasRefs ? '2' : '1'}.</span> Construye el <strong>arco narrativo en 3 actos</strong> (Gancho → Desarrollo → Cierre)</li>
+                                  <li><span className="font-bold">{hasRefs ? '3' : '2'}.</span> Genera las <strong>{count} imágenes</strong> bloqueando la identidad del protagonista en cada una</li>
+                                  <li><span className="font-bold">{hasRefs ? '4' : '3'}.</span> Recibís el set completo con captions y hashtags listos para publicar</li>
+                                </ol>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -676,10 +675,10 @@ const PhotodumpModule: React.FC = () => {
                           <span className="text-base">{DESTINO_META[destino].icon}</span>
                           <p className="text-[12px] text-slate-600">{DESTINO_META[destino].label}</p>
                         </div>
-                        {references.length > 0 && (
+                        {getRefsAsArray(refs).length > 0 && (
                           <div className="flex items-center gap-2">
                             <ImageIcon className="w-4 h-4 text-slate-400" />
-                            <p className="text-[12px] text-slate-600">{references.length} referencia{references.length > 1 ? 's' : ''} de estilo</p>
+                            <p className="text-[12px] text-slate-600">{getRefsAsArray(refs).length} referencia{getRefsAsArray(refs).length > 1 ? 's' : ''} de identidad</p>
                           </div>
                         )}
                         <p className="text-[11px] text-slate-400 line-clamp-2 mt-1 italic">"{basePrompt}"</p>
