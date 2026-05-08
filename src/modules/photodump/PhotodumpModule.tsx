@@ -368,39 +368,51 @@ const PhotodumpModule: React.FC = () => {
                         <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
                           Subí fotos del personaje, producto, outfit o lugar que aparecerán en toda la historia. El director analiza cada referencia y bloquea la identidad en cada imagen generada.
                         </p>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                          <ImageSlot
-                            value={refs.avatarRef}
-                            onChange={v => setRefs(r => ({ ...r, avatarRef: v }))}
-                            slotType="person"
-                            aspectRatio="portrait"
-                            label="Persona"
-                            hint="Foto del personaje"
-                          />
-                          <ImageSlot
-                            value={refs.productRef}
-                            onChange={v => setRefs(r => ({ ...r, productRef: v }))}
-                            slotType="product"
-                            aspectRatio="portrait"
-                            label="Producto"
-                            hint="Foto del producto"
-                          />
-                          <ImageSlot
-                            value={refs.outfitRef}
-                            onChange={v => setRefs(r => ({ ...r, outfitRef: v }))}
-                            slotType="outfit"
-                            aspectRatio="portrait"
-                            label="Outfit"
-                            hint="Foto del outfit"
-                          />
-                          <ImageSlot
-                            value={refs.sceneRef}
-                            onChange={v => setRefs(r => ({ ...r, sceneRef: v }))}
-                            slotType="scene"
-                            aspectRatio="portrait"
-                            label="Escena"
-                            hint="Foto del lugar"
-                          />
+                        <div className="grid grid-cols-4 gap-3">
+                          <div className="flex flex-col gap-1.5">
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em]">Persona</p>
+                            <ImageSlot
+                              value={refs.avatarRef}
+                              onChange={v => setRefs(r => ({ ...r, avatarRef: v }))}
+                              slotType="person"
+                              aspectRatio="portrait"
+                              hint="Foto del personaje"
+                              iconless={false}
+                            />
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em]">Producto</p>
+                            <ImageSlot
+                              value={refs.productRef}
+                              onChange={v => setRefs(r => ({ ...r, productRef: v }))}
+                              slotType="product"
+                              aspectRatio="portrait"
+                              hint="Foto del producto"
+                              iconless={false}
+                            />
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em]">Outfit</p>
+                            <ImageSlot
+                              value={refs.outfitRef}
+                              onChange={v => setRefs(r => ({ ...r, outfitRef: v }))}
+                              slotType="outfit"
+                              aspectRatio="portrait"
+                              hint="Foto del outfit"
+                              iconless={false}
+                            />
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em]">Escena</p>
+                            <ImageSlot
+                              value={refs.sceneRef}
+                              onChange={v => setRefs(r => ({ ...r, sceneRef: v }))}
+                              slotType="scene"
+                              aspectRatio="portrait"
+                              hint="Foto del lugar"
+                              iconless={false}
+                            />
+                          </div>
                         </div>
                         {refs.sceneRef && (
                           <input
