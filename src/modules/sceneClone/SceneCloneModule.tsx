@@ -58,6 +58,47 @@ function toBase64OrThrow(input: string | null | undefined, fieldName: string): s
   return result;
 }
 
+
+type PersonSlotSide = 'left' | 'right';
+
+function cropPersonSlotFromTarget(input: string, side: PersonSlotSide): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const width = img.naturalWidth || img.width;
+        const height = img.naturalHeight || img.height;
+        if (!width || !height) {
+          resolve(input);
+          return;
+        }
+
+        // Recorte amplio con solape: no intenta recortar perfecto, solo crea un ancla visual
+        // del sujeto izquierdo/derecho con suficiente contexto para que el modelo entienda el slot.
+        const cropWidth = Math.round(width * 0.62);
+        const sx = side === 'left' ? 0 : Math.max(0, width - cropWidth);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = cropWidth;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(input);
+          return;
+        }
+
+        ctx.drawImage(img, sx, 0, cropWidth, height, 0, 0, cropWidth, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.92));
+      } catch (err) {
+        console.warn('No se pudo generar el recorte de slot:', err);
+        resolve(input);
+      }
+    };
+    img.onerror = () => resolve(input);
+    img.src = input;
+  });
+}
+
 // --- COMPONENTS UI PRO ---
 const ProHeader: React.FC<{ title: string; subtitle: string; icon: string }> = ({ title, subtitle, icon }) => (
   <div className="flex items-center gap-4 mb-6">
@@ -275,7 +316,9 @@ export default function CloneImageModule() {
   const fabVisible = !!fabVisibleRaw;
 
   const CLONE_COST = CREDIT_COSTS.CLONE_IMAGE;
-  const creditsAfter = Math.max(0, credits.available - CLONE_COST);
+  const DUAL_SUBJECT_EXTRA_COST = 2;
+  const baseGenerationCost = CLONE_COST + (enableSecondSubject ? DUAL_SUBJECT_EXTRA_COST : 0);
+  const creditsAfter = Math.max(0, credits.available - baseGenerationCost);
 
   useEffect(() => {
     cloneMasterStorage.listSessions().then(setSessions).catch(() => {});
@@ -300,7 +343,8 @@ export default function CloneImageModule() {
   };
 
   const canGoToIdentity = !!targetImage;
-  const canGoToBase = !!face1 && !!body1 && (!enableSecondSubject || (!!face2 && !!body2));
+  const hasConfirmedDualMapping = !enableSecondSubject || subject1Selector !== 'auto';
+  const canGoToBase = !!face1 && !!body1 && (!enableSecondSubject || (!!face2 && !!body2 && hasConfirmedDualMapping));
   const canGoToOutfit = !!baseComposition;
 
   const activeProductOverrides = detectedProducts.filter(p => p.replacementImage);
@@ -341,7 +385,7 @@ export default function CloneImageModule() {
   const { checkAndDeduct, showNoCredits, requiredCredits, closeModal, refundCredits } = useCreditGuard();
 
   async function handleGenerateBase() {
-    const ok = await checkAndDeduct(CREDIT_COSTS.CLONE_IMAGE);
+    const ok = await checkAndDeduct(baseGenerationCost);
     if (!ok) return;
     setError(null);
     setCreditsRefunded(false);
@@ -365,6 +409,15 @@ export default function CloneImageModule() {
       const safeFace = toBase64OrThrow(face1, "cara del sujeto 1");
       const safeBody = toBase64OrThrow(body1, "cuerpo del sujeto 1");
 
+      let subject1SlotImage: string | undefined;
+      let subject2SlotImage: string | undefined;
+      if (enableSecondSubject && subject1Selector !== 'auto') {
+        const leftSlot = await cropPersonSlotFromTarget(safeTarget, 'left');
+        const rightSlot = await cropPersonSlotFromTarget(safeTarget, 'right');
+        subject1SlotImage = subject1Selector === 'left' ? leftSlot : rightSlot;
+        subject2SlotImage = subject1Selector === 'left' ? rightSlot : leftSlot;
+      }
+
       const payload: CloneImageParams = {
         targetImage: safeTarget,
         faceImage: safeFace,
@@ -375,6 +428,8 @@ export default function CloneImageModule() {
         modelId,
         enableSecondSubject,
         subject1Selector,
+        subject1SlotImage,
+        subject2SlotImage,
         faceImage2: enableSecondSubject ? (normalizeImageInput(face2) || undefined) : undefined,
         bodyImage2: enableSecondSubject ? (normalizeImageInput(body2) || undefined) : undefined,
         replaceOutfit2: false,
@@ -385,7 +440,7 @@ export default function CloneImageModule() {
           moduleLabel: 'Clonar escena (Base)',
           shotIndex: 0,
           totalShots: 1,
-          metadata: { cameraStyle, aspectRatio, enableSecondSubject },
+          metadata: { cameraStyle, aspectRatio, enableSecondSubject, baseGenerationCost },
         },
       };
 
@@ -396,8 +451,8 @@ export default function CloneImageModule() {
         imageUrl: img,
         module: 'scene_clone',
         moduleLabel: 'Scene Clone (Base)',
-        creditsUsed: CREDIT_COSTS.CLONE_IMAGE,
-        promptText: `Clonación de escena base con estilo ${cameraStyle}`
+        creditsUsed: baseGenerationCost,
+        promptText: `Clonación de escena base con estilo ${cameraStyle}${enableSecondSubject ? ' · modo 2 personas inteligente' : ''}`
       }).catch(console.error);
 
       const session: CloneMasterSession = {
@@ -422,7 +477,7 @@ export default function CloneImageModule() {
       const appErr = toAppError(e);
       setError(appErr);
       if (REFUNDABLE_ERRORS.has(appErr.code as any)) {
-        const refunded = await refundCredits(CREDIT_COSTS.CLONE_IMAGE);
+        const refunded = await refundCredits(baseGenerationCost);
         setCreditsRefunded(refunded);
       }
     } finally {
@@ -795,10 +850,22 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
 
                   <ProToggle 
                     checked={enableSecondSubject} 
-                    onChange={(v) => { setEnableSecondSubject(v); resetDownstream(2); }} 
-                    label="Habilitar 2º Persona" 
-                    description="Si el target tiene dos personas visibles."
+                    onChange={(v) => { setEnableSecondSubject(v); setSubject1Selector(v ? 'auto' : 'auto'); resetDownstream(2); }} 
+                    label={`Habilitar 2º Persona (+${DUAL_SUBJECT_EXTRA_COST} cr)`}
+                    description="Modo dual inteligente: requiere asignar si S1 va a la izquierda o derecha."
                   />
+
+                  {enableSecondSubject && (
+                    <div className="bg-purple-50 border border-purple-200 rounded-xl px-3 py-2.5 text-[11.5px] text-purple-900 leading-[1.55]">
+                      <strong>Modo 2 personas:</strong> suma {DUAL_SUBJECT_EXTRA_COST} cr al generar la base. La app crea anclas visuales izquierda/derecha para mejorar la asignación de S1 y S2.
+                    </div>
+                  )}
+
+                  {enableSecondSubject && subject1Selector === 'auto' && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-[11.5px] text-amber-900 leading-[1.55]">
+                      Para usar el modo 2 personas debes confirmar dónde va S1: pulsa <strong>Izq</strong> o <strong>Der</strong> en el selector junto a “Sujeto 1”. Esto evita generaciones ambiguas.
+                    </div>
+                  )}
 
                   {enableSecondSubject && (
                     <div className="space-y-3 animate-in fade-in">
@@ -830,7 +897,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                       <div className="flex flex-col gap-2 mb-3.5 text-[13px]">
                         <div className="flex justify-between">
                           <span className="opacity-70">Sujetos</span>
-                          <span className="font-semibold">{enableSecondSubject ? '2 personas' : '1 persona'}</span>
+                          <span className="font-semibold">{enableSecondSubject ? `2 personas (+${DUAL_SUBJECT_EXTRA_COST} cr)` : '1 persona'}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="opacity-70">Formato</span>
@@ -840,11 +907,17 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                           <span className="opacity-70">Imágenes</span>
                           <span className="font-semibold">1</span>
                         </div>
+                        {enableSecondSubject && (
+                          <div className="flex justify-between">
+                            <span className="opacity-70">Modo dual inteligente</span>
+                            <span className="font-semibold">+{DUAL_SUBJECT_EXTRA_COST} cr</span>
+                          </div>
+                        )}
                         <div className="h-px bg-white/10 my-1.5" />
                         <div className="flex justify-between items-baseline">
                           <span className="opacity-85 text-[13px]">Total</span>
                           <span className="t-display text-[36px] tracking-tight leading-none normal-case not-italic">
-                            {CLONE_COST}{' '}
+                            {baseGenerationCost}{' '}
                             <span className="text-sm opacity-70 font-semibold normal-case">cr</span>
                           </span>
                         </div>
@@ -856,7 +929,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                   </div>
 
                   <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5 text-[11.5px] text-emerald-900 leading-[1.55]">
-                    <strong>Sin sorpresas.</strong> Esta generación consume créditos. Reembolso automático si falla por un error reembolsable.
+                    <strong>Sin sorpresas.</strong> La base consume {baseGenerationCost} cr. El modo 2 personas suma {DUAL_SUBJECT_EXTRA_COST} cr porque usa asignación dual con anclas visuales.
                   </div>
                 </div>
               )}
@@ -999,7 +1072,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                   else if (step === 4) handleApplyOutfitsAndProducts();
                 }}
                 continueLabel={
-                  step === 3 ? `Generar Base · ${CLONE_COST} cr` :
+                  step === 3 ? `Generar Base · ${baseGenerationCost} cr` :
                   step === 4 ? `Aplicar Cambios · ${CLONE_COST} cr` :
                   'Continuar'
                 }
