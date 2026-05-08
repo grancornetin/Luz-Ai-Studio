@@ -255,8 +255,11 @@ const CampaignModule: React.FC = () => {
   };
 
   const downloadSetZip = async (set: CampaignSet) => {
-    const urls = set.plan.piezas.map(p => p.imageUrl).filter(Boolean);
-    await downloadAsZip(urls, `campaña_${set.id.slice(-6)}.zip`, 'campaign');
+    const validPiezas = set.plan.piezas.filter(p => p.imageUrl && p.imageUrl.length > 10);
+    if (validPiezas.length === 0) return;
+    const urls    = validPiezas.map(p => p.imageUrl);
+    const prefix  = (set.plan.tagline ?? 'campaña').replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ\s]/g, '').trim().slice(0, 30);
+    await downloadAsZip(urls, `${prefix}.zip`, `dia`);
   };
 
   const deleteSet = async (id: string) => {
@@ -409,6 +412,7 @@ const CampaignModule: React.FC = () => {
         slots:         activeSlots,
         anchorImage:   selectedAnchor,
         anchorOptions,
+        userName:      user?.displayName ?? undefined,
         plan:          campaignPlan,
       };
 

@@ -78,6 +78,8 @@ export interface CampaignSet {
   // Ancla visual — elegida por Sofi en el paso de aprobación
   anchorImage:   string;        // base64 o URL de la imagen ancla elegida
   anchorOptions: string[];      // las 2 opciones generadas (para referencia)
+  // Usuario
+  userName?: string;            // nombre del usuario para el PDF
   // Plan generado
   plan:      CampaignPlan;
 }

@@ -22,7 +22,10 @@ const CAMPAIGN_NEGATIVE = [
   'blurry', 'distorted', 'low quality', 'bad anatomy',
   'extra fingers', 'deformed hands', 'mutated body',
   'bad lighting', 'low resolution', 'overexposed', 'underexposed',
-  'ugly', 'poor composition', 'watermark', 'text overlay',
+  'ugly', 'poor composition', 'watermark',
+  // Texto en imagen — siempre excluido salvo que el prompt lo pida explícitamente
+  'text overlay', 'text on image', 'typography', 'words', 'letters',
+  'caption on photo', 'subtitle', 'label text', 'graphic design text',
   'collage', 'composite artifacts', 'identity mixing',
   'face distortion', 'skin smoothing', 'beauty filter',
   'airbrushed', 'editorial over-processing', 'plastic skin',
@@ -205,9 +208,12 @@ ANCHOR IMAGE REQUIREMENTS:
 
 ${lockSystem}
 
+🚫 NO TEXT IN THE IMAGE — no typography, no overlaid words, no captions, no watermarks, no graphic design elements. Pure photography only. Text belongs in the caption, not in the photo.
+
 FINAL CHECKLIST:
 ${hasProduct ? '✓ Product matches product reference exactly — same shape, color, every detail\n' : ''}${hasModel ? '✓ Person matches model reference exactly — same face, hair, skin tone\n' : ''}${hasInspo ? '✓ Mood and lighting feel matches inspiration reference\n' : ''}✓ Image quality is campaign-ready — no obvious AI artifacts
-✓ This image could be the cover of a brand campaign`;
+✓ This image could be the cover of a brand campaign
+✓ NO text, typography or graphic design elements in the image`;
 }
 
 // ─── Prompt para imagen de campaña derivada (con ancla) ───────
@@ -267,9 +273,12 @@ ${CAMPAIGN_CHANNEL_META[pieza.canal].label === 'Instagram Stories' || CAMPAIGN_C
   ? '- Square or slightly vertical. Clean, clear product focus. Simple background.'
   : '- Square or 4:5. Strong focal point. Scroll-stopping composition.'}
 
+🚫 NO TEXT IN THE IMAGE — no typography, no overlaid words, no captions, no watermarks. Pure photography only.
+
 FINAL CHECKLIST:
 ${hasModel   ? '✓ Person matches model reference exactly — face, hair, skin tone unchanged\n' : ''}${hasProduct ? '✓ Product matches product reference exactly — same shape, color, every detail\n' : ''}${hasAnchor  ? '✓ Color temperature and lighting match anchor image\n' : ''}✓ Shot role "${pieza.rol}" is clearly communicated
-✓ Professional campaign quality — no obvious AI artifacts`;
+✓ Professional campaign quality — no obvious AI artifacts
+✓ NO text, typography or graphic design elements in the image`;
 }
 
 // ─── buildCampaignPlan ────────────────────────────────────────

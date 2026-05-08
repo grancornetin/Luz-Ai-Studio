@@ -262,7 +262,7 @@ function buildCoverPage(set: CampaignSet): string {
       <div class="cover-footer">
         <div class="cover-footer-inner">
           <span style="font-family:var(--font-body);font-size:11px;color:rgba(255,255,255,0.35)">
-            Generado con Luz IA Studio · ${formatDate()}
+            ${set.userName ? `Creado por ${esc(set.userName)} · ` : ''}Luz IA Studio · ${formatDate()}
           </span>
           <span style="font-family:var(--font-body);font-size:11px;color:rgba(255,255,255,0.25)">${canalesLabels}</span>
         </div>
@@ -506,6 +506,79 @@ function buildHashtagsPage(set: CampaignSet, pageNum: number): string {
   </div>`;
 }
 
+// ─── Página de configuración / brief / prompts ───────────────
+
+function buildConfigPage(set: CampaignSet, pageNum: number): string {
+  const { plan } = set;
+  const canalesLabels = set.canales.map(c => CAMPAIGN_CHANNEL_META[c].label).join(', ');
+
+  const piezasRows = plan.piezas.map((p, i) => `
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:10px 12px;font-family:var(--font-body);font-size:11px;font-weight:700;color:var(--dark-text);white-space:nowrap">Pieza ${i + 1} · Día ${p.dia}</td>
+      <td style="padding:10px 12px;font-family:var(--font-body);font-size:11px;color:#64748b">${esc(p.rol)} · ${esc(CAMPAIGN_CHANNEL_META[p.canal]?.label ?? p.canal)}</td>
+      <td style="padding:10px 12px;font-family:monospace;font-size:10px;color:#475569;line-height:1.5">${esc(p.imagePrompt)}</td>
+    </tr>`).join('');
+
+  return `
+  <div class="page-label">Última página · Configuración y Brief</div>
+  <div class="page" id="page-config">
+    <div class="section-header">
+      <span class="section-header-title">Configuración de Campaña</span>
+      <span class="section-header-badge">Registro completo</span>
+    </div>
+    <div class="page-body" style="padding-bottom:80px">
+
+      <!-- Brief original -->
+      <div style="margin-bottom:24px">
+        <div class="strategy-label">Brief original</div>
+        <div style="background:var(--slate);border:1px solid var(--border);border-radius:var(--r-md);padding:16px 18px">
+          <p style="font-family:var(--font-body);font-size:13px;line-height:1.7;color:var(--dark-text)">${esc(set.idea)}</p>
+        </div>
+      </div>
+
+      <!-- Configuración -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">
+        <div style="background:var(--black);border-radius:var(--r-md);padding:16px 18px">
+          <div style="font-family:var(--font-body);font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:6px">Canales</div>
+          <div style="font-family:var(--font-title);font-size:13px;font-weight:700;color:var(--white)">${esc(canalesLabels)}</div>
+        </div>
+        <div style="background:var(--black);border-radius:var(--r-md);padding:16px 18px">
+          <div style="font-family:var(--font-body);font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:6px">Imágenes generadas</div>
+          <div style="font-family:var(--font-title);font-size:13px;font-weight:700;color:var(--fucsia)">${plan.piezas.length} piezas de campaña</div>
+        </div>
+        <div style="background:var(--black);border-radius:var(--r-md);padding:16px 18px">
+          <div style="font-family:var(--font-body);font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:6px">Concepto creativo</div>
+          <div style="font-family:var(--font-title);font-size:13px;font-weight:700;color:var(--white)">${esc(plan.concepto)}</div>
+        </div>
+        <div style="background:var(--black);border-radius:var(--r-md);padding:16px 18px">
+          <div style="font-family:var(--font-body);font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.4);margin-bottom:6px">Referencias subidas</div>
+          <div style="font-family:var(--font-title);font-size:13px;font-weight:700;color:var(--lime)">${set.slots.length} imágenes (${[...new Set(set.slots.map(s => s.role))].join(', ')})</div>
+        </div>
+      </div>
+
+      <!-- Tabla de prompts -->
+      <div style="margin-bottom:24px">
+        <div class="strategy-label">Prompts usados por pieza</div>
+        <div style="background:var(--white);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden">
+          <table style="width:100%;border-collapse:collapse">
+            <thead>
+              <tr style="background:var(--slate);border-bottom:2px solid var(--border)">
+                <th style="padding:10px 12px;font-family:var(--font-body);font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b;text-align:left;white-space:nowrap">Pieza</th>
+                <th style="padding:10px 12px;font-family:var(--font-body);font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b;text-align:left">Rol · Canal</th>
+                <th style="padding:10px 12px;font-family:var(--font-body);font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b;text-align:left">Prompt de imagen</th>
+              </tr>
+            </thead>
+            <tbody>${piezasRows}</tbody>
+          </table>
+        </div>
+      </div>
+
+      ${set.userName ? `<p style="font-family:var(--font-body);font-size:11px;color:#94a3b8">Creado por ${esc(set.userName)} · ${formatDate()}</p>` : ''}
+    </div>
+    ${pageFooter(pageNum)}
+  </div>`;
+}
+
 // ─── Construye el HTML completo ───────────────────────────────
 
 async function buildHtml(set: CampaignSet): Promise<string> {
@@ -514,6 +587,7 @@ async function buildHtml(set: CampaignSet): Promise<string> {
     set.plan.piezas.map(p => urlToBase64(p.imageUrl))
   );
 
+  const lastPageNum = set.plan.piezas.length + 5;
   const pages = [
     buildCoverPage(set),
     buildStrategyPage(set),
@@ -522,6 +596,7 @@ async function buildHtml(set: CampaignSet): Promise<string> {
       buildPiecePage(p, i, set.plan.piezas.length, base64Images[i])
     ),
     buildHashtagsPage(set, set.plan.piezas.length + 4),
+    buildConfigPage(set, lastPageNum),
   ].join('\n');
 
   const campaignTitle = esc(set.plan.tagline || 'Kit de Campaña');
