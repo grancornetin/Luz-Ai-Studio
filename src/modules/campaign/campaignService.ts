@@ -2,23 +2,21 @@ import { geminiService } from '../../services/geminiService';
 import { imageApiService, extractImageRef } from '../../services/imageApiService';
 import {
   CampaignChannel, CampaignImageSlot, CampaignPiece, CampaignPlan,
-  CAMPAIGN_CHANNEL_META,
+  CAMPAIGN_CHANNEL_META, ANCHOR_IMAGE_COUNT,
 } from './types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CAMPAIGN DIRECTOR SERVICE
 //
-// Arquitectura inspirada en UGC Studio:
-//   1. Gemini 2.5 analiza el brief + imágenes de referencia → construye el plan
-//      estratégico completo (concepto, piezas, copy, hashtags, calendario)
-//   2. Por cada pieza, se construye un prompt de imagen con los mismos locks
-//      de identidad/producto/marca que usa UGC Studio
-//   3. Las referencias se pasan estratificadas: producto primero (2x), luego
-//      inspiración, luego marca — igual que UGC duplica la cara para reforzar
-//   4. La generación usa imageApiService directamente (mismo path que UGC)
+// Flujo inspirado en UGC Studio:
+//   1. Gemini 2.5 analiza brief + referencias → plan estratégico completo
+//   2. Selección inteligente de referencias (elige las mejores fotos de producto)
+//   3. Genera 2 imágenes "ancla" para que Sofi apruebe el estilo visual
+//   4. Sofi elige un ancla → se analiza igual que REF0 en UGC Studio
+//   5. Genera las N imágenes con [modelo x2, productos, ancla, inspiración, marca]
+//      usando el mismo sistema de locks de identidad/producto/estilo que UGC
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ─── Negative prompt compartido con UGC Studio ───────────────
 const CAMPAIGN_NEGATIVE = [
   'blurry', 'distorted', 'low quality', 'bad anatomy',
   'extra fingers', 'deformed hands', 'mutated body',
@@ -27,174 +25,306 @@ const CAMPAIGN_NEGATIVE = [
   'collage', 'composite artifacts', 'identity mixing',
   'face distortion', 'skin smoothing', 'beauty filter',
   'airbrushed', 'editorial over-processing', 'plastic skin',
-  'wrong product', 'different brand', 'color drift',
+  'wrong product', 'color drift', 'different brand',
 ].join(', ');
 
-// ─── Lock system para campaña (versión campaign de UGC LOCK_SYSTEM) ──────────
-function buildCampaignLockSystem(slots: CampaignImageSlot[]): string {
-  const hasProduct     = slots.some(s => s.role === 'product');
-  const hasModel       = slots.some(s => s.role === 'model');
-  const hasBrand       = slots.some(s => s.role === 'brand');
-  const hasInspiration = slots.some(s => s.role === 'inspiration');
+// ─── Selección inteligente de referencias ────────────────────
+// Cuando Sofi sube muchas fotos del mismo producto, elegimos las más
+// informativas para no desperdiciar el límite de 10 referencias de Gemini.
+// Estrategia: máx 2 fotos de producto, 1 de modelo, 1 inspiración, 1 marca.
 
+function selectBestRefs(slots: CampaignImageSlot[]): {
+  productRefs:     CampaignImageSlot[];
+  modelRef:        CampaignImageSlot | null;
+  inspirationRef:  CampaignImageSlot | null;
+  brandRef:        CampaignImageSlot | null;
+} {
+  const products     = slots.filter(s => s.role === 'product');
+  const models       = slots.filter(s => s.role === 'model');
+  const inspirations = slots.filter(s => s.role === 'inspiration');
+  const brands       = slots.filter(s => s.role === 'brand');
+
+  // Para productos: máximo 3 fotos — priorizamos variedad de ángulos
+  // Si hay más de 3, tomamos la primera, la del medio, y la última
+  // (asumimos que el usuario subió: frontal, lateral, detalle)
+  let productRefs = products;
+  if (products.length > 3) {
+    const mid = Math.floor(products.length / 2);
+    productRefs = [products[0], products[mid], products[products.length - 1]];
+  }
+
+  return {
+    productRefs,
+    modelRef:       models[0]       ?? null,
+    inspirationRef: inspirations[0] ?? null,
+    brandRef:       brands[0]       ?? null,
+  };
+}
+
+// ─── Construye el array de referencias estratificado ─────────
+// Mismo orden que UGC Studio: identidad primero (duplicada), luego
+// producto (duplicado), luego ancla/contexto, luego estilo/marca.
+
+function buildStratifiedRefs(
+  selected: ReturnType<typeof selectBestRefs>,
+  anchorImage?: string,
+): Array<{ data: string; mimeType: string }> {
+  const raw: string[] = [];
+
+  // 1. Modelo — identidad, duplicado para máximo peso
+  if (selected.modelRef) {
+    raw.push(selected.modelRef.base64);
+    raw.push(selected.modelRef.base64); // duplicar
+  }
+
+  // 2. Producto — visual hero, duplicado si solo hay 1
+  selected.productRefs.forEach(r => raw.push(r.base64));
+  if (selected.productRefs.length === 1) {
+    raw.push(selected.productRefs[0].base64); // duplicar si solo 1
+  }
+
+  // 3. Ancla elegida por Sofi (REF0) — define la sesión visual
+  if (anchorImage) raw.push(anchorImage);
+
+  // 4. Inspiración — mood/estilo secundario
+  if (selected.inspirationRef) raw.push(selected.inspirationRef.base64);
+
+  // 5. Marca — paleta/identidad visual
+  if (selected.brandRef) raw.push(selected.brandRef.base64);
+
+  // Nunca pasar más de 10 referencias (límite Gemini)
+  return raw
+    .filter(Boolean)
+    .slice(0, 10)
+    .map((b64, i) => {
+      try { return extractImageRef(b64, `campaignRef[${i}]`); }
+      catch { return null; }
+    })
+    .filter(Boolean) as Array<{ data: string; mimeType: string }>;
+}
+
+// ─── Lock system para campaña ─────────────────────────────────
+function buildLockSystem(selected: ReturnType<typeof selectBestRefs>, hasAnchor: boolean): string {
   const locks: string[] = [];
 
-  if (hasProduct) locks.push(`🔒 PRODUCT LOCK:
-- The product shown in the PRODUCT REFERENCE must appear EXACTLY as-is.
-- Same shape, same color, same materials, same label/packaging details.
-- NO reinterpretation. NO generic version. NO different product.
-- If the product has text or logo, reproduce it faithfully.`);
+  if (selected.modelRef) {
+    locks.push(`🔒🔒🔒 IDENTITY LOCK (ABSOLUTE PRIORITY):
+- MODEL REFERENCE appears MULTIPLE TIMES at the start of the reference list. That is intentional.
+- The person's FACE must be EXACTLY the same as the model reference in every single image.
+- Same bone structure, eye shape/color, nose, lips, jaw, hair color/texture, skin tone.
+- NO face replacement. NO identity drift. NO different person.
+- DO NOT average the face with the anchor image. Model reference OVERRIDES everything for identity.
+- DO NOT composite — generate the person naturally from scratch.`);
+  }
 
-  if (hasModel) locks.push(`🔒🔒🔒 IDENTITY LOCK (ABSOLUTE PRIORITY):
-- The MODEL REFERENCE defines the ONLY person allowed in this image.
-- Same face, bone structure, skin tone, hair color, texture, eye color. EXACT.
-- NO face replacement, NO identity drift, NO different person.
-- DO NOT composite or paste the face reference — generate the person naturally.`);
+  if (selected.productRefs.length > 0) {
+    locks.push(`🔒 PRODUCT LOCK:
+- PRODUCT REFERENCE defines the exact product. Same shape, color, materials, labels, packaging.
+- ${selected.productRefs.length > 1 ? `Multiple product angles provided — use all of them to understand the product fully.` : ''}
+- NO reinterpretation. NO generic version. Reproduce exactly.`);
+  }
 
-  if (hasBrand) locks.push(`🔒 BRAND LOCK:
-- The BRAND REFERENCE defines the visual identity: colors, style, aesthetic.
-- Maintain color palette coherence with brand reference.
-- NO clashing colors. NO visual style that contradicts the brand.`);
+  if (hasAnchor) {
+    locks.push(`🔒🔒 ANCHOR/SESSION LOCK (VISUAL CONTINUITY):
+- The ANCHOR IMAGE defines the visual world: lighting direction, color temperature, environment.
+- Every campaign image must feel like it was taken in the SAME session as the anchor.
+- Same color temperature — do NOT shift warm/cool.
+- Same ambient light quality — do NOT add/remove light sources.
+- Same overall contrast range — no HDR, no filters, no vignetting.
+- Person at correct scale relative to environment.
+- The anchor is a STYLE reference, NOT an element to copy literally.`);
+  }
 
-  if (hasInspiration) locks.push(`🔒 STYLE LOCK:
-- The INSPIRATION REFERENCE defines the visual mood, lighting, and composition style.
-- Match the lighting direction, color temperature, and overall aesthetic.
-- DO NOT copy the exact scene — use it as MOOD and STYLE reference only.`);
+  if (selected.inspirationRef) {
+    locks.push(`🔒 STYLE LOCK:
+- INSPIRATION REFERENCE defines mood, lighting aesthetic, and composition style.
+- Match the lighting direction, color temperature, and overall visual atmosphere.
+- DO NOT copy the exact scene — use it as MOOD and COMPOSITION reference only.`);
+  }
 
-  if (locks.length === 0) return '';
+  if (selected.brandRef) {
+    locks.push(`🔒 BRAND LOCK:
+- BRAND REFERENCE defines color palette and visual identity.
+- Maintain coherence with brand colors and aesthetic.`);
+  }
 
-  return `
+  return locks.length === 0 ? '' : `
 ╔══════════════════════════════════════════════════════════════════╗
 ║           CAMPAIGN LOCK SYSTEM (NON-NEGOTIABLE)                 ║
 ╚══════════════════════════════════════════════════════════════════╝
 
-${locks.join('\n\n')}
-
-🔒 VISUAL CONTINUITY LOCK (ALL PIECES MUST FEEL FROM SAME SESSION):
-- Same color temperature across all images.
-- Same overall lighting quality — do NOT shift warm/cool between pieces.
-- Same aesthetic tone — every piece must feel like the same campaign.
-- No Instagram-style color grading. No vignetting. No filters.
-`;
+${locks.join('\n\n')}`;
 }
 
-// ─── Construye el prompt de imagen para una pieza específica ──
-function buildImagePrompt(
-  piece: CampaignPiece,
-  slots: CampaignImageSlot[],
-  campaignConcept: string,
-  channelLabel: string,
+// ─── Prompt para imagen ancla ─────────────────────────────────
+function buildAnchorPrompt(
+  plan:     CampaignPlan,
+  slots:    CampaignImageSlot[],
+  selected: ReturnType<typeof selectBestRefs>,
+  variant:  'A' | 'B',
 ): string {
-  const hasProduct     = slots.some(s => s.role === 'product');
-  const hasModel       = slots.some(s => s.role === 'model');
-  const hasInspiration = slots.some(s => s.role === 'inspiration');
-  const hasBrand       = slots.some(s => s.role === 'brand');
+  const hasModel    = !!selected.modelRef;
+  const hasProduct  = selected.productRefs.length > 0;
+  const hasInspo    = !!selected.inspirationRef;
 
   const refGuide = [
-    hasModel       && '- FIRST IMAGES: MODEL REFERENCE — defines the person\'s identity. Use EXACTLY.',
-    hasProduct     && '- PRODUCT REFERENCE: defines the exact product to show.',
-    hasInspiration && '- INSPIRATION REFERENCE: defines the mood, lighting style, and aesthetic.',
-    hasBrand       && '- BRAND REFERENCE: defines color palette and visual identity.',
+    hasModel    && `- FIRST IMAGES: MODEL REFERENCE — establishes the person's identity. Use EXACTLY.`,
+    hasProduct  && `- PRODUCT REFERENCE(S): define the exact product. Show it prominently.`,
+    hasInspo    && `- INSPIRATION REFERENCE: defines the mood, lighting, and aesthetic. Match it.`,
   ].filter(Boolean).join('\n');
 
-  const lockSystem = buildCampaignLockSystem(slots);
+  // Variant B usa una dirección visual diferente para dar contraste real
+  const variantDirection = variant === 'A'
+    ? `Natural lifestyle setting. Warm, inviting light. Product and person (if any) feel approachable and real.`
+    : `Clean editorial setting. Cooler, more structured light. Strong composition. Product feels premium and aspirational.`;
+
+  const lockSystem = buildLockSystem(selected, false);
 
   return `You are a professional commercial photographer and creative director.
-Generate a high-quality campaign image for the following brief.
 
-CAMPAIGN CONCEPT: "${campaignConcept}"
-PIECE ROLE: ${piece.rol}
-CHANNEL: ${channelLabel}
-DAY: ${piece.dia} of 7
+Generate a CAMPAIGN ANCHOR IMAGE — this image will define the visual style for an entire campaign.
+
+CAMPAIGN CONCEPT: "${plan.concepto}"
+CAMPAIGN TAGLINE: "${plan.tagline}"
+VISUAL DIRECTION (VARIANT ${variant}): ${variantDirection}
 
 ${refGuide ? `REFERENCE GUIDE:\n${refGuide}\n` : ''}
 
-VISUAL DIRECTION:
-${piece.imagePrompt}
-
-TECHNICAL REQUIREMENTS:
-- Professional commercial photography quality
-- ${channelLabel === 'Instagram Stories' || channelLabel === 'TikTok' ? 'Vertical format (9:16 feel), mobile-first composition' : 'Clean, editorial composition'}
-- Natural lighting preferred over studio unless brief specifies otherwise
-- High resolution, sharp focus on hero element
-- ${hasModel ? 'Person is STATIC — no mid-walk, no blurred motion' : 'Product centered and well-lit'}
-- Authentic, not over-processed — real quality, not AI-obvious
+ANCHOR IMAGE REQUIREMENTS:
+- This is the HERO image of the campaign — the most impactful, most polished piece
+- ${hasProduct ? 'Product is the visual hero — prominently featured, well-lit, crystal clear' : 'Brand concept is the visual hero'}
+- ${hasModel ? 'Person is present — natural pose, authentic expression, not catalog-stiff' : 'No person required — focus on product and atmosphere'}
+- Professional commercial photography quality — could appear in a brand lookbook
+- Lighting: ${variant === 'A' ? 'warm, golden hour or soft window light' : 'clean, diffused studio or overcast natural light'}
+- Composition: intentional, not cluttered — hero element takes 40-60% of frame
+- Background: ${variant === 'A' ? 'natural environment, lifestyle context' : 'minimal, clean, controlled'}
 
 ${lockSystem}
 
 FINAL CHECKLIST:
-${hasProduct ? '✓ Product matches product reference exactly\n' : ''}${hasModel ? '✓ Person matches model reference exactly\n' : ''}${hasInspiration ? '✓ Mood and lighting matches inspiration reference\n' : ''}${hasBrand ? '✓ Color palette coherent with brand reference\n' : ''}✓ Image feels professional and campaign-ready
-✓ Suitable for ${channelLabel}
-✓ Represents "${piece.rol}" role in the campaign narrative`;
+${hasProduct ? '✓ Product matches product reference exactly — same shape, color, every detail\n' : ''}${hasModel ? '✓ Person matches model reference exactly — same face, hair, skin tone\n' : ''}${hasInspo ? '✓ Mood and lighting feel matches inspiration reference\n' : ''}✓ Image quality is campaign-ready — no obvious AI artifacts
+✓ This image could be the cover of a brand campaign`;
 }
 
-// ─── buildCampaignPlan — el "director creativo" ───────────────
+// ─── Prompt para imagen de campaña derivada (con ancla) ───────
+function buildDerivedImagePrompt(
+  pieza:     CampaignPiece,
+  plan:      CampaignPlan,
+  selected:  ReturnType<typeof selectBestRefs>,
+  hasAnchor: boolean,
+): string {
+  const hasModel   = !!selected.modelRef;
+  const hasProduct = selected.productRefs.length > 0;
+
+  const refGuide = [
+    hasModel   && `- FIRST IMAGES: MODEL REFERENCE (appears multiple times) — IDENTITY LOCK. Use EXACTLY.`,
+    hasProduct && `- PRODUCT REFERENCE(S): the exact product. Reproduce faithfully.`,
+    hasAnchor  && `- ANCHOR IMAGE: the session's visual world — lighting, color temp, environment. Match it.`,
+    !!selected.inspirationRef && `- INSPIRATION: mood and aesthetic reference.`,
+    !!selected.brandRef       && `- BRAND: color palette and visual identity.`,
+  ].filter(Boolean).join('\n');
+
+  const lockSystem = buildLockSystem(selected, hasAnchor);
+
+  return `⚠️⚠️⚠️ IDENTITY LOCK — READ THIS FIRST ⚠️⚠️⚠️
+${hasModel ? `
+🔴🔴🔴 CRITICAL: DO NOT AVERAGE THE MODEL WITH THE ANCHOR IMAGE OR ANY OTHER REFERENCE.
+The MODEL REFERENCE images appear MULTIPLE TIMES at the start. That is intentional.
+They are the ONLY source of truth for the person's identity.
+If the anchor image shows a different face angle, IGNORE it for identity — use ONLY the model reference.
+DO NOT blend, average, or interpolate between references for the face. 🔴🔴🔴
+` : ''}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${hasAnchor ? 'CREATE A NEW PHOTO FROM THE SAME SESSION AS THE ANCHOR IMAGE.' : 'CREATE A PROFESSIONAL CAMPAIGN PHOTO.'}
+
+CAMPAIGN: "${plan.concepto}"
+PIECE ROLE: ${pieza.rol} (Day ${pieza.dia} of 7)
+CHANNEL: ${CAMPAIGN_CHANNEL_META[pieza.canal].label}
+
+REFERENCE GUIDE:
+${refGuide}
+
+VISUAL DIRECTION:
+${pieza.imagePrompt}
+
+${hasAnchor ? `CONTINUITY WITH ANCHOR:
+- Same color temperature as anchor — do NOT shift warm/cool.
+- Same ambient light quality — same direction, same softness.
+- Same overall aesthetic tone — this is part of the same campaign session.
+- Person (if present) shares the anchor's lighting.
+` : ''}
+
+${lockSystem}
+
+CHANNEL OPTIMIZATION:
+${CAMPAIGN_CHANNEL_META[pieza.canal].label === 'Instagram Stories' || CAMPAIGN_CHANNEL_META[pieza.canal].label === 'TikTok'
+  ? '- Vertical composition (9:16). Key elements in center-top zone. Text-safe margins.'
+  : CAMPAIGN_CHANNEL_META[pieza.canal].label === 'WhatsApp / Catálogo'
+  ? '- Square or slightly vertical. Clean, clear product focus. Simple background.'
+  : '- Square or 4:5. Strong focal point. Scroll-stopping composition.'}
+
+FINAL CHECKLIST:
+${hasModel   ? '✓ Person matches model reference exactly — face, hair, skin tone unchanged\n' : ''}${hasProduct ? '✓ Product matches product reference exactly — same shape, color, every detail\n' : ''}${hasAnchor  ? '✓ Color temperature and lighting match anchor image\n' : ''}✓ Shot role "${pieza.rol}" is clearly communicated
+✓ Professional campaign quality — no obvious AI artifacts`;
+}
+
+// ─── buildCampaignPlan ────────────────────────────────────────
 export async function buildCampaignPlan(
   idea:       string,
   canales:    CampaignChannel[],
   imageCount: number,
   slots:      CampaignImageSlot[],
 ): Promise<CampaignPlan> {
-
   const canalesLabel = canales.map(c => CAMPAIGN_CHANNEL_META[c].label).join(', ');
-
-  const hasProduct     = slots.some(s => s.role === 'product');
-  const hasInspiration = slots.some(s => s.role === 'inspiration');
-  const hasBrand       = slots.some(s => s.role === 'brand');
-  const hasModel       = slots.some(s => s.role === 'model');
+  const selected     = selectBestRefs(slots);
 
   const slotsContext = [
-    hasProduct     && '- PRODUCT IMAGE attached: analyze the product type, colors, packaging, and commercial positioning.',
-    hasInspiration && '- INSPIRATION IMAGE attached: analyze the visual mood, lighting style, color palette, and aesthetic.',
-    hasBrand       && '- BRAND IMAGE attached: analyze brand colors, style, and visual identity.',
-    hasModel       && '- MODEL/AVATAR IMAGE attached: this person will star in the campaign.',
+    selected.productRefs.length > 0 && `- ${selected.productRefs.length} PRODUCT IMAGE(S) attached: analyze the product type, colors, packaging, commercial positioning. ${selected.productRefs.length > 1 ? 'Multiple angles provided — understand the product fully.' : ''}`,
+    selected.inspirationRef          && '- INSPIRATION IMAGE attached: analyze the visual mood, lighting style, color palette, and aesthetic.',
+    selected.brandRef                && '- BRAND IMAGE attached: analyze brand colors, style, and visual identity.',
+    selected.modelRef                && '- MODEL IMAGE attached: this person will star in the campaign.',
   ].filter(Boolean).join('\n');
 
-  const prompt = `You are a senior creative director, marketing strategist, and prompt engineer specialized in Latin American e-commerce brands (fashion, cosmetics, lifestyle, artisan products).
+  const prompt = `You are a senior creative director, marketing strategist, and prompt engineer specialized in Latin American e-commerce brands.
 
-Your job: analyze the brief below and design a complete campaign plan that a solo entrepreneur can execute in 7 days without feeling overwhelmed.
+Your job: design a complete, executable campaign plan that a solo entrepreneur can follow in 7 days without feeling overwhelmed.
 
 ═══════════════════════════════════════════════
-BRAND BRIEF (written by the entrepreneur):
+BRIEF:
 "${idea}"
 ═══════════════════════════════════════════════
+CHANNELS: ${canalesLabel}
+IMAGES: ${imageCount}
+${slotsContext ? `\nVISUAL REFERENCES:\n${slotsContext}` : ''}
 
-PUBLISHING CHANNELS: ${canalesLabel}
-NUMBER OF IMAGES TO GENERATE: ${imageCount}
-${slotsContext ? `\nVISUAL REFERENCES PROVIDED:\n${slotsContext}` : ''}
+THINK STEP BY STEP:
+1. What does this entrepreneur actually need? (launch / sale / awareness / engagement)
+2. Define a strong creative concept — the emotional thread tying all pieces together
+3. Build a 3-act narrative: tension → revelation → transformation
+4. Distribute ${imageCount} pieces across 7 days and selected channels (max 2/day)
+5. Write copy that sounds human, warm, Latin American Spanish — never generic AI copy
+6. Create NICHE-SPECIFIC hashtags — NOT generic like #emprendedora
+7. For each piece, write an imagePrompt in ENGLISH — specific, visual, directional:
+   "Commercial photography. [Subject]. [Composition]. [Lighting]. [Mood]. [Channel context]."
 
-YOUR TASK — think step by step:
+RULES:
+- Exactly ${imageCount} pieces
+- Max 2 pieces per day, spread across 7 days
+- Copy feels written by a real person — emotion, specificity, real CTAs
+- Instructions for Sofi: ONE simple action per piece
+- Hashtags: real, niche-specific, researched for this product/category
+- imagePrompt: English, 2-3 sentences, highly specific and visual
 
-1. UNDERSTAND what this entrepreneur actually needs (launch? sale? awareness? engagement?)
-2. DEFINE a strong creative concept — the emotional thread that ties all pieces together
-3. BUILD a narrative arc: tension → revelation → transformation (like a 3-act story)
-4. DISTRIBUTE ${imageCount} pieces across 7 days and the selected channels
-5. WRITE copy that sounds human, warm, in Latin American Spanish — never generic
-6. CREATE strategic hashtags specific to this niche — not #emprendedora or #negocio
-7. For each piece, write an imagePrompt in ENGLISH that a Gemini image model can execute
-   — the imagePrompt must be specific, visual, directional (lighting, composition, mood, subject)
-   — if references were provided, the imagePrompt must reference them explicitly
-   — format: "Commercial photography. [Subject/hero]. [Composition]. [Lighting]. [Mood]. [Channel context]."
-
-STRICT RULES:
-- Exactly ${imageCount} pieces — no more, no less
-- Max 2 pieces per day across 7 days
-- Each piece has a CLEAR NARRATIVE ROLE (Teaser / Launch / Benefit / Trust / Urgency / Close / Bonus)
-- Copy must feel written by a real person, not AI — include emotion, specificity, real CTAs
-- Instructions for Sofi must be ONE simple action ("Publicá esto el lunes a las 19hs. Respondé todos los comentarios en la primera hora.")
-- Hashtags must be REAL and NICHE-SPECIFIC — research the product category
-- imagePrompt in English, 2-3 sentences, highly visual and specific
-
-RESPOND ONLY WITH VALID JSON (no markdown, no explanation):
+RESPOND ONLY WITH VALID JSON (no markdown):
 {
-  "concepto": "The creative thread — 1 sentence, evocative",
+  "concepto": "Creative thread — 1 evocative sentence",
   "promesa": "What this campaign promises to Sofi's customer — 1 sentence",
   "tagline": "Memorable campaign phrase — max 8 words in Spanish",
   "duracionDias": 7,
-  "resumen": "2-3 sentences telling Sofi exactly what to do with this kit and why it will work",
-  "hashtagsComunidad": ["#tag1", "#tag2", "#tag3"],
-  "hashtagsNicho": ["#tag4", "#tag5", "#tag6", "#tag7"],
-  "hashtagsColarga": ["#tag8", "#tag9", "#tag10"],
+  "resumen": "2-3 sentences telling Sofi exactly what to do and why it will work",
+  "hashtagsComunidad": ["#tag1","#tag2","#tag3"],
+  "hashtagsNicho": ["#tag4","#tag5","#tag6","#tag7"],
+  "hashtagsColarga": ["#tag8","#tag9","#tag10"],
   "piezas": [
     {
       "id": "pieza_1",
@@ -202,113 +332,122 @@ RESPOND ONLY WITH VALID JSON (no markdown, no explanation):
       "semana": 1,
       "canal": "instagram_feed",
       "rol": "Teaser",
-      "imagePrompt": "Commercial photography. [Specific visual description in English]. [Composition]. [Lighting]. [Mood]. Optimized for Instagram Feed.",
-      "titular": "Short impactful headline (max 60 chars in Spanish)",
-      "caption": "Full post text in Latin American Spanish, with emojis if natural, max 200 chars",
-      "cta": "Specific call to action (max 40 chars)",
-      "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4"],
-      "instruccion": "One simple, specific action for Sofi to take",
+      "imagePrompt": "Commercial photography. [specific visual]. [composition]. [lighting]. [mood]. Optimized for Instagram Feed.",
+      "titular": "Short impactful headline max 60 chars in Spanish",
+      "caption": "Full post text Latin American Spanish with emojis if natural max 200 chars",
+      "cta": "Specific call to action max 40 chars",
+      "hashtags": ["#hashtag1","#hashtag2","#hashtag3","#hashtag4"],
+      "instruccion": "One simple specific action for Sofi",
       "horaRecomendada": "19:00"
     }
   ]
 }`;
 
   try {
-    console.log('[CampaignDirector] buildCampaignPlan start', { slots: slots.length, canales, imageCount });
-    const raw = await geminiService.generateCampaignPlan(prompt, slots);
-    console.log('[CampaignDirector] Gemini raw response length:', raw?.length);
-
+    console.log('[CampaignDirector] buildCampaignPlan', { slots: slots.length, canales, imageCount });
+    const raw     = await geminiService.generateCampaignPlan(prompt, slots);
     const cleaned = (typeof raw === 'string' ? raw : JSON.stringify(raw))
       .replace(/```json|```/g, '').trim();
-    const match = cleaned.match(/\{[\s\S]*\}/);
+    const match   = cleaned.match(/\{[\s\S]*\}/);
 
     if (match) {
       const parsed = JSON.parse(match[0]);
       if (parsed?.piezas && Array.isArray(parsed.piezas) && parsed.piezas.length > 0) {
         parsed.piezas = parsed.piezas.slice(0, imageCount).map((p: any, i: number) => ({
           ...p,
-          id:       p.id       ?? `pieza_${i + 1}`,
+          id:       p.id ?? `pieza_${i + 1}`,
           imageUrl: '',
           hashtags: Array.isArray(p.hashtags) ? p.hashtags : [],
         }));
-        console.log('[CampaignDirector] Plan construido:', { concepto: parsed.concepto, piezas: parsed.piezas.length });
+        console.log('[CampaignDirector] Plan OK:', { concepto: parsed.concepto, piezas: parsed.piezas.length });
         return parsed as CampaignPlan;
       }
     }
-    throw new Error('Gemini returned invalid plan structure');
+    throw new Error('Invalid plan structure from Gemini');
   } catch (err) {
-    console.warn('[CampaignDirector] buildCampaignPlan failed, using fallback:', err);
+    console.warn('[CampaignDirector] buildCampaignPlan fallback:', err);
     return buildFallbackPlan(idea, canales, imageCount);
   }
 }
 
-// ─── generateCampaignImages — generación con refs estratificadas ──────────────
-// Mismo approach que UGC Studio: producto duplicado para mayor peso,
-// luego inspiración y marca como contexto visual.
-export async function generateCampaignImages(
-  plan:       CampaignPlan,
-  slots:      CampaignImageSlot[],
-  sessionParams: {
-    uid?:         string;
-    sessionId?:   string;
-  },
-  onProgress?: (completed: number, total: number) => void,
+// ─── generateAnchorImages — genera 2 opciones de ancla ────────
+export async function generateAnchorImages(
+  plan:    CampaignPlan,
+  slots:   CampaignImageSlot[],
+  sessionParams: { uid?: string; sessionId?: string },
+  onProgress?: (done: number, total: number) => void,
 ): Promise<string[]> {
+  const selected = selectBestRefs(slots);
+  const refs     = buildStratifiedRefs(selected);
 
-  const productSlots     = slots.filter(s => s.role === 'product');
-  const modelSlots       = slots.filter(s => s.role === 'model');
-  const inspirationSlots = slots.filter(s => s.role === 'inspiration');
-  const brandSlots       = slots.filter(s => s.role === 'brand');
+  const getAspectRatio = (): '3:4' => '3:4'; // ancla siempre 3:4
 
-  // Estratificación de referencias — igual que UGC:
-  // Modelo duplicado para máximo peso de identidad
-  // Producto duplicado para respeto del objeto
-  // Inspiración y marca como contexto secundario
-  const buildRefs = (): Array<{ data: string; mimeType: string }> => {
-    const refs: string[] = [];
+  const jobs = [
+    {
+      prompt:          buildAnchorPrompt(plan, slots, selected, 'A'),
+      negative:        CAMPAIGN_NEGATIVE,
+      referenceImages: refs,
+      aspectRatio:     getAspectRatio(),
+      module:          'campaign_anchor',
+      moduleLabel:     'Campaign Anchor A',
+      shotIndex:       0,
+      totalShots:      ANCHOR_IMAGE_COUNT,
+      uid:             sessionParams.uid,
+      sessionId:       sessionParams.sessionId,
+      metadata:        { variant: 'A', role: 'anchor' },
+    },
+    {
+      prompt:          buildAnchorPrompt(plan, slots, selected, 'B'),
+      negative:        CAMPAIGN_NEGATIVE,
+      referenceImages: refs,
+      aspectRatio:     getAspectRatio(),
+      module:          'campaign_anchor',
+      moduleLabel:     'Campaign Anchor B',
+      shotIndex:       1,
+      totalShots:      ANCHOR_IMAGE_COUNT,
+      uid:             sessionParams.uid,
+      sessionId:       sessionParams.sessionId,
+      metadata:        { variant: 'B', role: 'anchor' },
+    },
+  ];
 
-    // Modelo primero (identidad) — duplicado si existe
-    modelSlots.forEach(s => refs.push(s.base64));
-    if (modelSlots.length > 0) refs.push(modelSlots[0].base64); // duplicar
-
-    // Producto (héroe visual) — duplicado si existe
-    productSlots.forEach(s => refs.push(s.base64));
-    if (productSlots.length > 0) refs.push(productSlots[0].base64); // duplicar
-
-    // Inspiración (mood/estilo)
-    inspirationSlots.forEach(s => refs.push(s.base64));
-
-    // Marca (paleta/identidad visual)
-    brandSlots.forEach(s => refs.push(s.base64));
-
-    return refs
-      .filter(Boolean)
-      .map((b64, i) => {
-        try { return extractImageRef(b64, `campaignRef[${i}]`); }
-        catch { return null; }
-      })
-      .filter(Boolean) as Array<{ data: string; mimeType: string }>;
-  };
-
-  const refs = buildRefs();
-  const total = plan.piezas.length;
-
-  console.log('[CampaignDirector] generateCampaignImages', {
-    total,
-    refs: refs.length,
-    hasModel: modelSlots.length > 0,
-    hasProduct: productSlots.length > 0,
+  console.log('[CampaignDirector] generateAnchorImages', { refs: refs.length });
+  const results = await imageApiService.generateBatch(jobs, (done, total) => {
+    onProgress?.(done, total);
   });
 
-  // Determinar aspect ratio por canal — igual que UGC usa 3:4
-  const getAspectRatio = (canal: CampaignChannel): '3:4' | '9:16' | '1:1' | '4:3' => {
+  return results.map(r => r ?? '');
+}
+
+// ─── generateCampaignImages — genera N imágenes con ancla ─────
+export async function generateCampaignImages(
+  plan:        CampaignPlan,
+  slots:       CampaignImageSlot[],
+  anchorImage: string,
+  sessionParams: { uid?: string; sessionId?: string },
+  onProgress?: (done: number, total: number) => void,
+): Promise<string[]> {
+  const selected = selectBestRefs(slots);
+  const refs     = buildStratifiedRefs(selected, anchorImage);
+  const hasAnchor = !!anchorImage;
+  const total     = plan.piezas.length;
+
+  const getAspectRatio = (canal: CampaignChannel): '3:4' | '9:16' | '1:1' => {
     if (canal === 'instagram_stories' || canal === 'tiktok') return '9:16';
     if (canal === 'whatsapp') return '1:1';
     return '3:4';
   };
 
+  console.log('[CampaignDirector] generateCampaignImages', {
+    total,
+    refs: refs.length,
+    hasAnchor,
+    hasModel:   !!selected.modelRef,
+    hasProduct: selected.productRefs.length > 0,
+  });
+
   const jobs = plan.piezas.map((pieza, i) => ({
-    prompt:          buildImagePrompt(pieza, slots, plan.concepto, CAMPAIGN_CHANNEL_META[pieza.canal].label),
+    prompt:          buildDerivedImagePrompt(pieza, plan, selected, hasAnchor),
     negative:        CAMPAIGN_NEGATIVE,
     referenceImages: refs,
     aspectRatio:     getAspectRatio(pieza.canal),
@@ -328,21 +467,20 @@ export async function generateCampaignImages(
   return results.map(r => r ?? '');
 }
 
-// ─── Fallback si Gemini falla ─────────────────────────────────
+// ─── Fallback ─────────────────────────────────────────────────
 function buildFallbackPlan(
   idea:       string,
   canales:    CampaignChannel[],
   imageCount: number,
 ): CampaignPlan {
-  const roles = ['Teaser', 'Lanzamiento', 'Beneficio', 'Confianza', 'Conversión', 'Recordatorio', 'Cierre', 'Bonus'];
-
+  const roles = ['Teaser','Lanzamiento','Beneficio','Confianza','Conversión','Recordatorio','Cierre','Bonus'];
   const piezas: CampaignPiece[] = Array.from({ length: imageCount }, (_, i) => ({
     id:              `pieza_${i + 1}`,
     dia:             Math.min(i + 1, 7),
     semana:          1,
     canal:           canales[i % canales.length],
     rol:             roles[i] ?? `Escena ${i + 1}`,
-    imagePrompt:     'Commercial photography. Product on clean neutral surface, soft warm studio lighting, shallow depth of field. Professional e-commerce style. High resolution.',
+    imagePrompt:     'Commercial photography. Product on clean neutral surface, soft warm studio lighting, shallow depth of field. Professional e-commerce style.',
     imageUrl:        '',
     titular:         'Descubrí lo nuevo',
     caption:         'Algo especial para vos. ✨ No te lo pierdas.',
@@ -361,6 +499,6 @@ function buildFallbackPlan(
     hashtagsComunidad: ['#emprendedoras', '#tiendaonline', '#negocio'],
     hashtagsNicho:     ['#emprendedoralatina', '#ecommercechile', '#shoplocal'],
     hashtagsColarga:   ['#productoshandmade', '#tiendaonlinechile', '#compralocal'],
-    resumen:           'Seguí el plan día a día. Publicá cada pieza en el canal indicado y copiá el caption sugerido. Con constancia, esta campaña va a hacer crecer tu alcance.',
+    resumen:           'Seguí el plan día a día. Publicá cada pieza en el canal indicado y copiá el caption sugerido.',
   };
 }

@@ -70,11 +70,18 @@ export interface CampaignSet {
   id:        string;
   createdAt: number;
   // Brief
-  idea:      string;             // lo que Sofi escribió en el paso 1
-  canales:   CampaignChannel[];  // canales seleccionados
+  idea:      string;
+  canales:   CampaignChannel[];
   imageCount: number;
   // Slots de referencia (base64)
   slots:     CampaignImageSlot[];
+  // Ancla visual — elegida por Sofi en el paso de aprobación
+  anchorImage:   string;        // base64 o URL de la imagen ancla elegida
+  anchorOptions: string[];      // las 2 opciones generadas (para referencia)
   // Plan generado
   plan:      CampaignPlan;
 }
+
+// ── Constante de créditos para el ancla ──────────────────────
+export const ANCHOR_IMAGE_COUNT  = 2;   // siempre 2 opciones
+export const CREDITS_PER_IMAGE   = 2;   // igual que el resto de módulos

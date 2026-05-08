@@ -3,22 +3,20 @@ import {
   Megaphone, Download, Zap, Check, Sparkles,
   Library, Trash2, Copy, ChevronDown, RefreshCw,
   AlertTriangle, Plus, FileText, Calendar, Hash,
-  Image as ImageIcon, X,
+  Image as ImageIcon, X, ChevronRight,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-import { GenerationProgress } from '../promptLibrary/services/generationService';
 import { downloadAsZip } from '../../utils/imageUtils';
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
 import { newSessionId } from '../../services/imageApiService';
-import { buildCampaignPlan, generateCampaignImages } from './campaignService';
+import { buildCampaignPlan, generateAnchorImages, generateCampaignImages } from './campaignService';
 import { downloadCampaignPdf, downloadCampaignHtml } from './campaignPdfService';
 import { campaignStorage } from './campaignStorage';
 import {
   CampaignSet, CampaignChannel, CampaignImageSlot, ImageSlotRole,
-  CAMPAIGN_CHANNEL_META, IMAGE_SLOT_META,
+  CAMPAIGN_CHANNEL_META, IMAGE_SLOT_META, ANCHOR_IMAGE_COUNT, CREDITS_PER_IMAGE,
 } from './types';
-import { PRO_CREDIT_COSTS } from '../../services/creditConfig';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
 import { WizardStepper } from '../../components/shared/WizardStepper';
@@ -26,26 +24,34 @@ import { WizardFooter } from '../../components/shared/WizardFooter';
 import { GenerationProgress as GenProgress, type ProgressStep } from '../../components/shared/GenerationProgress';
 
 // ─── Wizard steps ─────────────────────────────────────────────
-type WizardStep = 1 | 2 | 3 | 4 | 5;
+// 1 Brief · 2 Canales · 3 Cantidad · 4 Generar Ancla · 5 Aprobar Ancla · 6 Generar · 7 Resultados
+type WizardStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 const WIZARD_STEP_DEFS = [
   { id: '1', label: 'Brief' },
   { id: '2', label: 'Canales' },
   { id: '3', label: 'Cantidad' },
-  { id: '4', label: 'Generar' },
-  { id: '5', label: 'Resultados' },
+  { id: '4', label: 'Estilo' },    // ancla
+  { id: '5', label: 'Generar' },
+  { id: '6', label: 'Resultados' },
+];
+
+const ANCHOR_PROGRESS_STEPS: ProgressStep[] = [
+  { id: 'brief',   label: 'Analizando brief y referencias' },
+  { id: 'plan',    label: 'Diseñando estrategia de campaña' },
+  { id: 'anchor',  label: 'Generando propuestas de estilo visual' },
+  { id: 'done',    label: 'Listo para aprobar' },
 ];
 
 const CAMPAIGN_PROGRESS_STEPS: ProgressStep[] = [
-  { id: 'brief',    label: 'Analizando brief e imágenes de referencia' },
-  { id: 'strategy', label: 'Diseñando estrategia de campaña' },
-  { id: 'scenes',   label: 'Construyendo guión de escenas' },
+  { id: 'anchor',   label: 'Analizando estilo aprobado' },
   { id: 'generate', label: 'Generando imágenes de campaña' },
-  { id: 'copy',     label: 'Redactando copy, captions y calendario' },
+  { id: 'copy',     label: 'Redactando copy y calendario' },
   { id: 'done',     label: 'Kit de campaña listo' },
 ];
 
 const SLOT_ROLES: ImageSlotRole[] = ['product', 'inspiration', 'brand', 'model'];
+const MAX_TOTAL_SLOTS = 8;
 
 // ─── UpgradeWall ──────────────────────────────────────────────
 const UpgradeWall: React.FC<{ proCredits: number }> = ({ proCredits }) => {
@@ -82,101 +88,65 @@ const UpgradeWall: React.FC<{ proCredits: number }> = ({ proCredits }) => {
   );
 };
 
-// ─── ImageUploadSlot — múltiples imágenes por rol ────────────
-const MAX_TOTAL_SLOTS = 8;
-
+// ─── ImageUploadSlot ──────────────────────────────────────────
 const ImageUploadSlot: React.FC<{
-  role:     ImageSlotRole;
-  images:   string[];
-  onChange: (images: string[]) => void;
+  role:      ImageSlotRole;
+  images:    string[];
+  onChange:  (images: string[]) => void;
   totalUsed: number;
 }> = ({ role, images, onChange, totalUsed }) => {
   const inputRef = useRef<HTMLInputElement>(null);
-  const meta = IMAGE_SLOT_META[role];
+  const meta     = IMAGE_SLOT_META[role];
   const canAddMore = totalUsed < MAX_TOTAL_SLOTS;
 
   const handleFiles = (files: FileList) => {
     const available = MAX_TOTAL_SLOTS - totalUsed;
-    const toProcess = Array.from(files).slice(0, available);
-    toProcess.forEach(file => {
+    Array.from(files).slice(0, available).forEach(file => {
       if (!file.type.startsWith('image/')) return;
       const reader = new FileReader();
-      reader.onload = e => {
-        onChange([...images, e.target?.result as string]);
-      };
+      reader.onload = e => onChange([...images, e.target?.result as string]);
       reader.readAsDataURL(file);
     });
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
-  };
-
-  const removeImage = (idx: number) => {
-    onChange(images.filter((_, i) => i !== idx));
-  };
-
   return (
     <div className="flex flex-col gap-2">
-      {/* Etiqueta del rol */}
       <div className="flex items-center justify-between">
         <div className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em] flex items-center gap-1.5">
           <span>{meta.icon}</span> {meta.label}
         </div>
         {images.length > 0 && (
-          <span className="text-[9px] font-bold text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded-full">
-            {images.length}
-          </span>
+          <span className="text-[9px] font-bold text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded-full">{images.length}</span>
         )}
       </div>
-
-      {/* Grid de imágenes subidas */}
       {images.length > 0 && (
         <div className="grid grid-cols-2 gap-1.5">
           {images.map((src, idx) => (
             <div key={idx} className="relative aspect-square rounded-xl overflow-hidden group">
-              <img src={src} alt={`${meta.label} ${idx + 1}`} className="w-full h-full object-cover" />
-              <button
-                type="button"
-                onClick={() => removeImage(idx)}
-                className="absolute top-1 right-1 w-5 h-5 bg-black/70 hover:bg-black/90 text-white rounded-full flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
-              >
+              <img src={src} alt="" className="w-full h-full object-cover" />
+              <button type="button" onClick={() => onChange(images.filter((_, i) => i !== idx))}
+                className="absolute top-1 right-1 w-5 h-5 bg-black/70 hover:bg-black/90 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
                 <X size={8} strokeWidth={3} />
               </button>
             </div>
           ))}
         </div>
       )}
-
-      {/* Botón agregar */}
       {canAddMore && (
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          onDrop={handleDrop}
+        <button type="button" onClick={() => inputRef.current?.click()}
+          onDrop={e => { e.preventDefault(); if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); }}
           onDragOver={e => e.preventDefault()}
-          className={`rounded-2xl border-2 border-dashed transition-all group flex flex-col items-center justify-center gap-1.5 py-3
-            ${images.length === 0
-              ? 'border-slate-200 hover:border-brand-400 bg-slate-50 hover:bg-brand-50'
-              : 'border-slate-200 hover:border-brand-300 bg-white hover:bg-brand-50'
-            }`}
-        >
+          className={`rounded-2xl border-2 border-dashed transition-all group flex flex-col items-center justify-center gap-1.5 py-3 ${
+            images.length === 0 ? 'border-slate-200 hover:border-brand-400 bg-slate-50 hover:bg-brand-50' : 'border-slate-200 hover:border-brand-300 bg-white hover:bg-brand-50'
+          }`}>
           <Plus className="w-4 h-4 text-slate-300 group-hover:text-brand-400 transition-colors" />
           <span className="text-[9px] font-semibold text-slate-400 group-hover:text-brand-500 text-center leading-tight px-2">
             {images.length === 0 ? meta.description : 'Agregar otra'}
           </span>
         </button>
       )}
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        onChange={e => { if (e.target.files?.length) handleFiles(e.target.files); e.target.value = ''; }}
-      />
+      <input ref={inputRef} type="file" accept="image/*" multiple className="hidden"
+        onChange={e => { if (e.target.files?.length) handleFiles(e.target.files); e.target.value = ''; }} />
     </div>
   );
 };
@@ -185,7 +155,7 @@ const ImageUploadSlot: React.FC<{
 const CampaignModule: React.FC = () => {
   const { user, credits, isAdmin, deductCredits, refreshCredits, proCredits, deductProCredit, refundProCredit } = useAuth();
 
-  // ── State: brief
+  // Brief state
   const [idea,       setIdea]       = useState('');
   const [canales,    setCanales]    = useState<CampaignChannel[]>(['instagram_feed']);
   const [imageCount, setImageCount] = useState(4);
@@ -193,48 +163,57 @@ const CampaignModule: React.FC = () => {
     product: [], inspiration: [], brand: [], model: [],
   });
 
-  // ── State: wizard
+  // Anchor state
+  const [anchorOptions,  setAnchorOptions]  = useState<string[]>([]);
+  const [selectedAnchor, setSelectedAnchor] = useState<string>('');
+  const [isRegenerating, setIsRegenerating] = useState(false);
+
+  // Wizard state
   const [step,      setStep]      = useState<WizardStep>(1);
   const [activeTab, setActiveTab] = useState<'create' | 'library'>('create');
 
-  // ── State: generation
+  // Generation state
   const [isGenerating,      setIsGenerating]      = useState(false);
-  const [progress,          setProgress]          = useState<GenerationProgress | null>(null);
+  const [progress,          setProgress]          = useState<{ total: number; completed: number; current: number } | null>(null);
   const [progressStepIndex, setProgressStepIndex] = useState(0);
+  const [progressSteps,     setProgressSteps]     = useState<ProgressStep[]>(ANCHOR_PROGRESS_STEPS);
   const [error,             setError]             = useState<string | null>(null);
   const [currentSet,        setCurrentSet]        = useState<CampaignSet | null>(null);
+  const [campaignPlan,      setCampaignPlan]      = useState<any>(null);
 
-  // ── State: results UI
+  // Results UI state
   const [expandedPieza, setExpandedPieza] = useState<string | null>(null);
   const [copiedKey,     setCopiedKey]     = useState<string | null>(null);
   const [activeTab2,    setActiveTab2]    = useState<'plan' | 'calendario' | 'hashtags'>('plan');
 
-  // ── State: library
-  const [sets,       setSets]       = useState<CampaignSet[]>([]);
+  // Library state
+  const [sets,        setSets]        = useState<CampaignSet[]>([]);
   const [loadingSets, setLoadingSets] = useState(false);
   const [deletingId,  setDeletingId]  = useState<string | null>(null);
 
-  // ── State: lightbox
+  // Lightbox state
   const [lightboxOpen,   setLightboxOpen]   = useState(false);
   const [lightboxIndex,  setLightboxIndex]  = useState(0);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
 
-  const hasProCredits   = isAdmin || proCredits > 0;
-  const imageCreditCost = imageCount * 2;
-  const creditsAfter    = Math.max(0, (credits?.available ?? 0) - imageCreditCost);
-  const insufficient    = !isAdmin && (credits?.available ?? 0) < imageCreditCost;
+  // ── Cálculos de costo ──────────────────────────────────────
+  const hasProCredits    = isAdmin || proCredits > 0;
+  const anchorCreditCost = ANCHOR_IMAGE_COUNT * CREDITS_PER_IMAGE;   // 4 cr
+  const imageCreditCost  = imageCount * CREDITS_PER_IMAGE;           // N×2 cr
+  const totalCreditCost  = anchorCreditCost + imageCreditCost;       // total
+  const creditsAfter     = Math.max(0, (credits?.available ?? 0) - totalCreditCost);
+  const insufficient     = !isAdmin && (credits?.available ?? 0) < totalCreditCost;
+  const insufficientForAnchorRegen = !isAdmin && (credits?.available ?? 0) < anchorCreditCost;
 
-  const activeSlots: CampaignImageSlot[] = SLOT_ROLES
-    .flatMap(r => slots[r].map(base64 => ({ role: r, base64 })));
-
+  const activeSlots: CampaignImageSlot[] = SLOT_ROLES.flatMap(r => slots[r].map(base64 => ({ role: r, base64 })));
   const totalSlotsUsed = SLOT_ROLES.reduce((sum, r) => sum + slots[r].length, 0);
 
-  // ── Validaciones
+  // ── Validaciones ──────────────────────────────────────────
   const canStep1 = idea.trim().length >= 10;
   const canStep2 = canales.length > 0;
   const canStep3 = !insufficient;
 
-  // ── Helpers
+  // ── Helpers ───────────────────────────────────────────────
   const loadSets = async () => {
     setLoadingSets(true);
     const all = await campaignStorage.list();
@@ -249,31 +228,20 @@ const CampaignModule: React.FC = () => {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const toggleCanal = (canal: CampaignChannel) => {
-    setCanales(prev =>
-      prev.includes(canal) ? prev.filter(c => c !== canal) : [...prev, canal],
-    );
-  };
+  const toggleCanal = (canal: CampaignChannel) =>
+    setCanales(prev => prev.includes(canal) ? prev.filter(c => c !== canal) : [...prev, canal]);
 
   const resetCreator = () => {
-    setStep(1);
-    setIdea('');
-    setCanales(['instagram_feed']);
-    setImageCount(4);
+    setStep(1); setIdea(''); setCanales(['instagram_feed']); setImageCount(4);
     setSlots({ product: [], inspiration: [], brand: [], model: [] });
-    setCurrentSet(null);
-    setError(null);
-    setProgress(null);
-    setProgressStepIndex(0);
-    setIsGenerating(false);
-    setExpandedPieza(null);
-    setActiveTab2('plan');
+    setAnchorOptions([]); setSelectedAnchor(''); setCampaignPlan(null);
+    setCurrentSet(null); setError(null); setProgress(null);
+    setProgressStepIndex(0); setIsGenerating(false);
+    setExpandedPieza(null); setActiveTab2('plan');
   };
 
   const openLightbox = (images: string[], idx: number) => {
-    setLightboxImages(images);
-    setLightboxIndex(idx);
-    setLightboxOpen(true);
+    setLightboxImages(images); setLightboxIndex(idx); setLightboxOpen(true);
   };
 
   const downloadSetZip = async (set: CampaignSet) => {
@@ -288,21 +256,22 @@ const CampaignModule: React.FC = () => {
     setDeletingId(null);
   };
 
-  // ── Generate
-  const handleGenerate = async () => {
+  // ── PASO 1: Generar ancla (plan + 2 imágenes de estilo) ───
+  const handleGenerateAnchor = async () => {
     if (!hasProCredits) return;
 
+    // Cobrar: 1 pro-credit + créditos totales (ancla + campaña)
     if (!isAdmin) {
       const ok = await deductProCredit();
       if (!ok) { setError('No tenés pro-credits para esta sesión.'); return; }
     }
-    if (!isAdmin && (credits?.available ?? 0) < imageCreditCost) {
+    if (!isAdmin && (credits?.available ?? 0) < totalCreditCost) {
       if (!isAdmin) await refundProCredit();
-      setError(`Necesitás ${imageCreditCost} créditos para generar ${imageCount} imágenes.`);
+      setError(`Necesitás ${totalCreditCost} créditos para esta campaña.`);
       return;
     }
     if (!isAdmin) {
-      const ok = await deductCredits(imageCreditCost);
+      const ok = await deductCredits(totalCreditCost);
       if (!ok) {
         await refundProCredit();
         setError('Error al descontar créditos. Intentá de nuevo.');
@@ -313,71 +282,123 @@ const CampaignModule: React.FC = () => {
     setStep(4);
     setIsGenerating(true);
     setError(null);
+    setProgressSteps(ANCHOR_PROGRESS_STEPS);
+    setProgress({ total: ANCHOR_IMAGE_COUNT, completed: 0, current: 0 });
+    setProgressStepIndex(0);
+
+    try {
+      // Construir plan estratégico
+      setProgressStepIndex(1);
+      const plan = await buildCampaignPlan(idea, canales, imageCount, activeSlots);
+      setCampaignPlan(plan);
+      console.log('[Campaign] Plan construido:', plan.concepto);
+
+      // Generar 2 imágenes ancla
+      setProgressStepIndex(2);
+      const anchors = await generateAnchorImages(
+        plan, activeSlots,
+        { uid: user?.uid, sessionId: newSessionId() },
+        (done, total) => setProgress({ total, completed: done, current: done - 1 }),
+      );
+
+      setProgressStepIndex(3);
+      setAnchorOptions(anchors.filter(Boolean));
+      setSelectedAnchor(anchors[0] ?? ''); // preseleccionar A
+      await refreshCredits();
+
+      // Ir al paso de aprobación
+      setStep(5);
+    } catch (err: any) {
+      console.error('[Campaign] handleGenerateAnchor error:', err);
+      setError(`Error generando las propuestas de estilo: ${err?.message || err}`);
+      if (!isAdmin) {
+        await refundProCredit().catch(() => {});
+        await deductCredits(-totalCreditCost).catch(() => {});
+        await refreshCredits().catch(() => {});
+      }
+      setStep(3);
+    } finally {
+      setIsGenerating(false);
+      setProgress(null);
+    }
+  };
+
+  // ── PASO 2: Regenerar ancla (cuesta 4 créditos más) ───────
+  const handleRegenerateAnchor = async () => {
+    if (insufficientForAnchorRegen) return;
+    if (!isAdmin) {
+      const ok = await deductCredits(anchorCreditCost);
+      if (!ok) { setError('Error al descontar créditos.'); return; }
+    }
+
+    setIsRegenerating(true);
+    setError(null);
+
+    try {
+      const anchors = await generateAnchorImages(
+        campaignPlan, activeSlots,
+        { uid: user?.uid, sessionId: newSessionId() },
+      );
+      setAnchorOptions(anchors.filter(Boolean));
+      setSelectedAnchor(anchors[0] ?? '');
+      await refreshCredits();
+    } catch (err: any) {
+      setError(`Error regenerando: ${err?.message || err}`);
+      if (!isAdmin) await deductCredits(-anchorCreditCost).catch(() => {});
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+  // ── PASO 3: Generar campaña con ancla aprobada ────────────
+  const handleGenerateCampaign = async () => {
+    if (!selectedAnchor || !campaignPlan) return;
+
+    setStep(6);
+    setIsGenerating(true);
+    setError(null);
     setCurrentSet(null);
+    setProgressSteps(CAMPAIGN_PROGRESS_STEPS);
     setProgress({ total: imageCount, completed: 0, current: 0 });
     setProgressStepIndex(0);
 
     try {
-      // Paso 1: Gemini construye el plan estratégico completo
       setProgressStepIndex(1);
-      console.log('[Campaign] buildCampaignPlan start', { idea, canales, imageCount, slots: activeSlots.length });
-      const plan = await buildCampaignPlan(idea, canales, imageCount, activeSlots);
-      console.log('[Campaign] plan recibido', { piezas: plan.piezas.length, concepto: plan.concepto });
-
-      if (!plan.piezas || plan.piezas.length === 0) {
-        throw new Error('No se pudo construir el plan de campaña. Intentá de nuevo.');
-      }
-
-      // Paso 2: generar imágenes con el director creativo de campaña
-      setProgressStepIndex(3);
-      console.log('[Campaign] generateCampaignImages start', { piezas: plan.piezas.length, slots: activeSlots.length });
-
       const images = await generateCampaignImages(
-        plan,
-        activeSlots,
+        campaignPlan, activeSlots, selectedAnchor,
         { uid: user?.uid, sessionId: newSessionId() },
         (done, total) => {
           setProgress({ total, completed: done, current: done - 1 });
-          if (done === total) setProgressStepIndex(4);
+          if (done === total) setProgressStepIndex(2);
         },
       );
 
-      console.log('[Campaign] imágenes generadas:', images.length, images.filter(Boolean).length, 'con URL');
+      setProgressStepIndex(3);
 
-      // Paso 5: captions + calendario (ya vienen del plan)
-      setProgressStepIndex(5);
-
-      // Inyectar URLs generadas en las piezas
-      plan.piezas = plan.piezas.map((p, i) => ({
-        ...p,
-        imageUrl: images[i] ?? '',
+      // Inyectar URLs en el plan
+      campaignPlan.piezas = campaignPlan.piezas.map((p: any, i: number) => ({
+        ...p, imageUrl: images[i] ?? '',
       }));
 
       const set: CampaignSet = {
-        id:         Date.now().toString(),
-        createdAt:  Date.now(),
-        idea,
-        canales,
-        imageCount,
-        slots:      activeSlots,
-        plan,
+        id:            Date.now().toString(),
+        createdAt:     Date.now(),
+        idea, canales, imageCount,
+        slots:         activeSlots,
+        anchorImage:   selectedAnchor,
+        anchorOptions,
+        plan:          campaignPlan,
       };
 
       await campaignStorage.save(set);
       await loadSets();
       setCurrentSet(set);
-      setStep(5);
+      setStep(7);
       await refreshCredits();
     } catch (err: any) {
-      console.error('[Campaign] handleGenerate error:', err);
-      const msg = err?.message || err?.toString() || 'Error desconocido';
-      setError(`Error generando la campaña: ${msg}`);
-      if (!isAdmin) {
-        await refundProCredit().catch(() => {});
-        await deductCredits(-imageCreditCost).catch(() => {});
-        await refreshCredits().catch(() => {});
-      }
-      setStep(3);
+      console.error('[Campaign] handleGenerateCampaign error:', err);
+      setError(`Error generando la campaña: ${err?.message || err}`);
+      setStep(5); // volver a la aprobación del ancla
     } finally {
       setIsGenerating(false);
       setProgress(null);
@@ -391,7 +412,7 @@ const CampaignModule: React.FC = () => {
     <>
       <div className="max-w-7xl mx-auto pb-20 animate-in fade-in duration-500">
 
-        {/* ── HEADER ────────────────────────────────────────────── */}
+        {/* ── HEADER ──────────────────────────────────────── */}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-5 px-1 mb-6 md:mb-8">
           <div>
             <h1 className="t-display text-3xl text-slate-900">
@@ -399,12 +420,11 @@ const CampaignModule: React.FC = () => {
             </h1>
             <div className="flex items-center gap-2 mt-2">
               <p className="text-slate-500 font-medium italic text-xs md:text-sm">
-                Agencia creativa IA · Brief → Estrategia → Imágenes + Copy + Calendario
+                Agencia creativa IA · Brief → Estilo → Imágenes + Copy + Calendario
               </p>
               <ModuleTutorial moduleId="campaignMode" steps={TUTORIAL_CONFIGS.campaignMode} />
             </div>
           </div>
-
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-1.5 bg-brand-50 border border-brand-100 rounded-2xl px-3 py-2">
               <Zap className="w-3.5 h-3.5 text-brand-600" />
@@ -412,23 +432,19 @@ const CampaignModule: React.FC = () => {
               <span className="t-meta text-brand-500">sesiones</span>
             </div>
             <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-slate-100 gap-1">
-              <button
-                onClick={() => { setActiveTab('create'); resetCreator(); window.scrollTo(0, 0); }}
-                className={`px-5 md:px-8 py-2 md:py-3 rounded-xl t-meta transition-colors duration-150 ${activeTab === 'create' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700'}`}
-              >
+              <button onClick={() => { setActiveTab('create'); resetCreator(); window.scrollTo(0, 0); }}
+                className={`px-5 md:px-8 py-2 md:py-3 rounded-xl t-meta transition-colors duration-150 ${activeTab === 'create' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700'}`}>
                 Crear
               </button>
-              <button
-                onClick={() => { setActiveTab('library'); window.scrollTo(0, 0); }}
-                className={`px-5 md:px-8 py-2 md:py-3 rounded-xl t-meta transition-colors duration-150 ${activeTab === 'library' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700'}`}
-              >
+              <button onClick={() => { setActiveTab('library'); window.scrollTo(0, 0); }}
+                className={`px-5 md:px-8 py-2 md:py-3 rounded-xl t-meta transition-colors duration-150 ${activeTab === 'library' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700'}`}>
                 Biblioteca ({sets.length})
               </button>
             </div>
           </div>
         </header>
 
-        {/* ── SIN PRO-CREDITS ───────────────────────────────────── */}
+        {/* ── SIN PRO-CREDITS ─────────────────────────────── */}
         {!hasProCredits && activeTab === 'create' && (
           <div className="bg-white rounded-[28px] md:rounded-[36px] shadow-sm border border-slate-100 overflow-hidden">
             <UpgradeWall proCredits={proCredits} />
@@ -440,7 +456,7 @@ const CampaignModule: React.FC = () => {
           <div className="bg-white rounded-[28px] md:rounded-[36px] shadow-sm border border-slate-100 overflow-hidden flex flex-col min-h-[640px]">
             <WizardStepper
               steps={WIZARD_STEP_DEFS}
-              current={step}
+              current={Math.min(step, 6) as any}
               onJump={(s) => {
                 const n = Number(s) as WizardStep;
                 if (n < step && !isGenerating) setStep(n);
@@ -449,120 +465,68 @@ const CampaignModule: React.FC = () => {
 
             <div className="flex-1 overflow-auto">
 
-              {/* ── PASO 1: BRIEF ──────────────────────────────── */}
+              {/* ── PASO 1: BRIEF ────────────────────────── */}
               {step === 1 && (
                 <div className="fade-in p-4 md:p-8">
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-9 items-start">
-
-                    {/* LEFT */}
                     <div className="md:col-span-7 order-2 md:order-1 flex flex-col gap-5">
                       <div>
-                        <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">
-                          Paso 1 · Brief
-                        </div>
+                        <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Paso 1 · Brief</div>
                         <h2 className="t-display text-[28px] md:text-[34px] text-slate-900 mt-2.5 leading-[1.05]">
-                          ¿Cuál es tu{' '}
-                          <span className="text-brand-600 italic normal-case">idea de campaña?</span>
+                          ¿Cuál es tu <span className="text-brand-600 italic normal-case">idea de campaña?</span>
                         </h2>
                         <p className="text-sm text-slate-500 mt-2 leading-[1.55]">
-                          Contanos qué querés hacer. Puede ser un lanzamiento, una fecha especial, una oferta, dar a conocer tu marca — lo que sea. Cuanto más detalle, mejor campaña.
+                          Contanos qué querés hacer. Puede ser un lanzamiento, una fecha especial, una oferta, dar a conocer tu marca. Cuanto más detalle, mejor campaña.
                         </p>
                       </div>
-
-                      {/* Campo principal */}
                       <div>
                         <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-2">
                           Tu idea <span className="text-brand-600">*</span>
                         </label>
-                        <textarea
-                          value={idea}
-                          onChange={e => setIdea(e.target.value)}
+                        <textarea value={idea} onChange={e => setIdea(e.target.value)}
                           placeholder="Ej: Quiero lanzar mi nueva crema de noche, es para mujeres de 30 años que cuidan su piel. El precio es $25 y quiero que la gente me escriba al DM para pedirla..."
-                          rows={4}
-                          autoComplete="off"
-                          autoCapitalize="sentences"
-                          className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3.5 text-[15px] text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 transition-all resize-none leading-relaxed"
-                        />
+                          rows={4} autoComplete="off" autoCapitalize="sentences"
+                          className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3.5 text-[15px] text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 transition-all resize-none leading-relaxed" />
                         <p className="text-[11px] text-slate-400 mt-1.5">
                           Podés mencionar el producto, el precio, la fecha especial, el descuento, o el resultado que querés lograr.
                         </p>
                       </div>
-
-                      {/* Slots de imágenes */}
                       <div>
                         <div className="flex items-center justify-between mb-3">
                           <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em]">
                             ¿Tenés imágenes para usar?{' '}
                             <span className="text-slate-400 font-medium normal-case tracking-normal">(opcional pero recomendado)</span>
                           </label>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            totalSlotsUsed >= MAX_TOTAL_SLOTS
-                              ? 'bg-slate-100 text-slate-500'
-                              : totalSlotsUsed > 0
-                              ? 'bg-brand-50 text-brand-600'
-                              : 'bg-slate-50 text-slate-400'
-                          }`}>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${totalSlotsUsed >= MAX_TOTAL_SLOTS ? 'bg-slate-100 text-slate-500' : totalSlotsUsed > 0 ? 'bg-brand-50 text-brand-600' : 'bg-slate-50 text-slate-400'}`}>
                             {totalSlotsUsed}/{MAX_TOTAL_SLOTS} imágenes
                           </span>
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                           {SLOT_ROLES.map(role => (
-                            <ImageUploadSlot
-                              key={role}
-                              role={role}
-                              images={slots[role]}
+                            <ImageUploadSlot key={role} role={role} images={slots[role]}
                               onChange={imgs => setSlots(prev => ({ ...prev, [role]: imgs }))}
-                              totalUsed={totalSlotsUsed}
-                            />
+                              totalUsed={totalSlotsUsed} />
                           ))}
                         </div>
                         <p className="text-[11px] text-slate-400 mt-2 leading-[1.5]">
-                          Podés subir hasta 8 imágenes en total. La IA las analiza para entender tu producto, estética y marca antes de crear la campaña.
+                          Podés subir hasta 8 imágenes en total. La IA las analiza para entender tu producto, estética y marca.
                         </p>
                       </div>
                     </div>
-
-                    {/* RIGHT — ejemplos */}
                     <div className="md:col-span-5 order-1 md:order-2">
-                      <div className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-3">
-                        Ejemplos de ideas
-                      </div>
+                      <div className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-3">Ejemplos de ideas</div>
                       <div className="space-y-2.5">
                         {[
-                          {
-                            tag: 'Lanzamiento',
-                            color: 'text-brand-600', bg: 'bg-brand-50',
-                            text: 'Lanzar mi nueva crema de noche para mujeres de 30+. Precio $25. Quiero que me escriban al DM para pedir el link de pago.',
-                          },
-                          {
-                            tag: 'Black Friday',
-                            color: 'text-violet-600', bg: 'bg-violet-50',
-                            text: 'Campaña Black Friday, 40% de descuento en toda mi ropa. Dura 3 días. Quiero que vayan a mi link de bio.',
-                          },
-                          {
-                            tag: 'Dar a conocer',
-                            color: 'text-emerald-600', bg: 'bg-emerald-50',
-                            text: 'Quiero que más gente conozca mi marca de velas artesanales. Me compran mucho por recomendación pero no tengo alcance en redes.',
-                          },
-                          {
-                            tag: 'Navidad',
-                            color: 'text-amber-600', bg: 'bg-amber-50',
-                            text: 'Campaña navideña para mi tienda de accesorios. Quiero mostrar mis productos como regalos perfectos.',
-                          },
+                          { tag: 'Lanzamiento', color: 'text-brand-600', bg: 'bg-brand-50', text: 'Lanzar mi nueva crema de noche para mujeres de 30+. Precio $25. Quiero que me escriban al DM para pedir el link de pago.' },
+                          { tag: 'Black Friday', color: 'text-violet-600', bg: 'bg-violet-50', text: 'Campaña Black Friday, 40% de descuento en toda mi ropa. Dura 3 días. Quiero que vayan a mi link de bio.' },
+                          { tag: 'Dar a conocer', color: 'text-emerald-600', bg: 'bg-emerald-50', text: 'Quiero que más gente conozca mi marca de velas artesanales. Me compran mucho por recomendación pero no tengo alcance.' },
+                          { tag: 'Navidad', color: 'text-amber-600', bg: 'bg-amber-50', text: 'Campaña navideña para mi tienda de accesorios. Quiero mostrar mis productos como regalos perfectos.' },
                         ].map(ex => (
-                          <button
-                            key={ex.tag}
-                            type="button"
-                            onClick={() => setIdea(ex.text)}
-                            className="w-full text-left bg-white border border-slate-200 hover:border-slate-300 rounded-2xl p-3.5 transition-all hover:shadow-sm group"
-                          >
+                          <button key={ex.tag} type="button" onClick={() => setIdea(ex.text)}
+                            className="w-full text-left bg-white border border-slate-200 hover:border-slate-300 rounded-2xl p-3.5 transition-all hover:shadow-sm group">
                             <div className="flex items-center gap-2 mb-1.5">
-                              <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${ex.bg} ${ex.color}`}>
-                                {ex.tag}
-                              </span>
-                              <span className="text-[10px] text-slate-400 group-hover:text-brand-600 transition-colors">
-                                Usar este ejemplo →
-                              </span>
+                              <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${ex.bg} ${ex.color}`}>{ex.tag}</span>
+                              <span className="text-[10px] text-slate-400 group-hover:text-brand-600 transition-colors">Usar este ejemplo →</span>
                             </div>
                             <p className="text-[12px] text-slate-600 leading-snug">{ex.text}</p>
                           </button>
@@ -573,168 +537,136 @@ const CampaignModule: React.FC = () => {
                 </div>
               )}
 
-              {/* ── PASO 2: CANALES ────────────────────────────── */}
+              {/* ── PASO 2: CANALES ──────────────────────── */}
               {step === 2 && (
                 <div className="fade-in p-4 md:p-8">
                   <div className="max-w-xl">
-                    <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">
-                      Paso 2 · Canales
-                    </div>
+                    <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Paso 2 · Canales</div>
                     <h2 className="t-display text-[28px] md:text-[34px] text-slate-900 mt-2.5 leading-[1.05]">
-                      ¿Dónde vas a{' '}
-                      <span className="text-brand-600 italic normal-case">publicar?</span>
+                      ¿Dónde vas a <span className="text-brand-600 italic normal-case">publicar?</span>
                     </h2>
                     <p className="text-sm text-slate-500 mt-2 mb-6 leading-[1.55]">
-                      Elegí uno o varios canales. La IA va a adaptar el copy, el formato y las instrucciones de publicación a cada uno.
+                      Elegí uno o varios canales. La IA adapta el copy, el formato y las instrucciones a cada uno.
                     </p>
-
                     <div className="flex flex-col gap-3">
                       {(Object.keys(CAMPAIGN_CHANNEL_META) as CampaignChannel[]).map(canal => {
                         const meta = CAMPAIGN_CHANNEL_META[canal];
-                        const selected = canales.includes(canal);
+                        const sel  = canales.includes(canal);
                         return (
-                          <button
-                            key={canal}
-                            type="button"
-                            onClick={() => toggleCanal(canal)}
-                            className={`flex items-center gap-4 p-4 rounded-2xl border text-left transition-all ${
-                              selected
-                                ? 'border-2 border-brand-600 bg-brand-50'
-                                : 'border border-slate-200 bg-white hover:border-slate-300'
-                            }`}
-                          >
+                          <button key={canal} type="button" onClick={() => toggleCanal(canal)}
+                            className={`flex items-center gap-4 p-4 rounded-2xl border text-left transition-all ${sel ? 'border-2 border-brand-600 bg-brand-50' : 'border border-slate-200 bg-white hover:border-slate-300'}`}>
                             <span className="text-2xl flex-shrink-0">{meta.icon}</span>
                             <div className="flex-1">
-                              <div className={`text-[14px] font-bold ${selected ? 'text-brand-900' : 'text-slate-800'}`}>
-                                {meta.label}
-                              </div>
+                              <div className={`text-[14px] font-bold ${sel ? 'text-brand-900' : 'text-slate-800'}`}>{meta.label}</div>
                               <div className="text-[11px] text-slate-500 mt-0.5">{meta.copyHint}</div>
                             </div>
-                            <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
-                              selected ? 'bg-brand-600 text-white' : 'border-2 border-slate-200'
-                            }`}>
-                              {selected && <Check size={10} strokeWidth={3} />}
+                            <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${sel ? 'bg-brand-600 text-white' : 'border-2 border-slate-200'}`}>
+                              {sel && <Check size={10} strokeWidth={3} />}
                             </div>
                           </button>
                         );
                       })}
                     </div>
-
                     {canales.length === 0 && (
-                      <p className="text-[12px] text-rose-500 font-medium mt-3">
-                        Seleccioná al menos un canal para continuar.
-                      </p>
+                      <p className="text-[12px] text-rose-500 font-medium mt-3">Seleccioná al menos un canal para continuar.</p>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* ── PASO 3: CANTIDAD ───────────────────────────── */}
+              {/* ── PASO 3: CANTIDAD + COSTO COMPLETO ────── */}
               {step === 3 && (
                 <div className="fade-in p-4 md:p-8">
                   <div className="grid grid-cols-1 md:grid-cols-[1fr_300px] gap-5 md:gap-6 items-start">
-
                     <div>
-                      <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">
-                        Paso 3 · Cantidad
-                      </div>
+                      <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Paso 3 · Cantidad</div>
                       <h2 className="t-display text-[28px] md:text-[34px] text-slate-900 mt-2.5 leading-[1.05]">
-                        ¿Cuántas imágenes{' '}
-                        <span className="text-brand-600 italic normal-case">genera la campaña?</span>
+                        ¿Cuántas imágenes <span className="text-brand-600 italic normal-case">genera la campaña?</span>
                       </h2>
                       <p className="text-sm text-slate-500 mt-2 mb-6 leading-[1.55] max-w-[500px]">
-                        Cada imagen es una pieza distinta del plan: tiene su canal, su día, su copy y sus instrucciones de publicación.
+                        Cada imagen es una pieza del plan: tiene su canal, su día, su copy y sus instrucciones de publicación.
                       </p>
-
-                      {/* Selector 1–8 */}
                       <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 mb-5">
-                        <div className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-4">
-                          Imágenes de campaña
-                        </div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-4">Imágenes de campaña</div>
                         <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
-                          {([1, 2, 3, 4, 5, 6, 7, 8] as const).map(n => (
-                            <button
-                              key={n}
-                              type="button"
-                              onClick={() => setImageCount(n)}
-                              className={`py-4 rounded-2xl flex flex-col items-center gap-0.5 transition-all ${
-                                imageCount === n
-                                  ? 'bg-slate-900 text-white'
-                                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                              }`}
-                            >
+                          {([1,2,3,4,5,6,7,8] as const).map(n => (
+                            <button key={n} type="button" onClick={() => setImageCount(n)}
+                              className={`py-4 rounded-2xl flex flex-col items-center gap-0.5 transition-all ${imageCount === n ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                               <span className="text-lg font-bold">{n}</span>
                               <span className="text-[9px] opacity-60">img</span>
                             </button>
                           ))}
                         </div>
-                        <p className="text-[11px] text-slate-500 mt-3 leading-[1.5]">
-                          Cada pieza incluye imagen generada + caption + CTA + instrucciones de publicación. Todo listo para ejecutar.
-                        </p>
                       </div>
 
-                      {/* Pro-credit notice */}
+                      {/* Aviso del flujo */}
+                      <div className="rounded-2xl p-4 bg-violet-50 border border-violet-100 mb-4">
+                        <div className="flex items-start gap-3">
+                          <Sparkles className="w-4 h-4 text-violet-600 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-[12px] font-bold text-violet-900 mb-1">Cómo funciona el proceso</p>
+                            <ol className="text-[11px] text-violet-700 leading-[1.6] space-y-1 list-none">
+                              <li><span className="font-bold">1.</span> La IA genera <strong>2 propuestas de estilo visual</strong> para que elijas la que más te gusta</li>
+                              <li><span className="font-bold">2.</span> Con el estilo aprobado, genera las <strong>{imageCount} imágenes de tu campaña</strong> con consistencia visual total</li>
+                              <li><span className="font-bold">3.</span> Recibís el kit completo: imágenes + copy + calendario + PDF</li>
+                            </ol>
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="rounded-2xl p-4 bg-brand-50 border border-brand-100">
                         <div className="flex items-start gap-3">
                           <Zap className="w-4 h-4 text-brand-600 flex-shrink-0 mt-0.5" />
                           <div>
                             <p className="text-[12px] font-bold text-brand-900 mb-0.5">1 pro-credit por sesión</p>
                             <p className="text-[11px] text-brand-700 leading-[1.5]">
-                              Cada kit de campaña consume 1 pro-credit + {imageCreditCost} créditos para las imágenes.
                               Tenés <strong>{isAdmin ? '∞' : proCredits} sesiones</strong> disponibles.
                             </p>
                           </div>
                         </div>
                       </div>
-
                       {error && (
                         <div className="mt-3 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-[12px] text-rose-700 font-medium flex items-start gap-2">
-                          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                          {error}
+                          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />{error}
                         </div>
                       )}
                     </div>
 
-                    {/* Cost panel */}
+                    {/* Panel de costo completo */}
                     <div className="md:sticky md:top-4">
                       <div className="relative bg-slate-900 text-white rounded-2xl p-5 overflow-hidden">
                         <div className="absolute -top-10 -right-10 w-[140px] h-[140px] rounded-full pointer-events-none"
                           style={{ background: 'rgba(124,58,237,0.3)', filter: 'blur(40px)' }} />
                         <div className="relative">
-                          <div className="text-[10px] font-bold text-pink-300 uppercase tracking-[0.14em] mb-3.5">
-                            Resumen del kit
-                          </div>
+                          <div className="text-[10px] font-bold text-pink-300 uppercase tracking-[0.14em] mb-3.5">Resumen del costo</div>
                           <div className="flex flex-col gap-2 mb-3.5 text-[13px]">
-                            <div className="flex justify-between">
-                              <span className="opacity-70">Canales</span>
-                              <span className="font-semibold">{canales.length}</span>
+                            <div className="flex justify-between items-baseline">
+                              <span className="opacity-70">2 propuestas de estilo</span>
+                              <span className="font-semibold">{anchorCreditCost} cr</span>
                             </div>
-                            <div className="flex justify-between">
-                              <span className="opacity-70">Imágenes</span>
-                              <span className="font-semibold">{imageCount}</span>
+                            <div className="flex justify-between items-baseline">
+                              <span className="opacity-70">{imageCount} imágenes campaña</span>
+                              <span className="font-semibold">{imageCreditCost} cr</span>
                             </div>
-                            <div className="flex justify-between">
-                              <span className="opacity-70">Referencias</span>
-                              <span className="font-semibold">{totalSlotsUsed} imagen{totalSlotsUsed !== 1 ? 'es' : ''}</span>
-                            </div>
-                            <div className="flex justify-between">
+                            <div className="flex justify-between items-baseline">
                               <span className="opacity-70">Sesión</span>
                               <span className="font-semibold">1 pro-credit</span>
                             </div>
-                            <div className="h-px bg-white/10 my-1.5" />
+                            <div className="h-px bg-white/10 my-1" />
                             <div className="flex justify-between items-baseline">
-                              <span className="opacity-85 text-[13px]">Créditos</span>
-                              <span className="font-display font-extrabold italic text-[36px] tracking-tight leading-none"
-                                style={{ fontFamily: 'Syne, Inter, sans-serif' }}>
-                                {imageCreditCost}{' '}
+                              <span className="opacity-85 text-[13px]">Total créditos</span>
+                              <span className="font-display font-extrabold italic text-[36px] tracking-tight leading-none" style={{ fontFamily: 'Syne, Inter, sans-serif' }}>
+                                {totalCreditCost}{' '}
                                 <span className="text-sm opacity-70 font-semibold not-italic tracking-normal">cr</span>
                               </span>
                             </div>
                           </div>
+                          <div className="h-px bg-white/10 mb-3" />
+                          <div className="text-[11px] opacity-60 leading-[1.5] mb-2">Si regenerás el estilo: +{anchorCreditCost} cr extra</div>
                           <div className={`text-[11px] leading-[1.5] ${insufficient ? 'text-rose-300' : 'opacity-70'}`}>
                             {insufficient
-                              ? <><strong>Créditos insuficientes.</strong> Te faltan {imageCreditCost - (credits?.available ?? 0)} cr.</>
-                              : <>Te quedarán {creditsAfter} cr después de esta campaña.</>}
+                              ? <><strong>Créditos insuficientes.</strong> Te faltan {totalCreditCost - (credits?.available ?? 0)} cr.</>
+                              : <>Te quedarán <strong>{creditsAfter} cr</strong> después.</>}
                           </div>
                         </div>
                       </div>
@@ -746,34 +678,154 @@ const CampaignModule: React.FC = () => {
                 </div>
               )}
 
-              {/* ── PASO 4: GENERANDO ─────────────────────────── */}
+              {/* ── PASO 4: GENERANDO ANCLA ──────────────── */}
               {step === 4 && (
                 <div className="fade-in p-4 md:p-8">
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-7 items-start">
                     <div className="md:col-span-5 lg:col-span-4">
                       <div className="flex items-center gap-2 mb-2">
                         <div className="w-2 h-2 rounded-full bg-brand-600 animate-pulse" />
-                        <span className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">
-                          Generando · no cierres esta ventana
-                        </span>
+                        <span className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Generando · no cierres esta ventana</span>
                       </div>
                       <h2 className="font-display font-extrabold italic uppercase tracking-tight text-[22px] md:text-[26px] text-slate-900 leading-tight"
                         style={{ fontFamily: 'Syne, Inter, sans-serif', letterSpacing: '-0.025em' }}>
                         {idea.length > 50 ? idea.slice(0, 50) + '...' : idea}
                       </h2>
                       <div className="text-[13px] text-slate-500 mt-1 mb-4">
-                        {imageCount} imágenes · {canales.length} canal{canales.length > 1 ? 'es' : ''}
+                        Generando propuestas de estilo visual...
                       </div>
                       <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-[18px]">
-                        <GenProgress
-                          steps={CAMPAIGN_PROGRESS_STEPS}
-                          currentStepIndex={progressStepIndex}
-                          completedShots={[]}
-                          totalShots={0}
-                        />
+                        <GenProgress steps={progressSteps} currentStepIndex={progressStepIndex} completedShots={[]} totalShots={0} />
                       </div>
                       <div className="mt-3 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5]">
                         💡 Podés cerrar la ventana — te avisamos cuando termine.
+                      </div>
+                    </div>
+                    <div className="md:col-span-7 lg:col-span-8">
+                      <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.14em] mb-3">Generando estilos</div>
+                      <div className="grid grid-cols-2 gap-4">
+                        {[0, 1].map(i => {
+                          const done = progress ? i < progress.completed : false;
+                          return (
+                            <div key={i} className={`relative aspect-[3/4] rounded-2xl overflow-hidden transition-all ${done ? 'fade-in shadow-md' : 'bg-slate-100 animate-pulse'}`}>
+                              {done && (
+                                <div className="absolute inset-0 bg-gradient-to-br from-brand-50 to-violet-50 flex items-center justify-center">
+                                  <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center">
+                                    <Check className="w-4 h-4 text-white" strokeWidth={3} />
+                                  </div>
+                                </div>
+                              )}
+                              {!done && (
+                                <div className="absolute top-3 left-3 text-[11px] font-bold text-slate-400">
+                                  Opción {i === 0 ? 'A' : 'B'}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── PASO 5: APROBAR ANCLA ────────────────── */}
+              {step === 5 && (
+                <div className="fade-in p-4 md:p-8">
+                  <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em] mb-2">Paso 4 · Elegí el estilo</div>
+                  <h2 className="t-display text-[26px] md:text-[32px] text-slate-900 mb-2 leading-[1.05]">
+                    ¿Cuál es la estética de <span className="text-brand-600 italic normal-case">tu campaña?</span>
+                  </h2>
+                  <p className="text-sm text-slate-500 mb-6 leading-[1.55] max-w-[560px]">
+                    La imagen que elijas define el estilo visual de toda la campaña. Todas las demás imágenes van a mantener esta misma estética, luz y composición.
+                  </p>
+
+                  {error && (
+                    <div className="mb-4 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-[12px] text-rose-700 font-medium flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />{error}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+                    {anchorOptions.map((url, i) => {
+                      const label   = i === 0 ? 'A' : 'B';
+                      const variant = i === 0 ? 'Estilo natural · lifestyle' : 'Estilo editorial · premium';
+                      const isSelected = selectedAnchor === url;
+                      return (
+                        <button key={i} type="button" onClick={() => setSelectedAnchor(url)}
+                          className={`relative rounded-[24px] overflow-hidden border-4 transition-all cursor-pointer group ${isSelected ? 'border-brand-600 shadow-xl' : 'border-transparent hover:border-slate-200'}`}>
+                          {/* Imagen */}
+                          <div className="aspect-[3/4] relative">
+                            <img src={url} alt={`Opción ${label}`} className="w-full h-full object-cover" />
+                            <div className={`absolute inset-0 transition-opacity ${isSelected ? 'bg-brand-600/10' : 'bg-black/0 group-hover:bg-black/5'}`} />
+                          </div>
+                          {/* Badge seleccionado */}
+                          {isSelected && (
+                            <div className="absolute top-4 right-4 w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center shadow-lg">
+                              <Check className="w-4 h-4 text-white" strokeWidth={3} />
+                            </div>
+                          )}
+                          {/* Label */}
+                          <div className="absolute top-4 left-4">
+                            <span className="bg-black/60 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full">
+                              Opción {label}
+                            </span>
+                          </div>
+                          {/* Footer */}
+                          <div className={`absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/70 to-transparent`}>
+                            <p className="text-white text-[12px] font-semibold">{variant}</p>
+                            {isSelected && <p className="text-brand-300 text-[10px] font-bold uppercase tracking-wider mt-0.5">Seleccionada ✓</p>}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Regenerar */}
+                  <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                    <div>
+                      <p className="text-[12px] font-bold text-slate-700">¿Ninguna te convence?</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Generá 2 nuevas opciones por <strong>{anchorCreditCost} créditos</strong> adicionales.
+                        {insufficientForAnchorRegen && <span className="text-rose-500 ml-1">— Créditos insuficientes.</span>}
+                      </p>
+                    </div>
+                    <button type="button" onClick={handleRegenerateAnchor}
+                      disabled={isRegenerating || insufficientForAnchorRegen}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:border-slate-300 text-slate-700 rounded-xl text-[12px] font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                      {isRegenerating
+                        ? <><div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> Generando...</>
+                        : <><RefreshCw size={13} /> Nuevas opciones</>}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── PASO 6: GENERANDO CAMPAÑA ────────────── */}
+              {step === 6 && (
+                <div className="fade-in p-4 md:p-8">
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-7 items-start">
+                    <div className="md:col-span-5 lg:col-span-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-2 h-2 rounded-full bg-brand-600 animate-pulse" />
+                        <span className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Generando campaña · no cierres</span>
+                      </div>
+                      <h2 className="font-display font-extrabold italic uppercase tracking-tight text-[22px] md:text-[26px] text-slate-900 leading-tight"
+                        style={{ fontFamily: 'Syne, Inter, sans-serif', letterSpacing: '-0.025em' }}>
+                        {idea.length > 50 ? idea.slice(0, 50) + '...' : idea}
+                      </h2>
+                      <div className="text-[13px] text-slate-500 mt-1 mb-4">
+                        {imageCount} imágenes · estilo aprobado como ancla
+                      </div>
+                      {/* Ancla elegida */}
+                      {selectedAnchor && (
+                        <div className="mb-4 rounded-2xl overflow-hidden border border-brand-200">
+                          <div className="bg-brand-50 px-3 py-2 text-[10px] font-bold text-brand-700 uppercase tracking-wider">Estilo ancla</div>
+                          <img src={selectedAnchor} alt="Ancla" className="w-full aspect-[3/4] object-cover" />
+                        </div>
+                      )}
+                      <div className="bg-white border border-slate-200 rounded-2xl p-4">
+                        <GenProgress steps={progressSteps} currentStepIndex={progressStepIndex} completedShots={[]} totalShots={0} />
                       </div>
                     </div>
                     <div className="md:col-span-7 lg:col-span-8">
@@ -791,24 +843,10 @@ const CampaignModule: React.FC = () => {
                           const done   = progress ? i < progress.completed : false;
                           const active = progress ? i === progress.completed && isGenerating : false;
                           return (
-                            <div key={i} className={`relative aspect-[3/4] rounded-2xl overflow-hidden transition-all ${
-                              done ? 'fade-in shadow-md' : active ? 'border-2 border-brand-600 bg-slate-100 animate-pulse' : 'bg-slate-100'
-                            }`}>
-                              {active && (
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                  <div className="bg-white/95 rounded-full px-3.5 py-1.5 text-[10px] font-bold text-brand-600 tracking-[0.12em] uppercase">EN VIVO</div>
-                                </div>
-                              )}
-                              {done && (
-                                <div className="absolute inset-0 bg-gradient-to-br from-brand-50 to-violet-50 flex items-center justify-center">
-                                  <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center">
-                                    <Check className="w-4 h-4 text-white" strokeWidth={3} />
-                                  </div>
-                                </div>
-                              )}
-                              {!done && !active && (
-                                <div className="absolute top-2 left-2 text-[10px] text-slate-400 font-semibold">{i + 1}</div>
-                              )}
+                            <div key={i} className={`relative aspect-[3/4] rounded-2xl overflow-hidden transition-all ${done ? 'fade-in shadow-md' : active ? 'border-2 border-brand-600 bg-slate-100 animate-pulse' : 'bg-slate-100'}`}>
+                              {active && <div className="absolute inset-0 flex items-center justify-center"><div className="bg-white/95 rounded-full px-3.5 py-1.5 text-[10px] font-bold text-brand-600 tracking-[0.12em] uppercase">EN VIVO</div></div>}
+                              {done && <div className="absolute inset-0 bg-gradient-to-br from-brand-50 to-violet-50 flex items-center justify-center"><div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center"><Check className="w-4 h-4 text-white" strokeWidth={3} /></div></div>}
+                              {!done && !active && <div className="absolute top-2 left-2 text-[10px] text-slate-400 font-semibold">{i + 1}</div>}
                             </div>
                           );
                         })}
@@ -818,11 +856,9 @@ const CampaignModule: React.FC = () => {
                 </div>
               )}
 
-              {/* ── PASO 5: RESULTADOS ────────────────────────── */}
-              {step === 5 && currentSet && (
+              {/* ── PASO 7: RESULTADOS ───────────────────── */}
+              {step === 7 && currentSet && (
                 <div className="fade-in p-4 md:p-8">
-
-                  {/* Header del kit */}
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                     <div>
                       <div className="flex items-center gap-2.5 mb-2 flex-wrap">
@@ -840,33 +876,21 @@ const CampaignModule: React.FC = () => {
                       <p className="text-[13px] text-slate-500 mt-1 italic">"{currentSet.plan.concepto}"</p>
                     </div>
                     <div className="flex gap-2 w-full md:w-auto flex-wrap">
-                      <button
-                        type="button"
-                        onClick={() => downloadSetZip(currentSet)}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-700 transition-colors"
-                      >
+                      <button type="button" onClick={() => downloadSetZip(currentSet)}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-700 transition-colors">
                         <Download size={14} /> ZIP
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => downloadCampaignHtml(currentSet)}
+                      <button type="button" onClick={() => downloadCampaignHtml(currentSet)}
                         className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-700 transition-colors"
-                        title="Descargá una versión interactiva del kit — abrila desde tu PC para marcar el progreso, copiar textos y exportar PDF"
-                      >
+                        title="Descargá una versión interactiva del kit — abrila desde tu PC para marcar el progreso, copiar textos y exportar PDF">
                         <FileText size={14} /> Versión interactiva
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => downloadCampaignPdf(currentSet)}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-colors"
-                      >
+                      <button type="button" onClick={() => downloadCampaignPdf(currentSet)}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-colors">
                         <Download size={14} /> PDF
                       </button>
-                      <button
-                        type="button"
-                        onClick={resetCreator}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-colors"
-                      >
+                      <button type="button" onClick={resetCreator}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-colors">
                         <Plus size={14} /> Nueva campaña
                       </button>
                     </div>
@@ -881,21 +905,15 @@ const CampaignModule: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Tabs de resultados */}
+                  {/* Tabs */}
                   <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl mb-6 w-fit">
                     {([
-                      { id: 'plan', label: 'Piezas', icon: <ImageIcon size={12} /> },
-                      { id: 'calendario', label: 'Calendario', icon: <Calendar size={12} /> },
-                      { id: 'hashtags', label: 'Hashtags', icon: <Hash size={12} /> },
-                    ] as const).map(t => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => setActiveTab2(t.id)}
-                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[11px] font-bold transition-all ${
-                          activeTab2 === t.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                        }`}
-                      >
+                      { id: 'plan' as const,       label: 'Piezas',     icon: <ImageIcon size={12} /> },
+                      { id: 'calendario' as const,  label: 'Calendario', icon: <Calendar size={12} /> },
+                      { id: 'hashtags' as const,    label: 'Hashtags',   icon: <Hash size={12} /> },
+                    ]).map(t => (
+                      <button key={t.id} type="button" onClick={() => setActiveTab2(t.id)}
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[11px] font-bold transition-all ${activeTab2 === t.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                         {t.icon} {t.label}
                       </button>
                     ))}
@@ -905,33 +923,22 @@ const CampaignModule: React.FC = () => {
                   {activeTab2 === 'plan' && (
                     <div className="space-y-4">
                       {currentSet.plan.piezas.map((pieza, i) => {
-                        const canalMeta = CAMPAIGN_CHANNEL_META[pieza.canal];
+                        const canalMeta  = CAMPAIGN_CHANNEL_META[pieza.canal];
                         const isExpanded = expandedPieza === pieza.id;
                         return (
                           <div key={pieza.id} className="bg-white border border-slate-100 rounded-[24px] overflow-hidden shadow-sm">
-                            {/* Header de pieza */}
-                            <button
-                              type="button"
-                              onClick={() => setExpandedPieza(isExpanded ? null : pieza.id)}
-                              className="w-full flex items-center gap-4 p-4 md:p-5 text-left hover:bg-slate-50 transition-colors"
-                            >
-                              {/* Imagen thumbnail */}
+                            <button type="button" onClick={() => setExpandedPieza(isExpanded ? null : pieza.id)}
+                              className="w-full flex items-center gap-4 p-4 md:p-5 text-left hover:bg-slate-50 transition-colors">
                               <div className="w-14 h-14 md:w-16 md:h-16 rounded-xl overflow-hidden flex-shrink-0 bg-slate-100">
                                 {pieza.imageUrl && (
-                                  <img src={pieza.imageUrl} alt={pieza.rol}
-                                    className="w-full h-full object-cover"
-                                    onClick={e => { e.stopPropagation(); openLightbox(currentSet.plan.piezas.map(p => p.imageUrl).filter(Boolean), i); }}
-                                  />
+                                  <img src={pieza.imageUrl} alt={pieza.rol} className="w-full h-full object-cover"
+                                    onClick={e => { e.stopPropagation(); openLightbox(currentSet.plan.piezas.map(p => p.imageUrl).filter(Boolean), i); }} />
                                 )}
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                  <span className="text-[10px] font-black text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                                    Día {pieza.dia}
-                                  </span>
-                                  <span className="text-[10px] font-semibold text-slate-500">
-                                    {canalMeta.icon} {canalMeta.label}
-                                  </span>
+                                  <span className="text-[10px] font-black text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full uppercase tracking-wider">Día {pieza.dia}</span>
+                                  <span className="text-[10px] font-semibold text-slate-500">{canalMeta.icon} {canalMeta.label}</span>
                                   <span className="text-[10px] text-slate-400">· {pieza.rol}</span>
                                 </div>
                                 <p className="text-[14px] font-bold text-slate-800 truncate">{pieza.titular}</p>
@@ -939,24 +946,15 @@ const CampaignModule: React.FC = () => {
                               </div>
                               <ChevronDown size={16} className={`text-slate-400 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                             </button>
-
-                            {/* Detalle expandido */}
                             {isExpanded && (
                               <div className="border-t border-slate-100 p-4 md:p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
-                                {/* Imagen grande */}
                                 {pieza.imageUrl && (
                                   <div className="aspect-[4/3] rounded-2xl overflow-hidden cursor-pointer group relative"
                                     onClick={() => openLightbox(currentSet.plan.piezas.map(p => p.imageUrl).filter(Boolean), i)}>
                                     <img src={pieza.imageUrl} alt={pieza.rol} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                      <span className="text-white text-xs font-bold">Ver completa</span>
-                                    </div>
                                   </div>
                                 )}
-
-                                {/* Copy */}
                                 <div className="space-y-4">
-                                  {/* Titular */}
                                   <div>
                                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Titular</p>
                                     <div className="flex items-start justify-between gap-2">
@@ -967,8 +965,6 @@ const CampaignModule: React.FC = () => {
                                       </button>
                                     </div>
                                   </div>
-
-                                  {/* Caption */}
                                   <div>
                                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Caption completo</p>
                                     <div className="flex items-start justify-between gap-2">
@@ -979,8 +975,6 @@ const CampaignModule: React.FC = () => {
                                       </button>
                                     </div>
                                   </div>
-
-                                  {/* CTA */}
                                   <div>
                                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CTA</p>
                                     <div className="flex items-center justify-between gap-2">
@@ -991,8 +985,6 @@ const CampaignModule: React.FC = () => {
                                       </button>
                                     </div>
                                   </div>
-
-                                  {/* Hashtags */}
                                   <div>
                                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Hashtags</p>
                                     <div className="flex flex-wrap gap-1.5">
@@ -1001,8 +993,6 @@ const CampaignModule: React.FC = () => {
                                       ))}
                                     </div>
                                   </div>
-
-                                  {/* Instrucción */}
                                   <div className="bg-amber-50 border border-amber-100 rounded-xl p-3">
                                     <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">📌 Qué hacer</p>
                                     <p className="text-[11.5px] text-amber-900 leading-relaxed">{pieza.instruccion}</p>
@@ -1024,25 +1014,17 @@ const CampaignModule: React.FC = () => {
                         return (
                           <div key={dia} className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
                             <div className={`px-5 py-3 flex items-center justify-between ${dia === 1 ? 'bg-brand-600' : 'bg-slate-50'}`}>
-                              <span className={`text-[12px] font-black uppercase tracking-wider ${dia === 1 ? 'text-white' : 'text-slate-700'}`}>
-                                Día {dia}
-                              </span>
-                              {piezasDelDia.length === 0 && (
-                                <span className={`text-[10px] ${dia === 1 ? 'text-white/70' : 'text-slate-400'}`}>Día de descanso</span>
-                              )}
+                              <span className={`text-[12px] font-black uppercase tracking-wider ${dia === 1 ? 'text-white' : 'text-slate-700'}`}>Día {dia}</span>
+                              {piezasDelDia.length === 0 && <span className={`text-[10px] ${dia === 1 ? 'text-white/70' : 'text-slate-400'}`}>Día de descanso</span>}
                             </div>
                             {piezasDelDia.map(p => {
-                              const canalMeta = CAMPAIGN_CHANNEL_META[p.canal];
+                              const cm = CAMPAIGN_CHANNEL_META[p.canal];
                               return (
                                 <div key={p.id} className="flex items-center gap-4 px-5 py-3 border-t border-slate-50">
-                                  {p.imageUrl && (
-                                    <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0">
-                                      <img src={p.imageUrl} alt="" className="w-full h-full object-cover" />
-                                    </div>
-                                  )}
+                                  {p.imageUrl && <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0"><img src={p.imageUrl} alt="" className="w-full h-full object-cover" /></div>}
                                   <div className="flex-1 min-w-0">
                                     <p className="text-[12px] font-bold text-slate-800 truncate">{p.titular}</p>
-                                    <p className="text-[10px] text-slate-500">{canalMeta.icon} {canalMeta.label} · {p.horaRecomendada}</p>
+                                    <p className="text-[10px] text-slate-500">{cm.icon} {cm.label} · {p.horaRecomendada}</p>
                                   </div>
                                   <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-1 rounded-full flex-shrink-0">{p.rol}</span>
                                 </div>
@@ -1068,11 +1050,9 @@ const CampaignModule: React.FC = () => {
                               <p className="text-[13px] font-bold text-slate-800">{group.title}</p>
                               <p className="text-[11px] text-slate-500 mt-0.5">{group.desc}</p>
                             </div>
-                            <button type="button"
-                              onClick={() => copyText(group.tags.join(' '), `ht-${group.title}`)}
+                            <button type="button" onClick={() => copyText(group.tags.join(' '), `ht-${group.title}`)}
                               className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-brand-50 text-slate-500 hover:text-brand-600 rounded-xl text-[10px] font-bold transition-all flex-shrink-0">
-                              {copiedKey === `ht-${group.title}` ? <Check size={10} /> : <Copy size={10} />}
-                              Copiar todos
+                              {copiedKey === `ht-${group.title}` ? <Check size={10} /> : <Copy size={10} />} Copiar todos
                             </button>
                           </div>
                           <div className="flex flex-wrap gap-2">
@@ -1087,7 +1067,7 @@ const CampaignModule: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Footer actions */}
+                  {/* Footer */}
                   <div className="flex flex-col md:flex-row md:justify-between md:items-center mt-7 pt-5 border-t border-slate-200 gap-2 md:gap-3.5">
                     <div className="flex flex-wrap gap-2">
                       <button type="button" onClick={() => { resetCreator(); setStep(2); }}
@@ -1109,18 +1089,32 @@ const CampaignModule: React.FC = () => {
 
             </div>
 
-            {/* ── WIZARD FOOTER ─────────────────────────────── */}
-            {step < 4 && (
+            {/* ── WIZARD FOOTER ─────────────────────────── */}
+            {(step === 1 || step === 2 || step === 3 || step === 5) && (
               <WizardFooter
                 onBack={step > 1 ? () => setStep(s => (s - 1) as WizardStep) : undefined}
                 onContinue={() => {
                   if (step === 1 && canStep1) setStep(2);
                   else if (step === 2 && canStep2) setStep(3);
-                  else if (step === 3 && canStep3) handleGenerate();
+                  else if (step === 3 && canStep3) handleGenerateAnchor();
+                  else if (step === 5 && selectedAnchor) handleGenerateCampaign();
                 }}
-                continueLabel={step === 3 ? 'Crear kit de campaña' : 'Continuar'}
-                disabled={(step === 1 && !canStep1) || (step === 2 && !canStep2) || (step === 3 && insufficient)}
-                costInfo={step === 3 ? { cost: imageCreditCost, label: 'Créditos totales' } : undefined}
+                continueLabel={
+                  step === 3 ? 'Generar propuestas de estilo' :
+                  step === 5 ? `Generar campaña completa · ${imageCount} imágenes` :
+                  'Continuar'
+                }
+                disabled={
+                  (step === 1 && !canStep1) ||
+                  (step === 2 && !canStep2) ||
+                  (step === 3 && insufficient) ||
+                  (step === 5 && !selectedAnchor)
+                }
+                costInfo={
+                  step === 3 ? { cost: totalCreditCost, label: 'Créditos totales' } :
+                  step === 5 ? { cost: 0, label: 'Sin costo adicional' } :
+                  undefined
+                }
                 loading={isGenerating}
               />
             )}
@@ -1151,8 +1145,7 @@ const CampaignModule: React.FC = () => {
                 <div key={set.id} className="bg-white border border-slate-100 rounded-[36px] overflow-hidden shadow-sm">
                   <div className="p-5 md:p-6 flex items-center justify-between border-b border-slate-100">
                     <div className="min-w-0">
-                      <p className="font-display font-bold italic text-[16px] text-slate-900 uppercase truncate"
-                        style={{ fontFamily: 'Syne, Inter, sans-serif' }}>
+                      <p className="font-display font-bold italic text-[16px] text-slate-900 uppercase truncate" style={{ fontFamily: 'Syne, Inter, sans-serif' }}>
                         {set.plan?.tagline ?? 'Campaña'}
                       </p>
                       <p className="text-[11px] text-slate-400 truncate mt-0.5">{set.idea}</p>
@@ -1162,7 +1155,7 @@ const CampaignModule: React.FC = () => {
                     </div>
                     <div className="flex gap-2 flex-shrink-0 ml-4">
                       <button type="button" onClick={() => downloadCampaignHtml(set)}
-                        className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl flex items-center justify-center transition-all" title="Versión interactiva — abrila desde tu PC">
+                        className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl flex items-center justify-center transition-all" title="Versión interactiva">
                         <FileText className="w-4 h-4" />
                       </button>
                       <button type="button" onClick={() => downloadCampaignPdf(set)}
@@ -1170,14 +1163,12 @@ const CampaignModule: React.FC = () => {
                         <Download className="w-4 h-4" />
                       </button>
                       <button type="button" onClick={() => downloadSetZip(set)}
-                        className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl flex items-center justify-center transition-all" title="Descargar imágenes ZIP">
+                        className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl flex items-center justify-center transition-all" title="Descargar ZIP">
                         <Download className="w-4 h-4" />
                       </button>
                       <button type="button" onClick={() => deleteSet(set.id)} disabled={deletingId === set.id}
-                        className="w-9 h-9 bg-rose-50 hover:bg-rose-100 text-rose-400 hover:text-rose-600 rounded-xl flex items-center justify-center transition-all disabled:opacity-40" title="Eliminar">
-                        {deletingId === set.id
-                          ? <div className="w-3.5 h-3.5 border-2 border-rose-400 border-t-transparent rounded-full animate-spin" />
-                          : <Trash2 className="w-4 h-4" />}
+                        className="w-9 h-9 bg-rose-50 hover:bg-rose-100 text-rose-400 hover:text-rose-600 rounded-xl flex items-center justify-center transition-all disabled:opacity-40">
+                        {deletingId === set.id ? <div className="w-3.5 h-3.5 border-2 border-rose-400 border-t-transparent rounded-full animate-spin" /> : <Trash2 className="w-4 h-4" />}
                       </button>
                     </div>
                   </div>
@@ -1204,11 +1195,7 @@ const CampaignModule: React.FC = () => {
       </div>
 
       {lightboxOpen && lightboxImages.length > 0 && (
-        <ImageLightbox
-          images={lightboxImages}
-          initialIndex={lightboxIndex}
-          onClose={() => setLightboxOpen(false)}
-        />
+        <ImageLightbox images={lightboxImages} initialIndex={lightboxIndex} onClose={() => setLightboxOpen(false)} />
       )}
     </>
   );
