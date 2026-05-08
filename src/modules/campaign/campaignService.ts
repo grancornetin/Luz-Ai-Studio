@@ -375,48 +375,44 @@ export async function generateAnchorImages(
   plan:    CampaignPlan,
   slots:   CampaignImageSlot[],
   sessionParams: { uid?: string; sessionId?: string },
-  onProgress?: (done: number, total: number) => void,
+  onProgress?: (done: number, total: number, partialUrls?: string[]) => void,
 ): Promise<string[]> {
   const selected = selectBestRefs(slots);
   const refs     = buildStratifiedRefs(selected);
 
-  const getAspectRatio = (): '3:4' => '3:4'; // ancla siempre 3:4
+  // Generamos las 2 anclas en paralelo pero capturamos cada URL al terminar
+  // para poder mostrarlas en la UI en tiempo real
+  const partialResults: string[] = ['', ''];
 
-  const jobs = [
-    {
-      prompt:          buildAnchorPrompt(plan, slots, selected, 'A'),
+  const generateOne = async (variant: 'A' | 'B', index: number): Promise<string> => {
+    const params = {
+      prompt:          buildAnchorPrompt(plan, slots, selected, variant),
       negative:        CAMPAIGN_NEGATIVE,
       referenceImages: refs,
-      aspectRatio:     getAspectRatio(),
+      aspectRatio:     '3:4' as const,
       module:          'campaign_anchor',
-      moduleLabel:     'Campaign Anchor A',
-      shotIndex:       0,
+      moduleLabel:     `Campaign Anchor ${variant}`,
+      shotIndex:       index,
       totalShots:      ANCHOR_IMAGE_COUNT,
       uid:             sessionParams.uid,
       sessionId:       sessionParams.sessionId,
-      metadata:        { variant: 'A', role: 'anchor' },
-    },
-    {
-      prompt:          buildAnchorPrompt(plan, slots, selected, 'B'),
-      negative:        CAMPAIGN_NEGATIVE,
-      referenceImages: refs,
-      aspectRatio:     getAspectRatio(),
-      module:          'campaign_anchor',
-      moduleLabel:     'Campaign Anchor B',
-      shotIndex:       1,
-      totalShots:      ANCHOR_IMAGE_COUNT,
-      uid:             sessionParams.uid,
-      sessionId:       sessionParams.sessionId,
-      metadata:        { variant: 'B', role: 'anchor' },
-    },
-  ];
+      metadata:        { variant, role: 'anchor' },
+    };
+    const url = await imageApiService.generateImage(params);
+    partialResults[index] = url ?? '';
+    const done = partialResults.filter(Boolean).length;
+    onProgress?.(done, ANCHOR_IMAGE_COUNT, [...partialResults]);
+    return url ?? '';
+  };
 
   console.log('[CampaignDirector] generateAnchorImages', { refs: refs.length });
-  const results = await imageApiService.generateBatch(jobs, (done, total) => {
-    onProgress?.(done, total);
-  });
 
-  return results.map(r => r ?? '');
+  const [urlA, urlB] = await Promise.allSettled([
+    generateOne('A', 0),
+    generateOne('B', 1),
+  ]).then(results => results.map(r => r.status === 'fulfilled' ? r.value : ''));
+
+  return [urlA, urlB];
 }
 
 // ─── generateCampaignImages — genera N imágenes con ancla ─────

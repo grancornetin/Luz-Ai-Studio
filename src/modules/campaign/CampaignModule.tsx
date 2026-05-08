@@ -298,12 +298,22 @@ const CampaignModule: React.FC = () => {
       const anchors = await generateAnchorImages(
         plan, activeSlots,
         { uid: user?.uid, sessionId: newSessionId() },
-        (done, total) => setProgress({ total, completed: done, current: done - 1 }),
+        (done, total, partialUrls) => {
+          setProgress({ total, completed: done, current: done - 1 });
+          // Actualizar anchorOptions con URLs parciales a medida que llegan
+          if (partialUrls) setAnchorOptions(partialUrls.filter(Boolean));
+        },
       );
 
       setProgressStepIndex(3);
-      setAnchorOptions(anchors.filter(Boolean));
-      setSelectedAnchor(anchors[0] ?? ''); // preseleccionar A
+
+      const validAnchors = anchors.filter(Boolean);
+      if (validAnchors.length === 0) {
+        throw new Error('No se pudieron generar las propuestas de estilo. Intentá de nuevo.');
+      }
+
+      setAnchorOptions(validAnchors);
+      setSelectedAnchor(validAnchors[0]);
       await refreshCredits();
 
       // Ir al paso de aprobación
@@ -702,22 +712,34 @@ const CampaignModule: React.FC = () => {
                       </div>
                     </div>
                     <div className="md:col-span-7 lg:col-span-8">
-                      <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.14em] mb-3">Generando estilos</div>
+                      <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.14em] mb-3">Propuestas de estilo</div>
                       <div className="grid grid-cols-2 gap-4">
                         {[0, 1].map(i => {
-                          const done = progress ? i < progress.completed : false;
+                          const done    = progress ? i < progress.completed : false;
+                          const active  = progress ? i === progress.completed && isGenerating : false;
+                          const imgUrl  = anchorOptions[i] ?? '';
                           return (
-                            <div key={i} className={`relative aspect-[3/4] rounded-2xl overflow-hidden transition-all ${done ? 'fade-in shadow-md' : 'bg-slate-100 animate-pulse'}`}>
-                              {done && (
-                                <div className="absolute inset-0 bg-gradient-to-br from-brand-50 to-violet-50 flex items-center justify-center">
-                                  <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center">
-                                    <Check className="w-4 h-4 text-white" strokeWidth={3} />
-                                  </div>
+                            <div key={i} className={`relative aspect-[3/4] rounded-2xl overflow-hidden transition-all ${done && imgUrl ? 'fade-in shadow-md' : active ? 'border-2 border-brand-600 bg-slate-100 animate-pulse' : 'bg-slate-100'}`}>
+                              {/* Imagen real cuando llega */}
+                              {imgUrl && (
+                                <img src={imgUrl} alt={`Opción ${i === 0 ? 'A' : 'B'}`} className="w-full h-full object-cover" />
+                              )}
+                              {/* Placeholder animado */}
+                              {!imgUrl && active && (
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <div className="bg-white/95 rounded-full px-3.5 py-1.5 text-[10px] font-bold text-brand-600 tracking-[0.12em] uppercase">Generando...</div>
                                 </div>
                               )}
-                              {!done && (
-                                <div className="absolute top-3 left-3 text-[11px] font-bold text-slate-400">
+                              {/* Label de opción */}
+                              <div className="absolute top-3 left-3">
+                                <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full ${imgUrl ? 'bg-black/60 text-white' : 'text-slate-400'}`}>
                                   Opción {i === 0 ? 'A' : 'B'}
+                                </span>
+                              </div>
+                              {/* Check cuando está lista */}
+                              {done && imgUrl && (
+                                <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shadow">
+                                  <Check className="w-3 h-3 text-white" strokeWidth={3} />
                                 </div>
                               )}
                             </div>
