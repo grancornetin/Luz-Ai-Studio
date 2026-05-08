@@ -206,6 +206,84 @@ const CampaignModule: React.FC = () => {
   const [lightboxIndex,  setLightboxIndex]  = useState(0);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
 
+  // ── Recuperación de sesión ────────────────────────────────
+  // Guarda el progreso en localStorage para sobrevivir a recargas/crashes.
+  // Solo se guarda cuando hay trabajo real (plan generado o anclas listas).
+  const SESSION_KEY = `campaign_session_${user?.uid ?? 'anon'}`;
+
+  const saveSession = (overrides?: Partial<{
+    step: WizardStep; idea: string; canales: CampaignChannel[]; imageCount: number;
+    slots: Record<ImageSlotRole, string[]>; campaignPlan: any;
+    anchorOptions: string[]; selectedAnchor: string;
+  }>) => {
+    const data = {
+      step:          overrides?.step          ?? step,
+      idea:          overrides?.idea          ?? idea,
+      canales:       overrides?.canales       ?? canales,
+      imageCount:    overrides?.imageCount    ?? imageCount,
+      slots:         overrides?.slots         ?? slots,
+      campaignPlan:  overrides?.campaignPlan  ?? campaignPlan,
+      anchorOptions: overrides?.anchorOptions ?? anchorOptions,
+      selectedAnchor:overrides?.selectedAnchor ?? selectedAnchor,
+      savedAt:       Date.now(),
+    };
+    try { localStorage.setItem(SESSION_KEY, JSON.stringify(data)); } catch {}
+  };
+
+  const clearSession = () => { try { localStorage.removeItem(SESSION_KEY); } catch {} };
+
+  const [sessionRestored, setSessionRestored] = useState(false);
+  const [pendingRestore, setPendingRestore] = useState<any>(null);
+
+  // Detectar sesión guardada al montar
+  useEffect(() => {
+    if (!user?.uid) return;
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      // Solo ofrecer recuperar si hay un plan (trabajo real hecho)
+      if (data?.campaignPlan?.piezas && Date.now() - data.savedAt < 24 * 60 * 60 * 1000) {
+        setPendingRestore(data);
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
+
+  const applyRestore = (data: any) => {
+    if (!data) return;
+    setIdea(data.idea ?? '');
+    setCanales(data.canales ?? ['instagram_feed']);
+    setImageCount(data.imageCount ?? 4);
+    setSlots(data.slots ?? { product: [], inspiration: [], brand: [], model: [] });
+    setCampaignPlan(data.campaignPlan ?? null);
+    setAnchorOptions(data.anchorOptions ?? []);
+    setSelectedAnchor(data.selectedAnchor ?? '');
+    // Volver al paso de aprobación (5) si había anclas, si no al paso 3
+    const recoveredStep: WizardStep = (data.anchorOptions?.length > 0) ? 5 : 3;
+    setStep(recoveredStep);
+    setSessionRestored(true);
+    setPendingRestore(null);
+  };
+
+  const dismissRestore = () => {
+    clearSession();
+    setPendingRestore(null);
+  };
+
+  // Guardar sesión cuando hay plan
+  useEffect(() => {
+    if (campaignPlan && step >= 4) saveSession();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignPlan, anchorOptions, selectedAnchor, step]);
+
+  // Limpiar sesión cuando la campaña termina o se resetea
+  const resetCreatorAndClear = () => {
+    clearSession();
+    setSessionRestored(false);
+    setPendingRestore(null);
+  };
+
   // ── Cálculos de costo ──────────────────────────────────────
   const hasProCredits    = isAdmin || proCredits > 0;
   const anchorCreditCost = ANCHOR_IMAGE_COUNT * CREDITS_PER_IMAGE;   // 4 cr
@@ -242,6 +320,7 @@ const CampaignModule: React.FC = () => {
     setCanales(prev => prev.includes(canal) ? prev.filter(c => c !== canal) : [...prev, canal]);
 
   const resetCreator = () => {
+    resetCreatorAndClear();
     setStep(1); setIdea(''); setCanales(['instagram_feed']); setImageCount(4);
     setSlots({ product: [], inspiration: [], brand: [], model: [] });
     setAnchorOptions([]); setSelectedAnchor(''); setCampaignPlan(null);
@@ -418,6 +497,7 @@ const CampaignModule: React.FC = () => {
 
       await campaignStorage.save(set);
       await loadSets();
+      clearSession();
       setCurrentSet(set);
       setStep(7);
       await refreshCredits();
@@ -469,6 +549,30 @@ const CampaignModule: React.FC = () => {
             </div>
           </div>
         </header>
+
+        {/* ── BANNER RECUPERAR SESIÓN ─────────────────────── */}
+        {pendingRestore && activeTab === 'create' && (
+          <div className="mb-4 bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-4">
+            <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-bold text-amber-900">Tenés una campaña sin terminar</p>
+              <p className="text-[11px] text-amber-700 mt-0.5 truncate">
+                "{pendingRestore.idea?.slice(0, 60)}{pendingRestore.idea?.length > 60 ? '…' : ''}"
+                {pendingRestore.anchorOptions?.length > 0 ? ' · Ancla lista, faltaba generar las imágenes' : ' · Plan listo, faltaba aprobar el estilo'}
+              </p>
+            </div>
+            <div className="flex gap-2 flex-shrink-0">
+              <button onClick={() => applyRestore(pendingRestore)}
+                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[11px] font-black uppercase tracking-wider transition-all">
+                Retomar
+              </button>
+              <button onClick={dismissRestore}
+                className="px-3 py-1.5 bg-white border border-amber-200 hover:border-amber-300 text-amber-700 rounded-xl text-[11px] font-bold transition-all">
+                Descartar
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ── SIN PRO-CREDITS ─────────────────────────────── */}
         {!hasProCredits && activeTab === 'create' && (
@@ -979,7 +1083,7 @@ const CampaignModule: React.FC = () => {
                   {activeTab2 === 'plan' && (
                     <div className="space-y-4">
                       {currentSet.plan.piezas.map((pieza, i) => {
-                        const canalMeta  = CAMPAIGN_CHANNEL_META[pieza.canal];
+                        const canalMeta  = CAMPAIGN_CHANNEL_META[pieza.canal] ?? { icon: '📢', label: pieza.canal ?? 'Canal', copyHint: '' };
                         const isExpanded = expandedPieza === pieza.id;
                         return (
                           <div key={pieza.id} className="bg-white border border-slate-100 rounded-[24px] overflow-hidden shadow-sm">
@@ -1074,7 +1178,7 @@ const CampaignModule: React.FC = () => {
                               {piezasDelDia.length === 0 && <span className={`text-[10px] ${dia === 1 ? 'text-white/70' : 'text-slate-400'}`}>Día de descanso</span>}
                             </div>
                             {piezasDelDia.map(p => {
-                              const cm = CAMPAIGN_CHANNEL_META[p.canal];
+                              const cm = CAMPAIGN_CHANNEL_META[p.canal] ?? { icon: '📢', label: p.canal ?? 'Canal', copyHint: '' };
                               return (
                                 <div key={p.id} className="flex items-center gap-4 px-5 py-3 border-t border-slate-50">
                                   {p.imageUrl && <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0"><img src={p.imageUrl} alt="" className="w-full h-full object-cover" /></div>}
