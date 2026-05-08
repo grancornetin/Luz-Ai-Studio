@@ -3,43 +3,51 @@ import { imageApiService, extractImageRef } from '../../services/imageApiService
 import { compressImageForUpload } from '../../utils/imageUtils';
 import {
   CampaignChannel, CampaignImageSlot, CampaignPiece, CampaignPlan,
-  TextoEnImagenes, CAMPAIGN_CHANNEL_META, ANCHOR_IMAGE_COUNT,
+  ModoVisual, TextoEnImagenes, CAMPAIGN_CHANNEL_META, ANCHOR_IMAGE_COUNT,
 } from './types';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CAMPAIGN DIRECTOR SERVICE
-//
-// Flujo inspirado en UGC Studio:
-//   1. Gemini 2.5 analiza brief + referencias → plan estratégico completo
-//   2. Selección inteligente de referencias (elige las mejores fotos de producto)
-//   3. Genera 2 imágenes "ancla" para que Sofi apruebe el estilo visual
-//   4. Sofi elige un ancla → se analiza igual que REF0 en UGC Studio
-//   5. Genera las N imágenes con [modelo x2, productos, ancla, inspiración, marca]
-//      usando el mismo sistema de locks de identidad/producto/estilo que UGC
-// ─────────────────────────────────────────────────────────────────────────────
-
-const CAMPAIGN_NEGATIVE = [
-  // Calidad general
+// ─── Negativos base (anatomía + identidad + texto — siempre) ──
+const NEGATIVE_BASE = [
   'blurry', 'low quality', 'low resolution', 'jpeg artifacts', 'pixelated',
-  'overexposed', 'underexposed', 'bad lighting', 'poor composition', 'watermark',
-  // Anatomía — crítico para evitar aberraciones
+  'overexposed', 'underexposed', 'watermark',
   'bad anatomy', 'deformed', 'mutated', 'disfigured',
   'extra limbs', 'extra fingers', 'missing fingers', 'fused fingers',
   'extra arms', 'extra legs', 'missing arms', 'missing legs',
   'deformed hands', 'malformed hands', 'abnormal body proportions',
   'floating limbs', 'disconnected limbs', 'body horror',
-  'face distortion', 'crossed eyes', 'asymmetric face',
-  // Producto e identidad
+  'face distortion', 'crossed eyes',
   'wrong product', 'different product', 'generic product', 'color drift',
-  'identity mixing', 'different person', 'composite artifacts',
-  'collage', 'different brand',
-  // Texto en imagen — siempre excluido salvo que el prompt lo pida explícitamente
+  'identity mixing', 'different person', 'composite artifacts', 'collage', 'different brand',
   'text overlay', 'text on image', 'typography', 'words', 'letters',
   'caption on photo', 'subtitle', 'label text', 'graphic design text',
-  // Sobre-procesado
-  'skin smoothing', 'beauty filter', 'airbrushed', 'plastic skin',
-  'editorial over-processing',
 ].join(', ');
+
+// Modo UGC: prohíbe todo lo "profesional/editorial"
+const NEGATIVE_UGC = [
+  NEGATIVE_BASE,
+  'professional studio lighting', 'softbox lighting', 'glamour lighting', 'ring light',
+  'beauty dish', 'strobe flash', 'perfectly even lighting',
+  'commercial photography', 'editorial softening', 'commercial polish', 'brand lookbook',
+  'high fashion look', 'luxury redesign', 'magazine spread', 'vogue editorial',
+  'skin smoothing', 'beauty filter', 'airbrushed', 'plastic skin', 'flawless skin',
+  'no pores', 'porcelain skin', 'wax figure look', 'retouched skin',
+  'mannequin pose', 'catalog pose', 'runway pose', 'symmetric pose', 'stiff pose',
+  'neutral blank expression', 'model stare',
+  'white seamless background', 'studio backdrop', 'neutral studio',
+].join(', ');
+
+// Modo Editorial: prohíbe lo "amateur/casual"
+const NEGATIVE_EDITORIAL = [
+  NEGATIVE_BASE,
+  'skin smoothing', 'beauty filter', 'airbrushed', 'plastic skin',
+  'editorial over-processing', 'poor composition', 'bad lighting',
+  'snapshot quality', 'phone photo', 'amateur photography',
+  'casual snapshot', 'unflattering angle', 'busy background',
+].join(', ');
+
+function getNegative(modo: ModoVisual): string {
+  return modo === 'ugc' ? NEGATIVE_UGC : NEGATIVE_EDITORIAL;
+}
 
 // ─── Selección inteligente de referencias ────────────────────
 // Cuando Sofi sube muchas fotos del mismo producto, elegimos las más
@@ -120,109 +128,160 @@ async function buildStratifiedRefsCompressed(
 }
 
 // ─── Lock system para campaña ─────────────────────────────────
-function buildLockSystem(selected: ReturnType<typeof selectBestRefs>, hasAnchor: boolean): string {
+// Prioridad 2: cada referencia tiene un rol EXPLÍCITO y ÚNICO.
+// El modelo no puede mezclar roles — la ropa del avatar no define el outfit,
+// la inspiración no define la persona, el producto es el héroe visual.
+function buildLockSystem(
+  selected:  ReturnType<typeof selectBestRefs>,
+  hasAnchor: boolean,
+  modo:      ModoVisual,
+): string {
   const locks: string[] = [];
 
   if (selected.modelRef) {
-    locks.push(`🔒🔒🔒 IDENTITY LOCK (ABSOLUTE PRIORITY):
-- MODEL REFERENCE appears MULTIPLE TIMES at the start of the reference list. That is intentional.
-- The person's FACE must be EXACTLY the same as the model reference in every single image.
-- Same bone structure, eye shape/color, nose, lips, jaw, hair color/texture, skin tone.
-- NO face replacement. NO identity drift. NO different person.
-- DO NOT average the face with the anchor image. Model reference OVERRIDES everything for identity.
-- DO NOT composite — generate the person naturally from scratch.`);
+    locks.push(`🔒🔒🔒 IDENTITY LOCK — MODEL REFERENCE (ABSOLUTE PRIORITY):
+ROLE: This reference provides ONLY the person's FACE and PHYSICAL IDENTITY.
+- Face, bone structure, eye shape/color, nose, lips, jaw, hair color/texture, skin tone.
+- DO NOT copy the outfit, clothing, accessories or background from this reference.
+- The person's CLOTHES are defined by the creative concept and channel — NOT by what they wear in this photo.
+- NO face replacement. NO identity drift. NO averaging with anchor or other refs.
+- Generate the person naturally in the new scene — do NOT paste or composite.`);
   }
 
   if (selected.productRefs.length > 0) {
-    locks.push(`🔒 PRODUCT LOCK:
-- PRODUCT REFERENCE defines the exact product. Same shape, color, materials, labels, packaging.
-- ${selected.productRefs.length > 1 ? `Multiple product angles provided — use all of them to understand the product fully.` : ''}
-- NO reinterpretation. NO generic version. Reproduce exactly.`);
+    locks.push(`🔒🔒 PRODUCT LOCK — PRODUCT REFERENCE (HERO):
+ROLE: This reference defines the EXACT product to feature. It is the VISUAL HERO.
+- Same shape, color, materials, labels, packaging — EXACTLY as shown.
+- The product must be CLEARLY VISIBLE and IDENTIFIABLE in the image.
+- ${selected.productRefs.length > 1 ? 'Multiple angles provided — use all to understand the product fully.' : ''}
+- DO NOT replace with a generic version, similar product, or invented variation.
+- DO NOT hide it, blur it, or make it secondary if it is the main subject.`);
   }
 
   if (hasAnchor) {
-    locks.push(`🔒🔒 ANCHOR/SESSION LOCK (VISUAL CONTINUITY):
-- The ANCHOR IMAGE defines the visual world: lighting direction, color temperature, environment.
-- Every campaign image must feel like it was taken in the SAME session as the anchor.
+    locks.push(`🔒🔒 SESSION LOCK — ANCHOR IMAGE:
+ROLE: This image defines the VISUAL WORLD of this campaign session.
+- Lighting direction, color temperature, environment type, overall mood.
+- Every image must feel like it was captured in the SAME moment as this anchor.
 - Same color temperature — do NOT shift warm/cool.
-- Same ambient light quality — do NOT add/remove light sources.
-- Same overall contrast range — no HDR, no filters, no vignetting.
-- Person at correct scale relative to environment.
-- The anchor is a STYLE reference, NOT an element to copy literally.`);
+- Same ambient light quality — same direction and softness.
+- The anchor is a STYLE reference, NOT an element to copy literally.
+- DO NOT replicate the exact composition — create a new angle of the same world.`);
   }
 
   if (selected.inspirationRef) {
-    locks.push(`🔒 STYLE LOCK:
-- INSPIRATION REFERENCE defines mood, lighting aesthetic, and composition style.
-- Match the lighting direction, color temperature, and overall visual atmosphere.
-- DO NOT copy the exact scene — use it as MOOD and COMPOSITION reference only.`);
+    locks.push(`🔒 AESTHETIC LOCK — INSPIRATION REFERENCE:
+ROLE: This defines MOOD, COMPOSITION STYLE and AESTHETIC DIRECTION only.
+- Use it to understand: framing, atmosphere, color grading preference.
+- DO NOT copy the scene, people, or products from this reference.
+- DO NOT use it to define identity, outfit, or product.`);
   }
 
   if (selected.brandRef) {
-    locks.push(`🔒 BRAND LOCK:
-- BRAND REFERENCE defines color palette and visual identity.
-- Maintain coherence with brand colors and aesthetic.`);
+    locks.push(`🔒 BRAND LOCK — BRAND REFERENCE:
+ROLE: Defines COLOR PALETTE and VISUAL IDENTITY coherence only.
+- Maintain harmony with brand colors and aesthetic — subtly, not literally.
+- DO NOT copy the layout, graphics, or text from this reference.`);
+  }
+
+  // Prioridad 3: si no hay modelo, dar instrucciones explícitas de casting
+  if (!selected.modelRef) {
+    locks.push(`📋 CASTING NOTE (no model reference provided):
+Create a person that fits this campaign's target audience perfectly:
+- Age range, style, and energy consistent with the product and concept.
+- Appearance that resonates with the target customer — aspirational but relatable.
+- ${modo === 'ugc' ? 'Looks like a real person, NOT a professional model.' : 'Polished and aspirational, consistent with the brand positioning.'}`);
   }
 
   return locks.length === 0 ? '' : `
 ╔══════════════════════════════════════════════════════════════════╗
-║           CAMPAIGN LOCK SYSTEM (NON-NEGOTIABLE)                 ║
+║      REFERENCE ROLE SYSTEM — READ BEFORE GENERATING            ║
 ╚══════════════════════════════════════════════════════════════════╝
 
 ${locks.join('\n\n')}`;
 }
 
+// ─── Paradigma de los dos modos visuales ──────────────────────
+const UGC_PARADIGM = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📸 VISUAL MODE: iPhone UGC — ORGANIC REAL-LIFE CAPTURE
+
+You are NOT creating a commercial photograph.
+You are capturing a SPONTANEOUS REAL MOMENT with an iPhone.
+
+This is the kind of content a real influencer or customer posts on Instagram.
+It looks like life, not like an ad.
+
+- Light: NATURAL ONLY — window, sun, outdoor. Never softbox, ring light, or studio.
+- Skin: REAL TEXTURE — pores, natural imperfections are CORRECT and REQUIRED.
+- Pose: ORGANIC — weight shifted, mid-movement, asymmetric. NEVER symmetric/catalog.
+- Background: REAL LIFE — café, street, home, park. NEVER neutral studio backdrop.
+- Feel: "someone captured this in the moment" — handheld, alive, authentic.
+- FORBIDDEN: commercial polish, beauty retouching, editorial softening, studio setup.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
+const EDITORIAL_PARADIGM = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📷 VISUAL MODE: EDITORIAL CAMPAIGN — PREMIUM BRAND PHOTOGRAPHY
+
+You are a creative director shooting a premium brand campaign.
+Every image is intentional and could appear in Vogue or a brand lookbook.
+
+- Light: CONTROLLED AND BEAUTIFUL — golden hour, clean window, dramatic natural.
+- Composition: INTENTIONAL — rule of thirds, deliberate negative space, strong focal.
+- Pose: EXPRESSIVE AND POLISHED — confident, aspirational, purposeful.
+- Background: curated real-world OR minimal clean — whichever serves the concept.
+- Feel: "a photographer directed this" — elevated, aspirational, brand-worthy.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
 // ─── Prompt para imagen ancla ─────────────────────────────────
+// Variant A = UGC/iPhone orgánico
+// Variant B = Editorial/lookbook
 function buildAnchorPrompt(
   plan:     CampaignPlan,
-  slots:    CampaignImageSlot[],
   selected: ReturnType<typeof selectBestRefs>,
   variant:  'A' | 'B',
 ): string {
-  const hasModel    = !!selected.modelRef;
-  const hasProduct  = selected.productRefs.length > 0;
-  const hasInspo    = !!selected.inspirationRef;
+  const hasModel   = !!selected.modelRef;
+  const hasProduct = selected.productRefs.length > 0;
+  const modo: ModoVisual = variant === 'A' ? 'ugc' : 'editorial';
+  const paradigm   = modo === 'ugc' ? UGC_PARADIGM : EDITORIAL_PARADIGM;
+  const lockSystem = buildLockSystem(selected, false, modo);
 
-  const refGuide = [
-    hasModel    && `- FIRST IMAGES: MODEL REFERENCE — establishes the person's identity. Use EXACTLY.`,
-    hasProduct  && `- PRODUCT REFERENCE(S): define the exact product. Show it prominently.`,
-    hasInspo    && `- INSPIRATION REFERENCE: defines the mood, lighting, and aesthetic. Match it.`,
-  ].filter(Boolean).join('\n');
+  const lightingNote = modo === 'ugc'
+    ? 'Natural ambient — window, sun, or outdoor. Imperfect and alive.'
+    : 'Beautiful controlled natural light — golden hour or clean window.';
+  const poseNote = modo === 'ugc'
+    ? (hasModel ? 'Organic, asymmetric, mid-movement. Weight shifted. NOT catalog.' : 'Organic product placement in real-life context.')
+    : (hasModel ? 'Confident and expressive. Aspirational, not stiff.' : 'Hero product — perfectly lit, intentional composition.');
+  const bgNote = modo === 'ugc'
+    ? 'Real inhabited environment — home, café, street.'
+    : 'Curated environment OR minimal clean — serves the concept.';
 
-  // Variant B usa una dirección visual diferente para dar contraste real
-  const variantDirection = variant === 'A'
-    ? `Natural lifestyle setting. Warm, inviting light. Product and person (if any) feel approachable and real.`
-    : `Clean editorial setting. Cooler, more structured light. Strong composition. Product feels premium and aspirational.`;
+  return `${paradigm}
 
-  const lockSystem = buildLockSystem(selected, false);
+CAMPAIGN BRIEF:
+Concept: "${plan.concepto}"
+Tagline: "${plan.tagline}"
+${plan.clienteIdeal ? `Target audience: ${plan.clienteIdeal}` : ''}
+${plan.dolorCentral ? `Core tension resolved: ${plan.dolorCentral}` : ''}
 
-  return `You are a professional commercial photographer and creative director.
+ANCHOR IMAGE TASK:
+This image defines the visual world for the ENTIRE campaign. All other images inherit its mood.
 
-Generate a CAMPAIGN ANCHOR IMAGE — this image will define the visual style for an entire campaign.
-
-CAMPAIGN CONCEPT: "${plan.concepto}"
-CAMPAIGN TAGLINE: "${plan.tagline}"
-VISUAL DIRECTION (VARIANT ${variant}): ${variantDirection}
-
-${refGuide ? `REFERENCE GUIDE:\n${refGuide}\n` : ''}
-
-ANCHOR IMAGE REQUIREMENTS:
-- This is the HERO image of the campaign — the most impactful, most polished piece
-- ${hasProduct ? 'Product is the visual hero — prominently featured, well-lit, crystal clear' : 'Brand concept is the visual hero'}
-- ${hasModel ? 'Person is present — natural pose, authentic expression, not catalog-stiff' : 'No person required — focus on product and atmosphere'}
-- Professional commercial photography quality — could appear in a brand lookbook
-- Lighting: ${variant === 'A' ? 'warm, golden hour or soft window light' : 'clean, diffused studio or overcast natural light'}
-- Composition: intentional, not cluttered — hero element takes 40-60% of frame
-- Background: ${variant === 'A' ? 'natural environment, lifestyle context' : 'minimal, clean, controlled'}
+- ${hasProduct ? 'Product is the VISUAL HERO — clearly identifiable, prominent, exactly as in reference.' : 'The concept emotion is the visual hero.'}
+- ${hasModel ? 'Person: identity from MODEL REFERENCE only (face/hair/skin). Outfit comes from creative concept, NOT from the model reference photo.' : 'No specific person required — cast someone fitting the target audience.'}
+- Lighting: ${lightingNote}
+- Pose/Placement: ${poseNote}
+- Background: ${bgNote}
 
 ${lockSystem}
 
-🚫 NO TEXT IN THE IMAGE — no typography, no overlaid words, no captions, no watermarks, no graphic design elements. Pure photography only. Text belongs in the caption, not in the photo. The anchor image is always pure photography — text decisions apply to derived campaign images only.
+🚫 NO TEXT IN THE IMAGE — pure photography only. No typography, overlays, watermarks.
 
 FINAL CHECKLIST:
-${hasProduct ? '✓ Product matches product reference exactly — same shape, color, every detail\n' : ''}${hasModel ? '✓ Person matches model reference exactly — same face, hair, skin tone\n' : ''}${hasInspo ? '✓ Mood and lighting feel matches inspiration reference\n' : ''}✓ Image quality is campaign-ready — no obvious AI artifacts
-✓ This image could be the cover of a brand campaign
-✓ NO text, typography or graphic design elements in the image`;
+${hasProduct ? '✓ Product matches product reference exactly\n' : ''}${hasModel ? '✓ Person identity from MODEL REFERENCE only — outfit NOT copied from that photo\n' : ''}✓ Visual mode consistent: ${modo === 'ugc' ? 'organic iPhone feel, real skin, no studio' : 'editorial quality, intentional composition'}
+✓ NO text, graphic design elements, or reference board artifacts`;
 }
 
 // ─── Instrucciones tipográficas según la decisión del plan ────
@@ -273,60 +332,52 @@ function buildDerivedImagePrompt(
 ): string {
   const hasModel   = !!selected.modelRef;
   const hasProduct = selected.productRefs.length > 0;
+  const modo: ModoVisual = plan.modoVisual ?? 'editorial';
+  const paradigm   = modo === 'ugc' ? UGC_PARADIGM : EDITORIAL_PARADIGM;
+  const lockSystem = buildLockSystem(selected, hasAnchor, modo);
 
-  const refGuide = [
-    hasModel   && `- FIRST IMAGES: MODEL REFERENCE (appears multiple times) — IDENTITY LOCK. Use EXACTLY.`,
-    hasProduct && `- PRODUCT REFERENCE(S): the exact product. Reproduce faithfully.`,
-    hasAnchor  && `- ANCHOR IMAGE: the session's visual world — lighting, color temp, environment. Match it.`,
-    !!selected.inspirationRef && `- INSPIRATION: mood and aesthetic reference.`,
-    !!selected.brandRef       && `- BRAND: color palette and visual identity.`,
-  ].filter(Boolean).join('\n');
+  const canalLabel = CAMPAIGN_CHANNEL_META[pieza.canal]?.label ?? pieza.canal;
+  const channelOpt = (canalLabel === 'Instagram Stories' || canalLabel === 'TikTok')
+    ? 'Vertical 9:16. Key elements in center zone. Safe margins top and bottom.'
+    : canalLabel === 'WhatsApp / Catálogo'
+    ? 'Square or slightly vertical. Clean product focus. Simple background.'
+    : 'Square or 4:5. Strong focal point. Scroll-stopping composition.';
 
-  const lockSystem = buildLockSystem(selected, hasAnchor);
-
-  return `⚠️⚠️⚠️ IDENTITY LOCK — READ THIS FIRST ⚠️⚠️⚠️
+  return `${paradigm}
 ${hasModel ? `
-🔴🔴🔴 CRITICAL: DO NOT AVERAGE THE MODEL WITH THE ANCHOR IMAGE OR ANY OTHER REFERENCE.
-The MODEL REFERENCE images appear MULTIPLE TIMES at the start. That is intentional.
-They are the ONLY source of truth for the person's identity.
-If the anchor image shows a different face angle, IGNORE it for identity — use ONLY the model reference.
-DO NOT blend, average, or interpolate between references for the face. 🔴🔴🔴
+🔴 IDENTITY LOCK (READ FIRST):
+The MODEL REFERENCE appears MULTIPLE TIMES at the start of the reference list — intentional.
+It defines ONLY: face, bone structure, hair, skin tone.
+DO NOT copy the outfit, accessories, or setting from the model reference photo.
+DO NOT average the face with the anchor or any other reference.
+The person's clothing is defined by the creative concept, NOT by the model reference.
 ` : ''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${hasAnchor ? 'CREATE A NEW PHOTO FROM THE SAME SESSION AS THE ANCHOR IMAGE.' : 'CREATE A PROFESSIONAL CAMPAIGN PHOTO.'}
+${hasAnchor ? 'CREATE A NEW PHOTO FROM THE SAME SESSION AS THE ANCHOR IMAGE.' : 'CREATE A CAMPAIGN PHOTO.'}
 
 CAMPAIGN: "${plan.concepto}"
-PIECE ROLE: ${pieza.rol} (Day ${pieza.dia} of 7)
-CHANNEL: ${CAMPAIGN_CHANNEL_META[pieza.canal].label}
+${plan.clienteIdeal ? `Target audience: ${plan.clienteIdeal}` : ''}
+PIECE ROLE: ${pieza.rol} — Day ${pieza.dia} of 7
+CHANNEL: ${canalLabel}
 
-REFERENCE GUIDE:
-${refGuide}
-
-VISUAL DIRECTION:
+VISUAL DIRECTION FOR THIS PIECE:
 ${pieza.imagePrompt}
 
-${hasAnchor ? `CONTINUITY WITH ANCHOR:
-- Same color temperature as anchor — do NOT shift warm/cool.
-- Same ambient light quality — same direction, same softness.
-- Same overall aesthetic tone — this is part of the same campaign session.
-- Person (if present) shares the anchor's lighting.
+${hasAnchor ? `SESSION CONTINUITY (anchor defines this world):
+- Same color temperature — do NOT shift warm/cool.
+- Same ambient light quality and direction.
+- Same overall mood — this is part of the same session.
 ` : ''}
-
 ${lockSystem}
 
-CHANNEL OPTIMIZATION:
-${CAMPAIGN_CHANNEL_META[pieza.canal].label === 'Instagram Stories' || CAMPAIGN_CHANNEL_META[pieza.canal].label === 'TikTok'
-  ? '- Vertical composition (9:16). Key elements in center-top zone. Text-safe margins.'
-  : CAMPAIGN_CHANNEL_META[pieza.canal].label === 'WhatsApp / Catálogo'
-  ? '- Square or slightly vertical. Clean, clear product focus. Simple background.'
-  : '- Square or 4:5. Strong focal point. Scroll-stopping composition.'}
+CHANNEL: ${channelOpt}
 
 ${buildTypographyInstructions(plan, pieza)}
 
 FINAL CHECKLIST:
-${hasModel   ? '✓ Person matches model reference exactly — face, hair, skin tone unchanged\n' : ''}${hasProduct ? '✓ Product matches product reference exactly — same shape, color, every detail\n' : ''}${hasAnchor  ? '✓ Color temperature and lighting match anchor image\n' : ''}✓ Shot role "${pieza.rol}" is clearly communicated
-✓ Professional campaign quality — no obvious AI artifacts
-${plan.textoEnImagenes === 'none' ? '✓ NO text, typography or graphic design elements in the image' : `✓ Typography style matches: ${plan.estiloTexto ?? 'clean designed text'}`}`;
+${hasModel   ? '✓ Face matches MODEL REFERENCE — outfit does NOT come from that photo\n' : ''}${hasProduct ? '✓ Product matches product reference exactly — same shape, color, every detail\n' : ''}${hasAnchor  ? '✓ Lighting and color temperature match anchor\n' : ''}✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel — real skin, natural light, no studio' : 'editorial quality — intentional composition, brand-worthy'}
+✓ NO reference board artifacts, no collage, no composite feel
+${plan.textoEnImagenes === 'none' ? '✓ NO text or typography in the image' : `✓ Typography: ${plan.estiloTexto ?? 'designed, intentional'}`}`;
 }
 
 // ─── buildCampaignPlan ────────────────────────────────────────
@@ -348,63 +399,76 @@ export async function buildCampaignPlan(
 
   const hasInspirationImages = !!selected.inspirationRef;
 
-  const prompt = `You are a senior creative director, marketing strategist, and prompt engineer specialized in Latin American e-commerce brands.
+  // ── Prioridad 1: Prompt en dos fases (Director Creativo → Brief de Fotógrafo) ──
+  const prompt = `You are a senior creative team working together: Creative Director, Photographer, Community Manager, and Marketing Strategist — all specialized in Latin American e-commerce brands.
 
-Your job: design a complete, executable campaign plan that a solo entrepreneur can follow in 7 days without feeling overwhelmed.
+You work in two phases:
 
-═══════════════════════════════════════════════
-BRIEF:
-"${idea}"
-═══════════════════════════════════════════════
+═══════════════════════════════════════════════════
+PHASE 1 — CREATIVE DIRECTOR: Situation Analysis
+═══════════════════════════════════════════════════
+
+CLIENT BRIEF: "${idea}"
 CHANNELS: ${canalesLabel}
-IMAGES: ${imageCount}
-${slotsContext ? `\nVISUAL REFERENCES:\n${slotsContext}` : ''}
+IMAGES TO PRODUCE: ${imageCount}
 
-THINK STEP BY STEP:
-1. What does this entrepreneur actually need? (launch / sale / awareness / engagement)
-2. Define a strong creative concept — the emotional thread tying all pieces together
-3. Build a 3-act narrative: tension → revelation → transformation
-4. Distribute ${imageCount} pieces across 7 days and selected channels (max 2/day)
-5. Write copy that sounds human, warm, Latin American Spanish — never generic AI copy
-6. Create NICHE-SPECIFIC hashtags — NOT generic like #emprendedora
-7. For each piece, write an imagePrompt in ENGLISH — specific, visual, directional:
-   "Commercial photography. [Subject]. [Composition]. [Lighting]. [Mood]. [Channel context]."
-   IMPORTANT: imagePrompt must NEVER include any text, words, or typography instructions.
-   Text decisions are handled separately — do NOT write "with text overlay", "with caption", etc.
+${slotsContext ? `WHAT WE HAVE TO WORK WITH:\n${slotsContext}` : 'No visual references provided — work from the brief alone.'}
 
-TYPOGRAPHY DECISION (critical — analyze this carefully):
+Answer these questions to build the creative foundation:
+1. What does this entrepreneur REALLY need right now? (launch / sale / awareness / engagement)
+2. Who is the EXACT ideal customer? (age, lifestyle, pain point, desires — be specific, not generic)
+3. What is the CENTRAL TENSION this product resolves? ("I want X but I have problem Y")
+4. What is the single most powerful creative concept — the emotional thread?
+5. What is the 3-act narrative arc: tension → revelation → transformation?
+
+REFERENCE ROLES (critical — establish this before any visual decisions):
+${selected.modelRef ? `- MODEL: provides FACE and IDENTITY only. The outfit in their reference photo is IRRELEVANT to campaign styling.` : `- NO MODEL PROVIDED: describe the ideal person to cast based on the target audience.`}
+${selected.productRefs.length > 0 ? `- PRODUCT: the VISUAL HERO of every image. Must be clearly identifiable.` : `- NO PRODUCT PHOTO: describe the product based on brief.`}
+${selected.inspirationRef ? `- INSPIRATION: defines visual aesthetic and mood only. Does NOT define people or products.` : ``}
+${selected.brandRef ? `- BRAND: defines color palette and visual identity only.` : ``}
+
+═══════════════════════════════════════════════════
+PHASE 2 — PHOTOGRAPHER + COMMUNITY MANAGER + MARKETER
+═══════════════════════════════════════════════════
+
+Using the creative foundation above, now produce the full campaign plan.
+
+PHOTOGRAPHER BRIEF (imagePrompt rules):
+- Write each imagePrompt as a photographer's shot brief — specific scene, subject position, lighting quality, composition, emotion.
+- The product must be CLEARLY VISIBLE in every relevant shot. Name its placement explicitly.
+- If a person is present: describe pose, expression, what they're doing — NOT who they look like.
+- NEVER mention text, overlays, typography, or graphic design in imagePrompt.
+- NEVER reference "the model reference photo's outfit" — define a NEW outfit based on the concept.
+- Format: "[Scene]. [Subject and action]. [Lighting]. [Composition]. [Mood/energy]. [Channel]."
+
+TYPOGRAPHY DECISION:
 ${hasInspirationImages
-  ? `The entrepreneur uploaded INSPIRATION images. Analyze them to decide the text-in-image style:
-- If the inspiration is UGC/lifestyle/product-only (no text on image) → textoEnImagenes: "none"
-- If the inspiration has subtle text (a small phrase, minimal overlay) → textoEnImagenes: "minimal"
-- If the inspiration has strong graphic text (editorial, magazine style, billboard) → textoEnImagenes: "editorial"
-When textoEnImagenes is "minimal" or "editorial", describe the typography style you see or infer
-from the inspiration in estiloTexto (font weight, color, placement, case — e.g., "serif white bold
-uppercase, centered top third" or "thin sans-serif black, bottom-left aligned, sentence case").`
-  : `No inspiration images uploaded. Default to textoEnImagenes: "none" unless the brief explicitly
-mentions graphic text, poster-style, or editorial look. If so, infer a clean modern style.`}
-
-NOT every image needs text — for "minimal" and "editorial" styles, only 30-50% of pieces should
-have text. Use your creative judgment: text works best for teasers, launches, and closing pieces.
-For product shots, lifestyle, and social proof — pure photography usually wins.
+  ? `Analyze the INSPIRATION images carefully:
+- If inspiration is UGC/lifestyle/product-only (no graphic text) → textoEnImagenes: "none"
+- If inspiration has subtle text overlay → textoEnImagenes: "minimal"
+- If inspiration has strong graphic/editorial text → textoEnImagenes: "editorial"
+When not "none": describe typography in estiloTexto (weight, color, placement, case).`
+  : `No inspiration uploaded → textoEnImagenes: "none" unless brief mentions poster/graphic/editorial style.`}
+Only 30-50% of pieces should have text in "minimal"/"editorial" mode. Use text for teasers and launches; pure photography for product and lifestyle shots.
 
 RULES:
-- Exactly ${imageCount} pieces
-- Max 2 pieces per day, spread across 7 days
-- Copy feels written by a real person — emotion, specificity, real CTAs
-- Instructions for Sofi: ONE simple action per piece
-- Hashtags: real, niche-specific, researched for this product/category
-- imagePrompt: English, 2-3 sentences, highly specific and visual — NO text/typography mentions ever
+- Exactly ${imageCount} pieces, max 2/day, spread across 7 days
+- Copy: human, warm, Latin American Spanish — emotion, specificity, real CTAs
+- Hashtags: niche-specific, researched, NOT generic
 
-RESPOND ONLY WITH VALID JSON (no markdown):
+RESPOND ONLY WITH VALID JSON (no markdown, no explanations outside the JSON):
 {
-  "concepto": "Creative thread — 1 evocative sentence",
-  "promesa": "What this campaign promises to Sofi's customer — 1 sentence",
-  "tagline": "Memorable campaign phrase — max 8 words in Spanish",
+  "concepto": "The emotional thread — 1 evocative sentence",
+  "promesa": "What the campaign promises to the customer — 1 sentence",
+  "tagline": "Memorable phrase — max 8 words in Spanish",
   "duracionDias": 7,
-  "resumen": "2-3 sentences telling Sofi exactly what to do and why it will work",
+  "resumen": "2-3 sentences: what to do and why it works",
+  "clienteIdeal": "Exact target: age, lifestyle, pain, desire — 1 specific sentence",
+  "dolorCentral": "The core tension this product resolves — 1 sentence",
+  "moodboardTexto": "Visual world description: environment, light quality, color palette, energy — 2 sentences",
   "textoEnImagenes": "none",
   "estiloTexto": null,
+  "modoVisual": "ugc",
   "hashtagsComunidad": ["#tag1","#tag2","#tag3"],
   "hashtagsNicho": ["#tag4","#tag5","#tag6","#tag7"],
   "hashtagsColarga": ["#tag8","#tag9","#tag10"],
@@ -416,7 +480,7 @@ RESPOND ONLY WITH VALID JSON (no markdown):
       "canal": "instagram_feed",
       "rol": "Teaser",
       "usaTexto": false,
-      "imagePrompt": "Commercial photography. [specific visual]. [composition]. [lighting]. [mood]. Optimized for Instagram Feed.",
+      "imagePrompt": "[Scene]. [Subject and what they're doing]. [Lighting]. [Composition]. [Mood]. [Channel].",
       "titular": "Short impactful headline max 60 chars in Spanish",
       "caption": "Full post text Latin American Spanish with emojis if natural max 200 chars",
       "cta": "Specific call to action max 40 chars",
@@ -437,27 +501,28 @@ RESPOND ONLY WITH VALID JSON (no markdown):
     if (match) {
       const parsed = JSON.parse(match[0]);
       if (parsed?.piezas && Array.isArray(parsed.piezas) && parsed.piezas.length > 0) {
-        // Normalizar decisión tipográfica
         const textoMode: TextoEnImagenes =
           ['none', 'minimal', 'editorial'].includes(parsed.textoEnImagenes)
-            ? parsed.textoEnImagenes
-            : 'none';
+            ? parsed.textoEnImagenes : 'none';
         parsed.textoEnImagenes = textoMode;
-        parsed.estiloTexto = parsed.estiloTexto ?? null;
+        parsed.estiloTexto     = parsed.estiloTexto ?? null;
+        // modoVisual viene del plan de Gemini pero se sobreescribirá cuando la usuaria elija el ancla
+        parsed.modoVisual      = (['ugc', 'editorial'].includes(parsed.modoVisual) ? parsed.modoVisual : 'ugc') as ModoVisual;
+        parsed.clienteIdeal    = parsed.clienteIdeal ?? null;
+        parsed.dolorCentral    = parsed.dolorCentral ?? null;
+        parsed.moodboardTexto  = parsed.moodboardTexto ?? null;
 
         parsed.piezas = parsed.piezas.slice(0, imageCount).map((p: any, i: number) => ({
           ...p,
           id:       p.id ?? `pieza_${i + 1}`,
           imageUrl: '',
           hashtags: Array.isArray(p.hashtags) ? p.hashtags : [],
-          // usaTexto: si el plan tiene texto, Gemini decide por pieza; si no, siempre false
           usaTexto: textoMode !== 'none' ? (p.usaTexto ?? false) : false,
         }));
         console.log('[CampaignDirector] Plan OK:', {
-          concepto: parsed.concepto,
-          piezas:   parsed.piezas.length,
-          textoEnImagenes: parsed.textoEnImagenes,
-          estiloTexto: parsed.estiloTexto,
+          concepto: parsed.concepto, piezas: parsed.piezas.length,
+          modoVisual: parsed.modoVisual, textoEnImagenes: parsed.textoEnImagenes,
+          clienteIdeal: parsed.clienteIdeal,
         });
         return parsed as CampaignPlan;
       }
@@ -484,9 +549,10 @@ export async function generateAnchorImages(
   const partialResults: string[] = ['', ''];
 
   const generateOne = async (variant: 'A' | 'B', index: number): Promise<string> => {
+    const modo: ModoVisual = variant === 'A' ? 'ugc' : 'editorial';
     const params = {
-      prompt:          buildAnchorPrompt(plan, slots, selected, variant),
-      negative:        CAMPAIGN_NEGATIVE,
+      prompt:          buildAnchorPrompt(plan, selected, variant),
+      negative:        getNegative(modo),
       referenceImages: refs,
       aspectRatio:     '3:4' as const,
       module:          'campaign_anchor',
@@ -495,7 +561,7 @@ export async function generateAnchorImages(
       totalShots:      ANCHOR_IMAGE_COUNT,
       uid:             sessionParams.uid,
       sessionId:       sessionParams.sessionId,
-      metadata:        { variant, role: 'anchor' },
+      metadata:        { variant, modo, role: 'anchor' },
     };
     const url = await imageApiService.generateImage(params);
     partialResults[index] = url ?? '';
@@ -546,10 +612,12 @@ export async function generateCampaignImages(
   const CONCURRENCY = 2;
   const partialResults: string[] = Array(total).fill('');
 
+  const modo: ModoVisual = plan.modoVisual ?? 'editorial';
+
   const generateOne = async (pieza: CampaignPiece, index: number): Promise<string> => {
     const url = await imageApiService.generateImage({
       prompt:          buildDerivedImagePrompt(pieza, plan, selected, hasAnchor),
-      negative:        CAMPAIGN_NEGATIVE,
+      negative:        getNegative(modo),
       referenceImages: refs,
       aspectRatio:     getAspectRatio(pieza.canal),
       module:          'campaign',
@@ -614,8 +682,12 @@ function buildFallbackPlan(
     tagline:           'Hecho para destacar.',
     duracionDias:      7,
     piezas,
+    modoVisual:        'ugc' as ModoVisual,
     textoEnImagenes:   'none' as TextoEnImagenes,
     estiloTexto:       null,
+    clienteIdeal:      null,
+    dolorCentral:      null,
+    moodboardTexto:    null,
     hashtagsComunidad: ['#emprendedoras', '#tiendaonline', '#negocio'],
     hashtagsNicho:     ['#emprendedoralatina', '#ecommercechile', '#shoplocal'],
     hashtagsColarga:   ['#productoshandmade', '#tiendaonlinechile', '#compralocal'],

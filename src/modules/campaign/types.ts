@@ -51,29 +51,37 @@ export interface CampaignPiece {
   horaRecomendada: string;       // "19:00"
 }
 
+// ── Modo visual de campaña ────────────────────────────────────
+// "ugc"      → iPhone orgánico, personas reales, luz natural, sin polish
+// "editorial"→ fotografía profesional, revista, lookbook, controlado
+export type ModoVisual = 'ugc' | 'editorial';
+
 // ── Estilo de texto en imágenes ───────────────────────────────
-// "none"     → fotografía pura, sin tipografía (default cuando la inspiración es UGC/lifestyle)
+// "none"     → fotografía pura, sin tipografía
 // "minimal"  → una frase corta máx, integrada al diseño con elegancia
 // "editorial"→ texto como elemento gráfico fuerte, estilo revista/campaña
 export type TextoEnImagenes = 'none' | 'minimal' | 'editorial';
 
 // ── Plan estratégico completo ─────────────────────────────────
 export interface CampaignPlan {
-  concepto:    string;   // El hilo conductor creativo
-  promesa:     string;   // Qué le promete la campaña al cliente de Sofi
-  tagline:     string;   // Frase memorable de la campaña
-  duracionDias: number;  // 7
+  concepto:    string;
+  promesa:     string;
+  tagline:     string;
+  duracionDias: number;
   piezas:      CampaignPiece[];
-  // Estrategia de hashtags por capa
-  hashtagsComunidad: string[];   // alta competencia, largo plazo
-  hashtagsNicho:     string[];   // competencia media
-  hashtagsColarga:   string[];   // baja competencia, alta intención
-  // Resumen ejecutivo para Sofi
-  resumen:     string;           // 2-3 oraciones de qué hacer con esta campaña
-  // Decisión tipográfica — tomada por Gemini al analizar la inspiración
+  hashtagsComunidad: string[];
+  hashtagsNicho:     string[];
+  hashtagsColarga:   string[];
+  resumen:     string;
+  // Modo visual — definido cuando la usuaria elige el ancla (A=ugc, B=editorial)
+  modoVisual:  ModoVisual;
+  // Decisión tipográfica
   textoEnImagenes: TextoEnImagenes;
-  estiloTexto?: string;  // descripción del estilo si textoEnImagenes !== 'none'
-                         // ej: "serif blanco bold, centrado, uppercase, fondo oscuro semitransparente"
+  estiloTexto?: string;
+  // Director creativo — análisis de situación generado en buildCampaignPlan
+  clienteIdeal?:    string;  // a quién le hablamos exactamente
+  dolorCentral?:    string;  // qué problema resuelve el producto
+  moodboardTexto?:  string;  // descripción del mundo visual acordado
 }
 
 // ── Set guardado en biblioteca ────────────────────────────────

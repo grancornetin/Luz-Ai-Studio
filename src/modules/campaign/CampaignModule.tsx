@@ -456,6 +456,11 @@ const CampaignModule: React.FC = () => {
   const handleGenerateCampaign = async () => {
     if (!selectedAnchor || !campaignPlan) return;
 
+    // Determinar el modo según qué ancla eligió la usuaria
+    // anchorOptions[0] = A = UGC, anchorOptions[1] = B = Editorial
+    const anchorIndex = anchorOptions.indexOf(selectedAnchor);
+    campaignPlan.modoVisual = anchorIndex === 1 ? 'editorial' : 'ugc';
+
     setStep(6);
     setIsGenerating(true);
     setError(null);
@@ -893,17 +898,18 @@ const CampaignModule: React.FC = () => {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+                  <div className="grid grid-cols-2 gap-4 mb-6">
                     {anchorOptions.map((url, i) => {
                       const label   = i === 0 ? 'A' : 'B';
-                      const variant = i === 0 ? 'Estilo natural · lifestyle' : 'Estilo editorial · premium';
+                      const variant = i === 0 ? '📱 UGC · iPhone orgánico · personas reales' : '📷 Editorial · revista · lookbook premium';
                       const isSelected = selectedAnchor === url;
                       return (
                         <button key={i} type="button" onClick={() => setSelectedAnchor(url)}
-                          className={`relative rounded-[24px] overflow-hidden border-4 transition-all cursor-pointer group ${isSelected ? 'border-brand-600 shadow-xl' : 'border-transparent hover:border-slate-200'}`}>
+                          className={`relative rounded-[20px] overflow-hidden border-4 transition-all cursor-pointer group ${isSelected ? 'border-brand-600 shadow-xl' : 'border-transparent hover:border-slate-200'}`}
+                          style={{ maxHeight: 420 }}>
                           {/* Imagen */}
-                          <div className="aspect-[3/4] relative">
-                            <img src={url} alt={`Opción ${label}`} className="w-full h-full object-cover" />
+                          <div className="relative h-full">
+                            <img src={url} alt={`Opción ${label}`} className="w-full h-full object-cover" style={{ maxHeight: 420 }} />
                             <div className={`absolute inset-0 transition-opacity ${isSelected ? 'bg-brand-600/10' : 'bg-black/0 group-hover:bg-black/5'}`} />
                           </div>
                           {/* Badge seleccionado */}
