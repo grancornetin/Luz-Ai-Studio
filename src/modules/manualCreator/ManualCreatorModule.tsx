@@ -1,4 +1,4 @@
-﻿// src/modules/ManualCreatorModule.tsx
+// src/modules/manualCreator/ManualCreatorModule.tsx
 import React, { useState, useEffect } from 'react';
 import { avatarService } from '../../services/avatarService';
 import { generationHistoryService } from '../../services/generationHistoryService';
@@ -157,7 +157,7 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
       const shots = await avatarService.generateMasterSet(
         identityPrompt,
         "blurry, low quality, distorted face, messy background",
-        data.gender,
+        (data.gender === 'hombre' || data.gender === 'mujer' ? data.gender : 'mujer') as 'hombre' | 'mujer',
         data.outfit,
         data.personality,
         data.expression,
@@ -184,7 +184,7 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
       const newAvatar: AvatarProfile = {
         id: Date.now().toString(),
         name,
-        type: 'scratch',
+        type: 'manual',
         identityPrompt,
         physicalDescription,
         negativePrompt: "blurry, low quality",

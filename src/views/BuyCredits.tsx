@@ -8,7 +8,7 @@ import { buildCheckoutUrl, TOPUP_TO_PRODUCT, PRO_TOPUP_TO_PRODUCT, type ProductK
 
 export default function BuyCredits() {
   const navigate         = useNavigate();
-  const { credits, user } = useAuth();
+  const { credits, user, proCredits } = useAuth();
   const { currency, toggle, format } = useCurrency();
 
   const handleBuy = (pkgId: string) => {
@@ -144,7 +144,7 @@ export default function BuyCredits() {
           </div>
           <div>
             <p className="text-[10px] font-black text-violet-400 uppercase tracking-widest">Pro-credits disponibles</p>
-            <p className="text-2xl font-black text-violet-700">{credits?.proCredits ?? 0}</p>
+            <p className="text-2xl font-black text-violet-700">{proCredits ?? 0}</p>
           </div>
         </div>
 

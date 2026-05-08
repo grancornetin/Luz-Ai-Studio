@@ -13,7 +13,7 @@ export const WalletPill: React.FC<WalletPillProps> = ({
   showPlanButton = true,
   className = '',
 }) => {
-  const { credits, isAdmin, previewPlan, setPreviewPlan } = useAuth();
+  const { credits, isAdmin, previewPlan, setPreviewPlan, proCredits } = useAuth();
   const navigate = useNavigate();
   const [showPlanMenu, setShowPlanMenu] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
@@ -84,7 +84,7 @@ export const WalletPill: React.FC<WalletPillProps> = ({
         title="Pro-credits para Campaign y Photodump"
       >
         <Megaphone className="w-4 h-4 text-violet-200" />
-        <span className="text-sm font-bold">{credits.proCredits ?? 0}</span>
+        <span className="text-sm font-bold">{proCredits ?? 0}</span>
         <span className="text-[10px] font-black uppercase tracking-wider text-violet-300">
           pro
         </span>

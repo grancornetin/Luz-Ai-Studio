@@ -132,7 +132,7 @@ const PhotodumpModule: React.FC = () => {
 
       const set: PhotodumpSet = {
         id: Date.now().toString(), createdAt: Date.now(),
-        basePrompt, narrative, protagonist, customStory, count, references: [],
+        basePrompt, narrative, protagonist, destino: 'feed' as const, customStory, count, references: [],
         images: images.filter(Boolean).map((url, i) => ({
           imageUrl: url,
           moment:   scenes[i]?.moment   ?? `Momento ${i + 1}`,
@@ -278,7 +278,7 @@ const PhotodumpModule: React.FC = () => {
                 protagonist === p ? 'bg-violet-600 text-white shadow-lg' : 'bg-white/5 text-slate-500 border border-white/10 hover:bg-white/10'
               }`}
             >
-              {PROTAGONIST_META[p]}
+              {PROTAGONIST_META[p].label}
             </button>
           ))}
         </div>
