@@ -711,10 +711,10 @@ const CampaignModule: React.FC = () => {
                       </div>
                       <h2 className="font-display font-extrabold italic uppercase tracking-tight text-[22px] md:text-[26px] text-slate-900 leading-tight"
                         style={{ fontFamily: 'Syne, Inter, sans-serif', letterSpacing: '-0.025em' }}>
-                        {idea.length > 50 ? idea.slice(0, 50) + '...' : idea}
+                        {campaignPlan?.tagline ?? 'Preparando tu campaña'}
                       </h2>
                       <div className="text-[13px] text-slate-500 mt-1 mb-4">
-                        Generando propuestas de estilo visual...
+                        {campaignPlan?.concepto ?? 'Analizando brief y referencias...'}
                       </div>
                       <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-[18px]">
                         <GenProgress steps={progressSteps} currentStepIndex={progressStepIndex} completedShots={[]} totalShots={0} />
@@ -846,10 +846,10 @@ const CampaignModule: React.FC = () => {
                       </div>
                       <h2 className="font-display font-extrabold italic uppercase tracking-tight text-[22px] md:text-[26px] text-slate-900 leading-tight"
                         style={{ fontFamily: 'Syne, Inter, sans-serif', letterSpacing: '-0.025em' }}>
-                        {idea.length > 50 ? idea.slice(0, 50) + '...' : idea}
+                        {campaignPlan?.tagline ?? 'Generando campaña'}
                       </h2>
                       <div className="text-[13px] text-slate-500 mt-1 mb-4">
-                        {imageCount} imágenes · estilo aprobado como ancla
+                        {imageCount} imágenes · {campaignPlan?.concepto ?? 'estilo aprobado como ancla'}
                       </div>
                       {/* Ancla elegida */}
                       {selectedAnchor && (
