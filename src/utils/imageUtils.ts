@@ -172,14 +172,22 @@ export async function downloadAsZip(
     return;
   }
 
+  // Convierte un data URL a Blob sin usar fetch() — evita el límite de tamaño de Chrome
+  function dataUrlToBlob(dataUrl: string): Blob {
+    const [header, b64] = dataUrl.split(',');
+    const mime = header.match(/:(.*?);/)?.[1] ?? 'image/jpeg';
+    const bytes = atob(b64);
+    const arr   = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  }
+
   const zip = new JSZip();
   const fetchPromises = images.map(async (url, idx) => {
     try {
       let blob: Blob;
       if (url.startsWith('data:')) {
-        // Convertir dataURL a Blob
-        const response = await fetch(url);
-        blob = await response.blob();
+        blob = dataUrlToBlob(url);
       } else {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);

@@ -19,17 +19,26 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CAMPAIGN_NEGATIVE = [
-  'blurry', 'distorted', 'low quality', 'bad anatomy',
-  'extra fingers', 'deformed hands', 'mutated body',
-  'bad lighting', 'low resolution', 'overexposed', 'underexposed',
-  'ugly', 'poor composition', 'watermark',
+  // Calidad general
+  'blurry', 'low quality', 'low resolution', 'jpeg artifacts', 'pixelated',
+  'overexposed', 'underexposed', 'bad lighting', 'poor composition', 'watermark',
+  // Anatomía — crítico para evitar aberraciones
+  'bad anatomy', 'deformed', 'mutated', 'disfigured',
+  'extra limbs', 'extra fingers', 'missing fingers', 'fused fingers',
+  'extra arms', 'extra legs', 'missing arms', 'missing legs',
+  'deformed hands', 'malformed hands', 'abnormal body proportions',
+  'floating limbs', 'disconnected limbs', 'body horror',
+  'face distortion', 'crossed eyes', 'asymmetric face',
+  // Producto e identidad
+  'wrong product', 'different product', 'generic product', 'color drift',
+  'identity mixing', 'different person', 'composite artifacts',
+  'collage', 'different brand',
   // Texto en imagen — siempre excluido salvo que el prompt lo pida explícitamente
   'text overlay', 'text on image', 'typography', 'words', 'letters',
   'caption on photo', 'subtitle', 'label text', 'graphic design text',
-  'collage', 'composite artifacts', 'identity mixing',
-  'face distortion', 'skin smoothing', 'beauty filter',
-  'airbrushed', 'editorial over-processing', 'plastic skin',
-  'wrong product', 'color drift', 'different brand',
+  // Sobre-procesado
+  'skin smoothing', 'beauty filter', 'airbrushed', 'plastic skin',
+  'editorial over-processing',
 ].join(', ');
 
 // ─── Selección inteligente de referencias ────────────────────
@@ -532,7 +541,9 @@ export async function generateCampaignImages(
     hasProduct: selected.productRefs.length > 0,
   });
 
-  // Generamos cada pieza individualmente para poder mostrar URLs en tiempo real
+  // Generamos con concurrencia limitada (máx 2 en paralelo) para evitar rate limit
+  // y mejorar la consistencia visual entre imágenes.
+  const CONCURRENCY = 2;
   const partialResults: string[] = Array(total).fill('');
 
   const generateOne = async (pieza: CampaignPiece, index: number): Promise<string> => {
@@ -555,11 +566,23 @@ export async function generateCampaignImages(
     return url ?? '';
   };
 
-  const settled = await Promise.allSettled(
-    plan.piezas.map((pieza, i) => generateOne(pieza, i))
-  );
+  // Pool de concurrencia: lanza de a CONCURRENCY piezas a la vez
+  const results: string[] = Array(total).fill('');
+  const queue = plan.piezas.map((pieza, i) => ({ pieza, i }));
+  const workers = Array.from({ length: CONCURRENCY }, async () => {
+    while (queue.length > 0) {
+      const item = queue.shift();
+      if (!item) break;
+      try {
+        results[item.i] = await generateOne(item.pieza, item.i);
+      } catch {
+        results[item.i] = '';
+      }
+    }
+  });
+  await Promise.all(workers);
 
-  return settled.map(r => r.status === 'fulfilled' ? r.value : '');
+  return results;
 }
 
 // ─── Fallback ─────────────────────────────────────────────────

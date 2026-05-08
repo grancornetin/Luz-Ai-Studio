@@ -479,6 +479,11 @@ const CampaignModule: React.FC = () => {
 
       setProgressStepIndex(3);
 
+      const validImages = images.filter(Boolean);
+      if (validImages.length === 0) {
+        throw new Error('No se generó ninguna imagen. La API puede estar saturada — intentá de nuevo en unos minutos.');
+      }
+
       // Inyectar URLs en el plan
       campaignPlan.piezas = campaignPlan.piezas.map((p: any, i: number) => ({
         ...p, imageUrl: images[i] ?? '',

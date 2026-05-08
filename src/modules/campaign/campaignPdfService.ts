@@ -1,4 +1,4 @@
-import { CampaignSet, CampaignPiece, CAMPAIGN_CHANNEL_META } from './types';
+import { CampaignSet, CampaignPiece, ImageSlotRole, IMAGE_SLOT_META, CAMPAIGN_CHANNEL_META } from './types';
 
 // ─── SVG del logo (rayo doble) ────────────────────────────────
 const LOGO_SVG = `<svg viewBox="0 0 375 375" xmlns="http://www.w3.org/2000/svg">
@@ -508,6 +508,15 @@ function buildHashtagsPage(set: CampaignSet, pageNum: number): string {
 
 // ─── Página de configuración / brief / prompts ───────────────
 
+const SLOT_LABEL: Record<ImageSlotRole, string> = {
+  product:     '📦 Producto',
+  inspiration: '🖼️ Inspiración',
+  brand:       '🎨 Marca',
+  model:       '👤 Modelo',
+};
+
+const SLOT_ORDER: ImageSlotRole[] = ['product', 'inspiration', 'brand', 'model'];
+
 function buildConfigPage(set: CampaignSet, pageNum: number): string {
   const { plan } = set;
   const canalesLabels = set.canales.map(c => CAMPAIGN_CHANNEL_META[c].label).join(', ');
@@ -518,6 +527,61 @@ function buildConfigPage(set: CampaignSet, pageNum: number): string {
       <td style="padding:10px 12px;font-family:var(--font-body);font-size:11px;color:#64748b">${esc(p.rol)} · ${esc(CAMPAIGN_CHANNEL_META[p.canal]?.label ?? p.canal)}</td>
       <td style="padding:10px 12px;font-family:monospace;font-size:10px;color:#475569;line-height:1.5">${esc(p.imagePrompt)}</td>
     </tr>`).join('');
+
+  // ── Referencias visuales por slot ──────────────────────────
+  const slotsByRole = SLOT_ORDER.reduce<Record<ImageSlotRole, string[]>>((acc, role) => {
+    acc[role] = set.slots.filter(s => s.role === role).map(s => s.base64);
+    return acc;
+  }, { product: [], inspiration: [], brand: [], model: [] });
+
+  const refThumb = (src: string) =>
+    `<img src="${src}" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--border);flex-shrink:0" />`;
+
+  const refGroups = SLOT_ORDER
+    .filter(role => slotsByRole[role].length > 0)
+    .map(role => {
+      const thumbs = slotsByRole[role].map(refThumb).join('');
+      return `
+        <div style="margin-bottom:16px">
+          <div style="font-family:var(--font-body);font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#64748b;margin-bottom:8px">${SLOT_LABEL[role]} · ${slotsByRole[role].length} imagen${slotsByRole[role].length > 1 ? 'es' : ''}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">${thumbs}</div>
+        </div>`;
+    }).join('');
+
+  // ── Ancla elegida ──────────────────────────────────────────
+  const anchorSrc = set.anchorImage || '';
+  const anchorHtml = anchorSrc ? `
+    <div style="margin-bottom:24px">
+      <div class="strategy-label">Ancla visual elegida</div>
+      <div style="display:flex;align-items:flex-start;gap:16px;background:var(--slate);border:1px solid var(--border);border-radius:var(--r-md);padding:16px">
+        <img src="${anchorSrc}" style="width:120px;height:160px;object-fit:cover;border-radius:10px;border:2px solid var(--fucsia);flex-shrink:0" />
+        <div>
+          <div style="font-family:var(--font-body);font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--fucsia);margin-bottom:6px">REF0 · Estilo de sesión</div>
+          <p style="font-family:var(--font-body);font-size:12px;color:#475569;line-height:1.6;margin:0">Esta imagen define la luz, la paleta de colores y la estética de toda la campaña. Todas las piezas se generaron tomándola como referencia de sesión.</p>
+          ${set.plan.textoEnImagenes && set.plan.textoEnImagenes !== 'none' ? `
+          <div style="margin-top:10px;background:white;border:1px solid var(--border);border-radius:8px;padding:10px 12px">
+            <div style="font-family:var(--font-body);font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#64748b;margin-bottom:4px">Texto en imágenes</div>
+            <div style="font-family:var(--font-body);font-size:12px;font-weight:600;color:var(--dark-text)">${esc(set.plan.textoEnImagenes)}</div>
+            ${set.plan.estiloTexto ? `<div style="font-family:monospace;font-size:10px;color:#64748b;margin-top:2px">${esc(set.plan.estiloTexto)}</div>` : ''}
+          </div>` : ''}
+        </div>
+      </div>
+    </div>` : '';
+
+  // ── También mostrar las 2 opciones de ancla si están disponibles ──
+  const anchorOptionsHtml = (set.anchorOptions?.length ?? 0) > 0 ? `
+    <div style="margin-bottom:24px">
+      <div class="strategy-label">Opciones de ancla generadas</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        ${set.anchorOptions.map((src, idx) => `
+          <div style="position:relative">
+            <img src="${src}" style="width:110px;height:146px;object-fit:cover;border-radius:10px;border:${src === anchorSrc ? '2px solid var(--fucsia)' : '1px solid var(--border)'}" />
+            ${src === anchorSrc
+              ? `<div style="position:absolute;top:6px;left:6px;background:var(--fucsia);color:white;font-family:var(--font-body);font-size:9px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;padding:3px 7px;border-radius:100px">Elegida</div>`
+              : `<div style="position:absolute;top:6px;left:6px;background:rgba(0,0,0,0.55);color:rgba(255,255,255,0.7);font-family:var(--font-body);font-size:9px;font-weight:600;letter-spacing:0.06em;padding:3px 7px;border-radius:100px">Opción ${idx + 1}</div>`}
+          </div>`).join('')}
+      </div>
+    </div>` : '';
 
   return `
   <div class="page-label">Última página · Configuración y Brief</div>
@@ -555,6 +619,19 @@ function buildConfigPage(set: CampaignSet, pageNum: number): string {
           <div style="font-family:var(--font-title);font-size:13px;font-weight:700;color:var(--lime)">${set.slots.length} imágenes (${[...new Set(set.slots.map(s => s.role))].join(', ')})</div>
         </div>
       </div>
+
+      <!-- Referencias visuales por slot -->
+      ${refGroups ? `
+      <div style="margin-bottom:24px">
+        <div class="strategy-label">Imágenes de referencia por categoría</div>
+        <div style="background:var(--slate);border:1px solid var(--border);border-radius:var(--r-md);padding:16px 18px">
+          ${refGroups}
+        </div>
+      </div>` : ''}
+
+      <!-- Ancla elegida + opciones -->
+      ${anchorHtml}
+      ${anchorOptionsHtml}
 
       <!-- Tabla de prompts -->
       <div style="margin-bottom:24px">
