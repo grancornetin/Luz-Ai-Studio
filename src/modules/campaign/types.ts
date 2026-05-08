@@ -50,6 +50,12 @@ export interface CampaignPiece {
   horaRecomendada: string;       // "19:00"
 }
 
+// ── Estilo de texto en imágenes ───────────────────────────────
+// "none"     → fotografía pura, sin tipografía (default cuando la inspiración es UGC/lifestyle)
+// "minimal"  → una frase corta máx, integrada al diseño con elegancia
+// "editorial"→ texto como elemento gráfico fuerte, estilo revista/campaña
+export type TextoEnImagenes = 'none' | 'minimal' | 'editorial';
+
 // ── Plan estratégico completo ─────────────────────────────────
 export interface CampaignPlan {
   concepto:    string;   // El hilo conductor creativo
@@ -63,6 +69,10 @@ export interface CampaignPlan {
   hashtagsColarga:   string[];   // baja competencia, alta intención
   // Resumen ejecutivo para Sofi
   resumen:     string;           // 2-3 oraciones de qué hacer con esta campaña
+  // Decisión tipográfica — tomada por Gemini al analizar la inspiración
+  textoEnImagenes: TextoEnImagenes;
+  estiloTexto?: string;  // descripción del estilo si textoEnImagenes !== 'none'
+                         // ej: "serif blanco bold, centrado, uppercase, fondo oscuro semitransparente"
 }
 
 // ── Set guardado en biblioteca ────────────────────────────────
