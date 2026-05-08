@@ -1,5 +1,12 @@
 # Campaign Generator — Guía del Módulo
 
+> **REGLAS DE MANTENIMIENTO PARA IA:**
+> 1. Este archivo debe mantenerse actualizado con el estado real del módulo.
+> 2. Cada vez que se agregue, modifique o elimine un feature relevante, actualizar la sección correspondiente.
+> 3. Actualizar la fecha de "Última actualización" con cada cambio.
+> 4. No borrar secciones — si algo fue eliminado, marcarlo como "Eliminado en [fecha]" y explicar por qué.
+> 5. El objetivo es que otra IA pueda leer este archivo y entender completamente qué hace el módulo, cómo funciona, y en qué estado está, sin necesidad de leer el código.
+
 **Última actualización:** Mayo 2026  
 **Propósito:** Crear kits de campaña publicitaria completos para emprendedores latinoamericanos que venden en Instagram, TikTok, WhatsApp y Facebook.
 

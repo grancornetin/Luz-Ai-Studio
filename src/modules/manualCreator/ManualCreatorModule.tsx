@@ -1,29 +1,29 @@
-// src/modules/ManualCreatorModule.tsx
+﻿// src/modules/ManualCreatorModule.tsx
 import React, { useState, useEffect } from 'react';
-import { avatarService } from '../services/avatarService';
-import { generationHistoryService } from '../services/generationHistoryService';
-import { AvatarProfile } from '../types';
-import ModuleTutorial from '../components/shared/ModuleTutorial';
-import { TUTORIAL_CONFIGS } from '../components/shared/tutorialConfigs';
-import { useCreditGuard } from '../hooks/useCreditGuard';
-import NoCreditsModal from '../components/shared/NoCreditsModal';
-import { CREDIT_COSTS, MODEL_CREDIT_COST } from '../services/creditConfig';
-import { downloadAsZip } from '../utils/imageUtils';
-import { useAuth } from '../modules/auth/AuthContext';
-import { newSessionId } from '../services/imageApiService';
-import { getNotification } from '../services/notificationsService';
+import { avatarService } from '../../services/avatarService';
+import { generationHistoryService } from '../../services/generationHistoryService';
+import { AvatarProfile } from '../../types';
+import ModuleTutorial from '../../components/shared/ModuleTutorial';
+import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
+import { useCreditGuard } from '../../hooks/useCreditGuard';
+import NoCreditsModal from '../../components/shared/NoCreditsModal';
+import { CREDIT_COSTS, MODEL_CREDIT_COST } from '../../services/creditConfig';
+import { downloadAsZip } from '../../utils/imageUtils';
+import { useAuth } from '../../modules/auth/AuthContext';
+import { newSessionId } from '../../services/imageApiService';
+import { getNotification } from '../../services/notificationsService';
 import { useSearchParams } from 'react-router-dom';
-import { GenerateButton } from '../components/shared/GenerateButton';
+import { GenerateButton } from '../../components/shared/GenerateButton';
 import { 
   ETHNICITY_OPTIONS, AGE_OPTIONS, BUILD_OPTIONS, OUTFITS_MUJER, OUTFITS_HOMBRE, 
   EYE_COLORS, HAIR_COLORS, HAIR_TYPES, HAIR_LENGTHS, PERSONALITY_OPTIONS, EXPRESSION_OPTIONS 
-} from '../constants';
+} from '../../constants';
 
 // Nuevos componentes base
-import { ImageLightbox } from '../components/shared/ImageLightbox';
-import { FloatingActionBar } from '../components/shared/FloatingActionBar';
-import { useScrollFAB } from '../hooks/useScrollFAB';
-import { GenerationProgress, type ProgressStep } from '../components/shared/GenerationProgress';
+import { ImageLightbox } from '../../components/shared/ImageLightbox';
+import { FloatingActionBar } from '../../components/shared/FloatingActionBar';
+import { useScrollFAB } from '../../hooks/useScrollFAB';
+import { GenerationProgress, type ProgressStep } from '../../components/shared/GenerationProgress';
 
 const DNA_STEPS: ProgressStep[] = [
   { id: 'body',  label: 'Creando Body Master (vista frontal)' },

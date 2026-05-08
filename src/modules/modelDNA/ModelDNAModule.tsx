@@ -1,28 +1,28 @@
-// src/modules/CloningModule.tsx
+﻿// src/modules/CloningModule.tsx
 import React, { useState, useEffect } from 'react';
-import { AvatarProfile } from '../types';
-import { startClone, waitForCloneComplete } from '../services/avatarCloneService';
-import { useCreditGuard } from '../hooks/useCreditGuard';
-import NoCreditsModal from '../components/shared/NoCreditsModal';
-import { CREDIT_COSTS, MODEL_CREDIT_COST } from '../services/creditConfig';
-import { readAndCompressFile, downloadAsZip } from '../utils/imageUtils';
-import ModuleTutorial from '../components/shared/ModuleTutorial';
-import { TUTORIAL_CONFIGS } from '../components/shared/tutorialConfigs';
-import { generationHistoryService } from '../services/generationHistoryService';
-import { useAuth } from '../modules/auth/AuthContext';
-import { GenerateButton } from '../components/shared/GenerateButton';
+import { AvatarProfile } from '../../types';
+import { startClone, waitForCloneComplete } from '../../services/avatarCloneService';
+import { useCreditGuard } from '../../hooks/useCreditGuard';
+import NoCreditsModal from '../../components/shared/NoCreditsModal';
+import { CREDIT_COSTS, MODEL_CREDIT_COST } from '../../services/creditConfig';
+import { readAndCompressFile, downloadAsZip } from '../../utils/imageUtils';
+import ModuleTutorial from '../../components/shared/ModuleTutorial';
+import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
+import { generationHistoryService } from '../../services/generationHistoryService';
+import { useAuth } from '../../modules/auth/AuthContext';
+import { GenerateButton } from '../../components/shared/GenerateButton';
 
 // Nuevos componentes base
-import { ErrorDisplay, toAppError, type AppError } from '../components/shared/ErrorDisplay';
-import { REFUNDABLE_ERRORS, newSessionId } from '../services/imageApiService';
-import { getNotification } from '../services/notificationsService';
+import { ErrorDisplay, toAppError, type AppError } from '../../components/shared/ErrorDisplay';
+import { REFUNDABLE_ERRORS, newSessionId } from '../../services/imageApiService';
+import { getNotification } from '../../services/notificationsService';
 import { useSearchParams } from 'react-router-dom';
-import { ImageSlot } from '../components/shared/ImageSlot';
-import UploadDisclaimer from '../components/shared/UploadDisclaimer';
-import { ImageLightbox } from '../components/shared/ImageLightbox';
-import { FloatingActionBar } from '../components/shared/FloatingActionBar';
-import { useScrollFAB } from '../hooks/useScrollFAB';
-import { GenerationProgress, type ProgressStep } from '../components/shared/GenerationProgress';
+import { ImageSlot } from '../../components/shared/ImageSlot';
+import UploadDisclaimer from '../../components/shared/UploadDisclaimer';
+import { ImageLightbox } from '../../components/shared/ImageLightbox';
+import { FloatingActionBar } from '../../components/shared/FloatingActionBar';
+import { useScrollFAB } from '../../hooks/useScrollFAB';
+import { GenerationProgress, type ProgressStep } from '../../components/shared/GenerationProgress';
 
 const DNA_STEPS: ProgressStep[] = [
   { id: 'body',  label: 'Creando Body Master (vista frontal)' },

@@ -6,13 +6,13 @@ import { useNotifications } from './hooks/useNotifications';
 // Vistas y Módulos — carga diferida para reducir bundle inicial
 const Landing               = lazy(() => import('./views/Landing'));
 const Dashboard             = lazy(() => import('./views/Dashboard'));
-const CloningModule         = lazy(() => import('./modules/CloningModule'));
-const ManualCreatorModule   = lazy(() => import('./modules/ManualCreatorModule'));
+const CloningModule         = lazy(() => import('./modules/modelDNA/ModelDNAModule'));
+const ManualCreatorModule   = lazy(() => import('./modules/manualCreator/ManualCreatorModule'));
 const ProductGeneratorModule = lazy(() => import('./modules/productGenerator/ProductGeneratorModule'));
 const AvatarLibrary         = lazy(() => import('./components/AvatarLibrary'));
 const ContentStudioProModule = lazy(() => import('./modules/contentStudioPro/ContentStudioProModule'));
 const OutfitExtractorModule = lazy(() => import('./modules/outfitExtractor/OutfitExtractorModule'));
-const CloneImageModule      = lazy(() => import('./modules/CloneImageModule'));
+const CloneImageModule      = lazy(() => import('./modules/sceneClone/SceneCloneModule'));
 const GenerationHistory     = lazy(() => import('./views/GenerationHistory'));
 const PoliticaPrivacidad    = lazy(() => import('./views/PoliticaPrivacidad'));
 const TerminosUso           = lazy(() => import('./views/TerminosUso'));

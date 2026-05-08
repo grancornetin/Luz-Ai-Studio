@@ -1,4 +1,4 @@
-// CloneImageModule.tsx - VERSIÓN CORREGIDA COMPLETA
+﻿// CloneImageModule.tsx - VERSIÓN CORREGIDA COMPLETA
 // (solo se han modificado las líneas donde se asignan faceImage2 y bodyImage2)
 // El resto es idéntico al original.
 
@@ -9,29 +9,29 @@ import {
   type CameraStyle,
   type CloneImageParams,
   type SubjectSelector,
-} from "../services/cloneImageService";
-import { generationHistoryService } from "../services/generationHistoryService";
-import ModuleTutorial from "../components/shared/ModuleTutorial";
-import { TUTORIAL_CONFIGS } from "../components/shared/tutorialConfigs";
+} from "../../services/cloneImageService";
+import { generationHistoryService } from "../../services/generationHistoryService";
+import ModuleTutorial from "../../components/shared/ModuleTutorial";
+import { TUTORIAL_CONFIGS } from "../../components/shared/tutorialConfigs";
 import { useCreditGuard } from "../../hooks/useCreditGuard";
-import NoCreditsModal from "../components/shared/NoCreditsModal";
-import { CREDIT_COSTS } from "../services/creditConfig";
-import { readAndCompressFile, downloadAsZip } from '../utils/imageUtils';
-import { ImageLightbox } from '../components/shared/ImageLightbox';
-import { FloatingActionBar } from '../components/shared/FloatingActionBar';
-import { useScrollFAB } from '../hooks/useScrollFAB';
-import { analyzeScene, DetectedObject } from '../services/sceneAnalysisService';
-import { ImageSlot } from '../components/shared/ImageSlot';
-import UploadDisclaimer from '../components/shared/UploadDisclaimer';
-import { cloneMasterStorage, type CloneMasterSession } from './cloneMaster/storage';
-import { useAuth } from '../modules/auth/AuthContext';
-import { GenerationProgress, type ProgressStep } from '../components/shared/GenerationProgress';
-import { ErrorDisplay, toAppError, type AppError } from '../components/shared/ErrorDisplay';
-import { REFUNDABLE_ERRORS, newSessionId } from '../services/imageApiService';
-import { getNotification } from '../services/notificationsService';
+import NoCreditsModal from "../../components/shared/NoCreditsModal";
+import { CREDIT_COSTS } from "../../services/creditConfig";
+import { readAndCompressFile, downloadAsZip } from '../../utils/imageUtils';
+import { ImageLightbox } from '../../components/shared/ImageLightbox';
+import { FloatingActionBar } from '../../components/shared/FloatingActionBar';
+import { useScrollFAB } from '../../hooks/useScrollFAB';
+import { analyzeScene, DetectedObject } from '../../services/sceneAnalysisService';
+import { ImageSlot } from '../../components/shared/ImageSlot';
+import UploadDisclaimer from '../../components/shared/UploadDisclaimer';
+import { cloneMasterStorage, type CloneMasterSession } from '../cloneMaster/storage';
+import { useAuth } from '../../modules/auth/AuthContext';
+import { GenerationProgress, type ProgressStep } from '../../components/shared/GenerationProgress';
+import { ErrorDisplay, toAppError, type AppError } from '../../components/shared/ErrorDisplay';
+import { REFUNDABLE_ERRORS, newSessionId } from '../../services/imageApiService';
+import { getNotification } from '../../services/notificationsService';
 import { useSearchParams } from 'react-router-dom';
-import { WizardStepper } from '../components/shared/WizardStepper';
-import { WizardFooter } from '../components/shared/WizardFooter';
+import { WizardStepper } from '../../components/shared/WizardStepper';
+import { WizardFooter } from '../../components/shared/WizardFooter';
 
 type Step = 1 | 2 | 3 | 4;
 
