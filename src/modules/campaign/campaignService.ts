@@ -3,7 +3,7 @@ import { imageApiService, extractImageRef } from '../../services/imageApiService
 import { compressImageForUpload } from '../../utils/imageUtils';
 import {
   CampaignChannel, CampaignImageSlot, CampaignPiece, CampaignPlan,
-  CAMPAIGN_CHANNEL_META, ANCHOR_IMAGE_COUNT,
+  TextoEnImagenes, CAMPAIGN_CHANNEL_META, ANCHOR_IMAGE_COUNT,
 } from './types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -208,12 +208,51 @@ ANCHOR IMAGE REQUIREMENTS:
 
 ${lockSystem}
 
-🚫 NO TEXT IN THE IMAGE — no typography, no overlaid words, no captions, no watermarks, no graphic design elements. Pure photography only. Text belongs in the caption, not in the photo.
+🚫 NO TEXT IN THE IMAGE — no typography, no overlaid words, no captions, no watermarks, no graphic design elements. Pure photography only. Text belongs in the caption, not in the photo. The anchor image is always pure photography — text decisions apply to derived campaign images only.
 
 FINAL CHECKLIST:
 ${hasProduct ? '✓ Product matches product reference exactly — same shape, color, every detail\n' : ''}${hasModel ? '✓ Person matches model reference exactly — same face, hair, skin tone\n' : ''}${hasInspo ? '✓ Mood and lighting feel matches inspiration reference\n' : ''}✓ Image quality is campaign-ready — no obvious AI artifacts
 ✓ This image could be the cover of a brand campaign
 ✓ NO text, typography or graphic design elements in the image`;
+}
+
+// ─── Instrucciones tipográficas según la decisión del plan ────
+function buildTypographyInstructions(
+  plan:  CampaignPlan,
+  pieza: CampaignPiece,
+): string {
+  const mode: TextoEnImagenes = plan.textoEnImagenes ?? 'none';
+
+  // Si el modo global es none, o esta pieza específica no usa texto → bloqueo total
+  if (mode === 'none' || !pieza.usaTexto) {
+    return `🚫 NO TEXT IN THE IMAGE — no typography, no overlaid words, no captions, no watermarks. Pure photography only. Text belongs in the caption, not in the photo.`;
+  }
+
+  // Texto del titular acortado para usar en imagen (max ~6 palabras)
+  const shortText = pieza.titular.split(' ').slice(0, 6).join(' ');
+  const styleDesc = plan.estiloTexto ?? 'clean sans-serif, white, bold, centered';
+
+  if (mode === 'minimal') {
+    return `TYPOGRAPHY (MINIMAL):
+- Include ONE short text element in the image: "${shortText}"
+- Style: ${styleDesc}
+- Text must feel DESIGNED, not pasted — integrated naturally into the composition
+- Use NO MORE than one line of text
+- Placement: top or bottom safe zone, leaving the main subject unobstructed
+- The text should enhance the image, not compete with it
+- DO NOT add captions, hashtags, CTAs, watermarks or any other text`;
+  }
+
+  // editorial
+  return `TYPOGRAPHY (EDITORIAL):
+- Text IS a core design element in this image — treat it like a magazine cover or billboard
+- Main text: "${shortText}"
+- Style: ${styleDesc}
+- Typography must be INTENTIONAL — the font, size, weight, and placement should feel like a designed piece
+- Can use 1-2 lines max — headline only, no body copy
+- Integrate text with the composition: it can overlap the subject, sit in negative space, or anchor the layout
+- The overall image must look like a professional editorial campaign piece
+- DO NOT add captions, hashtags, CTAs, watermarks or secondary text elements`;
 }
 
 // ─── Prompt para imagen de campaña derivada (con ancla) ───────
@@ -273,12 +312,12 @@ ${CAMPAIGN_CHANNEL_META[pieza.canal].label === 'Instagram Stories' || CAMPAIGN_C
   ? '- Square or slightly vertical. Clean, clear product focus. Simple background.'
   : '- Square or 4:5. Strong focal point. Scroll-stopping composition.'}
 
-🚫 NO TEXT IN THE IMAGE — no typography, no overlaid words, no captions, no watermarks. Pure photography only.
+${buildTypographyInstructions(plan, pieza)}
 
 FINAL CHECKLIST:
 ${hasModel   ? '✓ Person matches model reference exactly — face, hair, skin tone unchanged\n' : ''}${hasProduct ? '✓ Product matches product reference exactly — same shape, color, every detail\n' : ''}${hasAnchor  ? '✓ Color temperature and lighting match anchor image\n' : ''}✓ Shot role "${pieza.rol}" is clearly communicated
 ✓ Professional campaign quality — no obvious AI artifacts
-✓ NO text, typography or graphic design elements in the image`;
+${plan.textoEnImagenes === 'none' ? '✓ NO text, typography or graphic design elements in the image' : `✓ Typography style matches: ${plan.estiloTexto ?? 'clean designed text'}`}`;
 }
 
 // ─── buildCampaignPlan ────────────────────────────────────────
@@ -297,6 +336,8 @@ export async function buildCampaignPlan(
     selected.brandRef                && '- BRAND IMAGE attached: analyze brand colors, style, and visual identity.',
     selected.modelRef                && '- MODEL IMAGE attached: this person will star in the campaign.',
   ].filter(Boolean).join('\n');
+
+  const hasInspirationImages = !!selected.inspirationRef;
 
   const prompt = `You are a senior creative director, marketing strategist, and prompt engineer specialized in Latin American e-commerce brands.
 
@@ -319,6 +360,24 @@ THINK STEP BY STEP:
 6. Create NICHE-SPECIFIC hashtags — NOT generic like #emprendedora
 7. For each piece, write an imagePrompt in ENGLISH — specific, visual, directional:
    "Commercial photography. [Subject]. [Composition]. [Lighting]. [Mood]. [Channel context]."
+   IMPORTANT: imagePrompt must NEVER include any text, words, or typography instructions.
+   Text decisions are handled separately — do NOT write "with text overlay", "with caption", etc.
+
+TYPOGRAPHY DECISION (critical — analyze this carefully):
+${hasInspirationImages
+  ? `The entrepreneur uploaded INSPIRATION images. Analyze them to decide the text-in-image style:
+- If the inspiration is UGC/lifestyle/product-only (no text on image) → textoEnImagenes: "none"
+- If the inspiration has subtle text (a small phrase, minimal overlay) → textoEnImagenes: "minimal"
+- If the inspiration has strong graphic text (editorial, magazine style, billboard) → textoEnImagenes: "editorial"
+When textoEnImagenes is "minimal" or "editorial", describe the typography style you see or infer
+from the inspiration in estiloTexto (font weight, color, placement, case — e.g., "serif white bold
+uppercase, centered top third" or "thin sans-serif black, bottom-left aligned, sentence case").`
+  : `No inspiration images uploaded. Default to textoEnImagenes: "none" unless the brief explicitly
+mentions graphic text, poster-style, or editorial look. If so, infer a clean modern style.`}
+
+NOT every image needs text — for "minimal" and "editorial" styles, only 30-50% of pieces should
+have text. Use your creative judgment: text works best for teasers, launches, and closing pieces.
+For product shots, lifestyle, and social proof — pure photography usually wins.
 
 RULES:
 - Exactly ${imageCount} pieces
@@ -326,7 +385,7 @@ RULES:
 - Copy feels written by a real person — emotion, specificity, real CTAs
 - Instructions for Sofi: ONE simple action per piece
 - Hashtags: real, niche-specific, researched for this product/category
-- imagePrompt: English, 2-3 sentences, highly specific and visual
+- imagePrompt: English, 2-3 sentences, highly specific and visual — NO text/typography mentions ever
 
 RESPOND ONLY WITH VALID JSON (no markdown):
 {
@@ -335,6 +394,8 @@ RESPOND ONLY WITH VALID JSON (no markdown):
   "tagline": "Memorable campaign phrase — max 8 words in Spanish",
   "duracionDias": 7,
   "resumen": "2-3 sentences telling Sofi exactly what to do and why it will work",
+  "textoEnImagenes": "none",
+  "estiloTexto": null,
   "hashtagsComunidad": ["#tag1","#tag2","#tag3"],
   "hashtagsNicho": ["#tag4","#tag5","#tag6","#tag7"],
   "hashtagsColarga": ["#tag8","#tag9","#tag10"],
@@ -345,6 +406,7 @@ RESPOND ONLY WITH VALID JSON (no markdown):
       "semana": 1,
       "canal": "instagram_feed",
       "rol": "Teaser",
+      "usaTexto": false,
       "imagePrompt": "Commercial photography. [specific visual]. [composition]. [lighting]. [mood]. Optimized for Instagram Feed.",
       "titular": "Short impactful headline max 60 chars in Spanish",
       "caption": "Full post text Latin American Spanish with emojis if natural max 200 chars",
@@ -366,13 +428,28 @@ RESPOND ONLY WITH VALID JSON (no markdown):
     if (match) {
       const parsed = JSON.parse(match[0]);
       if (parsed?.piezas && Array.isArray(parsed.piezas) && parsed.piezas.length > 0) {
+        // Normalizar decisión tipográfica
+        const textoMode: TextoEnImagenes =
+          ['none', 'minimal', 'editorial'].includes(parsed.textoEnImagenes)
+            ? parsed.textoEnImagenes
+            : 'none';
+        parsed.textoEnImagenes = textoMode;
+        parsed.estiloTexto = parsed.estiloTexto ?? null;
+
         parsed.piezas = parsed.piezas.slice(0, imageCount).map((p: any, i: number) => ({
           ...p,
           id:       p.id ?? `pieza_${i + 1}`,
           imageUrl: '',
           hashtags: Array.isArray(p.hashtags) ? p.hashtags : [],
+          // usaTexto: si el plan tiene texto, Gemini decide por pieza; si no, siempre false
+          usaTexto: textoMode !== 'none' ? (p.usaTexto ?? false) : false,
         }));
-        console.log('[CampaignDirector] Plan OK:', { concepto: parsed.concepto, piezas: parsed.piezas.length });
+        console.log('[CampaignDirector] Plan OK:', {
+          concepto: parsed.concepto,
+          piezas:   parsed.piezas.length,
+          textoEnImagenes: parsed.textoEnImagenes,
+          estiloTexto: parsed.estiloTexto,
+        });
         return parsed as CampaignPlan;
       }
     }
@@ -514,6 +591,8 @@ function buildFallbackPlan(
     tagline:           'Hecho para destacar.',
     duracionDias:      7,
     piezas,
+    textoEnImagenes:   'none' as TextoEnImagenes,
+    estiloTexto:       null,
     hashtagsComunidad: ['#emprendedoras', '#tiendaonline', '#negocio'],
     hashtagsNicho:     ['#emprendedoralatina', '#ecommercechile', '#shoplocal'],
     hashtagsColarga:   ['#productoshandmade', '#tiendaonlinechile', '#compralocal'],

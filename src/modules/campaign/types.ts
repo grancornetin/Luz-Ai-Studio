@@ -40,6 +40,7 @@ export interface CampaignPiece {
   rol:         string;           // "Teaser", "Lanzamiento", "Beneficio", "Conversión", etc.
   imagePrompt: string;           // prompt para generar la imagen
   imageUrl:    string;           // resultado generado
+  usaTexto?:   boolean;          // true si esta pieza específica debe llevar texto en imagen
   // Copy adaptado al canal
   titular:     string;           // frase corta, impacto inmediato
   caption:     string;           // texto completo del post

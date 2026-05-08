@@ -7,7 +7,7 @@
 > 4. No borrar secciones — si algo fue eliminado, marcarlo como "Eliminado en [fecha]" y explicar por qué.
 > 5. El objetivo es que otra IA pueda leer este archivo y entender completamente qué hace el módulo, cómo funciona, y en qué estado está, sin necesidad de leer el código.
 
-**Última actualización:** Mayo 2026  
+**Última actualización:** Mayo 2026 (tipografía inteligente)  
 **Propósito:** Crear kits de campaña publicitaria completos para emprendedores latinoamericanos que venden en Instagram, TikTok, WhatsApp y Facebook.
 
 ---
@@ -149,5 +149,5 @@ Para mostrar las imágenes en pantalla a medida que terminan, sin esperar a que 
 
 - Integración con el módulo de Proyectos (guardar automáticamente el kit completo en un proyecto)
 - Perfil de Marca como módulo separado que alimenta a Campaign con datos del negocio
-- Texto en imágenes: instrucción explícita de cuándo usar texto y con qué estilo (alineado a la inspiración visual subida)
+- ~~Texto en imágenes: instrucción explícita de cuándo usar texto y con qué estilo~~ — **Implementado Mayo 2026**: Gemini analiza las imágenes de inspiración al crear el plan y devuelve `textoEnImagenes` ("none" / "minimal" / "editorial") + `estiloTexto` (descripción tipográfica). Cada pieza tiene `usaTexto: boolean` para que no todas lleven texto. `buildTypographyInstructions()` convierte esa decisión en instrucciones específicas para el generador de imágenes.
 - Hoja de configuración/brief/prompts al final del PDF

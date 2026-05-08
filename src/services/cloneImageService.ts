@@ -1,12 +1,14 @@
 // src/services/cloneImageService.ts
 // ─────────────────────────────────────────────────────────────────────────────
 // Clone de escena con sustitución de identidad + reemplazo de outfits/productos.
-// V2: refuerzo especial para escenas con 2 sujetos:
-// - obliga a reemplazar ambas personas
-// - refuerza left/right
-// - evita que una sola identidad domine la escena
-// - mantiene el trabajo de outfit como edición localizada
-// Usa imageApiService → QStash + Redis → image-worker → Gemini 3 @ global.
+// V3: enfoque separado para BASE PASS vs EDIT PASS
+//
+// CAMBIO CLAVE:
+// - La imagen target YA NO se trata como identidad humana a conservar.
+// - Se trata como plantilla de escena / pose / composición / iluminación.
+// - Las personas originales del target son placeholders humanos reemplazables.
+// - El BASE PASS se enfoca en reemplazo de identidad.
+// - El EDIT PASS se enfoca en cambio localizado de outfit/productos.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { imageApiService, extractImageRef, type GenerateImageParams } from './imageApiService';
@@ -64,75 +66,12 @@ type BuiltRefs = {
 
 function getCameraStylePrompt(cameraStyle: CameraStyle): string {
   if (cameraStyle === 'iphone_05x') {
-    return '[CAMERA: 0.5x Ultra Wide] Ultra-wide perspective, slight edge distortion, deeper field of view, strong environmental presence.';
+    return '[CAMERA: 0.5x Ultra Wide] Ultra-wide perspective, slight edge distortion, deeper field of view, stronger environmental presence.';
   }
   if (cameraStyle === 'iphone_selfie') {
     return '[CAMERA: Front Selfie] Natural arm-length distance, selfie perspective, believable front-camera realism.';
   }
   return '[CAMERA: 1x Main] Natural proportions, handheld realism, approximately 26mm equivalent iPhone main camera look.';
-}
-
-function getSubjectPlacementInstruction(selector?: SubjectSelector, hasSecondSubject?: boolean): string {
-  if (!hasSecondSubject) {
-    return [
-      '- There is exactly ONE visible subject in the final image.',
-      '- Subject 1 is the only person in frame.',
-      '- The original visible person in the anchor image must be fully replaced by Subject 1.',
-    ].join('\n');
-  }
-
-  if (selector === 'left') {
-    return [
-      '- There are exactly TWO visible subjects in the final image.',
-      '- Subject 1 MUST occupy the LEFT-side person position from the scene anchor.',
-      '- Subject 2 MUST occupy the RIGHT-side person position from the scene anchor.',
-      '- Replace both original people from the anchor scene.',
-      '- Do not swap positions.',
-      '- Do not merge identities.',
-    ].join('\n');
-  }
-
-  if (selector === 'right') {
-    return [
-      '- There are exactly TWO visible subjects in the final image.',
-      '- Subject 1 MUST occupy the RIGHT-side person position from the scene anchor.',
-      '- Subject 2 MUST occupy the LEFT-side person position from the scene anchor.',
-      '- Replace both original people from the anchor scene.',
-      '- Do not swap positions.',
-      '- Do not merge identities.',
-    ].join('\n');
-  }
-
-  return [
-    '- There are exactly TWO visible subjects in the final image.',
-    '- Subject 1 and Subject 2 must be assigned using the most stable spatial mapping from the scene anchor.',
-    '- Once the mapping is inferred, keep it fixed.',
-    '- Replace both original people from the anchor scene.',
-    '- Never swap Subject 1 and Subject 2.',
-    '- Never merge or average their identities.',
-  ].join('\n');
-}
-
-function getSubjectCountLock(params: CloneImageParams, hasSecondSubject: boolean): string {
-  if (!hasSecondSubject) {
-    return [
-      '[SUBJECT COUNT LOCK]',
-      '- Final image must contain exactly ONE visible person.',
-      '- That visible person must be Subject 1.',
-      '- No original anchor identity may remain visible.',
-    ].join('\n');
-  }
-
-  return [
-    '[SUBJECT COUNT LOCK]',
-    '- Final image must contain exactly TWO visible people.',
-    '- Both visible people must be replaced by the provided identities.',
-    '- One person must be Subject 1 and the other must be Subject 2.',
-    '- Neither original anchor identity may remain visible.',
-    '- Do not omit one person.',
-    '- Do not duplicate one identity onto both people.',
-    '- Do not average, blend, or merge Subject 1 and Subject 2.',
-  ].join('\n');
 }
 
 function buildReferences(params: CloneImageParams): BuiltRefs {
@@ -192,13 +131,138 @@ function buildReferences(params: CloneImageParams): BuiltRefs {
   };
 }
 
-function buildGeminiPrompt(params: CloneImageParams, refs: BuiltRefs, runId: string): string {
-  const hasSecondSubject = !!params.enableSecondSubject && !!refs.refMap.subject2Face && !!refs.refMap.subject2Body;
-  const hasOutfit1 = !!refs.refMap.subject1Outfit;
-  const hasOutfit2 = !!refs.refMap.subject2Outfit;
-  const hasProductReplacements = refs.productRefs.length > 0;
-  const isEditPass = hasOutfit1 || hasOutfit2 || hasProductReplacements;
+function getSubjectPlacementBlock(selector: SubjectSelector | undefined, hasSecondSubject: boolean): string {
+  if (!hasSecondSubject) {
+    return [
+      '[SUBJECT POSITION MAPPING]',
+      '- There is exactly one visible person in the final image.',
+      '- Subject 1 replaces the original visible person from the scene anchor.',
+      '- The original visible person in the scene anchor is only a pose/composition placeholder and must not remain as the final identity.',
+    ].join('\n');
+  }
 
+  if (selector === 'left') {
+    return [
+      '[SUBJECT POSITION MAPPING]',
+      '- There are exactly two visible people in the final image.',
+      '- Subject 1 MUST replace the person on the LEFT side of the scene anchor.',
+      '- Subject 2 MUST replace the person on the RIGHT side of the scene anchor.',
+      '- The original left-side person is only a placeholder and must not remain.',
+      '- The original right-side person is only a placeholder and must not remain.',
+      '- Never swap the mapping.',
+    ].join('\n');
+  }
+
+  if (selector === 'right') {
+    return [
+      '[SUBJECT POSITION MAPPING]',
+      '- There are exactly two visible people in the final image.',
+      '- Subject 1 MUST replace the person on the RIGHT side of the scene anchor.',
+      '- Subject 2 MUST replace the person on the LEFT side of the scene anchor.',
+      '- The original right-side person is only a placeholder and must not remain.',
+      '- The original left-side person is only a placeholder and must not remain.',
+      '- Never swap the mapping.',
+    ].join('\n');
+  }
+
+  return [
+    '[SUBJECT POSITION MAPPING]',
+    '- There are exactly two visible people in the final image.',
+    '- Assign Subject 1 and Subject 2 to the two anchor positions using the most stable spatial mapping.',
+    '- Once the mapping is inferred, keep it fixed.',
+    '- Both original people in the scene anchor are only placeholders and must not remain as final identities.',
+    '- Never swap the two subjects after mapping.',
+  ].join('\n');
+}
+
+function buildBaseGeminiPrompt(params: CloneImageParams, refs: BuiltRefs, runId: string): string {
+  const hasSecondSubject = !!params.enableSecondSubject && !!refs.refMap.subject2Face && !!refs.refMap.subject2Body;
+  const sceneRef = refs.refMap.scene;
+  const s1FaceRef = refs.refMap.subject1Face;
+  const s1BodyRef = refs.refMap.subject1Body;
+  const s2FaceRef = refs.refMap.subject2Face;
+  const s2BodyRef = refs.refMap.subject2Body;
+
+  const refMapLines = [
+    `- ${sceneRef} = scene anchor (USE FOR SCENE / POSE / COMPOSITION / LIGHTING / BACKGROUND ONLY)`,
+    `- ${s1FaceRef} = Subject 1 face identity reference`,
+    `- ${s1BodyRef} = Subject 1 body reference (USE FOR BODY PROPORTIONS / SKIN TONE / HAIR LENGTH GUIDANCE ONLY)`,
+    ...(hasSecondSubject && s2FaceRef ? [`- ${s2FaceRef} = Subject 2 face identity reference`] : []),
+    ...(hasSecondSubject && s2BodyRef ? [`- ${s2BodyRef} = Subject 2 body reference (USE FOR BODY PROPORTIONS / SKIN TONE / HAIR LENGTH GUIDANCE ONLY)`] : []),
+  ].join('\n');
+
+  return `
+[PROTOCOL: CLONE IMAGE BASE PASS — SCENE TEMPLATE + IDENTITY REPLACEMENT]
+[RUN_ID: ${runId}]
+
+[REFERENCE MAP]
+${refMapLines}
+
+[PRIMARY GOAL]
+Use ${sceneRef} as a scene template only.
+Preserve the scene layout, pose, camera framing, background, lighting, perspective, interpersonal spacing, and overall composition from ${sceneRef}.
+DO NOT preserve the original people identities from ${sceneRef}.
+The people visible in ${sceneRef} are placeholders that must be replaced by the provided subjects.
+
+${getSubjectPlacementBlock(params.subject1Selector, hasSecondSubject)}
+
+[SCENE TEMPLATE RULES]
+- Preserve the environment/background from ${sceneRef}.
+- Preserve the camera angle and framing from ${sceneRef}.
+- Preserve the pose and body placement from ${sceneRef}.
+- Preserve the crop from ${sceneRef}.
+- Preserve the lighting direction and white balance from ${sceneRef}.
+- Preserve the approximate gesture, posture, leaning, and interpersonal interaction from ${sceneRef}.
+- Preserve visible props and environmental objects unless explicitly replaced elsewhere.
+- Treat the anchor people only as pose/composition placeholders, not as identity references.
+
+[IDENTITY REPLACEMENT RULES]
+- Replace every visible original anchor person identity.
+- If the anchor contains 1 person, replace that person with Subject 1.
+- If the anchor contains 2 people, replace BOTH people: one with Subject 1 and the other with Subject 2, according to the mapping rules.
+- Never keep the original face of any visible anchor person.
+- Never keep the original hair identity of any visible anchor person.
+- Never return the unmodified target image.
+- Never output only one replaced subject if two are required.
+- Never duplicate Subject 1 onto both people.
+- Never duplicate Subject 2 onto both people.
+- Never blend Subject 1 and Subject 2 into a hybrid identity.
+
+[SUBJECT 1 IDENTITY]
+- Subject 1 face must clearly and recognizably match ${s1FaceRef}.
+- Subject 1 body structure should follow ${s1BodyRef} for body proportions, visible anatomy, skin tone, and general hair length only.
+- Subject 1 must remain a distinct identity.
+
+${hasSecondSubject && s2FaceRef && s2BodyRef ? `
+[SUBJECT 2 IDENTITY]
+- Subject 2 face must clearly and recognizably match ${s2FaceRef}.
+- Subject 2 body structure should follow ${s2BodyRef} for body proportions, visible anatomy, skin tone, and general hair length only.
+- Subject 2 must remain a distinct identity.
+- Subject 2 must not be confused with Subject 1.
+`.trim() : ''}
+
+[WARDROBE RULES FOR BASE PASS]
+- In BASE PASS, wardrobe may remain generally consistent with the target scene unless explicit outfit replacement is requested later.
+- Do not prioritize preserving the original identities through wardrobe.
+- The most important objective is correct identity replacement while preserving scene composition.
+
+${getCameraStylePrompt(params.cameraStyle)}
+
+[HARD RULES]
+- Photorealistic smartphone image. No illustration. No CGI. No 3D render look.
+- No text. No watermark.
+- No face drift.
+- No identity swap.
+- No identity blending.
+- No leaving the original anchor identity unchanged.
+- No body deformation. No extra limbs. No extra fingers.
+- No scene drift. No background drift. No composition drift.
+- The final image must look like the same scene, but with the anchor people replaced by the requested subjects.
+`.trim();
+}
+
+function buildEditGeminiPrompt(params: CloneImageParams, refs: BuiltRefs, runId: string): string {
+  const hasSecondSubject = !!params.enableSecondSubject && !!refs.refMap.subject2Face && !!refs.refMap.subject2Body;
   const sceneRef = refs.refMap.scene;
   const s1FaceRef = refs.refMap.subject1Face;
   const s1BodyRef = refs.refMap.subject1Body;
@@ -207,214 +271,215 @@ function buildGeminiPrompt(params: CloneImageParams, refs: BuiltRefs, runId: str
   const s1OutfitRef = refs.refMap.subject1Outfit;
   const s2OutfitRef = refs.refMap.subject2Outfit;
 
-  const referenceMapLines = [
-    `- ${sceneRef} = ${isEditPass ? 'locked scene/base composition anchor' : 'original scene anchor'}`,
+  const hasOutfit1 = !!s1OutfitRef;
+  const hasOutfit2 = !!s2OutfitRef;
+  const hasProductReplacements = refs.productRefs.length > 0;
+
+  const refMapLines = [
+    `- ${sceneRef} = locked base composition anchor`,
     `- ${s1FaceRef} = Subject 1 face identity reference`,
-    `- ${s1BodyRef} = Subject 1 body reference (only proportions / visible anatomy / skin tone)`,
+    `- ${s1BodyRef} = Subject 1 body reference`,
     ...(hasSecondSubject && s2FaceRef ? [`- ${s2FaceRef} = Subject 2 face identity reference`] : []),
-    ...(hasSecondSubject && s2BodyRef ? [`- ${s2BodyRef} = Subject 2 body reference (only proportions / visible anatomy / skin tone)`] : []),
-    ...(hasOutfit1 && s1OutfitRef ? [`- ${s1OutfitRef} = Subject 1 outfit reference`] : []),
-    ...(hasOutfit2 && s2OutfitRef ? [`- ${s2OutfitRef} = Subject 2 outfit reference`] : []),
-    ...refs.productRefs.map(p => `- ${p.refName} = Replacement reference for product/accessory "${p.name}"`),
+    ...(hasSecondSubject && s2BodyRef ? [`- ${s2BodyRef} = Subject 2 body reference`] : []),
+    ...(hasOutfit1 ? [`- ${s1OutfitRef} = Subject 1 outfit reference`] : []),
+    ...(hasOutfit2 ? [`- ${s2OutfitRef} = Subject 2 outfit reference`] : []),
+    ...refs.productRefs.map((p) => `- ${p.refName} = replacement reference for product/accessory "${p.name}"`),
   ].join('\n');
-
-  const goalText = isEditPass
-    ? `Use ${sceneRef} as a LOCKED anchor image. Perform a localized edit only. Keep the image almost identical to ${sceneRef}, and change only the explicitly requested wardrobe/products while preserving both subject identities and positions.`
-    : hasSecondSubject
-      ? `Recreate ${sceneRef} with the same scene, framing, pose, background and lighting, but replace BOTH visible people: one must become Subject 1 and the other must become Subject 2, following the requested spatial mapping.`
-      : `Recreate ${sceneRef} with the same scene, pose, framing, background and lighting, while replacing the visible subject with Subject 1.`;
-
-  const subject1Task = [
-    '[SUBJECT 1 TASK]',
-    `- Subject 1 face identity must clearly and recognizably match ${s1FaceRef}.`,
-    `- Subject 1 body must follow ${s1BodyRef} only for body proportions, visible anatomy, and skin tone alignment.`,
-    `- Subject 1 must remain distinct from Subject 2.`,
-    hasOutfit1 && s1OutfitRef
-      ? `- Replace ONLY Subject 1 clothing using ${s1OutfitRef}. This must not affect Subject 2, scene composition, pose, or identity locks.`
-      : `- ${isEditPass ? 'Keep Subject 1 wardrobe unchanged unless a requested product replacement affects that exact area.' : 'If no outfit override is provided, keep the wardrobe logically consistent with the anchor scene.'}`,
-  ].join('\n');
-
-  const subject2Task = hasSecondSubject && s2FaceRef && s2BodyRef
-    ? [
-        '[SUBJECT 2 TASK]',
-        `- Subject 2 face identity must clearly and recognizably match ${s2FaceRef}.`,
-        `- Subject 2 body must follow ${s2BodyRef} only for body proportions, visible anatomy, and skin tone alignment.`,
-        `- Subject 2 must remain distinct from Subject 1.`,
-        hasOutfit2 && s2OutfitRef
-          ? `- Replace ONLY Subject 2 clothing using ${s2OutfitRef}. This must not affect Subject 1, scene composition, pose, or identity locks.`
-          : `- ${isEditPass ? 'Keep Subject 2 wardrobe unchanged unless a requested product replacement affects that exact area.' : 'If no outfit override is provided, keep the wardrobe logically consistent with the anchor scene.'}`,
-      ].join('\n')
-    : '';
-
-  const productText = hasProductReplacements
-    ? [
-        '[PRODUCT REPLACEMENTS]',
-        ...refs.productRefs.map(p => `- Replace only the corresponding product/accessory in the scene with the item shown in ${p.refName} (${p.name}). Keep scale, placement, perspective, hand interaction, lighting, and shadows coherent with the scene.`),
-      ].join('\n')
-    : '';
 
   return `
-[PROTOCOL: CLONE IMAGE — SCENE LOCK + DUAL IDENTITY LOCK + LOCAL OUTFIT EDIT]
-[MODE: ${isEditPass ? 'EDIT PASS' : 'BASE PASS'}]
+[PROTOCOL: CLONE IMAGE EDIT PASS — LOCALIZED OUTFIT / PRODUCT EDIT]
 [RUN_ID: ${runId}]
 
 [REFERENCE MAP]
-${referenceMapLines}
+${refMapLines}
 
-[GOAL]
-${goalText}
+[PRIMARY GOAL]
+Use ${sceneRef} as a locked anchor image.
+Keep the image almost identical to ${sceneRef}.
+Perform only localized edits to the explicitly requested clothing and/or products.
+Do not redesign the scene and do not change subject identities.
 
-${getSubjectCountLock(params, hasSecondSubject)}
-
-[SUBJECT PLACEMENT]
-${getSubjectPlacementInstruction(params.subject1Selector, hasSecondSubject)}
-
-${subject1Task}
-${subject2Task ? `\n\n${subject2Task}` : ''}
-${productText ? `\n\n${productText}` : ''}
-
-[BASE IDENTITY REPLACEMENT RULES]
-- Replace all original visible person identities from the anchor scene.
-- If there are 2 people in the scene, BOTH must be replaced.
-- Never leave one original anchor identity visible.
-- Never output only one replaced person when two are required.
-- Never assign Subject 1 identity to both people.
-- Never assign Subject 2 identity to both people.
-- Never blend Subject 1 and Subject 2 into a hybrid face.
+${getSubjectPlacementBlock(params.subject1Selector, hasSecondSubject)}
 
 [SCENE LOCK]
-- Framing/crop: identical to ${sceneRef}.
-- Camera angle and lens impression: identical to ${sceneRef}.
-- Pose and body placement: identical to ${sceneRef}.
-- Background and environment: identical to ${sceneRef}.
-- Lighting, white balance and shadow direction: identical to ${sceneRef}.
-- Keep the same interpersonal spacing and body placement from the anchor scene.
+- Keep framing/crop identical to ${sceneRef}.
+- Keep camera angle and lens impression identical to ${sceneRef}.
+- Keep pose and body placement identical to ${sceneRef}.
+- Keep background and environment identical to ${sceneRef}.
+- Keep lighting direction, white balance, and shadow direction identical to ${sceneRef}.
+- Keep interpersonal spacing and body interaction identical to ${sceneRef}.
+
+[IDENTITY LOCK]
+- Subject 1 identity must still match ${s1FaceRef}.
+- Subject 1 body proportions and visible anatomy must remain coherent with ${s1BodyRef}.
+${hasSecondSubject && s2FaceRef ? `- Subject 2 identity must still match ${s2FaceRef}.` : ''}
+${hasSecondSubject && s2BodyRef ? `- Subject 2 body proportions and visible anatomy must remain coherent with ${s2BodyRef}.` : ''}
+- Never change the identity of any already-correct subject while applying outfits/products.
+- Never re-interpret the image globally.
+- Never revert to the original target person identities.
+
+[OUTFIT RULES]
+${hasOutfit1 ? `- Replace ONLY Subject 1 clothing using ${s1OutfitRef}.` : '- Subject 1 wardrobe must remain unchanged unless a requested product edit overlaps that area.'}
+${hasSecondSubject ? (hasOutfit2 ? `- Replace ONLY Subject 2 clothing using ${s2OutfitRef}.` : '- Subject 2 wardrobe must remain unchanged unless a requested product edit overlaps that area.') : ''}
+- Outfit edits are localized changes only.
+- Do not affect the other subject when editing one subject.
+- Use body references only for body proportions and skin tone, not as clothing references when an outfit override exists.
+- Adapt the outfit to the exact visible pose and crop of the subject in the anchor image.
+- Render only garment parts that are logically visible in the actual crop and pose.
+- If only the upper body is visible, do not invent lower garments or shoes.
+- Respect occlusions from arms, hands, hair, furniture, other person, props, and frame edges.
+- The new clothing must inherit scene lighting, perspective, shading, white balance, and shadow logic.
+- Fabrics must look naturally worn, with realistic folds, drape, seams, tension, and material response.
+- The result must not look like pasted-on clothing or a collage.
+
+${hasProductReplacements ? `
+[PRODUCT REPLACEMENTS]
+${refs.productRefs.map((p) => `- Replace only the corresponding product/accessory with the item shown in ${p.refName} (${p.name}). Keep scale, placement, interaction, perspective, and lighting coherent with the scene.`).join('\n')}
+`.trim() : ''}
 
 ${getCameraStylePrompt(params.cameraStyle)}
 
-[OUTFIT INTEGRATION RULES]
-- Outfit replacement is a LOCALIZED change only.
-- Do NOT redesign the whole image.
-- Do NOT change identity, face structure, hairstyle, scene, crop, camera, or pose while applying outfits.
-- Use body references only for body proportions and skin tone. NEVER copy their clothing when an outfit override exists.
-- Adapt each outfit to the exact visible body pose from the scene anchor.
-- Respect real-world garment behavior: folds, seams, drape, tension, layering, sleeve behavior, collar behavior, and fabric thickness.
-- The new outfit must inherit the scene lighting, perspective, white balance, shadows, and occlusions, so it looks photographed in the original scene, not pasted on top.
-- Show ONLY garment parts that are logically visible in the current crop and pose.
-- If only the torso is visible, render only the visible upper-body portion of the outfit.
-- Never force hidden pants, skirts, shorts, shoes, or full-body garment sections to appear if the crop or pose does not reveal them.
-- Respect occlusions from arms, hands, hair, furniture, props, the other person, and frame edges.
-- Preserve realistic fabric texture and material response.
-
 [HARD RULES]
-- Photorealistic smartphone / iPhone style. No 3D render look. No illustration.
+- Photorealistic smartphone image. No illustration. No CGI. No 3D render look.
 - No text. No watermark.
-- No identity swaps. No face drift. No hairstyle drift.
-- No body deformation. No extra limbs. No extra fingers. No broken anatomy.
-- No scene drift. No background drift. No re-composition.
+- No face drift.
+- No identity swaps.
+- No hairstyle drift.
+- No body deformation. No extra limbs. No extra fingers.
+- No scene drift. No background drift. No composition drift.
 - No wardrobe contamination between Subject 1 and Subject 2.
-- If only one subject has an outfit replacement, the other subject must remain unchanged.
-- The final image must read as one single coherent original photo.
+- The final result must look like one coherent original photo.
 `.trim();
 }
 
-function buildSeedreamPrompt(params: CloneImageParams, refs: BuiltRefs, runId: string): string {
+function buildBaseSeedreamPrompt(params: CloneImageParams, refs: BuiltRefs, runId: string): string {
   const hasSecondSubject = !!params.enableSecondSubject && !!refs.refMap.subject2Face && !!refs.refMap.subject2Body;
-  const hasOutfit1 = !!refs.refMap.subject1Outfit;
-  const hasOutfit2 = !!refs.refMap.subject2Outfit;
-  const hasProductReplacements = refs.productRefs.length > 0;
-  const isEditPass = hasOutfit1 || hasOutfit2 || hasProductReplacements;
-
-  const imageList = [
-    `• ${refs.refMap.scene}: ${isEditPass ? 'locked scene/base composition anchor' : 'scene anchor to replicate'}`,
-    `• ${refs.refMap.subject1Face}: Subject 1 face identity reference`,
-    `• ${refs.refMap.subject1Body}: Subject 1 body reference (use only for body proportions / visible anatomy / skin tone, not for clothing)`,
-    ...(hasSecondSubject && refs.refMap.subject2Face ? [`• ${refs.refMap.subject2Face}: Subject 2 face identity reference`] : []),
-    ...(hasSecondSubject && refs.refMap.subject2Body ? [`• ${refs.refMap.subject2Body}: Subject 2 body reference (use only for body proportions / visible anatomy / skin tone, not for clothing)`] : []),
-    ...(hasOutfit1 && refs.refMap.subject1Outfit ? [`• ${refs.refMap.subject1Outfit}: Subject 1 outfit reference`] : []),
-    ...(hasOutfit2 && refs.refMap.subject2Outfit ? [`• ${refs.refMap.subject2Outfit}: Subject 2 outfit reference`] : []),
-    ...refs.productRefs.map(p => `• ${p.refName}: replacement reference for product/accessory "${p.name}"`),
-  ].join('\n');
-
-  const productInstructions = hasProductReplacements
-    ? [
-        '[PRODUCT REPLACEMENTS]',
-        ...refs.productRefs.map(p => `- Replace only the matching product/accessory in the scene with the item shown in ${p.refName} (${p.name}). Keep scale, perspective, lighting and placement natural.`),
-      ].join('\n')
-    : '';
+  const sceneRef = refs.refMap.scene;
+  const s1FaceRef = refs.refMap.subject1Face;
+  const s1BodyRef = refs.refMap.subject1Body;
+  const s2FaceRef = refs.refMap.subject2Face;
+  const s2BodyRef = refs.refMap.subject2Body;
 
   return `
-[REFERENCE IMAGES PROVIDED — USE EACH EXACTLY AS DESCRIBED]
-${imageList}
+[REFERENCE IMAGES PROVIDED]
+- ${sceneRef}: scene template only. Use it for background, pose, composition, crop, perspective, camera, lighting, and overall scene structure.
+- ${s1FaceRef}: Subject 1 face identity reference.
+- ${s1BodyRef}: Subject 1 body reference for body proportions, visible anatomy, skin tone, and general hair length.
+${hasSecondSubject && s2FaceRef ? `- ${s2FaceRef}: Subject 2 face identity reference.` : ''}
+${hasSecondSubject && s2BodyRef ? `- ${s2BodyRef}: Subject 2 body reference for body proportions, visible anatomy, skin tone, and general hair length.` : ''}
 
 [RUN ID]
 ${runId}
 
-[GOAL]
-${isEditPass
-  ? `Treat ${refs.refMap.scene} as a locked anchor image. Perform a minimal localized edit only. Keep the scene, framing, pose, lighting and identity stable, and change only the explicitly requested outfit/product areas.`
-  : hasSecondSubject
-    ? `Replicate ${refs.refMap.scene} with the same scene, framing, pose, background and lighting, but replace BOTH visible people using the provided identity references.`
-    : `Replicate ${refs.refMap.scene} with the same scene, framing, pose, background and lighting, replacing the visible person with Subject 1.`}
+[MAIN GOAL]
+Replicate the same scene from ${sceneRef}, but do NOT preserve the original people identities.
+The people in ${sceneRef} are placeholders that must be replaced by the provided subjects.
 
-${getSubjectCountLock(params, hasSecondSubject)}
+${getSubjectPlacementBlock(params.subject1Selector, hasSecondSubject)}
 
-[SUBJECT PLACEMENT]
-${getSubjectPlacementInstruction(params.subject1Selector, hasSecondSubject)}
+[SCENE RULES]
+- Keep the same scene, background, camera, framing, crop, perspective, lighting, and pose from ${sceneRef}.
+- Keep the same interpersonal spacing and body placement.
+- Keep the same environment and visible props.
+- Treat the original people only as pose/composition placeholders, not as identities to preserve.
 
-[IDENTITY AND BODY RULES]
-- Subject 1 face identity must clearly match ${refs.refMap.subject1Face}.
-- Subject 1 body proportions and skin tone must follow ${refs.refMap.subject1Body}.
-- Subject 1 must remain distinct from any other person.
-${hasOutfit1 && refs.refMap.subject1Outfit
-  ? `- Change only Subject 1 clothing using ${refs.refMap.subject1Outfit}.`
-  : `- ${isEditPass ? 'Keep Subject 1 wardrobe unchanged unless a product replacement overlaps that area.' : 'Keep Subject 1 wardrobe logically consistent with the scene anchor if no outfit override is supplied.'}`}
-${hasSecondSubject && refs.refMap.subject2Face ? `- Subject 2 face identity must clearly match ${refs.refMap.subject2Face}.` : ''}
-${hasSecondSubject && refs.refMap.subject2Body ? `- Subject 2 body proportions and skin tone must follow ${refs.refMap.subject2Body}.` : ''}
-${hasSecondSubject ? '- Subject 2 must remain distinct from Subject 1.' : ''}
-${hasSecondSubject && hasOutfit2 && refs.refMap.subject2Outfit
-  ? `- Change only Subject 2 clothing using ${refs.refMap.subject2Outfit}.`
-  : hasSecondSubject
-    ? `- ${isEditPass ? 'Keep Subject 2 wardrobe unchanged unless a product replacement overlaps that area.' : 'Keep Subject 2 wardrobe logically consistent with the scene anchor if no outfit override is supplied.'}`
-    : ''}
-
-[BASE IDENTITY REPLACEMENT RULES]
-- Replace all original visible person identities from the anchor scene.
-- If there are 2 people in the scene, BOTH must be replaced.
-- Never leave one original person unchanged.
+[IDENTITY REPLACEMENT RULES]
+- Replace every visible person identity from the scene anchor.
+- Never return the original target people unchanged.
+- If there is one visible person, replace that person with Subject 1.
+- If there are two visible people, replace both people with Subject 1 and Subject 2 according to the mapping.
 - Never output only one replaced person when two are required.
-- Never duplicate Subject 1 onto both people.
-- Never duplicate Subject 2 onto both people.
-- Never blend both subjects into one hybrid identity.
+- Never duplicate one subject onto both people.
+- Never blend both identities together.
 
-[SCENE LOCK]
-- Keep the framing/crop identical to the scene anchor.
-- Keep pose and body placement identical to the scene anchor.
-- Keep background and environment identical to the scene anchor.
-- Keep lighting, shadow direction, white balance and camera impression identical to the scene anchor.
-- Keep the same interpersonal spacing and body placement from the anchor scene.
+[SUBJECT IDENTITIES]
+- Subject 1 face must clearly match ${s1FaceRef}.
+- Subject 1 body proportions and skin tone must follow ${s1BodyRef}.
+${hasSecondSubject && s2FaceRef ? `- Subject 2 face must clearly match ${s2FaceRef}.` : ''}
+${hasSecondSubject && s2BodyRef ? `- Subject 2 body proportions and skin tone must follow ${s2BodyRef}.` : ''}
 
 ${getCameraStylePrompt(params.cameraStyle)}
 
-[OUTFIT INTEGRATION RULES]
-- Outfit changes are localized edits only.
-- Do not redesign the whole image.
-- Do not change face identity, hairstyle, body geometry, pose, crop, background or camera while changing clothes.
-- Use body references only for body structure and skin tone, never as clothing references when outfit overrides exist.
-- The new clothes must fit the exact pose of the person in the anchor image.
-- The new clothes must look naturally photographed in the original scene, with correct folds, drape, texture, lighting, perspective and occlusion.
-- Show only the clothing areas that are actually visible in the crop and pose.
-- Never invent pants, skirts, shorts or shoes if they are not truly visible.
-- Respect occlusions caused by arms, hands, hair, props, furniture, the other person, and frame edges.
-
-${productInstructions ? `${productInstructions}\n\n` : ''}[HARD RULES]
-- Photorealistic smartphone image. No 3D render look. No illustration.
+[HARD RULES]
+- Photorealistic smartphone image only.
 - No text or watermark.
-- No face drift, no identity swap, no wardrobe mixing between subjects.
-- No extra limbs or anatomy errors.
-- No scene drift or background drift.
-- If only one subject is edited, the other subject must remain unchanged.
-- The final result must look like one single coherent original photo.
+- No face drift, identity swap, or identity blending.
+- No scene drift.
+- No body deformation.
+- The final result must look like the same scene, but with the anchor people replaced by the requested subjects.
+`.trim();
+}
+
+function buildEditSeedreamPrompt(params: CloneImageParams, refs: BuiltRefs, runId: string): string {
+  const hasSecondSubject = !!params.enableSecondSubject && !!refs.refMap.subject2Face && !!refs.refMap.subject2Body;
+  const s1OutfitRef = refs.refMap.subject1Outfit;
+  const s2OutfitRef = refs.refMap.subject2Outfit;
+  const hasOutfit1 = !!s1OutfitRef;
+  const hasOutfit2 = !!s2OutfitRef;
+  const hasProductReplacements = refs.productRefs.length > 0;
+
+  return `
+[REFERENCE IMAGES PROVIDED]
+- ${refs.refMap.scene}: locked base composition anchor.
+- ${refs.refMap.subject1Face}: Subject 1 face identity reference.
+- ${refs.refMap.subject1Body}: Subject 1 body reference.
+${hasSecondSubject && refs.refMap.subject2Face ? `- ${refs.refMap.subject2Face}: Subject 2 face identity reference.` : ''}
+${hasSecondSubject && refs.refMap.subject2Body ? `- ${refs.refMap.subject2Body}: Subject 2 body reference.` : ''}
+${hasOutfit1 ? `- ${s1OutfitRef}: Subject 1 outfit reference.` : ''}
+${hasOutfit2 ? `- ${s2OutfitRef}: Subject 2 outfit reference.` : ''}
+${refs.productRefs.map((p) => `- ${p.refName}: replacement reference for product/accessory "${p.name}".`).join('\n')}
+
+[RUN ID]
+${runId}
+
+[MAIN GOAL]
+Perform a minimal localized edit on the locked base image.
+Keep the scene, crop, pose, lighting, and identities stable.
+Change only the explicitly requested outfit and/or product areas.
+
+${getSubjectPlacementBlock(params.subject1Selector, hasSecondSubject)}
+
+[LOCK RULES]
+- Keep the scene unchanged.
+- Keep background unchanged.
+- Keep pose unchanged.
+- Keep crop unchanged.
+- Keep camera impression unchanged.
+- Keep lighting and white balance unchanged.
+- Keep correct identities unchanged.
+
+[IDENTITY RULES]
+- Subject 1 must still match ${refs.refMap.subject1Face}.
+${hasSecondSubject && refs.refMap.subject2Face ? `- Subject 2 must still match ${refs.refMap.subject2Face}.` : ''}
+- Never swap identities.
+- Never revert to the original target identities.
+
+[OUTFIT RULES]
+${hasOutfit1 ? `- Change only Subject 1 clothing using ${s1OutfitRef}.` : '- Keep Subject 1 wardrobe unchanged unless a requested product edit overlaps that area.'}
+${hasSecondSubject ? (hasOutfit2 ? `- Change only Subject 2 clothing using ${s2OutfitRef}.` : '- Keep Subject 2 wardrobe unchanged unless a requested product edit overlaps that area.') : ''}
+- Outfit edits are localized only.
+- Fit clothing to the subject pose exactly.
+- Show only clothing parts that are actually visible.
+- Do not invent hidden pants, skirts, shoes, or full-body sections.
+- Clothing must look naturally photographed in the scene, with correct folds, drape, lighting, shadow, perspective, and occlusion.
+- Do not affect the other subject when editing one subject.
+
+${hasProductReplacements ? `
+[PRODUCT REPLACEMENTS]
+${refs.productRefs.map((p) => `- Replace only the matching product/accessory with ${p.refName} (${p.name}), preserving scale, placement, and lighting.`).join('\n')}
+`.trim() : ''}
+
+${getCameraStylePrompt(params.cameraStyle)}
+
+[HARD RULES]
+- Photorealistic smartphone image only.
+- No text or watermark.
+- No scene drift.
+- No face drift.
+- No identity swaps.
+- No body deformation.
+- No collage look.
+- Final result must look like one coherent original photo.
 `.trim();
 }
 
@@ -424,15 +489,19 @@ export const cloneImageService = {
     const refs = buildReferences(params);
 
     const hasSecondSubject = !!params.enableSecondSubject && !!refs.refMap.subject2Face && !!refs.refMap.subject2Body;
-    const hasProductReplacements = refs.productRefs.length > 0;
     const hasOutfit1 = !!refs.refMap.subject1Outfit;
     const hasOutfit2 = !!refs.refMap.subject2Outfit;
+    const hasProductReplacements = refs.productRefs.length > 0;
     const isEditPass = hasOutfit1 || hasOutfit2 || hasProductReplacements;
     const isSeedream = (params.modelId || 'gemini') === 'seedream';
 
     const prompt = isSeedream
-      ? buildSeedreamPrompt(params, refs, runId)
-      : buildGeminiPrompt(params, refs, runId);
+      ? (isEditPass
+          ? buildEditSeedreamPrompt(params, refs, runId)
+          : buildBaseSeedreamPrompt(params, refs, runId))
+      : (isEditPass
+          ? buildEditGeminiPrompt(params, refs, runId)
+          : buildBaseGeminiPrompt(params, refs, runId));
 
     const negative = [
       'cartoon',
@@ -444,36 +513,51 @@ export const cloneImageService = {
       'text',
       'watermark',
       'logo overlay',
-      'different pose',
       'different background',
+      'different scene',
+      'different framing',
       'different crop',
       'different camera angle',
-      'different framing',
       'different lighting',
       'scene drift',
       'background drift',
+      'composition drift',
       'face drift',
       'identity swap',
       'identity blending',
       'averaged faces',
-      'hairstyle change',
+      'hybrid face',
+      'original target face preserved',
+      'original anchor identity left unchanged',
+      'missing person',
+      'one person only',
+      'duplicated person',
+      'duplicate same identity',
       'bad anatomy',
       'deformed hands',
       'extra fingers',
       'extra limbs',
-      'duplicated person',
-      'missing person',
-      'one person only',
-      ...(hasSecondSubject ? ['single subject when two are required', 'missing second subject', 'original person left unchanged'] : []),
-      'floating clothes',
-      'collage look',
-      'pasted clothing',
-      'warped garments',
-      'outfit contamination between people',
-      'hallucinated pants',
-      'hallucinated shoes',
-      'forced full body outfit',
-      ...(isEditPass ? ['global restyling', 'scene reinterpretation', 'unwanted re-design'] : []),
+      ...(hasSecondSubject ? [
+        'missing second subject',
+        'single subject when two are required',
+        'same person copied twice',
+      ] : []),
+      ...(isEditPass ? [
+        'global restyling',
+        'full image redesign',
+        'scene reinterpretation',
+        'collage look',
+        'pasted clothing',
+        'floating clothes',
+        'warped garments',
+        'outfit contamination between people',
+        'hallucinated pants',
+        'hallucinated shoes',
+        'forced full body outfit',
+      ] : [
+        'return original unmodified target image',
+        'unchanged original people',
+      ]),
     ].join(', ');
 
     return imageApiService.generateImage({
