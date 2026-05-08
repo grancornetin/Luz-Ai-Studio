@@ -45,9 +45,8 @@ function selectBestRefs(slots: CampaignImageSlot[]): {
   const inspirations = slots.filter(s => s.role === 'inspiration');
   const brands       = slots.filter(s => s.role === 'brand');
 
-  // Para productos: máximo 3 fotos — priorizamos variedad de ángulos
-  // Si hay más de 3, tomamos la primera, la del medio, y la última
-  // (asumimos que el usuario subió: frontal, lateral, detalle)
+  // Para productos: máximo 3 fotos para no saturar el payload
+  // Si hay más de 3, tomamos primera + medio + última (máxima variedad de ángulos)
   let productRefs = products;
   if (products.length > 3) {
     const mid = Math.floor(products.length / 2);
@@ -56,9 +55,9 @@ function selectBestRefs(slots: CampaignImageSlot[]): {
 
   return {
     productRefs,
-    modelRef:       models[0]       ?? null,
-    inspirationRef: inspirations[0] ?? null,
-    brandRef:       brands[0]       ?? null,
+    modelRef:       models[0]                     ?? null,
+    inspirationRef: slots.filter(s => s.role === 'inspiration')[0] ?? null,
+    brandRef:       slots.filter(s => s.role === 'brand')[0]       ?? null,
   };
 }
 

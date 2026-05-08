@@ -51,7 +51,8 @@ const CAMPAIGN_PROGRESS_STEPS: ProgressStep[] = [
 ];
 
 const SLOT_ROLES: ImageSlotRole[] = ['product', 'inspiration', 'brand', 'model'];
-const MAX_TOTAL_SLOTS = 8;
+const MAX_PER_SLOT   = 4;
+const MAX_TOTAL_SLOTS = 12;
 
 // ─── UpgradeWall ──────────────────────────────────────────────
 const UpgradeWall: React.FC<{ proCredits: number }> = ({ proCredits }) => {
@@ -97,16 +98,24 @@ const ImageUploadSlot: React.FC<{
 }> = ({ role, images, onChange, totalUsed }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const meta     = IMAGE_SLOT_META[role];
-  const canAddMore = totalUsed < MAX_TOTAL_SLOTS;
+  const canAddMore = images.length < MAX_PER_SLOT && totalUsed < MAX_TOTAL_SLOTS;
 
-  const handleFiles = (files: FileList) => {
-    const available = MAX_TOTAL_SLOTS - totalUsed;
-    Array.from(files).slice(0, available).forEach(file => {
-      if (!file.type.startsWith('image/')) return;
-      readAndCompressFile(file).then(compressed => {
-        onChange([...images, compressed]);
-      });
-    });
+  const handleFiles = async (files: FileList) => {
+    // Cuántos más acepta este slot y el total global
+    const canAddToSlot  = MAX_PER_SLOT   - images.length;
+    const canAddGlobal  = MAX_TOTAL_SLOTS - totalUsed;
+    const canAdd        = Math.min(canAddToSlot, canAddGlobal);
+    if (canAdd <= 0) return;
+
+    const validFiles = Array.from(files)
+      .filter(f => f.type.startsWith('image/'))
+      .slice(0, canAdd);
+
+    if (validFiles.length === 0) return;
+
+    // Procesar todos en paralelo y hacer un solo onChange
+    const compressed = await Promise.all(validFiles.map(f => readAndCompressFile(f)));
+    onChange([...images, ...compressed]);
   };
 
   return (
@@ -141,7 +150,7 @@ const ImageUploadSlot: React.FC<{
           }`}>
           <Plus className="w-4 h-4 text-slate-300 group-hover:text-brand-400 transition-colors" />
           <span className="text-[9px] font-semibold text-slate-400 group-hover:text-brand-500 text-center leading-tight px-2">
-            {images.length === 0 ? meta.description : 'Agregar otra'}
+            {images.length === 0 ? meta.description : `Agregar más (máx ${MAX_PER_SLOT})`}
           </span>
         </button>
       )}
@@ -511,7 +520,7 @@ const CampaignModule: React.FC = () => {
                             <span className="text-slate-400 font-medium normal-case tracking-normal">(opcional pero recomendado)</span>
                           </label>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${totalSlotsUsed >= MAX_TOTAL_SLOTS ? 'bg-slate-100 text-slate-500' : totalSlotsUsed > 0 ? 'bg-brand-50 text-brand-600' : 'bg-slate-50 text-slate-400'}`}>
-                            {totalSlotsUsed}/{MAX_TOTAL_SLOTS} imágenes
+                            {totalSlotsUsed}/{MAX_TOTAL_SLOTS} subidas
                           </span>
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -522,7 +531,7 @@ const CampaignModule: React.FC = () => {
                           ))}
                         </div>
                         <p className="text-[11px] text-slate-400 mt-2 leading-[1.5]">
-                          Podés subir hasta 8 imágenes en total. La IA las analiza para entender tu producto, estética y marca.
+                          Podés subir hasta {MAX_PER_SLOT} imágenes por categoría ({MAX_TOTAL_SLOTS} en total). Seleccioná varias a la vez desde tu galería. La IA elige las mejores referencias automáticamente.
                         </p>
                       </div>
                     </div>
