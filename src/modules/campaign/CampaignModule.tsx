@@ -355,6 +355,16 @@ const CampaignModule: React.FC = () => {
     setLightboxImages(images); setLightboxIndex(idx); setLightboxOpen(true);
   };
 
+  const openSetFromLibrary = (set: CampaignSet) => {
+    setCurrentSet(set);
+    setCampaignPlan(set.plan);
+    setStep(7 as WizardStep);
+    setActiveTab('create');
+    setActiveTab2('plan');
+    setModalPieza(null);
+    window.scrollTo(0, 0);
+  };
+
   const downloadSetZip = async (set: CampaignSet) => {
     const validPiezas = set.plan.piezas.filter(p => p.imageUrl && p.imageUrl.length > 10);
     if (validPiezas.length === 0) return;
@@ -1586,7 +1596,7 @@ const CampaignModule: React.FC = () => {
                 const [img0, img1, img2] = withImg.map(p => p.imageUrl);
                 const modo = set.plan?.modoVisual;
                 return (
-                  <div key={set.id} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 hover:border-brand-200 transition-all cursor-pointer group">
+                  <div key={set.id} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 hover:border-brand-200 transition-all cursor-pointer group" onClick={() => openSetFromLibrary(set)}>
                     {/* Strip de color */}
                     <div className="h-1 bg-brand-600" />
                     {/* Mosaico de imágenes */}
@@ -1633,14 +1643,18 @@ const CampaignModule: React.FC = () => {
                         <span className="text-[10px] text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-full">{set.canales.length} canales</span>
                       </div>
                       {/* Acciones */}
-                      <div className="flex gap-1.5 pt-3 border-t border-slate-100">
+                      <div className="flex gap-1.5 pt-3 border-t border-slate-100" onClick={e => e.stopPropagation()}>
+                        <button type="button" onClick={() => openSetFromLibrary(set)}
+                          className="flex-1 py-1.5 rounded-xl text-[11px] font-bold bg-brand-600 text-white hover:bg-brand-700 transition-colors">
+                          Ver →
+                        </button>
                         <button type="button" onClick={() => handleDownloadPdf(set)} disabled={downloadingPdf || downloadingHtml}
-                          className="flex-1 py-1.5 rounded-xl text-[11px] font-semibold bg-brand-50 text-brand-700 border border-brand-100 hover:bg-brand-100 transition-colors disabled:opacity-50 disabled:cursor-wait">
+                          className="flex-1 py-1.5 rounded-xl text-[11px] font-semibold bg-slate-50 text-slate-600 border border-slate-200 hover:border-slate-300 transition-colors disabled:opacity-50 disabled:cursor-wait">
                           {downloadingPdf ? '…' : '↓ PDF'}
                         </button>
                         <button type="button" onClick={() => handleDownloadHtml(set)} disabled={downloadingHtml || downloadingPdf}
                           className="flex-1 py-1.5 rounded-xl text-[11px] font-semibold bg-slate-50 text-slate-600 border border-slate-200 hover:border-slate-300 transition-colors disabled:opacity-50 disabled:cursor-wait">
-                          {downloadingHtml ? '…' : '☑️ Kit'}
+                          {downloadingHtml ? '…' : '☑️'}
                         </button>
                         <button type="button" onClick={() => downloadSetZip(set)}
                           className="flex-1 py-1.5 rounded-xl text-[11px] font-semibold bg-slate-50 text-slate-600 border border-slate-200 hover:border-slate-300 transition-colors">
