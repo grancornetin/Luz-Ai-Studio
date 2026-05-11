@@ -1,5 +1,6 @@
 ================================================================================
 MAPA DEL PROYECTO: LUZ IA STUDIO
+Ultima actualizacion: Mayo 2026 (agregado Publicar Studio)
 ================================================================================
 
 Este mapa esta hecho para que puedas saber donde buscar cada cosa sin tener que
@@ -342,6 +343,45 @@ src/modules/promptLibrary/utils/promptHelpers.ts
   QUE HACE: utilidades pequeñas usadas en varios sitios del modulo.
 
 
+  PUBLICAR STUDIO  (planificador de contenido social)
+  Ruta: /publicar
+  Documentacion completa: src/modules/contentPlanner/explicacion-publicar-studio.md
+
+src/modules/contentPlanner/ContentPlannerModule.tsx
+  QUE HACE: pantalla principal del modulo. Tiene el selector de proyectos
+            (crea uno nuevo o usa uno existente), el sidebar con estadisticas
+            del plan activo, y los tres tabs: Copiloto / Calendario / Remix.
+  SI LO TOCO QUE PASA: afecta el layout general y la navegacion entre tabs.
+
+src/modules/contentPlanner/ContentPlannerCopilot.tsx
+  QUE HACE: el copiloto elevado del modulo. Extiende el ProjectCopilot con:
+            - Remix Engine (bloque [REMIX]): genera 15-25 ideas de posts
+            - Conoce 6 modulos de navegacion (antes solo 3)
+            - Captions, checklist, calendario igual que el original
+            Llama a /api/gemini/content igual que el ProjectCopilot — no
+            requiere cambios en el backend.
+  SI LO TOCO QUE PASA: afecta toda la conversacion del planificador. Cambios
+                       en el system prompt cambian el comportamiento del IA.
+
+src/modules/contentPlanner/WeeklyCalendar.tsx
+  QUE HACE: vista semanal visual del calendario. Navega semana a semana,
+            muestra puntos de color por estado (pendiente/listo/saltado),
+            calcula la racha de dias consecutivos publicados, y tiene botones
+            Listo / Generar / Saltear por cada entrada.
+  SI LO TOCO QUE PASA: afecta la vista de calendario del planificador.
+
+src/modules/contentPlanner/RemixIdeasGrid.tsx
+  QUE HACE: grilla de las ideas generadas por el Remix Engine. Filtros por
+            modulo, agrupadas por tipo de post, cada card expandible con la
+            descripcion de imagen que necesita. Exporta el tipo RemixIdea
+            que usa ContentPlannerCopilot.tsx.
+  SI LO TOCO QUE PASA: afecta la pantalla de ideas del planificador.
+
+src/modules/contentPlanner/explicacion-publicar-studio.md
+  QUE HACE: documentacion completa del modulo para IAs y desarrolladores.
+            Explica cada archivo, las decisiones tecnicas y los pendientes.
+
+
   PROYECTOS  (carpetas de generaciones del usuario)
 
 src/modules/projects/ProjectsList.tsx
@@ -349,6 +389,21 @@ src/modules/projects/ProjectsList.tsx
 
 src/modules/projects/ProjectDetail.tsx
   QUE HACE: detalle de un proyecto (todas las imagenes guardadas en el).
+            Incluye el ProjectCopilot embebido (version original, mas simple
+            que el de Publicar Studio) y el ProjectCalendar. Los proyectos
+            creados en Publicar Studio tambien aparecen aqui — comparten
+            la misma coleccion de Firestore.
+
+src/modules/projects/ProjectCopilot.tsx
+  QUE HACE: copiloto embebido en el workspace de proyectos. Version mas
+            simple que ContentPlannerCopilot: conoce 3 modulos, no tiene
+            Remix Engine. Comparte la misma estructura de bloques especiales
+            ([CAPTIONS], [CHECKLIST], [CALENDAR], [ACCIONES]).
+
+src/modules/projects/ProjectCalendar.tsx
+  QUE HACE: vista del calendario dentro del workspace de proyectos. Muestra
+            las mismas entradas que WeeklyCalendar pero con un diseno
+            integrado al layout de tres columnas del workspace.
 
 
   PANEL ADMIN
@@ -485,6 +540,8 @@ PAGINAS COMPLETAS  (cada ruta de la app)
 
 src/views/Landing.tsx               - pagina publica de inicio (hero, modulos)
 src/views/Dashboard.tsx             - panel del usuario con cards de modulos
+  NOTA: agregar la card de Publicar Studio en Dashboard.tsx para que aparezca
+        en la pantalla de inicio. Por ahora solo esta en el menu lateral.
 src/views/ContentCreator.tsx        - redireccion a Content Studio Pro
 src/views/OutfitExtractor.tsx       - vista del modulo Outfit Extractor
 src/views/PromptStudioView.tsx      - vista del Prompt Studio
@@ -740,6 +797,21 @@ GUIAS RAPIDAS DE "DONDE TOCO PARA..."
     2. Agregar la ruta en src/App.tsx
     3. Agregar el costo en src/services/creditConfig.ts
     4. Agregar la card en src/views/Dashboard.tsx
+
+  Cambiar el copiloto de planificacion de contenido (Publicar Studio)
+    src/modules/contentPlanner/ContentPlannerCopilot.tsx
+    - Para cambiar preguntas iniciales: constante INITIAL_SUGGESTIONS
+    - Para cambiar el comportamiento del IA: funcion buildSystemPrompt()
+    - Para agregar un modulo nuevo a la navegacion: objeto MODULE_ROUTES
+      dentro de handleAction() y la funcion buildSystemPrompt()
+
+  Cambiar la vista semanal del calendario
+    src/modules/contentPlanner/WeeklyCalendar.tsx
+    - Para cambiar colores por modulo: objeto MODULE_META
+    - Para cambiar la logica de racha: funcion de calculo dentro de stats
+
+  Ver documentacion completa del Publicar Studio
+    src/modules/contentPlanner/explicacion-publicar-studio.md
 
 ================================================================================
 NOTAS IMPORTANTES PARA NO ROMPER NADA
