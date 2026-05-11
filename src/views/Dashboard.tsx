@@ -11,7 +11,8 @@ import { useAuth } from '../modules/auth/AuthContext';
 import {
   Zap, TrendingUp, User, Package, AlertCircle,
   Crown, ArrowRight, Sparkles, Clock, Images,
-  Settings, FileText, Mail, CreditCard, UserCircle, Gift, ShoppingCart, Tag, LogOut, FolderOpen
+  Settings, FileText, Mail, CreditCard, UserCircle, Gift, ShoppingCart, Tag, LogOut, FolderOpen,
+  CalendarDays, Megaphone,
 } from 'lucide-react';
 import { MISSIONS, getUserMissions, completeMission, isMissionOnCooldown, type UserMissions } from '../services/missionsService';
 import { getReferralStats, redeemSpecialCode } from '../services/referralService';
@@ -113,6 +114,7 @@ const MODULE_GROUPS = [
         creditsGemini: 2,
         creditsSeedream: null,
         proCredit: true,
+        lucideIcon: 'megaphone',
       },
       {
         path: '/photodump',
@@ -125,6 +127,18 @@ const MODULE_GROUPS = [
         creditsGemini: 2,
         creditsSeedream: null,
         proCredit: true,
+      },
+      {
+        path: '/planner',
+        title: 'PLANNER',
+        subtitle: 'Tu asistente de contenido',
+        description: 'Planificá qué publicar, cuándo y con qué herramienta. El copiloto arma tu semana en segundos.',
+        icon: 'fa-calendar-days',
+        accent: 'text-rose-600',
+        bg: 'bg-rose-50',
+        creditsGemini: 0,
+        creditsSeedream: 0,
+        lucideIcon: 'calendar',
       },
     ]
   },
@@ -744,10 +758,11 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
             </div>
           </div>
 
-          {/* PROJECTS CARD */}
+          {/* PLANNER CARD */}
           <div
-            onClick={() => navigate('/projects')}
-            className="group relative bg-gradient-to-br from-emerald-500 to-teal-600 p-6 md:p-8 rounded-[32px] cursor-pointer hover:scale-[1.02] hover:shadow-2xl hover:shadow-emerald-200 transition-all overflow-hidden"
+            onClick={() => navigate('/planner')}
+            className="group relative p-6 md:p-8 rounded-[32px] cursor-pointer hover:scale-[1.02] hover:shadow-2xl transition-all overflow-hidden"
+            style={{ background: 'linear-gradient(135deg, #F72C5B 0%, #C4224A 100%)', boxShadow: '0 8px 32px rgba(247,44,91,0.25)' }}
           >
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
             <div className="absolute bottom-0 left-0 w-20 h-20 bg-black/10 rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -756,19 +771,19 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                    <FolderOpen className="w-5 h-5 text-white" />
+                    <CalendarDays className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="t-display text-lg text-white">Mis Proyectos</h3>
-                    <p className="t-meta text-emerald-200">Workspace</p>
+                    <h3 className="t-display text-lg text-white">Planner</h3>
+                    <p className="t-meta text-white/70">Asistente de contenido</p>
                   </div>
                 </div>
-                <p className="text-sm text-emerald-100 font-medium leading-relaxed max-w-xs">
-                  Organiza campañas, guarda imágenes y planifica contenido con el copiloto.
+                <p className="text-sm text-white/85 font-medium leading-relaxed max-w-xs">
+                  Planificá tu semana, generá captions y descubrí 25 ideas para tu producto.
                 </p>
               </div>
-              <div className="w-9 h-9 rounded-full border border-white/30 flex items-center justify-center text-white/60 group-hover:bg-white group-hover:text-emerald-600 transition-all flex-shrink-0 mt-1">
-                <ArrowRight size={16} className="-rotate-45 group-hover:rotate-0 transition-transform" />
+              <div className="w-9 h-9 rounded-full border border-white/30 flex items-center justify-center text-white/60 group-hover:bg-white transition-all flex-shrink-0 mt-1" style={{ '--hover-color': '#F72C5B' } as any}>
+                <ArrowRight size={16} className="-rotate-45 group-hover:rotate-0 transition-transform text-white group-hover:text-[#F72C5B]" />
               </div>
             </div>
           </div>
