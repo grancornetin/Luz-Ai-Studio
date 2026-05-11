@@ -17,6 +17,7 @@ import {
   Project, ProjectMessage, ProjectBrief, ChecklistItem, CalendarEntry,
   saveConversation, saveBrief, saveChecklist, saveCalendar,
 } from '../../services/projectService';
+import { getAuth } from 'firebase/auth';
 import { v4 as uuidv4 } from 'uuid';
 import { RemixIdea } from './RemixIdeasGrid';
 
@@ -188,8 +189,17 @@ async function callCopilot(
   messages: ProjectMessage[],
   imageData?: { data: string; mimeType: string },
 ): Promise<string> {
-  const history = messages
-    .map(m => `${m.role === 'user' ? 'Usuario' : 'Copiloto'}: ${m.content}`)
+  // Últimos 12 mensajes, texto conversacional únicamente.
+  // Los mensajes del asistente ya tienen los bloques especiales ([REMIX], [CALENDAR], etc.)
+  // removidos por parseResponse antes de guardarse en `content` — no hace falta limpiar aquí.
+  // Truncamos cada mensaje a 600 chars para evitar superar el límite de 48.000 del endpoint.
+  const recent = messages.slice(-12);
+  const history = recent
+    .map(m => {
+      const role    = m.role === 'user' ? 'Usuario' : 'Copiloto';
+      const content = m.content.length > 600 ? m.content.slice(0, 600) + '…' : m.content;
+      return `${role}: ${content}`;
+    })
     .join('\n\n');
 
   const fullPrompt = `${systemPrompt}\n\n---\n\n${history}\n\nCopiloto:`;
@@ -204,12 +214,20 @@ async function callCopilot(
     body.mimeTypes = [imageData.mimeType];
   }
 
+  const token = await getAuth().currentUser?.getIdToken().catch(() => null);
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   const res = await fetch('/api/gemini/content', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`API error ${res.status}`);
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => '');
+    console.error('[callCopilot] HTTP', res.status, errBody);
+    throw new Error(`API error ${res.status}: ${errBody}`);
+  }
   const data = await res.json();
   if (!data.success) throw new Error(data.error || 'Error en el copiloto');
   return data.text || '';
@@ -590,7 +608,8 @@ const ContentPlannerCopilot: React.FC<Props> = ({
       setMessages(prev => [...prev, assistantMsg]);
       tryExtractBrief(content, project);
 
-    } catch {
+    } catch (err: any) {
+      console.error('[ContentPlannerCopilot] error:', err?.message || err);
       setMessages(prev => [...prev, {
         id: uuidv4(),
         role: 'assistant',
