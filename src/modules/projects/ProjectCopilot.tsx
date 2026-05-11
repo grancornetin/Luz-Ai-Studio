@@ -6,6 +6,7 @@
  */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getAuth } from 'firebase/auth';
 import {
   Sparkles, Send, Loader2, ImagePlus, XCircle,
   RotateCcw, ChevronRight, ArrowRight, Copy, Check,
@@ -191,9 +192,13 @@ async function callCopilot(
     body.mimeTypes = [imageData.mimeType];
   }
 
+  const token = await getAuth().currentUser?.getIdToken().catch(() => null);
   const res = await fetch('/api/gemini/content', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`API error ${res.status}`);
