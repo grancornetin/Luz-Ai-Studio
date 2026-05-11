@@ -12,7 +12,9 @@ const MAX_HEIGHT = 260;
 
 const SLOT_SUGGESTIONS = [
   'person1', 'person2', 'person3', 'person4',
+  'outfit1', 'outfit2', 'outfit3', 'outfit4',
   'product1', 'product2', 'product3', 'product4',
+  'scene1',
 ];
 
 const PromptInput: React.FC<PromptInputProps> = ({ value, onChange, onAutoFormat, placeholder }) => {
@@ -100,7 +102,7 @@ const PromptInput: React.FC<PromptInputProps> = ({ value, onChange, onAutoFormat
             lineHeight: '1.6',
             fontFamily: 'inherit',
             fontWeight: 500,
-            color: 'transparent',
+            color: 'var(--slate-800, #1e293b)',
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
             overflowY: 'hidden',
