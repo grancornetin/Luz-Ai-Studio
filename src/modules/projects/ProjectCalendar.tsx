@@ -19,13 +19,38 @@ interface ProjectCalendarProps {
   onChecklistChange: (updated: ChecklistItem[]) => void;
 }
 
-// ── Colores por módulo ────────────────────────────────────────
+// ── Estilos por módulo — tema claro ───────────────────────────
 const moduleStyles: Record<string, { bg: string; border: string; text: string; badge: string }> = {
-  campaign:  { bg: 'bg-brand-600/10',  border: 'border-brand-500/30',  text: 'text-brand-300',   badge: 'bg-brand-600 text-white' },
-  photodump: { bg: 'bg-violet-600/10', border: 'border-violet-500/30', text: 'text-violet-300',  badge: 'bg-violet-600 text-white' },
-  ugc:       { bg: 'bg-emerald-600/10',border: 'border-emerald-500/30',text: 'text-emerald-300', badge: 'bg-emerald-600 text-white' },
-  catalog:   { bg: 'bg-sky-600/10',    border: 'border-sky-500/30',    text: 'text-sky-300',     badge: 'bg-sky-600 text-white' },
-  prompt:    { bg: 'bg-slate-700/30',  border: 'border-slate-600/30',  text: 'text-slate-300',   badge: 'bg-slate-600 text-white' },
+  campaign:  {
+    bg:     'bg-[#FFF0F4]',
+    border: 'border-[#F72C5B]/20',
+    text:   'text-[#F72C5B]',
+    badge:  'bg-[#F72C5B] text-white',
+  },
+  photodump: {
+    bg:     'bg-violet-50',
+    border: 'border-violet-200',
+    text:   'text-violet-700',
+    badge:  'bg-violet-600 text-white',
+  },
+  ugc: {
+    bg:     'bg-emerald-50',
+    border: 'border-emerald-200',
+    text:   'text-emerald-700',
+    badge:  'bg-emerald-600 text-white',
+  },
+  catalog: {
+    bg:     'bg-sky-50',
+    border: 'border-sky-200',
+    text:   'text-sky-700',
+    badge:  'bg-sky-600 text-white',
+  },
+  prompt: {
+    bg:     'bg-gray-50',
+    border: 'border-gray-200',
+    text:   'text-gray-600',
+    badge:  'bg-gray-500 text-white',
+  },
 };
 
 const moduleLabel: Record<string, string> = {
@@ -57,20 +82,20 @@ const ProjectCalendar: React.FC<ProjectCalendarProps> = ({
   const [localChecklist, setLocalChecklist] = useState<ChecklistItem[]>(checklist);
   const [weekOffset, setWeekOffset] = useState(0);
 
-  // ── Estadísticas de hábito ────────────────────────────────────
-  const done    = localCalendar.filter(e => e.status === 'done').length;
-  const total   = localCalendar.length;
-  const streak  = calcStreak(localCalendar);
-  const pct     = total > 0 ? Math.round((done / total) * 100) : 0;
+  // ── Estadísticas ──────────────────────────────────────────────
+  const done   = localCalendar.filter(e => e.status === 'done').length;
+  const total  = localCalendar.length;
+  const streak = calcStreak(localCalendar);
+  const pct    = total > 0 ? Math.round((done / total) * 100) : 0;
 
   // ── Semanas ───────────────────────────────────────────────────
-  const weeks  = groupByWeek(localCalendar);
-  const weekKeys = Object.keys(weeks).sort();
-  const currentWeekIdx = Math.min(Math.max(0, weekOffset), weekKeys.length - 1);
-  const currentWeekKey = weekKeys[currentWeekIdx];
-  const currentEntries = currentWeekKey ? weeks[currentWeekKey] : [];
+  const weeks        = groupByWeek(localCalendar);
+  const weekKeys     = Object.keys(weeks).sort();
+  const currentWeekIdx     = Math.min(Math.max(0, weekOffset), weekKeys.length - 1);
+  const currentWeekKey     = weekKeys[currentWeekIdx];
+  const currentEntries     = currentWeekKey ? weeks[currentWeekKey] : [];
 
-  // ── Marcar entrada del calendario ────────────────────────────
+  // ── Marcar entrada ────────────────────────────────────────────
   const toggleEntry = async (entryId: string) => {
     const entry = localCalendar.find(e => e.id === entryId);
     if (!entry) return;
@@ -88,7 +113,7 @@ const ProjectCalendar: React.FC<ProjectCalendarProps> = ({
     await updateCalendarEntryStatus(projectId, entryId, 'skipped').catch(() => {});
   };
 
-  // ── Marcar ítem de checklist ──────────────────────────────────
+  // ── Marcar checklist ──────────────────────────────────────────
   const toggleChecklistItem = async (itemId: string) => {
     const item = localChecklist.find(i => i.id === itemId);
     if (!item) return;
@@ -106,86 +131,87 @@ const ProjectCalendar: React.FC<ProjectCalendarProps> = ({
     navigate(`${base}?${params.toString()}`);
   };
 
+  // ── Estado vacío ──────────────────────────────────────────────
   if (localCalendar.length === 0 && localChecklist.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
-        <div className="w-16 h-16 bg-indigo-600/10 border border-indigo-500/20 rounded-2xl flex items-center justify-center">
-          <CalendarDays className="w-8 h-8 text-indigo-400" />
+      <div className="flex flex-col items-center justify-center py-14 text-center space-y-4">
+        <div className="w-14 h-14 bg-[#FFF0F4] border border-[#F72C5B]/20 rounded-2xl
+                        flex items-center justify-center">
+          <CalendarDays className="w-7 h-7 text-[#F72C5B]" />
         </div>
         <div>
-          <p className="text-white font-black text-sm uppercase tracking-tight">Sin calendario aún</p>
-          <p className="text-slate-500 text-xs mt-1">Pedile al copiloto que te cree un plan de contenido o un calendario semanal.</p>
+          <p className="text-gray-700 font-black text-sm uppercase tracking-tight">Sin calendario aún</p>
+          <p className="text-gray-400 text-xs mt-1 max-w-[200px] mx-auto leading-relaxed">
+            Pedile al copiloto que te cree un plan de contenido o un calendario semanal.
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
 
-      {/* ── Stats de hábito ────────────────────────────────── */}
+      {/* ── Stats de hábito ─────────────────────────────────── */}
       {localCalendar.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
-            <div className="flex items-center justify-center gap-1.5 mb-1">
-              <TrendingUp className="w-4 h-4 text-emerald-400" />
-            </div>
-            <p className="text-2xl font-black text-white">{done}</p>
-            <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Completados</p>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-white border border-gray-100 rounded-2xl p-3.5 text-center shadow-sm">
+            <TrendingUp className="w-4 h-4 text-emerald-500 mx-auto mb-1" />
+            <p className="text-xl font-black text-gray-900">{done}</p>
+            <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest">Hechos</p>
           </div>
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
-            <div className="flex items-center justify-center gap-1.5 mb-1">
-              <Zap className="w-4 h-4 text-brand-400" />
-            </div>
-            <p className="text-2xl font-black text-white">{streak}</p>
-            <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Días seguidos</p>
+          <div className="bg-white border border-gray-100 rounded-2xl p-3.5 text-center shadow-sm">
+            <Zap className="w-4 h-4 text-[#F72C5B] mx-auto mb-1" />
+            <p className="text-xl font-black text-gray-900">{streak}</p>
+            <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest">Seguidos</p>
           </div>
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center">
-            <div className="flex items-center justify-center gap-1.5 mb-1">
-              <Target className="w-4 h-4 text-violet-400" />
-            </div>
-            <p className="text-2xl font-black text-white">{pct}%</p>
-            <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Del plan</p>
+          <div className="bg-white border border-gray-100 rounded-2xl p-3.5 text-center shadow-sm">
+            <Target className="w-4 h-4 text-violet-500 mx-auto mb-1" />
+            <p className="text-xl font-black text-gray-900">{pct}%</p>
+            <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest">Del plan</p>
           </div>
         </div>
       )}
 
-      {/* Barra de progreso global */}
+      {/* ── Barra de progreso ────────────────────────────────── */}
       {localCalendar.length > 0 && (
         <div className="space-y-1.5">
           <div className="flex justify-between">
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Progreso del plan</p>
-            <p className="text-[9px] font-black text-slate-400">{done} / {total}</p>
+            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Progreso</p>
+            <p className="text-[9px] font-black text-gray-500">{done} / {total}</p>
           </div>
-          <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-700"
+              className="h-full bg-[#F72C5B] rounded-full transition-all duration-700"
               style={{ width: `${pct}%` }}
             />
           </div>
         </div>
       )}
 
-      {/* ── Calendario semanal ─────────────────────────────── */}
+      {/* ── Calendario semanal ───────────────────────────────── */}
       {localCalendar.length > 0 && (
         <div className="space-y-3">
+
           {/* Navegación de semanas */}
           {weekKeys.length > 1 && (
             <div className="flex items-center justify-between">
               <button
                 onClick={() => setWeekOffset(w => Math.max(0, w - 1))}
                 disabled={currentWeekIdx === 0}
-                className="w-8 h-8 bg-white/5 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 disabled:opacity-30 transition-all"
+                className="w-8 h-8 bg-white border border-gray-200 rounded-xl flex items-center justify-center
+                           text-gray-400 hover:text-gray-700 hover:border-gray-300 disabled:opacity-30 transition-all"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
                 Semana {currentWeekIdx + 1} de {weekKeys.length}
               </p>
               <button
                 onClick={() => setWeekOffset(w => Math.min(weekKeys.length - 1, w + 1))}
                 disabled={currentWeekIdx === weekKeys.length - 1}
-                className="w-8 h-8 bg-white/5 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 disabled:opacity-30 transition-all"
+                className="w-8 h-8 bg-white border border-gray-200 rounded-xl flex items-center justify-center
+                           text-gray-400 hover:text-gray-700 hover:border-gray-300 disabled:opacity-30 transition-all"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -195,24 +221,28 @@ const ProjectCalendar: React.FC<ProjectCalendarProps> = ({
           {/* Tarjetas de días */}
           <div className="space-y-2">
             {currentEntries.map(entry => {
-              const style = moduleStyles[entry.module] ?? moduleStyles.prompt;
+              const style   = moduleStyles[entry.module] ?? moduleStyles.prompt;
               const isToday = entry.date === todayISO();
               return (
                 <div
                   key={entry.id}
-                  className={`rounded-2xl border p-4 transition-all ${style.bg} ${style.border} ${
+                  className={`rounded-2xl border p-3.5 transition-all shadow-sm ${style.bg} ${style.border} ${
                     entry.status === 'done' ? 'opacity-60' : ''
-                  } ${isToday ? 'ring-1 ring-indigo-500/40' : ''}`}
+                  } ${isToday ? 'ring-2 ring-[#F72C5B]/20' : ''}`}
                 >
                   <div className="flex items-start gap-3">
 
                     {/* Día */}
-                    <div className="flex-shrink-0 text-center min-w-[44px]">
-                      <p className="text-[8px] font-black text-slate-500 uppercase">{entry.dayLabel.split(' ')[0]}</p>
-                      <p className={`text-xl font-black leading-none mt-0.5 ${isToday ? 'text-indigo-400' : 'text-white'}`}>
+                    <div className="flex-shrink-0 text-center min-w-[40px]">
+                      <p className="text-[8px] font-black text-gray-400 uppercase">
+                        {entry.dayLabel.split(' ')[0]}
+                      </p>
+                      <p className={`text-xl font-black leading-none mt-0.5 ${isToday ? 'text-[#F72C5B]' : 'text-gray-800'}`}>
                         {entry.dayLabel.split(' ')[1]}
                       </p>
-                      {isToday && <p className="text-[8px] font-black text-indigo-400 uppercase mt-0.5">Hoy</p>}
+                      {isToday && (
+                        <p className="text-[8px] font-black text-[#F72C5B] uppercase mt-0.5">Hoy</p>
+                      )}
                     </div>
 
                     {/* Contenido */}
@@ -224,26 +254,34 @@ const ProjectCalendar: React.FC<ProjectCalendarProps> = ({
                               {moduleLabel[entry.module] ?? entry.module}
                             </span>
                           </div>
-                          <p className={`text-xs font-black ${style.text} leading-tight`}>{entry.contentType}</p>
+                          <p className={`text-xs font-black ${style.text} leading-tight`}>
+                            {entry.contentType}
+                          </p>
                           {entry.prompt && (
-                            <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">{entry.prompt}</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{entry.prompt}</p>
                           )}
                         </div>
                       </div>
 
-                      {/* Acciones */}
+                      {/* Acciones — pendiente */}
                       {entry.status !== 'done' && entry.status !== 'skipped' && (
                         <div className="flex gap-2">
                           <button
                             onClick={() => goToModule(entry)}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-white/10 hover:bg-white/15 rounded-xl text-[10px] font-black text-white uppercase tracking-widest transition-all"
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2
+                                       bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300
+                                       rounded-xl text-[10px] font-black text-gray-600 uppercase tracking-widest
+                                       transition-all shadow-sm"
                           >
                             <ArrowRight className="w-3 h-3" />
                             Generar
                           </button>
                           <button
                             onClick={() => toggleEntry(entry.id)}
-                            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/30 rounded-xl text-[10px] font-black text-emerald-300 uppercase tracking-widest transition-all"
+                            className="flex items-center justify-center gap-1.5 px-3 py-2
+                                       bg-emerald-50 hover:bg-emerald-100 border border-emerald-200
+                                       rounded-xl text-[10px] font-black text-emerald-700 uppercase tracking-widest
+                                       transition-all"
                             title="Marcar como hecho"
                           >
                             <Check className="w-3 h-3" />
@@ -251,7 +289,9 @@ const ProjectCalendar: React.FC<ProjectCalendarProps> = ({
                           </button>
                           <button
                             onClick={() => skipEntry(entry.id)}
-                            className="w-9 h-9 flex items-center justify-center bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-500/30 rounded-xl text-slate-600 hover:text-red-400 transition-all"
+                            className="w-9 h-9 flex items-center justify-center
+                                       bg-white hover:bg-red-50 border border-gray-200 hover:border-red-200
+                                       rounded-xl text-gray-400 hover:text-red-400 transition-all"
                             title="Saltar este día"
                           >
                             <X className="w-3.5 h-3.5" />
@@ -259,23 +299,29 @@ const ProjectCalendar: React.FC<ProjectCalendarProps> = ({
                         </div>
                       )}
 
+                      {/* Completado */}
                       {entry.status === 'done' && (
                         <div className="flex items-center gap-1.5">
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Completado</span>
+                          <Check className="w-3.5 h-3.5 text-emerald-500" />
+                          <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">
+                            Completado
+                          </span>
                           <button
                             onClick={() => toggleEntry(entry.id)}
-                            className="ml-auto text-[9px] text-slate-600 hover:text-slate-400 underline transition-colors"
+                            className="ml-auto text-[9px] text-gray-400 hover:text-gray-600 underline transition-colors"
                           >
                             Deshacer
                           </button>
                         </div>
                       )}
 
+                      {/* Omitido */}
                       {entry.status === 'skipped' && (
                         <div className="flex items-center gap-1.5">
-                          <X className="w-3.5 h-3.5 text-slate-600" />
-                          <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Omitido</span>
+                          <X className="w-3.5 h-3.5 text-gray-400" />
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                            Omitido
+                          </span>
                         </div>
                       )}
                     </div>
@@ -287,38 +333,48 @@ const ProjectCalendar: React.FC<ProjectCalendarProps> = ({
         </div>
       )}
 
-      {/* ── Checklist de plan ──────────────────────────────── */}
+      {/* ── Checklist de plan ────────────────────────────────── */}
       {localChecklist.length > 0 && (
         <div className="space-y-3">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Plan de contenido</p>
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+            Plan de contenido
+          </p>
           <div className="space-y-2">
             {localChecklist.map(item => {
               const style = moduleStyles[item.module] ?? moduleStyles.prompt;
               return (
                 <div
                   key={item.id}
-                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${style.bg} ${style.border} ${
+                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all shadow-sm ${style.bg} ${style.border} ${
                     item.status === 'done' ? 'opacity-50' : ''
                   }`}
                 >
                   <button
                     onClick={() => toggleChecklistItem(item.id)}
                     className={`w-5 h-5 rounded-lg flex-shrink-0 border-2 flex items-center justify-center transition-all ${
-                      item.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-slate-600 hover:border-emerald-500'
+                      item.status === 'done'
+                        ? 'bg-emerald-500 border-emerald-500'
+                        : `border-gray-300 hover:border-[#F72C5B]`
                     }`}
                   >
                     {item.status === 'done' && <Check className="w-3 h-3 text-white" />}
                   </button>
-                  <span className={`text-xs flex-1 font-medium ${item.status === 'done' ? 'line-through text-slate-500' : style.text}`}>
+
+                  <span className={`text-xs flex-1 font-medium ${
+                    item.status === 'done' ? 'line-through text-gray-400' : style.text
+                  }`}>
                     {item.label}
                   </span>
+
                   {item.status !== 'done' && (
                     <button
                       onClick={() => {
                         const base = moduleRoute[item.module] ?? '/prompt-studio';
                         navigate(`${base}?${new URLSearchParams(item.params).toString()}`);
                       }}
-                      className="flex-shrink-0 w-7 h-7 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center text-slate-400 hover:text-white transition-all"
+                      className="flex-shrink-0 w-7 h-7 bg-white hover:bg-gray-50 border border-gray-200
+                                 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700
+                                 transition-all shadow-sm"
                       title="Ir al módulo"
                     >
                       <ArrowRight className="w-3.5 h-3.5" />
@@ -328,7 +384,7 @@ const ProjectCalendar: React.FC<ProjectCalendarProps> = ({
               );
             })}
           </div>
-          <p className="text-[9px] text-slate-600 font-medium text-center">
+          <p className="text-[9px] text-gray-400 font-medium text-center">
             {localChecklist.filter(i => i.status === 'done').length} de {localChecklist.length} completados
           </p>
         </div>

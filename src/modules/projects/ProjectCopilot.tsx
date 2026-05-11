@@ -27,11 +27,8 @@ interface CopilotAction {
   description: string;
   module?: ActionModule;
   params?: Record<string, string>;
-  // Para captions
   captions?: GeneratedCaptions;
-  // Para checklist
   checklist?: ChecklistItem[];
-  // Para calendario
   calendar?: CalendarEntry[];
 }
 
@@ -217,7 +214,6 @@ function parseResponse(raw: string, currentBrief?: ProjectBrief): ParsedResponse
   const actions: CopilotAction[] = [];
   let text = raw;
 
-  // Extraer y remover cada bloque especial
   const extractBlock = (marker: string): string | null => {
     const idx = text.indexOf(marker);
     if (idx === -1) return null;
@@ -246,12 +242,7 @@ function parseResponse(raw: string, currentBrief?: ProjectBrief): ParsedResponse
       const match = captionsRaw.match(/\{[\s\S]*?\}/);
       if (match) {
         const captions: GeneratedCaptions = JSON.parse(match[0]);
-        actions.push({
-          type: 'captions',
-          label: 'Captions generados',
-          description: 'Listos para copiar y publicar',
-          captions,
-        });
+        actions.push({ type: 'captions', label: 'Captions generados', description: 'Listos para copiar y publicar', captions });
       }
     } catch { /* silencioso */ }
   }
@@ -261,12 +252,7 @@ function parseResponse(raw: string, currentBrief?: ProjectBrief): ParsedResponse
       const match = checklistRaw.match(/\[[\s\S]*\]/);
       if (match) {
         const checklist: ChecklistItem[] = JSON.parse(match[0]);
-        actions.push({
-          type: 'checklist',
-          label: 'Plan de contenido',
-          description: `${checklist.length} tareas generadas`,
-          checklist,
-        });
+        actions.push({ type: 'checklist', label: 'Plan de contenido', description: `${checklist.length} tareas generadas`, checklist });
       }
     } catch { /* silencioso */ }
   }
@@ -276,24 +262,12 @@ function parseResponse(raw: string, currentBrief?: ProjectBrief): ParsedResponse
       const match = calendarRaw.match(/\[[\s\S]*\]/);
       if (match) {
         const calendar: CalendarEntry[] = JSON.parse(match[0]);
-        actions.push({
-          type: 'calendar',
-          label: 'Calendario de contenido',
-          description: `${calendar.length} días programados`,
-          calendar,
-        });
+        actions.push({ type: 'calendar', label: 'Calendario de contenido', description: `${calendar.length} días programados`, calendar });
       }
     } catch { /* silencioso */ }
   }
 
-  // Intentar extraer brief de la conversación
-  let brief: Partial<ProjectBrief> | undefined;
-  const lowerText = text.toLowerCase();
-  if (!currentBrief?.productDescription && (lowerText.includes('producto') || lowerText.includes('vender'))) {
-    // El brief se extrae via un análisis posterior si hay suficiente info
-  }
-
-  return { text: cleanText(text), actions, brief };
+  return { text: cleanText(text), actions };
 }
 
 function cleanText(text: string): string {
@@ -327,16 +301,16 @@ const CaptionsPanel: React.FC<{ captions: GeneratedCaptions }> = ({ captions }) 
   };
 
   const entries = [
-    { key: 'instagram', icon: <Instagram className="w-3.5 h-3.5" />, label: 'Instagram', color: 'text-pink-400', value: captions.instagram },
-    { key: 'tiktok',    icon: <Play className="w-3.5 h-3.5" />,      label: 'TikTok',    color: 'text-cyan-400',  value: captions.tiktok },
-    { key: 'ecommerce', icon: <ShoppingBag className="w-3.5 h-3.5" />, label: 'Tienda',  color: 'text-emerald-400', value: captions.ecommerce },
-    { key: 'hashtags',  icon: <Hash className="w-3.5 h-3.5" />,      label: 'Hashtags',  color: 'text-violet-400', value: captions.hashtags },
+    { key: 'instagram', icon: <Instagram className="w-3.5 h-3.5" />, label: 'Instagram', color: 'text-pink-500',   value: captions.instagram },
+    { key: 'tiktok',    icon: <Play className="w-3.5 h-3.5" />,      label: 'TikTok',    color: 'text-cyan-600',   value: captions.tiktok },
+    { key: 'ecommerce', icon: <ShoppingBag className="w-3.5 h-3.5" />, label: 'Tienda',  color: 'text-emerald-600', value: captions.ecommerce },
+    { key: 'hashtags',  icon: <Hash className="w-3.5 h-3.5" />,      label: 'Hashtags',  color: 'text-violet-600', value: captions.hashtags },
   ];
 
   return (
     <div className="space-y-2 mt-2">
       {entries.map(e => (
-        <div key={e.key} className="bg-white/5 border border-white/10 rounded-xl p-3">
+        <div key={e.key} className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
           <div className="flex items-center justify-between mb-1.5">
             <div className={`flex items-center gap-1.5 ${e.color}`}>
               {e.icon}
@@ -344,12 +318,15 @@ const CaptionsPanel: React.FC<{ captions: GeneratedCaptions }> = ({ captions }) 
             </div>
             <button
               onClick={() => copy(e.key, e.value)}
-              className="w-6 h-6 bg-white/5 hover:bg-white/15 text-slate-500 hover:text-white rounded-lg flex items-center justify-center transition-all"
+              className="w-6 h-6 bg-gray-100 hover:bg-[#FFF0F4] text-gray-400 hover:text-[#F72C5B] rounded-lg
+                         flex items-center justify-center transition-all"
             >
-              {copied === e.key ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+              {copied === e.key
+                ? <Check className="w-3 h-3 text-emerald-500" />
+                : <Copy className="w-3 h-3" />}
             </button>
           </div>
-          <p className="text-[11px] text-slate-300 leading-relaxed">{e.value}</p>
+          <p className="text-[11px] text-gray-600 leading-relaxed">{e.value}</p>
         </div>
       ))}
     </div>
@@ -378,26 +355,30 @@ const ChecklistPreview: React.FC<{
   };
 
   return (
-    <div className="mt-2 bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
-      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Plan de contenido</p>
+    <div className="mt-2 bg-white border border-gray-200 rounded-xl p-3 space-y-2 shadow-sm">
+      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Plan de contenido</p>
       {items.map(item => (
         <div key={item.id} className="flex items-center gap-2">
           <button
             onClick={() => toggle(item.id)}
             className={`w-4 h-4 rounded flex-shrink-0 border-2 flex items-center justify-center transition-all ${
-              item.status === 'done' ? 'bg-emerald-500 border-emerald-500' : 'border-slate-600'
+              item.status === 'done'
+                ? 'bg-emerald-500 border-emerald-500'
+                : 'border-gray-300 hover:border-[#F72C5B]'
             }`}
           >
             {item.status === 'done' && <Check className="w-2.5 h-2.5 text-white" />}
           </button>
-          <span className={`text-[11px] flex-1 ${item.status === 'done' ? 'text-slate-500 line-through' : 'text-slate-300'}`}>
+          <span className={`text-[11px] flex-1 ${item.status === 'done' ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
             {item.label}
           </span>
         </div>
       ))}
       <button
         onClick={handleSave}
-        className="w-full mt-1 py-2 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/30 rounded-lg text-[10px] font-black text-indigo-300 uppercase tracking-widest transition-all flex items-center justify-center gap-1.5"
+        className="w-full mt-1 py-2 bg-[#FFF0F4] hover:bg-[#fce0e7] border border-[#F72C5B]/20
+                   rounded-lg text-[10px] font-black text-[#F72C5B] uppercase tracking-widest
+                   transition-all flex items-center justify-center gap-1.5"
       >
         {saved ? <><Check className="w-3 h-3" /> Guardado</> : 'Guardar en el proyecto'}
       </button>
@@ -420,21 +401,24 @@ const CalendarPreview: React.FC<{
   };
 
   const moduleColor: Record<string, string> = {
-    campaign:  'bg-brand-600/20 border-brand-500/30 text-brand-300',
-    photodump: 'bg-violet-600/20 border-violet-500/30 text-violet-300',
-    ugc:       'bg-emerald-600/20 border-emerald-500/30 text-emerald-300',
-    catalog:   'bg-sky-600/20 border-sky-500/30 text-sky-300',
-    prompt:    'bg-slate-600/20 border-slate-500/30 text-slate-300',
+    campaign:  'bg-[#FFF0F4] border-[#F72C5B]/20 text-[#F72C5B]',
+    photodump: 'bg-violet-50  border-violet-200   text-violet-700',
+    ugc:       'bg-emerald-50 border-emerald-200  text-emerald-700',
+    catalog:   'bg-sky-50     border-sky-200      text-sky-700',
+    prompt:    'bg-gray-50    border-gray-200     text-gray-600',
   };
 
   return (
-    <div className="mt-2 bg-white/5 border border-white/10 rounded-xl p-3 space-y-2">
-      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Calendario generado</p>
+    <div className="mt-2 bg-white border border-gray-200 rounded-xl p-3 space-y-2 shadow-sm">
+      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Calendario generado</p>
       <div className="space-y-1.5 max-h-48 overflow-y-auto">
         {calendar.map(entry => (
-          <div key={entry.id} className={`flex items-start gap-2 p-2 rounded-lg border ${moduleColor[entry.module] || moduleColor.prompt}`}>
+          <div
+            key={entry.id}
+            className={`flex items-start gap-2 p-2 rounded-lg border ${moduleColor[entry.module] || moduleColor.prompt}`}
+          >
             <div className="flex-shrink-0 text-center min-w-[36px]">
-              <p className="text-[8px] font-black uppercase opacity-70">{entry.dayLabel.split(' ')[0]}</p>
+              <p className="text-[8px] font-black uppercase opacity-60">{entry.dayLabel.split(' ')[0]}</p>
               <p className="text-sm font-black leading-none">{entry.dayLabel.split(' ')[1]}</p>
             </div>
             <div className="min-w-0">
@@ -446,7 +430,9 @@ const CalendarPreview: React.FC<{
       </div>
       <button
         onClick={handleSave}
-        className="w-full mt-1 py-2 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/30 rounded-lg text-[10px] font-black text-indigo-300 uppercase tracking-widest transition-all flex items-center justify-center gap-1.5"
+        className="w-full mt-1 py-2 bg-[#FFF0F4] hover:bg-[#fce0e7] border border-[#F72C5B]/20
+                   rounded-lg text-[10px] font-black text-[#F72C5B] uppercase tracking-widest
+                   transition-all flex items-center justify-center gap-1.5"
       >
         {saved ? <><Check className="w-3 h-3" /> Guardado</> : 'Guardar calendario'}
       </button>
@@ -473,26 +459,20 @@ const ProjectCopilot: React.FC<ProjectCopilotProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLInputElement>(null);
   const fileInputRef   = useRef<HTMLInputElement>(null);
-  // Ref para evitar guardar en Firestore durante la carga inicial
   const skipSaveRef    = useRef(true);
 
-  // ── Cargar conversación guardada al montar ───────────────────
+  // ── Cargar conversación guardada ─────────────────────────────
   useEffect(() => {
     skipSaveRef.current = true;
-
     if (project.conversation && project.conversation.length > 0) {
       setMessages(project.conversation);
     } else {
-      // Saludo inicial — personalizado si hay brief
       const greeting = project.brief?.productDescription
         ? `¡Hola de nuevo! Seguimos con "${project.name}".\n\nRecuerdo que estamos trabajando con ${project.brief.productDescription} para ${project.brief.goal}. ¿Continuamos desde donde dejamos o querés explorar algo nuevo?`
         : `Hola! Soy tu copiloto para el proyecto "${project.name}".\n\nSubí una foto de tu producto o contame qué querés lograr, y te ayudo a crear un plan de contenido concreto paso a paso.`;
-
       setMessages([{ id: 'welcome', role: 'assistant', content: greeting, timestamp: Date.now() }]);
     }
-
     setInitialized(true);
-    // Permitir guardado después de un tick
     setTimeout(() => { skipSaveRef.current = false; }, 100);
   }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -501,7 +481,7 @@ const ProjectCopilot: React.FC<ProjectCopilotProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // ── Guardar conversación en Firestore (debounced) ─────────────
+  // ── Guardar en Firestore (debounced) ─────────────────────────
   useEffect(() => {
     if (!initialized || skipSaveRef.current || messages.length === 0) return;
     const timer = setTimeout(() => {
@@ -557,12 +537,8 @@ const ProjectCopilot: React.FC<ProjectCopilotProps> = ({
         actions: actions.length > 0 ? actions : undefined,
         timestamp: Date.now(),
       };
-
       setMessages(prev => [...prev, assistantMsg]);
-
-      // Auto-guardar brief si el copiloto lo detectó (heurística básica)
       tryExtractAndSaveBrief(content, replyText, project);
-
     } catch {
       setMessages(prev => [...prev, {
         id: uuidv4(),
@@ -575,11 +551,10 @@ const ProjectCopilot: React.FC<ProjectCopilotProps> = ({
     }
   }, [input, messages, loading, pendingImage, project]);
 
-  // ── Heurística para extraer brief de la conversación ─────────
+  // ── Heurística brief ─────────────────────────────────────────
   const tryExtractAndSaveBrief = (userText: string, _replyText: string, proj: Project) => {
-    if (proj.brief?.productDescription) return; // ya hay brief
-    // Si el usuario mencionó algo que parezca un producto, intentar guardarlo parcialmente
-    const hasProduct  = userText.length > 10;
+    if (proj.brief?.productDescription) return;
+    const hasProduct   = userText.length > 10;
     const hasObjective = /vend|lanzar|promover|publicar|instagram|tiktok/i.test(userText);
     if (hasProduct && hasObjective) {
       saveBrief(proj.id, {
@@ -592,15 +567,12 @@ const ProjectCopilot: React.FC<ProjectCopilotProps> = ({
     }
   };
 
-  // ── Ejecutar acción del copiloto ──────────────────────────────
+  // ── Ejecutar acción ───────────────────────────────────────────
   const handleAction = (action: CopilotAction) => {
     if (action.type === 'navigate' && action.module && action.params) {
       const routes: Record<ActionModule, string> = {
-        campaign:  '/prompt-studio',
-        photodump: '/prompt-studio',
-        prompt:    '/prompt-studio',
-        ugc:       '/studio-pro',
-        catalog:   '/productos',
+        campaign: '/prompt-studio', photodump: '/prompt-studio', prompt: '/prompt-studio',
+        ugc: '/studio-pro', catalog: '/productos',
       };
       navigate(`${routes[action.module]}?${new URLSearchParams(action.params).toString()}`);
     }
@@ -634,31 +606,37 @@ const ProjectCopilot: React.FC<ProjectCopilotProps> = ({
       const n = line.match(/^(\d+)\.\s+(.+)$/);
       if (n) return (
         <div key={i} className="flex gap-2 my-1">
-          <span className="text-indigo-400 font-black flex-shrink-0">{n[1]}.</span>
+          <span className="text-[#F72C5B] font-black flex-shrink-0">{n[1]}.</span>
           <span>{n[2]}</span>
         </div>
       );
       return <span key={i} className="block">{line}</span>;
     });
 
+  // ────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full bg-slate-900 rounded-2xl overflow-hidden border border-white/10">
+    <div className="flex flex-col h-full bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
 
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3.5 bg-indigo-600 flex-shrink-0">
+      {/* Header del copiloto */}
+      <div className="flex items-center gap-3 px-4 py-3.5 bg-[#F72C5B] flex-shrink-0">
         <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
           <Sparkles className="w-4 h-4 text-white" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-black text-white uppercase tracking-widest leading-none">Copiloto del proyecto</p>
-          <p className="text-[9px] font-bold text-indigo-200 uppercase tracking-widest mt-0.5">
-            {project.brief ? `Producto conocido · ${project.brief.platform}` : 'Director creativo · Estratega de contenido'}
+          <p className="text-xs font-black text-white uppercase tracking-widest leading-none">
+            Copiloto del proyecto
+          </p>
+          <p className="text-[9px] font-bold text-white/70 uppercase tracking-widest mt-0.5">
+            {project.brief
+              ? `Producto conocido · ${project.brief.platform}`
+              : 'Director creativo · Estratega de contenido'}
           </p>
         </div>
         {messages.length > 1 && (
           <button
             onClick={reset}
-            className="w-7 h-7 bg-white/10 text-white/70 rounded-xl flex items-center justify-center hover:bg-white/20 transition-colors"
+            className="w-7 h-7 bg-white/15 text-white/80 rounded-xl flex items-center justify-center
+                       hover:bg-white/25 transition-colors"
             title="Nueva conversación"
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -666,24 +644,33 @@ const ProjectCopilot: React.FC<ProjectCopilotProps> = ({
         )}
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+      {/* Mensajes */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 bg-gray-50/50">
         {messages.map(msg => (
           <div key={msg.id} className={`flex gap-2.5 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+
+            {/* Avatar asistente */}
             {msg.role === 'assistant' && (
-              <div className="w-6 h-6 bg-indigo-600/30 border border-indigo-500/30 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Sparkles className="w-3 h-3 text-indigo-400" />
+              <div className="w-6 h-6 bg-[#FFF0F4] border border-[#F72C5B]/20 rounded-full
+                              flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Sparkles className="w-3 h-3 text-[#F72C5B]" />
               </div>
             )}
+
             <div className="max-w-[88%] space-y-2">
+              {/* Imágenes adjuntas */}
               {msg.imageUrls?.map((url, i) => (
-                <img key={i} src={url} alt="adjunto" className="rounded-xl max-h-40 object-cover w-full border border-white/10" />
+                <img
+                  key={i} src={url} alt="adjunto"
+                  className="rounded-xl max-h-40 object-cover w-full border border-gray-200 shadow-sm"
+                />
               ))}
 
+              {/* Burbuja */}
               <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                 msg.role === 'user'
-                  ? 'bg-indigo-600 text-white rounded-tr-sm'
-                  : 'bg-white/8 text-slate-200 rounded-tl-sm border border-white/10'
+                  ? 'bg-[#F72C5B] text-white rounded-tr-sm shadow-sm'
+                  : 'bg-[#FFF0F4] text-gray-800 rounded-tl-sm border border-[#F72C5B]/15'
               }`}>
                 {msg.role === 'assistant'
                   ? <div className="text-sm leading-relaxed space-y-0.5">{renderText(msg.content)}</div>
@@ -691,7 +678,7 @@ const ProjectCopilot: React.FC<ProjectCopilotProps> = ({
                 }
               </div>
 
-              {/* Acciones del copiloto */}
+              {/* Acciones */}
               {msg.actions && msg.actions.length > 0 && (
                 <div className="space-y-2 pt-1">
                   {(msg.actions as CopilotAction[]).map((action, i) => {
@@ -709,14 +696,19 @@ const ProjectCopilot: React.FC<ProjectCopilotProps> = ({
                       <button
                         key={i}
                         onClick={() => handleAction(action)}
-                        className="w-full text-left bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 hover:border-indigo-500/60 rounded-xl px-4 py-3 transition-all group"
+                        className="w-full text-left bg-white hover:bg-[#FFF0F4] border border-gray-200
+                                   hover:border-[#F72C5B]/30 rounded-xl px-4 py-3 transition-all group shadow-sm"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="min-w-0">
-                            <p className="text-xs font-black text-indigo-300 uppercase tracking-tight">{action.label}</p>
-                            <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">{action.description}</p>
+                            <p className="text-xs font-black text-[#F72C5B] uppercase tracking-tight">
+                              {action.label}
+                            </p>
+                            <p className="text-[10px] text-gray-500 mt-0.5 leading-snug">
+                              {action.description}
+                            </p>
                           </div>
-                          <ArrowRight className="w-4 h-4 text-indigo-400 flex-shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                          <ArrowRight className="w-4 h-4 text-[#F72C5B] flex-shrink-0 group-hover:translate-x-0.5 transition-transform" />
                         </div>
                       </button>
                     );
@@ -727,14 +719,17 @@ const ProjectCopilot: React.FC<ProjectCopilotProps> = ({
           </div>
         ))}
 
+        {/* Typing indicator */}
         {(loading || compressing) && (
           <div className="flex gap-2.5">
-            <div className="w-6 h-6 bg-indigo-600/30 border border-indigo-500/30 rounded-full flex items-center justify-center flex-shrink-0">
-              <Sparkles className="w-3 h-3 text-indigo-400" />
+            <div className="w-6 h-6 bg-[#FFF0F4] border border-[#F72C5B]/20 rounded-full
+                            flex items-center justify-center flex-shrink-0">
+              <Sparkles className="w-3 h-3 text-[#F72C5B]" />
             </div>
-            <div className="bg-white/8 border border-white/10 rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-2">
-              <Loader2 className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
-              <span className="text-xs text-slate-400 font-medium">
+            <div className="bg-[#FFF0F4] border border-[#F72C5B]/15 rounded-2xl rounded-tl-sm
+                            px-4 py-3 flex items-center gap-2">
+              <Loader2 className="w-3.5 h-3.5 text-[#F72C5B] animate-spin" />
+              <span className="text-xs text-gray-500 font-medium">
                 {compressing ? 'Procesando imagen...' : 'Pensando...'}
               </span>
             </div>
@@ -746,13 +741,18 @@ const ProjectCopilot: React.FC<ProjectCopilotProps> = ({
 
       {/* Sugerencias iniciales */}
       {messages.length <= 1 && !loading && (
-        <div className="px-4 pb-3 space-y-1.5 flex-shrink-0">
-          <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Por dónde empezar</p>
+        <div className="px-4 pb-3 space-y-1.5 flex-shrink-0 bg-white border-t border-gray-100">
+          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest pt-2">
+            Por dónde empezar
+          </p>
           {INITIAL_SUGGESTIONS.map((s, i) => (
             <button
               key={i}
               onClick={() => sendMessage(s)}
-              className="w-full text-left px-3 py-2 bg-white/5 hover:bg-indigo-600/20 hover:text-indigo-300 text-slate-400 rounded-xl text-xs font-medium transition-colors border border-white/8 hover:border-indigo-500/30 flex items-center justify-between gap-2"
+              className="w-full text-left px-3 py-2 bg-gray-50 hover:bg-[#FFF0F4] hover:text-[#F72C5B]
+                         text-gray-500 rounded-xl text-xs font-medium transition-colors
+                         border border-gray-200 hover:border-[#F72C5B]/30
+                         flex items-center justify-between gap-2"
             >
               <span>{s}</span>
               <ChevronRight className="w-3 h-3 flex-shrink-0 opacity-50" />
@@ -763,12 +763,16 @@ const ProjectCopilot: React.FC<ProjectCopilotProps> = ({
 
       {/* Preview imagen pendiente */}
       {pendingImage && (
-        <div className="px-4 pt-2 flex-shrink-0">
+        <div className="px-4 pt-2 flex-shrink-0 bg-white">
           <div className="relative inline-block">
-            <img src={pendingImage.preview} alt="preview" className="h-14 w-14 object-cover rounded-xl border border-white/20" />
+            <img
+              src={pendingImage.preview} alt="preview"
+              className="h-14 w-14 object-cover rounded-xl border border-gray-200 shadow-sm"
+            />
             <button
               onClick={() => setPendingImage(null)}
-              className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-slate-700 text-white rounded-full flex items-center justify-center hover:bg-red-500 transition-colors"
+              className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gray-200 text-gray-600 rounded-full
+                         flex items-center justify-center hover:bg-red-100 hover:text-red-500 transition-colors"
             >
               <XCircle className="w-3.5 h-3.5" />
             </button>
@@ -777,12 +781,13 @@ const ProjectCopilot: React.FC<ProjectCopilotProps> = ({
       )}
 
       {/* Input */}
-      <div className="px-3 py-3 border-t border-white/10 flex-shrink-0 flex gap-2 items-center">
+      <div className="px-3 py-3 border-t border-gray-100 flex-shrink-0 flex gap-2 items-center bg-white">
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={loading}
-          className="w-9 h-9 bg-white/5 text-slate-500 rounded-xl flex items-center justify-center hover:bg-indigo-600/20 hover:text-indigo-400 disabled:opacity-30 transition-colors flex-shrink-0"
+          className="w-9 h-9 bg-gray-100 text-gray-400 rounded-xl flex items-center justify-center
+                     hover:bg-[#FFF0F4] hover:text-[#F72C5B] disabled:opacity-30 transition-colors flex-shrink-0"
           title="Adjuntar imagen"
         >
           <ImagePlus className="w-4 h-4" />
@@ -795,12 +800,15 @@ const ProjectCopilot: React.FC<ProjectCopilotProps> = ({
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
           placeholder="Contame qué querés lograr..."
           disabled={loading}
-          className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-indigo-500/50 focus:bg-white/8 transition-all disabled:opacity-50"
+          className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800
+                     placeholder-gray-400 outline-none focus:border-[#F72C5B]/40 focus:ring-2 focus:ring-[#F72C5B]/8
+                     transition-all disabled:opacity-50"
         />
         <button
           onClick={() => sendMessage()}
           disabled={!canSend}
-          className="w-9 h-9 bg-indigo-600 text-white rounded-xl flex items-center justify-center hover:bg-indigo-700 disabled:opacity-30 transition-all flex-shrink-0"
+          className="w-9 h-9 bg-[#F72C5B] text-white rounded-xl flex items-center justify-center
+                     hover:bg-[#C4224A] disabled:opacity-30 transition-all flex-shrink-0"
         >
           <Send className="w-4 h-4" />
         </button>
