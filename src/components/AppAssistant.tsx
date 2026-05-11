@@ -9,6 +9,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MessageCircle, X, Send, Loader2, ChevronDown, Sparkles, RotateCcw, ImagePlus, XCircle } from 'lucide-react';
+import { getAuth } from 'firebase/auth';
 
 // ── Types ────────────────────────────────────────────────────
 interface Message {
@@ -371,9 +372,12 @@ async function callAssistant(
     body.mimeTypes = [imageData.mimeType];
   }
 
+  const token = await getAuth().currentUser?.getIdToken().catch(() => null);
+  const authHeader: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+
   const response = await fetch('/api/gemini/content', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeader },
     body: JSON.stringify(body),
   });
 
