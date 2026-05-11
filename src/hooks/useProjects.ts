@@ -7,13 +7,16 @@ import {
   updateProjectName,
   exportProjectAsZip,
 } from '../services/projectService';
+import { useAuth } from '../modules/auth/AuthContext';
 
 export const useProjects = () => {
+  const { user, loading: authLoading } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadProjects = useCallback(async () => {
+    if (!user) return;
     setLoading(true);
     setError(null);
     try {
@@ -24,7 +27,7 @@ export const useProjects = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   const addProject = useCallback(async (name: string): Promise<Project> => {
     try {
@@ -67,8 +70,14 @@ export const useProjects = () => {
   }, []);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      setProjects([]);
+      setLoading(false);
+      return;
+    }
     loadProjects();
-  }, [loadProjects]);
+  }, [user, authLoading, loadProjects]);
 
   return { projects, loading, error, loadProjects, addProject, renameProject, removeProject, exportProject };
 };

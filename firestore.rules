@@ -173,6 +173,11 @@ service cloud.firestore {
         allow read, write: if isOwner(userId) || isAdmin();
       }
 
+      // Proyectos del usuario
+      match /projects/{projectId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
       // Flags internos (ej: migración)
       match /meta/{docId} {
         allow read, write: if isOwner(userId) || isAdmin();
