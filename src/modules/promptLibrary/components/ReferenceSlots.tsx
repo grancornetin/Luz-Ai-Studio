@@ -198,9 +198,9 @@ const ReferenceSlots: React.FC<Props> = ({
                 />
               )}
 
-              {/* Outfit — solo visible si la persona está activa */}
+              {/* Outfit asignado a esta persona */}
               {outfit && (
-                <div className={`transition-all ${person?.imageUrl ? 'opacity-100' : 'opacity-40'}`}>
+                <div className="transition-all">
                   <SlotCard
                     slot={outfit}
                     isActive={isActive(outfit)}
@@ -212,19 +212,6 @@ const ReferenceSlots: React.FC<Props> = ({
                 </div>
               )}
 
-              {/* Hint de outfit cuando persona está cargada pero sin outfit */}
-              {person?.imageUrl && !outfit?.imageUrl && (
-                <label className="cursor-pointer flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-violet-200 bg-violet-50/50 transition-all hover:border-violet-400 hover:bg-violet-50"
-                  style={{ aspectRatio: '4/5' }}
-                  title="Agregar outfit para esta persona"
-                >
-                  <input type="file" hidden accept="image/*"
-                    onChange={e => { if (e.target.files?.[0] && outfit) onUpload(outfit.id, e.target.files[0]); }}
-                  />
-                  <Shirt className="w-4 h-4 text-violet-400" />
-                  <span className="text-[8px] font-black text-violet-400 uppercase">Outfit</span>
-                </label>
-              )}
             </div>
           ))}
         </div>
