@@ -49,8 +49,9 @@ import { startNotificationsListener, stopNotificationsListener } from './hooks/u
 import { AvatarProfile, ProductProfile } from './types';
 
 const NotificationsPanel = lazy(() => import('./views/NotificationsPanel'));
-const CampaignModule     = lazy(() => import('./modules/campaign/CampaignModule'));
-const PhotodumpModule    = lazy(() => import('./modules/photodump/PhotodumpModule'));
+const CampaignModule        = lazy(() => import('./modules/campaign/CampaignModule'));
+const PhotodumpModule       = lazy(() => import('./modules/photodump/PhotodumpModule'));
+const ContentPlannerModule  = lazy(() => import('./modules/contentPlanner/ContentPlannerModule'));
 
 const PLAN_STYLES: Record<string, { label: string; className: string }> = {
   free:    { label: 'Free',    className: 'bg-slate-100 text-slate-500' },
@@ -89,12 +90,19 @@ const MENU_GROUPS = [
     ]
   },
   {
+    label: 'Publicar',
+    icon: 'fa-calendar-days',
+    items: [
+      { path: '/publicar',  label: 'Publicar Studio', sublabel: 'Plan + Calendario + Ideas', icon: 'fa-calendar-days' },
+      { path: '/projects',  label: 'Proyectos',        sublabel: '',                          icon: 'fa-folder-open' },
+    ]
+  },
+  {
     label: 'Herramientas',
     icon: 'fa-toolbox',
     items: [
       { path: '/outfit-extractor', label: 'Extraer prendas',  sublabel: 'Outfit Extractor', icon: 'fa-shirt' },
       { path: '/productos',         label: 'Foto de producto', sublabel: 'Product Studio',   icon: 'fa-gem' },
-      { path: '/projects',          label: 'Proyectos',        sublabel: '',                 icon: 'fa-folder-open' },
     ]
   },
 ];
@@ -432,6 +440,7 @@ const AppContent: React.FC = () => {
                   <Route path="/pricing"        element={<Pricing />} />
                   <Route path="/buy-credits"    element={<BuyCredits />} />
                   <Route path="/cuenta"         element={<AccountSettings />} />
+                  <Route path="/publicar"        element={<ContentPlannerModule />} />
                   <Route path="/projects"        element={<ProjectsList />} />
                   <Route path="/projects/:id"   element={<ProjectDetail />} />
                   <Route path="/prompt-library" element={<Navigate to="/prompt-gallery" replace />} />
