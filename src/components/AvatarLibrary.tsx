@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { AvatarProfile } from '../types';
 import ModuleTutorial from './shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from './shared/tutorialConfigs';
+import { ResultCard } from './shared/ResultCard';
+import { ResultLibraryGrid } from './shared/ResultLibraryGrid';
 
 interface AvatarLibraryProps {
   avatars: AvatarProfile[];
@@ -74,79 +76,44 @@ const AvatarLibrary: React.FC<AvatarLibraryProps> = ({ avatars }) => {
       </header>
 
 
-      {avatars.length === 0 ? (
-        <div className="bg-white p-12 md:p-24 rounded-[40px] md:rounded-[64px] border-2 border-dashed border-slate-100 text-center">
-           <i className="fa-solid fa-user-astronaut text-5xl md:text-7xl text-slate-100 mb-6 md:mb-8"></i>
-           <p className="text-slate-400 font-black uppercase text-xs md:text-sm tracking-[0.2em]">No hay modelos registrados</p>
-           <p className="text-slate-300 text-[10px] md:text-xs mt-3 italic">Usa el laboratorio para crear tu primera identidad digital.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-10">
-          {avatars.map(avatar => (
-            <div 
-              key={avatar.id} 
-              className="bg-white p-5 md:p-6 rounded-[40px] md:rounded-[56px] border border-slate-100 shadow-sm hover:shadow-2xl transition-all group cursor-pointer"
-              onClick={() => setSelectedAvatar(avatar)}
-            >
-              <div 
-                className="aspect-[3/4] rounded-[32px] md:rounded-[44px] overflow-hidden bg-slate-50 mb-6 md:mb-8 relative shadow-inner cursor-zoom-in group-hover:scale-105 transition-transform duration-700"
-                onClick={(e) => { e.stopPropagation(); openZoomModal(avatar.baseImages, imgIdx[avatar.id] || 0); }}
-              >
-                 <img 
-                    src={avatar.baseImages[imgIdx[avatar.id] || 0]} 
-                    alt={avatar.name} 
-                    className="w-full h-full object-contain" 
-                 />
-                 {/* Zoom Overlay on hover */}
-                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                   <i className="fa-solid fa-magnifying-glass-plus text-3xl md:text-4xl"></i>
-                 </div>
-                 {/* Navigation dots */}
-                 <div className="absolute bottom-6 inset-x-6 flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                    {avatar.baseImages.map((_, i) => (
-                      <button 
-                        key={i} 
-                        onClick={(e) => { e.stopPropagation(); setImgIdx({...imgIdx, [avatar.id]: i}); }} 
-                        className={`h-1.5 rounded-full transition-all ${ (imgIdx[avatar.id] || 0) === i ? 'w-8 bg-white' : 'w-2 bg-white/30 hover:bg-white/50'}`} 
-                      />
-                    ))}
-                 </div>
-                 {/* Type badges */}
-                 <div className="absolute top-6 left-6 flex gap-2">
-                   <span className={`px-4 py-1.5 text-[8px] md:text-[9px] font-black rounded-full text-white border border-white/20 backdrop-blur-md ${avatar.type === 'reference' ? 'bg-brand-500/60' : 'bg-accent-500/60'}`}>
-                      {avatar.type === 'reference' ? 'PROT. CLON' : 'ADN MASTER'}
-                   </span>
-                 </div>
-                 {/* Delete button */}
-                 <button onClick={(e) => deleteAvatar(avatar.id, e)} className="absolute top-6 right-6 w-8 h-8 bg-red-50/80 backdrop-blur-md text-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 hover:text-white">
-                   <i className="fa-solid fa-trash-can text-xs"></i>
-                 </button>
-              </div>
-              <div className="px-3 md:px-4 space-y-4 md:space-y-5"> {/* Increased mobile px */}
-                 <div className="flex justify-between items-start">
-                    <div>
-                       <h4 className="text-lg md:text-2xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">{avatar.name}</h4> {/* Adjusted mobile text size */}
-                       <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 italic">{avatar.metadata.personality}</p> {/* Adjusted mobile text size */}
-                    </div>
-                    <div className="w-8 h-8 md:w-10 md:h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 group-hover:bg-brand-50 group-hover:text-brand-500 transition-all">
-                       <i className="fa-solid fa-chevron-right text-xs"></i>
-                    </div>
-                 </div>
-                 <div className="grid grid-cols-2 gap-2 pt-2">
-                    <div className="bg-slate-50 p-2 md:p-3 rounded-xl md:rounded-2xl border border-slate-100 text-center">
-                       <p className="text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest">Etnia</p> {/* Adjusted mobile text size */}
-                       <p className="text-[10px] md:text-sm font-black text-slate-800 uppercase tracking-tighter truncate">{avatar.metadata.ethnicity}</p> {/* Adjusted mobile text size */}
-                    </div>
-                    <div className="bg-slate-50 p-2 md:p-3 rounded-xl md:rounded-2xl border border-slate-100 text-center">
-                       <p className="text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest">Edad Aprox.</p> {/* Adjusted mobile text size */}
-                       <p className="text-[10px] md:text-sm font-black text-slate-800">{avatar.metadata.age}</p> {/* Adjusted mobile text size */}
-                    </div>
-                 </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <ResultLibraryGrid
+        stats={[
+          { label: 'Modelos', value: avatars.length, sub: 'guardados' },
+          { label: 'Clonados', value: avatars.filter(a => a.type === 'reference' || a.type === 'clone').length, sub: 'desde foto', color: 'text-brand-600' },
+          { label: 'ADN Manual', value: avatars.filter(a => a.type === 'manual').length, sub: 'creados' },
+        ]}
+        searchTexts={avatars.map(a => `${a.name} ${a.metadata?.ethnicity ?? ''} ${a.metadata?.personality ?? ''} ${a.type}`)}
+        emptyTitle="Sin modelos guardados"
+        emptyDescription="Usá el laboratorio para crear tu primera identidad digital"
+        emptyCtaLabel="Nueva clonación"
+        onEmpty={() => navigate('/crear/clonar')}
+        primaryAction={{ label: 'Crear ADN', onClick: () => navigate('/crear/manual') }}
+      >
+        {avatars.map(avatar => (
+          <ResultCard
+            key={avatar.id}
+            images={avatar.baseImages.slice(0, 3)}
+            title={avatar.name}
+            subtitle={avatar.metadata?.personality ?? ''}
+            date={avatar.createdAt}
+            badge={{
+              label: avatar.type === 'reference' || avatar.type === 'clone' ? 'PROT. CLON' : 'ADN MASTER',
+              color: avatar.type === 'manual' ? 'violet' as any : 'fuchsia',
+            }}
+            pills={[
+              avatar.metadata?.ethnicity,
+              avatar.metadata?.age,
+              avatar.metadata?.gender,
+            ].filter(Boolean) as string[]}
+            accentColor={avatar.type === 'manual' ? 'violet' : 'fuchsia'}
+            onClick={() => setSelectedAvatar(avatar)}
+            actions={[
+              { label: 'Ver modelo', onClick: e => { e.stopPropagation(); setSelectedAvatar(avatar); }, variant: 'primary' },
+              { label: '', icon: <i className="fa-solid fa-trash text-xs" />, onClick: e => deleteAvatar(avatar.id, e), variant: 'danger', title: 'Eliminar' },
+            ]}
+          />
+        ))}
+      </ResultLibraryGrid>
 
       {selectedAvatar && (
         <div className="fixed inset-0 z-[10000] bg-slate-900/98 backdrop-blur-xl flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300">

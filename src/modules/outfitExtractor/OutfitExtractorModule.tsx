@@ -1,5 +1,7 @@
 // src/modules/outfitExtractor/OutfitExtractorModule.tsx
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { ResultCard } from '../../components/shared/ResultCard';
+import { ResultLibraryGrid } from '../../components/shared/ResultLibraryGrid';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
 import { useCreditGuard } from '../../../hooks/useCreditGuard';
@@ -940,23 +942,34 @@ const OutfitExtractorModule: React.FC = () => {
             </nav>
 
             {libView === 'kits' && (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+              <ResultLibraryGrid
+                stats={[
+                  { label: 'Kits', value: libraryKits.length, sub: 'guardados' },
+                  { label: 'Prendas', value: libraryKits.reduce((s, k) => s + (k.items?.length ?? 0), 0), sub: 'extraídas', color: 'text-brand-600' },
+                ]}
+                searchTexts={libraryKits.map(k => `kit ${k.id}`)}
+                emptyTitle="Sin kits todavía"
+                emptyDescription="Extraé tu primer outfit para verlo aquí"
+                columns={3}
+              >
                 {libraryKits.map(kit => (
-                  <div key={kit.id} className="bg-white p-4 rounded-[32px] border border-slate-100 shadow-sm space-y-4 group">
-                    <div className="aspect-[3/4] bg-slate-50 rounded-[24px] overflow-hidden relative cursor-pointer" onClick={() => viewFromLibrary(kit)}>
-                      <img src={kit.finalKitUrl || ''} className="w-full h-full object-contain" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                        <i className="fa-solid fa-eye text-white text-2xl" />
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] font-black uppercase text-slate-900">Kit #{kit.id.slice(-4)}</p>
-                      <button onClick={e => handleDeleteKit(kit.id, e)} className="text-red-400 hover:text-red-600"><i className="fa-solid fa-trash" /></button>
-                    </div>
-                  </div>
+                  <ResultCard
+                    key={kit.id}
+                    images={[kit.finalKitUrl, ...(kit.items?.slice(0,2).map(i => i.imageUrl) ?? [])].filter(Boolean) as string[]}
+                    title={`Kit #${kit.id.slice(-4)}`}
+                    subtitle={kit.inputType === 'COLLAGE' ? 'Desde collage' : 'Desde foto real'}
+                    date={kit.createdAt}
+                    badge={{ label: `${kit.items?.length ?? 0} prendas`, color: 'fuchsia' }}
+                    pills={kit.items?.slice(0, 3).map(i => i.category ?? i.name).filter(Boolean) ?? []}
+                    accentColor="violet"
+                    onClick={() => viewFromLibrary(kit)}
+                    actions={[
+                      { label: 'Ver kit', onClick: e => { e.stopPropagation(); viewFromLibrary(kit); }, variant: 'primary' },
+                      { label: '', icon: <i className="fa-solid fa-trash text-xs" />, onClick: e => handleDeleteKit(kit.id, e), variant: 'danger', title: 'Eliminar' },
+                    ]}
+                  />
                 ))}
-                {libraryKits.length === 0 && <div className="col-span-full py-20 text-center bg-slate-50 rounded-[40px] opacity-60 text-sm text-slate-400">No hay kits todavía</div>}
-              </div>
+              </ResultLibraryGrid>
             )}
 
             {libView === 'items' && (

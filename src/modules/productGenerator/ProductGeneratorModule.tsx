@@ -7,6 +7,8 @@
 // — descuento total al apretar Generar + reembolso por fallos
 // — Paso 6 con reintento de fotos fallidas
 import React, { useState, useEffect } from 'react';
+import { ResultCard } from '../../components/shared/ResultCard';
+import { ResultLibraryGrid } from '../../components/shared/ResultLibraryGrid';
 import { useSearchParams } from 'react-router-dom';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
@@ -800,43 +802,35 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-10 px-1">
-            {products.map((product) => (
-              <div
+          <ResultLibraryGrid
+            stats={[
+              { label: 'Productos', value: products.length, sub: 'en catálogo' },
+              { label: 'Imágenes', value: products.reduce((s, p) => s + (p.generatedImages?.length ?? 0), 0), sub: 'generadas', color: 'text-brand-600' },
+            ]}
+            searchTexts={products.map(p => `${p.name} ${p.category} ${p.metadata?.material ?? ''}`)}
+            emptyTitle="Catálogo vacío"
+            emptyDescription="Generá tu primer set de fotos de producto para verlo aquí"
+            emptyCtaLabel="Crear producto"
+            onEmpty={() => setActiveTab('create')}
+          >
+            {products.map(product => (
+              <ResultCard
                 key={product.id}
-                className="bg-white p-5 md:p-6 rounded-[40px] md:rounded-[56px] border border-slate-100 shadow-sm hover:shadow-2xl transition-all group overflow-hidden cursor-pointer"
+                images={[...(product.generatedImages ?? []), ...(product.baseImages ?? [])].filter(Boolean).slice(0, 3)}
+                title={product.name}
+                subtitle={`${product.category}${product.metadata?.material ? ` · ${product.metadata.material}` : ''}`}
+                date={product.createdAt}
+                badge={{ label: '✓ Guardado', color: 'green' }}
+                pills={[product.category, product.metadata?.material, product.metadata?.style].filter(Boolean) as string[]}
+                refSlots={(product.baseImages ?? []).slice(0, 2).map((src, i) => ({ label: `Base ${i + 1}`, src }))}
+                accentColor="blue"
                 onClick={() => openProductDetail(product)}
-              >
-                <div className="aspect-square rounded-[32px] md:rounded-[44px] overflow-hidden bg-slate-50 mb-6 md:mb-8 relative shadow-inner">
-                  <img
-                    src={product.generatedImages[0] || product.baseImages[0]}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                  />
-                </div>
-                <div className="px-1 md:px-2 space-y-3 md:space-y-4">
-                  <h4 className="t-display text-xl md:text-2xl text-slate-900 truncate">
-                    {product.name}
-                  </h4>
-                  <div className="flex gap-2">
-                    <span className="px-3 py-1.5 bg-slate-50 text-xs font-black text-slate-500 uppercase rounded-xl border border-slate-100">
-                      {product.metadata.material}
-                    </span>
-                    <span className="px-3 py-1.5 bg-slate-50 text-xs font-black text-slate-500 uppercase rounded-xl border border-slate-100">
-                      {product.category}
-                    </span>
-                  </div>
-                </div>
-              </div>
+                actions={[
+                  { label: 'Ver detalle', onClick: e => { e.stopPropagation(); openProductDetail(product); }, variant: 'primary' },
+                ]}
+              />
             ))}
-            {products.length === 0 && (
-              <div className="col-span-full py-20 md:py-32 text-center bg-white rounded-[40px] md:rounded-[56px] border-2 border-dashed border-slate-200">
-                <i className="fa-solid fa-box-open text-5xl md:text-6xl text-slate-100 mb-6"></i>
-                <p className="text-slate-400 font-black uppercase text-xs md:text-sm tracking-[0.2em]">
-                  Catálogo vacío
-                </p>
-              </div>
-            )}
-          </div>
+          </ResultLibraryGrid>
         )}
 
         {lightboxOpen && lightboxImages.length > 0 && (

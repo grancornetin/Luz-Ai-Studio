@@ -4,6 +4,8 @@
  * Diseño alineado con CampaignModule: fondo blanco, WizardStepper, layout dos columnas.
  */
 import React, { useState, useEffect } from 'react';
+import { ResultCard } from '../../components/shared/ResultCard';
+import { ResultLibraryGrid } from '../../components/shared/ResultLibraryGrid';
 import {
   Images, Download, Check, Sparkles, Library, Trash2, Copy,
   Plus, Hash, BookOpen, RefreshCw, AlertTriangle,
@@ -960,76 +962,46 @@ const PhotodumpModule: React.FC = () => {
 
         {/* ══════════════ BIBLIOTECA ══════════════ */}
         {activeTab === 'library' && (
-          <div className="animate-in fade-in duration-500">
-            {loadingSets && (
-              <div className="flex items-center justify-center py-20">
-                <div className="w-6 h-6 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
-              </div>
-            )}
-            {!loadingSets && sets.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-20 md:py-32 text-center bg-white rounded-[40px] md:rounded-[56px] border-2 border-dashed border-slate-200">
-                <Images className="w-12 h-12 text-slate-200 mb-5" />
-                <p className="t-meta mb-2">Biblioteca vacía</p>
-                <p className="t-body-sm mb-6">Creá tu primer set para verlo aquí</p>
-                <button type="button" onClick={() => setActiveTab('create')}
-                  className="flex items-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-md hover:bg-brand-700 transition-colors">
-                  <Sparkles size={14} /> Crear set
-                </button>
-              </div>
-            )}
-            <div className="space-y-6">
-              {sets.map(set => (
-                <div key={set.id} className="bg-white border border-slate-100 rounded-[36px] overflow-hidden shadow-sm">
-                  <div className="p-5 md:p-6 flex items-center justify-between border-b border-slate-100">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-lg">{NARRATIVE_META[set.narrative]?.icon}</span>
-                        <p className="font-display font-bold italic text-[16px] text-slate-900 uppercase truncate"
-                          style={{ fontFamily: 'Syne, Inter, sans-serif' }}>
-                          {NARRATIVE_META[set.narrative]?.label ?? 'Photodump'}
-                        </p>
-                      </div>
-                      <p className="text-[11px] text-slate-400 truncate">{set.basePrompt}</p>
-                      <p className="text-[10px] text-slate-300 mt-0.5">
-                        {new Date(set.createdAt).toLocaleDateString('es-CL')} · {set.images.length} imágenes
-                        {set.destino && ` · ${DESTINO_META[set.destino]?.label}`}
-                      </p>
-                    </div>
-                    <div className="flex gap-2 flex-shrink-0 ml-4">
-                      <button type="button" onClick={() => downloadSetZip(set)}
-                        className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl flex items-center justify-center transition-all">
-                        <Download className="w-4 h-4" />
-                      </button>
-                      <button type="button"
-                        onClick={async () => { setDeletingId(set.id); await photodumpStorage.delete(set.id); await loadSets(); setDeletingId(null); }}
-                        disabled={deletingId === set.id}
-                        className="w-9 h-9 bg-rose-50 hover:bg-rose-100 text-rose-400 hover:text-rose-600 rounded-xl flex items-center justify-center transition-all disabled:opacity-40">
-                        {deletingId === set.id
-                          ? <div className="w-3.5 h-3.5 border-2 border-rose-400 border-t-transparent rounded-full animate-spin" />
-                          : <Trash2 className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 p-3">
-                    {set.images.map((img, i) => (
-                      <div key={i}
-                        style={{ aspectRatio: set.destino ? DESTINO_META[set.destino]?.aspectRatio : '3/4' }}
-                        className="rounded-2xl overflow-hidden cursor-pointer group relative"
-                        onClick={() => openLightbox(set.images.map(x => x.imageUrl), i)}>
-                        <img src={img.imageUrl} alt={img.moment} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <div className="absolute bottom-1 left-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <div className="bg-white/90 rounded-lg px-1.5 py-0.5">
-                            <p className="text-[8px] font-black text-slate-900 uppercase truncate">{img.moment}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <ResultLibraryGrid
+            loading={loadingSets}
+            stats={[
+              { label: 'Sets', value: sets.length, sub: 'guardados' },
+              { label: 'Imágenes', value: sets.reduce((s, c) => s + (c.images?.length ?? 0), 0), sub: 'generadas', color: 'text-brand-600' },
+            ]}
+            searchTexts={sets.map(s => `${NARRATIVE_META[s.narrative]?.label ?? ''} ${s.basePrompt}`)}
+            emptyTitle="Biblioteca vacía"
+            emptyDescription="Creá tu primer set para verlo aquí"
+            emptyCtaLabel="Crear set"
+            emptyIcon={<Images className="w-10 h-10 text-slate-300" />}
+            onEmpty={() => setActiveTab('create')}
+            primaryAction={{ label: 'Crear set', onClick: () => setActiveTab('create'), icon: <Sparkles size={13} /> }}
+          >
+            {sets.map(set => (
+              <ResultCard
+                key={set.id}
+                images={set.images.map(i => i.imageUrl).filter(Boolean).slice(0, 3)}
+                title={`${NARRATIVE_META[set.narrative]?.icon ?? ''} ${NARRATIVE_META[set.narrative]?.label ?? 'Photodump'}`}
+                subtitle={set.basePrompt}
+                date={set.createdAt}
+                badge={{ label: '✓ Completado', color: 'green' }}
+                pills={[
+                  `${set.images.length} momentos`,
+                  ...(set.destino ? [DESTINO_META[set.destino]?.label ?? set.destino] : []),
+                ]}
+                refSlots={[
+                  ...(set.refs?.avatarRef   ? [{ label: 'Avatar',    src: set.refs.avatarRef }]   : []),
+                  ...(set.refs?.productRef  ? [{ label: 'Producto',  src: set.refs.productRef }]  : []),
+                  ...(set.refs?.outfitRef   ? [{ label: 'Outfit',    src: set.refs.outfitRef }]   : []),
+                  ...(set.refs?.sceneRef    ? [{ label: 'Escena',    src: set.refs.sceneRef }]    : []),
+                ]}
+                onClick={() => openLightbox(set.images.map(x => x.imageUrl), 0)}
+                actions={[
+                  { label: '↓ ZIP', onClick: e => { e.stopPropagation(); downloadSetZip(set); }, variant: 'secondary' },
+                  { label: '', icon: <Trash2 size={12} />, onClick: async e => { e.stopPropagation(); setDeletingId(set.id); await photodumpStorage.delete(set.id); await loadSets(); setDeletingId(null); }, variant: 'danger', loading: deletingId === set.id, title: 'Eliminar' },
+                ]}
+              />
+            ))}
+          </ResultLibraryGrid>
         )}
 
       </div>

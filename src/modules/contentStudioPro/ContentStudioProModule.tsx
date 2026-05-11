@@ -2,6 +2,7 @@
 // (solo se modificó el GenerateButton en la sección SETUP para añadir creditsAfter)
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { ResultLibraryGrid } from '../../components/shared/ResultLibraryGrid';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
 import { useCreditGuard } from '../../../hooks/useCreditGuard';
@@ -1419,27 +1420,15 @@ const ContentStudioProModule: React.FC = () => {
         {/* LIBRARY - con FAB y checkboxes custom */}
         {step === 'library' && (
           <div className="space-y-6 md:space-y-8 animate-in fade-in duration-700 px-4 md:px-0">
-            
-            {/* Pestañas de filtrado con scroll horizontal en mobile */}
+
+            {/* Pestañas de filtrado */}
             <div className="flex overflow-x-auto scrollbar-hide gap-2 border-b border-slate-200 pb-2">
               {TAB_ORDER.map((tab) => {
-                const count = tab === 'TODAS' 
-                  ? sets.length 
-                  : sets.filter(s => s.focus === tab).length;
+                const count = tab === 'TODAS' ? sets.length : sets.filter(s => s.focus === tab).length;
                 return (
-                  <button
-                    key={tab}
-                    onClick={() => {
-                      setActiveTab(tab);
-                      setSelectionMode(false);
-                      setSelectedSets(new Set());
-                    }}
-                    className={`px-4 md:px-6 py-2 rounded-full t-meta whitespace-nowrap transition-all ${
-                      activeTab === tab
-                        ? 'bg-brand-600 text-white shadow-md'
-                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                    }`}
-                  >
+                  <button key={tab}
+                    onClick={() => { setActiveTab(tab); setSelectionMode(false); setSelectedSets(new Set()); }}
+                    className={`px-4 md:px-6 py-2 rounded-full t-meta whitespace-nowrap transition-all ${activeTab === tab ? 'bg-brand-600 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
                     {tab === 'TODAS' ? 'Todas' : FOCUS_LABELS[tab as Focus].split(' / ')[0]}
                     <span className="ml-1 text-[10px] opacity-70">({count})</span>
                   </button>
@@ -1447,53 +1436,22 @@ const ContentStudioProModule: React.FC = () => {
               })}
             </div>
 
-            {/* Barra de herramientas simplificada */}
-            {showSelectionTools && (
-              <div className="flex flex-wrap justify-between items-center gap-3 bg-slate-50 p-3 rounded-xl">
-                <div className="flex gap-2">
-                  {!selectionMode ? (
-                    <button
-                      onClick={() => setSelectionMode(true)}
-                      className="px-4 py-2 bg-white border border-slate-200 rounded-lg t-meta hover:bg-slate-100 transition-all"
-                    >
-                      <i className="fa-solid fa-check-square mr-1"></i> Seleccionar múltiple
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        onClick={selectAllFiltered}
-                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg t-meta hover:bg-slate-100 transition-all"
-                      >
-                        <i className="fa-solid fa-square-check mr-1"></i> Seleccionar todo
-                      </button>
-                      <button
-                        onClick={clearSelection}
-                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg t-meta hover:bg-slate-100 transition-all"
-                      >
-                        <i className="fa-solid fa-square mr-1"></i> Limpiar
-                      </button>
-                      <button
-                        onClick={() => setSelectionMode(false)}
-                        className="px-4 py-2 bg-white border border-slate-200 rounded-lg t-meta hover:bg-slate-100 transition-all"
-                      >
-                        <i className="fa-solid fa-times mr-1"></i> Salir
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {filteredSets.length === 0 ? (
-              <div className="text-center py-12 bg-slate-50 rounded-2xl">
-                <i className="fa-solid fa-folder-open text-slate-300 text-4xl mb-3"></i>
-                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">
-                  No hay sesiones en esta categoría
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-8 md:gap-12">
-                {filteredSets.map((set) => (
+            <ResultLibraryGrid
+              loading={false}
+              stats={[
+                { label: 'Sesiones', value: sets.length, sub: 'guardadas' },
+                { label: 'Imágenes', value: sets.reduce((s, c) => s + 1 + (c.shots?.filter(sh => sh.imageUrl).length ?? 0), 0), sub: 'generadas', color: 'text-brand-600' },
+                { label: 'Avatar', value: sets.filter(s => s.focus === 'AVATAR').length, sub: 'sesiones' },
+                { label: 'Producto', value: sets.filter(s => s.focus === 'PRODUCT').length, sub: 'sesiones' },
+              ]}
+              emptyTitle="Sin sesiones todavía"
+              emptyDescription="Creá tu primera sesión en el laboratorio para verla aquí"
+              emptyCtaLabel="Ir al laboratorio"
+              onEmpty={() => { setStep('setup'); setSelectionMode(false); }}
+              columns={1}
+              searchTexts={filteredSets.map(s => `sesión ${s.id} ${FOCUS_LABELS[s.focus]} ${s.productCategory ?? ''}`)}
+            >
+              {filteredSets.map((set) => (
                   <section
                     key={set.id}
                     className={`bg-white p-6 md:p-10 rounded-[32px] md:rounded-[56px] border shadow-sm space-y-6 md:space-y-10 group transition-all hover:shadow-2xl ${
@@ -1647,9 +1605,8 @@ const ContentStudioProModule: React.FC = () => {
                       ))}
                     </div>
                   </section>
-                ))}
-              </div>
-            )}
+              ))}
+            </ResultLibraryGrid>
           </div>
         )}
 

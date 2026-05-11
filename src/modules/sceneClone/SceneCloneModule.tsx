@@ -27,6 +27,8 @@ import { getNotification } from '../../services/notificationsService';
 import { useSearchParams } from 'react-router-dom';
 import { WizardStepper } from '../../components/shared/WizardStepper';
 import { WizardFooter } from '../../components/shared/WizardFooter';
+import { ResultCard } from '../../components/shared/ResultCard';
+import { ResultLibraryGrid } from '../../components/shared/ResultLibraryGrid';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -966,9 +968,9 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
           </div>
         </div>
 
-        {showHistory && sessions.length > 0 && (
-          <section className="px-4 md:px-0 space-y-4 animate-in fade-in duration-300">
-            <div className="flex items-center justify-between">
+        {showHistory && (
+          <section className="px-4 md:px-0 animate-in fade-in duration-300">
+            <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-lg font-black text-slate-900 uppercase italic tracking-tighter">Historial</h2>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tus sesiones guardadas</p>
@@ -977,59 +979,40 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                 <i className="fa-solid fa-xmark text-xs"></i>
               </button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <ResultLibraryGrid
+              loading={false}
+              stats={[
+                { label: 'Sesiones', value: sessions.length, sub: 'guardadas' },
+                { label: 'Finalizadas', value: sessions.filter(s => !!s.finalImage).length, sub: 'con imagen final', color: 'text-emerald-600' },
+              ]}
+              searchTexts={sessions.map(s => `clone ${s.id} ${s.cameraStyle ?? ''}`)}
+              emptyTitle="Sin sesiones guardadas"
+              emptyDescription="Completá una clonación para que aparezca aquí"
+            >
               {sessions.map(s => (
-                <div key={s.id} className="bg-white rounded-[28px] border border-slate-100 shadow-sm overflow-hidden group">
-                  <div className="grid grid-cols-3 gap-0.5 h-36 bg-slate-100">
-                    <img src={s.targetImage}      alt="Target"  className="w-full h-full object-cover" />
-                    <img src={s.baseComposition}  alt="Base"    className="w-full h-full object-cover" />
-                    {s.finalImage
-                      ? <img src={s.finalImage}  alt="Final"   className="w-full h-full object-cover" />
-                      : <div className="w-full h-full bg-slate-200 flex items-center justify-center">
-                          <i className="fa-solid fa-ellipsis text-slate-400 text-xs"></i>
-                        </div>
-                    }
-                  </div>
-                  <div className="p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-[10px] font-black text-slate-700 uppercase tracking-widest">
-                          {s.finalImage ? 'Final' : 'Base'}
-                        </p>
-                        <p className="text-[9px] text-slate-400 font-medium mt-0.5">
-                          {new Date(s.createdAt).toLocaleDateString()} · {s.cameraStyle?.replace('iphone_', 'iPhone ')}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => deleteSession(s.id)}
-                        disabled={deletingId === s.id}
-                        className="w-7 h-7 bg-red-50 text-red-400 rounded-xl flex items-center justify-center hover:bg-red-100 hover:text-red-600 transition-colors disabled:opacity-40"
-                      >
-                        {deletingId === s.id
-                          ? <i className="fa-solid fa-spinner animate-spin text-xs"></i>
-                          : <i className="fa-solid fa-trash text-xs"></i>
-                        }
-                      </button>
-                    </div>
-                    <div className="flex gap-2">
-                      <a
-                        href={s.finalImage || s.baseComposition}
-                        download={`clone_${s.id}.png`}
-                        className="flex-1 py-2 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-[9px] font-black uppercase tracking-widest text-center hover:bg-slate-100 transition-colors"
-                      >
-                        <i className="fa-solid fa-download mr-1"></i> Descargar
-                      </a>
-                      <button
-                        onClick={() => loadSession(s)}
-                        className="flex-1 py-2 bg-brand-50 border border-brand-100 text-brand-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-brand-100 transition-colors"
-                      >
-                        <i className="fa-solid fa-rotate-right mr-1"></i> Recrear
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                <ResultCard
+                  key={s.id}
+                  images={[s.targetImage, s.baseComposition, s.finalImage].filter(Boolean) as string[]}
+                  title={s.finalImage ? 'Clonación final' : 'Composición base'}
+                  subtitle={s.cameraStyle?.replace('iphone_', 'iPhone ') ?? ''}
+                  date={s.createdAt}
+                  badge={{ label: s.finalImage ? '✓ Final' : 'Base', color: s.finalImage ? 'green' : 'slate' }}
+                  pills={[s.aspectRatio ?? '', s.cameraStyle?.replace('iphone_', 'iPhone ') ?? ''].filter(Boolean)}
+                  refSlots={[
+                    ...(s.face1   ? [{ label: 'Cara',   src: s.face1 }]   : []),
+                    ...(s.body1   ? [{ label: 'Cuerpo', src: s.body1 }]   : []),
+                    ...(s.outfit1 ? [{ label: 'Outfit', src: s.outfit1 }] : []),
+                  ]}
+                  accentColor="blue"
+                  onClick={() => { const imgs = [s.targetImage, s.baseComposition, s.finalImage].filter(Boolean) as string[]; if (imgs.length) { setLightboxImages(imgs); setLightboxIndex(0); setLightboxOpen(true); }}}
+                  actions={[
+                    { label: '↺ Recrear', onClick: e => { e.stopPropagation(); loadSession(s); }, variant: 'primary' },
+                    { label: '↓', onClick: e => { e.stopPropagation(); const link = document.createElement('a'); link.href = s.finalImage || s.baseComposition; link.download = `clone_${s.id}.png`; link.click(); }, variant: 'secondary', title: 'Descargar' },
+                    { label: '', icon: <i className="fa-solid fa-trash text-xs" />, onClick: e => { e.stopPropagation(); deleteSession(s.id); }, variant: 'danger', loading: deletingId === s.id, title: 'Eliminar' },
+                  ]}
+                />
               ))}
-            </div>
+            </ResultLibraryGrid>
           </section>
         )}
 
