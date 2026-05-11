@@ -62,25 +62,38 @@ export const referenceService = {
    * Los outfits se insertan inmediatamente después de su persona para que
    * el modelo los asocie correctamente al generar.
    */
-  buildOrderedReferences(slots: ReferenceSlot[]): string[] {
-    const result: string[] = [];
+  buildOrderedSlots(slots: ReferenceSlot[]): ReferenceSlot[] {
+    const result: ReferenceSlot[] = [];
     const personSlots  = slots.filter(s => s.type === 'person'  && s.imageUrl);
     const outfitSlots  = slots.filter(s => s.type === 'outfit'  && s.imageUrl);
     const productSlots = slots.filter(s => s.type === 'product' && s.imageUrl);
     const sceneSlots   = slots.filter(s => s.type === 'scene'   && s.imageUrl);
+    const assignedOutfitIds = new Set<string>();
 
     // Persona + su outfit inmediatamente después
     personSlots.forEach(p => {
-      result.push(p.imageUrl!);
+      result.push(p);
       const pIdx = p.personIndex ?? (parseInt(p.role?.replace('person', '') || '1'));
       const outfit = outfitSlots.find(o => o.personIndex === pIdx);
-      if (outfit) result.push(outfit.imageUrl!);
+      if (outfit) {
+        result.push(outfit);
+        assignedOutfitIds.add(outfit.id);
+      }
     });
 
-    productSlots.forEach(p => result.push(p.imageUrl!));
-    sceneSlots.forEach(s => result.push(s.imageUrl!));
+    outfitSlots
+      .filter(o => !assignedOutfitIds.has(o.id))
+      .forEach(o => result.push(o));
+    productSlots.forEach(p => result.push(p));
+    sceneSlots.forEach(s => result.push(s));
 
     return result;
+  },
+
+  buildOrderedReferences(slots: ReferenceSlot[]): string[] {
+    return this.buildOrderedSlots(slots)
+      .map(slot => slot.imageUrl)
+      .filter((img): img is string => Boolean(img));
   },
 
   priorityToWeight(priority?: ReferencePriority): number {

@@ -6,6 +6,7 @@ import { usePromptParser } from './usePromptParser';
 import { useReferences } from './useReferences';
 import { promptParserService } from '../services/promptParserService';
 import { promptBuilder } from '../services/promptBuilder';
+import { referenceService } from '../services/referenceService';
 import { payloadValidator } from '../services/payloadValidator';
 import { useAuth } from '../../auth/AuthContext';
 import { CREDIT_COSTS, imageCost } from '../../../services/creditConfig';
@@ -54,7 +55,6 @@ export const usePromptComposer = () => {
     removeReference,
     setPriority,
     toggleLock,
-    getActiveReferences,
     buildDNA,
     resetReferences
   } = useReferences();
@@ -99,11 +99,7 @@ export const usePromptComposer = () => {
         throw new Error(validation.errors.join(' | '));
       }
 
-      const activeReferences = getActiveReferences();
-
-      const references = activeReferences
-        .map(slot => slot.imageUrl)
-        .filter((img): img is string => Boolean(img));
+      const references = referenceService.buildOrderedReferences(slots);
 
       const { dna: referenceDNA } = buildDNA();
 
@@ -169,7 +165,7 @@ export const usePromptComposer = () => {
       setIsGenerating(false);
     }
 
-  }, [promptText, dna, slots, getActiveReferences, buildDNA, modelId, credits.available, isAdmin, deductCredits, refreshCredits]);
+  }, [promptText, dna, slots, buildDNA, modelId, credits.available, isAdmin, deductCredits, refreshCredits]);
 
   const reset = useCallback(() => {
 

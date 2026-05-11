@@ -27,9 +27,7 @@ export const promptEngine = {
 
     const references: GenerationReference[] = []
 
-    slots.forEach(slot => {
-
-      if (!slot.imageUrl) return
+    referenceService.buildOrderedSlots(slots).forEach(slot => {
 
       references.push({
 
