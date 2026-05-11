@@ -1,14 +1,9 @@
-﻿// CloneImageModule.tsx - VERSIÓN CORREGIDA COMPLETA
-// (solo se han modificado las líneas donde se asignan faceImage2 y bodyImage2)
-// El resto es idéntico al original.
-
-import React, { useMemo, useState, useEffect, useRef } from "react";
+﻿import React, { useMemo, useState, useEffect, useRef } from "react";
 import {
   cloneImageService,
   type AspectRatio,
   type CameraStyle,
   type CloneImageParams,
-  type SubjectSelector,
 } from "../../services/cloneImageService";
 import { generationHistoryService } from "../../services/generationHistoryService";
 import ModuleTutorial from "../../components/shared/ModuleTutorial";
@@ -58,46 +53,6 @@ function toBase64OrThrow(input: string | null | undefined, fieldName: string): s
   return result;
 }
 
-
-type PersonSlotSide = 'left' | 'right';
-
-function cropPersonSlotFromTarget(input: string, side: PersonSlotSide): Promise<string> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const width = img.naturalWidth || img.width;
-        const height = img.naturalHeight || img.height;
-        if (!width || !height) {
-          resolve(input);
-          return;
-        }
-
-        // Recorte amplio con solape: no intenta recortar perfecto, solo crea un ancla visual
-        // del sujeto izquierdo/derecho con suficiente contexto para que el modelo entienda el slot.
-        const cropWidth = Math.round(width * 0.62);
-        const sx = side === 'left' ? 0 : Math.max(0, width - cropWidth);
-
-        const canvas = document.createElement('canvas');
-        canvas.width = cropWidth;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve(input);
-          return;
-        }
-
-        ctx.drawImage(img, sx, 0, cropWidth, height, 0, 0, cropWidth, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.92));
-      } catch (err) {
-        console.warn('No se pudo generar el recorte de slot:', err);
-        resolve(input);
-      }
-    };
-    img.onerror = () => resolve(input);
-    img.src = input;
-  });
-}
 
 // --- COMPONENTS UI PRO ---
 const ProHeader: React.FC<{ title: string; subtitle: string; icon: string }> = ({ title, subtitle, icon }) => (
@@ -236,16 +191,9 @@ export default function CloneImageModule() {
   
   const [face1, setFace1] = useState<string | null>(null);
   const [body1, setBody1] = useState<string | null>(null);
-  
-  const [enableSecondSubject, setEnableSecondSubject] = useState(false);
-  const [subject1Selector, setSubject1Selector] = useState<SubjectSelector>("auto");
-  const [face2, setFace2] = useState<string | null>(null);
-  const [body2, setBody2] = useState<string | null>(null);
 
   const [replaceOutfit1, setReplaceOutfit1] = useState(false);
   const [outfit1, setOutfit1] = useState<string | null>(null);
-  const [replaceOutfit2, setReplaceOutfit2] = useState(false);
-  const [outfit2, setOutfit2] = useState<string | null>(null);
 
   const [detectedProducts, setDetectedProducts] = useState<DetectedObject[]>([]);
   const [analyzingTarget, setAnalyzingTarget] = useState(false);
@@ -316,8 +264,7 @@ export default function CloneImageModule() {
   const fabVisible = !!fabVisibleRaw;
 
   const CLONE_COST = CREDIT_COSTS.CLONE_IMAGE;
-  const DUAL_SUBJECT_EXTRA_COST = 2;
-  const baseGenerationCost = CLONE_COST + (enableSecondSubject ? DUAL_SUBJECT_EXTRA_COST : 0);
+  const baseGenerationCost = CLONE_COST;
   const creditsAfter = Math.max(0, credits.available - baseGenerationCost);
 
   useEffect(() => {
@@ -343,30 +290,26 @@ export default function CloneImageModule() {
   };
 
   const canGoToIdentity = !!targetImage;
-  const hasConfirmedDualMapping = !enableSecondSubject || subject1Selector !== 'auto';
-  const canGoToBase = !!face1 && !!body1 && (!enableSecondSubject || (!!face2 && !!body2 && hasConfirmedDualMapping));
+  const canGoToBase = !!face1 && !!body1;
   const canGoToOutfit = !!baseComposition;
 
   const activeProductOverrides = detectedProducts.filter(p => p.replacementImage);
   const hasOutfit1Change = !!replaceOutfit1 && !!normalizeImageInput(outfit1);
-  const hasOutfit2Change = !!enableSecondSubject && !!replaceOutfit2 && !!normalizeImageInput(outfit2);
   const hasProductChanges = activeProductOverrides.length > 0;
-  const hasFinalChanges = hasOutfit1Change || hasOutfit2Change || hasProductChanges;
+  const hasFinalChanges = hasOutfit1Change || hasProductChanges;
   const needsOutfit1Image = !!replaceOutfit1 && !normalizeImageInput(outfit1);
-  const needsOutfit2Image = !!enableSecondSubject && !!replaceOutfit2 && !normalizeImageInput(outfit2);
-  const canApplyFinalChanges = !!baseComposition && hasFinalChanges && !needsOutfit1Image && !needsOutfit2Image;
+  const canApplyFinalChanges = !!baseComposition && hasFinalChanges && !needsOutfit1Image;
   const finalCreditsAfter = Math.max(0, credits.available - CLONE_COST);
   const finalChangeSummary = [
-    hasOutfit1Change ? 'Outfit S1' : null,
-    hasOutfit2Change ? 'Outfit S2' : null,
+    hasOutfit1Change ? 'Outfit' : null,
     hasProductChanges ? `${activeProductOverrides.length} producto${activeProductOverrides.length === 1 ? '' : 's'}` : null,
   ].filter(Boolean).join(' + ') || 'Sin cambios seleccionados';
 
   useMemo(() => {
     let m = 1;
     if (canGoToIdentity) m = 2;
-    if (canGoToBase) m = 3;
-    if (canGoToOutfit) m = 4;
+    if (canGoToBase)     m = 3;
+    if (canGoToOutfit)   m = 4;
     if (m > maxStep) setMaxStep(m);
   }, [canGoToIdentity, canGoToBase, canGoToOutfit, maxStep]);
 
@@ -409,15 +352,6 @@ export default function CloneImageModule() {
       const safeFace = toBase64OrThrow(face1, "cara del sujeto 1");
       const safeBody = toBase64OrThrow(body1, "cuerpo del sujeto 1");
 
-      let subject1SlotImage: string | undefined;
-      let subject2SlotImage: string | undefined;
-      if (enableSecondSubject && subject1Selector !== 'auto') {
-        const leftSlot = await cropPersonSlotFromTarget(safeTarget, 'left');
-        const rightSlot = await cropPersonSlotFromTarget(safeTarget, 'right');
-        subject1SlotImage = subject1Selector === 'left' ? leftSlot : rightSlot;
-        subject2SlotImage = subject1Selector === 'left' ? rightSlot : leftSlot;
-      }
-
       const payload: CloneImageParams = {
         targetImage: safeTarget,
         faceImage: safeFace,
@@ -426,13 +360,6 @@ export default function CloneImageModule() {
         cameraStyle,
         aspectRatio,
         modelId,
-        enableSecondSubject,
-        subject1Selector,
-        subject1SlotImage,
-        subject2SlotImage,
-        faceImage2: enableSecondSubject ? (normalizeImageInput(face2) || undefined) : undefined,
-        bodyImage2: enableSecondSubject ? (normalizeImageInput(body2) || undefined) : undefined,
-        replaceOutfit2: false,
         sessionParams: {
           uid: user?.uid,
           sessionId: newSessionId(),
@@ -440,7 +367,7 @@ export default function CloneImageModule() {
           moduleLabel: 'Clonar escena (Base)',
           shotIndex: 0,
           totalShots: 1,
-          metadata: { cameraStyle, aspectRatio, enableSecondSubject, baseGenerationCost },
+          metadata: { cameraStyle, aspectRatio, baseGenerationCost },
         },
       };
 
@@ -452,7 +379,7 @@ export default function CloneImageModule() {
         module: 'scene_clone',
         moduleLabel: 'Scene Clone (Base)',
         creditsUsed: baseGenerationCost,
-        promptText: `Clonación de escena base con estilo ${cameraStyle}${enableSecondSubject ? ' · modo 2 personas inteligente' : ''}`
+        promptText: `Clonación de escena base con estilo ${cameraStyle}`
       }).catch(console.error);
 
       const session: CloneMasterSession = {
@@ -462,11 +389,8 @@ export default function CloneImageModule() {
         baseComposition: img,
         face1: safeFace,
         body1: safeBody,
-        face2: enableSecondSubject ? (normalizeImageInput(face2) || undefined) : undefined,
-        body2: enableSecondSubject ? (normalizeImageInput(body2) || undefined) : undefined,
         cameraStyle,
         aspectRatio,
-        enableSecondSubject,
       };
       cloneMasterStorage.saveSession(session)
         .then(() => cloneMasterStorage.listSessions().then(setSessions))
@@ -502,11 +426,6 @@ export default function CloneImageModule() {
       return;
     }
 
-    if (needsOutfit2Image) {
-      setError(toAppError(new Error('Activaste Cambiar Outfit S2, pero falta subir la imagen del outfit.')));
-      return;
-    }
-
     if (!hasFinalChanges) {
       setError(toAppError(new Error('Selecciona al menos un cambio: outfit S1, outfit S2 o reemplazo de producto.')));
       return;
@@ -538,22 +457,10 @@ export default function CloneImageModule() {
         targetImage: safeTarget,
         faceImage: safeFace,
         bodyImage: safeBody,
-        
         replaceOutfit: !!replaceOutfit1,
         outfitOverrideImage: replaceOutfit1 ? normalizeImageInput(outfit1) : null,
-        
         cameraStyle,
         aspectRatio,
-        enableSecondSubject,
-        subject1Selector,
-        
-        // 🔧 CORRECCIÓN: convertir null a undefined
-        faceImage2: enableSecondSubject ? (normalizeImageInput(face2) || undefined) : undefined,
-        bodyImage2: enableSecondSubject ? (normalizeImageInput(body2) || undefined) : undefined,
-        
-        replaceOutfit2: enableSecondSubject ? !!replaceOutfit2 : false,
-        outfitOverrideImage2: enableSecondSubject && replaceOutfit2 ? normalizeImageInput(outfit2) : null,
-
         productOverrides: activeProductOverrides,
         modelId,
         sessionParams: {
@@ -563,7 +470,7 @@ export default function CloneImageModule() {
           moduleLabel: 'Clonar escena (Final)',
           shotIndex: 0,
           totalShots: 1,
-          metadata: { cameraStyle, aspectRatio, enableSecondSubject },
+          metadata: { cameraStyle, aspectRatio },
         },
       };
 
@@ -585,7 +492,6 @@ export default function CloneImageModule() {
             ...updated[0],
             finalImage: img,
             outfit1: replaceOutfit1 ? (normalizeImageInput(outfit1) || undefined) : undefined,
-            outfit2: enableSecondSubject && replaceOutfit2 ? (normalizeImageInput(outfit2) || undefined) : undefined,
           };
           cloneMasterStorage.saveSession(updated[0]).catch(console.error);
         }
@@ -649,16 +555,12 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
     setTargetImage(s.targetImage);
     setFace1(s.face1);
     setBody1(s.body1);
-    setFace2(s.face2 || null);
-    setBody2(s.body2 || null);
     setOutfit1(s.outfit1 || null);
-    setOutfit2(s.outfit2 || null);
     setBaseComposition(s.baseComposition);
     setFinalImage(s.finalImage || null);
-    setEnableSecondSubject(s.enableSecondSubject);
     setCameraStyle(s.cameraStyle as any);
     setAspectRatio(s.aspectRatio as any);
-    setMaxStep(s.finalImage ? 4 : 4);
+    setMaxStep(4);
     setStep(4);
     setShowHistory(false);
   };
@@ -668,15 +570,10 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
     setTargetImage(null);
     setFace1(null);
     setBody1(null);
-    setFace2(null);
-    setBody2(null);
     setOutfit1(null);
-    setOutfit2(null);
     setBaseComposition(null);
     setFinalImage(null);
-    setEnableSecondSubject(false);
     setReplaceOutfit1(false);
-    setReplaceOutfit2(false);
     setDetectedProducts([]);
     setError(null);
     setCreditsRefunded(false);
@@ -823,59 +720,15 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
 
               {step === 2 && (
                 <div className="space-y-6 animate-in slide-in-from-left-4">
-                  <ProHeader title="Identidades" subtitle="Sujetos a inyectar" icon="fa-user-group" />
-                  
+                  <ProHeader title="Identidades" subtitle="Tu modelo" icon="fa-user" />
+
                   <div className="space-y-3">
-                    <div className="flex justify-between items-end">
-                      <label className="t-meta text-brand-900">Sujeto 1 (Principal)</label>
-                      {enableSecondSubject && (
-                        <div className="flex bg-slate-100 rounded-lg p-0.5">
-                           {['left','auto','right'].map(s => (
-                             <button 
-                               key={s}
-                               onClick={() => setSubject1Selector(s as SubjectSelector)}
-                               className={`px-2 py-1 text-[8px] font-bold uppercase rounded-md transition-all ${subject1Selector === s ? 'bg-white shadow text-brand-600' : 'text-slate-400'}`}
-                             >
-                               {s === 'auto' ? 'Auto' : s === 'left' ? 'Izq' : 'Der'}
-                             </button>
-                           ))}
-                        </div>
-                      )}
-                    </div>
+                    <label className="t-meta text-brand-900">Sujeto</label>
                     <div className="grid grid-cols-2 gap-3">
                       <ProUploadCard label="Rostro" value={face1} onChange={(v) => { setFace1(v); resetDownstream(2); }} height="h-36" slotType="face" />
                       <ProUploadCard label="Cuerpo" value={body1} onChange={(v) => { setBody1(v); resetDownstream(2); }} height="h-36" slotType="body" />
                     </div>
                   </div>
-
-                  <ProToggle 
-                    checked={enableSecondSubject} 
-                    onChange={(v) => { setEnableSecondSubject(v); setSubject1Selector(v ? 'auto' : 'auto'); resetDownstream(2); }} 
-                    label={`Habilitar 2º Persona (+${DUAL_SUBJECT_EXTRA_COST} cr)`}
-                    description="Modo dual inteligente: requiere asignar si S1 va a la izquierda o derecha."
-                  />
-
-                  {enableSecondSubject && (
-                    <div className="bg-purple-50 border border-purple-200 rounded-xl px-3 py-2.5 text-[11.5px] text-purple-900 leading-[1.55]">
-                      <strong>Modo 2 personas:</strong> suma {DUAL_SUBJECT_EXTRA_COST} cr al generar la base. La app crea anclas visuales izquierda/derecha para mejorar la asignación de S1 y S2.
-                    </div>
-                  )}
-
-                  {enableSecondSubject && subject1Selector === 'auto' && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-[11.5px] text-amber-900 leading-[1.55]">
-                      Para usar el modo 2 personas debes confirmar dónde va S1: pulsa <strong>Izq</strong> o <strong>Der</strong> en el selector junto a “Sujeto 1”. Esto evita generaciones ambiguas.
-                    </div>
-                  )}
-
-                  {enableSecondSubject && (
-                    <div className="space-y-3 animate-in fade-in">
-                      <label className="t-meta text-purple-900">Sujeto 2</label>
-                      <div className="grid grid-cols-2 gap-3">
-                        <ProUploadCard label="Rostro S2" value={face2} onChange={(v) => { setFace2(v); resetDownstream(2); }} height="h-36" slotType="face" />
-                        <ProUploadCard label="Cuerpo S2" value={body2} onChange={(v) => { setBody2(v); resetDownstream(2); }} height="h-36" slotType="body" />
-                      </div>
-                    </div>
-                  )}
 
                 </div>
               )}
@@ -896,10 +749,6 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                       </div>
                       <div className="flex flex-col gap-2 mb-3.5 text-[13px]">
                         <div className="flex justify-between">
-                          <span className="opacity-70">Sujetos</span>
-                          <span className="font-semibold">{enableSecondSubject ? `2 personas (+${DUAL_SUBJECT_EXTRA_COST} cr)` : '1 persona'}</span>
-                        </div>
-                        <div className="flex justify-between">
                           <span className="opacity-70">Formato</span>
                           <span className="font-semibold">{aspectRatio}</span>
                         </div>
@@ -907,12 +756,6 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                           <span className="opacity-70">Imágenes</span>
                           <span className="font-semibold">1</span>
                         </div>
-                        {enableSecondSubject && (
-                          <div className="flex justify-between">
-                            <span className="opacity-70">Modo dual inteligente</span>
-                            <span className="font-semibold">+{DUAL_SUBJECT_EXTRA_COST} cr</span>
-                          </div>
-                        )}
                         <div className="h-px bg-white/10 my-1.5" />
                         <div className="flex justify-between items-baseline">
                           <span className="opacity-85 text-[13px]">Total</span>
@@ -929,7 +772,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                   </div>
 
                   <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5 text-[11.5px] text-emerald-900 leading-[1.55]">
-                    <strong>Sin sorpresas.</strong> La base consume {baseGenerationCost} cr. El modo 2 personas suma {DUAL_SUBJECT_EXTRA_COST} cr porque usa asignación dual con anclas visuales.
+                    <strong>Sin sorpresas.</strong> La base consume {baseGenerationCost} cr.
                   </div>
                 </div>
               )}
@@ -975,7 +818,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                     <strong>Importante:</strong> aplicar outfits o productos genera una nueva imagen final y consume {CLONE_COST} cr. Si la generación falla por un error reembolsable, se devuelve automáticamente.
                   </div>
 
-                  {!hasFinalChanges && !needsOutfit1Image && !needsOutfit2Image && (
+                  {!hasFinalChanges && !needsOutfit1Image && (
                     <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[11.5px] text-slate-600 leading-[1.55]">
                       Selecciona al menos un cambio antes de generar: activa un outfit y sube su imagen, o sube un producto de reemplazo.
                     </div>
@@ -983,38 +826,20 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
 
                   {needsOutfit1Image && (
                     <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-[11.5px] text-red-700 leading-[1.55]">
-                      Falta subir la imagen del outfit para el Sujeto 1.
+                      Falta subir la imagen del outfit.
                     </div>
                   )}
 
-                  {needsOutfit2Image && (
-                    <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-[11.5px] text-red-700 leading-[1.55]">
-                      Falta subir la imagen del outfit para el Sujeto 2.
-                    </div>
-                  )}
-                  
                   <div className="space-y-4">
                     <div className={`p-4 rounded-[24px] border transition-all ${replaceOutfit1 ? 'bg-brand-50 border-brand-200' : 'bg-white border-slate-200'}`}>
                        <div className="flex items-center justify-between mb-4">
-                          <label className="t-meta text-slate-700">Cambiar Outfit S1</label>
+                          <label className="t-meta text-slate-700">Cambiar Outfit</label>
                           <input type="checkbox" checked={replaceOutfit1} onChange={(e) => setReplaceOutfit1(e.target.checked)} className="w-5 h-5 accent-brand-600 cursor-pointer" />
                        </div>
                        {replaceOutfit1 && (
-                          <ProUploadCard label="Outfit S1" value={outfit1} onChange={setOutfit1} height="h-36" slotType="outfit" />
+                          <ProUploadCard label="Outfit" value={outfit1} onChange={setOutfit1} height="h-36" slotType="outfit" />
                        )}
                     </div>
-
-                    {enableSecondSubject && (
-                      <div className={`p-4 rounded-[24px] border transition-all ${replaceOutfit2 ? 'bg-purple-50 border-purple-200' : 'bg-white border-slate-200'}`}>
-                         <div className="flex items-center justify-between mb-4">
-                            <label className="t-meta text-slate-700">Cambiar Outfit S2</label>
-                            <input type="checkbox" checked={replaceOutfit2} onChange={(e) => setReplaceOutfit2(e.target.checked)} className="w-5 h-5 accent-purple-600 cursor-pointer" />
-                         </div>
-                         {replaceOutfit2 && (
-                            <ProUploadCard label="Outfit S2" value={outfit2} onChange={setOutfit2} height="h-36" slotType="outfit" />
-                         )}
-                      </div>
-                    )}
 
                     {analyzingTarget && targetImage && (
                       <div className="p-4 bg-slate-50 rounded-2xl text-center text-[10px] text-slate-500">
@@ -1169,8 +994,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-[10px] font-black text-slate-700 uppercase tracking-widest">
-                          {s.enableSecondSubject ? '2 personas' : '1 persona'}
-                          {s.finalImage ? ' · Final' : ' · Base'}
+                          {s.finalImage ? 'Final' : 'Base'}
                         </p>
                         <p className="text-[9px] text-slate-400 font-medium mt-0.5">
                           {new Date(s.createdAt).toLocaleDateString()} · {s.cameraStyle?.replace('iphone_', 'iPhone ')}

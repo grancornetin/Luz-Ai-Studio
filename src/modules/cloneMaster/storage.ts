@@ -4,18 +4,15 @@ const STORE    = 'sessions';
 export interface CloneMasterSession {
   id: string;
   createdAt: number;
-  targetImage: string;       // imagen objetivo original
-  baseComposition: string;   // resultado base (paso 3)
-  finalImage?: string;       // resultado final (paso 4, si existe)
+  targetImage: string;
+  baseComposition: string;
+  finalImage?: string;
   face1: string;
   body1: string;
-  face2?: string;
-  body2?: string;
   outfit1?: string;
-  outfit2?: string;
   cameraStyle: string;
   aspectRatio: string;
-  enableSecondSubject: boolean;
+  enableSecondSubject?: boolean; // legacy — kept for backward compat with stored sessions
 }
 
 export const cloneMasterStorage = {

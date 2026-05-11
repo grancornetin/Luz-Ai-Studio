@@ -195,6 +195,7 @@ const CampaignModule: React.FC = () => {
   const [expandedPieza, setExpandedPieza] = useState<string | null>(null);
   const [copiedKey,     setCopiedKey]     = useState<string | null>(null);
   const [activeTab2,    setActiveTab2]    = useState<'plan' | 'calendario' | 'hashtags'>('plan');
+  const [modalPieza,    setModalPieza]    = useState<number | null>(null);
 
   // Library state
   const [sets,        setSets]        = useState<CampaignSet[]>([]);
@@ -1049,247 +1050,450 @@ const CampaignModule: React.FC = () => {
               )}
 
               {/* ── PASO 7: RESULTADOS ───────────────────── */}
-              {step === 7 && currentSet && (
-                <div className="fade-in p-4 md:p-8">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                    <div>
-                      <div className="flex items-center gap-2.5 mb-2 flex-wrap">
-                        <div className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center">
-                          <Check size={14} strokeWidth={3} />
-                        </div>
-                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.18em]">
-                          Kit de campaña listo · {currentSet.plan.piezas.length} piezas
-                        </span>
+              {step === 7 && currentSet && (() => {
+                const plan = currentSet.plan;
+                const allImages = plan.piezas.map(p => p.imageUrl).filter(Boolean);
+                const modalP = modalPieza !== null ? plan.piezas[modalPieza] : null;
+                const modalCm = modalP ? (CAMPAIGN_CHANNEL_META[modalP.canal] ?? { icon: '📢', label: modalP.canal ?? 'Canal' }) : null;
+
+                return (
+                  <div className="fade-in">
+                    {/* ── Topbar de resultados ── */}
+                    <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-100 bg-white sticky top-0 z-10">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black italic text-[15px] text-slate-900 truncate" style={{ fontFamily: 'Syne, Inter, sans-serif' }}>
+                          {plan.tagline}
+                        </p>
+                        <p className="text-[11px] text-slate-400 truncate">{plan.concepto}</p>
                       </div>
-                      <h2 className="font-display font-extrabold italic uppercase tracking-tight text-[24px] md:text-[30px] text-slate-900 leading-[1.05]"
-                        style={{ fontFamily: 'Syne, Inter, sans-serif', letterSpacing: '-0.025em' }}>
-                        {currentSet.plan.tagline}
-                      </h2>
-                      <p className="text-[13px] text-slate-500 mt-1 italic">"{currentSet.plan.concepto}"</p>
-                    </div>
-                    <div className="flex gap-2 w-full md:w-auto flex-wrap">
-                      <button type="button" onClick={() => downloadSetZip(currentSet)}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-700 transition-colors">
-                        <Download size={14} /> ZIP
-                      </button>
-                      <button type="button" onClick={() => handleDownloadHtml(currentSet)}
-                        disabled={downloadingHtml || downloadingPdf}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-700 transition-colors disabled:opacity-60 disabled:cursor-wait"
-                        title="Descargá una versión interactiva del kit — abrila desde tu PC para marcar el progreso, copiar textos y exportar PDF">
-                        {downloadingHtml
-                          ? <><div className="w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> Generando...</>
-                          : <><FileText size={14} /> Versión interactiva</>}
-                      </button>
-                      <button type="button" onClick={() => handleDownloadPdf(currentSet)}
-                        disabled={downloadingHtml || downloadingPdf}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-colors disabled:opacity-60 disabled:cursor-wait">
-                        {downloadingPdf
-                          ? <><div className="w-3 h-3 border-2 border-white/50 border-t-white rounded-full animate-spin" /> Generando PDF...</>
-                          : <><Download size={14} /> PDF</>}
-                      </button>
-                      <button type="button" onClick={resetCreator}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-colors">
-                        <Plus size={14} /> Nueva campaña
-                      </button>
+                      <span className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-600">
+                        <Check size={10} strokeWidth={3} /> Completada
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => downloadSetZip(currentSet)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[11px] font-semibold text-slate-600 transition-colors">
+                          <Download size={12} /> ZIP
+                        </button>
+                        <button type="button" onClick={() => handleDownloadHtml(currentSet)} disabled={downloadingHtml || downloadingPdf}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[11px] font-semibold text-slate-600 transition-colors disabled:opacity-50 disabled:cursor-wait">
+                          {downloadingHtml ? <div className="w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> : <FileText size={12} />}
+                          {downloadingHtml ? 'Generando…' : 'HTML'}
+                        </button>
+                        <button type="button" onClick={() => handleDownloadPdf(currentSet)} disabled={downloadingHtml || downloadingPdf}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-700 text-white rounded-xl text-[11px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-wait">
+                          {downloadingPdf ? <div className="w-3 h-3 border-2 border-white/50 border-t-white rounded-full animate-spin" /> : <Download size={12} />}
+                          {downloadingPdf ? 'Generando…' : 'PDF'}
+                        </button>
+                      </div>
                     </div>
                     {downloadError && (
-                      <div className="mt-2 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2">
+                      <div className="mx-5 mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2">
                         <AlertTriangle className="w-4 h-4 text-rose-500 flex-shrink-0 mt-0.5" />
                         <p className="text-[11px] text-rose-700">{downloadError}</p>
                       </div>
                     )}
-                  </div>
 
-                  {/* Resumen ejecutivo */}
-                  <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3.5 mb-6 flex gap-3">
-                    <span className="text-lg flex-shrink-0">📌</span>
-                    <div>
-                      <p className="text-[11px] font-bold text-amber-800 uppercase tracking-wider mb-1">Qué hacer con este kit</p>
-                      <p className="text-[13px] text-amber-900 leading-relaxed">{currentSet.plan.resumen}</p>
-                    </div>
-                  </div>
+                    {/* ── Layout dos columnas ── */}
+                    <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 p-5 items-start">
 
-                  {/* Tabs */}
-                  <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl mb-6 w-fit">
-                    {([
-                      { id: 'plan' as const,       label: 'Piezas',     icon: <ImageIcon size={12} /> },
-                      { id: 'calendario' as const,  label: 'Calendario', icon: <Calendar size={12} /> },
-                      { id: 'hashtags' as const,    label: 'Hashtags',   icon: <Hash size={12} /> },
-                    ]).map(t => (
-                      <button key={t.id} type="button" onClick={() => setActiveTab2(t.id)}
-                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[11px] font-bold transition-all ${activeTab2 === t.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                        {t.icon} {t.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Tab: Piezas */}
-                  {activeTab2 === 'plan' && (
-                    <div className="space-y-4">
-                      {currentSet.plan.piezas.map((pieza, i) => {
-                        const canalMeta  = CAMPAIGN_CHANNEL_META[pieza.canal] ?? { icon: '📢', label: pieza.canal ?? 'Canal', copyHint: '' };
-                        const isExpanded = expandedPieza === pieza.id;
-                        return (
-                          <div key={pieza.id} className="bg-white border border-slate-100 rounded-[24px] overflow-hidden shadow-sm">
-                            <button type="button" onClick={() => setExpandedPieza(isExpanded ? null : pieza.id)}
-                              className="w-full flex items-center gap-4 p-4 md:p-5 text-left hover:bg-slate-50 transition-colors">
-                              <div className="w-14 h-14 md:w-16 md:h-16 rounded-xl overflow-hidden flex-shrink-0 bg-slate-100">
-                                {pieza.imageUrl && (
-                                  <img src={pieza.imageUrl} alt={pieza.rol} className="w-full h-full object-cover"
-                                    onClick={e => { e.stopPropagation(); openLightbox(currentSet.plan.piezas.map(p => p.imageUrl).filter(Boolean), i); }} />
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                  <span className="text-[10px] font-black text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full uppercase tracking-wider">Día {pieza.dia}</span>
-                                  <span className="text-[10px] font-semibold text-slate-500">{canalMeta.icon} {canalMeta.label}</span>
-                                  <span className="text-[10px] text-slate-400">· {pieza.rol}</span>
-                                </div>
-                                <p className="text-[14px] font-bold text-slate-800 truncate">{pieza.titular}</p>
-                                <p className="text-[11px] text-slate-500 mt-0.5">⏰ {pieza.horaRecomendada}</p>
-                              </div>
-                              <ChevronDown size={16} className={`text-slate-400 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                            </button>
-                            {isExpanded && (
-                              <div className="border-t border-slate-100 p-4 md:p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
-                                {pieza.imageUrl && (
-                                  <div className="aspect-[4/3] rounded-2xl overflow-hidden cursor-pointer group relative"
-                                    onClick={() => openLightbox(currentSet.plan.piezas.map(p => p.imageUrl).filter(Boolean), i)}>
-                                    <img src={pieza.imageUrl} alt={pieza.rol} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                                  </div>
-                                )}
-                                <div className="space-y-4">
-                                  <div>
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Titular</p>
-                                    <div className="flex items-start justify-between gap-2">
-                                      <p className="text-[14px] font-bold text-slate-800 flex-1">{pieza.titular}</p>
-                                      <button type="button" onClick={() => copyText(pieza.titular, `tit-${i}`)}
-                                        className="w-7 h-7 bg-slate-50 hover:bg-brand-50 text-slate-400 hover:text-brand-600 rounded-lg flex items-center justify-center transition-all flex-shrink-0">
-                                        {copiedKey === `tit-${i}` ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                                      </button>
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Caption completo</p>
-                                    <div className="flex items-start justify-between gap-2">
-                                      <p className="text-[12px] text-slate-600 flex-1 leading-relaxed">{pieza.caption}</p>
-                                      <button type="button" onClick={() => copyText(pieza.caption, `cap-${i}`)}
-                                        className="w-7 h-7 bg-slate-50 hover:bg-brand-50 text-slate-400 hover:text-brand-600 rounded-lg flex items-center justify-center transition-all flex-shrink-0">
-                                        {copiedKey === `cap-${i}` ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                                      </button>
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CTA</p>
-                                    <div className="flex items-center justify-between gap-2">
-                                      <p className="text-[12px] font-bold text-brand-600">{pieza.cta}</p>
-                                      <button type="button" onClick={() => copyText(pieza.cta, `cta-${i}`)}
-                                        className="w-7 h-7 bg-slate-50 hover:bg-brand-50 text-slate-400 hover:text-brand-600 rounded-lg flex items-center justify-center transition-all flex-shrink-0">
-                                        {copiedKey === `cta-${i}` ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                                      </button>
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Hashtags</p>
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {pieza.hashtags.map(h => (
-                                        <span key={h} className="text-[10px] font-semibold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full">{h}</span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-3">
-                                    <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">📌 Qué hacer</p>
-                                    <p className="text-[11.5px] text-amber-900 leading-relaxed">{pieza.instruccion}</p>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Tab: Calendario */}
-                  {activeTab2 === 'calendario' && (
-                    <div className="space-y-2">
-                      {Array.from({ length: currentSet.plan.duracionDias }, (_, i) => i + 1).map(dia => {
-                        const piezasDelDia = currentSet.plan.piezas.filter(p => p.dia === dia);
-                        return (
-                          <div key={dia} className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
-                            <div className={`px-5 py-3 flex items-center justify-between ${dia === 1 ? 'bg-brand-600' : 'bg-slate-50'}`}>
-                              <span className={`text-[12px] font-black uppercase tracking-wider ${dia === 1 ? 'text-white' : 'text-slate-700'}`}>Día {dia}</span>
-                              {piezasDelDia.length === 0 && <span className={`text-[10px] ${dia === 1 ? 'text-white/70' : 'text-slate-400'}`}>Día de descanso</span>}
+                      {/* Columna principal */}
+                      <div>
+                        {/* Brief card */}
+                        <div className="bg-white border border-slate-200 rounded-2xl mb-5 overflow-hidden shadow-sm">
+                          <div className="p-4 border-b border-slate-100">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Promesa de campaña</p>
+                            <p className="text-[13px] font-medium text-brand-600 italic">{plan.promesa}</p>
+                            <div className="flex flex-wrap gap-1.5 mt-3">
+                              {currentSet.canales.map(c => {
+                                const cm = CAMPAIGN_CHANNEL_META[c] ?? { icon: '📢', label: c };
+                                return <span key={c} className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-100">{cm.icon} {cm.label}</span>;
+                              })}
+                              {plan.modoVisual && (
+                                <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                  {plan.modoVisual === 'ugc' ? '📱 UGC' : '📷 Editorial'}
+                                </span>
+                              )}
                             </div>
-                            {piezasDelDia.map(p => {
-                              const cm = CAMPAIGN_CHANNEL_META[p.canal] ?? { icon: '📢', label: p.canal ?? 'Canal', copyHint: '' };
+                          </div>
+                          {/* Imágenes de referencia del brief */}
+                          {currentSet.slots.length > 0 && (
+                            <div className="p-4 border-b border-slate-100">
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Imágenes que subiste en el brief</p>
+                              <div className="grid grid-cols-4 gap-3">
+                                {(['product','inspiration','brand','model'] as const).map(role => {
+                                  const roleSlots = currentSet.slots.filter(s => s.role === role);
+                                  if (roleSlots.length === 0) return null;
+                                  const labels: Record<string, string> = { product: '📦 Producto', inspiration: '🖼️ Inspiración', brand: '🎨 Marca', model: '👤 Modelo' };
+                                  return (
+                                    <div key={role} className="flex flex-col gap-1.5">
+                                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{labels[role]}</p>
+                                      {roleSlots.slice(0,2).map((s, si) => (
+                                        <div key={si} className="aspect-square rounded-lg overflow-hidden border border-slate-100">
+                                          <img src={s.base64} alt={role} className="w-full h-full object-cover" />
+                                        </div>
+                                      ))}
+                                      {roleSlots.length > 2 && <p className="text-[9px] text-slate-400 text-center">+{roleSlots.length - 2}</p>}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                          {/* Stats */}
+                          <div className="grid grid-cols-4 divide-x divide-slate-100">
+                            {[
+                              { label: 'Piezas', value: plan.piezas.length },
+                              { label: 'Días', value: plan.duracionDias },
+                              { label: 'Canales', value: currentSet.canales.length },
+                            ].map(s => (
+                              <div key={s.label} className="py-3 px-4 flex flex-col">
+                                <span className="text-[9px] text-slate-400 uppercase tracking-widest">{s.label}</span>
+                                <span className="text-[18px] font-black text-slate-900" style={{ fontFamily: 'Syne, Inter, sans-serif' }}>{s.value}</span>
+                              </div>
+                            ))}
+                            <div className="py-3 px-4 flex flex-col">
+                              <span className="text-[9px] text-slate-400 uppercase tracking-widest">Resumen</span>
+                              <span className="text-[10px] text-slate-500 leading-snug mt-0.5 line-clamp-3">{plan.resumen}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Tabs */}
+                        <div className="flex border-b border-slate-200 mb-5 gap-0">
+                          {([
+                            { id: 'plan' as const,      label: '🎨 Piezas',     count: plan.piezas.length },
+                            { id: 'calendario' as const, label: '📅 Calendario', count: null },
+                            { id: 'hashtags' as const,   label: '# Hashtags',   count: (plan.hashtagsComunidad?.length ?? 0) + (plan.hashtagsNicho?.length ?? 0) + (plan.hashtagsColarga?.length ?? 0) },
+                          ]).map(t => (
+                            <button key={t.id} type="button" onClick={() => setActiveTab2(t.id)}
+                              className={`flex items-center gap-1.5 px-4 py-2.5 text-[12px] font-semibold border-b-2 transition-all ${activeTab2 === t.id ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+                              {t.label}
+                              {t.count !== null && <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeTab2 === t.id ? 'bg-brand-50 text-brand-600' : 'bg-slate-100 text-slate-400'}`}>{t.count}</span>}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Tab: Piezas — grid 2 col */}
+                        {activeTab2 === 'plan' && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {plan.piezas.map((pieza, i) => {
+                              const cm = CAMPAIGN_CHANNEL_META[pieza.canal] ?? { icon: '📢', label: pieza.canal ?? 'Canal' };
                               return (
-                                <div key={p.id} className="flex items-center gap-4 px-5 py-3 border-t border-slate-50">
-                                  {p.imageUrl && <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0"><img src={p.imageUrl} alt="" className="w-full h-full object-cover" /></div>}
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-[12px] font-bold text-slate-800 truncate">{p.titular}</p>
-                                    <p className="text-[10px] text-slate-500">{cm.icon} {cm.label} · {p.horaRecomendada}</p>
+                                <div key={pieza.id} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-brand-200 transition-all cursor-pointer group"
+                                  onClick={() => setModalPieza(i)}>
+                                  {/* Imagen */}
+                                  <div className="relative aspect-square bg-slate-100 overflow-hidden">
+                                    {pieza.imageUrl
+                                      ? <img src={pieza.imageUrl} alt={pieza.rol} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                                      : <div className="w-full h-full flex items-center justify-center text-slate-300 text-4xl">🖼️</div>}
+                                    <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm rounded-full px-2.5 py-0.5 text-[10px] font-bold text-slate-600">{pieza.rol}</div>
+                                    <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-brand-600 flex items-center justify-center text-[10px] font-black text-white" style={{ fontFamily: 'Syne, Inter, sans-serif' }}>{pieza.dia}</div>
+                                    {/* Overlay hover */}
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3 gap-2">
+                                      <button type="button" onClick={e => { e.stopPropagation(); pieza.imageUrl && openLightbox(allImages, i); }}
+                                        className="flex-1 py-1.5 rounded-xl bg-white/90 text-[11px] font-semibold text-slate-800 text-center hover:bg-white transition-colors">
+                                        Ver imagen
+                                      </button>
+                                      <button type="button" onClick={e => { e.stopPropagation(); setModalPieza(i); }}
+                                        className="flex-1 py-1.5 rounded-xl bg-brand-600 text-[11px] font-semibold text-white text-center hover:bg-brand-700 transition-colors">
+                                        Ver todo →
+                                      </button>
+                                    </div>
                                   </div>
-                                  <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-1 rounded-full flex-shrink-0">{p.rol}</span>
+                                  {/* Body */}
+                                  <div className="p-3.5">
+                                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">{cm.icon} {cm.label}</p>
+                                    <p className="text-[13px] font-bold text-slate-800 leading-tight mb-2 line-clamp-2">{pieza.titular}</p>
+                                    <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-3 mb-3">{pieza.caption}</p>
+                                    {/* CTA */}
+                                    <div className="bg-brand-50 border border-brand-100 rounded-xl px-3 py-2 flex items-center justify-between gap-2 mb-2">
+                                      <p className="text-[11px] text-brand-700 font-medium italic flex-1 truncate">{pieza.cta}</p>
+                                      <button type="button" onClick={e => { e.stopPropagation(); copyText(pieza.cta, `cta-${i}`); }}
+                                        className="w-6 h-6 bg-white rounded-lg flex items-center justify-center text-brand-500 hover:text-brand-700 transition-colors flex-shrink-0">
+                                        {copiedKey === `cta-${i}` ? <Check size={10} /> : <Copy size={10} />}
+                                      </button>
+                                    </div>
+                                    {/* Instrucción */}
+                                    <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+                                      <p className="text-[9px] font-black text-amber-600 uppercase tracking-wider mb-0.5">📌 Qué hacer</p>
+                                      <p className="text-[10.5px] text-amber-800 leading-snug">{pieza.instruccion}</p>
+                                    </div>
+                                    {/* Footer pieza */}
+                                    <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-slate-100">
+                                      <span className="text-[10px] text-slate-400">⏰ {pieza.horaRecomendada}</span>
+                                      <button type="button" onClick={e => { e.stopPropagation(); copyText(pieza.caption, `cap-${i}`); }}
+                                        className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-brand-600 transition-colors">
+                                        {copiedKey === `cap-${i}` ? <Check size={9} className="text-emerald-500" /> : <Copy size={9} />}
+                                        {copiedKey === `cap-${i}` ? 'Copiado' : 'Copiar caption'}
+                                      </button>
+                                    </div>
+                                  </div>
                                 </div>
                               );
                             })}
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                        )}
 
-                  {/* Tab: Hashtags */}
-                  {activeTab2 === 'hashtags' && (
-                    <div className="space-y-5">
-                      {[
-                        { title: 'Comunidad', desc: 'Alta visibilidad. Usá 2-3 en cada post para construir presencia a largo plazo.', tags: currentSet.plan.hashtagsComunidad, color: 'bg-brand-50 text-brand-700' },
-                        { title: 'Nicho', desc: 'Conectan con personas que ya buscan lo que vendés. Incluí todos en cada post.', tags: currentSet.plan.hashtagsNicho, color: 'bg-violet-50 text-violet-700' },
-                        { title: 'Cola larga', desc: 'Menos alcance pero más intención de compra. Son tus mejores aliados para vender.', tags: currentSet.plan.hashtagsColarga, color: 'bg-emerald-50 text-emerald-700' },
-                      ].map(group => (
-                        <div key={group.title} className="bg-white border border-slate-100 rounded-2xl p-5">
-                          <div className="flex items-start justify-between gap-3 mb-3">
-                            <div>
-                              <p className="text-[13px] font-bold text-slate-800">{group.title}</p>
-                              <p className="text-[11px] text-slate-500 mt-0.5">{group.desc}</p>
+                        {/* Tab: Calendario */}
+                        {activeTab2 === 'calendario' && (
+                          <div className="space-y-2">
+                            {Array.from({ length: plan.duracionDias }, (_, i) => i + 1).map(dia => {
+                              const piezasDelDia = plan.piezas.filter(p => p.dia === dia);
+                              const DIAS = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+                              return (
+                                <div key={dia} className={`bg-white border rounded-2xl overflow-hidden flex items-stretch gap-0 ${piezasDelDia.length > 0 ? 'border-slate-200 shadow-sm' : 'border-slate-100 opacity-60'}`}>
+                                  <div className={`w-14 flex-shrink-0 flex flex-col items-center justify-center py-3 ${piezasDelDia.length > 0 ? 'bg-brand-600' : 'bg-slate-50'}`}>
+                                    <span className={`text-[9px] font-bold uppercase tracking-wider ${piezasDelDia.length > 0 ? 'text-white/70' : 'text-slate-400'}`}>{DIAS[dia]}</span>
+                                    <span className={`text-[16px] font-black ${piezasDelDia.length > 0 ? 'text-white' : 'text-slate-400'}`} style={{ fontFamily: 'Syne, Inter, sans-serif' }}>{dia}</span>
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    {piezasDelDia.length === 0
+                                      ? <div className="flex items-center h-full px-4 text-[11px] text-slate-400 italic">Día de descanso</div>
+                                      : piezasDelDia.map(p => {
+                                          const cm = CAMPAIGN_CHANNEL_META[p.canal] ?? { icon: '📢', label: p.canal ?? 'Canal' };
+                                          return (
+                                            <div key={p.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors cursor-pointer"
+                                              onClick={() => setModalPieza(plan.piezas.indexOf(p))}>
+                                              {p.imageUrl && <div className="w-9 h-9 rounded-lg overflow-hidden flex-shrink-0 border border-slate-100"><img src={p.imageUrl} alt="" className="w-full h-full object-cover" /></div>}
+                                              <div className="flex-1 min-w-0">
+                                                <p className="text-[12px] font-semibold text-slate-800 truncate">{p.titular}</p>
+                                                <p className="text-[10px] text-slate-400">{cm.icon} {cm.label} · {p.horaRecomendada}</p>
+                                              </div>
+                                              <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full flex-shrink-0">{p.rol}</span>
+                                            </div>
+                                          );
+                                        })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Tab: Hashtags */}
+                        {activeTab2 === 'hashtags' && (
+                          <div className="space-y-4">
+                            {[
+                              { title: '🔥 Hashtags de nicho', desc: 'Mayor alcance en tu industria. Usá estos en tus posts principales del Feed.', tags: plan.hashtagsNicho, color: 'bg-brand-50 text-brand-700 border-brand-100' },
+                              { title: '🌿 Comunidad', desc: 'Conectan con la comunidad emprendedora latinoamericana.', tags: plan.hashtagsComunidad, color: 'bg-lime-50 text-lime-700 border-lime-200' },
+                              { title: '🎯 Cola larga', desc: 'Menos alcance pero más conversión. Audiencia específica con intención de compra.', tags: plan.hashtagsColarga, color: 'bg-slate-100 text-slate-600 border-slate-200' },
+                            ].map(group => (
+                              <div key={group.title} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                                  <div>
+                                    <p className="text-[13px] font-bold text-slate-800">{group.title}</p>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">{group.desc}</p>
+                                  </div>
+                                  <button type="button" onClick={() => copyText(group.tags.join(' '), `ht-${group.title}`)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-brand-50 border border-slate-200 hover:border-brand-200 text-slate-500 hover:text-brand-600 rounded-xl text-[10px] font-bold transition-all flex-shrink-0">
+                                    {copiedKey === `ht-${group.title}` ? <Check size={10} /> : <Copy size={10} />} Copiar
+                                  </button>
+                                </div>
+                                <div className="p-4 flex flex-wrap gap-2">
+                                  {(group.tags ?? []).map(tag => (
+                                    <span key={tag} className={`text-[11px] font-semibold px-3 py-1 rounded-full border cursor-pointer hover:opacity-80 transition-opacity ${group.color}`}
+                                      onClick={() => copyText(tag, `tag-${tag}`)}>
+                                      {tag.startsWith('#') ? tag : `#${tag}`}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                            <div className="bg-lime-50 border border-lime-200 rounded-2xl p-4 flex gap-3">
+                              <span className="text-xl flex-shrink-0">💡</span>
+                              <div>
+                                <p className="text-[12px] font-bold text-lime-800 mb-1">Cómo combinarlos</p>
+                                <p className="text-[11px] text-lime-700 leading-relaxed">Combiná 2-3 de nicho + 2-3 de comunidad + 2-3 de cola larga por post. No uses los mismos en todos los posts — rotá para evitar penalizaciones del algoritmo.</p>
+                              </div>
                             </div>
-                            <button type="button" onClick={() => copyText(group.tags.join(' '), `ht-${group.title}`)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-brand-50 text-slate-500 hover:text-brand-600 rounded-xl text-[10px] font-bold transition-all flex-shrink-0">
-                              {copiedKey === `ht-${group.title}` ? <Check size={10} /> : <Copy size={10} />} Copiar todos
+                          </div>
+                        )}
+
+                        {/* Footer acciones */}
+                        <div className="flex gap-2 mt-6 pt-5 border-t border-slate-100 flex-wrap">
+                          <button type="button" onClick={resetCreator}
+                            className="flex items-center gap-1.5 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-[12px] font-bold transition-colors">
+                            <Plus size={13} /> Nueva campaña
+                          </button>
+                          <button type="button" onClick={() => setActiveTab('library')}
+                            className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 hover:border-slate-300 text-slate-600 rounded-xl text-[12px] font-semibold transition-colors">
+                            <Library size={13} /> Ver biblioteca
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Sidebar derecha */}
+                      <div className="flex flex-col gap-4">
+                        {/* Descargas */}
+                        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                          <div className="px-4 py-3 border-b border-slate-100">
+                            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">📥 Descargar kit</p>
+                          </div>
+                          <div className="p-3 space-y-2">
+                            <button type="button" onClick={() => handleDownloadPdf(currentSet)} disabled={downloadingPdf || downloadingHtml}
+                              className="w-full flex items-center gap-3 p-3 rounded-xl bg-brand-50 border border-brand-100 hover:bg-brand-100 transition-colors disabled:opacity-50 disabled:cursor-wait">
+                              <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center text-base flex-shrink-0">📄</div>
+                              <div className="flex-1 text-left">
+                                <p className="text-[12px] font-semibold text-slate-800">{downloadingPdf ? 'Generando PDF…' : 'PDF de agencia'}</p>
+                                <p className="text-[10px] text-slate-400">Plan, piezas, copy y calendario</p>
+                              </div>
+                              {downloadingPdf ? <div className="w-4 h-4 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" /> : <ChevronRight size={14} className="text-slate-400" />}
+                            </button>
+                            <button type="button" onClick={() => downloadSetZip(currentSet)}
+                              className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-slate-300 transition-colors">
+                              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-base flex-shrink-0">🗜️</div>
+                              <div className="flex-1 text-left">
+                                <p className="text-[12px] font-semibold text-slate-800">ZIP de imágenes</p>
+                                <p className="text-[10px] text-slate-400">{plan.piezas.length} imágenes en alta calidad</p>
+                              </div>
+                              <ChevronRight size={14} className="text-slate-400" />
+                            </button>
+                            <button type="button" onClick={() => handleDownloadHtml(currentSet)} disabled={downloadingHtml || downloadingPdf}
+                              className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-slate-300 transition-colors disabled:opacity-50 disabled:cursor-wait">
+                              <div className="w-8 h-8 rounded-lg bg-lime-50 flex items-center justify-center text-base flex-shrink-0">☑️</div>
+                              <div className="flex-1 text-left">
+                                <p className="text-[12px] font-semibold text-slate-800">{downloadingHtml ? 'Generando…' : 'Kit interactivo'}</p>
+                                <p className="text-[10px] text-slate-400">HTML con checklist y hashtags</p>
+                              </div>
+                              {downloadingHtml ? <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> : <ChevronRight size={14} className="text-slate-400" />}
                             </button>
                           </div>
-                          <div className="flex flex-wrap gap-2">
-                            {group.tags.map(tag => (
-                              <span key={tag} className={`text-[11px] font-semibold px-3 py-1 rounded-full ${group.color}`}>
-                                {tag.startsWith('#') ? tag : `#${tag}`}
-                              </span>
-                            ))}
+                        </div>
+
+                        {/* Mini calendario */}
+                        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">📅 Publicación</p>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 border border-brand-100">{plan.duracionDias} días</span>
+                          </div>
+                          <div className="p-3 space-y-1.5">
+                            {plan.piezas.map((p, i) => {
+                              const cm = CAMPAIGN_CHANNEL_META[p.canal] ?? { icon: '📢', label: p.canal ?? 'Canal' };
+                              return (
+                                <div key={p.id} className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-100 hover:border-brand-200 cursor-pointer transition-colors"
+                                  onClick={() => setModalPieza(i)}>
+                                  <div className="w-7 h-7 rounded-lg bg-brand-600 flex items-center justify-center text-[11px] font-black text-white flex-shrink-0" style={{ fontFamily: 'Syne, Inter, sans-serif' }}>{p.dia}</div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[11px] font-semibold text-slate-700 truncate">{p.titular}</p>
+                                    <p className="text-[9px] text-slate-400">{cm.icon} {cm.label} · {p.horaRecomendada}</p>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
 
-                  {/* Footer */}
-                  <div className="flex flex-col md:flex-row md:justify-between md:items-center mt-7 pt-5 border-t border-slate-200 gap-2 md:gap-3.5">
-                    <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => { resetCreator(); setStep(2); }}
-                        className="flex items-center gap-1.5 bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-700 rounded-xl px-4 py-3 text-[13px] font-bold transition-colors">
-                        <RefreshCw size={14} /> Ajustar y regenerar
-                      </button>
-                      <button type="button" onClick={resetCreator}
-                        className="flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-3 text-[13px] font-semibold transition-colors">
-                        <Plus size={14} /> Nueva campaña
-                      </button>
+                        {/* Mini hashtags */}
+                        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider"># Hashtags</p>
+                            <button type="button" onClick={() => setActiveTab2('hashtags')}
+                              className="text-[10px] text-brand-600 hover:text-brand-700 font-bold transition-colors">Ver todos →</button>
+                          </div>
+                          <div className="p-3">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2">De nicho</p>
+                            <div className="flex flex-wrap gap-1.5 mb-3">
+                              {(plan.hashtagsNicho ?? []).slice(0, 4).map(tag => (
+                                <span key={tag} className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-100 cursor-pointer hover:opacity-80"
+                                  onClick={() => copyText(tag, `ht-mini-${tag}`)}>
+                                  {tag.startsWith('#') ? tag : `#${tag}`}
+                                </span>
+                              ))}
+                            </div>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2">Comunidad</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(plan.hashtagsComunidad ?? []).slice(0, 3).map(tag => (
+                                <span key={tag} className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-lime-50 text-lime-700 border border-lime-200 cursor-pointer hover:opacity-80"
+                                  onClick={() => copyText(tag, `ht-mini-${tag}`)}>
+                                  {tag.startsWith('#') ? tag : `#${tag}`}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <button type="button" onClick={() => setActiveTab('library')}
-                      className="flex items-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 text-slate-600 rounded-xl px-4 py-3 text-[13px] font-semibold transition-colors">
-                      <Library size={14} /> Ver biblioteca
-                    </button>
+
+                    {/* ── Modal de pieza ── */}
+                    {modalPieza !== null && modalP && modalCm && (
+                      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                        onClick={() => setModalPieza(null)}>
+                        <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+                          onClick={e => e.stopPropagation()}>
+                          {/* Imagen modal */}
+                          <div className="relative aspect-square bg-slate-100 overflow-hidden rounded-t-2xl">
+                            {modalP.imageUrl
+                              ? <img src={modalP.imageUrl} alt={modalP.rol} className="w-full h-full object-cover" />
+                              : <div className="w-full h-full flex items-center justify-center text-6xl">🖼️</div>}
+                            <button type="button" onClick={() => setModalPieza(null)}
+                              className="absolute top-3 right-3 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center text-slate-600 hover:text-slate-900 shadow-sm transition-colors">
+                              <X size={14} />
+                            </button>
+                          </div>
+                          {/* Contenido modal */}
+                          <div className="p-5">
+                            <div className="flex items-center gap-2 mb-3">
+                              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-100">{modalCm.icon} {modalCm.label} · Día {modalP.dia}</span>
+                              <span className="text-[10px] font-semibold text-slate-400">{modalP.rol}</span>
+                            </div>
+                            <h3 className="text-[17px] font-black text-slate-900 mb-4 leading-tight" style={{ fontFamily: 'Syne, Inter, sans-serif' }}>{modalP.titular}</h3>
+
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Caption completo</p>
+                            <div className="flex items-start gap-2 mb-4">
+                              <p className="text-[13px] text-slate-600 flex-1 leading-relaxed whitespace-pre-line">{modalP.caption}</p>
+                              <button type="button" onClick={() => copyText(modalP.caption, 'modal-cap')}
+                                className="w-7 h-7 bg-slate-50 hover:bg-brand-50 rounded-lg flex items-center justify-center text-slate-400 hover:text-brand-600 transition-colors flex-shrink-0">
+                                {copiedKey === 'modal-cap' ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
+                              </button>
+                            </div>
+
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">CTA recomendado</p>
+                            <div className="bg-brand-50 border border-brand-100 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2 mb-4">
+                              <p className="text-[12px] text-brand-700 font-medium italic flex-1">{modalP.cta}</p>
+                              <button type="button" onClick={() => copyText(modalP.cta, 'modal-cta')}
+                                className="w-6 h-6 bg-white rounded-lg flex items-center justify-center text-brand-500 hover:text-brand-700 transition-colors">
+                                {copiedKey === 'modal-cta' ? <Check size={10} /> : <Copy size={10} />}
+                              </button>
+                            </div>
+
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Publicación recomendada</p>
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 mb-4">
+                              <p className="text-[12px] text-slate-600 leading-relaxed">{modalP.instruccion}</p>
+                            </div>
+
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Hashtags</p>
+                            <div className="flex flex-wrap gap-1.5 mb-5">
+                              {modalP.hashtags.map(tag => (
+                                <span key={tag} className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-brand-50 text-brand-700 border border-brand-100 cursor-pointer hover:opacity-80"
+                                  onClick={() => copyText(tag, `modal-tag-${tag}`)}>
+                                  {tag.startsWith('#') ? tag : `#${tag}`}
+                                </span>
+                              ))}
+                            </div>
+
+                            <div className="flex gap-2">
+                              {modalP.imageUrl && (
+                                <button type="button" onClick={() => { openLightbox(allImages, modalPieza!); setModalPieza(null); }}
+                                  className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 rounded-xl text-[12px] font-semibold transition-colors">
+                                  <ImageIcon size={13} /> Ver imagen
+                                </button>
+                              )}
+                              <button type="button" onClick={() => copyText(`${modalP.titular}\n\n${modalP.caption}\n\n${modalP.cta}\n\n${modalP.hashtags.join(' ')}`, 'modal-all')}
+                                className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 hover:border-brand-300 text-slate-700 rounded-xl text-[12px] font-semibold transition-colors">
+                                {copiedKey === 'modal-all' ? <><Check size={13} className="text-emerald-500" /> Copiado</> : <><Copy size={13} /> Copiar todo</>}
+                              </button>
+                              <button type="button" onClick={() => setModalPieza(null)}
+                                className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-[12px] font-bold transition-colors">
+                                <Check size={13} /> Listo
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
             </div>
 
@@ -1327,71 +1531,130 @@ const CampaignModule: React.FC = () => {
 
         {/* ══════════════ BIBLIOTECA ══════════════ */}
         {activeTab === 'library' && (
-          <div className="animate-in fade-in duration-500">
+          <div className="animate-in fade-in duration-500 p-5">
+            {/* Toolbar */}
+            <div className="flex items-center gap-3 mb-5 flex-wrap">
+              <div className="flex-1 min-w-[180px]">
+                <input type="text" placeholder="Buscar campaña..." className="w-full h-9 px-3 rounded-xl border border-slate-200 bg-white text-[13px] text-slate-700 placeholder-slate-400 outline-none focus:border-brand-400 transition-colors" />
+              </div>
+              <button type="button" onClick={() => setActiveTab('create')}
+                className="flex items-center gap-1.5 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-[12px] font-bold transition-colors">
+                <Plus size={13} /> Nueva campaña
+              </button>
+            </div>
+
+            {/* Stats */}
+            {sets.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                {[
+                  { label: 'Total', value: sets.length, sub: 'campañas', color: 'text-slate-900' },
+                  { label: 'Imágenes', value: sets.reduce((s, c) => s + (c.plan?.piezas?.length ?? 0), 0), sub: 'generadas', color: 'text-brand-600' },
+                  { label: 'Completadas', value: sets.length, sub: 'guardadas', color: 'text-emerald-600' },
+                  { label: 'Días', value: sets.reduce((s, c) => s + (c.plan?.duracionDias ?? 0), 0), sub: 'planificados', color: 'text-slate-900' },
+                ].map(s => (
+                  <div key={s.label} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">{s.label}</p>
+                    <p className={`text-[22px] font-black ${s.color}`} style={{ fontFamily: 'Syne, Inter, sans-serif' }}>{s.value}</p>
+                    <p className="text-[11px] text-slate-400">{s.sub}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {loadingSets && (
               <div className="flex items-center justify-center py-20">
                 <div className="w-6 h-6 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
               </div>
             )}
             {!loadingSets && sets.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-20 md:py-32 text-center bg-white rounded-[40px] md:rounded-[56px] border-2 border-dashed border-slate-200">
-                <Megaphone className="w-12 h-12 text-slate-200 mb-5" />
-                <p className="t-meta mb-2">Biblioteca vacía</p>
-                <p className="t-body-sm mb-6">Creá tu primer kit de campaña para guardarlo aquí</p>
+              <div className="flex flex-col items-center justify-center py-20 text-center bg-white border-2 border-dashed border-slate-200 rounded-2xl">
+                <Megaphone className="w-12 h-12 text-slate-200 mb-4" />
+                <p className="text-[14px] font-bold text-slate-500 mb-1">Biblioteca vacía</p>
+                <p className="text-[12px] text-slate-400 mb-5">Creá tu primer kit de campaña para guardarlo aquí</p>
                 <button type="button" onClick={() => setActiveTab('create')}
-                  className="flex items-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-md hover:bg-brand-700 transition-colors">
-                  <Sparkles size={14} /> Crear campaña
+                  className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-xl text-[12px] font-bold hover:bg-brand-700 transition-colors">
+                  <Sparkles size={13} /> Crear campaña
                 </button>
               </div>
             )}
-            <div className="space-y-6">
-              {sets.map(set => (
-                <div key={set.id} className="bg-white border border-slate-100 rounded-[36px] overflow-hidden shadow-sm">
-                  <div className="p-5 md:p-6 flex items-center justify-between border-b border-slate-100">
-                    <div className="min-w-0">
-                      <p className="font-display font-bold italic text-[16px] text-slate-900 uppercase truncate" style={{ fontFamily: 'Syne, Inter, sans-serif' }}>
-                        {set.plan?.tagline ?? 'Campaña'}
-                      </p>
-                      <p className="text-[11px] text-slate-400 truncate mt-0.5">{set.idea}</p>
-                      <p className="text-[10px] text-slate-300 mt-0.5">
-                        {new Date(set.createdAt).toLocaleDateString('es-CL')} · {set.plan?.piezas?.length ?? 0} piezas
-                      </p>
+
+            {/* Grid de campañas */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {sets.map(set => {
+                const piezas = set.plan?.piezas ?? [];
+                const withImg = piezas.filter(p => p.imageUrl);
+                const [img0, img1, img2] = withImg.map(p => p.imageUrl);
+                const modo = set.plan?.modoVisual;
+                return (
+                  <div key={set.id} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 hover:border-brand-200 transition-all cursor-pointer group">
+                    {/* Strip de color */}
+                    <div className="h-1 bg-brand-600" />
+                    {/* Mosaico de imágenes */}
+                    <div className="grid grid-cols-2 grid-rows-2 h-40 overflow-hidden border-b border-slate-100">
+                      <div className="row-span-2 overflow-hidden border-r border-slate-100">
+                        {img0 ? <img src={img0} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                          : <div className="w-full h-full bg-slate-50 flex items-center justify-center text-2xl">🖼️</div>}
+                      </div>
+                      <div className="overflow-hidden border-b border-slate-100">
+                        {img1 ? <img src={img1} alt="" className="w-full h-full object-cover" />
+                          : <div className="w-full h-full bg-slate-50 flex items-center justify-center text-lg">🖼️</div>}
+                      </div>
+                      <div className="overflow-hidden">
+                        {img2 ? <img src={img2} alt="" className="w-full h-full object-cover" />
+                          : <div className="w-full h-full bg-slate-100 flex items-center justify-center text-sm text-slate-400">+{piezas.length - 2}</div>}
+                      </div>
                     </div>
-                    <div className="flex gap-2 flex-shrink-0 ml-4">
-                      <button type="button" onClick={() => handleDownloadHtml(set)} disabled={downloadingHtml || downloadingPdf}
-                        className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-wait" title="Versión interactiva">
-                        {downloadingHtml ? <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> : <FileText className="w-4 h-4" />}
-                      </button>
-                      <button type="button" onClick={() => handleDownloadPdf(set)} disabled={downloadingHtml || downloadingPdf}
-                        className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-wait" title="Descargar PDF">
-                        {downloadingPdf ? <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> : <Download className="w-4 h-4" />}
-                      </button>
-                      <button type="button" onClick={() => downloadSetZip(set)}
-                        className="w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-xl flex items-center justify-center transition-all" title="Descargar ZIP">
-                        <Download className="w-4 h-4" />
-                      </button>
-                      <button type="button" onClick={() => deleteSet(set.id)} disabled={deletingId === set.id}
-                        className="w-9 h-9 bg-rose-50 hover:bg-rose-100 text-rose-400 hover:text-rose-600 rounded-xl flex items-center justify-center transition-all disabled:opacity-40">
-                        {deletingId === set.id ? <div className="w-3.5 h-3.5 border-2 border-rose-400 border-t-transparent rounded-full animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 p-3">
-                    {set.plan?.piezas?.map((pieza, i) => pieza.imageUrl ? (
-                      <div key={i} className="aspect-[3/4] rounded-2xl overflow-hidden cursor-pointer group relative"
-                        onClick={() => openLightbox(set.plan.piezas.map(p => p.imageUrl).filter(Boolean), i)}>
-                        <img src={pieza.imageUrl} alt={pieza.rol} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <div className="absolute bottom-2 left-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <div className="bg-white/90 rounded-lg px-2 py-1">
-                            <p className="text-[9px] font-black text-slate-900 uppercase truncate">{pieza.rol}</p>
+                    {/* Body */}
+                    <div className="p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">✓ Completada</span>
+                        <span className="text-[10px] text-slate-400">{new Date(set.createdAt).toLocaleDateString('es-CL')}</span>
+                      </div>
+                      <p className="font-black italic text-[14px] text-slate-900 mb-1 leading-tight" style={{ fontFamily: 'Syne, Inter, sans-serif' }}>{set.plan?.tagline ?? 'Campaña'}</p>
+                      <p className="text-[11px] text-slate-400 mb-3 line-clamp-2">{set.plan?.concepto ?? set.idea}</p>
+                      {/* Refs del brief */}
+                      {set.slots.length > 0 && (
+                        <div className="mb-3">
+                          <p className="text-[9px] text-slate-400 uppercase tracking-wider font-bold mb-1.5">Brief</p>
+                          <div className="flex gap-1.5">
+                            {(['product','inspiration','brand','model'] as const).map(role => {
+                              const s = set.slots.find(sl => sl.role === role);
+                              if (!s) return null;
+                              return <div key={role} className="w-7 h-7 rounded-lg overflow-hidden border border-slate-100 flex-shrink-0"><img src={s.base64} alt={role} className="w-full h-full object-cover" /></div>;
+                            })}
+                            {modo && <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 self-center">{modo === 'ugc' ? '📱 UGC' : '📷 Editorial'}</span>}
                           </div>
                         </div>
+                      )}
+                      {/* Meta pills */}
+                      <div className="flex gap-1.5 flex-wrap mb-3">
+                        <span className="text-[10px] text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-full">📸 {piezas.length} piezas</span>
+                        <span className="text-[10px] text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-full">📅 {set.plan?.duracionDias ?? 7} días</span>
+                        <span className="text-[10px] text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-full">{set.canales.length} canales</span>
                       </div>
-                    ) : null)}
+                      {/* Acciones */}
+                      <div className="flex gap-1.5 pt-3 border-t border-slate-100">
+                        <button type="button" onClick={() => handleDownloadPdf(set)} disabled={downloadingPdf || downloadingHtml}
+                          className="flex-1 py-1.5 rounded-xl text-[11px] font-semibold bg-brand-50 text-brand-700 border border-brand-100 hover:bg-brand-100 transition-colors disabled:opacity-50 disabled:cursor-wait">
+                          {downloadingPdf ? '…' : '↓ PDF'}
+                        </button>
+                        <button type="button" onClick={() => handleDownloadHtml(set)} disabled={downloadingHtml || downloadingPdf}
+                          className="flex-1 py-1.5 rounded-xl text-[11px] font-semibold bg-slate-50 text-slate-600 border border-slate-200 hover:border-slate-300 transition-colors disabled:opacity-50 disabled:cursor-wait">
+                          {downloadingHtml ? '…' : '☑️ Kit'}
+                        </button>
+                        <button type="button" onClick={() => downloadSetZip(set)}
+                          className="flex-1 py-1.5 rounded-xl text-[11px] font-semibold bg-slate-50 text-slate-600 border border-slate-200 hover:border-slate-300 transition-colors">
+                          ↓ ZIP
+                        </button>
+                        <button type="button" onClick={() => deleteSet(set.id)} disabled={deletingId === set.id}
+                          className="w-8 flex items-center justify-center rounded-xl bg-rose-50 text-rose-400 hover:text-rose-600 hover:bg-rose-100 border border-rose-100 transition-colors disabled:opacity-40">
+                          {deletingId === set.id ? <div className="w-3 h-3 border-2 border-rose-400 border-t-transparent rounded-full animate-spin" /> : <Trash2 size={12} />}
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
