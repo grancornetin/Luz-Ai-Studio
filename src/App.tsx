@@ -19,8 +19,6 @@ const TerminosUso           = lazy(() => import('./views/TerminosUso'));
 const Descargo              = lazy(() => import('./views/Descargo'));
 const PromptGalleryView     = lazy(() => import('./views/PromptGalleryView'));
 const PromptStudioView      = lazy(() => import('./views/PromptStudioView'));
-const ProjectsList          = lazy(() => import('./modules/projects/ProjectsList'));
-const ProjectDetail         = lazy(() => import('./modules/projects/ProjectDetail'));
 const BatchProgressPanel    = lazy(() => import('./modules/admin/BatchProgressPanel'));
 const Pricing               = lazy(() => import('./views/Pricing'));
 const BuyCredits            = lazy(() => import('./views/BuyCredits'));
@@ -443,8 +441,8 @@ const AppContent: React.FC = () => {
                   <Route path="/cuenta"         element={<AccountSettings />} />
                   <Route path="/planner"         element={<PlannerList />} />
                   <Route path="/planner/:id"    element={<PlannerDetail />} />
-                  <Route path="/projects"        element={<ProjectsList />} />
-                  <Route path="/projects/:id"   element={<ProjectDetail />} />
+                  <Route path="/projects"        element={<Navigate to="/planner" replace />} />
+                  <Route path="/projects/:id"   element={<Navigate to="/planner" replace />} />
                   <Route path="/prompt-library" element={<Navigate to="/prompt-gallery" replace />} />
                   <Route path="/admin/batch"    element={<BatchProgressPanel />} />
                   <Route path="*"               element={<Navigate to="/dashboard" replace />} />
