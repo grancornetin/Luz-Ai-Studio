@@ -1027,19 +1027,24 @@ export async function buildUGCSessionPlanFromAnchor(
   let sceneAnalysis = null;
   let directives: ShotDirective[] = [];
 
+  // Analizar outfit para TODOS los modos cuando hay referencia — no solo OUTFIT mode.
+  // Esto evita que el modelo invente zapatos, tipo de pantalón o accesorios en shots derivados.
+  if (refs?.outfitRef) {
+    outfitAnalysis = await analyzeOutfitReference(refs.outfitRef);
+  }
+
   if (focus === 'AVATAR') {
     directives = buildAvatarShotDirectives(shotCount, hasProduct, hasOutfit, hasScene);
-  } else if (focus === 'OUTFIT' && refs?.outfitRef) {
-    outfitAnalysis = await analyzeOutfitReference(refs.outfitRef);
-    directives = buildOutfitShotDirectives(outfitAnalysis, productIsRelevant || false, 'complement', shotCount, hasScene);
   } else if (focus === 'OUTFIT') {
-    // Outfit sin referencia — usar defaults razonables
-    directives = buildOutfitShotDirectives({
-      hasShoes: true, hasPants: true, hasAccessories: false,
-      hasDetail: true, fabricType: 'unknown', colors: [], hasTop: true,
-      hasBottom: true, hasBelt: false, hasBag: false, hasHat: false,
-      hasNecklace: false, bottomType: 'unknown'
-    }, productIsRelevant || false, 'complement', shotCount, hasScene);
+    if (!outfitAnalysis) {
+      outfitAnalysis = {
+        hasShoes: true, hasPants: true, hasAccessories: false,
+        hasDetail: true, fabricType: 'unknown', colors: [], hasTop: true,
+        hasBottom: true, hasBelt: false, hasBag: false, hasHat: false,
+        hasNecklace: false, bottomType: 'unknown'
+      };
+    }
+    directives = buildOutfitShotDirectives(outfitAnalysis, productIsRelevant || false, 'complement', shotCount, hasScene);
   } else if (focus === 'PRODUCT') {
     directives = buildProductShotDirectives(productCategory, productSize, shotCount, hasOutfit, hasScene);
   } else if (focus === 'SCENE') {

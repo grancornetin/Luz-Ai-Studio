@@ -6,6 +6,7 @@
 // Costo por imagen según modelo:
 //   Nano Banana 2 (Gemini): 2 créditos/imagen
 //   Seedream 4.5:           1 crédito/imagen
+//   GPT Image 2:            2 créditos/imagen
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const MODELS = {

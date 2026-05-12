@@ -9,6 +9,8 @@ import { useCreditGuard } from '../../../hooks/useCreditGuard';
 import { useAuth } from '../../modules/auth/AuthContext';
 import NoCreditsModal from '../../components/shared/NoCreditsModal';
 import { CREDIT_COSTS, MODEL_CREDIT_COST } from '../../services/creditConfig';
+
+type ModelId = 'gemini' | 'gptimage';
 import {
   ContentStudioProSet,
   Focus,
@@ -98,7 +100,7 @@ const CustomCheckbox: React.FC<{ checked: boolean; onChange: () => void; label?:
 );
 
 const ContentStudioProModule: React.FC = () => {
-  const modelId = 'gemini' as const;
+  const [modelId, setModelId] = useState<ModelId>('gemini');
   const { credits, user } = useAuth();
   const [step, setStep] = useState<Step>('setup');
   const [sets, setSets] = useState<ContentStudioProSet[]>([]);
@@ -1172,7 +1174,33 @@ const ContentStudioProModule: React.FC = () => {
 
                 <UploadDisclaimer />
 
-
+                {/* Selector de modelo de IA */}
+                <div className="space-y-3">
+                  <label className="t-meta">Motor de generación</label>
+                  <div className="flex bg-white p-1 rounded-[16px] border border-slate-200 gap-1">
+                    {([
+                      { id: 'gemini' as ModelId,   label: 'Nano Banana 2', sub: 'Gemini · Recomendado' },
+                      { id: 'gptimage' as ModelId, label: 'GPT Image 2',   sub: 'OpenAI · Alternativo' },
+                    ] as const).map(m => (
+                      <button
+                        key={m.id}
+                        onClick={() => setModelId(m.id)}
+                        className={`flex-1 py-3 px-2 rounded-[12px] text-center transition-all ${
+                          modelId === m.id
+                            ? 'bg-brand-600 text-white shadow-md'
+                            : 'text-slate-400 hover:text-slate-600'
+                        }`}
+                      >
+                        <div className="text-[10px] font-black uppercase tracking-tight leading-none">{m.label}</div>
+                        <div className={`text-[9px] mt-0.5 ${modelId === m.id ? 'text-white/70' : 'text-slate-400'}`}>{m.sub}</div>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-slate-400 text-center">
+                    {modelId === 'gemini'   && 'Mejor coherencia de identidad y outfit. Recomendado para sesiones UGC.'}
+                    {modelId === 'gptimage' && 'Motor alternativo de OpenAI vía EvoLink. Igual costo. Útil si Gemini está saturado.'}
+                  </p>
+                </div>
 
                 {/* Selector de cantidad de shots */}
                 <div className="space-y-3">
@@ -1255,7 +1283,7 @@ const ContentStudioProModule: React.FC = () => {
             <div className="space-y-4">
               <h2 className="t-display text-xl md:text-3xl text-white">{loadingMsg}</h2>
               <p className="t-meta text-slate-500 tracking-[0.5em] animate-pulse">
-                UGC SYSTEM • Gemini ACTIVE
+                UGC SYSTEM • {modelId === 'gptimage' ? 'GPT IMAGE 2' : 'GEMINI'} ACTIVE
               </p>
             </div>
           </div>

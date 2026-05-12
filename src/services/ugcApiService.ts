@@ -101,7 +101,7 @@ class UGCApiService {
     aspectRatio?: string;
     shotIndex?: number;
     totalShots?: number;
-    modelId?: 'gemini' | 'seedream';
+    modelId?: 'gemini' | 'gptimage';
     // Notificaciones Nivel 3
     uid?: string;
     sessionId?: string;
@@ -110,9 +110,9 @@ class UGCApiService {
     metadata?: Record<string, any>;
     onStatusChange?: (status: string, image?: string, shotIndex?: number) => void;
   }): Promise<string> {
-    // Seedream no soporta reference images — usa el endpoint genérico
-    const useSeedream = params.modelId === 'seedream';
-    const endpoint    = useSeedream ? '/api/gemini/image' : this.baseUrl;
+    // gptimage pasa por el router EvoLink (/api/gemini/image), igual que desde PromptStudio.
+    // gemini usa el endpoint UGC que soporta referencias múltiples de Gemini nativo.
+    const endpoint = params.modelId === 'gptimage' ? '/api/gemini/image' : this.baseUrl;
 
     // Iniciar generación asíncrona
     const startResponse = await fetch(endpoint, {

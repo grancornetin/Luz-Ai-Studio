@@ -1035,7 +1035,7 @@ async function generateWithPolling(
   shotIndex?: number,
   totalShots?: number,
   onStatusChange?: (status: string, image?: string) => void,
-  modelId?: 'gemini' | 'seedream',
+  modelId?: 'gemini' | 'gptimage',
   sessionParams?: {
     uid?: string;
     sessionId?: string;
@@ -1047,9 +1047,7 @@ async function generateWithPolling(
   const referenceImages = await prepareReferenceImagesCompressed(refs);
   const negativePrompt = isDerivedShot ? NEGATIVE_SHORT : NEGATIVE_FULL;
 
-  const fullPrompt = modelId === 'seedream'
-    ? buildSeedreamPrompt(prompt, refs, systemInstructions, negativePrompt, isDerivedShot)
-    : `${systemInstructions}\n\nTASK:\n${prompt}\n\nNEGATIVE:\n${negativePrompt}`;
+  const fullPrompt = `${systemInstructions}\n\nTASK:\n${prompt}\n\nNEGATIVE:\n${negativePrompt}`;
 
   return ugcApiService.generateImageAsync({
     prompt: fullPrompt,
@@ -1133,7 +1131,7 @@ export const contentStudioService = {
     productSize?: ProductSize,
     productIsRelevant?: boolean,
     onStatusChange?: (status: string, image?: string) => void,
-    modelId?: 'gemini' | 'seedream',
+    modelId?: 'gemini' | 'gptimage',
     sessionParams?: {
       uid?: string;
       sessionId?: string;
@@ -1147,8 +1145,7 @@ export const contentStudioService = {
     await this.ensureAccess();
 
     const useProduct = productIsRelevant !== false;
-    // IDENTITY-FIRST: faceRef en posición 0 y 1 para máximo peso de identidad.
-    // El modelo siempre leerá las primeras referencias con mayor peso.
+    // faceRef x2 en posiciones 0 y 1 para identidad; outfit, product, scene al final.
     const refsToPass: (string | null)[] = [faceRef, faceRef];
     let promptExtra = '';
 
@@ -1303,7 +1300,7 @@ UNIVERSAL RULES:
     shotIndex?: number,
     totalShots?: number,
     onStatusChange?: (status: string, imageUrl?: string) => void,
-    modelId?: 'gemini' | 'seedream',
+    modelId?: 'gemini' | 'gptimage',
     sessionParams?: {
       uid?: string;
       sessionId?: string;
@@ -1332,8 +1329,8 @@ Keep everything else identical to REF0 and the references.
 Same color temperature as REF0. Same ambient light. Same environment.
 Natural UGC aesthetic. NO beautification. NO studio polish.`;
 
-      // ORDEN CORREGIDO: faceRef primero y repetido, luego image0
-      const refs = [faceRef, faceRef, faceRef, image0];
+      // faceRef x2 para identidad, image0 como ancla visual REF0, contextos al final
+      const refs = [faceRef, faceRef, image0];
       if (outfitRef) refs.push(outfitRef);
       if (productRef && productIsRelevant !== false) refs.push(productRef);
       if (sceneRef) refs.push(sceneRef);
@@ -1417,7 +1414,12 @@ ${outfitRef ? `OUTFIT LOCK:
   same hardware (buckles, clasps), same material finish (patent, suede, matte), same color.
   Do NOT simplify, reinterpret, or generalize the shoe. It must be recognizably the same shoe.
 - For DETAIL shoe shots: ONLY shoe, ankle, floor. NO pant leg. NO invented fabric.
-- Tight/opaque/sheer level of hosiery must match outfit reference. Do NOT change color or opacity of tights/stockings.` : ''}
+- Tight/opaque/sheer level of hosiery must match outfit reference. Do NOT change color or opacity of tights/stockings.` : `OUTFIT CONTINUITY LOCK (no outfitRef — anchor to REF0):
+- The person's clothing in THIS shot MUST be IDENTICAL to the clothing visible in REF0.
+- Same garments, same colors, same fit, same fabric texture as seen in REF0.
+- Do NOT invent new clothes, do NOT change colors, do NOT add or remove garments.
+- If REF0 shows a specific shoe design, reproduce that exact shoe. Do NOT generalize or simplify.
+- The outfit is already established — this shot is a new angle of the SAME moment.`}
 ${productRef ? `PRODUCT LOCK:
 - The product MUST be IDENTICAL to productRef. Same exact shape, color, material, all design details.
 - PRODUCT OVERRIDES OUTFIT for the featured item: if both contain the same item type (e.g. footwear),
@@ -1439,9 +1441,9 @@ FINAL CHECKLIST (apply before finalizing):
 ✓ Natural UGC iPhone quality — real skin texture, organic lighting.
 ✓ The shot role is correctly executed (no role mixing).`;
 
-    // ORDEN CORREGIDO: faceRef primero y repetido, luego image0
-    // Esto da máximo peso a la identidad facial sobre el contexto visual de REF0
-    const refs: (string | null)[] = [faceRef, faceRef, faceRef, image0];
+    // Orden de referencias: faceRef x2 (identidad), image0 (ancla visual REF0),
+    // luego contextos del enfoque. Solo 2 copias del rostro — 3 aplastaba el outfit.
+    const refs: (string | null)[] = [faceRef, faceRef, image0];
     if (outfitRef) refs.push(outfitRef);
     if (productRef && productIsRelevant !== false) refs.push(productRef);
     if (sceneRef) refs.push(sceneRef);
