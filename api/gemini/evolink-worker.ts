@@ -232,6 +232,7 @@ async function processEvolinkJob(
   if (modelProvider === 'gptimage') {
     const highResModules = ['product', 'prompt_studio'];
     evolinkBody.resolution = highResModules.includes(job.module ?? '') ? '4K' : '1K';
+    evolinkBody.quality    = 'medium';
   }
 
   // CRÍTICO: no mezclar image_url + image_urls — algunos gateways priorizan

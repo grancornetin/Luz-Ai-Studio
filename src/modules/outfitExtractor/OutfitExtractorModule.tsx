@@ -84,6 +84,7 @@ const OutfitExtractorModule: React.FC = () => {
 
   const [loadingMsg, setLoadingMsg]     = useState('');
   const [isZipping, setIsZipping]       = useState(false);
+  const [savedMsg, setSavedMsg]         = useState(false);
   const [creatorSelectedItems, setCreatorSelectedItems] = useState<SavedOutfitItem[]>([]);
   const [creatorName, setCreatorName]   = useState('Nuevo Outfit Set');
 
@@ -196,8 +197,8 @@ const OutfitExtractorModule: React.FC = () => {
       items: currentKit.items.map(item => {
         let selected = false;
         if (mode === 'all') selected = true;
-        if (mode === 'clothing') selected = ['main_garment', 'top', 'bottom'].includes(item.category);
-        if (mode === 'clothing_footwear') selected = ['main_garment', 'top', 'bottom', 'footwear'].includes(item.category);
+        if (mode === 'clothing') selected = ['main_garment', 'top', 'bottom', 'bag', 'accessory'].includes(item.category);
+        if (mode === 'clothing_footwear') selected = ['main_garment', 'top', 'bottom', 'footwear', 'bag', 'accessory'].includes(item.category);
         return { ...item, selected };
       }),
     });
@@ -305,7 +306,7 @@ const OutfitExtractorModule: React.FC = () => {
   const saveItemsOnly = async () => {
     if (!currentKit) return;
     const itemsToSave: SavedOutfitItem[] = currentKit.items
-      .filter(it => it.selected && it.status === 'done' && it.imageUrl)
+      .filter(it => it.status === 'done' && it.imageUrl)
       .map(it => ({
         id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
         kitId: currentKit.id,
@@ -319,7 +320,8 @@ const OutfitExtractorModule: React.FC = () => {
     if (itemsToSave.length === 0) return;
     await outfitStorage.saveItems(itemsToSave);
     await loadLibrary();
-    setStep('final_kit');
+    setSavedMsg(true);
+    setTimeout(() => setSavedMsg(false), 3000);
   };
 
   const downloadAll = async (kit: OutfitKit | null = currentKit) => {
@@ -424,7 +426,7 @@ const OutfitExtractorModule: React.FC = () => {
   // ── Cálculos de costo ─────────────────────────────────────────────────────
   // Con GPT Image 2: 1 crédito por todo (renders + kit final + combinaciones)
   // Con Gemini/Seedream: usa OUTFIT_PER_GARMENT (2 créditos)
-  const outfitCostPerItem   = modelId === 'gptimage' ? 1 : outfitCostPerItem;
+  const outfitCostPerItem   = modelId === 'gptimage' ? 1 : CREDIT_COSTS.OUTFIT_PER_GARMENT;
 
   const selectedItemsCount  = currentKit?.items.filter(i => i.selected).length || 0;
   const renderCost          = selectedItemsCount * outfitCostPerItem;
@@ -463,11 +465,6 @@ const OutfitExtractorModule: React.FC = () => {
             </div>
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <ModelSelector
-              value={modelId}
-              onChange={setModelId}
-              disabled={isLoading}
-            />
             <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-slate-100 gap-0">
               <button
                 onClick={() => { setMainView('main'); if (step === 'library' as any) setStep('idle'); }}
@@ -609,6 +606,12 @@ const OutfitExtractorModule: React.FC = () => {
                         aspectRatio="portrait"
                       />
                       <UploadDisclaimer />
+                      <ModelSelector
+                        value={modelId}
+                        onChange={setModelId}
+                        disabled={isLoading}
+                        exclude={['seedream']}
+                      />
                     </div>
                   )}
 
@@ -765,15 +768,22 @@ const OutfitExtractorModule: React.FC = () => {
                     style={{ boxShadow: '0 -8px 24px rgba(15,23,42,0.04)' }}
                   >
                     {/* Opción 1: solo guardar prendas, sin kit */}
-                    <button
-                      type="button"
-                      onClick={saveItemsOnly}
-                      disabled={currentKit?.items.filter(i => i.selected && i.status === 'done').length === 0}
-                      className="w-full py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                      <i className="fa-solid fa-floppy-disk text-slate-400" />
-                      Guardar prendas en biblioteca (sin kit)
-                    </button>
+                    {savedMsg ? (
+                      <div className="w-full py-2.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold flex items-center justify-center gap-2">
+                        <i className="fa-solid fa-check text-emerald-500" />
+                        Prendas guardadas en biblioteca
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={saveItemsOnly}
+                        disabled={currentKit?.items.filter(i => i.status === 'done').length === 0}
+                        className="w-full py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        <i className="fa-solid fa-floppy-disk text-slate-400" />
+                        Guardar prendas en biblioteca (sin kit)
+                      </button>
+                    )}
                     {/* Opción 2: generar imagen compuesta + guardar todo */}
                     <button
                       type="button"

@@ -10,6 +10,7 @@ interface ModelSelectorProps {
   onChange:  (model: ModelId) => void;
   disabled?: boolean;
   className?: string;
+  exclude?:  ModelId[];
 }
 
 const BananaIcon: React.FC<{ className?: string }> = () => (
@@ -59,13 +60,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   onChange,
   disabled = false,
   className = '',
+  exclude = [],
 }) => (
   <div className={`space-y-1.5 ${className}`}>
     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">
       Modelo de IA · activo: <span className="text-slate-700">{MODELS.find(m => m.id === value)?.label}</span>
     </p>
     <div className="flex gap-2 min-w-0 overflow-hidden">
-      {MODELS.map(m => {
+      {MODELS.filter(m => !exclude.includes(m.id)).map(m => {
         const active = value === m.id;
         return (
           <button
