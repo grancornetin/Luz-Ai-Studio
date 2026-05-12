@@ -8,7 +8,7 @@ import { useCreditGuard } from '../../../hooks/useCreditGuard';
 import NoCreditsModal from '../../components/shared/NoCreditsModal';
 import { CREDIT_COSTS } from '../../services/creditConfig';
 import { ModelSelector } from '../../components/shared/ModelSelector';
-import { useModelSelection } from '../../../hooks/useModelSelection';
+import { useModelSelection } from '../../hooks/useModelSelection';
 import { generationHistoryService } from '../../services/generationHistoryService';
 import { outfitService } from './outfitService';
 import { outfitStorage } from './outfitStorage';

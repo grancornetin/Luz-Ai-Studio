@@ -16,7 +16,7 @@ import { useCreditGuard } from '../../../hooks/useCreditGuard';
 import NoCreditsModal from '../../components/shared/NoCreditsModal';
 import { MODEL_CREDIT_COST } from '../../services/creditConfig';
 import { ModelSelector } from '../../components/shared/ModelSelector';
-import { useModelSelection } from '../../../hooks/useModelSelection';
+import { useModelSelection } from '../../hooks/useModelSelection';
 import { ProductProfile } from '../../types';
 import { imageApiService, extractImageRef, newSessionId } from '../../services/imageApiService';
 import { useAuth } from '../auth/AuthContext';
