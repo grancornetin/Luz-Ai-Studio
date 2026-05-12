@@ -268,10 +268,19 @@ function stripHeavyLocalOnlyData(record: GenerationRecord): GenerationRecord {
     label: ref.label || `Referencia ${index + 1}`,
     mimeType: ref.mimeType,
     role: ref.role,
+    // imageUrl de referencias ya se omite — demasiado pesada para Redis
   }));
+
+  // Si imageUrl es base64 (data:...) no se envía al remoto — solo se guarda local.
+  // Upstash tiene límite de 10MB por request y las imágenes generadas pueden pesar
+  // varios MB cada una. El imageKey actúa como fingerprint para dedup remoto.
+  const remoteImageUrl = record.imageUrl?.startsWith('data:')
+    ? ''
+    : (record.imageUrl || '');
 
   return {
     ...record,
+    imageUrl:   remoteImageUrl,
     references: safeReferences,
   };
 }

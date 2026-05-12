@@ -873,23 +873,41 @@ export async function downloadCampaignPdf(set: CampaignSet, filename?: string): 
     iframe.srcdoc = html;
   });
 
-  // Esperar a que las fuentes carguen
-  await new Promise(r => setTimeout(r, 1500));
+  // Esperar a que los scripts del iframe (jsPDF + html2canvas) terminen de cargar.
+  // Polling cada 200ms con timeout de 15s para no bloquear indefinidamente.
+  await new Promise<void>((resolve, reject) => {
+    const start = Date.now();
+    const check = () => {
+      const win = iframe.contentWindow as any;
+      if (win?.jspdf?.jsPDF && win?.html2canvas) {
+        resolve();
+      } else if (Date.now() - start > 15000) {
+        reject(new Error('Timeout esperando jsPDF y html2canvas en el iframe'));
+      } else {
+        setTimeout(check, 200);
+      }
+    };
+    check();
+  });
 
   try {
+    const iframeWin = iframe.contentWindow as any;
     const iframeDoc = iframe.contentDocument!;
     const pages = iframeDoc.querySelectorAll('.page');
-    const { jsPDF } = (window as any).jspdf;
+
+    // jsPDF y html2canvas se cargan dentro del iframe — leerlos desde contentWindow
+    const jspdfLib = iframeWin?.jspdf;
+    const jsPDF = jspdfLib?.jsPDF;
 
     if (!jsPDF) {
-      // jsPDF no está cargado en el contexto principal — usar descarga HTML como fallback
+      // jsPDF no cargó en el iframe — fallback a descarga HTML
       document.body.removeChild(iframe);
       await downloadCampaignHtml(set, filename?.replace('.pdf', '.html'));
       return;
     }
 
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const html2canvas = (iframe.contentWindow as any).html2canvas;
+    const html2canvas = iframeWin.html2canvas;
 
     for (let i = 0; i < pages.length; i++) {
       const page = pages[i] as HTMLElement;
