@@ -41,6 +41,9 @@ export interface CampaignPiece {
   imagePrompt: string;           // prompt para generar la imagen
   imageUrl:    string;           // resultado generado
   usaTexto?:   boolean;          // true si esta pieza específica debe llevar texto en imagen
+  // Inteligencia visual (opcional — asignado por Gemini si hay familias editoriales)
+  visualFamilyId?:   string;    // ID de familia visual de campaign_director_rules.json
+  psychologicalGoal?: string;   // objetivo psicológico/comercial de esta pieza
   // Copy adaptado al canal
   titular:     string;           // frase corta, impacto inmediato
   caption:     string;           // texto completo del post

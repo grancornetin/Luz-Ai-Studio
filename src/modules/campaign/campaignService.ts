@@ -5,6 +5,19 @@ import {
   CampaignChannel, CampaignImageSlot, CampaignPiece, CampaignPlan,
   ModoVisual, TextoEnImagenes, CAMPAIGN_CHANNEL_META, ANCHOR_IMAGE_COUNT,
 } from './types';
+import {
+  initCampaignIntelligence,
+  buildCampaignIntelligencePromptBlock,
+  getTopFamilyFromPieces,
+  getFamilyById,
+  extractBlendText,
+  extractBasePromptBlock,
+  extractAnchorPromptBlock,
+  extractGuardrails,
+} from './campaignIntelligence';
+
+// Precarga los JSON de inteligencia visual en background al importar este módulo
+initCampaignIntelligence();
 
 // ─── Negativos base (anatomía + identidad + texto — siempre) ──
 const NEGATIVE_BASE = [
@@ -343,6 +356,33 @@ function buildDerivedImagePrompt(
     ? 'Square or slightly vertical. Clean product focus. Simple background.'
     : 'Square or 4:5. Strong focal point. Scroll-stopping composition.';
 
+  // ── Inteligencia visual de familia (solo editorial, solo si hay familyId) ──
+  let visualFamilyBlock = '';
+  let guardrailsBlock = '';
+
+  if (modo === 'editorial' && pieza.visualFamilyId) {
+    const family = getFamilyById(pieza.visualFamilyId);
+    if (family) {
+      const blendText = extractBlendText(family);
+      const baseBlock = extractBasePromptBlock(family);
+      const guards    = extractGuardrails(family);
+
+      if (blendText) {
+        visualFamilyBlock += `\nVISUAL FAMILY DNA:\n${blendText}`;
+      }
+      if (baseBlock) {
+        visualFamilyBlock += `\n\nTRANSFERABLE PROMPT BLOCK:\n${baseBlock}`;
+        visualFamilyBlock += `\n(Use as pattern — adapt to the user's actual product. Never copy branding, logos or text from the source.)`;
+      }
+      if (pieza.psychologicalGoal) {
+        visualFamilyBlock += `\n\nPSYCHOLOGICAL GOAL FOR THIS PIECE:\n${pieza.psychologicalGoal}`;
+      }
+      if (guards.length > 0) {
+        guardrailsBlock = `\nAI RISK GUARDRAILS:\n${guards.map(g => `- ${g}`).join('\n')}`;
+      }
+    }
+  }
+
   return `${paradigm}
 ${hasModel ? `
 🔴 IDENTITY LOCK (READ FIRST):
@@ -369,6 +409,8 @@ ${hasAnchor ? `SESSION CONTINUITY (anchor defines this world):
 - Same overall mood — this is part of the same session.
 ` : ''}
 ${lockSystem}
+${visualFamilyBlock}
+${guardrailsBlock}
 
 CHANNEL: ${channelOpt}
 
@@ -398,6 +440,12 @@ export async function buildCampaignPlan(
   ].filter(Boolean).join('\n');
 
   const hasInspirationImages = !!selected.inspirationRef;
+
+  // ── Inteligencia visual editorial (solo si hay familias cargadas) ──
+  // El modo visual final se decide cuando la usuaria elige el ancla,
+  // pero incluimos el bloque editorial para que Gemini pueda asignar familias
+  // desde el inicio. Si no hay familias, el bloque queda vacío y no afecta nada.
+  const intelligenceBlock = buildCampaignIntelligencePromptBlock('editorial');
 
   // ── Prioridad 1: Prompt en dos fases (Director Creativo → Brief de Fotógrafo) ──
   const prompt = `You are a senior creative team working together: Creative Director, Photographer, Community Manager, and Marketing Strategist — all specialized in Latin American e-commerce brands.
@@ -456,6 +504,7 @@ RULES:
 - Copy: human, warm, Latin American Spanish — emotion, specificity, real CTAs
 - Hashtags: niche-specific, researched, NOT generic
 
+${intelligenceBlock ? intelligenceBlock + '\n' : ''}
 RESPOND ONLY WITH VALID JSON (no markdown, no explanations outside the JSON):
 {
   "concepto": "The emotional thread — 1 evocative sentence",
@@ -480,6 +529,8 @@ RESPOND ONLY WITH VALID JSON (no markdown, no explanations outside the JSON):
       "canal": "instagram_feed",
       "rol": "Teaser",
       "usaTexto": false,
+      "visualFamilyId": "",
+      "psychologicalGoal": "",
       "imagePrompt": "[Scene]. [Subject and what they're doing]. [Lighting]. [Composition]. [Mood]. [Channel].",
       "titular": "Short impactful headline max 60 chars in Spanish",
       "caption": "Full post text Latin American Spanish with emojis if natural max 200 chars",
@@ -514,10 +565,12 @@ RESPOND ONLY WITH VALID JSON (no markdown, no explanations outside the JSON):
 
         parsed.piezas = parsed.piezas.slice(0, imageCount).map((p: any, i: number) => ({
           ...p,
-          id:       p.id ?? `pieza_${i + 1}`,
-          imageUrl: '',
-          hashtags: Array.isArray(p.hashtags) ? p.hashtags : [],
-          usaTexto: textoMode !== 'none' ? (p.usaTexto ?? false) : false,
+          id:                p.id ?? `pieza_${i + 1}`,
+          imageUrl:          '',
+          hashtags:          Array.isArray(p.hashtags) ? p.hashtags : [],
+          usaTexto:          textoMode !== 'none' ? (p.usaTexto ?? false) : false,
+          visualFamilyId:    typeof p.visualFamilyId === 'string' ? p.visualFamilyId : '',
+          psychologicalGoal: typeof p.psychologicalGoal === 'string' ? p.psychologicalGoal : '',
         }));
         console.log('[CampaignDirector] Plan OK:', {
           concepto: parsed.concepto, piezas: parsed.piezas.length,
@@ -548,10 +601,23 @@ export async function generateAnchorImages(
   // para poder mostrarlas en la UI en tiempo real
   const partialResults: string[] = ['', ''];
 
+  // Para la variante B (editorial) buscamos la familia visual dominante del plan
+  // y añadimos su anchor prompt block al final del prompt base.
+  const topFamily = getTopFamilyFromPieces(plan.piezas ?? []);
+
   const generateOne = async (variant: 'A' | 'B', index: number): Promise<string> => {
     const modo: ModoVisual = variant === 'A' ? 'ugc' : 'editorial';
+    let basePrompt = buildAnchorPrompt(plan, selected, variant);
+
+    if (variant === 'B' && topFamily) {
+      const anchorBlock = extractAnchorPromptBlock(topFamily);
+      if (anchorBlock) {
+        basePrompt += `\n\nEDITORIAL VISUAL FAMILY ANCHOR:\n${anchorBlock}`;
+      }
+    }
+
     const params = {
-      prompt:          buildAnchorPrompt(plan, selected, variant),
+      prompt:          basePrompt,
       negative:        getNegative(modo),
       referenceImages: refs,
       aspectRatio:     '3:4' as const,
