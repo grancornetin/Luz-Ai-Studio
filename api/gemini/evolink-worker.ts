@@ -227,8 +227,11 @@ async function processEvolinkJob(
   };
 
   // GPT Image 2 soporta parámetro resolution; Seedream lo ignora si se lo pasamos
+  // Product Studio (module='product') pide 4K para mayor calidad comercial.
+  // Todo lo demás (outfit, etc.) usa 1K — suficiente y más barato.
   if (modelProvider === 'gptimage') {
-    evolinkBody.resolution = '1K';
+    const highResModules = ['product', 'prompt_studio'];
+    evolinkBody.resolution = highResModules.includes(job.module ?? '') ? '4K' : '1K';
   }
 
   // CRÍTICO: no mezclar image_url + image_urls — algunos gateways priorizan

@@ -10,7 +10,7 @@ const LS_KEY = 'luz_model_preference';
 function readStored(): ModelId {
   try {
     const v = localStorage.getItem(LS_KEY);
-    if (v === 'gemini' || v === 'seedream') return v;
+    if (v === 'gemini' || v === 'seedream' || v === 'gptimage') return v;
   } catch { /* ignore */ }
   return 'gemini'; // default siempre Gemini
 }

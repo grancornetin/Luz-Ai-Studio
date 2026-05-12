@@ -7,6 +7,8 @@ import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
 import { useCreditGuard } from '../../../hooks/useCreditGuard';
 import NoCreditsModal from '../../components/shared/NoCreditsModal';
 import { CREDIT_COSTS } from '../../services/creditConfig';
+import { ModelSelector } from '../../components/shared/ModelSelector';
+import { useModelSelection } from '../../../hooks/useModelSelection';
 import { generationHistoryService } from '../../services/generationHistoryService';
 import { outfitService } from './outfitService';
 import { outfitStorage } from './outfitStorage';
@@ -67,7 +69,7 @@ const StepHeader: React.FC<{ title: string; subtitle: string; icon: string }> = 
 
 const OutfitExtractorModule: React.FC = () => {
   const { credits, user } = useAuth();
-  const modelId = 'gemini' as const;
+  const { modelId, setModelId } = useModelSelection();
 
   const [step, setStep]           = useState<FlowStep>('idle');
   const [mainView, setMainView]   = useState<'main' | 'library'>('main');
@@ -206,7 +208,7 @@ const OutfitExtractorModule: React.FC = () => {
     const selectedItems = currentKit.items.filter(i => i.selected);
     if (selectedItems.length === 0) return alert('Seleccioná al menos una prenda para generar.');
 
-    const ok = await checkAndDeduct(selectedItems.length * CREDIT_COSTS.OUTFIT_PER_GARMENT);
+    const ok = await checkAndDeduct(selectedItems.length * outfitCostPerItem);
     if (!ok) return;
 
     setStep('generating_renders');
@@ -240,7 +242,7 @@ const OutfitExtractorModule: React.FC = () => {
           imageUrl: url,
           module: 'outfit_extractor',
           moduleLabel: `Outfit Extractor (${item.name})`,
-          creditsUsed: CREDIT_COSTS.OUTFIT_PER_GARMENT,
+          creditsUsed: outfitCostPerItem,
           promptText: `Render for ${item.name}`,
         }).catch(console.error);
       } catch {
@@ -253,7 +255,7 @@ const OutfitExtractorModule: React.FC = () => {
 
   const composeFinalKit = async () => {
     if (!currentKit) return;
-    const ok = await checkAndDeduct(CREDIT_COSTS.OUTFIT_PER_GARMENT);
+    const ok = await checkAndDeduct(outfitCostPerItem);
     if (!ok) return;
     setStep('composing');
     setLoadingMsg('Componiendo tu kit final...');
@@ -270,7 +272,7 @@ const OutfitExtractorModule: React.FC = () => {
         imageUrl: finalUrl,
         module: 'outfit_extractor',
         moduleLabel: 'Outfit Extractor (Final Kit)',
-        creditsUsed: CREDIT_COSTS.OUTFIT_PER_GARMENT,
+        creditsUsed: outfitCostPerItem,
         promptText: 'Final composition',
       }).catch(console.error);
 
@@ -378,7 +380,7 @@ const OutfitExtractorModule: React.FC = () => {
 
   const generateCombinedOutfit = async () => {
     if (creatorSelectedItems.length === 0) return;
-    const ok = await checkAndDeduct(CREDIT_COSTS.OUTFIT_PER_GARMENT);
+    const ok = await checkAndDeduct(outfitCostPerItem);
     if (!ok) return;
     setStep('composing');
     setLoadingMsg('Combinando prendas...');
@@ -420,11 +422,14 @@ const OutfitExtractorModule: React.FC = () => {
   }, [libraryItems]);
 
   // ── Cálculos de costo ─────────────────────────────────────────────────────
+  // Con GPT Image 2: 1 crédito por todo (renders + kit final + combinaciones)
+  // Con Gemini/Seedream: usa OUTFIT_PER_GARMENT (2 créditos)
+  const outfitCostPerItem   = modelId === 'gptimage' ? 1 : outfitCostPerItem;
 
   const selectedItemsCount  = currentKit?.items.filter(i => i.selected).length || 0;
-  const renderCost          = selectedItemsCount * CREDIT_COSTS.OUTFIT_PER_GARMENT;
+  const renderCost          = selectedItemsCount * outfitCostPerItem;
   const creditsAfterRender  = Math.max(0, credits.available - renderCost);
-  const comboCost           = CREDIT_COSTS.OUTFIT_PER_GARMENT;
+  const comboCost           = outfitCostPerItem;
   const creditsAfterCombo   = Math.max(0, credits.available - comboCost);
 
   // Estados de carga activa
@@ -457,19 +462,26 @@ const OutfitExtractorModule: React.FC = () => {
               <ModuleTutorial moduleId="outfitKit" steps={TUTORIAL_CONFIGS.outfitKit} />
             </div>
           </div>
-          <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-slate-100 gap-0">
-            <button
-              onClick={() => { setMainView('main'); if (step === 'library' as any) setStep('idle'); }}
-              className={`px-5 md:px-8 py-2 md:py-3 rounded-xl t-meta transition-colors duration-150 ${mainView === 'main' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700'}`}
-            >
-              Extraer
-            </button>
-            <button
-              onClick={() => setMainView('library')}
-              className={`px-5 md:px-8 py-2 md:py-3 rounded-xl t-meta transition-colors duration-150 ${mainView === 'library' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700'}`}
-            >
-              Biblioteca
-            </button>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <ModelSelector
+              value={modelId}
+              onChange={setModelId}
+              disabled={isLoading}
+            />
+            <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-slate-100 gap-0">
+              <button
+                onClick={() => { setMainView('main'); if (step === 'library' as any) setStep('idle'); }}
+                className={`px-5 md:px-8 py-2 md:py-3 rounded-xl t-meta transition-colors duration-150 ${mainView === 'main' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700'}`}
+              >
+                Extraer
+              </button>
+              <button
+                onClick={() => setMainView('library')}
+                className={`px-5 md:px-8 py-2 md:py-3 rounded-xl t-meta transition-colors duration-150 ${mainView === 'library' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700'}`}
+              >
+                Biblioteca
+              </button>
+            </div>
           </div>
         </header>
 
@@ -642,12 +654,12 @@ const OutfitExtractorModule: React.FC = () => {
                             </div>
                             <div className="flex flex-col gap-1.5 mb-3 text-[12px]">
                               <div className="flex justify-between">
-                                <span className="opacity-70">{selectedItemsCount} {selectedItemsCount === 1 ? 'prenda' : 'prendas'} × {CREDIT_COSTS.OUTFIT_PER_GARMENT} cr</span>
+                                <span className="opacity-70">{selectedItemsCount} {selectedItemsCount === 1 ? 'prenda' : 'prendas'} × {outfitCostPerItem} cr</span>
                                 <span className="font-semibold">{renderCost} cr</span>
                               </div>
                               <div className="flex justify-between opacity-60">
                                 <span>Kit final (imagen compuesta)</span>
-                                <span className="font-semibold">{CREDIT_COSTS.OUTFIT_PER_GARMENT} cr (opcional)</span>
+                                <span className="font-semibold">{outfitCostPerItem} cr (opcional)</span>
                               </div>
                               <div className="h-px bg-white/10 my-1" />
                               <div className="flex justify-between items-baseline">
@@ -770,7 +782,7 @@ const OutfitExtractorModule: React.FC = () => {
                       style={{ touchAction: 'manipulation' }}
                       className="w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 bg-gradient-to-br from-violet-600 to-pink-600 text-white shadow-[0_12px_28px_rgba(124,58,237,0.32)] active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
                     >
-                      Generar kit final · {CREDIT_COSTS.OUTFIT_PER_GARMENT} cr
+                      Generar kit final · {outfitCostPerItem} cr
                       <i className="fa-solid fa-arrow-right text-sm" />
                     </button>
                     <p className="text-center text-[9px] text-slate-400">

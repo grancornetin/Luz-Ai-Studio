@@ -15,6 +15,8 @@ import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
 import { useCreditGuard } from '../../../hooks/useCreditGuard';
 import NoCreditsModal from '../../components/shared/NoCreditsModal';
 import { MODEL_CREDIT_COST } from '../../services/creditConfig';
+import { ModelSelector } from '../../components/shared/ModelSelector';
+import { useModelSelection } from '../../../hooks/useModelSelection';
 import { ProductProfile } from '../../types';
 import { imageApiService, extractImageRef, newSessionId } from '../../services/imageApiService';
 import { useAuth } from '../auth/AuthContext';
@@ -92,9 +94,9 @@ function computeFinalCount(wizard: WizardState): { count: number; gridCollage: b
   return { count: r * c, gridCollage: true };
 }
 
-function computeCost(wizard: WizardState): number {
+function computeCost(wizard: WizardState, modelId: 'gemini' | 'seedream' | 'gptimage'): number {
   const { count, gridCollage } = computeFinalCount(wizard);
-  return count * MODEL_CREDIT_COST.gemini + (gridCollage ? 1 : 0);
+  return count * MODEL_CREDIT_COST[modelId] + (gridCollage ? 1 : 0);
 }
 
 // El director devuelve aspect ratios en su set propio ('1:1' | '3:4' | '4:5' | '9:16').
@@ -111,7 +113,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
   products,
   standalone: _standalone,
 }) => {
-  const modelId = 'gemini' as const;
+  const { modelId, setModelId } = useModelSelection();
   const { credits, isAdmin, user } = useAuth();
   const { checkAndDeduct, refundCredits, showNoCredits, requiredCredits, closeModal } = useCreditGuard();
 
@@ -235,7 +237,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
       return;
     }
 
-    const totalCost = computeCost(state);
+    const totalCost = computeCost(state, modelId);
     const { count: finalCount, gridCollage } = computeFinalCount(state);
 
     if (!free && !isAdmin) {
@@ -306,13 +308,13 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
               imageUrl:    img,
               module:      'catalog',
               moduleLabel: `Product Studio (${payload.shotType})`,
-              creditsUsed: free ? 0 : MODEL_CREDIT_COST.gemini,
+              creditsUsed: free ? 0 : MODEL_CREDIT_COST[modelId],
               promptText:  payload.prompt,
             }).catch(console.error);
           } catch (e: any) {
             console.error(`Error generating shot ${i}:`, e);
             shots[i] = 'error';
-            creditsToRefund += MODEL_CREDIT_COST.gemini;
+            creditsToRefund += MODEL_CREDIT_COST[modelId];
             setGeneratedShots([...shots]);
           }
         }),
@@ -414,7 +416,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
       .filter((i) => i >= 0);
     if (failedIndices.length === 0) return;
 
-    const cost = failedIndices.length * MODEL_CREDIT_COST.gemini;
+    const cost = failedIndices.length * MODEL_CREDIT_COST[modelId];
     if (!isAdmin) {
       const ok = await checkAndDeduct(cost);
       if (!ok) return;
@@ -430,7 +432,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
         const payload = lastPayloads[i];
         if (!payload) {
           next[i] = 'error';
-          creditsToRefund += MODEL_CREDIT_COST.gemini;
+          creditsToRefund += MODEL_CREDIT_COST[modelId];
           return;
         }
         try {
@@ -454,13 +456,13 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
             imageUrl:    img,
             module:      'catalog',
             moduleLabel: `Product Studio (${payload.shotType} retry)`,
-            creditsUsed: MODEL_CREDIT_COST.gemini,
+            creditsUsed: MODEL_CREDIT_COST[modelId],
             promptText:  payload.prompt,
           }).catch(console.error);
         } catch (e) {
           console.error(`Reintento falló para shot ${i}:`, e);
           next[i] = 'error';
-          creditsToRefund += MODEL_CREDIT_COST.gemini;
+          creditsToRefund += MODEL_CREDIT_COST[modelId];
         }
       }),
     );
@@ -609,7 +611,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
 
   // ─── Validaciones por paso ──────────────────────────────────────────────────
   const filledSlots = wizard.product.slots.filter(Boolean).length;
-  const totalCost = computeCost(wizard);
+  const totalCost = computeCost(wizard, modelId);
   const canContinueByStep: Record<WizardStep, boolean> = {
     1: filledSlots >= 2 && wizard.product.title.trim().length > 0,
     2: !!wizard.goal,
@@ -669,11 +671,17 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
               <ModuleTutorial moduleId="catalog" steps={TUTORIAL_CONFIGS.catalog} />
             </div>
           </div>
-          <div
-            className={`flex bg-white p-1 rounded-2xl shadow-sm border border-slate-100 transition-opacity duration-150 ${
-              isGenerating ? 'opacity-50' : ''
-            }`}
-          >
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <ModelSelector
+              value={modelId}
+              onChange={setModelId}
+              disabled={isGenerating}
+            />
+            <div
+              className={`flex bg-white p-1 rounded-2xl shadow-sm border border-slate-100 transition-opacity duration-150 ${
+                isGenerating ? 'opacity-50' : ''
+              }`}
+            >
             <button
               type="button"
               disabled={isGenerating}
@@ -709,6 +717,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
             >
               Catálogo ({products.length})
             </button>
+          </div>
           </div>
         </header>
 
@@ -747,6 +756,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
                   hasReference={!!wizard.style.referenceImg}
                   productTitle={wizard.product.title}
                   creditsAvailable={credits.available}
+                  modelId={modelId}
                 />
               )}
               {step === 5 && (

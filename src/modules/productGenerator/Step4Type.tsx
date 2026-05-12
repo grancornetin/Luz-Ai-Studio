@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Check, Layers, Grid3x3 } from 'lucide-react';
 import { MODEL_CREDIT_COST } from '../../services/creditConfig';
+import type { ModelId } from '../../services/imageApiService';
 import type {
   GenMode,
   GridSize,
@@ -15,14 +16,15 @@ interface Step4TypeProps {
   hasReference: boolean;
   productTitle: string;
   creditsAvailable: number;
+  modelId?: ModelId;
 }
 
 // Cálculo informativo del prototipo (NO se conecta todavía a la generación real).
 // El usuario lo enchufará después.
 // Cálculo informativo del Paso 4. La fuente de verdad para el descuento real
 // vive en ProductGeneratorModule (función computeCost compartida con la generación).
-const calcCost = (t: WizardTypeState, hasRef: boolean): { cost: number; finalCount: number } => {
-  const perImage = MODEL_CREDIT_COST.gemini;
+const calcCost = (t: WizardTypeState, hasRef: boolean, modelId: ModelId = 'gemini'): { cost: number; finalCount: number } => {
+  const perImage = MODEL_CREDIT_COST[modelId];
   let finalCount: number;
   if (hasRef) {
     finalCount = t.refCount;
@@ -44,8 +46,9 @@ export const Step4Type: React.FC<Step4TypeProps> = ({
   hasReference,
   productTitle,
   creditsAvailable,
+  modelId = 'gemini',
 }) => {
-  const { cost, finalCount } = calcCost(type, hasReference);
+  const { cost, finalCount } = calcCost(type, hasReference, modelId);
 
   useEffect(() => {
     if (type.computedCost !== cost || type.finalCount !== finalCount) {
@@ -307,7 +310,7 @@ export const Step4Type: React.FC<Step4TypeProps> = ({
                   <strong>Créditos insuficientes. Te faltan {cost - creditsAvailable} cr.</strong>
                 ) : (
                   <>
-                    Te quedarán {remaining} cr · ~{Math.floor(remaining / MODEL_CREDIT_COST.gemini)} imágenes más
+                    Te quedarán {remaining} cr · ~{Math.floor(remaining / MODEL_CREDIT_COST[modelId])} imágenes más
                   </>
                 )}
               </div>
