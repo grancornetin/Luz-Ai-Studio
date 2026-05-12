@@ -858,62 +858,75 @@ export async function downloadCampaignHtml(set: CampaignSet, filename?: string):
   URL.revokeObjectURL(url);
 }
 
-export async function downloadCampaignPdf(set: CampaignSet, filename?: string): Promise<void> {
-  // Genera el HTML, lo inyecta en un iframe oculto, y usa html2canvas + jsPDF
-  // para exportar con fidelidad visual total
-  const html = await buildHtml(set);
+// ─── Carga dinámica de scripts en el documento principal ──────
+// srcdoc bloquea scripts externos en browsers modernos.
+// Cargamos jsPDF y html2canvas una vez en window y los reutilizamos.
 
-  // Crear iframe oculto
-  const iframe = document.createElement('iframe');
-  iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:794px;height:1122px;border:none;visibility:hidden;';
-  document.body.appendChild(iframe);
-
-  await new Promise<void>(resolve => {
-    iframe.onload = () => resolve();
-    iframe.srcdoc = html;
-  });
-
-  // Esperar a que los scripts del iframe (jsPDF + html2canvas) terminen de cargar.
-  // Polling cada 200ms con timeout de 15s para no bloquear indefinidamente.
-  await new Promise<void>((resolve, reject) => {
-    const start = Date.now();
-    const check = () => {
-      const win = iframe.contentWindow as any;
-      if (win?.jspdf?.jsPDF && win?.html2canvas) {
-        resolve();
-      } else if (Date.now() - start > 15000) {
-        reject(new Error('Timeout esperando jsPDF y html2canvas en el iframe'));
-      } else {
-        setTimeout(check, 200);
-      }
-    };
-    check();
-  });
-
-  try {
-    const iframeWin = iframe.contentWindow as any;
-    const iframeDoc = iframe.contentDocument!;
-    const pages = iframeDoc.querySelectorAll('.page');
-
-    // jsPDF y html2canvas se cargan dentro del iframe — leerlos desde contentWindow
-    const jspdfLib = iframeWin?.jspdf;
-    const jsPDF = jspdfLib?.jsPDF;
-
-    if (!jsPDF) {
-      // jsPDF no cargó en el iframe — fallback a descarga HTML
-      document.body.removeChild(iframe);
-      await downloadCampaignHtml(set, filename?.replace('.pdf', '.html'));
+function loadScript(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) {
+      // Ya existe — esperar a que esté listo si window aún no lo tiene
+      const check = () => {
+        if (src.includes('jspdf') && (window as any).jspdf) return resolve();
+        if (src.includes('html2canvas') && (window as any).html2canvas) return resolve();
+        setTimeout(check, 100);
+      };
+      check();
       return;
     }
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error(`No se pudo cargar: ${src}`));
+    document.head.appendChild(s);
+  });
+}
+
+async function ensurePdfLibs(): Promise<{ jsPDF: any; html2canvas: any }> {
+  await Promise.all([
+    loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'),
+    loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'),
+  ]);
+  const jsPDF = (window as any).jspdf?.jsPDF;
+  const html2canvas = (window as any).html2canvas;
+  if (!jsPDF || !html2canvas) throw new Error('No se pudieron cargar jsPDF o html2canvas');
+  return { jsPDF, html2canvas };
+}
+
+export async function downloadCampaignPdf(set: CampaignSet, filename?: string): Promise<void> {
+  // Carga las librerías en el documento principal (evita el problema de srcdoc)
+  const { jsPDF, html2canvas } = await ensurePdfLibs();
+
+  // Construir el HTML y renderizarlo en un div oculto en el documento principal
+  const html = await buildHtml(set);
+
+  const container = document.createElement('div');
+  container.style.cssText = [
+    'position:fixed', 'left:-9999px', 'top:0',
+    'width:794px', 'background:#ffffff',
+    'visibility:hidden', 'pointer-events:none', 'z-index:-1',
+  ].join(';');
+  container.innerHTML = html;
+  document.body.appendChild(container);
+
+  // Esperar a que las fuentes (Google Fonts) carguen
+  await new Promise(r => setTimeout(r, 1200));
+
+  try {
+    const pages = container.querySelectorAll('.page');
+    if (!pages.length) throw new Error('No se encontraron páginas en el HTML generado');
 
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const html2canvas = iframeWin.html2canvas;
 
     for (let i = 0; i < pages.length; i++) {
       const page = pages[i] as HTMLElement;
       const canvas = await html2canvas(page, {
-        scale: 2, useCORS: true, backgroundColor: '#ffffff',
-        logging: false, width: 794, height: page.offsetHeight,
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        width: 794,
+        height: page.offsetHeight,
         windowWidth: 794,
       });
       const imgData = canvas.toDataURL('image/jpeg', 0.92);
@@ -925,6 +938,6 @@ export async function downloadCampaignPdf(set: CampaignSet, filename?: string): 
     const safeName = (set.plan.tagline || 'campaña').replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ\s]/g, '').trim();
     pdf.save(filename ?? `Kit-${safeName}.pdf`);
   } finally {
-    document.body.removeChild(iframe);
+    document.body.removeChild(container);
   }
 }
