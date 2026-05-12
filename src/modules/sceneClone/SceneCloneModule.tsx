@@ -56,6 +56,34 @@ function toBase64OrThrow(input: string | null | undefined, fieldName: string): s
 }
 
 
+// Recorta un ancla visual centrada en la persona de la imagen target.
+// No intenta recortar perfecto — solo crea un contexto de posición/pose
+// que ayuda a Gemini a integrar la cara en el lugar correcto.
+function cropPersonSlot(input: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        if (!w || !h) { resolve(input); return; }
+        // Recorte centrado del 80% del ancho — preserva contexto de escena sin eliminar bordes
+        const cropW = Math.round(w * 0.80);
+        const sx = Math.round((w - cropW) / 2);
+        const canvas = document.createElement('canvas');
+        canvas.width = cropW;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(input); return; }
+        ctx.drawImage(img, sx, 0, cropW, h, 0, 0, cropW, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.90));
+      } catch { resolve(input); }
+    };
+    img.onerror = () => resolve(input);
+    img.src = input;
+  });
+}
+
 // --- COMPONENTS UI PRO ---
 const ProHeader: React.FC<{ title: string; subtitle: string; icon: string }> = ({ title, subtitle, icon }) => (
   <div className="flex items-center gap-4 mb-6">
@@ -354,6 +382,10 @@ export default function CloneImageModule() {
       const safeFace = toBase64OrThrow(face1, "cara del sujeto 1");
       const safeBody = toBase64OrThrow(body1, "cuerpo del sujeto 1");
 
+      // Ancla visual de posición: recorte centrado del target para ayudar a Gemini
+      // a colocar la cara en la pose correcta sin "flotarla" sobre el cuerpo.
+      const slotAnchor = await cropPersonSlot(safeTarget);
+
       const payload: CloneImageParams = {
         targetImage: safeTarget,
         faceImage: safeFace,
@@ -362,6 +394,7 @@ export default function CloneImageModule() {
         cameraStyle,
         aspectRatio,
         modelId,
+        subject1SlotImage: slotAnchor,
         sessionParams: {
           uid: user?.uid,
           sessionId: newSessionId(),

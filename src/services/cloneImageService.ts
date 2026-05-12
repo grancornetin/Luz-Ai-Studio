@@ -28,6 +28,8 @@ export interface CloneImageParams {
   aspectRatio: AspectRatio;
   enableSecondSubject?: boolean;
   subject1Selector?: SubjectSelector;
+  subject1SlotImage?: string | null;
+  subject2SlotImage?: string | null;
   faceImage2?: string | null;
   bodyImage2?: string | null;
   replaceOutfit2?: boolean;
@@ -56,8 +58,10 @@ type BuiltRefs = {
     scene: string;
     subject1Face: string;
     subject1Body: string;
+    subject1Slot?: string;
     subject2Face?: string;
     subject2Body?: string;
+    subject2Slot?: string;
     subject1Outfit?: string;
     subject2Outfit?: string;
   };
@@ -101,6 +105,9 @@ function buildReferences(params: CloneImageParams): BuiltRefs {
   const subject2Face = hasSecondSubject ? addRef(params.faceImage2, 'subject2Face') : undefined;
   const subject2Body = hasSecondSubject ? addRef(params.bodyImage2, 'subject2Body') : undefined;
 
+  const subject1Slot = params.subject1SlotImage ? addRef(params.subject1SlotImage, 'subject1SlotAnchor') : undefined;
+  const subject2Slot = (hasSecondSubject && params.subject2SlotImage) ? addRef(params.subject2SlotImage, 'subject2SlotAnchor') : undefined;
+
   const subject1Outfit = hasOutfit1 ? addRef(params.outfitOverrideImage, 'subject1Outfit') : undefined;
   const subject2Outfit = hasOutfit2 ? addRef(params.outfitOverrideImage2, 'subject2Outfit') : undefined;
 
@@ -122,8 +129,10 @@ function buildReferences(params: CloneImageParams): BuiltRefs {
       scene: scene || 'REF0',
       subject1Face: subject1Face || 'REF1',
       subject1Body: subject1Body || 'REF2',
+      subject1Slot,
       subject2Face,
       subject2Body,
+      subject2Slot,
       subject1Outfit,
       subject2Outfit,
     },
@@ -177,18 +186,22 @@ function getSubjectPlacementBlock(selector: SubjectSelector | undefined, hasSeco
 
 function buildBaseGeminiPrompt(params: CloneImageParams, refs: BuiltRefs, runId: string): string {
   const hasSecondSubject = !!params.enableSecondSubject && !!refs.refMap.subject2Face && !!refs.refMap.subject2Body;
-  const sceneRef = refs.refMap.scene;
-  const s1FaceRef = refs.refMap.subject1Face;
-  const s1BodyRef = refs.refMap.subject1Body;
-  const s2FaceRef = refs.refMap.subject2Face;
-  const s2BodyRef = refs.refMap.subject2Body;
+  const sceneRef    = refs.refMap.scene;
+  const s1FaceRef   = refs.refMap.subject1Face;
+  const s1BodyRef   = refs.refMap.subject1Body;
+  const s1SlotRef   = refs.refMap.subject1Slot;
+  const s2FaceRef   = refs.refMap.subject2Face;
+  const s2BodyRef   = refs.refMap.subject2Body;
+  const s2SlotRef   = refs.refMap.subject2Slot;
 
   const refMapLines = [
     `- ${sceneRef} = scene anchor (USE FOR SCENE / POSE / COMPOSITION / LIGHTING / BACKGROUND ONLY)`,
     `- ${s1FaceRef} = Subject 1 face identity reference`,
     `- ${s1BodyRef} = Subject 1 body reference (USE FOR BODY PROPORTIONS / SKIN TONE / HAIR LENGTH GUIDANCE ONLY)`,
+    ...(s1SlotRef ? [`- ${s1SlotRef} = Subject 1 positional slot anchor (USE FOR EXACT PLACEMENT / POSE POSITION ONLY — not an identity source)`] : []),
     ...(hasSecondSubject && s2FaceRef ? [`- ${s2FaceRef} = Subject 2 face identity reference`] : []),
     ...(hasSecondSubject && s2BodyRef ? [`- ${s2BodyRef} = Subject 2 body reference (USE FOR BODY PROPORTIONS / SKIN TONE / HAIR LENGTH GUIDANCE ONLY)`] : []),
+    ...(hasSecondSubject && s2SlotRef ? [`- ${s2SlotRef} = Subject 2 positional slot anchor (USE FOR EXACT PLACEMENT / POSE POSITION ONLY — not an identity source)`] : []),
   ].join('\n');
 
   return `
@@ -205,6 +218,14 @@ DO NOT preserve the original people identities from ${sceneRef}.
 The people visible in ${sceneRef} are placeholders that must be replaced by the provided subjects.
 
 ${getSubjectPlacementBlock(params.subject1Selector, hasSecondSubject)}
+
+${s1SlotRef ? `[SLOT ANCHOR RULES]
+- ${s1SlotRef} shows the exact position, scale, crop, and pose context for Subject 1 in this scene.
+- Use ${s1SlotRef} ONLY for spatial placement — to know where Subject 1's body goes in the frame.
+- The human visible inside ${s1SlotRef} is a placeholder. Their face and identity must NOT appear in the output.
+- Subject 1's face must come exclusively from ${s1FaceRef}.
+- The slot anchor is a position guide, not an identity guide.` : ''}
+${hasSecondSubject && s2SlotRef ? `- ${s2SlotRef} is the positional slot anchor for Subject 2. Same rules apply: position/scale only, identity from ${s2FaceRef}.` : ''}
 
 [SCENE TEMPLATE RULES]
 - Preserve the environment/background from ${sceneRef}.
