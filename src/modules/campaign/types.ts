@@ -65,6 +65,19 @@ export type ModoVisual = 'ugc' | 'editorial';
 // "editorial"→ texto como elemento gráfico fuerte, estilo revista/campaña
 export type TextoEnImagenes = 'none' | 'minimal' | 'editorial';
 
+// ── Visual Spine — columna vertebral visual de toda la campaña ─
+// Define el mundo visual compartido. Todas las piezas heredan estos valores.
+// Se genera en buildCampaignPlan y se fija cuando la usuaria elige la ancla B.
+export interface CampaignVisualSpine {
+  campaignVisualFamilyId:    string;   // ID de la familia visual maestra
+  campaignVisualConcept:     string;   // concepto visual en 1 frase
+  campaignLightingRule:      string;   // regla de iluminación para toda la campaña
+  campaignEnvironmentRule:   string;   // tipo de entorno / sistema de entornos
+  campaignCompositionRule:   string;   // dirección de composición
+  campaignColorPaletteRule:  string;   // paleta de color unificada
+  campaignDoNotBreakRule:    string;   // lo que NO se puede romper en ninguna pieza
+}
+
 // ── Plan estratégico completo ─────────────────────────────────
 export interface CampaignPlan {
   concepto:    string;
@@ -85,6 +98,8 @@ export interface CampaignPlan {
   clienteIdeal?:    string;  // a quién le hablamos exactamente
   dolorCentral?:    string;  // qué problema resuelve el producto
   moodboardTexto?:  string;  // descripción del mundo visual acordado
+  // Visual Spine — columna vertebral visual (asignada por Gemini, confirmada al elegir ancla B)
+  visualSpine?: CampaignVisualSpine;
 }
 
 // ── Set guardado en biblioteca ────────────────────────────────

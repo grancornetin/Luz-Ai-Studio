@@ -56,12 +56,27 @@ export interface CalendarEntry {
   id: string;
   date: string;          // ISO date "2026-05-10"
   dayLabel: string;      // "Lunes 10 mayo"
-  contentType: string;   // "Campaña de producto"
-  module: string;        // "campaign" | "photodump" | etc.
+  contentType: string;   // "Foto catálogo", "UGC review", etc.
+  module: string;        // "product" | "ugc" | "campaign" | "scene" | "outfit" | "prompt"
   params: Record<string, string>;
-  prompt: string;
+  prompt: string;        // prompt listo para copiar en el módulo
+  caption: string;       // copy completo para la publicación
+  hashtags: string;      // hashtags del nicho
+  platform: string;      // "Instagram Feed" | "TikTok" | "Stories" | "WhatsApp"
+  suggestedTime: string; // "19:00"
+  whatToUpload: string[]; // instrucciones de qué subir al módulo
+  howToConfigure: string[]; // instrucciones de configuración del módulo
+  engagementHook: string; // consejo de engagement para ese post
   status: 'pending' | 'done' | 'skipped';
   notes?: string;
+}
+
+export interface PlannerBrief {
+  product: string;       // "aretes artesanales de plata"
+  goal: string;          // "sell" | "grow" | "launch" | "maintain"
+  frequency: number;     // 3 | 5 | 7
+  platforms: string[];   // ["Instagram Feed", "Stories", "TikTok"]
+  updatedAt: number;
 }
 
 export interface Project {
@@ -70,8 +85,8 @@ export interface Project {
   createdAt: Timestamp;
   updatedAt: Timestamp;
   items: ProjectItem[];
-  // Copilot extensions
   brief?: ProjectBrief;
+  plannerBrief?: PlannerBrief;
   conversation?: ProjectMessage[];
   checklist?: ChecklistItem[];
   calendar?: CalendarEntry[];
@@ -222,6 +237,19 @@ export const updateCalendarEntryStatus = async (
   const calendar: CalendarEntry[] = snap.data().calendar || [];
   const updated = calendar.map(e => e.id === entryId ? { ...e, status } : e);
   await updateDoc(docRef, { calendar: updated, updatedAt: Timestamp.now() });
+};
+
+// ── Planner brief ─────────────────────────────────────────────
+
+export const savePlannerBrief = async (
+  projectId: string,
+  brief: Omit<PlannerBrief, 'updatedAt'>,
+): Promise<void> => {
+  const docRef = getProjectDocRef(projectId);
+  await updateDoc(docRef, {
+    plannerBrief: { ...brief, updatedAt: Date.now() },
+    updatedAt: Timestamp.now(),
+  });
 };
 
 // ── Export ZIP ────────────────────────────────────────────────

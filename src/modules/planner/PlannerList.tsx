@@ -10,22 +10,15 @@ import {
   CalendarDays, Plus, Trash2, Download, Sparkles,
   Loader2, CheckCircle2, Clock,
 } from 'lucide-react';
+// Loader2 se usa en el botón de exportar
 
 const PlannerList: React.FC = () => {
   const navigate = useNavigate();
-  const { projects, loading, error, removeProject, exportProject, addProject } = useProjects();
-  const [creating,    setCreating]    = useState(false);
+  const { projects, loading, error, removeProject, exportProject } = useProjects();
   const [exportingId, setExportingId] = useState<string | null>(null);
 
-  const handleCreate = async () => {
-    setCreating(true);
-    try {
-      const name = `Plan ${new Date().toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}`;
-      const proj = await addProject(name);
-      if (proj?.id) navigate(`/planner/${proj.id}`);
-    } finally {
-      setCreating(false);
-    }
+  const handleCreate = () => {
+    navigate('/planner/nuevo');
   };
 
   const handleExport = async (e: React.MouseEvent, id: string, name: string) => {
@@ -51,16 +44,15 @@ const PlannerList: React.FC = () => {
             Mis Planes
           </h1>
           <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mt-1">
-            Todos tus planes de contenido — abrí uno para trabajar
+            Tu semana de contenido, organizada y lista para ejecutar
           </p>
         </div>
         <button
           onClick={handleCreate}
-          disabled={creating}
-          className="flex items-center gap-2 px-5 py-3 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-50 shadow-lg"
+          className="flex items-center gap-2 px-5 py-3 text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-lg"
           style={{ background: '#F72C5B', boxShadow: '0 8px 24px rgba(247,44,91,0.25)' }}
         >
-          {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+          <Plus className="w-4 h-4" />
           Nuevo plan
         </button>
       </div>
@@ -87,14 +79,14 @@ const PlannerList: React.FC = () => {
             style={{ background: 'rgba(247,44,91,0.08)' }}>
             <CalendarDays className="w-8 h-8" style={{ color: '#F72C5B' }} />
           </div>
-          <p className="text-slate-700 text-sm font-black uppercase italic tracking-tight">Creá tu primer plan</p>
+          <p className="text-slate-700 text-sm font-black uppercase italic tracking-tight">Armá tu primera semana</p>
           <p className="text-slate-400 text-xs mt-1.5 max-w-xs mx-auto">
-            El copiloto te ayuda a planificar qué publicar, cuándo y con qué herramienta.
+            Contanos qué vendés y la IA arma un plan de publicaciones completo con captions, hashtags e instrucciones.
           </p>
           <div className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-widest text-white transition-all"
             style={{ background: '#F72C5B' }}>
-            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            Empezar ahora
+            <Plus className="w-4 h-4" />
+            Armar mi semana
           </div>
         </div>
       )}

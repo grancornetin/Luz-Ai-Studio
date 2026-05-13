@@ -40,6 +40,7 @@ import { ModelSelectionProvider } from './contexts/ModelSelectionContext';
 import AuthModal from './modules/auth/components/AuthModal';
 import OnboardingWizard from './modules/auth/components/OnboardingWizard';
 import AppAssistant from './components/AppAssistant';
+import PlannerTaskBubble from './components/PlannerTaskBubble';
 import NotificationsHUD from './components/NotificationsHUD';
 import { MobileBottomNav } from './components/shared/MobileBottomNav';
 import { GlobalSearchModal } from './components/shared/GlobalSearchModal';
@@ -51,6 +52,8 @@ const CampaignModule   = lazy(() => import('./modules/campaign/CampaignModule'))
 const PhotodumpModule  = lazy(() => import('./modules/photodump/PhotodumpModule'));
 const PlannerList      = lazy(() => import('./modules/planner/PlannerList'));
 const PlannerDetail    = lazy(() => import('./modules/planner/PlannerDetail'));
+const PlannerOnboarding = lazy(() => import('./modules/planner/PlannerOnboarding'));
+const PlannerWeek      = lazy(() => import('./modules/planner/PlannerWeek'));
 
 const PLAN_STYLES: Record<string, { label: string; className: string }> = {
   free:    { label: 'Free',    className: 'bg-slate-100 text-slate-500' },
@@ -440,7 +443,8 @@ const AppContent: React.FC = () => {
                   <Route path="/buy-credits"    element={<BuyCredits />} />
                   <Route path="/cuenta"         element={<AccountSettings />} />
                   <Route path="/planner"         element={<PlannerList />} />
-                  <Route path="/planner/:id"    element={<PlannerDetail />} />
+                  <Route path="/planner/nuevo"  element={<PlannerOnboarding />} />
+                  <Route path="/planner/:id"    element={<PlannerWeek />} />
                   <Route path="/projects"        element={<Navigate to="/planner" replace />} />
                   <Route path="/projects/:id"   element={<Navigate to="/planner" replace />} />
                   <Route path="/prompt-library" element={<Navigate to="/prompt-gallery" replace />} />
@@ -453,6 +457,7 @@ const AppContent: React.FC = () => {
           </div>
           {isNewUser && <OnboardingWizard onDone={markOnboardingDone} />}
           <AppAssistant />
+          <PlannerTaskBubble />
           <NotificationsHUD />
           <GlobalSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
         </ProtectedRoute>

@@ -3,7 +3,7 @@ import { imageApiService, extractImageRef } from '../../services/imageApiService
 import { compressImageForUpload } from '../../utils/imageUtils';
 import {
   CampaignChannel, CampaignImageSlot, CampaignPiece, CampaignPlan,
-  ModoVisual, TextoEnImagenes, CAMPAIGN_CHANNEL_META, ANCHOR_IMAGE_COUNT,
+  CampaignVisualSpine, ModoVisual, TextoEnImagenes, CAMPAIGN_CHANNEL_META, ANCHOR_IMAGE_COUNT,
 } from './types';
 import {
   initCampaignIntelligence,
@@ -336,6 +336,48 @@ function buildTypographyInstructions(
 - DO NOT add captions, hashtags, CTAs, watermarks or secondary text elements`;
 }
 
+// ─── Bloque CAMPAIGN VISUAL SPINE para prompts derivados ─────
+// Inyectado ANTES del visual family block para que tenga prioridad máxima.
+function buildVisualSpineBlock(plan: CampaignPlan, pieza: CampaignPiece): string {
+  const spine = plan.visualSpine;
+  if (!spine) return '';
+
+  // Si la pieza tiene una familia propia incompatible con la maestra, ignorarla
+  const effectiveFamilyId = (pieza.visualFamilyId && pieza.visualFamilyId !== spine.campaignVisualFamilyId)
+    ? spine.campaignVisualFamilyId  // heredar la maestra
+    : (pieza.visualFamilyId || spine.campaignVisualFamilyId);
+
+  // Sincronizar la pieza internamente (sin mutar — solo para el prompt)
+  const lines: string[] = [
+    '╔══════════════════════════════════════════════════════════════════╗',
+    '║   CAMPAIGN VISUAL SPINE — MAXIMUM PRIORITY — READ FIRST        ║',
+    '╚══════════════════════════════════════════════════════════════════╝',
+    '',
+    'This is the UNIFIED visual world for the ENTIRE campaign.',
+    'Every image MUST feel like it belongs to the SAME editorial series.',
+    '',
+    `▸ Master visual family : ${effectiveFamilyId || 'editorial'}`,
+    `▸ Visual concept       : ${spine.campaignVisualConcept}`,
+    `▸ Lighting rule        : ${spine.campaignLightingRule}`,
+    `▸ Environment rule     : ${spine.campaignEnvironmentRule}`,
+    `▸ Composition rule     : ${spine.campaignCompositionRule}`,
+    `▸ Color palette        : ${spine.campaignColorPaletteRule}`,
+    '',
+    `🚫 DO NOT BREAK: ${spine.campaignDoNotBreakRule}`,
+    '',
+    'CONTROLLED VARIATION (same world, different shot):',
+    '- Same lighting language → different angle',
+    '- Same color palette     → different crop',
+    '- Same environment system → different staging',
+    '- Same product identity  → different campaign role',
+    '',
+    'THIS PIECE ROLE: ' + pieza.rol,
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+  ];
+
+  return lines.join('\n');
+}
+
 // ─── Prompt para imagen de campaña derivada (con ancla) ───────
 function buildDerivedImagePrompt(
   pieza:     CampaignPiece,
@@ -356,12 +398,21 @@ function buildDerivedImagePrompt(
     ? 'Square or slightly vertical. Clean product focus. Simple background.'
     : 'Square or 4:5. Strong focal point. Scroll-stopping composition.';
 
-  // ── Inteligencia visual de familia (solo editorial, solo si hay familyId) ──
+  // ── Visual Spine — columna vertebral visual (prioridad máxima) ──
+  const spineBlock = buildVisualSpineBlock(plan, pieza);
+
+  // ── Inteligencia visual de familia (solo editorial) ──
+  // Si la pieza tiene familia incompatible con el spine, usamos la maestra.
+  const effectiveFamilyId = plan.visualSpine && pieza.visualFamilyId
+    && pieza.visualFamilyId !== plan.visualSpine.campaignVisualFamilyId
+    ? plan.visualSpine.campaignVisualFamilyId
+    : (pieza.visualFamilyId ?? '');
+
   let visualFamilyBlock = '';
   let guardrailsBlock = '';
 
-  if (modo === 'editorial' && pieza.visualFamilyId) {
-    const family = getFamilyById(pieza.visualFamilyId);
+  if (modo === 'editorial' && effectiveFamilyId) {
+    const family = getFamilyById(effectiveFamilyId);
     if (family) {
       const blendText = extractBlendText(family);
       const baseBlock = extractBasePromptBlock(family);
@@ -384,7 +435,7 @@ function buildDerivedImagePrompt(
   }
 
   return `${paradigm}
-${hasModel ? `
+${spineBlock ? spineBlock + '\n' : ''}${hasModel ? `
 🔴 IDENTITY LOCK (READ FIRST):
 The MODEL REFERENCE appears MULTIPLE TIMES at the start of the reference list — intentional.
 It defines ONLY: face, bone structure, hair, skin tone.
@@ -417,7 +468,7 @@ CHANNEL: ${channelOpt}
 ${buildTypographyInstructions(plan, pieza)}
 
 FINAL CHECKLIST:
-${hasModel   ? '✓ Face matches MODEL REFERENCE — outfit does NOT come from that photo\n' : ''}${hasProduct ? '✓ Product matches product reference exactly — same shape, color, every detail\n' : ''}${hasAnchor  ? '✓ Lighting and color temperature match anchor\n' : ''}✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel — real skin, natural light, no studio' : 'editorial quality — intentional composition, brand-worthy'}
+${hasModel   ? '✓ Face matches MODEL REFERENCE — outfit does NOT come from that photo\n' : ''}${hasProduct ? '✓ Product matches product reference exactly — same shape, color, every detail\n' : ''}${hasAnchor  ? '✓ Lighting and color temperature match anchor\n' : ''}${plan.visualSpine ? `✓ Visual spine respected — same atmosphere, palette, lighting, environment as defined above\n` : ''}✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel — real skin, natural light, no studio' : 'editorial quality — intentional composition, brand-worthy'}
 ✓ NO reference board artifacts, no collage, no composite feel
 ${plan.textoEnImagenes === 'none' ? '✓ NO text or typography in the image' : `✓ Typography: ${plan.estiloTexto ?? 'designed, intentional'}`}`;
 }
@@ -448,6 +499,9 @@ export async function buildCampaignPlan(
   const intelligenceBlock = buildCampaignIntelligencePromptBlock('editorial');
 
   // ── Prioridad 1: Prompt en dos fases (Director Creativo → Brief de Fotógrafo) ──
+  // VISUAL SPINE CONTEXT: instrucciones para que Gemini elija UNA familia visual maestra
+  // y defina las reglas unificadoras de toda la campaña. Esto evita que cada pieza
+  // use un mundo visual distinto (botín oscuro / catálogo blanco / neón nocturno).
   const prompt = `You are a senior creative team working together: Creative Director, Photographer, Community Manager, and Marketing Strategist — all specialized in Latin American e-commerce brands.
 
 You work in two phases:
@@ -481,6 +535,23 @@ PHASE 2 — PHOTOGRAPHER + COMMUNITY MANAGER + MARKETER
 
 Using the creative foundation above, now produce the full campaign plan.
 
+CAMPAIGN VISUAL SPINE (critical — define this FIRST):
+Before assigning any imagePrompt, choose ONE master visual family for the entire campaign.
+The campaign must look like a UNIFIED editorial series — not 8 random images of the same product.
+
+Rules:
+- Choose ONE family from the editorial library as "campaignVisualFamilyId" — this is the master.
+- Each piece may have its own "visualFamilyId" ONLY if it is compatible with the master family.
+  If it is not compatible, it must use the master family ID. Never mix incompatible visual worlds.
+- Define "campaignVisualConcept": one sentence describing the shared visual world.
+- Define "campaignLightingRule": one rule for lighting that applies to ALL pieces.
+- Define "campaignEnvironmentRule": one rule for environment/location type for ALL pieces.
+- Define "campaignCompositionRule": one rule for composition approach for ALL pieces.
+- Define "campaignColorPaletteRule": one sentence defining the shared color palette.
+- Define "campaignDoNotBreakRule": what must NEVER change across any piece (e.g. "no white e-commerce backgrounds, no neon night scenes, no flat lay wood surfaces in the same campaign").
+- Pieces vary by CAMPAIGN ROLE (hero, detail, lifestyle, texture, social proof, closing), NOT by visual world.
+- For footwear/fashion: AVOID mixing white ecommerce, dark studio, neon night, warm interior, wood flat lay in the same campaign unless the campaignVisualConcept explicitly justifies it.
+
 PHOTOGRAPHER BRIEF (imagePrompt rules):
 - Write each imagePrompt as a photographer's shot brief — specific scene, subject position, lighting quality, composition, emotion.
 - The product must be CLEARLY VISIBLE in every relevant shot. Name its placement explicitly.
@@ -488,6 +559,7 @@ PHOTOGRAPHER BRIEF (imagePrompt rules):
 - NEVER mention text, overlays, typography, or graphic design in imagePrompt.
 - NEVER reference "the model reference photo's outfit" — define a NEW outfit based on the concept.
 - Format: "[Scene]. [Subject and action]. [Lighting]. [Composition]. [Mood/energy]. [Channel]."
+- Each imagePrompt must be a variation of the SAME visual world (same atmosphere, palette, light, environment) — different shot, same campaign.
 
 TYPOGRAPHY DECISION:
 ${hasInspirationImages
@@ -518,6 +590,15 @@ RESPOND ONLY WITH VALID JSON (no markdown, no explanations outside the JSON):
   "textoEnImagenes": "none",
   "estiloTexto": null,
   "modoVisual": "ugc",
+  "visualSpine": {
+    "campaignVisualFamilyId": "ID of the master visual family from the editorial library",
+    "campaignVisualConcept": "One sentence: the shared visual world that unifies all 8 images",
+    "campaignLightingRule": "Lighting rule that applies to every single piece",
+    "campaignEnvironmentRule": "Environment/location rule for all pieces",
+    "campaignCompositionRule": "Composition approach that runs through the entire campaign",
+    "campaignColorPaletteRule": "The unified color palette description",
+    "campaignDoNotBreakRule": "What must never change or be mixed in any piece of this campaign"
+  },
   "hashtagsComunidad": ["#tag1","#tag2","#tag3"],
   "hashtagsNicho": ["#tag4","#tag5","#tag6","#tag7"],
   "hashtagsColarga": ["#tag8","#tag9","#tag10"],
@@ -529,9 +610,9 @@ RESPOND ONLY WITH VALID JSON (no markdown, no explanations outside the JSON):
       "canal": "instagram_feed",
       "rol": "Teaser",
       "usaTexto": false,
-      "visualFamilyId": "",
+      "visualFamilyId": "same as campaignVisualFamilyId or compatible sub-family",
       "psychologicalGoal": "",
-      "imagePrompt": "[Scene]. [Subject and what they're doing]. [Lighting]. [Composition]. [Mood]. [Channel].",
+      "imagePrompt": "[Scene consistent with campaignVisualConcept]. [Subject and what they're doing]. [Lighting per campaignLightingRule]. [Composition per campaignCompositionRule]. [Mood]. [Channel].",
       "titular": "Short impactful headline max 60 chars in Spanish",
       "caption": "Full post text Latin American Spanish with emojis if natural max 200 chars",
       "cta": "Specific call to action max 40 chars",
@@ -563,19 +644,42 @@ RESPOND ONLY WITH VALID JSON (no markdown, no explanations outside the JSON):
         parsed.dolorCentral    = parsed.dolorCentral ?? null;
         parsed.moodboardTexto  = parsed.moodboardTexto ?? null;
 
+        // Normalizar visualSpine
+        const rawSpine = parsed.visualSpine;
+        if (rawSpine && typeof rawSpine === 'object' && rawSpine.campaignVisualFamilyId) {
+          parsed.visualSpine = {
+            campaignVisualFamilyId:   String(rawSpine.campaignVisualFamilyId ?? ''),
+            campaignVisualConcept:    String(rawSpine.campaignVisualConcept  ?? ''),
+            campaignLightingRule:     String(rawSpine.campaignLightingRule   ?? ''),
+            campaignEnvironmentRule:  String(rawSpine.campaignEnvironmentRule ?? ''),
+            campaignCompositionRule:  String(rawSpine.campaignCompositionRule ?? ''),
+            campaignColorPaletteRule: String(rawSpine.campaignColorPaletteRule ?? ''),
+            campaignDoNotBreakRule:   String(rawSpine.campaignDoNotBreakRule  ?? ''),
+          } as CampaignVisualSpine;
+        } else {
+          parsed.visualSpine = undefined;
+        }
+
+        const masterFamilyId = (parsed.visualSpine as CampaignVisualSpine | undefined)?.campaignVisualFamilyId ?? '';
+
         parsed.piezas = parsed.piezas.slice(0, imageCount).map((p: any, i: number) => ({
           ...p,
           id:                p.id ?? `pieza_${i + 1}`,
           imageUrl:          '',
           hashtags:          Array.isArray(p.hashtags) ? p.hashtags : [],
           usaTexto:          textoMode !== 'none' ? (p.usaTexto ?? false) : false,
-          visualFamilyId:    typeof p.visualFamilyId === 'string' ? p.visualFamilyId : '',
+          // Si la pieza no tiene familia o tiene una familia distinta a la maestra,
+          // forzar la familia maestra para mantener la columna vertebral visual
+          visualFamilyId:    typeof p.visualFamilyId === 'string' && p.visualFamilyId
+            ? p.visualFamilyId  // se reconciliará en buildDerivedImagePrompt
+            : masterFamilyId,
           psychologicalGoal: typeof p.psychologicalGoal === 'string' ? p.psychologicalGoal : '',
         }));
         console.log('[CampaignDirector] Plan OK:', {
           concepto: parsed.concepto, piezas: parsed.piezas.length,
           modoVisual: parsed.modoVisual, textoEnImagenes: parsed.textoEnImagenes,
           clienteIdeal: parsed.clienteIdeal,
+          visualSpine: parsed.visualSpine?.campaignVisualFamilyId,
         });
         return parsed as CampaignPlan;
       }
@@ -601,18 +705,38 @@ export async function generateAnchorImages(
   // para poder mostrarlas en la UI en tiempo real
   const partialResults: string[] = ['', ''];
 
-  // Para la variante B (editorial) buscamos la familia visual dominante del plan
-  // y añadimos su anchor prompt block al final del prompt base.
-  const topFamily = getTopFamilyFromPieces(plan.piezas ?? []);
+  // Para la variante B (editorial) usamos el visual spine del plan (familia maestra).
+  // Si no hay spine, fallback a la familia más frecuente en las piezas.
+  const spine = plan.visualSpine;
+  const topFamily = spine?.campaignVisualFamilyId
+    ? (getFamilyById(spine.campaignVisualFamilyId) ?? getTopFamilyFromPieces(plan.piezas ?? []))
+    : getTopFamilyFromPieces(plan.piezas ?? []);
 
   const generateOne = async (variant: 'A' | 'B', index: number): Promise<string> => {
     const modo: ModoVisual = variant === 'A' ? 'ugc' : 'editorial';
     let basePrompt = buildAnchorPrompt(plan, selected, variant);
 
-    if (variant === 'B' && topFamily) {
-      const anchorBlock = extractAnchorPromptBlock(topFamily);
-      if (anchorBlock) {
-        basePrompt += `\n\nEDITORIAL VISUAL FAMILY ANCHOR:\n${anchorBlock}`;
+    if (variant === 'B') {
+      // Inyectar visual spine completo en el anchor editorial
+      if (spine) {
+        basePrompt += `\n\n╔══════════════════════════════════════════════════════════════════╗
+║   CAMPAIGN VISUAL SPINE — THIS ANCHOR DEFINES THE CAMPAIGN     ║
+╚══════════════════════════════════════════════════════════════════╝
+This image IS the visual reference for every other image in this campaign.
+Establish these rules visually — all derived images will inherit them:
+
+▸ Visual concept  : ${spine.campaignVisualConcept}
+▸ Lighting        : ${spine.campaignLightingRule}
+▸ Environment     : ${spine.campaignEnvironmentRule}
+▸ Composition     : ${spine.campaignCompositionRule}
+▸ Color palette   : ${spine.campaignColorPaletteRule}
+🚫 Never break     : ${spine.campaignDoNotBreakRule}`;
+      }
+      if (topFamily) {
+        const anchorBlock = extractAnchorPromptBlock(topFamily);
+        if (anchorBlock) {
+          basePrompt += `\n\nEDITORIAL VISUAL FAMILY ANCHOR:\n${anchorBlock}`;
+        }
       }
     }
 
