@@ -230,8 +230,7 @@ async function processEvolinkJob(
   // Product Studio (module='product') pide 4K para mayor calidad comercial.
   // Todo lo demás (outfit, etc.) usa 1K — suficiente y más barato.
   if (modelProvider === 'gptimage') {
-    const highResModules = ['product', 'prompt_studio'];
-    evolinkBody.resolution = highResModules.includes(job.module ?? '') ? '4K' : '1K';
+    evolinkBody.resolution = job.module === 'product' ? '2K' : '1K';
   }
 
   // CRÍTICO: no mezclar image_url + image_urls — algunos gateways priorizan
