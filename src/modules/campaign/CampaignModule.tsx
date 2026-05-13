@@ -190,6 +190,8 @@ const CampaignModule: React.FC = () => {
   const [currentSet,        setCurrentSet]        = useState<CampaignSet | null>(null);
   const [campaignPlan,      setCampaignPlan]      = useState<any>(null);
   const [partialImages,     setPartialImages]     = useState<string[]>([]);
+  // Imágenes fallidas al generar campaña (índices de las que no se generaron)
+  const [failedIndexes,     setFailedIndexes]     = useState<number[]>([]);
 
   // Results UI state
   const [expandedPieza, setExpandedPieza] = useState<string | null>(null);
@@ -348,6 +350,7 @@ const CampaignModule: React.FC = () => {
     setAnchorOptions([]); setSelectedAnchor(''); setCampaignPlan(null);
     setCurrentSet(null); setError(null); setProgress(null);
     setProgressStepIndex(0); setIsGenerating(false); setPartialImages([]);
+    setFailedIndexes([]);
     setExpandedPieza(null); setActiveTab2('plan');
   };
 
@@ -485,7 +488,7 @@ const CampaignModule: React.FC = () => {
   };
 
   // ── PASO 3: Generar campaña con ancla aprobada ────────────
-  const handleGenerateCampaign = async () => {
+  const handleGenerateCampaign = async (retryIndexes?: number[]) => {
     if (!selectedAnchor || !campaignPlan) return;
 
     // Determinar el modo según qué ancla eligió la usuaria
@@ -496,29 +499,77 @@ const CampaignModule: React.FC = () => {
     setStep(6);
     setIsGenerating(true);
     setError(null);
-    setCurrentSet(null);
-    setPartialImages([]);
+    setFailedIndexes([]);
+    if (!retryIndexes) {
+      setCurrentSet(null);
+      setPartialImages([]);
+    }
     setProgressSteps(CAMPAIGN_PROGRESS_STEPS);
-    setProgress({ total: imageCount, completed: 0, current: 0 });
+    setProgress({ total: retryIndexes ? retryIndexes.length : imageCount, completed: 0, current: 0 });
     setProgressStepIndex(0);
 
     try {
       setProgressStepIndex(1);
-      const images = await generateCampaignImages(
-        campaignPlan, activeSlots, selectedAnchor,
-        { uid: user?.uid, sessionId: newSessionId() },
-        (done, total, partialUrls) => {
-          setProgress({ total, completed: done, current: done - 1 });
-          if (partialUrls) setPartialImages([...partialUrls]);
-          if (done === total) setProgressStepIndex(2);
-        },
-      );
+
+      let images: string[];
+
+      if (retryIndexes) {
+        // Regenerar solo las piezas fallidas — usamos el plan filtrado a esas piezas
+        const piezasToRetry = retryIndexes.map(i => campaignPlan.piezas[i]);
+        const partialPlan = { ...campaignPlan, piezas: piezasToRetry };
+        const retried = await generateCampaignImages(
+          partialPlan, activeSlots, selectedAnchor,
+          { uid: user?.uid, sessionId: newSessionId() },
+          (done, total, partialUrls) => {
+            setProgress({ total, completed: done, current: done - 1 });
+            // Inyectar en las posiciones correctas del array original
+            if (partialUrls) {
+              setPartialImages(prev => {
+                const next = [...prev];
+                retryIndexes.forEach((origIdx, j) => {
+                  if (partialUrls[j]) next[origIdx] = partialUrls[j];
+                });
+                return next;
+              });
+            }
+          },
+        );
+        // Reconstruir array completo combinando las existentes con las reintentadas
+        images = [...partialImages];
+        retryIndexes.forEach((origIdx, j) => {
+          images[origIdx] = retried[j] ?? '';
+        });
+      } else {
+        images = await generateCampaignImages(
+          campaignPlan, activeSlots, selectedAnchor,
+          { uid: user?.uid, sessionId: newSessionId() },
+          (done, total, partialUrls) => {
+            setProgress({ total, completed: done, current: done - 1 });
+            if (partialUrls) setPartialImages([...partialUrls]);
+            if (done === total) setProgressStepIndex(2);
+          },
+        );
+      }
 
       setProgressStepIndex(3);
 
       const validImages = images.filter(Boolean);
       if (validImages.length === 0) {
         throw new Error('No se generó ninguna imagen. La API puede estar saturada — intentá de nuevo en unos minutos.');
+      }
+
+      // Detectar fallos individuales — quedarse en paso 6 si los hay
+      const failed = images.map((url, i) => (!url ? i : -1)).filter(i => i !== -1);
+      if (failed.length > 0) {
+        setFailedIndexes(failed);
+        setPartialImages([...images]);
+        // Inyectar lo que sí se generó en el plan (las fallidas quedan vacías)
+        campaignPlan.piezas = campaignPlan.piezas.map((p: any, i: number) => ({
+          ...p, imageUrl: images[i] ?? p.imageUrl ?? '',
+        }));
+        setIsGenerating(false);
+        setProgress(null);
+        return; // NO avanzar al paso 7
       }
 
       // Inyectar URLs en el plan
@@ -541,6 +592,7 @@ const CampaignModule: React.FC = () => {
       await loadSets();
       clearSession();
       setCurrentSet(set);
+      setFailedIndexes([]);
       setStep(7);
       await refreshCredits();
     } catch (err: any) {
@@ -920,7 +972,7 @@ const CampaignModule: React.FC = () => {
                   <h2 className="t-display text-[26px] md:text-[32px] text-slate-900 mb-2 leading-[1.05]">
                     ¿Cuál es la estética de <span className="text-brand-600 italic normal-case">tu campaña?</span>
                   </h2>
-                  <p className="text-sm text-slate-500 mb-6 leading-[1.55] max-w-[560px]">
+                  <p className="text-sm text-slate-500 mb-5 leading-[1.55] max-w-[560px]">
                     La imagen que elijas define el estilo visual de toda la campaña. Todas las demás imágenes van a mantener esta misma estética, luz y composición.
                   </p>
 
@@ -930,44 +982,49 @@ const CampaignModule: React.FC = () => {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 gap-4 mb-6">
+                  {/* Grid de anclas — mismo tamaño/estilo que el grid del paso 6 */}
+                  <div className={`grid gap-3 mb-5 ${anchorOptions.length <= 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3 md:grid-cols-4'}`}>
                     {anchorOptions.map((url, i) => {
-                      const label   = i === 0 ? 'A' : 'B';
-                      const variant = i === 0 ? '📱 UGC · iPhone orgánico · personas reales' : '📷 Editorial · revista · lookbook premium';
+                      const label     = i === 0 ? 'A' : 'B';
+                      const variant   = i === 0 ? '📱 UGC · iPhone orgánico · personas reales' : '📷 Editorial · revista · lookbook premium';
                       const isSelected = selectedAnchor === url;
                       return (
                         <button key={i} type="button" onClick={() => setSelectedAnchor(url)}
-                          className={`relative rounded-[20px] overflow-hidden border-4 transition-all cursor-pointer group ${isSelected ? 'border-brand-600 shadow-xl' : 'border-transparent hover:border-slate-200'}`}
-                          style={{ maxHeight: 420 }}>
-                          {/* Imagen */}
-                          <div className="relative h-full">
-                            <img src={url} alt={`Opción ${label}`} className="w-full h-full object-cover" style={{ maxHeight: 420 }} />
-                            <div className={`absolute inset-0 transition-opacity ${isSelected ? 'bg-brand-600/10' : 'bg-black/0 group-hover:bg-black/5'}`} />
-                          </div>
+                          className={`relative aspect-[3/4] rounded-2xl overflow-hidden border-4 transition-all cursor-pointer group ${isSelected ? 'border-brand-600 shadow-xl' : 'border-transparent hover:border-slate-300'}`}>
+                          <img src={url} alt={`Opción ${label}`} className="w-full h-full object-cover" />
+                          <div className={`absolute inset-0 transition-opacity ${isSelected ? 'bg-brand-600/10' : 'bg-black/0 group-hover:bg-black/5'}`} />
                           {/* Badge seleccionado */}
                           {isSelected && (
-                            <div className="absolute top-4 right-4 w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center shadow-lg">
-                              <Check className="w-4 h-4 text-white" strokeWidth={3} />
+                            <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-brand-600 flex items-center justify-center shadow-lg">
+                              <Check className="w-3 h-3 text-white" strokeWidth={3} />
                             </div>
                           )}
-                          {/* Label */}
-                          <div className="absolute top-4 left-4">
-                            <span className="bg-black/60 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full">
+                          {/* Label opción */}
+                          <div className="absolute top-2 left-2">
+                            <span className="bg-black/60 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full">
                               Opción {label}
                             </span>
                           </div>
-                          {/* Footer */}
-                          <div className={`absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/70 to-transparent`}>
-                            <p className="text-white text-[12px] font-semibold">{variant}</p>
-                            {isSelected && <p className="text-brand-300 text-[10px] font-bold uppercase tracking-wider mt-0.5">Seleccionada ✓</p>}
+                          {/* Footer tipo badge */}
+                          <div className="absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t from-black/70 to-transparent">
+                            <p className="text-white text-[10px] font-semibold leading-tight">{variant}</p>
+                            {isSelected && <p className="text-brand-300 text-[9px] font-bold uppercase tracking-wider mt-0.5">SELECCIONADA ✓</p>}
                           </div>
                         </button>
                       );
                     })}
                   </div>
 
-                  {/* Regenerar */}
-                  <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                  {/* Botón principal de generar campaña */}
+                  <button type="button"
+                    onClick={() => selectedAnchor && handleGenerateCampaign()}
+                    disabled={!selectedAnchor}
+                    className="w-full mb-3 py-4 bg-brand-600 hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-lg">
+                    Generar campaña completa · {imageCount} imágenes
+                  </button>
+
+                  {/* Regenerar ancla + hint */}
+                  <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-2xl mb-3">
                     <div>
                       <p className="text-[12px] font-bold text-slate-700">¿Ninguna te convence?</p>
                       <p className="text-[11px] text-slate-500 mt-0.5">
@@ -983,6 +1040,10 @@ const CampaignModule: React.FC = () => {
                         : <><RefreshCw size={13} /> Nuevas opciones</>}
                     </button>
                   </div>
+
+                  <div className="px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5]">
+                    💡 Podés cerrar la ventana — te avisamos cuando termine.
+                  </div>
                 </div>
               )}
 
@@ -991,10 +1052,19 @@ const CampaignModule: React.FC = () => {
                 <div className="fade-in p-4 md:p-8">
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-7 items-start">
                     <div className="md:col-span-5 lg:col-span-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-2 h-2 rounded-full bg-brand-600 animate-pulse" />
-                        <span className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Generando campaña · no cierres</span>
-                      </div>
+                      {isGenerating ? (
+                        <>
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-2 h-2 rounded-full bg-brand-600 animate-pulse" />
+                            <span className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Generando campaña · no cierres</span>
+                          </div>
+                        </>
+                      ) : failedIndexes.length > 0 ? (
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-2 h-2 rounded-full bg-rose-500" />
+                          <span className="text-[10px] font-black text-rose-600 uppercase tracking-[0.18em]">{failedIndexes.length} imagen{failedIndexes.length > 1 ? 'es' : ''} fallida{failedIndexes.length > 1 ? 's' : ''}</span>
+                        </div>
+                      ) : null}
                       <h2 className="font-display font-extrabold italic uppercase tracking-tight text-[22px] md:text-[26px] text-slate-900 leading-tight"
                         style={{ fontFamily: 'Syne, Inter, sans-serif', letterSpacing: '-0.025em' }}>
                         {campaignPlan?.tagline ?? 'Generando campaña'}
@@ -1009,9 +1079,53 @@ const CampaignModule: React.FC = () => {
                           <img src={selectedAnchor} alt="Ancla" className="w-full aspect-[3/4] object-cover" />
                         </div>
                       )}
-                      <div className="bg-white border border-slate-200 rounded-2xl p-4">
-                        <GenProgress steps={progressSteps} currentStepIndex={progressStepIndex} completedShots={[]} totalShots={0} />
-                      </div>
+                      {isGenerating && (
+                        <div className="bg-white border border-slate-200 rounded-2xl p-4">
+                          <GenProgress steps={progressSteps} currentStepIndex={progressStepIndex} completedShots={[]} totalShots={0} />
+                        </div>
+                      )}
+                      {/* Panel de imágenes fallidas con botón de reintentar */}
+                      {!isGenerating && failedIndexes.length > 0 && (
+                        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 space-y-3">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-rose-500 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-[12px] font-bold text-rose-800">
+                                {failedIndexes.length} imagen{failedIndexes.length > 1 ? 'es no se generaron' : ' no se generó'} correctamente.
+                              </p>
+                              <p className="text-[11px] text-rose-600 mt-0.5 leading-snug">
+                                Podés regenerarlas sin costo adicional — se usarán las mismas referencias y estilo.
+                              </p>
+                            </div>
+                          </div>
+                          <button type="button"
+                            onClick={() => handleGenerateCampaign(failedIndexes)}
+                            className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[12px] font-bold transition-colors flex items-center justify-center gap-2">
+                            <RefreshCw size={13} />
+                            Regenerar {failedIndexes.length} imagen{failedIndexes.length > 1 ? 'es' : ''}
+                          </button>
+                          {/* Opción de continuar igual si quiere */}
+                          <button type="button"
+                            onClick={() => {
+                              // Avanzar igual aunque haya fallidas
+                              const images = partialImages;
+                              campaignPlan.piezas = campaignPlan.piezas.map((p: any, i: number) => ({
+                                ...p, imageUrl: images[i] ?? p.imageUrl ?? '',
+                              }));
+                              const set: CampaignSet = {
+                                id: Date.now().toString(), createdAt: Date.now(),
+                                idea, canales, imageCount, slots: activeSlots,
+                                anchorImage: selectedAnchor, anchorOptions,
+                                userName: user?.displayName ?? undefined, plan: campaignPlan,
+                              };
+                              campaignStorage.save(set).then(() => loadSets());
+                              clearSession(); setCurrentSet(set); setFailedIndexes([]); setStep(7);
+                            }}
+                            className="w-full py-2 text-[11px] text-rose-500 hover:text-rose-700 font-semibold transition-colors">
+                            Continuar igual con las que se generaron →
+                          </button>
+                        </div>
+                      )}
                     </div>
                     <div className="md:col-span-7 lg:col-span-8">
                       <div className="flex justify-between items-baseline mb-3.5">
@@ -1019,17 +1133,27 @@ const CampaignModule: React.FC = () => {
                           <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.14em] mb-1">En vivo</div>
                           <h3 className="font-display font-extrabold italic text-[20px] md:text-[22px] text-slate-900 normal-case"
                             style={{ fontFamily: 'Syne, Inter, sans-serif' }}>
-                            {progress ? progress.completed : 0} de {imageCount} listas
+                            {isGenerating
+                              ? `${progress ? progress.completed : 0} de ${imageCount} listas`
+                              : failedIndexes.length > 0
+                              ? `${imageCount - failedIndexes.length} de ${imageCount} generadas`
+                              : `${imageCount} de ${imageCount} listas`}
                           </h3>
                         </div>
                       </div>
                       <div className={`grid gap-3 ${imageCount <= 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3 md:grid-cols-4'}`}>
                         {Array.from({ length: imageCount }).map((_, i) => {
-                          const imgUrl = partialImages[i] ?? '';
-                          const done   = !!imgUrl;
-                          const active = !done && progress ? i === progress.completed && isGenerating : false;
+                          const imgUrl  = partialImages[i] ?? '';
+                          const done    = !!imgUrl;
+                          const failed  = failedIndexes.includes(i);
+                          const active  = !done && !failed && progress ? i === progress.completed && isGenerating : false;
                           return (
-                            <div key={i} className={`relative aspect-[3/4] rounded-2xl overflow-hidden transition-all ${done ? 'fade-in shadow-md' : active ? 'border-2 border-brand-600 bg-slate-100 animate-pulse' : 'bg-slate-100'}`}>
+                            <div key={i} className={`relative aspect-[3/4] rounded-2xl overflow-hidden transition-all ${
+                              done    ? 'fade-in shadow-md' :
+                              failed  ? 'border-2 border-rose-400 bg-rose-50' :
+                              active  ? 'border-2 border-brand-600 bg-slate-100 animate-pulse' :
+                              'bg-slate-100'
+                            }`}>
                               {/* Imagen real cuando llega */}
                               {imgUrl && (
                                 <img src={imgUrl} alt={`Pieza ${i + 1}`} className="w-full h-full object-cover" />
@@ -1040,8 +1164,15 @@ const CampaignModule: React.FC = () => {
                                   <div className="bg-white/95 rounded-full px-3.5 py-1.5 text-[10px] font-bold text-brand-600 tracking-[0.12em] uppercase">Generando...</div>
                                 </div>
                               )}
+                              {/* Indicador de fallo */}
+                              {failed && (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
+                                  <AlertTriangle className="w-5 h-5 text-rose-400" />
+                                  <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wider">Falló</span>
+                                </div>
+                              )}
                               {/* Número de pieza cuando está esperando */}
-                              {!done && !active && (
+                              {!done && !active && !failed && (
                                 <div className="absolute top-2 left-2 text-[10px] text-slate-400 font-semibold">{i + 1}</div>
                               )}
                               {/* Check cuando está lista */}
@@ -1125,11 +1256,21 @@ const CampaignModule: React.FC = () => {
                               )}
                             </div>
                           </div>
-                          {/* Imágenes de referencia del brief */}
-                          {currentSet.slots.length > 0 && (
+                          {/* Ancla elegida + imágenes de referencia del brief */}
+                          {(currentSet.anchorImage || currentSet.slots.length > 0) && (
                             <div className="p-4 border-b border-slate-100">
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Imágenes que subiste en el brief</p>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Referencias de campaña</p>
                               <div className="grid grid-cols-4 gap-3">
+                                {/* Ancla elegida siempre primera */}
+                                {currentSet.anchorImage && (
+                                  <div className="flex flex-col gap-1.5">
+                                    <p className="text-[9px] font-bold text-brand-600 uppercase tracking-wider">🎯 Ancla visual</p>
+                                    <div className="aspect-[3/4] rounded-lg overflow-hidden border-2 border-brand-200 cursor-pointer"
+                                      onClick={() => openLightbox([currentSet.anchorImage, ...currentSet.slots.map(s => s.base64).filter(Boolean)], 0)}>
+                                      <img src={currentSet.anchorImage} alt="Ancla visual" className="w-full h-full object-cover" />
+                                    </div>
+                                  </div>
+                                )}
                                 {(['product','inspiration','brand','model'] as const).map(role => {
                                   const roleSlots = currentSet.slots.filter(s => s.role === role);
                                   if (roleSlots.length === 0) return null;
@@ -1507,30 +1648,26 @@ const CampaignModule: React.FC = () => {
 
             </div>
 
-            {/* ── WIZARD FOOTER ─────────────────────────── */}
-            {(step === 1 || step === 2 || step === 3 || step === 5) && (
+            {/* ── WIZARD FOOTER — solo pasos 1, 2, 3 ───── */}
+            {(step === 1 || step === 2 || step === 3) && (
               <WizardFooter
                 onBack={step > 1 ? () => setStep(s => (s - 1) as WizardStep) : undefined}
                 onContinue={() => {
                   if (step === 1 && canStep1) setStep(2);
                   else if (step === 2 && canStep2) setStep(3);
                   else if (step === 3 && canStep3) handleGenerateAnchor();
-                  else if (step === 5 && selectedAnchor) handleGenerateCampaign();
                 }}
                 continueLabel={
                   step === 3 ? 'Generar propuestas de estilo' :
-                  step === 5 ? `Generar campaña completa · ${imageCount} imágenes` :
                   'Continuar'
                 }
                 disabled={
                   (step === 1 && !canStep1) ||
                   (step === 2 && !canStep2) ||
-                  (step === 3 && insufficient) ||
-                  (step === 5 && !selectedAnchor)
+                  (step === 3 && insufficient)
                 }
                 costInfo={
                   step === 3 ? { cost: totalCreditCost, label: 'Créditos totales' } :
-                  step === 5 ? { cost: 0, label: 'Sin costo adicional' } :
                   undefined
                 }
                 loading={isGenerating}

@@ -279,6 +279,40 @@ function buildStrategyPage(set: CampaignSet): string {
     return `<div class="channel-chip"><span class="channel-icon">${m.icon}</span> ${esc(m.label)}</div>`;
   }).join('');
 
+  // Ancla visual y referencias del brief en columna derecha
+  const anchorSrc = set.anchorImage || '';
+  const anchorBlock = anchorSrc ? `
+    <div style="margin-bottom:20px">
+      <div class="strategy-label" style="margin-bottom:10px">Ancla Visual de Campaña</div>
+      <div style="position:relative;display:inline-block">
+        <img src="${anchorSrc}" style="width:160px;height:213px;object-fit:cover;border-radius:12px;border:2px solid var(--fucsia);display:block" />
+        <div style="position:absolute;top:8px;left:8px;background:var(--fucsia);color:white;font-family:var(--font-body);font-size:9px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;padding:3px 8px;border-radius:100px">Ancla elegida</div>
+      </div>
+      <p style="font-family:var(--font-body);font-size:11px;color:#64748b;margin-top:8px;line-height:1.5;max-width:160px">Define la luz, paleta y estética de toda la campaña</p>
+    </div>` : '';
+
+  // Miniaturas de referencia por rol
+  const slotGroups = (['product','inspiration','brand','model'] as const)
+    .map(role => {
+      const roleSlots = set.slots.filter(s => s.role === role).slice(0,2);
+      if (roleSlots.length === 0) return '';
+      const labels: Record<string, string> = { product: '📦 Producto', inspiration: '🖼️ Inspiración', brand: '🎨 Marca', model: '👤 Modelo' };
+      const thumbs = roleSlots.map(s =>
+        `<img src="${s.base64}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0" />`
+      ).join('');
+      return `
+        <div style="margin-bottom:12px">
+          <div style="font-family:var(--font-body);font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#64748b;margin-bottom:5px">${labels[role]}</div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap">${thumbs}</div>
+        </div>`;
+    }).join('');
+
+  const refsBlock = (anchorBlock || slotGroups) ? `
+    <div style="width:180px;flex-shrink:0">
+      ${anchorBlock}
+      ${slotGroups ? `<div class="strategy-label" style="margin-bottom:10px">Imágenes de brief</div>${slotGroups}` : ''}
+    </div>` : '';
+
   return `
   <div class="page-label">Página 2 · Estrategia</div>
   <div class="page" id="page-2">
@@ -287,41 +321,46 @@ function buildStrategyPage(set: CampaignSet): string {
       <span class="section-header-badge">Visión general</span>
     </div>
     <div class="page-body">
-      <div class="strategy-section">
-        <div class="strategy-label">Concepto Creativo</div>
-        <div class="strategy-title">${esc(plan.tagline)}</div>
-        <div class="strategy-text">${esc(plan.concepto)}</div>
-      </div>
-      <div class="divider"></div>
-      <div class="strategy-section">
-        <div class="strategy-label">Promesa de Campaña</div>
-        <div class="strategy-title">"${esc(plan.promesa)}"</div>
-        <div class="strategy-text">${esc(plan.resumen)}</div>
-      </div>
-      <div class="divider"></div>
-      <div class="strategy-section">
-        <div class="strategy-label">Canales Seleccionados</div>
-        <div class="channels-row">${canalesChips}</div>
-      </div>
-      <div class="divider"></div>
-      <div class="strategy-label" style="margin-bottom:12px">Resumen Ejecutivo</div>
-      <div class="exec-box">
-        <div class="exec-item">
-          <div class="exec-item-label">Piezas generadas</div>
-          <div class="exec-item-value accent">${plan.piezas.length} imágenes + copy</div>
+      <div style="display:flex;gap:24px;align-items:flex-start">
+        <div style="flex:1;min-width:0">
+          <div class="strategy-section">
+            <div class="strategy-label">Concepto Creativo</div>
+            <div class="strategy-title">${esc(plan.tagline)}</div>
+            <div class="strategy-text">${esc(plan.concepto)}</div>
+          </div>
+          <div class="divider"></div>
+          <div class="strategy-section">
+            <div class="strategy-label">Promesa de Campaña</div>
+            <div class="strategy-title">"${esc(plan.promesa)}"</div>
+            <div class="strategy-text">${esc(plan.resumen)}</div>
+          </div>
+          <div class="divider"></div>
+          <div class="strategy-section">
+            <div class="strategy-label">Canales Seleccionados</div>
+            <div class="channels-row">${canalesChips}</div>
+          </div>
+          <div class="divider"></div>
+          <div class="strategy-label" style="margin-bottom:12px">Resumen Ejecutivo</div>
+          <div class="exec-box">
+            <div class="exec-item">
+              <div class="exec-item-label">Piezas generadas</div>
+              <div class="exec-item-value accent">${plan.piezas.length} imágenes + copy</div>
+            </div>
+            <div class="exec-item">
+              <div class="exec-item-label">Duración</div>
+              <div class="exec-item-value">${plan.duracionDias} días de campaña</div>
+            </div>
+            <div class="exec-item">
+              <div class="exec-item-label">Frecuencia</div>
+              <div class="exec-item-value lime">1–2 piezas por día</div>
+            </div>
+            <div class="exec-item">
+              <div class="exec-item-label">Canales</div>
+              <div class="exec-item-value">${set.canales.length} canal${set.canales.length > 1 ? 'es' : ''} activo${set.canales.length > 1 ? 's' : ''}</div>
+            </div>
+          </div>
         </div>
-        <div class="exec-item">
-          <div class="exec-item-label">Duración</div>
-          <div class="exec-item-value">${plan.duracionDias} días de campaña</div>
-        </div>
-        <div class="exec-item">
-          <div class="exec-item-label">Frecuencia</div>
-          <div class="exec-item-value lime">1–2 piezas por día</div>
-        </div>
-        <div class="exec-item">
-          <div class="exec-item-label">Canales</div>
-          <div class="exec-item-value">${set.canales.length} canal${set.canales.length > 1 ? 'es' : ''} activo${set.canales.length > 1 ? 's' : ''}</div>
-        </div>
+        ${refsBlock}
       </div>
     </div>
     ${pageFooter(2)}
@@ -701,7 +740,7 @@ async function buildHtml(set: CampaignSet): Promise<string> {
   const lastPageNum = set.plan.piezas.length + 5;
   const pages = [
     buildCoverPage(set),
-    buildStrategyPage(set),
+    buildStrategyPage(setForConfig),
     buildCalendarPage(set),
     ...set.plan.piezas.map((p, i) =>
       buildPiecePage(p, i, set.plan.piezas.length, base64Images[i])

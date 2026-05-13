@@ -78,6 +78,19 @@ export interface CampaignVisualSpine {
   campaignDoNotBreakRule:    string;   // lo que NO se puede romper en ninguna pieza
 }
 
+// ── Styling Lock — bloqueo de vestuario/estilismo de campaña ──
+// Capturado del ancla cuando incluye modelo con outfit visible.
+// Se propaga a todas las piezas derivadas para mantener coherencia editorial.
+export interface CampaignStylingLock {
+  hasVisibleModel:     boolean;  // el ancla incluye modelo con outfit visible
+  outfitColorFamily:   string;   // familia de colores del outfit ("neutrales cálidos", "tonos tierra", etc.)
+  garmentCategory:     string;   // categoría de la prenda ("falda larga", "pantalón sastre", etc.)
+  stylingFormality:    string;   // formalidad ("formal", "smart casual", "casual", "streetwear", etc.)
+  silhouetteLogic:     string;   // silueta ("oversized", "fitted", "flowing", "structured", etc.)
+  fashionMood:         string;   // mood general ("editorial minimalista", "boho romántico", etc.)
+  doNotSwitch:         string;   // lo que NO puede cambiar ("no pants if anchor shows long skirt", etc.)
+}
+
 // ── Plan estratégico completo ─────────────────────────────────
 export interface CampaignPlan {
   concepto:    string;
@@ -100,6 +113,8 @@ export interface CampaignPlan {
   moodboardTexto?:  string;  // descripción del mundo visual acordado
   // Visual Spine — columna vertebral visual (asignada por Gemini, confirmada al elegir ancla B)
   visualSpine?: CampaignVisualSpine;
+  // Styling Lock — vestuario/estilismo del ancla (asignado por Gemini si hay modelo con outfit)
+  stylingLock?: CampaignStylingLock;
 }
 
 // ── Set guardado en biblioteca ────────────────────────────────

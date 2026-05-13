@@ -3,7 +3,7 @@ import { imageApiService, extractImageRef } from '../../services/imageApiService
 import { compressImageForUpload } from '../../utils/imageUtils';
 import {
   CampaignChannel, CampaignImageSlot, CampaignPiece, CampaignPlan,
-  CampaignVisualSpine, ModoVisual, TextoEnImagenes, CAMPAIGN_CHANNEL_META, ANCHOR_IMAGE_COUNT,
+  CampaignVisualSpine, CampaignStylingLock, ModoVisual, TextoEnImagenes, CAMPAIGN_CHANNEL_META, ANCHOR_IMAGE_COUNT,
 } from './types';
 import {
   initCampaignIntelligence,
@@ -283,11 +283,17 @@ ANCHOR IMAGE TASK:
 This image defines the visual world for the ENTIRE campaign. All other images inherit its mood.
 
 - ${hasProduct ? 'Product is the VISUAL HERO — clearly identifiable, prominent, exactly as in reference.' : 'The concept emotion is the visual hero.'}
-- ${hasModel ? 'Person: identity from MODEL REFERENCE only (face/hair/skin). Outfit comes from creative concept, NOT from the model reference photo.' : 'No specific person required — cast someone fitting the target audience.'}
+- ${hasModel ? 'Person: identity from MODEL REFERENCE only (face/hair/skin). Outfit comes from creative concept aligned with the campaign styling direction.' : 'No specific person required — cast someone fitting the target audience.'}
 - Lighting: ${lightingNote}
 - Pose/Placement: ${poseNote}
 - Background: ${bgNote}
-
+${variant === 'B' && hasModel ? `
+STYLING DIRECTION FOR THIS ANCHOR:
+If you include a visible model, choose a coherent outfit that establishes the styling system for the whole campaign.
+The outfit choice must be INTENTIONAL and CONSISTENT — it will lock the wardrobe world for all derived images.
+Define a clear styling direction: formality level, silhouette logic, color family, fashion mood.
+All other campaign images will inherit this styling — so make it editorial and well-defined.
+` : ''}
 ${lockSystem}
 
 🚫 NO TEXT IN THE IMAGE — pure photography only. No typography, overlays, watermarks.
@@ -378,6 +384,48 @@ function buildVisualSpineBlock(plan: CampaignPlan, pieza: CampaignPiece): string
   return lines.join('\n');
 }
 
+// ─── Bloque STYLING LOCK para prompts derivados ───────────────
+// Preserva la coherencia de vestuario/estilismo cuando el ancla incluye modelo.
+// Regla: "same session, same wardrobe system — not same outfit, but same styling world."
+function buildStylingLockBlock(plan: CampaignPlan, hasModel: boolean): string {
+  const lock = plan.stylingLock;
+
+  // Si no hay lock o el ancla no tiene modelo, bloque vacío
+  if (!lock?.hasVisibleModel || !hasModel) return '';
+
+  const lines: string[] = [
+    '╔══════════════════════════════════════════════════════════════════╗',
+    '║   CAMPAIGN STYLING LOCK — EDITORIAL WARDROBE CONSISTENCY       ║',
+    '╚══════════════════════════════════════════════════════════════════╝',
+    '',
+    'The anchor image established a visible model with a defined outfit.',
+    'All derived shots must preserve the SAME STYLING SYSTEM.',
+    'This is the same shoot — wardrobe continuity is mandatory.',
+    '',
+    `▸ Outfit color family   : ${lock.outfitColorFamily}`,
+    `▸ Garment category      : ${lock.garmentCategory}`,
+    `▸ Styling formality     : ${lock.stylingFormality}`,
+    `▸ Silhouette logic      : ${lock.silhouetteLogic}`,
+    `▸ Fashion mood          : ${lock.fashionMood}`,
+    '',
+    `🚫 DO NOT SWITCH: ${lock.doNotSwitch}`,
+    '',
+    'Allowed controlled variation:',
+    '- Same color family → different specific shade or tone',
+    '- Same garment category → different detail (texture, drape, layer)',
+    '- Same silhouette logic → different pose or angle',
+    '- Product-only shots may omit the model but must feel like the same styling world',
+    '',
+    'NOT allowed:',
+    '- Switching from long elegant skirt to pants or shorts',
+    '- Switching from formal/editorial to casual unless explicitly requested',
+    '- Mixing styling moods within the same campaign',
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+  ];
+
+  return lines.join('\n');
+}
+
 // ─── Prompt para imagen de campaña derivada (con ancla) ───────
 function buildDerivedImagePrompt(
   pieza:     CampaignPiece,
@@ -400,6 +448,9 @@ function buildDerivedImagePrompt(
 
   // ── Visual Spine — columna vertebral visual (prioridad máxima) ──
   const spineBlock = buildVisualSpineBlock(plan, pieza);
+
+  // ── Styling Lock — consistencia de vestuario editorial ──
+  const stylingLockBlock = buildStylingLockBlock(plan, hasModel);
 
   // ── Inteligencia visual de familia (solo editorial) ──
   // Si la pieza tiene familia incompatible con el spine, usamos la maestra.
@@ -435,13 +486,13 @@ function buildDerivedImagePrompt(
   }
 
   return `${paradigm}
-${spineBlock ? spineBlock + '\n' : ''}${hasModel ? `
+${spineBlock ? spineBlock + '\n' : ''}${stylingLockBlock ? stylingLockBlock + '\n' : ''}${hasModel ? `
 🔴 IDENTITY LOCK (READ FIRST):
 The MODEL REFERENCE appears MULTIPLE TIMES at the start of the reference list — intentional.
 It defines ONLY: face, bone structure, hair, skin tone.
 DO NOT copy the outfit, accessories, or setting from the model reference photo.
 DO NOT average the face with the anchor or any other reference.
-The person's clothing is defined by the creative concept, NOT by the model reference.
+The person's clothing is defined by the CAMPAIGN STYLING LOCK above, NOT by the model reference.
 ` : ''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${hasAnchor ? 'CREATE A NEW PHOTO FROM THE SAME SESSION AS THE ANCHOR IMAGE.' : 'CREATE A CAMPAIGN PHOTO.'}
@@ -458,6 +509,7 @@ ${hasAnchor ? `SESSION CONTINUITY (anchor defines this world):
 - Same color temperature — do NOT shift warm/cool.
 - Same ambient light quality and direction.
 - Same overall mood — this is part of the same session.
+- Same styling and wardrobe world — as specified in CAMPAIGN STYLING LOCK above.
 ` : ''}
 ${lockSystem}
 ${visualFamilyBlock}
@@ -468,7 +520,7 @@ CHANNEL: ${channelOpt}
 ${buildTypographyInstructions(plan, pieza)}
 
 FINAL CHECKLIST:
-${hasModel   ? '✓ Face matches MODEL REFERENCE — outfit does NOT come from that photo\n' : ''}${hasProduct ? '✓ Product matches product reference exactly — same shape, color, every detail\n' : ''}${hasAnchor  ? '✓ Lighting and color temperature match anchor\n' : ''}${plan.visualSpine ? `✓ Visual spine respected — same atmosphere, palette, lighting, environment as defined above\n` : ''}✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel — real skin, natural light, no studio' : 'editorial quality — intentional composition, brand-worthy'}
+${hasModel   ? '✓ Face matches MODEL REFERENCE — outfit does NOT come from that photo\n' : ''}${hasProduct ? '✓ Product matches product reference exactly — same shape, color, every detail\n' : ''}${hasAnchor  ? '✓ Lighting and color temperature match anchor\n' : ''}${plan.visualSpine ? `✓ Visual spine respected — same atmosphere, palette, lighting, environment as defined above\n` : ''}${plan.stylingLock?.hasVisibleModel ? `✓ Styling lock respected — same outfit system (${plan.stylingLock.garmentCategory}, ${plan.stylingLock.stylingFormality})\n` : ''}✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel — real skin, natural light, no studio' : 'editorial quality — intentional composition, brand-worthy'}
 ✓ NO reference board artifacts, no collage, no composite feel
 ${plan.textoEnImagenes === 'none' ? '✓ NO text or typography in the image' : `✓ Typography: ${plan.estiloTexto ?? 'designed, intentional'}`}`;
 }
@@ -552,14 +604,27 @@ Rules:
 - Pieces vary by CAMPAIGN ROLE (hero, detail, lifestyle, texture, social proof, closing), NOT by visual world.
 - For footwear/fashion: AVOID mixing white ecommerce, dark studio, neon night, warm interior, wood flat lay in the same campaign unless the campaignVisualConcept explicitly justifies it.
 
+CAMPAIGN STYLING LOCK (define if a model is referenced):
+If a MODEL is part of this campaign, define the wardrobe/styling direction NOW so all pieces feel like the same editorial shoot.
+The styling system is defined at this stage and locked for all derived images.
+- "hasVisibleModel": true if any campaign pieces will show a person with visible outfit.
+- "outfitColorFamily": the dominant color family for the outfit (e.g. "warm neutrals — cream, camel, ivory", "earth tones — terracotta, clay").
+- "garmentCategory": primary garment type (e.g. "long flowing skirt", "tailored wide-leg pants", "structured blazer").
+- "stylingFormality": formality level ("formal", "smart casual", "casual", "athleisure", "streetwear", "couture").
+- "silhouetteLogic": silhouette direction ("flowing/ethereal", "structured/tailored", "oversized/relaxed", "fitted/bodycon").
+- "fashionMood": overall styling mood in 3-4 words (e.g. "editorial minimalist", "boho romantic", "urban chic", "luxury quiet").
+- "doNotSwitch": what must NOT change ("do not switch to pants if anchor shows long skirt", "no casual looks if concept is formal couture").
+If no model is planned, set hasVisibleModel to false and leave other fields empty.
+
 PHOTOGRAPHER BRIEF (imagePrompt rules):
 - Write each imagePrompt as a photographer's shot brief — specific scene, subject position, lighting quality, composition, emotion.
 - The product must be CLEARLY VISIBLE in every relevant shot. Name its placement explicitly.
-- If a person is present: describe pose, expression, what they're doing — NOT who they look like.
+- If a person is present: describe pose, expression, what they're doing — NOT who they look like. Describe their outfit ONLY in terms of the styling lock defined above (color family, garment category, silhouette — no brand names, no specific copies of any reference photo).
 - NEVER mention text, overlays, typography, or graphic design in imagePrompt.
-- NEVER reference "the model reference photo's outfit" — define a NEW outfit based on the concept.
+- NEVER reference "the model reference photo's outfit" — define outfit based on the STYLING LOCK above.
 - Format: "[Scene]. [Subject and action]. [Lighting]. [Composition]. [Mood/energy]. [Channel]."
-- Each imagePrompt must be a variation of the SAME visual world (same atmosphere, palette, light, environment) — different shot, same campaign.
+- Each imagePrompt must be a variation of the SAME visual world (same atmosphere, palette, light, environment, styling) — different shot, same campaign.
+- The campaign should feel like ONE editorial shoot with multiple crops, NOT multiple shoots with similar products.
 
 TYPOGRAPHY DECISION:
 ${hasInspirationImages
@@ -598,6 +663,15 @@ RESPOND ONLY WITH VALID JSON (no markdown, no explanations outside the JSON):
     "campaignCompositionRule": "Composition approach that runs through the entire campaign",
     "campaignColorPaletteRule": "The unified color palette description",
     "campaignDoNotBreakRule": "What must never change or be mixed in any piece of this campaign"
+  },
+  "stylingLock": {
+    "hasVisibleModel": false,
+    "outfitColorFamily": "warm neutrals — cream, sand, ivory",
+    "garmentCategory": "long flowing skirt",
+    "stylingFormality": "smart casual",
+    "silhouetteLogic": "flowing/ethereal",
+    "fashionMood": "editorial minimalist",
+    "doNotSwitch": "do not switch to pants or short skirts; keep the long flowing silhouette throughout"
   },
   "hashtagsComunidad": ["#tag1","#tag2","#tag3"],
   "hashtagsNicho": ["#tag4","#tag5","#tag6","#tag7"],
@@ -660,6 +734,22 @@ RESPOND ONLY WITH VALID JSON (no markdown, no explanations outside the JSON):
           parsed.visualSpine = undefined;
         }
 
+        // Normalizar stylingLock
+        const rawLock = parsed.stylingLock;
+        if (rawLock && typeof rawLock === 'object') {
+          parsed.stylingLock = {
+            hasVisibleModel:   rawLock.hasVisibleModel === true,
+            outfitColorFamily: String(rawLock.outfitColorFamily ?? ''),
+            garmentCategory:   String(rawLock.garmentCategory   ?? ''),
+            stylingFormality:  String(rawLock.stylingFormality   ?? ''),
+            silhouetteLogic:   String(rawLock.silhouetteLogic    ?? ''),
+            fashionMood:       String(rawLock.fashionMood        ?? ''),
+            doNotSwitch:       String(rawLock.doNotSwitch        ?? ''),
+          } as CampaignStylingLock;
+        } else {
+          parsed.stylingLock = undefined;
+        }
+
         const masterFamilyId = (parsed.visualSpine as CampaignVisualSpine | undefined)?.campaignVisualFamilyId ?? '';
 
         parsed.piezas = parsed.piezas.slice(0, imageCount).map((p: any, i: number) => ({
@@ -680,6 +770,7 @@ RESPOND ONLY WITH VALID JSON (no markdown, no explanations outside the JSON):
           modoVisual: parsed.modoVisual, textoEnImagenes: parsed.textoEnImagenes,
           clienteIdeal: parsed.clienteIdeal,
           visualSpine: parsed.visualSpine?.campaignVisualFamilyId,
+          stylingLock: parsed.stylingLock?.hasVisibleModel ? parsed.stylingLock.garmentCategory : 'no model',
         });
         return parsed as CampaignPlan;
       }
