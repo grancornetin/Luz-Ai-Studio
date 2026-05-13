@@ -30,7 +30,7 @@ const receiver = new Receiver({
 const EVOLINK_BASE_URL   = process.env.EVOLINK_BASE_URL  || 'https://api.evolink.ai/v1';
 const EVOLINK_API_KEY    = process.env.EVOLINK_API_KEY   || '';
 const SEEDREAM_MODEL_ID  = process.env.SEEDREAM_MODEL_ID || 'doubao-seedream-4.5';
-const GPT_IMAGE_MODEL_ID = process.env.GPT_IMAGE_MODEL_ID || 'gpt-image-2-beta';
+const GPT_IMAGE_MODEL_ID = process.env.GPT_IMAGE_MODEL_ID || 'gpt-image-2';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type JobStatus      = 'pending' | 'processing' | 'completed' | 'failed';
@@ -232,7 +232,6 @@ async function processEvolinkJob(
   if (modelProvider === 'gptimage') {
     const highResModules = ['product', 'prompt_studio'];
     evolinkBody.resolution = highResModules.includes(job.module ?? '') ? '4K' : '1K';
-    evolinkBody.quality    = 'medium';
   }
 
   // CRÍTICO: no mezclar image_url + image_urls — algunos gateways priorizan
@@ -272,7 +271,10 @@ async function processEvolinkJob(
     taskId = startData.id || startData.task_id;
     if (!taskId) throw new Error('EvoLink returned no task_id');
 
-    console.log(`${tag} EvoLink task started: ${taskId}`);
+    // Loguear costo estimado para calibrar precios por resolución
+    const creditsReserved = startData.usage?.credits_reserved ?? 'n/a';
+    const billingRule     = startData.usage?.billing_rule     ?? 'n/a';
+    console.log(`[EvoLink:COST] model=${config.modelId} module=${job.module ?? 'unknown'} resolution=${evolinkBody.resolution ?? 'n/a'} size=${evolinkBody.size} credits_reserved=${creditsReserved} billing_rule=${billingRule} taskId=${taskId}`);
   } catch (err: any) {
     job.status    = 'failed';
     job.error     = `EvoLink start error: ${err.message}`;
@@ -306,6 +308,10 @@ async function processEvolinkJob(
     console.log(`${tag} Attempt ${attempt + 1}: status=${status}`);
 
     if (status === 'completed' || status === 'succeeded') {
+      // Loguear costo real al completar (puede diferir del estimado inicial)
+      const finalCredits = taskData.usage?.credits_used ?? taskData.usage?.credits_reserved ?? 'n/a';
+      console.log(`[EvoLink:COST_FINAL] model=${config.modelId} module=${job.module ?? 'unknown'} resolution=${evolinkBody.resolution ?? 'n/a'} size=${evolinkBody.size} credits_final=${finalCredits} taskId=${taskId}`);
+
       const imageUrl: string | undefined =
         taskData.result_data?.[0]?.url ||
         taskData.results?.[0]?.url      ||
