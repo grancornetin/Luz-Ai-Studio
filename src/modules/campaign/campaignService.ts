@@ -49,13 +49,25 @@ const NEGATIVE_UGC = [
   'white seamless background', 'studio backdrop', 'neutral studio',
 ].join(', ');
 
-// Modo Editorial: prohíbe lo "amateur/casual"
+// Modo Editorial: prohíbe lo "amateur/casual" Y texto/póster/drift de outfits
 const NEGATIVE_EDITORIAL = [
   NEGATIVE_BASE,
   'skin smoothing', 'beauty filter', 'airbrushed', 'plastic skin',
   'editorial over-processing', 'poor composition', 'bad lighting',
   'snapshot quality', 'phone photo', 'amateur photography',
   'casual snapshot', 'unflattering angle', 'busy background',
+  // Texto dentro de imagen
+  'slogan inside image', 'poster layout', 'magazine headline in image',
+  'editorial text overlay', 'white border frame layout', 'graphic design text',
+  'brand copy inside image', 'written words on photo', 'typographic poster',
+  // Drift de outfit/styling
+  'catsuit', 'latex bodysuit', 'mini dress', 'micro skirt', 'sporty leggings',
+  'casual pants', 'athleisure outfit', 'overly sensual styling',
+  'outfit change from anchor', 'different fashion mood',
+  // Drift de mundo visual
+  'street background', 'neon night background', 'wood flat lay background',
+  'white ecommerce background', 'dramatic unrelated lighting',
+  'new environment not in anchor',
 ].join(', ');
 
 function getNegative(modo: ModoVisual): string {
@@ -288,19 +300,18 @@ This image defines the visual world for the ENTIRE campaign. All other images in
 - Pose/Placement: ${poseNote}
 - Background: ${bgNote}
 ${variant === 'B' && hasModel ? `
-STYLING DIRECTION FOR THIS ANCHOR:
-If you include a visible model, choose a coherent outfit that establishes the styling system for the whole campaign.
-The outfit choice must be INTENTIONAL and CONSISTENT — it will lock the wardrobe world for all derived images.
-Define a clear styling direction: formality level, silhouette logic, color family, fashion mood.
-All other campaign images will inherit this styling — so make it editorial and well-defined.
+STYLING NOTE FOR ANCHOR B:
+If a model is present, use an ELEGANT and COHERENT outfit aligned with the campaign concept.
+The outfit will define the styling language for all derived images — make it refined, editorial, and product-forward.
+The product (boot/shoe) must remain the visual hero — the model supports the product, not the other way around.
 ` : ''}
 ${lockSystem}
 
-🚫 NO TEXT IN THE IMAGE — pure photography only. No typography, overlays, watermarks.
+🚫 NO TEXT IN THE IMAGE — pure photography only. No typography, no overlay, no poster layout, no slogan, no magazine headline, no white border frame, no brand copy inside the photo.
 
 FINAL CHECKLIST:
-${hasProduct ? '✓ Product matches product reference exactly\n' : ''}${hasModel ? '✓ Person identity from MODEL REFERENCE only — outfit NOT copied from that photo\n' : ''}✓ Visual mode consistent: ${modo === 'ugc' ? 'organic iPhone feel, real skin, no studio' : 'editorial quality, intentional composition'}
-✓ NO text, graphic design elements, or reference board artifacts`;
+${hasProduct ? '✓ Product is the visual hero — same boot/shoe, same shape and color as product reference\n' : ''}${hasModel ? '✓ Face from MODEL REFERENCE only — outfit is editorial and product-forward, NOT from the model reference photo\n' : ''}✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel, real skin, no studio' : 'editorial quality, intentional composition, NO text inside image'}
+✓ NO text, no graphic design layout, no reference board artifacts`;
 }
 
 // ─── Instrucciones tipográficas según la decisión del plan ────
@@ -385,42 +396,33 @@ function buildVisualSpineBlock(plan: CampaignPlan, pieza: CampaignPiece): string
 }
 
 // ─── Bloque STYLING LOCK para prompts derivados ───────────────
-// Preserva la coherencia de vestuario/estilismo cuando el ancla incluye modelo.
-// Regla: "same session, same wardrobe system — not same outfit, but same styling world."
+// Candado estricto: conserva el sistema de outfit del ancla sin inventar variantes.
+// No abre libertad creativa — solo restringe el drift de vestuario.
 function buildStylingLockBlock(plan: CampaignPlan, hasModel: boolean): string {
   const lock = plan.stylingLock;
 
-  // Si no hay lock o el ancla no tiene modelo, bloque vacío
+  // Solo aplica si el ancla tiene modelo con outfit visible
   if (!lock?.hasVisibleModel || !hasModel) return '';
 
   const lines: string[] = [
-    '╔══════════════════════════════════════════════════════════════════╗',
-    '║   CAMPAIGN STYLING LOCK — EDITORIAL WARDROBE CONSISTENCY       ║',
-    '╚══════════════════════════════════════════════════════════════════╝',
+    '┌─────────────────────────────────────────────────────────────────┐',
+    '│  STYLING LOCK — CONSERVE THE ANCHOR OUTFIT SYSTEM              │',
+    '└─────────────────────────────────────────────────────────────────┘',
     '',
-    'The anchor image established a visible model with a defined outfit.',
-    'All derived shots must preserve the SAME STYLING SYSTEM.',
-    'This is the same shoot — wardrobe continuity is mandatory.',
+    'The anchor already defined the wardrobe. Do NOT invent a new outfit.',
+    'Replicate the same styling family — only vary the pose and shot angle.',
     '',
-    `▸ Outfit color family   : ${lock.outfitColorFamily}`,
-    `▸ Garment category      : ${lock.garmentCategory}`,
-    `▸ Styling formality     : ${lock.stylingFormality}`,
-    `▸ Silhouette logic      : ${lock.silhouetteLogic}`,
-    `▸ Fashion mood          : ${lock.fashionMood}`,
+    `▸ Color family    : ${lock.outfitColorFamily}`,
+    `▸ Garment type    : ${lock.garmentCategory}`,
+    `▸ Formality       : ${lock.stylingFormality}`,
+    `▸ Silhouette      : ${lock.silhouetteLogic}`,
+    `▸ Fashion mood    : ${lock.fashionMood}`,
     '',
     `🚫 DO NOT SWITCH: ${lock.doNotSwitch}`,
-    '',
-    'Allowed controlled variation:',
-    '- Same color family → different specific shade or tone',
-    '- Same garment category → different detail (texture, drape, layer)',
-    '- Same silhouette logic → different pose or angle',
-    '- Product-only shots may omit the model but must feel like the same styling world',
-    '',
-    'NOT allowed:',
-    '- Switching from long elegant skirt to pants or shorts',
-    '- Switching from formal/editorial to casual unless explicitly requested',
-    '- Mixing styling moods within the same campaign',
-    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    '🚫 DO NOT invent a new garment category — keep the same type',
+    '🚫 DO NOT switch formality level (no casual if anchor is formal)',
+    '🚫 DO NOT add catsuit, mini dress, leggings, casual pants or overly sensual styling',
+    '🚫 DO NOT let the model dominate — the product (boot/shoe) is the hero',
   ];
 
   return lines.join('\n');
@@ -519,10 +521,18 @@ CHANNEL: ${channelOpt}
 
 ${buildTypographyInstructions(plan, pieza)}
 
+NEGATIVE VISUAL DRIFT — HARD BLOCKS (these are FORBIDDEN in this image):
+🚫 No text inside the image — no typography, no slogan, no poster layout, no magazine headline, no white border frame, no overlay text, no brand copy, no written words
+🚫 No new outfit category — do not invent garments outside the anchor's styling system
+🚫 No catsuit, latex bodysuit, mini dress, micro skirt, sporty leggings, casual pants
+🚫 No street background, neon night scene, wood flat lay, white ecommerce backdrop
+🚫 No dramatic lighting unrelated to the anchor's established light
+🚫 No model-as-hero framing — the product (footwear/boot/shoe) must remain visually dominant
+🚫 No product identity change — same boot, same color, same shape as in the product reference
+
 FINAL CHECKLIST:
-${hasModel   ? '✓ Face matches MODEL REFERENCE — outfit does NOT come from that photo\n' : ''}${hasProduct ? '✓ Product matches product reference exactly — same shape, color, every detail\n' : ''}${hasAnchor  ? '✓ Lighting and color temperature match anchor\n' : ''}${plan.visualSpine ? `✓ Visual spine respected — same atmosphere, palette, lighting, environment as defined above\n` : ''}${plan.stylingLock?.hasVisibleModel ? `✓ Styling lock respected — same outfit system (${plan.stylingLock.garmentCategory}, ${plan.stylingLock.stylingFormality})\n` : ''}✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel — real skin, natural light, no studio' : 'editorial quality — intentional composition, brand-worthy'}
-✓ NO reference board artifacts, no collage, no composite feel
-${plan.textoEnImagenes === 'none' ? '✓ NO text or typography in the image' : `✓ Typography: ${plan.estiloTexto ?? 'designed, intentional'}`}`;
+${hasProduct ? '✓ Product is the visual hero — same boot, same shape, same color as product reference\n' : ''}${hasModel   ? '✓ Face: from MODEL REFERENCE only. Outfit: same system as anchor (not from model reference photo)\n' : ''}${hasAnchor  ? '✓ Same lighting, color temperature, and environment as anchor\n' : ''}${plan.visualSpine ? `✓ Visual spine: same atmosphere, palette, environment\n` : ''}${plan.stylingLock?.hasVisibleModel ? `✓ Styling lock: ${plan.stylingLock.garmentCategory} — ${plan.stylingLock.stylingFormality}\n` : ''}✓ NO text inside the image — pure product/editorial photography only
+✓ NO reference board artifacts, no collage feel`;
 }
 
 // ─── buildCampaignPlan ────────────────────────────────────────
@@ -604,27 +614,28 @@ Rules:
 - Pieces vary by CAMPAIGN ROLE (hero, detail, lifestyle, texture, social proof, closing), NOT by visual world.
 - For footwear/fashion: AVOID mixing white ecommerce, dark studio, neon night, warm interior, wood flat lay in the same campaign unless the campaignVisualConcept explicitly justifies it.
 
-CAMPAIGN STYLING LOCK (define if a model is referenced):
-If a MODEL is part of this campaign, define the wardrobe/styling direction NOW so all pieces feel like the same editorial shoot.
-The styling system is defined at this stage and locked for all derived images.
-- "hasVisibleModel": true if any campaign pieces will show a person with visible outfit.
-- "outfitColorFamily": the dominant color family for the outfit (e.g. "warm neutrals — cream, camel, ivory", "earth tones — terracotta, clay").
-- "garmentCategory": primary garment type (e.g. "long flowing skirt", "tailored wide-leg pants", "structured blazer").
-- "stylingFormality": formality level ("formal", "smart casual", "casual", "athleisure", "streetwear", "couture").
-- "silhouetteLogic": silhouette direction ("flowing/ethereal", "structured/tailored", "oversized/relaxed", "fitted/bodycon").
-- "fashionMood": overall styling mood in 3-4 words (e.g. "editorial minimalist", "boho romantic", "urban chic", "luxury quiet").
-- "doNotSwitch": what must NOT change ("do not switch to pants if anchor shows long skirt", "no casual looks if concept is formal couture").
-If no model is planned, set hasVisibleModel to false and leave other fields empty.
+CAMPAIGN STYLING LOCK (define if a model will appear in any piece):
+This lock RESTRICTS the AI from inventing new outfits. It describes the styling family to PRESERVE across all model shots.
+The anchor image will establish the actual visual — this lock is a constraint, not a creative direction.
+- "hasVisibleModel": true only if campaign pieces will show a person with visible clothing.
+- "outfitColorFamily": the color family the outfit should belong to — aligned with the product and concept (e.g. "black — solid dark tones", "warm neutrals — cream, sand").
+- "garmentCategory": the garment type to use for model shots (e.g. "long midi skirt", "tailored trousers", "structured coat"). Choose ONE category and keep it.
+- "stylingFormality": formality that fits the product ("formal editorial", "smart casual", "casual"). Footwear campaigns: match the boot's formality.
+- "silhouetteLogic": "structured/refined", "flowing/ethereal", "oversized/relaxed" — match the product's character.
+- "fashionMood": 3-4 words (e.g. "editorial minimalist", "luxury understated", "urban editorial"). Product is hero.
+- "doNotSwitch": explicit prohibition on garment category changes (e.g. "no mini dress, no catsuit, no leggings, no casual pants — keep the refined long silhouette throughout").
+If no model is planned, set hasVisibleModel to false and leave other fields as empty strings.
 
 PHOTOGRAPHER BRIEF (imagePrompt rules):
 - Write each imagePrompt as a photographer's shot brief — specific scene, subject position, lighting quality, composition, emotion.
-- The product must be CLEARLY VISIBLE in every relevant shot. Name its placement explicitly.
-- If a person is present: describe pose, expression, what they're doing — NOT who they look like. Describe their outfit ONLY in terms of the styling lock defined above (color family, garment category, silhouette — no brand names, no specific copies of any reference photo).
-- NEVER mention text, overlays, typography, or graphic design in imagePrompt.
-- NEVER reference "the model reference photo's outfit" — define outfit based on the STYLING LOCK above.
-- Format: "[Scene]. [Subject and action]. [Lighting]. [Composition]. [Mood/energy]. [Channel]."
-- Each imagePrompt must be a variation of the SAME visual world (same atmosphere, palette, light, environment, styling) — different shot, same campaign.
-- The campaign should feel like ONE editorial shoot with multiple crops, NOT multiple shoots with similar products.
+- The PRODUCT (boot/shoe/footwear) is the visual hero. It must be CLEARLY VISIBLE and named explicitly in every prompt.
+- Vary by SHOT TYPE, not by world: hero product shot / worn close-up / walking/leg crop / detail shot / model seated / model standing / closing editorial shot.
+- If a person is present: describe ONLY pose, expression, body action, and approximate garment type from the styling lock. Do NOT invent new garment categories. Do NOT name brands.
+- NEVER mention text, slogan, typography, headline, caption, or graphic design in imagePrompt. The copy lives in the caption field, NOT inside the image.
+- NEVER describe poster layouts, magazine spreads, or editorial text compositions in imagePrompt.
+- Format: "[Shot type]. [Product placement and visibility]. [Subject action if model present]. [Lighting from campaign spine]. [Composition]. [Mood]."
+- All 8 prompts must describe variations within the SAME world (same light, same background, same palette) — never jump to a new environment.
+- The campaign should feel like ONE editorial product shoot with multiple angles, NOT multiple concepts.
 
 TYPOGRAPHY DECISION:
 ${hasInspirationImages
@@ -666,12 +677,12 @@ RESPOND ONLY WITH VALID JSON (no markdown, no explanations outside the JSON):
   },
   "stylingLock": {
     "hasVisibleModel": false,
-    "outfitColorFamily": "warm neutrals — cream, sand, ivory",
-    "garmentCategory": "long flowing skirt",
-    "stylingFormality": "smart casual",
-    "silhouetteLogic": "flowing/ethereal",
-    "fashionMood": "editorial minimalist",
-    "doNotSwitch": "do not switch to pants or short skirts; keep the long flowing silhouette throughout"
+    "outfitColorFamily": "black — solid black or very dark tones",
+    "garmentCategory": "long midi skirt or tailored trousers",
+    "stylingFormality": "formal editorial",
+    "silhouetteLogic": "structured and refined",
+    "fashionMood": "editorial minimalist — product-forward",
+    "doNotSwitch": "do not switch to mini dress, catsuit, leggings or casual pants; keep the elegant refined silhouette throughout the campaign"
   },
   "hashtagsComunidad": ["#tag1","#tag2","#tag3"],
   "hashtagsNicho": ["#tag4","#tag5","#tag6","#tag7"],

@@ -2,11 +2,12 @@
  * PlannerOnboarding.tsx — Wizard de 4 preguntas que genera el plan semanal.
  * Ruta: /planner/nuevo o primer uso desde PlannerList.
  */
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, Loader2, Sparkles,
   ShoppingBag, Users, Rocket, Radio,
+  ImagePlus, X,
 } from 'lucide-react';
 import { getAuth } from 'firebase/auth';
 import { createProject, saveCalendar, savePlannerBrief, CalendarEntry } from '../../services/projectService';
@@ -43,11 +44,33 @@ const GOAL_LABELS: Record<string, string> = {
 
 // ── Generación del plan con Gemini ────────────────────────────
 
+// Comprime una imagen a base64 para enviar a Gemini
+async function compressImage(file: File): Promise<{ data: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 768;
+      const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width  = Math.round(img.width  * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      const data = canvas.toDataURL('image/jpeg', 0.80).split(',')[1];
+      resolve({ data, mimeType: 'image/jpeg' });
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
 async function generateWeekPlan(
   product: string,
   goal: string,
   frequency: number,
   platforms: string[],
+  productImages: File[] = [],
 ): Promise<CalendarEntry[]> {
   const token = await getAuth().currentUser?.getIdToken();
   if (!token) throw new Error('No autenticado');
@@ -71,10 +94,20 @@ async function generateWeekPlan(
   const platformList = platforms.join(', ');
   const goalLabel = GOAL_LABELS[goal] ?? goal;
 
+  // Comprimir las imágenes del producto si las hay (máx 3)
+  const imageSlice = productImages.slice(0, 3);
+  const compressed = imageSlice.length > 0
+    ? await Promise.all(imageSlice.map(compressImage))
+    : [];
+
+  const imageContext = compressed.length > 0
+    ? `\nIMAGENES DEL PRODUCTO: La emprendedora adjuntó ${compressed.length} foto(s) de su producto. Analizalas para entender el tipo de producto, estilo visual, colores y packaging, y usá esa información para personalizar los prompts, captions y hashtags.`
+    : '';
+
   const systemPrompt = `Sos directora de contenido para emprendedoras latinoamericanas que venden en redes sociales.
 Tu tarea es crear un plan de contenido semanal concreto, ejecutable y variado.
 
-PRODUCTO: ${product}
+PRODUCTO: ${product}${imageContext}
 META DE LA SEMANA: ${goalLabel}
 PLATAFORMAS: ${platformList}
 DÍAS DEL PLAN: ${days.map(d => d.label).join(', ')}
@@ -112,13 +145,19 @@ Formato exacto de cada objeto:
   "engagementHook": "Terminá el caption con una pregunta directa. Las preguntas generan el doble de comentarios en los primeros 30 minutos."
 }`;
 
+  // Armar parts: texto + imágenes opcionales
+  const parts: any[] = [{ text: systemPrompt }];
+  for (const img of compressed) {
+    parts.push({ inlineData: { data: img.data, mimeType: img.mimeType } });
+  }
+
   const res = await fetch('/api/gemini/content', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       action: 'chat',
       model: 'gemini-2.5-flash',
-      messages: [{ role: 'user', parts: [{ text: systemPrompt }] }],
+      messages: [{ role: 'user', parts }],
     }),
   });
 
@@ -155,13 +194,32 @@ const TOTAL_STEPS = 4;
 const PlannerOnboarding: React.FC = () => {
   const navigate = useNavigate();
 
-  const [step, setStep]           = useState(1);
-  const [product, setProduct]     = useState('');
-  const [goal, setGoal]           = useState('');
-  const [frequency, setFrequency] = useState<number>(0);
-  const [platforms, setPlatforms] = useState<string[]>([]);
-  const [generating, setGenerating] = useState(false);
-  const [error, setError]         = useState('');
+  const [step, setStep]               = useState(1);
+  const [product, setProduct]         = useState('');
+  const [productImages, setProductImages] = useState<File[]>([]);
+  const [previews, setPreviews]       = useState<string[]>([]);
+  const [goal, setGoal]               = useState('');
+  const [frequency, setFrequency]     = useState<number>(0);
+  const [platforms, setPlatforms]     = useState<string[]>([]);
+  const [generating, setGenerating]   = useState(false);
+  const [error, setError]             = useState('');
+  const fileInputRef                  = useRef<HTMLInputElement>(null);
+
+  const handleImageAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    const remaining = 4 - productImages.length;
+    const toAdd = files.slice(0, remaining);
+    setProductImages(prev => [...prev, ...toAdd]);
+    setPreviews(prev => [...prev, ...toAdd.map(f => URL.createObjectURL(f))]);
+    e.target.value = '';
+  };
+
+  const handleImageRemove = (index: number) => {
+    URL.revokeObjectURL(previews[index]);
+    setProductImages(prev => prev.filter((_, i) => i !== index));
+    setPreviews(prev => prev.filter((_, i) => i !== index));
+  };
 
   const canNext =
     (step === 1 && product.trim().length > 3) ||
@@ -185,7 +243,7 @@ const PlannerOnboarding: React.FC = () => {
 
       await savePlannerBrief(project.id, { product, goal, frequency, platforms });
 
-      const entries = await generateWeekPlan(product, goal, frequency, platforms);
+      const entries = await generateWeekPlan(product, goal, frequency, platforms, productImages);
       await saveCalendar(project.id, entries);
 
       navigate(`/planner/${project.id}`);
@@ -240,19 +298,86 @@ const PlannerOnboarding: React.FC = () => {
               Describilo con tus palabras. Cuanto más específica, mejor va a quedar el plan.
             </p>
           </div>
+
           <textarea
             autoFocus
             value={product}
             onChange={e => setProduct(e.target.value)}
             placeholder="Ej: aretes artesanales de plata con piedras naturales, vendo en Instagram y MercadoLibre"
-            rows={4}
+            rows={3}
             className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-4 text-sm text-slate-700 outline-none transition-all resize-none placeholder:text-slate-300"
             onFocus={e => { e.target.style.boxShadow = '0 0 0 3px rgba(247,44,91,0.15)'; e.target.style.borderColor = '#F72C5B'; }}
             onBlur={e => { e.target.style.boxShadow = ''; e.target.style.borderColor = ''; }}
           />
-          <p className="text-[11px] text-slate-300 -mt-2">
-            {product.length}/200 caracteres
-          </p>
+          <p className="text-[11px] text-slate-300 -mt-3">{product.length}/200 caracteres</p>
+
+          {/* Zona de fotos del producto */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest text-slate-700">
+                  Fotos de tu producto
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Opcional · Hasta 4 fotos · La IA las analiza para personalizar el plan
+                </p>
+              </div>
+              {productImages.length > 0 && productImages.length < 4 && (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-[10px] font-black uppercase tracking-widest transition-colors flex items-center gap-1"
+                  style={{ color: '#F72C5B' }}
+                >
+                  <ImagePlus className="w-3 h-3" />
+                  Agregar
+                </button>
+              )}
+            </div>
+
+            {/* Grid de previews */}
+            {previews.length > 0 && (
+              <div className="grid grid-cols-4 gap-2 mb-3">
+                {previews.map((url, i) => (
+                  <div key={i} className="group relative aspect-square rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
+                    <img src={url} alt="" className="w-full h-full object-cover" />
+                    <button
+                      onClick={() => handleImageRemove(i)}
+                      className="absolute top-1 right-1 w-5 h-5 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3 text-white" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Zona de drop / botón de subir */}
+            {productImages.length < 4 && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleImageAdd}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`w-full flex items-center justify-center gap-2 py-4 rounded-2xl border-2 border-dashed transition-all ${
+                    previews.length === 0
+                      ? 'border-slate-200 hover:border-[#F72C5B] hover:bg-rose-50 text-slate-400 hover:text-[#F72C5B]'
+                      : 'border-slate-100 hover:border-slate-200 text-slate-300 hover:text-slate-400'
+                  }`}
+                >
+                  <ImagePlus className="w-4 h-4" />
+                  <span className="text-xs font-black uppercase tracking-widest">
+                    {previews.length === 0 ? 'Subir fotos de tu producto' : `Agregar más (${4 - productImages.length} restantes)`}
+                  </span>
+                </button>
+              </>
+            )}
+          </div>
         </div>
       )}
 
