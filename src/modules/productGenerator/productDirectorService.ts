@@ -1662,62 +1662,61 @@ export const buildPromptPayloadsFromDirectorResult = (
     const outputStructureRule = getOutputStructureRule(normalizedMode);
     const aspectRatio = getAspectRatioForObjective(input.objective);
 
+    // Para reference shots el environmentRules del ShotPlan ya contiene todos los
+    // bloques de reglas (buildReferenceMatchEnvironmentRules / buildReferenceVariationEnvironmentRules).
+    // Incluirlos de nuevo via buildReferencePromptRules + buildProductHardRules + buildContextualReferenceRules
+    // triplicaría el texto y supera el límite de 32 000 chars de la API.
+    // Para shots normales sí añadimos buildProductHardRules porque environmentRules es más corto.
+    const prompt = [
+      'Photorealistic product photography.',
+
+      isReferenceShot ? '' : buildProductHardRules(shot),
+      outputStructureRule,
+      isReferenceShot ? '' : SHOT_VARIATION_RULES,
+
+      `PRODUCT TITLE: ${input.productTitle}`,
+      input.productDescription ? `USER PRODUCT CONTEXT: ${input.productDescription}` : '',
+      `PRODUCT ANCHOR: ${result.analysis.productAnchor}`,
+      `TECHNICAL DESCRIPTION: ${result.analysis.technicalDescription}`,
+
+      '',
+      'MASTER CONTEXT:',
+      `Background: ${result.masterContext.background}`,
+      `Lighting: ${result.masterContext.lighting}`,
+      `Color tone: ${result.masterContext.colorTone}`,
+      `Mood: ${result.masterContext.mood}`,
+      `Environment: ${result.masterContext.environment}`,
+      `Human policy: ${result.masterContext.constraints.humanPolicy}`,
+
+      '',
+      `SHOT TYPE: ${shot.type}`,
+      `Composition: ${shot.composition}`,
+      `Framing: ${shot.framing}`,
+      `Focus: ${shot.focus}`,
+      `Product emphasis: ${shot.productEmphasis}`,
+      `Environment rules: ${shot.environmentRules}`,
+
+      '',
+      'HARD PRODUCT RULES:',
+      shot.constraints.preserveProduct,
+      `Avoid: ${shot.constraints.avoid}`,
+
+      '',
+      'FINAL HARD RULE:',
+      input.referenceImage
+        ? shot.type === 'REFERENCE_VARIATION'
+          ? 'Stay inside the same physical scene, surface and props from the reference. Product images control only product identity, anatomy, design, color, material and branding. Change the interaction to fit the product, never the product to fit the interaction. Do not create a studio, catalog, pedestal or white-background shot.'
+          : 'Reference image controls scene, lighting, camera and layout. Product images control only product identity, anatomy, design, color, material and branding. Change the interaction to fit the product, never the product to fit the interaction.'
+        : 'Product images control only product identity, anatomy, design, color, material and branding. Scene and composition must be newly generated.',
+    ].filter(Boolean).join('\n');
+
     return {
       shotId: shot.id,
       shotType: shot.type,
       referenceImages,
       aspectRatio,
       negativePrompt: PRODUCT_NEGATIVE_PROMPT,
-      prompt: [
-        'Photorealistic product photography.',
-
-        isReferenceShot ? buildReferencePromptRules(shot) : '',
-        buildProductHardRules(shot),
-        isReferenceShot ? buildContextualReferenceRules(shot) : '',
-        outputStructureRule,
-        isReferenceShot ? '' : SHOT_VARIATION_RULES,
-
-        `PRODUCT TITLE: ${input.productTitle}`,
-        input.productDescription ? `USER PRODUCT CONTEXT: ${input.productDescription}` : '',
-        `PRODUCT CATEGORY: ${result.analysis.category}`,
-        `PRODUCT STRUCTURE: ${result.analysis.structure}`,
-        `PRODUCT USAGE CONTEXT: ${result.analysis.usageContext}`,
-        `PRODUCT ANCHOR: ${result.analysis.productAnchor}`,
-        `TECHNICAL DESCRIPTION: ${result.analysis.technicalDescription}`,
-        `COMMERCIAL DESCRIPTION: ${result.analysis.commercialDescription}`,
-
-        '',
-        'MASTER CONTEXT:',
-        `Background: ${result.masterContext.background}`,
-        `Lighting: ${result.masterContext.lighting}`,
-        `Color tone: ${result.masterContext.colorTone}`,
-        `Mood: ${result.masterContext.mood}`,
-        `Environment: ${result.masterContext.environment}`,
-        `Consistency rule: ${result.masterContext.constraints.consistency}`,
-        `Realism rule: ${result.masterContext.constraints.realism}`,
-        `Human policy: ${result.masterContext.constraints.humanPolicy}`,
-
-        '',
-        `SHOT TYPE: ${shot.type}`,
-        `Composition: ${shot.composition}`,
-        `Framing: ${shot.framing}`,
-        `Focus: ${shot.focus}`,
-        `Product emphasis: ${shot.productEmphasis}`,
-        `Environment rules: ${shot.environmentRules}`,
-
-        '',
-        'HARD PRODUCT RULES:',
-        shot.constraints.preserveProduct,
-        `Avoid: ${shot.constraints.avoid}`,
-
-        '',
-        'FINAL HARD RULE:',
-        input.referenceImage
-          ? shot.type === 'REFERENCE_VARIATION'
-            ? 'Reference variation must remain inside the same physical scene, same environment type, same surface/location, same main supporting props and same lifestyle concept from the reference. Product images control only product identity, product anatomy, product design, product color, product material and product branding. If reference interaction conflicts with product anatomy, change the interaction, never the product. Do not turn this into a studio, catalog, pedestal, white-background or isolated product shot.'
-            : 'Reference image controls scene, lighting, camera perspective, layout and visual intention. Product images control only product identity, product anatomy, product design, product color, product material and product branding. If reference interaction conflicts with product anatomy, change the interaction, never the product.'
-          : 'Product images control only product identity, product anatomy, product design, product color, product material and product branding. Scene and composition must be newly generated.',
-      ].filter(Boolean).join('\n'),
+      prompt,
     };
   });
 };
