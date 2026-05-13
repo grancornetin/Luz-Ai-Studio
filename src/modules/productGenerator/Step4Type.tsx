@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Check, Layers, Grid3x3 } from 'lucide-react';
 import { MODEL_CREDIT_COST } from '../../services/creditConfig';
 import type { ModelId } from '../../services/imageApiService';
+import { ModelSelector } from '../../components/shared/ModelSelector';
 import type {
   GenMode,
   GridSize,
@@ -17,6 +18,8 @@ interface Step4TypeProps {
   productTitle: string;
   creditsAvailable: number;
   modelId?: ModelId;
+  onModelChange?: (model: ModelId) => void;
+  generatingDisabled?: boolean;
 }
 
 // Cálculo informativo del prototipo (NO se conecta todavía a la generación real).
@@ -47,6 +50,8 @@ export const Step4Type: React.FC<Step4TypeProps> = ({
   productTitle,
   creditsAvailable,
   modelId = 'gemini',
+  onModelChange,
+  generatingDisabled = false,
 }) => {
   const { cost, finalCount } = calcCost(type, hasReference, modelId);
 
@@ -255,8 +260,16 @@ export const Step4Type: React.FC<Step4TypeProps> = ({
           )}
         </div>
 
-        {/* RIGHT: cost panel sticky */}
-        <div className="md:sticky md:top-4">
+        {/* RIGHT: model selector + cost panel sticky */}
+        <div className="md:sticky md:top-4 flex flex-col gap-3">
+          {onModelChange && (
+            <ModelSelector
+              value={modelId}
+              onChange={onModelChange}
+              disabled={generatingDisabled}
+              exclude={['seedream']}
+            />
+          )}
           <div className="relative bg-slate-900 text-white rounded-2xl p-5 md:p-5.5 overflow-hidden">
             {/* Glow */}
             <div

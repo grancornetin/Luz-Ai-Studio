@@ -15,7 +15,6 @@ import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
 import { useCreditGuard } from '../../../hooks/useCreditGuard';
 import NoCreditsModal from '../../components/shared/NoCreditsModal';
 import { MODEL_CREDIT_COST } from '../../services/creditConfig';
-import { ModelSelector } from '../../components/shared/ModelSelector';
 import { useModelSelection } from '../../hooks/useModelSelection';
 import { ProductProfile } from '../../types';
 import { imageApiService, extractImageRef, newSessionId } from '../../services/imageApiService';
@@ -672,11 +671,6 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
             </div>
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <ModelSelector
-              value={modelId}
-              onChange={setModelId}
-              disabled={isGenerating}
-            />
             <div
               className={`flex bg-white p-1 rounded-2xl shadow-sm border border-slate-100 transition-opacity duration-150 ${
                 isGenerating ? 'opacity-50' : ''
@@ -757,6 +751,8 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
                   productTitle={wizard.product.title}
                   creditsAvailable={credits.available}
                   modelId={modelId}
+                  onModelChange={setModelId}
+                  generatingDisabled={isGenerating}
                 />
               )}
               {step === 5 && (

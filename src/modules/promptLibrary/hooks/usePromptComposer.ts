@@ -72,8 +72,9 @@ export const usePromptComposer = () => {
 
     if (!promptText.trim()) return;
 
-    // Costo dinámico según el modelo (Gemini = 2 créditos, Seedream = 1 crédito)
-    const creditCost = imageCost(1, modelId);
+    // Prompt Studio con GPT Image 2 usa 2K → cuesta 2 créditos (igual que Gemini).
+    // Para el resto de modelos el costo viene de MODEL_CREDIT_COST.
+    const creditCost = modelId === 'gptimage' ? 2 : imageCost(1, modelId);
 
     // Verificar y descontar créditos
     if (!isAdmin) {

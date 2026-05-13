@@ -26,7 +26,7 @@ export const MODEL_LOCATIONS: Record<string, string> = {
 export const MODEL_CREDIT_COST: Record<'gemini' | 'seedream' | 'gptimage', number> = {
   gemini:   2,   // Nano Banana 2 — 2 créditos/imagen
   seedream: 1,   // Seedream 4.5  — 1 crédito/imagen
-  gptimage: 2,   // GPT Image 2   — 2 créditos/imagen
+  gptimage: 1,   // GPT Image 2   — 1 crédito/imagen (excepción: prompt_studio cobra 2)
 };
 
 /** Devuelve el costo en créditos de N imágenes según el modelo activo. */
