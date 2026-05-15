@@ -111,17 +111,18 @@ Formato exacto:
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({
-      action: 'chat',
+      action: 'generateText',
       model: 'gemini-2.5-flash',
-      messages: [{ role: 'user', parts: [{ text: systemPrompt }] }],
+      prompt: systemPrompt,
     }),
   });
 
   const data = await res.json();
   if (!data.success) throw new Error(data.error || 'Error generando el plan');
 
-  const raw = data.text.trim().replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
-  const parsed = JSON.parse(raw) as any[];
+  const parsed: any[] = Array.isArray(data.json) ? data.json : JSON.parse(
+    data.text.trim().replace(/^```json\n?/, '').replace(/\n?```$/, '').trim()
+  );
 
   return parsed.map((item, i) => ({
     id: uuidv4(),
