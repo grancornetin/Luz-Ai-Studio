@@ -358,6 +358,31 @@ class UGCApiService {
   }
 
   // ──────────────────────────────────────────────────────────────
+  // analyzeAnchor - Extrae invariantes visuales del ancla de campaña
+  // Equivalente a analyzeREF0 pero con schema extendido para Campaign:
+  // cubre lighting, environment, styling, product, composition y mood.
+  // ──────────────────────────────────────────────────────────────
+  async analyzeAnchor(params: {
+    imageData: string;
+    mimeType: string;
+  }): Promise<import('../modules/campaign/types').CampaignAnchorAnalysis> {
+    const response = await fetch(this.baseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
+      body: JSON.stringify({
+        action: 'analyzeAnchor',
+        payload: params,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Analyze anchor failed: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
+  // ──────────────────────────────────────────────────────────────
   // analyzeScene - Analizar referencia de escena
   // ──────────────────────────────────────────────────────────────
   async analyzeScene(params: {

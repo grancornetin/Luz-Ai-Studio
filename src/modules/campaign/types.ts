@@ -136,6 +136,57 @@ export interface CampaignSet {
   plan:      CampaignPlan;
 }
 
+// ── Campaign Anchor Analysis ──────────────────────────────────
+// Extraída de la imagen ancla real elegida por el usuario,
+// equivalente al REF0Analysis de ContentStudioPro.
+// Se usa para construir el contrato visual con datos reales,
+// no con predicciones del planning.
+export interface CampaignAnchorAnalysis {
+  lighting: {
+    primarySource:    string;   // "natural window from left", "golden hour outdoor"
+    direction:        string;   // "left to right", "overhead", "frontal"
+    colorTemperature: string;   // "warm golden", "cool daylight", "neutral white"
+    shadowType:       string;   // "soft diffused", "hard dramatic", "minimal"
+    intensity:        string;   // "bright", "moody low-key", "balanced"
+    productionLevel:  string;   // "studio controlled", "natural ambient", "UGC casual"
+  };
+  environment: {
+    locationType:     string;   // "studio grey", "outdoor urban", "home interior", "flat lay surface"
+    indoorOutdoor:    string;   // "indoor", "outdoor", "mixed"
+    backgroundDesc:   string;   // "clean grey gradient", "blurred city street", "white seamless"
+    surfaceLanguage:  string;   // "none visible", "marble", "wood", "concrete", "fabric"
+    productionTier:   string;   // "high-end editorial", "mid-tier commercial", "UGC authentic"
+    propsLevel:       string;   // "minimal", "moderate", "rich"
+  };
+  styling: {
+    hasVisiblePerson: boolean;
+    garmentCategory:  string;   // "long skirt", "tailored coat", "casual jeans", "" if no person
+    outfitColorFamily:string;   // "black and white", "warm neutrals", "monochrome"
+    formalityTier:    string;   // "formal editorial", "smart casual", "casual", "streetwear"
+    silhouette:       string;   // "structured refined", "flowing ethereal", "oversized relaxed"
+    doNotSwitch:      string;   // "do not switch to activewear or mini dress"
+  };
+  product: {
+    category:         string;   // "boots", "skincare bottle", "handbag", "candle"
+    colorFamily:      string;   // "black", "warm beige", "vibrant red"
+    materialDesc:     string;   // "leather with metal buckle", "glass bottle", "fabric"
+    dominanceLevel:   string;   // "hero — centered and large", "supporting — held by model", "accent"
+  };
+  composition: {
+    shotType:         string;   // "full body", "waist up", "product hero", "detail close-up"
+    cameraDistance:   string;   // "wide", "medium", "close-up"
+    negativeSpace:    string;   // "generous", "moderate", "minimal"
+    visualHierarchy:  string;   // "product first", "model first", "balanced"
+    framingStyle:     string;   // "editorial minimal", "editorial rich", "UGC candid"
+  };
+  mood: {
+    emotionalRegister: string;  // "quiet luxury", "aspirational", "authentic relatable", "bold commercial"
+    energyLevel:       string;  // "calm and refined", "dynamic energetic", "soft intimate"
+    colorPalette:      string;  // "muted earth tones", "high contrast black/white", "warm golden"
+    overallMood:       string;  // "premium editorial", "UGC organic", "luxury fashion"
+  };
+}
+
 // ── Constante de créditos para el ancla ──────────────────────
 export const ANCHOR_IMAGE_COUNT  = 2;   // siempre 2 opciones
 export const CREDITS_PER_IMAGE   = 2;   // igual que el resto de módulos

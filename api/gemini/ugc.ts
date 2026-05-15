@@ -266,6 +266,67 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(JSON.parse(clean));
     }
 
+    if (action === 'analyzeAnchor') {
+      const { imageData, mimeType } = payload;
+      const ai = getGenAIClient('us-central1');
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          { text: 'You are a visual analyst for a campaign generator. Analyze this anchor image and extract ALL visual invariants that must be preserved across every derived campaign image. Be specific and concrete — no vague descriptions. Respond ONLY with the JSON object below, filled with real observations from the image.' },
+          { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
+          { text: `{
+  "lighting": {
+    "primarySource": "describe the light source you see (e.g. soft window from left, outdoor sun, studio softbox)",
+    "direction": "direction of light (e.g. left to right, overhead, frontal, backlit)",
+    "colorTemperature": "warm golden / cool daylight / neutral white / mixed",
+    "shadowType": "soft diffused / hard dramatic / minimal / no visible shadows",
+    "intensity": "bright / moody low-key / balanced / overcast flat",
+    "productionLevel": "high-end studio controlled / natural ambient mid-tier / UGC casual authentic"
+  },
+  "environment": {
+    "locationType": "describe location type (e.g. grey seamless studio, urban street exterior, home bedroom, product flat lay)",
+    "indoorOutdoor": "indoor / outdoor / mixed",
+    "backgroundDesc": "describe background in 1 sentence",
+    "surfaceLanguage": "none visible / marble / wood / concrete / fabric / other: describe",
+    "productionTier": "high-end editorial / mid-tier commercial / UGC authentic",
+    "propsLevel": "minimal — clean / moderate — some props / rich — many styled elements"
+  },
+  "styling": {
+    "hasVisiblePerson": false,
+    "garmentCategory": "if person visible: exact garment category (e.g. long midi skirt, tailored coat, jeans hoodie). If no person: empty string",
+    "outfitColorFamily": "if person visible: color family of outfit. If no person: empty string",
+    "formalityTier": "formal editorial / smart casual / casual / streetwear / no person",
+    "silhouette": "structured refined / flowing ethereal / oversized relaxed / fitted / no person",
+    "doNotSwitch": "if person visible: what garment category must never be replaced (e.g. do not switch to activewear, mini dress, or catsuit). If no person: empty string"
+  },
+  "product": {
+    "category": "product category visible in image (e.g. ankle boots, glass serum bottle, leather handbag, candle). If no product visible: describe from context",
+    "colorFamily": "main color family of product (e.g. black, warm beige, red, transparent)",
+    "materialDesc": "visible material or texture (e.g. smooth leather with silver buckle, frosted glass, woven fabric)",
+    "dominanceLevel": "hero — centered and large / supporting — held or worn by model / accent — secondary in composition"
+  },
+  "composition": {
+    "shotType": "full body / three-quarter / waist up / product hero only / detail close-up / lifestyle scene",
+    "cameraDistance": "wide / medium / close-up / macro",
+    "negativeSpace": "generous — lots of empty space / moderate / minimal — busy composition",
+    "visualHierarchy": "product first / model first / balanced product and model",
+    "framingStyle": "editorial minimal / editorial rich / UGC candid / commercial clean"
+  },
+  "mood": {
+    "emotionalRegister": "quiet luxury / aspirational premium / authentic relatable / bold high-energy / soft intimate",
+    "energyLevel": "calm and refined / dynamic energetic / soft and intimate / bold and assertive",
+    "colorPalette": "describe the dominant color palette in 1 sentence",
+    "overallMood": "premium editorial / UGC organic authentic / luxury fashion / commercial bright"
+  }
+}` },
+        ],
+        config: { responseMimeType: 'application/json' }
+      });
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      const clean = text.replace(/```json|```/g, '').trim();
+      return res.status(200).json(JSON.parse(clean));
+    }
+
     if (action === 'analyzeProductRelevance') {
       const { productRef, focus, outfitRef, sceneRef, sceneText } = payload;
       const parts: any[] = [];

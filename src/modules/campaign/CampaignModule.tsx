@@ -10,11 +10,17 @@ import { useAuth } from '../auth/AuthContext';
 import { downloadAsZip, readAndCompressFile } from '../../utils/imageUtils';
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
 import { newSessionId } from '../../services/imageApiService';
-import { buildCampaignPlan, generateAnchorImages, generateCampaignImages } from './campaignService';
+import {
+  generateAnchorImagesFromBrief,
+  analyzeAnchorImage,
+  buildCampaignPlanFromAnchor,
+  generateCampaignImages,
+} from './campaignService';
 import { downloadCampaignPdf, downloadCampaignHtml } from './campaignPdfService';
 import { campaignStorage } from './campaignStorage';
 import {
   CampaignSet, CampaignChannel, CampaignImageSlot, ImageSlotRole,
+  CampaignAnchorAnalysis,
   CAMPAIGN_CHANNEL_META, IMAGE_SLOT_META, ANCHOR_IMAGE_COUNT, CREDITS_PER_IMAGE,
 } from './types';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
@@ -24,30 +30,29 @@ import { WizardFooter } from '../../components/shared/WizardFooter';
 import { GenerationProgress as GenProgress, type ProgressStep } from '../../components/shared/GenerationProgress';
 
 // ─── Wizard steps ─────────────────────────────────────────────
-// 1 Brief · 2 Canales · 3 Cantidad · 4 Generar Ancla · 5 Aprobar Ancla · 6 Generar · 7 Resultados
+// 1 Brief · 2 Generar Ancla · 3 Aprobar Ancla · 4 Canales · 5 Cantidad · 6 Generar · 7 Resultados
 type WizardStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 const WIZARD_STEP_DEFS = [
   { id: '1', label: 'Brief' },
-  { id: '2', label: 'Canales' },
-  { id: '3', label: 'Cantidad' },
-  { id: '4', label: 'Estilo' },    // ancla
+  { id: '2', label: 'Estilo' },    // ancla generada desde el brief
+  { id: '3', label: 'Canales' },
+  { id: '4', label: 'Cantidad' },
   { id: '5', label: 'Generar' },
   { id: '6', label: 'Resultados' },
 ];
 
 const ANCHOR_PROGRESS_STEPS: ProgressStep[] = [
   { id: 'brief',   label: 'Analizando brief y referencias' },
-  { id: 'plan',    label: 'Diseñando estrategia de campaña' },
   { id: 'anchor',  label: 'Generando propuestas de estilo visual' },
   { id: 'done',    label: 'Listo para aprobar' },
 ];
 
 const CAMPAIGN_PROGRESS_STEPS: ProgressStep[] = [
-  { id: 'anchor',   label: 'Analizando estilo aprobado' },
-  { id: 'generate', label: 'Generando imágenes de campaña' },
-  { id: 'copy',     label: 'Redactando copy y calendario' },
-  { id: 'done',     label: 'Kit de campaña listo' },
+  { id: 'analyze', label: 'Analizando estilo aprobado' },
+  { id: 'plan',    label: 'Diseñando estrategia de campaña' },
+  { id: 'generate',label: 'Generando imágenes de campaña' },
+  { id: 'done',    label: 'Kit de campaña listo' },
 ];
 
 const SLOT_ROLES: ImageSlotRole[] = ['product', 'inspiration', 'brand', 'model'];
@@ -173,9 +178,10 @@ const CampaignModule: React.FC = () => {
   });
 
   // Anchor state
-  const [anchorOptions,  setAnchorOptions]  = useState<string[]>([]);
-  const [selectedAnchor, setSelectedAnchor] = useState<string>('');
-  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [anchorOptions,   setAnchorOptions]   = useState<string[]>([]);
+  const [selectedAnchor,  setSelectedAnchor]  = useState<string>('');
+  const [anchorAnalysis,  setAnchorAnalysis]  = useState<CampaignAnchorAnalysis | null>(null);
+  const [isRegenerating,  setIsRegenerating]  = useState(false);
 
   // Wizard state
   const [step,      setStep]      = useState<WizardStep>(1);
@@ -283,8 +289,8 @@ const CampaignModule: React.FC = () => {
     setCampaignPlan(data.campaignPlan ?? null);
     setAnchorOptions(data.anchorOptions ?? []);
     setSelectedAnchor(data.selectedAnchor ?? '');
-    // Volver al paso de aprobación (5) si había anclas, si no al paso 3
-    const recoveredStep: WizardStep = (data.anchorOptions?.length > 0) ? 5 : 3;
+    // Volver al paso de aprobación (3) si había anclas, si no al paso 1
+    const recoveredStep: WizardStep = (data.anchorOptions?.length > 0) ? 3 : 1;
     setStep(recoveredStep);
     setSessionRestored(true);
     setPendingRestore(null);
@@ -295,11 +301,11 @@ const CampaignModule: React.FC = () => {
     setPendingRestore(null);
   };
 
-  // Guardar sesión cuando hay plan
+  // Guardar sesión cuando hay anclas o plan
   useEffect(() => {
-    if (campaignPlan && step >= 4) saveSession();
+    if ((anchorOptions.length > 0 || campaignPlan) && step >= 3) saveSession();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [campaignPlan, anchorOptions, selectedAnchor, step]);
+  }, [campaignPlan, anchorOptions, selectedAnchor, step, anchorAnalysis]);
 
   // Limpiar sesión cuando la campaña termina o se resetea
   const resetCreatorAndClear = () => {
@@ -309,13 +315,19 @@ const CampaignModule: React.FC = () => {
   };
 
   // ── Cálculos de costo ──────────────────────────────────────
+  // Los créditos se cobran en 2 momentos:
+  //   Paso 1 (ancla): 1 pro-credit + anchorCreditCost (4 cr)
+  //   Paso 2 (campaña): imageCreditCost (N×2 cr)
   const hasProCredits    = isAdmin || proCredits > 0;
   const anchorCreditCost = ANCHOR_IMAGE_COUNT * CREDITS_PER_IMAGE;   // 4 cr
   const imageCreditCost  = imageCount * CREDITS_PER_IMAGE;           // N×2 cr
-  const totalCreditCost  = anchorCreditCost + imageCreditCost;       // total
+  const totalCreditCost  = anchorCreditCost + imageCreditCost;       // total visible en resumen
   const creditsAfter     = Math.max(0, (credits?.available ?? 0) - totalCreditCost);
-  const insufficient     = !isAdmin && (credits?.available ?? 0) < totalCreditCost;
+  const insufficientForAnchor      = !isAdmin && (credits?.available ?? 0) < anchorCreditCost;
+  const insufficientForCampaign    = !isAdmin && (credits?.available ?? 0) < imageCreditCost;
   const insufficientForAnchorRegen = !isAdmin && (credits?.available ?? 0) < anchorCreditCost;
+  // Alias para compatibilidad con referencias existentes en el JSX
+  const insufficient = insufficientForAnchor;
 
   const activeSlots: CampaignImageSlot[] = SLOT_ROLES.flatMap(r => slots[r].map(base64 => ({ role: r, base64 })));
   const totalSlotsUsed = SLOT_ROLES.reduce((sum, r) => sum + slots[r].length, 0);
@@ -347,7 +359,7 @@ const CampaignModule: React.FC = () => {
     resetCreatorAndClear();
     setStep(1); setIdea(''); setCanales(['instagram_feed']); setImageCount(4);
     setSlots({ product: [], inspiration: [], brand: [], model: [] });
-    setAnchorOptions([]); setSelectedAnchor(''); setCampaignPlan(null);
+    setAnchorOptions([]); setSelectedAnchor(''); setAnchorAnalysis(null); setCampaignPlan(null);
     setCurrentSet(null); setError(null); setProgress(null);
     setProgressStepIndex(0); setIsGenerating(false); setPartialImages([]);
     setFailedIndexes([]);
@@ -383,30 +395,31 @@ const CampaignModule: React.FC = () => {
     setDeletingId(null);
   };
 
-  // ── PASO 1: Generar ancla (plan + 2 imágenes de estilo) ───
+  // ── Generar ancla — solo desde el brief (paso 1→2) ────────
+  // Cobra: 1 pro-credit + 4 créditos (las 2 anclas)
+  // NO cobra los créditos de las imágenes de campaña todavía.
   const handleGenerateAnchor = async () => {
     if (!hasProCredits) return;
 
-    // Cobrar: 1 pro-credit + créditos totales (ancla + campaña)
     if (!isAdmin) {
       const ok = await deductProCredit();
       if (!ok) { setError('No tenés pro-credits para esta sesión.'); return; }
     }
-    if (!isAdmin && (credits?.available ?? 0) < totalCreditCost) {
-      if (!isAdmin) await refundProCredit();
-      setError(`Necesitás ${totalCreditCost} créditos para esta campaña.`);
+    if (!isAdmin && (credits?.available ?? 0) < anchorCreditCost) {
+      if (!isAdmin) await refundProCredit().catch(() => {});
+      setError(`Necesitás ${anchorCreditCost} créditos para generar las propuestas de estilo.`);
       return;
     }
     if (!isAdmin) {
-      const ok = await deductCredits(totalCreditCost);
+      const ok = await deductCredits(anchorCreditCost);
       if (!ok) {
-        await refundProCredit();
+        await refundProCredit().catch(() => {});
         setError('Error al descontar créditos. Intentá de nuevo.');
         return;
       }
     }
 
-    setStep(4);
+    setStep(2);
     setIsGenerating(true);
     setError(null);
     setProgressSteps(ANCHOR_PROGRESS_STEPS);
@@ -414,25 +427,17 @@ const CampaignModule: React.FC = () => {
     setProgressStepIndex(0);
 
     try {
-      // Construir plan estratégico
       setProgressStepIndex(1);
-      const plan = await buildCampaignPlan(idea, canales, imageCount, activeSlots);
-      setCampaignPlan(plan);
-      console.log('[Campaign] Plan construido:', plan.concepto);
-
-      // Generar 2 imágenes ancla
-      setProgressStepIndex(2);
-      const anchors = await generateAnchorImages(
-        plan, activeSlots,
+      const anchors = await generateAnchorImagesFromBrief(
+        idea, activeSlots,
         { uid: user?.uid, sessionId: newSessionId() },
         (done, total, partialUrls) => {
           setProgress({ total, completed: done, current: done - 1 });
-          // Actualizar anchorOptions con URLs parciales a medida que llegan
           if (partialUrls) setAnchorOptions(partialUrls.filter(Boolean));
         },
       );
 
-      setProgressStepIndex(3);
+      setProgressStepIndex(2);
 
       const validAnchors = anchors.filter(Boolean);
       if (validAnchors.length === 0) {
@@ -442,25 +447,23 @@ const CampaignModule: React.FC = () => {
       setAnchorOptions(validAnchors);
       setSelectedAnchor(validAnchors[0]);
       await refreshCredits();
-
-      // Ir al paso de aprobación
-      setStep(5);
+      setStep(3); // → aprobar ancla
     } catch (err: any) {
       console.error('[Campaign] handleGenerateAnchor error:', err);
       setError(`Error generando las propuestas de estilo: ${err?.message || err}`);
       if (!isAdmin) {
         await refundProCredit().catch(() => {});
-        await deductCredits(-totalCreditCost).catch(() => {});
+        await deductCredits(-anchorCreditCost).catch(() => {});
         await refreshCredits().catch(() => {});
       }
-      setStep(3);
+      setStep(1);
     } finally {
       setIsGenerating(false);
       setProgress(null);
     }
   };
 
-  // ── PASO 2: Regenerar ancla (cuesta 4 créditos más) ───────
+  // ── Regenerar ancla (cuesta 4 créditos más) ───────────────
   const handleRegenerateAnchor = async () => {
     if (insufficientForAnchorRegen) return;
     if (!isAdmin) {
@@ -472,12 +475,13 @@ const CampaignModule: React.FC = () => {
     setError(null);
 
     try {
-      const anchors = await generateAnchorImages(
-        campaignPlan, activeSlots,
+      const anchors = await generateAnchorImagesFromBrief(
+        idea, activeSlots,
         { uid: user?.uid, sessionId: newSessionId() },
       );
       setAnchorOptions(anchors.filter(Boolean));
       setSelectedAnchor(anchors[0] ?? '');
+      setAnchorAnalysis(null); // resetear análisis previo
       await refreshCredits();
     } catch (err: any) {
       setError(`Error regenerando: ${err?.message || err}`);
@@ -487,14 +491,34 @@ const CampaignModule: React.FC = () => {
     }
   };
 
-  // ── PASO 3: Generar campaña con ancla aprobada ────────────
+  // ── Generar campaña con ancla aprobada (paso 5→6) ─────────
+  // Cobra: N×2 créditos (solo las imágenes de campaña)
+  // Analiza el ancla real → construye el plan → genera imágenes
   const handleGenerateCampaign = async (retryIndexes?: number[]) => {
-    if (!selectedAnchor || !campaignPlan) return;
+    if (!selectedAnchor) return;
 
-    // Determinar el modo según qué ancla eligió la usuaria
+    // Determinar modo visual según qué ancla eligió el usuario
     // anchorOptions[0] = A = UGC, anchorOptions[1] = B = Editorial
     const anchorIndex = anchorOptions.indexOf(selectedAnchor);
-    campaignPlan.modoVisual = anchorIndex === 1 ? 'editorial' : 'ugc';
+    const modoVisual: 'ugc' | 'editorial' = anchorIndex === 1 ? 'editorial' : 'ugc';
+
+    // Solo cobrar créditos de imágenes en el primer intento (no en retry)
+    if (!retryIndexes && !isAdmin) {
+      if (insufficientForCampaign) {
+        setError(`Necesitás ${imageCreditCost} créditos para generar las ${imageCount} imágenes.`);
+        return;
+      }
+      const ok = await deductCredits(imageCreditCost);
+      if (!ok) {
+        setError('Error al descontar créditos. Intentá de nuevo.');
+        return;
+      }
+    }
+
+    // Actualizar modoVisual en el plan existente si ya había uno (retry)
+    if (campaignPlan) {
+      campaignPlan.modoVisual = modoVisual;
+    }
 
     setStep(6);
     setIsGenerating(true);
@@ -509,20 +533,41 @@ const CampaignModule: React.FC = () => {
     setProgressStepIndex(0);
 
     try {
-      setProgressStepIndex(1);
+      let activePlan = campaignPlan;
+      let activeAnalysis = anchorAnalysis;
+
+      // Primera generación (no retry): analizar ancla y construir plan
+      if (!retryIndexes) {
+        // 1. Analizar la imagen ancla real para extraer invariantes concretas
+        setProgressStepIndex(0);
+        activeAnalysis = await analyzeAnchorImage(selectedAnchor);
+        if (activeAnalysis) setAnchorAnalysis(activeAnalysis);
+
+        // 2. Construir el plan con el ancla analizada
+        setProgressStepIndex(1);
+        activePlan = await buildCampaignPlanFromAnchor(
+          idea, canales, imageCount, activeSlots, activeAnalysis, modoVisual,
+        );
+        setCampaignPlan(activePlan);
+        saveSession({ campaignPlan: activePlan });
+        console.log('[Campaign] Plan desde ancla construido:', activePlan.concepto);
+      }
+
+      if (!activePlan) {
+        throw new Error('No se pudo construir el plan de campaña.');
+      }
 
       let images: string[];
 
       if (retryIndexes) {
-        // Regenerar solo las piezas fallidas — usamos el plan filtrado a esas piezas
-        const piezasToRetry = retryIndexes.map(i => campaignPlan.piezas[i]);
-        const partialPlan = { ...campaignPlan, piezas: piezasToRetry };
+        // Regenerar solo piezas fallidas con el plan y análisis existentes
+        const piezasToRetry = retryIndexes.map(i => activePlan!.piezas[i]);
+        const partialPlan = { ...activePlan!, piezas: piezasToRetry };
         const retried = await generateCampaignImages(
           partialPlan, activeSlots, selectedAnchor,
           { uid: user?.uid, sessionId: newSessionId() },
           (done, total, partialUrls) => {
             setProgress({ total, completed: done, current: done - 1 });
-            // Inyectar en las posiciones correctas del array original
             if (partialUrls) {
               setPartialImages(prev => {
                 const next = [...prev];
@@ -533,21 +578,23 @@ const CampaignModule: React.FC = () => {
               });
             }
           },
+          activeAnalysis ?? undefined,
         );
-        // Reconstruir array completo combinando las existentes con las reintentadas
         images = [...partialImages];
         retryIndexes.forEach((origIdx, j) => {
           images[origIdx] = retried[j] ?? '';
         });
       } else {
+        setProgressStepIndex(2);
         images = await generateCampaignImages(
-          campaignPlan, activeSlots, selectedAnchor,
+          activePlan!, activeSlots, selectedAnchor,
           { uid: user?.uid, sessionId: newSessionId() },
           (done, total, partialUrls) => {
             setProgress({ total, completed: done, current: done - 1 });
             if (partialUrls) setPartialImages([...partialUrls]);
-            if (done === total) setProgressStepIndex(2);
+            if (done === total) setProgressStepIndex(3);
           },
+          activeAnalysis ?? undefined,
         );
       }
 
@@ -558,24 +605,24 @@ const CampaignModule: React.FC = () => {
         throw new Error('No se generó ninguna imagen. La API puede estar saturada — intentá de nuevo en unos minutos.');
       }
 
-      // Detectar fallos individuales — quedarse en paso 6 si los hay
+      // Detectar fallos individuales
       const failed = images.map((url, i) => (!url ? i : -1)).filter(i => i !== -1);
       if (failed.length > 0) {
         setFailedIndexes(failed);
         setPartialImages([...images]);
-        // Inyectar lo que sí se generó en el plan (las fallidas quedan vacías)
-        campaignPlan.piezas = campaignPlan.piezas.map((p: any, i: number) => ({
+        activePlan!.piezas = activePlan!.piezas.map((p: any, i: number) => ({
           ...p, imageUrl: images[i] ?? p.imageUrl ?? '',
         }));
+        setCampaignPlan({ ...activePlan! });
         setIsGenerating(false);
         setProgress(null);
-        return; // NO avanzar al paso 7
+        return;
       }
 
-      // Inyectar URLs en el plan
-      campaignPlan.piezas = campaignPlan.piezas.map((p: any, i: number) => ({
+      activePlan!.piezas = activePlan!.piezas.map((p: any, i: number) => ({
         ...p, imageUrl: images[i] ?? '',
       }));
+      setCampaignPlan({ ...activePlan! });
 
       const set: CampaignSet = {
         id:            Date.now().toString(),
@@ -585,7 +632,7 @@ const CampaignModule: React.FC = () => {
         anchorImage:   selectedAnchor,
         anchorOptions,
         userName:      user?.displayName ?? undefined,
-        plan:          campaignPlan,
+        plan:          activePlan!,
       };
 
       await campaignStorage.save(set);
@@ -598,7 +645,12 @@ const CampaignModule: React.FC = () => {
     } catch (err: any) {
       console.error('[Campaign] handleGenerateCampaign error:', err);
       setError(`Error generando la campaña: ${err?.message || err}`);
-      setStep(5); // volver a la aprobación del ancla
+      // Reembolsar créditos de imágenes si falló en el primer intento
+      if (!retryIndexes && !isAdmin) {
+        await deductCredits(-imageCreditCost).catch(() => {});
+        await refreshCredits().catch(() => {});
+      }
+      setStep(5); // volver a aprobar ancla
     } finally {
       setIsGenerating(false);
       setProgress(null);
@@ -652,7 +704,7 @@ const CampaignModule: React.FC = () => {
               <p className="text-[13px] font-bold text-amber-900">Tenés una campaña sin terminar</p>
               <p className="text-[11px] text-amber-700 mt-0.5 truncate">
                 "{pendingRestore.idea?.slice(0, 60)}{pendingRestore.idea?.length > 60 ? '…' : ''}"
-                {pendingRestore.anchorOptions?.length > 0 ? ' · Ancla lista, faltaba generar las imágenes' : ' · Plan listo, faltaba aprobar el estilo'}
+                {pendingRestore.anchorOptions?.length > 0 ? ' · Estilo listo, faltaba configurar y generar' : ' · Brief listo'}
               </p>
             </div>
             <div className="flex gap-2 flex-shrink-0">
@@ -761,11 +813,11 @@ const CampaignModule: React.FC = () => {
                 </div>
               )}
 
-              {/* ── PASO 2: CANALES ──────────────────────── */}
-              {step === 2 && (
+              {/* ── PASO 4: CANALES ──────────────────────── */}
+              {step === 4 && (
                 <div className="fade-in p-4 md:p-8">
                   <div className="max-w-xl">
-                    <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Paso 2 · Canales</div>
+                    <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Paso 3 · Canales</div>
                     <h2 className="t-display text-[28px] md:text-[34px] text-slate-900 mt-2.5 leading-[1.05]">
                       ¿Dónde vas a <span className="text-brand-600 italic normal-case">publicar?</span>
                     </h2>
@@ -798,12 +850,12 @@ const CampaignModule: React.FC = () => {
                 </div>
               )}
 
-              {/* ── PASO 3: CANTIDAD + COSTO COMPLETO ────── */}
-              {step === 3 && (
+              {/* ── PASO 5: CANTIDAD + COSTO DE IMÁGENES ─── */}
+              {step === 5 && (
                 <div className="fade-in p-4 md:p-8">
                   <div className="grid grid-cols-1 md:grid-cols-[1fr_300px] gap-5 md:gap-6 items-start">
                     <div>
-                      <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Paso 3 · Cantidad</div>
+                      <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Paso 4 · Cantidad</div>
                       <h2 className="t-display text-[28px] md:text-[34px] text-slate-900 mt-2.5 leading-[1.05]">
                         ¿Cuántas imágenes <span className="text-brand-600 italic normal-case">genera la campaña?</span>
                       </h2>
@@ -856,41 +908,36 @@ const CampaignModule: React.FC = () => {
                       )}
                     </div>
 
-                    {/* Panel de costo completo */}
+                    {/* Panel de costo de imágenes (anclas ya pagadas) */}
                     <div className="md:sticky md:top-4">
                       <div className="relative bg-slate-900 text-white rounded-2xl p-5 overflow-hidden">
                         <div className="absolute -top-10 -right-10 w-[140px] h-[140px] rounded-full pointer-events-none"
                           style={{ background: 'rgba(124,58,237,0.3)', filter: 'blur(40px)' }} />
                         <div className="relative">
-                          <div className="text-[10px] font-bold text-pink-300 uppercase tracking-[0.14em] mb-3.5">Resumen del costo</div>
+                          <div className="text-[10px] font-bold text-pink-300 uppercase tracking-[0.14em] mb-3.5">Costo de generación</div>
                           <div className="flex flex-col gap-2 mb-3.5 text-[13px]">
                             <div className="flex justify-between items-baseline">
-                              <span className="opacity-70">2 propuestas de estilo</span>
-                              <span className="font-semibold">{anchorCreditCost} cr</span>
+                              <span className="opacity-70 line-through text-[11px]">2 propuestas de estilo</span>
+                              <span className="font-semibold text-emerald-400 text-[11px]">✓ pagadas</span>
                             </div>
                             <div className="flex justify-between items-baseline">
                               <span className="opacity-70">{imageCount} imágenes campaña</span>
                               <span className="font-semibold">{imageCreditCost} cr</span>
                             </div>
-                            <div className="flex justify-between items-baseline">
-                              <span className="opacity-70">Sesión</span>
-                              <span className="font-semibold">1 pro-credit</span>
-                            </div>
                             <div className="h-px bg-white/10 my-1" />
                             <div className="flex justify-between items-baseline">
-                              <span className="opacity-85 text-[13px]">Total créditos</span>
+                              <span className="opacity-85 text-[13px]">A pagar ahora</span>
                               <span className="font-display font-extrabold italic text-[36px] tracking-tight leading-none" style={{ fontFamily: 'Syne, Inter, sans-serif' }}>
-                                {totalCreditCost}{' '}
+                                {imageCreditCost}{' '}
                                 <span className="text-sm opacity-70 font-semibold not-italic tracking-normal">cr</span>
                               </span>
                             </div>
                           </div>
                           <div className="h-px bg-white/10 mb-3" />
-                          <div className="text-[11px] opacity-60 leading-[1.5] mb-2">Si regenerás el estilo: +{anchorCreditCost} cr extra</div>
-                          <div className={`text-[11px] leading-[1.5] ${insufficient ? 'text-rose-300' : 'opacity-70'}`}>
-                            {insufficient
-                              ? <><strong>Créditos insuficientes.</strong> Te faltan {totalCreditCost - (credits?.available ?? 0)} cr.</>
-                              : <>Te quedarán <strong>{creditsAfter} cr</strong> después.</>}
+                          <div className={`text-[11px] leading-[1.5] ${insufficientForCampaign ? 'text-rose-300' : 'opacity-70'}`}>
+                            {insufficientForCampaign
+                              ? <><strong>Créditos insuficientes.</strong> Te faltan {imageCreditCost - (credits?.available ?? 0)} cr.</>
+                              : <>Te quedarán <strong>{Math.max(0, (credits?.available ?? 0) - imageCreditCost)} cr</strong> después.</>}
                           </div>
                         </div>
                       </div>
@@ -902,8 +949,8 @@ const CampaignModule: React.FC = () => {
                 </div>
               )}
 
-              {/* ── PASO 4: GENERANDO ANCLA ──────────────── */}
-              {step === 4 && (
+              {/* ── PASO 2: GENERANDO ANCLA ──────────────── */}
+              {step === 2 && (
                 <div className="fade-in p-4 md:p-8">
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-7 items-start">
                     <div className="md:col-span-5 lg:col-span-4">
@@ -913,7 +960,7 @@ const CampaignModule: React.FC = () => {
                       </div>
                       <h2 className="font-display font-extrabold italic uppercase tracking-tight text-[22px] md:text-[26px] text-slate-900 leading-tight"
                         style={{ fontFamily: 'Syne, Inter, sans-serif', letterSpacing: '-0.025em' }}>
-                        {campaignPlan?.tagline ?? 'Preparando tu campaña'}
+                        Generando propuestas de estilo
                       </h2>
                       <div className="text-[13px] text-slate-500 mt-1 mb-4">
                         {campaignPlan?.concepto ?? 'Analizando brief y referencias...'}
@@ -965,10 +1012,10 @@ const CampaignModule: React.FC = () => {
                 </div>
               )}
 
-              {/* ── PASO 5: APROBAR ANCLA ────────────────── */}
-              {step === 5 && (
+              {/* ── PASO 3: APROBAR ANCLA ────────────────── */}
+              {step === 3 && (
                 <div className="fade-in p-4 md:p-8">
-                  <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em] mb-2">Paso 4 · Elegí el estilo</div>
+                  <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em] mb-2">Paso 2 · Elegí el estilo</div>
                   <h2 className="t-display text-[26px] md:text-[32px] text-slate-900 mb-2 leading-[1.05]">
                     ¿Cuál es la estética de <span className="text-brand-600 italic normal-case">tu campaña?</span>
                   </h2>
@@ -1015,12 +1062,12 @@ const CampaignModule: React.FC = () => {
                     })}
                   </div>
 
-                  {/* Botón principal de generar campaña */}
+                  {/* Botón principal — avanzar a canales */}
                   <button type="button"
-                    onClick={() => selectedAnchor && handleGenerateCampaign()}
+                    onClick={() => selectedAnchor && setStep(4)}
                     disabled={!selectedAnchor}
                     className="w-full mb-3 py-4 bg-brand-600 hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-lg">
-                    Generar campaña completa · {imageCount} imágenes
+                    Usar este estilo · Configurar campaña →
                   </button>
 
                   {/* Regenerar ancla + hint */}
@@ -1648,26 +1695,42 @@ const CampaignModule: React.FC = () => {
 
             </div>
 
-            {/* ── WIZARD FOOTER — solo pasos 1, 2, 3 ───── */}
-            {(step === 1 || step === 2 || step === 3) && (
+            {/* ── WIZARD FOOTER — pasos de configuración ── */}
+            {(step === 1 || step === 3 || step === 4 || step === 5) && (
               <WizardFooter
-                onBack={step > 1 ? () => setStep(s => (s - 1) as WizardStep) : undefined}
+                onBack={step > 1 && !isGenerating ? () => {
+                  // Navegación hacia atrás con los nuevos pasos
+                  if (step === 3) setStep(1);       // aprobar ancla → brief
+                  else if (step === 4) setStep(3);  // canales → aprobar ancla
+                  else if (step === 5) setStep(4);  // cantidad → canales
+                  else setStep(s => (s - 1) as WizardStep);
+                } : undefined}
                 onContinue={() => {
-                  if (step === 1 && canStep1) setStep(2);
-                  else if (step === 2 && canStep2) setStep(3);
-                  else if (step === 3 && canStep3) handleGenerateAnchor();
+                  // Paso 1: Brief → generar ancla (cobra pro-credit + 4 cr)
+                  if (step === 1 && canStep1) handleGenerateAnchor();
+                  // Paso 3: Aprobar ancla → canales
+                  else if (step === 3 && selectedAnchor) setStep(4);
+                  // Paso 4: Canales → cantidad
+                  else if (step === 4 && canales.length > 0) setStep(5);
+                  // Paso 5: Cantidad → generar campaña (cobra N×2 cr)
+                  else if (step === 5 && !insufficientForCampaign) handleGenerateCampaign();
                 }}
                 continueLabel={
-                  step === 3 ? 'Generar propuestas de estilo' :
+                  step === 1 ? `Generar propuestas de estilo · ${anchorCreditCost} cr` :
+                  step === 3 ? 'Usar este estilo →' :
+                  step === 4 ? 'Continuar →' :
+                  step === 5 ? `Generar campaña · ${imageCreditCost} cr` :
                   'Continuar'
                 }
                 disabled={
-                  (step === 1 && !canStep1) ||
-                  (step === 2 && !canStep2) ||
-                  (step === 3 && insufficient)
+                  (step === 1 && (!canStep1 || insufficientForAnchor)) ||
+                  (step === 3 && !selectedAnchor) ||
+                  (step === 4 && canales.length === 0) ||
+                  (step === 5 && insufficientForCampaign)
                 }
                 costInfo={
-                  step === 3 ? { cost: totalCreditCost, label: 'Créditos totales' } :
+                  step === 1 ? { cost: anchorCreditCost, label: 'Propuestas de estilo' } :
+                  step === 5 ? { cost: imageCreditCost, label: `${imageCount} imágenes` } :
                   undefined
                 }
                 loading={isGenerating}
