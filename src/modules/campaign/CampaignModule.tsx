@@ -289,8 +289,8 @@ const CampaignModule: React.FC = () => {
     setCampaignPlan(data.campaignPlan ?? null);
     setAnchorOptions(data.anchorOptions ?? []);
     setSelectedAnchor(data.selectedAnchor ?? '');
-    // Volver al paso de aprobación (3) si había anclas, si no al paso 1
-    const recoveredStep: WizardStep = (data.anchorOptions?.length > 0) ? 3 : 1;
+    // Volver al paso de aprobación (3) si había al menos 1 ancla válida, si no al paso 1
+    const recoveredStep: WizardStep = (data.anchorOptions?.some(Boolean)) ? 3 : 1;
     setStep(recoveredStep);
     setSessionRestored(true);
     setPendingRestore(null);
@@ -303,7 +303,7 @@ const CampaignModule: React.FC = () => {
 
   // Guardar sesión cuando hay anclas o plan
   useEffect(() => {
-    if ((anchorOptions.length > 0 || campaignPlan) && step >= 3) saveSession();
+    if ((anchorOptions.some(Boolean) || campaignPlan) && step >= 3) saveSession();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignPlan, anchorOptions, selectedAnchor, step, anchorAnalysis]);
 
@@ -433,7 +433,9 @@ const CampaignModule: React.FC = () => {
         { uid: user?.uid, sessionId: newSessionId() },
         (done, total, partialUrls) => {
           setProgress({ total, completed: done, current: done - 1 });
-          if (partialUrls) setAnchorOptions(partialUrls.filter(Boolean));
+          // Guardar con índices preservados (slot 0=UGC, slot 1=Editorial)
+          // sin filtrar vacíos para que el grid muestre los slots correctamente
+          if (partialUrls) setAnchorOptions(partialUrls);
         },
       );
 
@@ -444,7 +446,9 @@ const CampaignModule: React.FC = () => {
         throw new Error('No se pudieron generar las propuestas de estilo. Intentá de nuevo.');
       }
 
-      setAnchorOptions(validAnchors);
+      // Guardar el array completo preservando índices (slot 0=UGC, slot 1=Editorial)
+      // para que los labels A/B sean correctos aunque una falle
+      setAnchorOptions(anchors);
       setSelectedAnchor(validAnchors[0]);
       await refreshCredits();
       setStep(3); // → aprobar ancla
@@ -456,7 +460,8 @@ const CampaignModule: React.FC = () => {
         await deductCredits(-anchorCreditCost).catch(() => {});
         await refreshCredits().catch(() => {});
       }
-      setStep(1);
+      // Quedarse en step 2 con el error visible + botón de reintentar
+      // (no volver a step 1 — el usuario no ve el error ahí)
     } finally {
       setIsGenerating(false);
       setProgress(null);
@@ -479,8 +484,10 @@ const CampaignModule: React.FC = () => {
         idea, activeSlots,
         { uid: user?.uid, sessionId: newSessionId() },
       );
-      setAnchorOptions(anchors.filter(Boolean));
-      setSelectedAnchor(anchors[0] ?? '');
+      // Preservar índices: slot 0=UGC, slot 1=Editorial
+      setAnchorOptions(anchors);
+      const firstValid = anchors.find(Boolean) ?? '';
+      setSelectedAnchor(firstValid);
       setAnchorAnalysis(null); // resetear análisis previo
       await refreshCredits();
     } catch (err: any) {
@@ -704,7 +711,7 @@ const CampaignModule: React.FC = () => {
               <p className="text-[13px] font-bold text-amber-900">Tenés una campaña sin terminar</p>
               <p className="text-[11px] text-amber-700 mt-0.5 truncate">
                 "{pendingRestore.idea?.slice(0, 60)}{pendingRestore.idea?.length > 60 ? '…' : ''}"
-                {pendingRestore.anchorOptions?.length > 0 ? ' · Estilo listo, faltaba configurar y generar' : ' · Brief listo'}
+                {pendingRestore.anchorOptions?.some(Boolean) ? ' · Estilo listo, faltaba configurar y generar' : ' · Brief listo'}
               </p>
             </div>
             <div className="flex gap-2 flex-shrink-0">
@@ -954,23 +961,54 @@ const CampaignModule: React.FC = () => {
                 <div className="fade-in p-4 md:p-8">
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-7 items-start">
                     <div className="md:col-span-5 lg:col-span-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-2 h-2 rounded-full bg-brand-600 animate-pulse" />
-                        <span className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Generando · no cierres esta ventana</span>
-                      </div>
-                      <h2 className="font-display font-extrabold italic uppercase tracking-tight text-[22px] md:text-[26px] text-slate-900 leading-tight"
-                        style={{ fontFamily: 'Syne, Inter, sans-serif', letterSpacing: '-0.025em' }}>
-                        Generando propuestas de estilo
-                      </h2>
-                      <div className="text-[13px] text-slate-500 mt-1 mb-4">
-                        {campaignPlan?.concepto ?? 'Analizando brief y referencias...'}
-                      </div>
-                      <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-[18px]">
-                        <GenProgress steps={progressSteps} currentStepIndex={progressStepIndex} completedShots={[]} totalShots={0} />
-                      </div>
-                      <div className="mt-3 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5]">
-                        💡 Podés cerrar la ventana — te avisamos cuando termine.
-                      </div>
+                      {!isGenerating && error ? (
+                        <>
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-2 h-2 rounded-full bg-rose-500" />
+                            <span className="text-[10px] font-black text-rose-600 uppercase tracking-[0.18em]">Error al generar</span>
+                          </div>
+                          <h2 className="font-display font-extrabold italic uppercase tracking-tight text-[22px] md:text-[26px] text-slate-900 leading-tight"
+                            style={{ fontFamily: 'Syne, Inter, sans-serif', letterSpacing: '-0.025em' }}>
+                            No se pudo generar
+                          </h2>
+                          <div className="mt-3 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-[12px] text-rose-700 font-medium flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />{error}
+                          </div>
+                          <p className="text-[12px] text-slate-500 mt-3 leading-[1.5]">
+                            Tus créditos fueron reembolsados automáticamente. Podés reintentar sin costo adicional.
+                          </p>
+                          <div className="flex gap-2 mt-4">
+                            <button onClick={() => { setError(null); handleGenerateAnchor(); }}
+                              className="flex-1 bg-brand-600 hover:bg-brand-700 text-white text-[13px] font-bold px-4 py-3 rounded-xl transition-colors">
+                              Reintentar
+                            </button>
+                            <button onClick={() => { setError(null); setStep(1); }}
+                              className="px-4 py-3 rounded-xl border border-slate-200 text-[13px] text-slate-600 hover:bg-slate-50 transition-colors">
+                              Volver al brief
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-2 h-2 rounded-full bg-brand-600 animate-pulse" />
+                            <span className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Generando · no cierres esta ventana</span>
+                          </div>
+                          <h2 className="font-display font-extrabold italic uppercase tracking-tight text-[22px] md:text-[26px] text-slate-900 leading-tight"
+                            style={{ fontFamily: 'Syne, Inter, sans-serif', letterSpacing: '-0.025em' }}>
+                            Generando propuestas de estilo
+                          </h2>
+                          <div className="text-[13px] text-slate-500 mt-1 mb-4">
+                            {campaignPlan?.concepto ?? 'Analizando brief y referencias...'}
+                          </div>
+                          <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-[18px]">
+                            <GenProgress steps={progressSteps} currentStepIndex={progressStepIndex} completedShots={[]} totalShots={0} />
+                          </div>
+                          <div className="mt-3 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5]">
+                            💡 Podés cerrar la ventana — te avisamos cuando termine.
+                          </div>
+                        </>
+                      )}
                     </div>
                     <div className="md:col-span-7 lg:col-span-8">
                       <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.14em] mb-3">Propuestas de estilo</div>
@@ -1029,9 +1067,10 @@ const CampaignModule: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Grid de anclas — mismo tamaño/estilo que el grid del paso 6 */}
-                  <div className={`grid gap-3 mb-5 ${anchorOptions.length <= 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3 md:grid-cols-4'}`}>
+                  {/* Grid de anclas — preserva índices para labels correctos aunque una falle */}
+                  <div className="grid grid-cols-2 gap-3 mb-5 max-w-sm">
                     {anchorOptions.map((url, i) => {
+                      if (!url) return null; // omitir slots vacías (ancla que falló)
                       const label     = i === 0 ? 'A' : 'B';
                       const variant   = i === 0 ? '📱 UGC · iPhone orgánico · personas reales' : '📷 Editorial · revista · lookbook premium';
                       const isSelected = selectedAnchor === url;
