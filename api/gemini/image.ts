@@ -94,16 +94,14 @@ export async function markProviderUp(provider: string): Promise<void> {
 }
 
 // Elige el mejor proveedor disponible según preferencia del usuario y estado del circuit.
-// GPT Image 2 NO es fallback automático — solo se activa si el usuario lo selecciona
-// explícitamente, por su latencia alta (~60-110s vs ~30s de Gemini/Seedream).
 async function resolveProvider(requestedModel: string): Promise<'gemini' | 'seedream' | 'gptimage'> {
   let preferred: string[];
   if (requestedModel === 'seedream') {
-    preferred = ['seedream', 'gemini'];   // fallback: Gemini, nunca GPT Image 2
+    preferred = ['seedream', 'gemini'];   // fallback: Gemini
   } else if (requestedModel === 'gptimage') {
     preferred = ['gptimage'];             // sin fallback: si está caído, falla limpio
   } else {
-    preferred = ['gemini', 'seedream'];   // fallback: Seedream, nunca GPT Image 2
+    preferred = ['gemini', 'gptimage'];   // fallback: GPT Image 2 (mejor calidad que Seedream)
   }
   for (const p of preferred) {
     if (!(await isProviderDown(p))) return p as 'gemini' | 'seedream' | 'gptimage';

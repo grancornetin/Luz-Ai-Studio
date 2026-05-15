@@ -363,149 +363,26 @@ function buildTypographyInstructions(
 }
 
 // ─── Campaign Anchor World Lock (REF0 equivalent) ─────────────
-// Inyectado al INICIO de buildDerivedImagePrompt, antes del paradigma.
-// Verbaliza de forma dura y concreta el mundo visual del ancla elegida,
-// igual que injectREF0Analysis hace en ContentStudioPro.
-// Fuente: visualSpine + stylingLock del plan (ya analizados por Gemini
-// al generar el plan sobre las imágenes del usuario).
-function buildAnchorWorldLock(plan: CampaignPlan, hasModel: boolean): string {
+// Bloque único inyectado al INICIO del prompt. Absorbe spine + styling lock
+// para evitar duplicación. Mantiene bajo el conteo de tokens.
+function buildAnchorWorldLock(plan: CampaignPlan, hasModel: boolean, pieceRole?: string): string {
   const spine = plan.visualSpine;
   const lock  = plan.stylingLock;
-
-  // Sin spine no hay datos concretos — bloque vacío (no daña nada)
   if (!spine) return '';
 
-  const lines: string[] = [
-    '╔══════════════════════════════════════════════════════════════════╗',
-    '║  CAMPAIGN ANCHOR LOCK — READ THIS BEFORE ANYTHING ELSE         ║',
-    '╚══════════════════════════════════════════════════════════════════╝',
-    '',
-    'The user selected ONE anchor image that defines the VISUAL WORLD of this campaign.',
-    'You are NOT creating a new visual concept. You are shooting a NEW ANGLE',
-    'inside the EXACT SAME WORLD already established by that anchor.',
-    '',
-    '🔒🔒🔒 VISUAL WORLD LOCK (ABSOLUTE — NO DRIFT ALLOWED):',
-    `▸ Lighting      : ${spine.campaignLightingRule}`,
-    `▸ Environment   : ${spine.campaignEnvironmentRule}`,
-    `▸ Color palette : ${spine.campaignColorPaletteRule}`,
-    `▸ Composition   : ${spine.campaignCompositionRule}`,
-    `▸ Visual concept: ${spine.campaignVisualConcept}`,
-    '',
-    `🚫 NEVER BREAK: ${spine.campaignDoNotBreakRule}`,
-    '',
-    'CONTINUITY RULES (identical to the anchor — zero exceptions):',
-    `- DO NOT shift the lighting quality or direction from: ${spine.campaignLightingRule}`,
-    `- DO NOT change the environment type from: ${spine.campaignEnvironmentRule}`,
-    `- DO NOT shift the color palette from: ${spine.campaignColorPaletteRule}`,
-    '- DO NOT add new light sources, backgrounds, or environments not in the anchor.',
-    '- DO NOT introduce a dramatically different mood or atmosphere.',
-    '- This shot must feel like the photographer moved to a new position — NOT like a different campaign.',
-  ];
+  const wardrobeLine = (hasModel && lock?.hasVisibleModel)
+    ? `🔒 OUTFIT: ${lock.garmentCategory} · ${lock.outfitColorFamily} · ${lock.stylingFormality} — 🚫 ${lock.doNotSwitch}`
+    : '';
 
-  if (hasModel && lock?.hasVisibleModel) {
-    lines.push('');
-    lines.push('🔒🔒 WARDROBE WORLD LOCK (anchored to the approved anchor image):');
-    lines.push(`▸ Outfit color family : ${lock.outfitColorFamily}`);
-    lines.push(`▸ Garment category    : ${lock.garmentCategory}`);
-    lines.push(`▸ Formality           : ${lock.stylingFormality}`);
-    lines.push(`▸ Silhouette          : ${lock.silhouetteLogic}`);
-    lines.push(`▸ Fashion mood        : ${lock.fashionMood}`);
-    lines.push('');
-    lines.push(`🚫 DO NOT SWITCH: ${lock.doNotSwitch}`);
-    lines.push('🚫 DO NOT invent a new garment category outside the anchor wardrobe system.');
-    lines.push('🚫 DO NOT shift formality level (no casual if anchor is formal, no mini if anchor is midi/long).');
-  }
-
-  lines.push('');
-  lines.push('🚫🚫🚫 NO TEXT INSIDE THE IMAGE — HARD PROHIBITION:');
-  lines.push('- NO typography, NO slogan, NO headline, NO caption, NO poster layout.');
-  lines.push('- NO magazine text overlay, NO white border ad frame, NO written words.');
-  lines.push('- NO brand copy inside the photo. Text lives ONLY in the caption field.');
-  lines.push('- If you are about to place ANY text in the image → STOP and regenerate without it.');
-  lines.push('');
-  lines.push('WHAT CAN VARY (shot role, NOT visual world):');
-  lines.push('- Camera angle, distance, crop, framing');
-  lines.push('- Model pose, expression, body action');
-  lines.push('- Product interaction or campaign role of the shot');
-  lines.push('- Type of shot (hero / detail / lifestyle / close-up / worn / editorial)');
-  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-
-  return lines.join('\n');
-}
-
-// ─── Bloque CAMPAIGN VISUAL SPINE para prompts derivados ─────
-// Inyectado ANTES del visual family block para que tenga prioridad máxima.
-function buildVisualSpineBlock(plan: CampaignPlan, pieza: CampaignPiece): string {
-  const spine = plan.visualSpine;
-  if (!spine) return '';
-
-  // Si la pieza tiene una familia propia incompatible con la maestra, ignorarla
-  const effectiveFamilyId = (pieza.visualFamilyId && pieza.visualFamilyId !== spine.campaignVisualFamilyId)
-    ? spine.campaignVisualFamilyId  // heredar la maestra
-    : (pieza.visualFamilyId || spine.campaignVisualFamilyId);
-
-  // Sincronizar la pieza internamente (sin mutar — solo para el prompt)
-  const lines: string[] = [
-    '╔══════════════════════════════════════════════════════════════════╗',
-    '║   CAMPAIGN VISUAL SPINE — MAXIMUM PRIORITY — READ FIRST        ║',
-    '╚══════════════════════════════════════════════════════════════════╝',
-    '',
-    'This is the UNIFIED visual world for the ENTIRE campaign.',
-    'Every image MUST feel like it belongs to the SAME editorial series.',
-    '',
-    `▸ Master visual family : ${effectiveFamilyId || 'editorial'}`,
-    `▸ Visual concept       : ${spine.campaignVisualConcept}`,
-    `▸ Lighting rule        : ${spine.campaignLightingRule}`,
-    `▸ Environment rule     : ${spine.campaignEnvironmentRule}`,
-    `▸ Composition rule     : ${spine.campaignCompositionRule}`,
-    `▸ Color palette        : ${spine.campaignColorPaletteRule}`,
-    '',
-    `🚫 DO NOT BREAK: ${spine.campaignDoNotBreakRule}`,
-    '',
-    'CONTROLLED VARIATION (same world, different shot):',
-    '- Same lighting language → different angle',
-    '- Same color palette     → different crop',
-    '- Same environment system → different staging',
-    '- Same product identity  → different campaign role',
-    '',
-    'THIS PIECE ROLE: ' + pieza.rol,
-    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-  ];
-
-  return lines.join('\n');
-}
-
-// ─── Bloque STYLING LOCK para prompts derivados ───────────────
-// Candado estricto: conserva el sistema de outfit del ancla sin inventar variantes.
-// No abre libertad creativa — solo restringe el drift de vestuario.
-function buildStylingLockBlock(plan: CampaignPlan, hasModel: boolean): string {
-  const lock = plan.stylingLock;
-
-  // Solo aplica si el ancla tiene modelo con outfit visible
-  if (!lock?.hasVisibleModel || !hasModel) return '';
-
-  const lines: string[] = [
-    '┌─────────────────────────────────────────────────────────────────┐',
-    '│  STYLING LOCK — CONSERVE THE ANCHOR OUTFIT SYSTEM              │',
-    '└─────────────────────────────────────────────────────────────────┘',
-    '',
-    'The anchor already defined the wardrobe. Do NOT invent a new outfit.',
-    'Replicate the same styling family — only vary the pose and shot angle.',
-    '',
-    `▸ Color family    : ${lock.outfitColorFamily}`,
-    `▸ Garment type    : ${lock.garmentCategory}`,
-    `▸ Formality       : ${lock.stylingFormality}`,
-    `▸ Silhouette      : ${lock.silhouetteLogic}`,
-    `▸ Fashion mood    : ${lock.fashionMood}`,
-    '',
-    `🚫 DO NOT SWITCH: ${lock.doNotSwitch}`,
-    '🚫 DO NOT invent a new garment category — keep the same type',
-    '🚫 DO NOT switch formality level (no casual if anchor is formal)',
-    '🚫 DO NOT add catsuit, mini dress, leggings, casual pants or overly sensual styling',
-    '🚫 DO NOT let the model dominate — the product (boot/shoe) is the hero',
-  ];
-
-  return lines.join('\n');
+  return `🔒 ANCHOR LOCK — NEW ANGLE, SAME SESSION:
+Light: ${spine.campaignLightingRule}
+Environment: ${spine.campaignEnvironmentRule}
+Palette: ${spine.campaignColorPaletteRule}
+🚫 NEVER: ${spine.campaignDoNotBreakRule}
+${wardrobeLine}
+🚫 NO TEXT IN IMAGE. 🚫 NO product floating giant in foreground with tiny model behind.
+VARY ONLY: angle · crop · pose · shot type${pieceRole ? ` · this shot = ${pieceRole}` : ''}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 }
 
 // ─── Prompt para imagen de campaña derivada (con ancla) ───────
@@ -528,14 +405,8 @@ function buildDerivedImagePrompt(
     ? 'Square or slightly vertical. Clean product focus. Simple background.'
     : 'Square or 4:5. Strong focal point. Scroll-stopping composition.';
 
-  // ── Anchor World Lock — REF0 equivalent (prioridad absoluta, va primero) ──
-  const anchorWorldLock = hasAnchor ? buildAnchorWorldLock(plan, hasModel) : '';
-
-  // ── Visual Spine — columna vertebral visual (prioridad máxima) ──
-  const spineBlock = buildVisualSpineBlock(plan, pieza);
-
-  // ── Styling Lock — consistencia de vestuario editorial ──
-  const stylingLockBlock = buildStylingLockBlock(plan, hasModel);
+  // ── Anchor World Lock — spine + styling + prohibiciones en un solo bloque compacto ──
+  const anchorWorldLock = hasAnchor ? buildAnchorWorldLock(plan, hasModel, pieza.rol) : '';
 
   // ── Inteligencia visual de familia (solo editorial) ──
   // Si la pieza tiene familia incompatible con el spine, usamos la maestra.
@@ -570,28 +441,10 @@ function buildDerivedImagePrompt(
     }
   }
 
-  const sessionContinuity = hasAnchor && plan.visualSpine ? `SESSION CONTINUITY — ANCHOR IS THE VISUAL TRUTH:
-- You are taking a NEW PHOTO inside the SAME MOMENT as the anchor image.
-- Same lighting: ${plan.visualSpine.campaignLightingRule}
-- Same environment: ${plan.visualSpine.campaignEnvironmentRule}
-- Same color palette: ${plan.visualSpine.campaignColorPaletteRule}
-- Same overall mood and atmosphere — this is the SAME session, SAME world.
-- DO NOT add new backgrounds, lighting setups, or environments not established by the anchor.
-- DO NOT shift color temperature warm/cool from the anchor.
-- The anchor is the ground truth for light, color, and world. Every shot inherits it.
-` : '';
-
   return `${anchorWorldLock ? anchorWorldLock + '\n' : ''}${paradigm}
-${spineBlock ? spineBlock + '\n' : ''}${stylingLockBlock ? stylingLockBlock + '\n' : ''}${hasModel ? `
-🔴 IDENTITY LOCK (READ FIRST):
-The MODEL REFERENCE appears MULTIPLE TIMES at the start of the reference list — intentional.
-It defines ONLY: face, bone structure, hair, skin tone.
-DO NOT copy the outfit, accessories, or setting from the model reference photo.
-DO NOT average the face with the anchor or any other reference.
-The person's clothing is defined by the CAMPAIGN STYLING LOCK above, NOT by the model reference.
-` : ''}
+${hasModel ? `🔴 IDENTITY LOCK: MODEL REF = face/hair/skin ONLY. Outfit from anchor, NOT from model photo.\n` : ''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${hasAnchor ? 'CREATE A NEW PHOTO FROM THE SAME SESSION AS THE ANCHOR IMAGE.' : 'CREATE A CAMPAIGN PHOTO.'}
+${hasAnchor ? 'NEW PHOTO — SAME SESSION AS THE ANCHOR IMAGE.' : 'CAMPAIGN PHOTO.'}
 
 CAMPAIGN: "${plan.concepto}"
 ${plan.clienteIdeal ? `Target audience: ${plan.clienteIdeal}` : ''}
@@ -601,7 +454,6 @@ CHANNEL: ${canalLabel}
 VISUAL DIRECTION FOR THIS PIECE:
 ${pieza.imagePrompt}
 
-${sessionContinuity}
 ${lockSystem}
 ${visualFamilyBlock}
 ${guardrailsBlock}
@@ -610,21 +462,9 @@ CHANNEL: ${channelOpt}
 
 ${buildTypographyInstructions(plan, pieza)}
 
-NEGATIVE VISUAL DRIFT — HARD BLOCKS (these are FORBIDDEN in this image):
-🚫 No text inside the image — no typography, no slogan, no poster layout, no magazine headline, no white border frame, no overlay text, no brand copy, no written words, no caption on photo
-🚫 No new outfit category — do not invent garments outside the anchor's styling system
-🚫 No catsuit, latex bodysuit, mini dress, micro skirt, sporty leggings, casual pants
-🚫 No street background, neon night scene, wood flat lay, white ecommerce backdrop
-🚫 No dramatic lighting unrelated to the anchor's established light
-🚫 No product identity change — same product, same color, same shape as in the product reference
-🚫 No environment change — do not jump to a new location or visual world not in the anchor
-🚫 No disembodied product composition — DO NOT place the product floating in the foreground at a scale disproportionate to the model behind it. If the product and model appear together, they must exist in the SAME spatial plane (product worn on the body, held in hand, or placed naturally on a surface at body level). "Giant product in front, tiny model in back" is FORBIDDEN — it produces unrealistic scale and looks AI-generated.
-🚫 No outfit variation — DO NOT change the garment category, silhouette, or formality level from what the anchor establishes. A new shot means a new angle, NOT a new wardrobe.
+🚫 HARD BLOCKS: no text/typography · no outfit category change · no new environment · no product shape change · no product floating giant in foreground (product+model must share same spatial plane) · no catsuit/leggings/mini · no studio white backdrop · no mood/lighting shift from anchor
 
-FINAL CHECKLIST:
-${hasProduct ? '✓ Product is the visual hero — same boot, same shape, same color as product reference\n' : ''}${hasModel   ? '✓ Face: from MODEL REFERENCE only. Outfit: same system as anchor (not from model reference photo)\n' : ''}${hasAnchor  ? `✓ Same lighting (${plan.visualSpine?.campaignLightingRule ?? 'as anchor'}), color temperature, and environment as anchor\n` : ''}${plan.visualSpine ? `✓ Visual spine: same atmosphere (${plan.visualSpine.campaignColorPaletteRule}), same environment\n` : ''}${plan.stylingLock?.hasVisibleModel ? `✓ Styling lock: ${plan.stylingLock.garmentCategory} — ${plan.stylingLock.stylingFormality}\n` : ''}✓ NO text inside the image — pure product/editorial photography only
-✓ NO reference board artifacts, no collage feel
-✓ Same visual world as anchor — different shot, NOT different campaign`;
+CHECKLIST: ${hasProduct ? 'product=same as ref · ' : ''}${hasModel ? 'face=model ref only · outfit=anchor system · ' : ''}no text · same world as anchor`;
 }
 
 // ─── buildCampaignPlan ────────────────────────────────────────
