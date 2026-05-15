@@ -144,14 +144,21 @@ async function processJob(jobId: string, parts: any[]): Promise<void> {
   const MODEL = 'gemini-3.1-flash-image-preview';
   const ai    = getGenAIClient();
 
+  // Timeout de 50s — deja 10s de margen antes del límite de 60s de Vercel
+  // para que el job quede en 'failed' en Redis (no en 'processing' huérfano)
+  const abort = new AbortController();
+  const abortTimer = setTimeout(() => abort.abort(), 50_000);
+
   try {
     console.log(`[ImageWorker ${jobId}] Using ${MODEL}`);
     const response = await ai.models.generateContent({
       model:    MODEL,
       contents: [{ role: 'user', parts }],
       config:   { responseModalities: ['TEXT', 'IMAGE'] },
-    });
+      abortSignal: abort.signal,
+    } as any);
 
+    clearTimeout(abortTimer);
     const candidates = response.candidates || [];
 
     for (const candidate of candidates) {
@@ -187,16 +194,23 @@ async function processJob(jobId: string, parts: any[]): Promise<void> {
 
     throw new Error(`El modelo no generó imagen (finishReason: ${finishReason}). Reformula el prompt.`);
   } catch (err: any) {
+    clearTimeout(abortTimer);
+    // Timeout propio (AbortError) — marcar failed para que el cliente no espere 4 min
+    if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+      job.error = 'El modelo tardó demasiado. Reintentá en unos segundos.';
+    }
     // Marcar gemini como DOWN si es rate limit de Vertex
-    if (err.message?.includes('RESOURCE_EXHAUSTED') || err.message?.includes('429')) {
+    else if (err.message?.includes('RESOURCE_EXHAUSTED') || err.message?.includes('429')) {
       await redis.set('circuit:gemini', 'down', { ex: 60 * 60 * 2 });
       console.warn(`[ImageWorker] Rate limit Vertex — circuit gemini abierto por 2h`);
+      job.error = err.message || 'Flash model failed';
+    } else {
+      job.error = err.message || 'Flash model failed';
     }
     job.status    = 'failed';
-    job.error     = err.message || 'Flash model failed';
     job.updatedAt = Date.now();
     await saveJob(job);
-    console.error(`[ImageWorker ${jobId}] Failed: ${err.message}`);
+    console.error(`[ImageWorker ${jobId}] Failed: ${job.error}`);
     await persistJobOutcome(job, false);
   }
 }

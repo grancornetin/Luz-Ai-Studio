@@ -205,15 +205,34 @@ function friendlyApiError(raw: string): string {
 
 // ─── Función principal ────────────────────────────────────────────────────────
 
+// Intentos de polling donde un 404 se trata como "job aún inicializando"
+// (cubre race conditions entre Redis write y replicación o delay de QStash)
+const MAX_404_GRACE = 8;
+
 async function generateImageOnce(params: GenerateImageParams): Promise<string> {
   const { jobId, shotIndex } = await startJob(params);
 
   params.onStatusChange?.('pending', undefined, shotIndex);
 
+  let notFoundCount = 0;
+
   for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
     await sleep(POLL_INTERVAL_MS);
 
-    const job = await pollJob(jobId);
+    let job: Awaited<ReturnType<typeof pollJob>>;
+    try {
+      job = await pollJob(jobId);
+    } catch (pollErr: any) {
+      // 404 puede ser transitorio: job aún no visible en Redis o replicación pendiente
+      if (pollErr.message?.includes('404') && notFoundCount < MAX_404_GRACE) {
+        notFoundCount++;
+        console.warn(`[ImageAPI] Poll 404 (${notFoundCount}/${MAX_404_GRACE}) for ${jobId}, retrying...`);
+        continue;
+      }
+      throw pollErr;
+    }
+
+    notFoundCount = 0; // reset si el job ya responde
     params.onStatusChange?.(job.status as ImageJobStatus, job.image, shotIndex ?? job.shotIndex);
 
     if (job.status === 'completed' && job.image) return job.image;
