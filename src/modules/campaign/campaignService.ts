@@ -107,8 +107,10 @@ function selectBestRefs(slots: CampaignImageSlot[]): {
 }
 
 // ─── Construye el array de referencias estratificado ─────────
-// Mismo orden que UGC Studio: identidad primero (duplicada), luego
-// producto (duplicado), luego ancla/contexto, luego estilo/marca.
+// Orden de prioridad visual: ancla primero (define outfit + mundo),
+// luego producto (héroe visual), luego modelo (solo cara), luego resto.
+// La ancla va duplicada para máximo peso — es la verdad visual aprobada
+// por el usuario y define tanto el mundo como el styling del modelo.
 
 async function buildStratifiedRefsCompressed(
   selected: ReturnType<typeof selectBestRefs>,
@@ -116,20 +118,22 @@ async function buildStratifiedRefsCompressed(
 ): Promise<Array<{ data: string; mimeType: string }>> {
   const raw: string[] = [];
 
-  // 1. Modelo — identidad, duplicado para máximo peso
-  if (selected.modelRef) {
-    raw.push(selected.modelRef.base64);
-    raw.push(selected.modelRef.base64);
+  // 1. Ancla aprobada — duplicada, va primero (define mundo visual + outfit)
+  if (anchorImage) {
+    raw.push(anchorImage);
+    raw.push(anchorImage);
   }
 
-  // 2. Producto — visual hero, duplicado si solo hay 1
+  // 2. Producto — visual hero, duplicado si solo hay 1 ángulo
   selected.productRefs.forEach(r => raw.push(r.base64));
   if (selected.productRefs.length === 1) {
     raw.push(selected.productRefs[0].base64);
   }
 
-  // 3. Ancla elegida por Sofi (REF0)
-  if (anchorImage) raw.push(anchorImage);
+  // 3. Modelo — solo cara/identidad, va después del ancla para no confundir outfit
+  if (selected.modelRef) {
+    raw.push(selected.modelRef.base64);
+  }
 
   // 4. Inspiración
   if (selected.inspirationRef) raw.push(selected.inspirationRef.base64);
@@ -184,14 +188,17 @@ ROLE: This reference defines the EXACT product to feature. It is the VISUAL HERO
   }
 
   if (hasAnchor) {
-    locks.push(`🔒🔒 SESSION LOCK — ANCHOR IMAGE:
-ROLE: This image defines the VISUAL WORLD of this campaign session.
-- Lighting direction, color temperature, environment type, overall mood.
-- Every image must feel like it was captured in the SAME moment as this anchor.
-- Same color temperature — do NOT shift warm/cool.
-- Same ambient light quality — same direction and softness.
-- The anchor is a STYLE reference, NOT an element to copy literally.
-- DO NOT replicate the exact composition — create a new angle of the same world.`);
+    locks.push(`🔒🔒🔒 ANCHOR LOCK — APPROVED SESSION IMAGE (APPEARS TWICE AT THE TOP — MAXIMUM PRIORITY):
+ROLE: This is the anchor image approved by the user. It defines:
+  1. THE VISUAL WORLD — lighting, environment, color temperature, atmosphere.
+  2. THE STYLING SYSTEM — what the model wears (garment type, silhouette, color family, formality level).
+- Every derived image must feel shot in the SAME SESSION as this anchor.
+- Same lighting direction and quality — do NOT shift warm/cool or change light source type.
+- Same environment — do NOT jump to a different location or visual world.
+- Same outfit system — do NOT invent new garment categories outside what the anchor establishes.
+  The model must wear clothing COHERENT with the anchor's styling, even if the exact garment varies.
+- DO NOT replicate the exact composition — shoot a new angle of the same world.
+- The anchor is the VISUAL TRUTH. It overrides any conflicting instruction below.`);
   }
 
   if (selected.inspirationRef) {
@@ -308,10 +315,12 @@ The product (boot/shoe) must remain the visual hero — the model supports the p
 ${lockSystem}
 
 🚫 NO TEXT IN THE IMAGE — pure photography only. No typography, no overlay, no poster layout, no slogan, no magazine headline, no white border frame, no brand copy inside the photo.
+🚫 NO disembodied product scale — do NOT place the product floating in the foreground at a scale disproportionate to the model. Product and model must share the same spatial plane (worn, held, or placed at body level).
 
 FINAL CHECKLIST:
-${hasProduct ? '✓ Product is the visual hero — same boot/shoe, same shape and color as product reference\n' : ''}${hasModel ? '✓ Face from MODEL REFERENCE only — outfit is editorial and product-forward, NOT from the model reference photo\n' : ''}✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel, real skin, no studio' : 'editorial quality, intentional composition, NO text inside image'}
-✓ NO text, no graphic design layout, no reference board artifacts`;
+${hasProduct ? '✓ Product is the visual hero — same product, same shape and color as product reference\n' : ''}${hasModel ? '✓ Face from MODEL REFERENCE only — outfit is editorial and product-forward, NOT from the model reference photo\n' : ''}✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel, real skin, no studio' : 'editorial quality, intentional composition, NO text inside image'}
+✓ NO text, no graphic design layout, no reference board artifacts
+✓ Product and model in same spatial plane — no disproportionate foreground product floating in front of a distant model`;
 }
 
 // ─── Instrucciones tipográficas según la decisión del plan ────
@@ -607,9 +616,10 @@ NEGATIVE VISUAL DRIFT — HARD BLOCKS (these are FORBIDDEN in this image):
 🚫 No catsuit, latex bodysuit, mini dress, micro skirt, sporty leggings, casual pants
 🚫 No street background, neon night scene, wood flat lay, white ecommerce backdrop
 🚫 No dramatic lighting unrelated to the anchor's established light
-🚫 No model-as-hero framing — the product (footwear/boot/shoe) must remain visually dominant
-🚫 No product identity change — same boot, same color, same shape as in the product reference
+🚫 No product identity change — same product, same color, same shape as in the product reference
 🚫 No environment change — do not jump to a new location or visual world not in the anchor
+🚫 No disembodied product composition — DO NOT place the product floating in the foreground at a scale disproportionate to the model behind it. If the product and model appear together, they must exist in the SAME spatial plane (product worn on the body, held in hand, or placed naturally on a surface at body level). "Giant product in front, tiny model in back" is FORBIDDEN — it produces unrealistic scale and looks AI-generated.
+🚫 No outfit variation — DO NOT change the garment category, silhouette, or formality level from what the anchor establishes. A new shot means a new angle, NOT a new wardrobe.
 
 FINAL CHECKLIST:
 ${hasProduct ? '✓ Product is the visual hero — same boot, same shape, same color as product reference\n' : ''}${hasModel   ? '✓ Face: from MODEL REFERENCE only. Outfit: same system as anchor (not from model reference photo)\n' : ''}${hasAnchor  ? `✓ Same lighting (${plan.visualSpine?.campaignLightingRule ?? 'as anchor'}), color temperature, and environment as anchor\n` : ''}${plan.visualSpine ? `✓ Visual spine: same atmosphere (${plan.visualSpine.campaignColorPaletteRule}), same environment\n` : ''}${plan.stylingLock?.hasVisibleModel ? `✓ Styling lock: ${plan.stylingLock.garmentCategory} — ${plan.stylingLock.stylingFormality}\n` : ''}✓ NO text inside the image — pure product/editorial photography only
