@@ -3,6 +3,12 @@ import { Check } from 'lucide-react';
 import { ImageSlot } from '../../components/shared/ImageSlot';
 import type { StylePreset, WizardStyleState } from './wizardTypes';
 
+import imgMinimal   from '../../data/media/estilos de foto producto/minimal.png';
+import imgPremium   from '../../data/media/estilos de foto producto/premium.png';
+import imgLifestyle from '../../data/media/estilos de foto producto/lifestyle.png';
+import imgDark      from '../../data/media/estilos de foto producto/dark.png';
+import imgNatural   from '../../data/media/estilos de foto producto/natural.png';
+
 interface Step3StyleProps {
   state: WizardStyleState;
   onChange: (next: WizardStyleState) => void;
@@ -34,7 +40,7 @@ const PRESETS: PresetDef[] = [
     bgGradient: 'from-slate-50 to-slate-200',
     mockBgColor: '#f1f5f9',
     mockLightPos: 'soft',
-    imgSrc: '/examples/minimal.jpg',
+    imgSrc: imgMinimal,
   },
   {
     id: 'premium',
@@ -46,7 +52,7 @@ const PRESETS: PresetDef[] = [
     bgGradient: 'from-stone-700 to-stone-950',
     mockBgColor: '#1c1917',
     mockLightPos: 'right',
-    imgSrc: '/examples/premium.jpg',
+    imgSrc: imgPremium,
   },
   {
     id: 'lifestyle',
@@ -58,7 +64,7 @@ const PRESETS: PresetDef[] = [
     bgGradient: 'from-amber-300 to-pink-400',
     mockBgColor: '#fef3c7',
     mockLightPos: 'left',
-    imgSrc: '/examples/lifestyle.jpg',
+    imgSrc: imgLifestyle,
   },
   {
     id: 'dark',
@@ -70,7 +76,7 @@ const PRESETS: PresetDef[] = [
     bgGradient: 'from-indigo-900 to-slate-950',
     mockBgColor: '#0f172a',
     mockLightPos: 'right',
-    imgSrc: '/examples/dark.jpg',
+    imgSrc: imgDark,
   },
   {
     id: 'natural',
@@ -82,7 +88,7 @@ const PRESETS: PresetDef[] = [
     bgGradient: 'from-amber-100 to-lime-100',
     mockBgColor: '#fef9c3',
     mockLightPos: 'left',
-    imgSrc: '/examples/natural.jpg',
+    imgSrc: imgNatural,
   },
 ];
 
