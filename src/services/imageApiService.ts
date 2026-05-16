@@ -19,7 +19,8 @@ import { generationHistoryService, MODULE_LABELS } from './generationHistoryServ
 const API_URL     = '/api/gemini/image';
 const POLL_INTERVAL_MS   = 2000;   // 2 s entre polls
 const MAX_POLL_ATTEMPTS  = 120;    // 120 × 2 s = 4 minutos máximo (cubre GPT Image 2 ~135s)
-const MAX_SILENT_RETRIES = 1;      // 1 intento total (sin retry silencioso) — evita 429 acumulado
+const MAX_SILENT_RETRIES = 3;      // hasta 3 intentos con backoff para rate-limit
+const RATE_LIMIT_BACKOFF_MS = [5000, 15000, 30000]; // 5s, 15s, 30s
 
 export type ImageJobStatus = 'pending' | 'processing' | 'retrying' | 'completed' | 'failed';
 
@@ -310,6 +311,13 @@ export const imageApiService = {
       } catch (err: any) {
         lastError = err;
         console.warn(`[ImageAPI] Attempt ${retry + 1} failed: ${err.message}`);
+        // Solo hace backoff y reintenta en rate-limit; cualquier otro error falla de inmediato
+        if (err.code !== ErrorCode.RATE_LIMIT) break;
+        if (retry < MAX_SILENT_RETRIES - 1) {
+          const delay = RATE_LIMIT_BACKOFF_MS[retry] ?? 5000;
+          console.info(`[ImageAPI] Rate limit hit — waiting ${delay / 1000}s before retry ${retry + 2}...`);
+          await sleep(delay);
+        }
       }
     }
 

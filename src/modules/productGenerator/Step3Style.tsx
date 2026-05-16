@@ -12,7 +12,14 @@ interface PresetDef {
   id: StylePreset;
   title: string;
   desc: string;
-  bgClass: string;
+  // Atributos visuales que ve la IA (los mismos que buildMasterContext)
+  bgLabel: string;   // tipo de fondo
+  lightLabel: string; // tipo de luz
+  toneLabel: string;  // tono de color
+  // Visual de la tarjeta
+  bgGradient: string;
+  mockBgColor: string;   // color de fondo del producto simulado
+  mockLightPos: 'left' | 'right' | 'top' | 'soft'; // dirección de luz simulada
   imgSrc: string;
 }
 
@@ -20,39 +27,122 @@ const PRESETS: PresetDef[] = [
   {
     id: 'minimal',
     title: 'Minimalista',
-    desc: 'Fondo limpio, foco total en producto',
-    bgClass: 'bg-gradient-to-br from-slate-100 to-slate-300',
+    desc: 'Foco total en el producto. Sin distracciones.',
+    bgLabel: 'Blanco / off-white',
+    lightLabel: 'Difusa de estudio',
+    toneLabel: 'Neutro exacto',
+    bgGradient: 'from-slate-50 to-slate-200',
+    mockBgColor: '#f1f5f9',
+    mockLightPos: 'soft',
     imgSrc: '/examples/minimal.jpg',
   },
   {
     id: 'premium',
     title: 'Premium',
-    desc: 'Iluminación dramática, lujo discreto',
-    bgClass: 'bg-gradient-to-br from-slate-800 to-slate-900',
+    desc: 'Lujo discreto, iluminación de alta gama.',
+    bgLabel: 'Superficie elegante',
+    lightLabel: 'Estudio high-end',
+    toneLabel: 'Cálido-neutro refinado',
+    bgGradient: 'from-stone-700 to-stone-950',
+    mockBgColor: '#1c1917',
+    mockLightPos: 'right',
     imgSrc: '/examples/premium.jpg',
   },
   {
     id: 'lifestyle',
     title: 'Lifestyle',
-    desc: 'En contexto, situaciones reales',
-    bgClass: 'bg-gradient-to-br from-amber-400 to-pink-500',
+    desc: 'Producto en contexto real y situaciones de vida.',
+    bgLabel: 'Ambiente real',
+    lightLabel: 'Luz natural de ventana',
+    toneLabel: 'Cálido orgánico',
+    bgGradient: 'from-amber-300 to-pink-400',
+    mockBgColor: '#fef3c7',
+    mockLightPos: 'left',
     imgSrc: '/examples/lifestyle.jpg',
   },
   {
     id: 'dark',
     title: 'Oscuro',
-    desc: 'Moody, neon, alta saturación',
-    bgClass: 'bg-gradient-to-br from-indigo-700 to-slate-900',
+    desc: 'Alto contraste, atmósfera dramática y profunda.',
+    bgLabel: 'Fondo oscuro mate',
+    lightLabel: 'Direccional con sombras',
+    toneLabel: 'Contraste profundo',
+    bgGradient: 'from-indigo-900 to-slate-950',
+    mockBgColor: '#0f172a',
+    mockLightPos: 'right',
     imgSrc: '/examples/dark.jpg',
   },
   {
     id: 'natural',
     title: 'Natural',
-    desc: 'Luz cálida, materiales orgánicos',
-    bgClass: 'bg-gradient-to-br from-amber-100 to-amber-200',
+    desc: 'Luz suave, materiales orgánicos y texturas reales.',
+    bgLabel: 'Superficie texturada',
+    lightLabel: 'Luz natural suave',
+    toneLabel: 'Cálido natural',
+    bgGradient: 'from-amber-100 to-lime-100',
+    mockBgColor: '#fef9c3',
+    mockLightPos: 'left',
     imgSrc: '/examples/natural.jpg',
   },
 ];
+
+// Componente de preview del estilo — representa visualmente fondo + luz + producto
+const StyleMockup: React.FC<{ preset: PresetDef; isSelected: boolean }> = ({ preset, isSelected }) => {
+  const lightGradient = {
+    left:  'from-white/30 via-transparent to-transparent',
+    right: 'from-transparent via-transparent to-white/25',
+    top:   'from-white/20 via-transparent to-transparent',
+    soft:  'from-white/15 via-white/5 to-transparent',
+  }[preset.mockLightPos];
+
+  const isDark = ['premium', 'dark'].includes(preset.id);
+
+  return (
+    <div className={`relative aspect-[4/3] overflow-hidden rounded-t-[12px] bg-gradient-to-br ${preset.bgGradient}`}>
+      {/* Imagen real si existe, silenciosa si falla */}
+      <img
+        src={preset.imgSrc}
+        alt={`Ejemplo ${preset.title}`}
+        className="absolute inset-0 w-full h-full object-cover"
+        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+      />
+
+      {/* Overlay de luz simulada (visible cuando no hay imagen) */}
+      <div className={`absolute inset-0 bg-gradient-to-r ${lightGradient} pointer-events-none`} />
+
+      {/* Producto simulado en el centro */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div
+          className="relative w-[38px] h-[50px] rounded-md shadow-[0_6px_18px_rgba(0,0,0,0.3)]"
+          style={{ background: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.75)', backdropFilter: 'blur(2px)', border: isDark ? '1px solid rgba(255,255,255,0.15)' : '1px solid rgba(0,0,0,0.06)' }}
+        >
+          <div
+            className="absolute inset-x-2 top-2 bottom-3 rounded-sm opacity-40"
+            style={{ background: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(100,100,100,0.15)' }}
+          />
+        </div>
+        {/* sombra de contacto */}
+        <div className="absolute bottom-[22%] left-1/2 -translate-x-1/2 w-9 h-1 bg-black/20 rounded-full blur-sm" />
+      </div>
+
+      {/* Etiqueta de ejemplo */}
+      <div className="absolute top-2 left-2 bg-black/30 backdrop-blur text-white text-[8px] font-bold tracking-[0.1em] uppercase px-1.5 py-0.5 rounded-full">
+        Ejemplo
+      </div>
+
+      {/* Check seleccionado */}
+      {isSelected && (
+        <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-violet-600 text-white flex items-center justify-center shadow-[0_3px_8px_rgba(124,58,237,0.5)]">
+          <Check size={10} strokeWidth={3.5} />
+        </div>
+      )}
+
+      {isSelected && (
+        <div className="absolute inset-0 bg-violet-600/10 rounded-t-[12px] pointer-events-none" />
+      )}
+    </div>
+  );
+};
 
 export const Step3Style: React.FC<Step3StyleProps> = ({ state, onChange }) => {
   const hasRef = !!state.referenceImg;
@@ -75,17 +165,20 @@ export const Step3Style: React.FC<Step3StyleProps> = ({ state, onChange }) => {
           Define la <span className="text-pink-600 italic normal-case">dirección estética.</span>
         </h2>
         <p className="text-sm text-slate-500 mt-2 leading-[1.55]">
-          Subí una foto que te inspire o elegí un estilo predefinido. <strong>No se pueden combinar</strong> — la referencia siempre gana.
+          Subí una foto que te inspire <strong>o</strong> elegí un estilo predefinido.{' '}
+          <strong>No se pueden combinar</strong> — la referencia siempre gana.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-5">
-        {/* ZONA A — Referencia */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
+
+        {/* ── ZONA A: Subir referencia ─────────────────────────────── */}
         <div className="md:col-span-5">
           <div className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-2.5">
-            A · Subir referencia
+            A · Usar imagen de referencia
           </div>
-          <div className={`relative ${hasRef ? '' : ''}`}>
+
+          <div className="relative">
             <ImageSlot
               value={state.referenceImg}
               onChange={(v) => setRef(v)}
@@ -95,27 +188,32 @@ export const Step3Style: React.FC<Step3StyleProps> = ({ state, onChange }) => {
               iconless={false}
             />
             {hasRef && (
-              <div className="absolute top-3 left-3 bg-white text-slate-900 text-[9px] font-bold tracking-[0.12em] uppercase px-2.5 py-1.5 rounded shadow-md pointer-events-none">
+              <div className="absolute top-3 left-3 bg-white text-slate-900 text-[9px] font-bold tracking-[0.12em] uppercase px-2.5 py-1.5 rounded-full shadow-md pointer-events-none">
                 ✓ Referencia activa
               </div>
             )}
             {hasRef && (
               <div className="absolute bottom-3 left-3 right-3 bg-white/95 backdrop-blur rounded-xl px-3.5 py-2.5 text-xs text-slate-700 leading-[1.5] pointer-events-none">
-                <strong className="text-violet-600">Modo recrear inspiración activo.</strong> Usaremos esta imagen como guía visual.
+                <strong className="text-violet-600">Modo recrear inspiración activo.</strong>{' '}
+                Usaremos esta imagen como guía visual de escena, luz y composición.
               </div>
             )}
           </div>
+
           {!hasRef && (
-            <p className="text-[11px] text-slate-400 mt-2.5 leading-[1.5] italic">
-              Replicaremos el estilo manteniendo TU producto.
-            </p>
+            <div className="mt-3 bg-slate-50 border border-slate-100 rounded-xl p-3.5">
+              <p className="text-[11px] text-slate-500 leading-[1.55]">
+                <strong className="text-slate-700">¿Qué hace la referencia?</strong><br/>
+                La IA replica la escena, la cámara y la luz de tu foto, pero con <em>tu producto</em> en lugar del que aparece en la imagen.
+              </p>
+            </div>
           )}
         </div>
 
-        {/* ZONA B — Estilos rápidos */}
+        {/* ── ZONA B: Estilos rápidos ──────────────────────────────── */}
         <div
           className={`md:col-span-7 transition-opacity duration-300 ${
-            hasRef ? 'opacity-40 pointer-events-none' : 'opacity-100'
+            hasRef ? 'opacity-35 pointer-events-none' : 'opacity-100'
           }`}
         >
           <div className="flex justify-between items-baseline mb-2.5">
@@ -123,11 +221,10 @@ export const Step3Style: React.FC<Step3StyleProps> = ({ state, onChange }) => {
               B · Estilos rápidos
             </div>
             {hasRef && (
-              <div className="text-[11px] text-slate-400 italic">
-                Desactivado por referencia
-              </div>
+              <div className="text-[10px] text-slate-400 italic">Desactivado por referencia</div>
             )}
           </div>
+
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
             {PRESETS.map((p) => {
               const sel = state.preset === p.id && !hasRef;
@@ -136,36 +233,33 @@ export const Step3Style: React.FC<Step3StyleProps> = ({ state, onChange }) => {
                   key={p.id}
                   type="button"
                   onClick={() => setPreset(p.id)}
-                  className={`bg-white rounded-[14px] overflow-hidden text-left transition-all ${
+                  className={`bg-white rounded-[14px] overflow-hidden text-left transition-all border-2 ${
                     sel
-                      ? 'border-2 border-violet-600 shadow-[0_12px_28px_rgba(124,58,237,0.18)]'
-                      : 'border border-slate-200 hover:border-slate-300 hover:shadow-sm'
+                      ? 'border-violet-600 shadow-[0_10px_24px_rgba(124,58,237,0.2)]'
+                      : 'border-slate-100 hover:border-slate-200 hover:shadow-sm'
                   }`}
                 >
-                  <div className={`relative aspect-[4/3] overflow-hidden ${p.bgClass}`}>
-                    <img
-                      src={p.imgSrc}
-                      alt={`Ejemplo ${p.title}`}
-                      className="absolute inset-0 w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).style.display = 'none';
-                      }}
-                    />
-                    <div className="absolute top-2 left-2 bg-white/95 backdrop-blur text-slate-900 text-[9px] font-bold tracking-[0.12em] uppercase px-2 py-0.5 rounded">
-                      Ejemplo
-                    </div>
-                    {sel && (
-                      <div className="absolute top-2 right-2 w-5.5 h-5.5 rounded-full bg-violet-600 text-white flex items-center justify-center shadow-[0_4px_10px_rgba(124,58,237,0.4)]">
-                        <Check size={11} strokeWidth={3} />
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-3">
-                    <div className="t-display text-sm text-slate-900 normal-case italic leading-tight">
+                  <StyleMockup preset={p} isSelected={sel} />
+
+                  {/* Info del estilo */}
+                  <div className="p-2.5 pt-2">
+                    <div className="t-display text-[13px] text-slate-900 normal-case italic leading-tight mb-1.5">
                       {p.title}
                     </div>
-                    <div className="text-[11px] text-slate-500 mt-1 leading-[1.45] normal-case">
+                    <div className="text-[10.5px] text-slate-500 leading-[1.4] normal-case mb-2">
                       {p.desc}
+                    </div>
+                    {/* Tres pills: fondo / luz / tono */}
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[9px] text-slate-400 normal-case leading-[1.3]">
+                        <span className="text-slate-300">▣</span> {p.bgLabel}
+                      </span>
+                      <span className="text-[9px] text-slate-400 normal-case leading-[1.3]">
+                        <span className="text-slate-300">◎</span> {p.lightLabel}
+                      </span>
+                      <span className="text-[9px] text-slate-400 normal-case leading-[1.3]">
+                        <span className="text-slate-300">◐</span> {p.toneLabel}
+                      </span>
                     </div>
                   </div>
                 </button>
