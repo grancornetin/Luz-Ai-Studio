@@ -92,59 +92,50 @@ const PRESETS: PresetDef[] = [
   },
 ];
 
-// Componente de preview del estilo — representa visualmente fondo + luz + producto
+// Componente de preview del estilo
 const StyleMockup: React.FC<{ preset: PresetDef; isSelected: boolean }> = ({ preset, isSelected }) => {
-  const lightGradient = {
-    left:  'from-white/30 via-transparent to-transparent',
-    right: 'from-transparent via-transparent to-white/25',
-    top:   'from-white/20 via-transparent to-transparent',
-    soft:  'from-white/15 via-white/5 to-transparent',
-  }[preset.mockLightPos];
-
+  const [imgFailed, setImgFailed] = React.useState(false);
   const isDark = ['premium', 'dark'].includes(preset.id);
 
   return (
     <div className={`relative aspect-[4/3] overflow-hidden rounded-t-[12px] bg-gradient-to-br ${preset.bgGradient}`}>
-      {/* Imagen real si existe, silenciosa si falla */}
-      <img
-        src={preset.imgSrc}
-        alt={`Ejemplo ${preset.title}`}
-        className="absolute inset-0 w-full h-full object-cover"
-        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-      />
 
-      {/* Overlay de luz simulada (visible cuando no hay imagen) */}
-      <div className={`absolute inset-0 bg-gradient-to-r ${lightGradient} pointer-events-none`} />
+      {/* Imagen real — ocupa todo el espacio */}
+      {!imgFailed && (
+        <img
+          src={preset.imgSrc}
+          alt={`Ejemplo ${preset.title}`}
+          className="absolute inset-0 w-full h-full object-cover"
+          onError={() => setImgFailed(true)}
+        />
+      )}
 
-      {/* Producto simulado en el centro */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div
-          className="relative w-[38px] h-[50px] rounded-md shadow-[0_6px_18px_rgba(0,0,0,0.3)]"
-          style={{ background: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.75)', backdropFilter: 'blur(2px)', border: isDark ? '1px solid rgba(255,255,255,0.15)' : '1px solid rgba(0,0,0,0.06)' }}
-        >
-          <div
-            className="absolute inset-x-2 top-2 bottom-3 rounded-sm opacity-40"
-            style={{ background: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(100,100,100,0.15)' }}
-          />
-        </div>
-        {/* sombra de contacto */}
-        <div className="absolute bottom-[22%] left-1/2 -translate-x-1/2 w-9 h-1 bg-black/20 rounded-full blur-sm" />
-      </div>
+      {/* Fallback cuando no hay imagen: producto simulado centrado */}
+      {imgFailed && (
+        <>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div
+              className="relative w-[38px] h-[50px] rounded-md shadow-[0_6px_18px_rgba(0,0,0,0.3)]"
+              style={{ background: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.75)', backdropFilter: 'blur(2px)', border: isDark ? '1px solid rgba(255,255,255,0.15)' : '1px solid rgba(0,0,0,0.06)' }}
+            >
+              <div className="absolute inset-x-2 top-2 bottom-3 rounded-sm opacity-40"
+                style={{ background: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(100,100,100,0.15)' }} />
+            </div>
+            <div className="absolute bottom-[22%] left-1/2 -translate-x-1/2 w-9 h-1 bg-black/20 rounded-full blur-sm" />
+          </div>
+        </>
+      )}
 
-      {/* Etiqueta de ejemplo */}
-      <div className="absolute top-2 left-2 bg-black/30 backdrop-blur text-white text-[8px] font-bold tracking-[0.1em] uppercase px-1.5 py-0.5 rounded-full">
-        Ejemplo
-      </div>
+      {/* Overlay seleccionado */}
+      {isSelected && (
+        <div className="absolute inset-0 bg-violet-600/15 pointer-events-none" />
+      )}
 
       {/* Check seleccionado */}
       {isSelected && (
         <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-violet-600 text-white flex items-center justify-center shadow-[0_3px_8px_rgba(124,58,237,0.5)]">
           <Check size={10} strokeWidth={3.5} />
         </div>
-      )}
-
-      {isSelected && (
-        <div className="absolute inset-0 bg-violet-600/10 rounded-t-[12px] pointer-events-none" />
       )}
     </div>
   );

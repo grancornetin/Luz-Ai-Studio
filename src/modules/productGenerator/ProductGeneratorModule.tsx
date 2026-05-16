@@ -128,6 +128,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
   const [lastPayloads, setLastPayloads] = useState<ProductPromptPayload[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isZipping, setIsZipping] = useState(false);
+  const [retryingIndices, setRetryingIndices] = useState<number[]>([]);
   // Notificaciones Nivel 3: ID único del set actual, para que el server agrupe
   // todos los shots en una sola notificación que se va actualizando.
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -422,6 +423,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
     }
 
     setIsGenerating(true);
+    setRetryingIndices(failedIndices); // marcar todas como "reintentando" desde el inicio
     let creditsToRefund = 0;
     const refs = buildRefObjects(wizard);
     const next = [...generatedShots];
@@ -432,6 +434,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
         if (!payload) {
           next[i] = 'error';
           creditsToRefund += MODEL_CREDIT_COST[modelId];
+          setRetryingIndices((prev) => prev.filter((idx) => idx !== i));
           return;
         }
         try {
@@ -445,12 +448,11 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
             modelId,
             shotIndex:       i,
             totalShots:      generatedShots.length,
-            // Retry: NO uses el sessionId del set original. Si el set ya estaba
-            // marcado como `partial`, sumar más shots reabriría la notificación.
-            // Generamos una sesión nueva por reintento (cada retry = 1 set chico).
             sessionId:       newSessionId(),
           });
           next[i] = img;
+          setRetryingIndices((prev) => prev.filter((idx) => idx !== i)); // retirar al completar
+          setGeneratedShots([...next]); // actualizar en tiempo real
           generationHistoryService.save({
             imageUrl:    img,
             module:      'catalog',
@@ -462,6 +464,8 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
           console.error(`Reintento falló para shot ${i}:`, e);
           next[i] = 'error';
           creditsToRefund += MODEL_CREDIT_COST[modelId];
+          setRetryingIndices((prev) => prev.filter((idx) => idx !== i)); // retirar aunque falle
+          setGeneratedShots([...next]);
         }
       }),
     );
@@ -470,7 +474,8 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
       await refundCredits(creditsToRefund);
     }
 
-    setGeneratedShots(next);
+    setRetryingIndices([]);
+    setGeneratedShots([...next]);
     setIsGenerating(false);
   };
 
@@ -568,6 +573,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
     setCollageShot(null);
     setDirectorResult(null);
     setLastPayloads([]);
+    setRetryingIndices([]);
     setSelectedProduct(null);
   };
 
@@ -779,6 +785,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
                   isZipping={isZipping}
                   hasFailed={generatedShots.some((s) => s === 'error')}
                   isRetrying={isGenerating}
+                  retryingIndices={retryingIndices}
                   onRetryFailed={retryFailedShots}
                   onLightbox={(i) => {
                     const all = collageShot ? [...generatedShots, collageShot] : generatedShots;

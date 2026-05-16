@@ -3,22 +3,21 @@ import { Check, Download, FileArchive, Plus, RotateCcw, Grid3x3, RefreshCw, Aler
 
 interface Step6ResultsProps {
   productTitle: string;
-  shots: string[];                                  // imágenes generadas (placeholder 'error' si falló)
-  collageIndex?: number | null;                     // índice de la imagen-collage final (si existe)
+  shots: string[];                // 'error' marca fallidas, '' marca en progreso
+  collageIndex?: number | null;
   isZipping?: boolean;
-  hasFailed?: boolean;                              // true si alguna imagen está marcada como 'error'
-  isRetrying?: boolean;                             // true mientras se reintenta
-  onRetryFailed?: () => void;                       // reintenta solo las fallidas
+  hasFailed?: boolean;
+  isRetrying?: boolean;           // true mientras hay reintento en curso (global)
+  retryingIndices?: number[];     // índices que están siendo reintentados ahora mismo
+  onRetryFailed?: () => void;
   onLightbox: (index: number) => void;
   onDownloadIndividual: (url: string, filename: string) => void;
   onDownloadZip: () => void;
   onSaveToCatalog: () => void;
   onRestart: () => void;
-  /** Vuelve al Paso 4 (Tipo y cantidad) preservando el estado del wizard. */
   onBackToConfig?: () => void;
-  /** Vuelve al Paso 1 (Producto) preservando el estado del wizard. */
   onBackToStart?: () => void;
-  onCreateManualGrid?: (selectedIndices: number[]) => void; // opcional
+  onCreateManualGrid?: (selectedIndices: number[]) => void;
 }
 
 export const Step6Results: React.FC<Step6ResultsProps> = ({
@@ -28,6 +27,7 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
   isZipping,
   hasFailed,
   isRetrying,
+  retryingIndices = [],
   onRetryFailed,
   onLightbox,
   onDownloadIndividual,
@@ -39,10 +39,10 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
   onCreateManualGrid,
 }) => {
   const [selected, setSelected] = useState<Set<number>>(new Set());
-  const total = shots.length;
-  const canMakeGrid = selected.size >= 2;
-  const failedCount = shots.filter((s) => s === 'error').length;
+  const total        = shots.length;
+  const failedCount  = shots.filter((s) => s === 'error').length;
   const successCount = shots.filter((s) => s && s !== 'error').length;
+  const canMakeGrid  = selected.size >= 2;
 
   const toggleSel = (idx: number) => {
     setSelected((prev) => {
@@ -58,14 +58,14 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
     if (onCreateManualGrid) {
       onCreateManualGrid(Array.from(selected));
     } else {
-      alert(
-        'Función de grid manual: próximamente. Quedará una sola imagen combinada en el set.'
-      );
+      alert('Función de grid manual: próximamente.');
     }
   };
 
   return (
     <div className="fade-in p-4 md:p-8">
+
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-5">
         <div>
           <div className="flex items-center gap-2.5 mb-2 flex-wrap">
@@ -74,9 +74,18 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
             </div>
             <span className={`text-[10px] font-black uppercase tracking-[0.18em] ${hasFailed ? 'text-amber-600' : 'text-emerald-600'}`}>
               {hasFailed
-                ? `${successCount} ok · ${failedCount} fallidas`
+                ? `${successCount} ok · ${failedCount} fallida${failedCount !== 1 ? 's' : ''}`
                 : `Listo · ${total} ${total === 1 ? 'imagen' : 'imágenes'}`}
             </span>
+            {/* Indicador de reintento en curso */}
+            {isRetrying && (
+              <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">
+                <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wider">
+                  Reintentando {retryingIndices.length > 0 ? retryingIndices.length : failedCount}…
+                </span>
+              </div>
+            )}
           </div>
           <h2 className="t-display text-[28px] md:text-[34px] text-slate-900 leading-[1.05]">
             {productTitle || 'Tu producto'}{' '}
@@ -95,11 +104,9 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
               disabled={isRetrying}
               className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl px-3.5 md:px-4 py-2.5 md:py-3 text-xs font-bold transition-colors disabled:opacity-60"
             >
-              {isRetrying ? (
-                <i className="fa-solid fa-spinner animate-spin" />
-              ) : (
-                <RefreshCw size={14} />
-              )}
+              {isRetrying
+                ? <div className="w-3.5 h-3.5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                : <RefreshCw size={14} />}
               Reintentar {failedCount} fallida{failedCount !== 1 ? 's' : ''}
             </button>
           )}
@@ -109,11 +116,9 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
             disabled={isZipping || successCount === 0}
             className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-3.5 md:px-4 py-2.5 md:py-3 text-xs font-semibold text-slate-700 transition-colors disabled:opacity-60"
           >
-            {isZipping ? (
-              <i className="fa-solid fa-spinner animate-spin" />
-            ) : (
-              <FileArchive size={14} />
-            )}
+            {isZipping
+              ? <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+              : <FileArchive size={14} />}
             Pack ZIP
           </button>
           <button
@@ -127,54 +132,80 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
         </div>
       </div>
 
-      {/* Grid asimétrico */}
-      <div
-        className={`grid gap-3 md:gap-3.5 ${
-          total >= 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2'
-        }`}
-      >
+      {/* ── Grid de shots ────────────────────────────────────────────────────── */}
+      <div className={`grid gap-3 md:gap-3.5 ${total >= 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2'}`}>
         {shots.map((url, i) => {
-          const sel = selected.has(i);
-          const isHero = total >= 4 && i === 0;
-          const isError = url === 'error';
+          const sel        = selected.has(i);
+          const isHero     = total >= 4 && i === 0;
+          const isError    = url === 'error';
+          const isRetryingThis = retryingIndices.includes(i);
+          const isEmpty    = url === '';
 
           return (
-            <div
-              key={i}
-              className={`${isHero ? 'col-span-2 row-span-2' : ''}`}
-            >
+            <div key={i} className={`${isHero ? 'col-span-2 row-span-2' : ''}`}>
               <div
-                onClick={() => !isError && onLightbox(i)}
+                onClick={() => !isError && !isRetryingThis && !isEmpty && onLightbox(i)}
                 style={{ touchAction: 'manipulation' }}
-                className={`group relative w-full aspect-[3/4] rounded-2xl overflow-hidden bg-white transition-shadow duration-150 ${
-                  isError ? 'cursor-not-allowed' : 'cursor-pointer md:hover:-translate-y-0.5'
-                } ${
-                  sel
-                    ? 'shadow-[0_0_0_3px_rgb(124_58_237),0_16px_40px_rgba(124,58,237,0.25)]'
-                    : 'shadow-[0_8px_20px_rgba(15,23,42,0.06)] md:hover:shadow-md'
+                className={`group relative w-full aspect-[3/4] rounded-2xl overflow-hidden bg-white transition-all duration-200 ${
+                  isRetryingThis
+                    ? 'border-2 border-amber-400 bg-amber-50 animate-pulse cursor-wait'
+                    : isError
+                    ? 'cursor-not-allowed border-2 border-rose-200 bg-rose-50'
+                    : isEmpty
+                    ? 'bg-slate-100 cursor-default'
+                    : sel
+                    ? 'cursor-pointer shadow-[0_0_0_3px_rgb(124_58_237),0_16px_40px_rgba(124,58,237,0.25)]'
+                    : 'cursor-pointer shadow-[0_8px_20px_rgba(15,23,42,0.06)] md:hover:-translate-y-0.5 md:hover:shadow-md'
                 }`}
               >
-                {isError ? (
-                  <div className="absolute inset-0 flex items-center justify-center bg-rose-50">
-                    <div className="text-center px-4">
-                      <i className="fa-solid fa-triangle-exclamation text-rose-400 text-2xl mb-1" />
-                      <p className="text-[10px] text-rose-600 font-bold uppercase tracking-wider">
-                        Falló — reintentá
-                      </p>
-                    </div>
+                {/* ── Estado: reintentando ───────────────────────────────── */}
+                {isRetryingThis && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10">
+                    <div className="w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wider">
+                      Reintentando...
+                    </span>
                   </div>
-                ) : (
+                )}
+
+                {/* ── Estado: error ──────────────────────────────────────── */}
+                {isError && !isRetryingThis && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-4 text-center">
+                    <AlertTriangle className="w-6 h-6 text-rose-400" strokeWidth={1.5} />
+                    <p className="text-[10px] text-rose-600 font-bold uppercase tracking-wider leading-tight">
+                      Falló
+                    </p>
+                    {onRetryFailed && !isRetrying && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onRetryFailed(); }}
+                        style={{ touchAction: 'manipulation' }}
+                        className="mt-1 flex items-center gap-1 bg-white border border-rose-200 hover:border-rose-300 text-rose-600 rounded-lg px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition-colors active:scale-95"
+                      >
+                        <RefreshCw size={9} strokeWidth={2.5} />
+                        Reintentar
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Estado: vacío / en espera ─────────────────────────── */}
+                {isEmpty && !isRetryingThis && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-[10px] text-slate-400 font-semibold">{i + 1}</div>
+                  </div>
+                )}
+
+                {/* ── Estado: imagen lista ───────────────────────────────── */}
+                {url && url !== 'error' && !isRetryingThis && (
                   <img src={url} alt={`Shot ${i + 1}`} className="w-full h-full object-cover" />
                 )}
 
-                {/* checkbox */}
-                {!isError && (
+                {/* ── Checkbox de selección ──────────────────────────────── */}
+                {url && url !== 'error' && !isRetryingThis && (
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleSel(i);
-                    }}
+                    onClick={(e) => { e.stopPropagation(); toggleSel(i); }}
                     style={{ touchAction: 'manipulation' }}
                     aria-label={sel ? 'Quitar selección' : 'Seleccionar imagen'}
                     className={`absolute top-2.5 left-2.5 z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow transition-colors duration-150 ${
@@ -187,28 +218,24 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
                   </button>
                 )}
 
-                {/* label top-right */}
-                <div className={`absolute top-2.5 right-2.5 text-[9px] font-bold tracking-[0.12em] uppercase px-2 py-1 rounded ${
-                  i === collageIndex
-                    ? 'bg-pink-600 text-white'
-                    : 'bg-white/95 text-slate-900'
-                }`}>
-                  {i === collageIndex
-                    ? 'Grid final'
-                    : i === 0 && total >= 4
-                    ? 'Hero'
-                    : `Shot ${i + 1}`}
-                </div>
+                {/* ── Label top-right ────────────────────────────────────── */}
+                {!isRetryingThis && !isError && !isEmpty && (
+                  <div className={`absolute top-2.5 right-2.5 text-[9px] font-bold tracking-[0.12em] uppercase px-2 py-1 rounded ${
+                    i === collageIndex ? 'bg-pink-600 text-white' : 'bg-white/95 text-slate-900'
+                  }`}>
+                    {i === collageIndex ? 'Grid final' : i === 0 && total >= 4 ? 'Hero' : `Shot ${i + 1}`}
+                  </div>
+                )}
 
-                {/* download */}
-                {!isError && (
+                {/* ── Botón de descarga individual ───────────────────────── */}
+                {url && url !== 'error' && !isRetryingThis && (
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       onDownloadIndividual(
                         url,
-                        `${productTitle.replace(/\s+/g, '_') || 'product'}_shot_${i + 1}.png`
+                        `${productTitle.replace(/\s+/g, '_') || 'product'}_shot_${i + 1}.png`,
                       );
                     }}
                     style={{ touchAction: 'manipulation' }}
@@ -224,7 +251,7 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
         })}
       </div>
 
-      {/* Selection bar (sticky bottom dentro del scroll) */}
+      {/* ── Barra de selección sticky ────────────────────────────────────────── */}
       {selected.size > 0 && (
         <div className="sticky bottom-4 mt-6 z-20 bg-slate-900 text-white rounded-2xl px-4 py-3 md:px-5 md:py-3.5 shadow-2xl flex items-center gap-3.5 flex-wrap">
           <div className="flex items-center gap-2.5">
@@ -233,13 +260,10 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
             </div>
             <div>
               <div className="text-[13px] font-semibold">
-                {selected.size}{' '}
-                {selected.size === 1 ? 'imagen seleccionada' : 'imágenes seleccionadas'}
+                {selected.size} {selected.size === 1 ? 'imagen seleccionada' : 'imágenes seleccionadas'}
               </div>
               <div className="text-[11px] opacity-70">
-                {canMakeGrid
-                  ? 'Listas para crear grid manual'
-                  : 'Seleccioná 1 más para hacer un grid'}
+                {canMakeGrid ? 'Listas para crear grid manual' : 'Seleccioná 1 más para hacer un grid'}
               </div>
             </div>
           </div>
@@ -267,9 +291,8 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
         </div>
       )}
 
-      {/* Footer actions */}
+      {/* ── Footer de acciones ───────────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:justify-between md:items-center mt-7 pt-5 border-t border-slate-200 gap-2 md:gap-3.5">
-        {/* Izquierda: ajustar / reintentar todo */}
         <div className="flex flex-wrap gap-2">
           {onBackToConfig && (
             <button
@@ -294,7 +317,6 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
             </button>
           )}
         </div>
-        {/* Derecha: empezar de cero / proyecto */}
         <div className="flex flex-wrap gap-2 md:justify-end">
           <button
             type="button"

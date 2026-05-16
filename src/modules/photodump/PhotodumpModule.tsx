@@ -739,20 +739,32 @@ const PhotodumpModule: React.FC = () => {
                       </div>
                       <div className={`grid gap-3 ${count <= 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3'}`}>
                         {Array.from({ length: count }).map((_, i) => {
-                          const imgUrl = partialImages[i] ?? '';
-                          const done   = !!imgUrl;
-                          const active = !done && progress ? i === progress.completed && isGenerating : false;
+                          const imgUrl   = partialImages[i] ?? '';
+                          const done     = !!imgUrl;
+                          const failed   = !done && !isGenerating && !!error;
+                          const active   = !done && !failed && progress ? i === progress.completed && isGenerating : false;
                           return (
                             <div key={i}
                               style={{ aspectRatio: DESTINO_META[destino].aspectRatio }}
-                              className={`relative rounded-2xl overflow-hidden transition-all ${done ? 'fade-in shadow-md' : active ? 'border-2 border-brand-600 bg-slate-100 animate-pulse' : 'bg-slate-100'}`}>
+                              className={`relative rounded-2xl overflow-hidden transition-all ${
+                                done   ? 'fade-in shadow-md' :
+                                failed ? 'border-2 border-rose-300 bg-rose-50' :
+                                active ? 'border-2 border-brand-600 bg-slate-100 animate-pulse' :
+                                'bg-slate-100'
+                              }`}>
                               {imgUrl && <img src={imgUrl} alt={`Imagen ${i + 1}`} className="w-full h-full object-cover" />}
                               {active && !imgUrl && (
                                 <div className="absolute inset-0 flex items-center justify-center">
                                   <div className="bg-white/95 rounded-full px-3.5 py-1.5 text-[10px] font-bold text-brand-600 tracking-[0.12em] uppercase">Generando...</div>
                                 </div>
                               )}
-                              {!done && !active && (
+                              {failed && (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
+                                  <AlertTriangle className="w-5 h-5 text-rose-400" strokeWidth={1.5} />
+                                  <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wider">No generada</span>
+                                </div>
+                              )}
+                              {!done && !active && !failed && (
                                 <div className="absolute top-2 left-2 text-[10px] text-slate-400 font-semibold">{i + 1}</div>
                               )}
                               {done && (

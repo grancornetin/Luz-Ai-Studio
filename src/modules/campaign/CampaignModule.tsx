@@ -453,7 +453,7 @@ const CampaignModule: React.FC = () => {
       setAnchorOptions(anchors);
       setSelectedAnchor(validAnchors[0]);
       await refreshCredits();
-      setStep(3); // → aprobar ancla
+      // Quedarse en step 2 — las tarjetas ya están visibles y se vuelven seleccionables
     } catch (err: any) {
       console.error('[Campaign] handleGenerateAnchor error:', err);
       setError(`Error generando las propuestas de estilo: ${err?.message || err}`);
@@ -993,54 +993,93 @@ const CampaignModule: React.FC = () => {
                             </button>
                           </div>
                         </>
-                      ) : (
-                        <>
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className="w-2 h-2 rounded-full bg-brand-600 animate-pulse" />
-                            <span className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Generando · no cierres esta ventana</span>
-                          </div>
-                          <h2 className="font-display font-extrabold italic uppercase tracking-tight text-[22px] md:text-[26px] text-slate-900 leading-tight"
-                            style={{ fontFamily: 'Syne, Inter, sans-serif', letterSpacing: '-0.025em' }}>
-                            Generando propuestas de estilo
-                          </h2>
-                          <div className="text-[13px] text-slate-500 mt-1 mb-4">
-                            {campaignPlan?.concepto ?? 'Analizando brief y referencias...'}
-                          </div>
-                          <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-[18px]">
-                            <GenProgress steps={progressSteps} currentStepIndex={progressStepIndex} completedShots={[]} totalShots={0} />
-                          </div>
-                          <div className="mt-3 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5]">
-                            💡 Podés cerrar la ventana — te avisamos cuando termine.
-                          </div>
-                        </>
-                      )}
+                      ) : (() => {
+                          const anchorsReady = !isGenerating && anchorOptions.some(Boolean);
+                          return (
+                            <>
+                              <div className="flex items-center gap-2 mb-2">
+                                {anchorsReady
+                                  ? <><div className="w-2 h-2 rounded-full bg-emerald-500" /><span className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.18em]">Listo · elegí un estilo</span></>
+                                  : <><div className="w-2 h-2 rounded-full bg-brand-600 animate-pulse" /><span className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Generando · no cierres esta ventana</span></>
+                                }
+                              </div>
+                              <h2 className="font-display font-extrabold italic uppercase tracking-tight text-[22px] md:text-[26px] text-slate-900 leading-tight"
+                                style={{ fontFamily: 'Syne, Inter, sans-serif', letterSpacing: '-0.025em' }}>
+                                {anchorsReady ? 'Elegí el estilo de tu campaña' : 'Generando propuestas de estilo'}
+                              </h2>
+                              <div className="text-[13px] text-slate-500 mt-1 mb-4">
+                                {anchorsReady
+                                  ? 'La imagen que elijas define el estilo visual de toda la campaña.'
+                                  : (campaignPlan?.concepto ?? 'Analizando brief y referencias...')}
+                              </div>
+                              {!anchorsReady && (
+                                <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-[18px]">
+                                  <GenProgress steps={progressSteps} currentStepIndex={progressStepIndex} completedShots={[]} totalShots={0} />
+                                </div>
+                              )}
+                              <div className="mt-3 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5]">
+                                💡 Podés cerrar la ventana — te avisamos cuando termine.
+                              </div>
+                              {anchorsReady && (
+                                <button type="button"
+                                  onClick={() => selectedAnchor && setStep(4)}
+                                  disabled={!selectedAnchor}
+                                  className="mt-3 w-full py-4 bg-brand-600 hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-lg">
+                                  Usar este estilo · Configurar campaña →
+                                </button>
+                              )}
+                            </>
+                          );
+                        })()}
                     </div>
                     <div className="md:col-span-7 lg:col-span-8">
                       <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.14em] mb-3">Propuestas de estilo</div>
                       <div className="grid grid-cols-2 gap-4">
                         {[0, 1].map(i => {
-                          const done    = progress ? i < progress.completed : false;
-                          const active  = progress ? i === progress.completed && isGenerating : false;
-                          const imgUrl  = anchorOptions[i] ?? '';
-                          return (
-                            <div key={i} className={`relative aspect-[3/4] rounded-2xl overflow-hidden transition-all ${done && imgUrl ? 'fade-in shadow-md' : active ? 'border-2 border-brand-600 bg-slate-100 animate-pulse' : 'bg-slate-100'}`}>
-                              {/* Imagen real cuando llega */}
-                              {imgUrl && (
-                                <img src={imgUrl} alt={`Opción ${i === 0 ? 'A' : 'B'}`} className="w-full h-full object-cover" />
+                          const ready      = !isGenerating && anchorOptions.some(Boolean);
+                          const done       = progress ? i < progress.completed : false;
+                          const active     = progress ? i === progress.completed && isGenerating : false;
+                          const imgUrl     = anchorOptions[i] ?? '';
+                          const isSelected = selectedAnchor === imgUrl && !!imgUrl;
+                          const label      = i === 0 ? 'A' : 'B';
+                          const variant    = i === 0 ? '📱 UGC · iPhone orgánico' : '📷 Editorial · lookbook';
+                          return ready && imgUrl ? (
+                            // Tarjeta seleccionable cuando ya terminó
+                            <button key={i} type="button" onClick={() => setSelectedAnchor(imgUrl)}
+                              className={`relative aspect-[3/4] rounded-2xl overflow-hidden border-4 transition-all cursor-pointer group fade-in ${isSelected ? 'border-brand-600 shadow-xl' : 'border-transparent hover:border-slate-300'}`}>
+                              <img src={imgUrl} alt={`Opción ${label}`} className="w-full h-full object-cover" />
+                              <div className={`absolute inset-0 transition-opacity ${isSelected ? 'bg-brand-600/10' : 'bg-black/0 group-hover:bg-black/5'}`} />
+                              {isSelected && (
+                                <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-brand-600 flex items-center justify-center shadow-lg">
+                                  <Check className="w-3 h-3 text-white" strokeWidth={3} />
+                                </div>
                               )}
-                              {/* Placeholder animado */}
+                              <div className="absolute top-2 left-2">
+                                <span className="bg-black/60 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full">
+                                  Opción {label}
+                                </span>
+                              </div>
+                              <div className="absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t from-black/70 to-transparent">
+                                <p className="text-white text-[10px] font-semibold leading-tight">{variant}</p>
+                                {isSelected && <p className="text-brand-300 text-[9px] font-bold uppercase tracking-wider mt-0.5">SELECCIONADA ✓</p>}
+                              </div>
+                            </button>
+                          ) : (
+                            // Tarjeta en estado cargando/esperando
+                            <div key={i} className={`relative aspect-[3/4] rounded-2xl overflow-hidden transition-all ${done && imgUrl ? 'fade-in shadow-md' : active ? 'border-2 border-brand-600 bg-slate-100 animate-pulse' : 'bg-slate-100'}`}>
+                              {imgUrl && (
+                                <img src={imgUrl} alt={`Opción ${label}`} className="w-full h-full object-cover" />
+                              )}
                               {!imgUrl && active && (
                                 <div className="absolute inset-0 flex items-center justify-center">
                                   <div className="bg-white/95 rounded-full px-3.5 py-1.5 text-[10px] font-bold text-brand-600 tracking-[0.12em] uppercase">Generando...</div>
                                 </div>
                               )}
-                              {/* Label de opción */}
                               <div className="absolute top-3 left-3">
                                 <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full ${imgUrl ? 'bg-black/60 text-white' : 'text-slate-400'}`}>
-                                  Opción {i === 0 ? 'A' : 'B'}
+                                  Opción {label}
                                 </span>
                               </div>
-                              {/* Check cuando está lista */}
                               {done && imgUrl && (
                                 <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shadow">
                                   <Check className="w-3 h-3 text-white" strokeWidth={3} />
@@ -1749,35 +1788,32 @@ const CampaignModule: React.FC = () => {
             </div>
 
             {/* ── WIZARD FOOTER — pasos de configuración ── */}
-            {(step === 1 || step === 3 || step === 4 || step === 5) && (
+            {(step === 1 || (step === 2 && !isGenerating && anchorOptions.some(Boolean)) || step === 3 || step === 4 || step === 5) && (
               <WizardFooter
                 onBack={step > 1 && !isGenerating ? () => {
-                  // Navegación hacia atrás con los nuevos pasos
-                  if (step === 3) setStep(1);       // aprobar ancla → brief
-                  else if (step === 4) setStep(3);  // canales → aprobar ancla
+                  if (step === 2) setStep(1);       // propuestas → brief
+                  else if (step === 3) setStep(1);  // aprobar ancla (legacy) → brief
+                  else if (step === 4) setStep(2);  // canales → propuestas
                   else if (step === 5) setStep(4);  // cantidad → canales
                   else setStep(s => (s - 1) as WizardStep);
                 } : undefined}
                 onContinue={() => {
-                  // Paso 1: Brief → generar ancla (cobra pro-credit + 4 cr)
                   if (step === 1 && canStep1) handleGenerateAnchor();
-                  // Paso 3: Aprobar ancla → canales
+                  else if (step === 2 && selectedAnchor) setStep(4);
                   else if (step === 3 && selectedAnchor) setStep(4);
-                  // Paso 4: Canales → cantidad
                   else if (step === 4 && canales.length > 0) setStep(5);
-                  // Paso 5: Cantidad → generar campaña (cobra N×2 cr)
                   else if (step === 5 && !insufficientForCampaign) handleGenerateCampaign();
                 }}
                 continueLabel={
                   step === 1 ? `Generar propuestas de estilo · ${anchorCreditCost} cr` :
-                  step === 3 ? 'Usar este estilo →' :
+                  (step === 2 || step === 3) ? 'Usar este estilo →' :
                   step === 4 ? 'Continuar →' :
                   step === 5 ? `Generar campaña · ${imageCreditCost} cr` :
                   'Continuar'
                 }
                 disabled={
                   (step === 1 && (!canStep1 || insufficientForAnchor)) ||
-                  (step === 3 && !selectedAnchor) ||
+                  ((step === 2 || step === 3) && !selectedAnchor) ||
                   (step === 4 && canales.length === 0) ||
                   (step === 5 && insufficientForCampaign)
                 }

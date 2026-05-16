@@ -50,18 +50,38 @@ export interface AppError {
 }
 
 /** Convierte un mensaje de error crudo en un AppError con código clasificado */
-export function parseErrorCode(raw: string): AppError {
-  const lower = (raw || '').toLowerCase();
+export function parseErrorCode(raw: unknown): AppError {
+  // Extraer un string limpio de cualquier tipo de entrada
+  let asString: string;
+  if (typeof raw === 'string') {
+    asString = raw;
+  } else if (raw instanceof Error) {
+    asString = raw.message;
+  } else if (raw != null && typeof raw === 'object') {
+    // Objeto estructurado: extraer code/message directamente sin JSON.stringify
+    const obj = raw as Record<string, any>;
+    const code = obj?.error?.code ?? obj?.code;
+    const msg  = obj?.error?.message ?? obj?.message ?? '';
+    if (code === 429 || String(code) === '429') {
+      return { code: ErrorCode.RATE_LIMIT, message: 'Demasiadas solicitudes simultáneas. Espera unos segundos e intenta de nuevo.' };
+    }
+    if (typeof msg === 'string' && msg) return parseErrorCode(msg);
+    asString = typeof msg === 'string' ? msg : (String(code) || 'Error desconocido');
+  } else {
+    asString = '';
+  }
 
-  // Intentar extraer JSON de la API
+  const lower = asString.toLowerCase();
+
+  // Intentar extraer JSON si viene como string serializado
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(asString);
     const code = parsed?.error?.code ?? parsed?.code;
     const msg  = parsed?.error?.message ?? parsed?.message ?? '';
     if (code === 429 || String(code) === '429') {
       return { code: ErrorCode.RATE_LIMIT, message: 'Demasiadas solicitudes simultáneas. Espera unos segundos e intenta de nuevo.' };
     }
-    if (msg) return parseErrorCode(msg); // recursión con el mensaje extraído
+    if (typeof msg === 'string' && msg) return parseErrorCode(msg);
   } catch { /* no es JSON */ }
 
   if (lower.includes('429') || lower.includes('quota') || lower.includes('resource_exhausted') || lower.includes('exhausted')) {
@@ -86,7 +106,7 @@ export function parseErrorCode(raw: string): AppError {
     return { code: ErrorCode.SERVER_ERROR, message: 'Error interno del servidor. Tus créditos serán reembolsados automáticamente. Intenta de nuevo.' };
   }
 
-  return { code: ErrorCode.UNKNOWN, message: raw || 'Ocurrió un error inesperado. Intenta de nuevo.' };
+  return { code: ErrorCode.UNKNOWN, message: asString || 'Ocurrió un error inesperado. Intenta de nuevo.' };
 }
 
 export type ModelId = 'gemini' | 'seedream' | 'gptimage';
@@ -179,29 +199,9 @@ async function sleep(ms: number): Promise<void> {
 
 // Convierte mensajes técnicos de la API en mensajes amigables para el usuario.
 // Maneja tanto strings planos como JSON crudo con estructura { error: { code, message } }
-function friendlyApiError(raw: string): string {
-  // Intentar extraer el mensaje real si viene como JSON
-  let msg = (raw || '').toLowerCase();
-  try {
-    const parsed = JSON.parse(raw);
-    const code = parsed?.error?.code ?? parsed?.code;
-    const message = parsed?.error?.message ?? parsed?.message ?? '';
-    if (code === 429 || String(code) === '429') {
-      return 'Espera un momento — demasiadas solicitudes. Intenta de nuevo en unos segundos.';
-    }
-    msg = message.toLowerCase();
-  } catch { /* no es JSON, usar el string raw */ }
-
-  if (msg.includes('429') || msg.includes('quota') || msg.includes('resource_exhausted') || msg.includes('resource has been exhausted') || msg.includes('exhausted')) {
-    return 'Espera un momento — demasiadas solicitudes. Intenta de nuevo en unos segundos.';
-  }
-  if (msg.includes('timeout') || msg.includes('timed out')) {
-    return 'La generación tardó demasiado. Intenta de nuevo.';
-  }
-  if (msg.includes('content') && (msg.includes('filter') || msg.includes('block') || msg.includes('policy'))) {
-    return 'El contenido fue bloqueado por las políticas de la IA. Ajusta el prompt e intenta de nuevo.';
-  }
-  return raw;
+function friendlyApiError(raw: unknown): string {
+  const appErr = parseErrorCode(raw);
+  return appErr.message;
 }
 
 // ─── Función principal ────────────────────────────────────────────────────────
@@ -238,7 +238,7 @@ async function generateImageOnce(params: GenerateImageParams): Promise<string> {
 
     if (job.status === 'completed' && job.image) return job.image;
     if (job.status === 'failed') {
-      const appErr = parseErrorCode(job.error || 'Image generation failed');
+      const appErr = parseErrorCode(job.error ?? 'Image generation failed');
       const err = new Error(appErr.message) as any;
       err.code = appErr.code;
       throw err;
