@@ -198,6 +198,8 @@ const CampaignModule: React.FC = () => {
   const [partialImages,     setPartialImages]     = useState<string[]>([]);
   // Imágenes fallidas al generar campaña (índices de las que no se generaron)
   const [failedIndexes,     setFailedIndexes]     = useState<number[]>([]);
+  // Índices que están siendo reintentados actualmente
+  const [retryingIndexes,   setRetryingIndexes]   = useState<number[]>([]);
 
   // Results UI state
   const [expandedPieza, setExpandedPieza] = useState<string | null>(null);
@@ -531,6 +533,7 @@ const CampaignModule: React.FC = () => {
     setIsGenerating(true);
     setError(null);
     setFailedIndexes([]);
+    setRetryingIndexes(retryIndexes ?? []);
     if (!retryIndexes) {
       setCurrentSet(null);
       setPartialImages([]);
@@ -647,6 +650,7 @@ const CampaignModule: React.FC = () => {
       clearSession();
       setCurrentSet(set);
       setFailedIndexes([]);
+      setRetryingIndexes([]);
       setStep(7);
       await refreshCredits();
     } catch (err: any) {
@@ -661,6 +665,7 @@ const CampaignModule: React.FC = () => {
     } finally {
       setIsGenerating(false);
       setProgress(null);
+      setRetryingIndexes([]);
     }
   };
 
@@ -1229,20 +1234,29 @@ const CampaignModule: React.FC = () => {
                       </div>
                       <div className={`grid gap-3 ${imageCount <= 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3 md:grid-cols-4'}`}>
                         {Array.from({ length: imageCount }).map((_, i) => {
-                          const imgUrl  = partialImages[i] ?? '';
-                          const done    = !!imgUrl;
-                          const failed  = failedIndexes.includes(i);
-                          const active  = !done && !failed && progress ? i === progress.completed && isGenerating : false;
+                          const imgUrl    = partialImages[i] ?? '';
+                          const done      = !!imgUrl;
+                          const retrying  = !done && isGenerating && retryingIndexes.includes(i);
+                          const failed    = failedIndexes.includes(i);
+                          const active    = !done && !failed && !retrying && progress ? i === progress.completed && isGenerating : false;
                           return (
                             <div key={i} className={`relative aspect-[3/4] rounded-2xl overflow-hidden transition-all ${
-                              done    ? 'fade-in shadow-md' :
-                              failed  ? 'border-2 border-rose-400 bg-rose-50' :
-                              active  ? 'border-2 border-brand-600 bg-slate-100 animate-pulse' :
+                              done      ? 'fade-in shadow-md' :
+                              retrying  ? 'border-2 border-amber-400 bg-amber-50 animate-pulse' :
+                              failed    ? 'border-2 border-rose-400 bg-rose-50' :
+                              active    ? 'border-2 border-brand-600 bg-slate-100 animate-pulse' :
                               'bg-slate-100'
                             }`}>
                               {/* Imagen real cuando llega */}
                               {imgUrl && (
                                 <img src={imgUrl} alt={`Pieza ${i + 1}`} className="w-full h-full object-cover" />
+                              )}
+                              {/* Loader de reintento */}
+                              {retrying && (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                                  <div className="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                                  <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wider">Reintentando...</span>
+                                </div>
                               )}
                               {/* Indicador activo */}
                               {active && !imgUrl && (
@@ -1251,14 +1265,14 @@ const CampaignModule: React.FC = () => {
                                 </div>
                               )}
                               {/* Indicador de fallo */}
-                              {failed && (
+                              {failed && !retrying && (
                                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
                                   <AlertTriangle className="w-5 h-5 text-rose-400" />
                                   <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wider">Falló</span>
                                 </div>
                               )}
                               {/* Número de pieza cuando está esperando */}
-                              {!done && !active && !failed && (
+                              {!done && !active && !failed && !retrying && (
                                 <div className="absolute top-2 left-2 text-[10px] text-slate-400 font-semibold">{i + 1}</div>
                               )}
                               {/* Check cuando está lista */}
