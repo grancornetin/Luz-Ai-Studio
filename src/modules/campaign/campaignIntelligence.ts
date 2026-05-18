@@ -14,6 +14,7 @@ export interface VisualFamily {
   name?: string;
   familyName?: string;
   compatibleModoVisual?: 'ugc' | 'editorial' | string;
+  usageClass?: 'ugc_core' | 'story_support' | 'creator_aesthetic' | 'editorial' | 'reject' | string;
   definition?: string;
   strategicSummary?: string;
   commercialIntentDNA?: {

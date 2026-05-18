@@ -17,9 +17,16 @@ import {
   extractAnchorPromptBlock,
   extractGuardrails,
 } from './campaignIntelligence';
+import {
+  initUgcIntelligence,
+  buildUgcIntelligencePromptBlock,
+  getUgcFamilyById,
+  getTopUgcFamilyFromPieces,
+} from './ugcIntelligence';
 
 // Precarga los JSON de inteligencia visual en background al importar este módulo
 initCampaignIntelligence();
+initUgcIntelligence();
 
 // ─── Negativos base (anatomía + identidad + texto — siempre) ──
 const NEGATIVE_BASE = [
@@ -576,8 +583,11 @@ function buildDerivedImagePrompt(
   let visualFamilyBlock = '';
   let guardrailsBlock = '';
 
-  if (modo === 'editorial' && effectiveFamilyId) {
-    const family = getFamilyById(effectiveFamilyId);
+  if (effectiveFamilyId) {
+    const family = modo === 'ugc'
+      ? getUgcFamilyById(effectiveFamilyId)
+      : getFamilyById(effectiveFamilyId);
+
     if (family) {
       const blendText = extractBlendText(family);
       const baseBlock = extractBasePromptBlock(family);
@@ -644,11 +654,14 @@ export async function buildCampaignPlan(
 
   const hasInspirationImages = !!selected.inspirationRef;
 
-  // ── Inteligencia visual editorial (solo si hay familias cargadas) ──
-  // El modo visual final se decide cuando la usuaria elige el ancla,
-  // pero incluimos el bloque editorial para que Gemini pueda asignar familias
-  // desde el inicio. Si no hay familias, el bloque queda vacío y no afecta nada.
-  const intelligenceBlock = buildCampaignIntelligencePromptBlock('editorial');
+  // ── Inteligencia visual (editorial + UGC) ─────────────────────
+  // El modo visual final se decide cuando el usuario elige el ancla.
+  // Incluimos ambos bloques para que Gemini pueda asignar familias
+  // de cualquier modo desde el inicio. Si no hay familias, el bloque
+  // queda vacío y no afecta nada.
+  const editorialBlock = buildCampaignIntelligencePromptBlock('editorial');
+  const ugcBlock       = buildUgcIntelligencePromptBlock();
+  const intelligenceBlock = [editorialBlock, ugcBlock].filter(Boolean).join('\n\n');
 
   // ── Prioridad 1: Prompt en dos fases (Director Creativo → Brief de Fotógrafo) ──
   // VISUAL SPINE CONTEXT: instrucciones para que Gemini elija UNA familia visual maestra
@@ -898,11 +911,13 @@ export async function generateAnchorImages(
   const partialResults: string[] = ['', ''];
 
   // Para la variante B (editorial) usamos el visual spine del plan (familia maestra).
-  // Si no hay spine, fallback a la familia más frecuente en las piezas.
+  // Para la variante A (ugc) usamos la familia ugc_core más frecuente en las piezas.
+  // Si no hay spine, fallback a la familia más frecuente.
   const spine = plan.visualSpine;
-  const topFamily = spine?.campaignVisualFamilyId
+  const topEditorialFamily = spine?.campaignVisualFamilyId
     ? (getFamilyById(spine.campaignVisualFamilyId) ?? getTopFamilyFromPieces(plan.piezas ?? []))
     : getTopFamilyFromPieces(plan.piezas ?? []);
+  const topUgcFamily = getTopUgcFamilyFromPieces(plan.piezas ?? []);
 
   const generateOne = async (variant: 'A' | 'B', index: number): Promise<string> => {
     const modo: ModoVisual = variant === 'A' ? 'ugc' : 'editorial';
@@ -924,11 +939,18 @@ Establish these rules visually — all derived images will inherit them:
 ▸ Color palette   : ${spine.campaignColorPaletteRule}
 🚫 Never break     : ${spine.campaignDoNotBreakRule}`;
       }
-      if (topFamily) {
-        const anchorBlock = extractAnchorPromptBlock(topFamily);
+      if (topEditorialFamily) {
+        const anchorBlock = extractAnchorPromptBlock(topEditorialFamily);
         if (anchorBlock) {
           basePrompt += `\n\nEDITORIAL VISUAL FAMILY ANCHOR:\n${anchorBlock}`;
         }
+      }
+    }
+
+    if (variant === 'A' && topUgcFamily) {
+      const anchorBlock = extractAnchorPromptBlock(topUgcFamily);
+      if (anchorBlock) {
+        basePrompt += `\n\nUGC VISUAL FAMILY ANCHOR:\n${anchorBlock}`;
       }
     }
 
@@ -1048,9 +1070,10 @@ export async function generateAnchorImagesFromBrief(
   const refs     = await buildStratifiedRefsCompressed(selected);
   const partialResults: string[] = ['', ''];
 
-  // Para la variante editorial, elegir la familia visual más representativa
-  // de la inteligencia pre-entrenada, sin necesitar un plan.
-  const intelligenceBlock = buildCampaignIntelligencePromptBlock('editorial');
+  // Para la variante editorial usamos familias editoriales; para UGC, familias ugc_core.
+  // Se inyectan en el prompt de cada variante por separado.
+  const editorialAnchorBlock = buildCampaignIntelligencePromptBlock('editorial');
+  const ugcAnchorBlock       = buildUgcIntelligencePromptBlock();
 
   const hasProduct = selected.productRefs.length > 0;
   const hasModel   = !!selected.modelRef;
@@ -1070,8 +1093,9 @@ export async function generateAnchorImagesFromBrief(
       ? 'Real inhabited environment — home, café, street.'
       : 'Curated environment OR minimal clean — serves the concept.';
 
-    const variantB_spine = variant === 'B' && intelligenceBlock
-      ? `\n\nEDITORIAL INTELLIGENCE:\n${intelligenceBlock}`
+    const intelligenceSnippet = modo === 'ugc' ? ugcAnchorBlock : editorialAnchorBlock;
+    const variantB_spine = intelligenceSnippet
+      ? `\n\n${modo === 'ugc' ? 'UGC' : 'EDITORIAL'} INTELLIGENCE:\n${intelligenceSnippet}`
       : '';
 
     return `${paradigm}
@@ -1196,7 +1220,9 @@ All imagePrompts MUST describe shots that feel like they were taken in the SAME 
 The visualSpine and stylingLock you output MUST match these extracted invariants.
 ` : `Visual mode chosen: ${modoVisual.toUpperCase()}`;
 
-  const intelligenceBlock = buildCampaignIntelligencePromptBlock(modoVisual);
+  const intelligenceBlock = modoVisual === 'ugc'
+    ? buildUgcIntelligencePromptBlock()
+    : buildCampaignIntelligencePromptBlock(modoVisual);
   const hasInspirationImages = !!selected.inspirationRef;
 
   const prompt = `You are a senior creative team: Creative Director, Photographer, Community Manager, and Marketing Strategist — specialized in Latin American e-commerce brands.
