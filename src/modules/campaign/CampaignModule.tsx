@@ -1186,7 +1186,12 @@ const CampaignModule: React.FC = () => {
                         <>
                           <div className="flex items-center gap-2 mb-2">
                             <div className="w-2 h-2 rounded-full bg-brand-600 animate-pulse" />
-                            <span className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Generando campaña · no cierres</span>
+                            <span className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">
+                              {progressStepIndex === 0 ? 'Leyendo tu ancla · esto tarda ~30s' :
+                               progressStepIndex === 1 ? 'Construyendo el plan · casi listo' :
+                               progressStepIndex >= 2 ? `Generando imágenes · ${progress?.completed ?? 0} de ${imageCount}` :
+                               'Generando campaña · no cierres'}
+                            </span>
                           </div>
                         </>
                       ) : failedIndexes.length > 0 ? (
@@ -1197,10 +1202,16 @@ const CampaignModule: React.FC = () => {
                       ) : null}
                       <h2 className="font-display font-extrabold italic uppercase tracking-tight text-[22px] md:text-[26px] text-slate-900 leading-tight"
                         style={{ fontFamily: 'Syne, Inter, sans-serif', letterSpacing: '-0.025em' }}>
-                        {campaignPlan?.tagline ?? 'Generando campaña'}
+                        {isGenerating && progressStepIndex < 2
+                          ? (progressStepIndex === 0 ? 'Analizando el estilo' : 'Diseñando la campaña')
+                          : (campaignPlan?.tagline ?? 'Generando campaña')}
                       </h2>
                       <div className="text-[13px] text-slate-500 mt-1 mb-4">
-                        {imageCount} imágenes · {campaignPlan?.concepto ?? 'estilo aprobado como ancla'}
+                        {isGenerating && progressStepIndex < 2
+                          ? (progressStepIndex === 0
+                              ? 'Gemini está leyendo la composición, luz y estética de tu imagen ancla para replicarla en todas las piezas.'
+                              : 'Creando el plan de piezas para cada canal. En segundos empiezan a aparecer las imágenes.')
+                          : `${imageCount} imágenes · ${campaignPlan?.concepto ?? 'estilo aprobado como ancla'}`}
                       </div>
                       {/* Ancla elegida */}
                       {selectedAnchor && (
@@ -1211,7 +1222,17 @@ const CampaignModule: React.FC = () => {
                       )}
                       {isGenerating && (
                         <div className="bg-white border border-slate-200 rounded-2xl p-4">
-                          <GenProgress steps={progressSteps} currentStepIndex={progressStepIndex} completedShots={[]} totalShots={0} />
+                          <GenProgress
+                            steps={progressSteps}
+                            currentStepIndex={progressStepIndex}
+                            completedShots={partialImages
+                              .map((url, idx) => url ? { url, index: idx } : null)
+                              .filter(Boolean) as { url: string; index: number }[]}
+                            totalShots={progressStepIndex >= 2 ? imageCount : 0}
+                            etaSeconds={progressStepIndex >= 2 && progress
+                              ? Math.max(0, Math.ceil((imageCount - progress.completed) / 2) * 45)
+                              : progressStepIndex === 0 ? 30 : progressStepIndex === 1 ? 20 : 0}
+                          />
                         </div>
                       )}
                       {/* Panel de imágenes fallidas con botón de reintentar */}
