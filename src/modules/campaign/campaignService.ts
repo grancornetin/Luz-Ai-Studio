@@ -1122,9 +1122,10 @@ ${hasProduct ? '✓ Product is the visual hero — same shape and color as produ
 
   console.log('[CampaignDirector] generateAnchorImagesFromBrief', { refs: refs.length });
 
-  // Secuencial para no acumular rate-limit 429 al lanzar ambas en paralelo
-  const urlA = await generateOne('A', 0).catch(() => '');
-  const urlB = await generateOne('B', 1).catch(() => '');
+  const [urlA, urlB] = await Promise.allSettled([
+    generateOne('A', 0),
+    generateOne('B', 1),
+  ]).then(results => results.map(r => r.status === 'fulfilled' ? r.value : ''));
 
   return [urlA, urlB];
 }

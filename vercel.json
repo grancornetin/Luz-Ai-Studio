@@ -6,6 +6,9 @@
     "api/gemini/ugc-worker.ts": {
       "maxDuration": 60
     },
+    "api/gemini/image-worker.ts": {
+      "maxDuration": 120
+    },
     "api/gemini/evolink-worker.ts": {
       "maxDuration": 150
     },

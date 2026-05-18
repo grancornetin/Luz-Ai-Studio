@@ -144,10 +144,10 @@ async function processJob(jobId: string, parts: any[]): Promise<void> {
   const MODEL = 'gemini-3.1-flash-image-preview';
   const ai    = getGenAIClient();
 
-  // Timeout de 50s — deja 10s de margen antes del límite de 60s de Vercel
+  // Timeout de 110s — deja 10s de margen antes del límite de 120s de Vercel
   // para que el job quede en 'failed' en Redis (no en 'processing' huérfano)
   const abort = new AbortController();
-  const abortTimer = setTimeout(() => abort.abort(), 50_000);
+  const abortTimer = setTimeout(() => abort.abort(), 110_000);
 
   try {
     console.log(`[ImageWorker ${jobId}] Using ${MODEL}`);

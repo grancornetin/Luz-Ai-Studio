@@ -19,8 +19,8 @@ import { generationHistoryService, MODULE_LABELS } from './generationHistoryServ
 const API_URL     = '/api/gemini/image';
 const POLL_INTERVAL_MS   = 2000;   // 2 s entre polls
 const MAX_POLL_ATTEMPTS  = 120;    // 120 × 2 s = 4 minutos máximo (cubre GPT Image 2 ~135s)
-const MAX_SILENT_RETRIES = 3;      // hasta 3 intentos con backoff para rate-limit
-const RATE_LIMIT_BACKOFF_MS = [5000, 15000, 30000]; // 5s, 15s, 30s
+const MAX_SILENT_RETRIES = 2;      // 2 intentos: el inicial + 1 retry para rate-limit
+const RATE_LIMIT_BACKOFF_MS = [3000, 8000]; // 3s, 8s — backoff corto, el 429 es transiente
 
 export type ImageJobStatus = 'pending' | 'processing' | 'retrying' | 'completed' | 'failed';
 
