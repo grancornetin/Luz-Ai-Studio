@@ -297,7 +297,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     "outfitColorFamily": "if person visible: color family of outfit. If no person: empty string",
     "formalityTier": "formal editorial / smart casual / casual / streetwear / no person",
     "silhouette": "structured refined / flowing ethereal / oversized relaxed / fitted / no person",
-    "doNotSwitch": "if person visible: what garment category must never be replaced (e.g. do not switch to activewear, mini dress, or catsuit). If no person: empty string"
+    "doNotSwitch": "if person visible: what garment category must never be replaced (e.g. do not switch to activewear, mini dress, or catsuit). If no person: empty string",
+    "bodyType": "if person visible: describe body type as seen (e.g. curvy with wide hips and full bust, petite and slim, athletic and toned, plus-size with soft curves, straight/lean). Be factual and neutral. If no person: empty string",
+    "visibleMarks": "if person visible: list any tattoos, birthmarks, scars or distinctive skin marks visible in exposed skin areas NOT covered by clothing (e.g. tattoo on left forearm, small birthmark on neck). If none visible or no person: empty string"
   },
   "product": {
     "category": "product category visible in image (e.g. ankle boots, glass serum bottle, leather handbag, candle). If no product visible: describe from context",

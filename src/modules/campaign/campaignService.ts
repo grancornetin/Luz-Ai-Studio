@@ -191,11 +191,30 @@ function buildLockSystem(
 
   if (selected.modelRef) {
     locks.push(`🔒🔒🔒 IDENTITY LOCK — MODEL REFERENCE (ABSOLUTE PRIORITY):
-ROLE: This reference provides ONLY the person's FACE and PHYSICAL IDENTITY.
-- Face, bone structure, eye shape/color, nose, lips, jaw, hair color/texture, skin tone.
-- DO NOT copy the outfit, clothing, accessories or background from this reference.
-- The person's CLOTHES are defined by the creative concept and channel — NOT by what they wear in this photo.
-- NO face replacement. NO identity drift. NO averaging with anchor or other refs.
+ROLE: This reference defines the person's FACE, PHYSICAL IDENTITY, and BODY.
+
+FACIAL IDENTITY (must match exactly):
+- Face shape, bone structure, eye shape/color, nose, lips, jaw line.
+- Hair color, texture, and general length.
+- Skin tone and undertone.
+
+BODY FIDELITY (must match exactly — this is not optional):
+- Body type, proportions, and silhouette must be preserved AS SEEN in the reference.
+  If the person has curves, a fuller figure, a petite frame, or an athletic build — REPRODUCE IT faithfully.
+- DO NOT slim down, elongate, normalize, or idealize the body toward any "standard" shape.
+- Clothing and garments must drape and fit the body AS IT IS.
+  The fabric adapts to the person's actual shape — NOT the person to the fabric.
+- Hip-to-waist ratio, shoulder width, and overall body weight must remain visually consistent.
+
+VISIBLE MARKS (context-aware — do not force):
+- Tattoos, birthmarks, scars, or distinctive skin marks visible in the reference:
+  reproduce them ONLY if the current outfit and scene would naturally expose that skin area.
+  If the garment covers the area — do NOT force the marks to appear. This is correct behavior.
+- DO NOT invent marks that are not in the reference.
+
+WHAT THIS REFERENCE DOES NOT DEFINE:
+- Outfit, clothing, accessories, or background — those come from the creative concept.
+- NO face replacement, NO identity drift, NO averaging with anchor or other refs.
 - Generate the person naturally in the new scene — do NOT paste or composite.`);
   }
 
@@ -377,7 +396,7 @@ ${lockSystem}
 🚫 NO disembodied product scale — do NOT place the product floating in the foreground at a scale disproportionate to the model. Product and model must share the same spatial plane (worn, held, or placed at body level).
 
 FINAL CHECKLIST:
-${hasProduct ? '✓ Product is the visual hero — same product, same shape and color as product reference\n' : ''}${hasModel ? '✓ Face from MODEL REFERENCE only — outfit is coherent with campaign concept, NOT from the model reference photo\n' : ''}✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel, real skin, no studio' : 'editorial quality, intentional composition, NO text inside image'}
+${hasProduct ? '✓ Product is the visual hero — same product, same shape and color as product reference\n' : ''}${hasModel ? '✓ Face AND body from MODEL REFERENCE — same face, same body type, same proportions\n' : ''}${hasModel ? '✓ Outfit is coherent with campaign concept, NOT copied from the model reference photo\n' : ''}✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel, real skin, no studio' : 'editorial quality, intentional composition, NO text inside image'}
 ✓ NO text, no graphic design layout, no reference board artifacts
 ✓ Product and model in same spatial plane — no disproportionate foreground product floating in front of a distant model`;
 }
@@ -500,23 +519,35 @@ function buildAnchorContract(
   // ── 4. Wardrobe / Styling Invariants ────────────────────────
   let wardrobeLine = '';
   if (aa?.styling?.hasVisiblePerson && aa.styling.garmentCategory) {
-    wardrobeLine = `🔒 WARDROBE / STYLING (extracted from anchor image):
+    const bodyTypeLine = aa.styling.bodyType
+      ? `\n  - Body type: ${aa.styling.bodyType} — PRESERVE this body type exactly. Do NOT slim down, normalize, or idealize. Clothing must drape to fit this body, not the reverse.`
+      : '';
+    const marksLine = aa.styling.visibleMarks
+      ? `\n  - Visible marks: ${aa.styling.visibleMarks} — reproduce ONLY if current outfit leaves that skin area exposed. If covered by clothing, omitting them is correct.`
+      : '';
+    wardrobeLine = `🔒 WARDROBE / BODY / STYLING (extracted from anchor image):
   - Garment category: ${aa.styling.garmentCategory} — DO NOT switch to a different garment category.
   - Color family: ${aa.styling.outfitColorFamily}
   - Formality: ${aa.styling.formalityTier} — DO NOT shift formality tier.
-  - Silhouette: ${aa.styling.silhouette}
+  - Silhouette: ${aa.styling.silhouette}${bodyTypeLine}${marksLine}
   - 🚫 ${aa.styling.doNotSwitch}
   - The outfit supports the product — product is always the visual hero.`;
   } else if (hasModel && lock?.hasVisibleModel) {
-    wardrobeLine = `🔒 WARDROBE / STYLING:
+    const bodyTypeLine = lock.bodyType
+      ? `\n  - Body type: ${lock.bodyType} — PRESERVE this body type exactly. Do NOT slim down, normalize, or idealize. Clothing must drape to fit this body, not the reverse.`
+      : '';
+    const marksLine = lock.visibleMarks
+      ? `\n  - Visible marks: ${lock.visibleMarks} — reproduce ONLY if current outfit leaves that skin area exposed. If covered by clothing, omitting them is correct.`
+      : '';
+    wardrobeLine = `🔒 WARDROBE / BODY / STYLING:
   - Garment category: ${lock.garmentCategory} — DO NOT switch categories.
   - Color family: ${lock.outfitColorFamily}
   - Formality: ${lock.stylingFormality}
-  - Silhouette: ${lock.silhouetteLogic}
+  - Silhouette: ${lock.silhouetteLogic}${bodyTypeLine}${marksLine}
   - 🚫 ${lock.doNotSwitch}
   - The outfit supports the product — product is always the visual hero.`;
   } else if (hasModel) {
-    wardrobeLine = `🔒 WARDROBE / STYLING: Model is present. Keep outfit coherent with the anchor. DO NOT invent new garment categories or shift formality tier. Product is always the visual hero.`;
+    wardrobeLine = `🔒 WARDROBE / BODY / STYLING: Model is present. Keep outfit coherent with the anchor. DO NOT invent new garment categories or shift formality tier. Preserve the model's body type and proportions as seen in the anchor. Product is always the visual hero.`;
   }
 
   // ── 5. Model Presence Invariants ────────────────────────────
@@ -1198,7 +1229,7 @@ ${lockSystem}
 🚫 NO disembodied product — do NOT place the product floating disproportionately large in the foreground with a tiny model behind.
 
 FINAL CHECKLIST:
-${hasProduct ? '✓ Product is the visual hero — same shape and color as product reference\n' : ''}${hasModel ? '✓ Face from MODEL REFERENCE only — outfit is real-life casual coherent with the brief, NOT from the model reference photo\n' : ''}✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel, real skin, no studio' : 'editorial quality, intentional composition'}
+${hasProduct ? '✓ Product is the visual hero — same shape and color as product reference\n' : ''}${hasModel ? '✓ Face AND body from MODEL REFERENCE — same face, same body type, same proportions\n' : ''}${hasModel ? '✓ Outfit is real-life casual coherent with the brief, NOT copied from the model reference photo\n' : ''}✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel, real skin, no studio' : 'editorial quality, intentional composition'}
 ✓ NO text, no graphic design layout
 ✓ Product and model in same spatial plane — no disproportionate foreground product`;
   };
@@ -1291,7 +1322,7 @@ ANCHOR IMAGE ANALYSIS (the user has already chosen this anchor — your plan MUS
 - Lighting: ${anchorAnalysis.lighting.primarySource}, ${anchorAnalysis.lighting.colorTemperature}, ${anchorAnalysis.lighting.productionLevel}
 - Environment: ${anchorAnalysis.environment.locationType} · ${anchorAnalysis.environment.indoorOutdoor} · ${anchorAnalysis.environment.productionTier}
 - Product visible: ${anchorAnalysis.product.category} · ${anchorAnalysis.product.colorFamily} · ${anchorAnalysis.product.dominanceLevel}
-- Model present: ${anchorAnalysis.styling.hasVisiblePerson ? `YES — ${anchorAnalysis.styling.garmentCategory}, ${anchorAnalysis.styling.formalityTier}` : 'NO'}
+- Model present: ${anchorAnalysis.styling.hasVisiblePerson ? `YES — ${anchorAnalysis.styling.garmentCategory}, ${anchorAnalysis.styling.formalityTier}${anchorAnalysis.styling.bodyType ? `, body type: ${anchorAnalysis.styling.bodyType}` : ''}` : 'NO'}
 - Composition: ${anchorAnalysis.composition.framingStyle} · ${anchorAnalysis.composition.visualHierarchy}
 - Mood: ${anchorAnalysis.mood.overallMood} · ${anchorAnalysis.mood.emotionalRegister}
 - Visual mode chosen: ${modoVisual.toUpperCase()}
@@ -1467,6 +1498,8 @@ RESPOND ONLY WITH VALID JSON (no markdown, no explanations outside JSON):
             silhouetteLogic:   String(rawLock.silhouetteLogic    ?? anchorAnalysis?.styling?.silhouette        ?? ''),
             fashionMood:       String(rawLock.fashionMood        ?? ''),
             doNotSwitch:       String(rawLock.doNotSwitch        ?? anchorAnalysis?.styling?.doNotSwitch       ?? ''),
+            bodyType:          String(anchorAnalysis?.styling?.bodyType    ?? ''),
+            visibleMarks:      String(anchorAnalysis?.styling?.visibleMarks ?? ''),
           } as CampaignStylingLock;
         } else {
           parsed.stylingLock = undefined;

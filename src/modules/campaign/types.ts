@@ -89,6 +89,8 @@ export interface CampaignStylingLock {
   silhouetteLogic:     string;   // silueta ("oversized", "fitted", "flowing", "structured", etc.)
   fashionMood:         string;   // mood general ("editorial minimalista", "boho romántico", etc.)
   doNotSwitch:         string;   // lo que NO puede cambiar ("no pants if anchor shows long skirt", etc.)
+  bodyType?:           string;   // tipo de cuerpo visible ("curvy", "petite", "athletic", "plus-size", etc.)
+  visibleMarks?:       string;   // marcas visibles en áreas no cubiertas por ropa ("tattoo left forearm", etc.)
 }
 
 // ── Plan estratégico completo ─────────────────────────────────
@@ -165,6 +167,8 @@ export interface CampaignAnchorAnalysis {
     formalityTier:    string;   // "formal editorial", "smart casual", "casual", "streetwear"
     silhouette:       string;   // "structured refined", "flowing ethereal", "oversized relaxed"
     doNotSwitch:      string;   // "do not switch to activewear or mini dress"
+    bodyType:         string;   // "curvy", "petite", "athletic", "plus-size", "slim", "" if no person
+    visibleMarks:     string;   // "tattoo on left forearm", "birthmark on neck", "" if none visible
   };
   product: {
     category:         string;   // "boots", "skincare bottle", "handbag", "candle"
