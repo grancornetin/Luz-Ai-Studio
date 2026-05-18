@@ -44,18 +44,31 @@ const NEGATIVE_BASE = [
   'caption on photo', 'subtitle', 'label text', 'graphic design text',
 ].join(', ');
 
-// Modo UGC: prohíbe todo lo "profesional/editorial"
+// Modo UGC: prohíbe todo lo "profesional/editorial" + drift de producto/escenario/persona
 const NEGATIVE_UGC = [
   NEGATIVE_BASE,
+  // Over-production
   'professional studio lighting', 'softbox lighting', 'glamour lighting', 'ring light',
   'beauty dish', 'strobe flash', 'perfectly even lighting',
   'commercial photography', 'editorial softening', 'commercial polish', 'brand lookbook',
   'high fashion look', 'luxury redesign', 'magazine spread', 'vogue editorial',
+  // Retoque
   'skin smoothing', 'beauty filter', 'airbrushed', 'plastic skin', 'flawless skin',
   'no pores', 'porcelain skin', 'wax figure look', 'retouched skin',
+  // Pose falsa
   'mannequin pose', 'catalog pose', 'runway pose', 'symmetric pose', 'stiff pose',
   'neutral blank expression', 'model stare',
+  // Fondo de estudio
   'white seamless background', 'studio backdrop', 'neutral studio',
+  // Drift de producto — el producto no puede cambiar de forma, color ni categoría
+  'different product shape', 'wrong product color', 'invented product', 'generic substitute',
+  'product replacement', 'similar but different product', 'changed packaging',
+  // Drift de escenario — el ambiente no puede saltar a uno nuevo
+  'different location', 'location jump', 'new background', 'unrelated environment',
+  'scene change', 'different setting', 'background swap',
+  // Drift de identidad — la persona no puede cambiar
+  'different face', 'face swap', 'identity change', 'different person appearance',
+  'different skin tone', 'age change', 'hair color change',
 ].join(', ');
 
 // Modo Editorial: prohíbe lo "amateur/casual" Y texto/póster/drift de outfits
@@ -242,6 +255,28 @@ Create a person that fits this campaign's target audience perfectly:
 ${locks.join('\n\n')}`;
 }
 
+// ─── Descripción de producto para ancla UGC ──────────────────
+// En modo UGC no hay spine que describa el producto con texto.
+// Este bloque lo suple: le dice a la IA exactamente qué conservar
+// del producto antes de que empiece a interpretar las referencias.
+function buildUgcProductLock(
+  selected: ReturnType<typeof selectBestRefs>,
+  plan?:    CampaignPlan,
+): string {
+  if (selected.productRefs.length === 0) return '';
+  const angles = selected.productRefs.length;
+  const concept = plan?.concepto ?? '';
+  return `🔒 PRODUCT IDENTITY CONTRACT (UGC ANCHOR):
+The product shown in the PRODUCT REFERENCE image(s) is the ONLY product allowed in this image.
+- Same exact shape, silhouette, and size proportions.
+- Same exact color(s), finish, and surface texture.
+- Same exact labels, logos, packaging details — do NOT invent or simplify.
+- ${angles > 1 ? `${angles} angles provided — study all to understand the full product. Use the one most natural for this scene.` : 'One angle provided — reproduce it faithfully. Do NOT improvise other angles that contradict it.'}
+- The product must be CLEARLY READABLE in the image — not blurred, obscured, or cropped away.
+- ${concept ? `Campaign concept: "${concept}" — product interaction must feel coherent with this, not generic.` : ''}
+🚫 Do NOT replace with: a similar product, a generic version, an invented variation, or a product with different colors or shape.`;
+}
+
 // ─── Paradigma de los dos modos visuales ──────────────────────
 const UGC_PARADIGM = `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -299,6 +334,24 @@ function buildAnchorPrompt(
     ? 'Real inhabited environment — home, café, street.'
     : 'Curated environment OR minimal clean — serves the concept.';
 
+  const ugcProductLock = modo === 'ugc' && hasProduct
+    ? `\n\n${buildUgcProductLock(selected, plan)}`
+    : '';
+
+  const stylingNote = variant === 'B' && hasModel
+    ? `\nSTYLING NOTE FOR ANCHOR B:
+If a model is present, use an ELEGANT and COHERENT outfit aligned with the campaign concept.
+The outfit will define the styling language for all derived images — make it refined, editorial, and product-forward.
+The product must remain the visual hero — the model supports the product, not the other way around.`
+    : variant === 'A' && hasModel
+    ? `\nSTYLING NOTE FOR ANCHOR A (UGC):
+Person wears CASUAL, REAL-LIFE clothing coherent with the campaign concept and target audience.
+NOT: luxury outfits, editorial looks, or anything that reads as "brand shoot".
+YES: the kind of outfit the target customer actually wears day-to-day.
+The styling must feel like it was chosen by the creator, not by a stylist.
+This outfit category will carry through all derived UGC images — choose it deliberately.`
+    : '';
+
   return `${paradigm}
 
 CAMPAIGN BRIEF:
@@ -306,6 +359,7 @@ Concept: "${plan.concepto}"
 Tagline: "${plan.tagline}"
 ${plan.clienteIdeal ? `Target audience: ${plan.clienteIdeal}` : ''}
 ${plan.dolorCentral ? `Core tension resolved: ${plan.dolorCentral}` : ''}
+${ugcProductLock}
 
 ANCHOR IMAGE TASK:
 This image defines the visual world for the ENTIRE campaign. All other images inherit its mood.
@@ -315,19 +369,15 @@ This image defines the visual world for the ENTIRE campaign. All other images in
 - Lighting: ${lightingNote}
 - Pose/Placement: ${poseNote}
 - Background: ${bgNote}
-${variant === 'B' && hasModel ? `
-STYLING NOTE FOR ANCHOR B:
-If a model is present, use an ELEGANT and COHERENT outfit aligned with the campaign concept.
-The outfit will define the styling language for all derived images — make it refined, editorial, and product-forward.
-The product (boot/shoe) must remain the visual hero — the model supports the product, not the other way around.
-` : ''}
+${stylingNote}
+
 ${lockSystem}
 
 🚫 NO TEXT IN THE IMAGE — pure photography only. No typography, no overlay, no poster layout, no slogan, no magazine headline, no white border frame, no brand copy inside the photo.
 🚫 NO disembodied product scale — do NOT place the product floating in the foreground at a scale disproportionate to the model. Product and model must share the same spatial plane (worn, held, or placed at body level).
 
 FINAL CHECKLIST:
-${hasProduct ? '✓ Product is the visual hero — same product, same shape and color as product reference\n' : ''}${hasModel ? '✓ Face from MODEL REFERENCE only — outfit is editorial and product-forward, NOT from the model reference photo\n' : ''}✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel, real skin, no studio' : 'editorial quality, intentional composition, NO text inside image'}
+${hasProduct ? '✓ Product is the visual hero — same product, same shape and color as product reference\n' : ''}${hasModel ? '✓ Face from MODEL REFERENCE only — outfit is coherent with campaign concept, NOT from the model reference photo\n' : ''}✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel, real skin, no studio' : 'editorial quality, intentional composition, NO text inside image'}
 ✓ NO text, no graphic design layout, no reference board artifacts
 ✓ Product and model in same spatial plane — no disproportionate foreground product floating in front of a distant model`;
 }
@@ -573,12 +623,16 @@ function buildDerivedImagePrompt(
   // ── Anchor Contract — contrato visual obligatorio que precede todo lo demás ──
   const anchorWorldLock = hasAnchor ? buildAnchorContract(plan, selected, pieza.rol, anchorAnalysis) : '';
 
-  // ── Inteligencia visual de familia (solo editorial) ──
-  // Si la pieza tiene familia incompatible con el spine, usamos la maestra.
-  const effectiveFamilyId = plan.visualSpine && pieza.visualFamilyId
-    && pieza.visualFamilyId !== plan.visualSpine.campaignVisualFamilyId
-    ? plan.visualSpine.campaignVisualFamilyId
-    : (pieza.visualFamilyId ?? '');
+  // ── Inteligencia visual de familia ────────────────────────────
+  // UGC: siempre usamos el ID asignado por Gemini a la pieza — no hay spine editorial.
+  // Editorial: si la pieza tiene un ID distinto al spine maestro, prevalece el spine
+  //   para mantener coherencia visual en toda la campaña.
+  const effectiveFamilyId = modo === 'ugc'
+    ? (pieza.visualFamilyId ?? '')
+    : (plan.visualSpine && pieza.visualFamilyId
+        && pieza.visualFamilyId !== plan.visualSpine.campaignVisualFamilyId
+      ? plan.visualSpine.campaignVisualFamilyId
+      : (pieza.visualFamilyId ?? ''));
 
   let visualFamilyBlock = '';
   let guardrailsBlock = '';
@@ -597,8 +651,13 @@ function buildDerivedImagePrompt(
         visualFamilyBlock += `\nVISUAL FAMILY DNA:\n${blendText}`;
       }
       if (baseBlock) {
-        visualFamilyBlock += `\n\nTRANSFERABLE PROMPT BLOCK:\n${baseBlock}`;
-        visualFamilyBlock += `\n(Use as pattern — adapt to the user's actual product. Never copy branding, logos or text from the source.)`;
+        if (modo === 'ugc') {
+          visualFamilyBlock += `\n\nUGC CREATOR BEHAVIOR PATTERN:\n${baseBlock}`;
+          visualFamilyBlock += `\n(This describes CREATOR BEHAVIOR — extract the human interaction with the product. Do NOT copy the scene, location, or background. The environment comes from the Anchor Contract above.)`;
+        } else {
+          visualFamilyBlock += `\n\nTRANSFERABLE PROMPT BLOCK:\n${baseBlock}`;
+          visualFamilyBlock += `\n(Use as pattern — adapt to the user's actual product. Never copy branding, logos or text from the source.)`;
+        }
       }
       if (pieza.psychologicalGoal) {
         visualFamilyBlock += `\n\nPSYCHOLOGICAL GOAL FOR THIS PIECE:\n${pieza.psychologicalGoal}`;
@@ -1093,14 +1152,35 @@ export async function generateAnchorImagesFromBrief(
       ? 'Real inhabited environment — home, café, street.'
       : 'Curated environment OR minimal clean — serves the concept.';
 
+    // Fix 4: inteligencia va al inicio, antes del lockSystem, para que tenga mayor peso
     const intelligenceSnippet = modo === 'ugc' ? ugcAnchorBlock : editorialAnchorBlock;
-    const variantB_spine = intelligenceSnippet
-      ? `\n\n${modo === 'ugc' ? 'UGC' : 'EDITORIAL'} INTELLIGENCE:\n${intelligenceSnippet}`
+    const intelligenceHeader = intelligenceSnippet
+      ? `${modo === 'ugc' ? 'UGC' : 'EDITORIAL'} VISUAL INTELLIGENCE:\n${intelligenceSnippet}\n\n`
+      : '';
+
+    // Fix 2: product lock explícito en UGC
+    const ugcProductLock = modo === 'ugc' && hasProduct
+      ? `\n\n${buildUgcProductLock(selected)}`
+      : '';
+
+    // Fix 3: styling note para UGC
+    const stylingNote = modo === 'ugc' && hasModel
+      ? `\nSTYLING NOTE (UGC):
+Person wears CASUAL, REAL-LIFE clothing coherent with the campaign brief and target audience.
+NOT: luxury outfits, editorial looks, or anything that reads as "brand shoot".
+YES: the kind of outfit the target customer actually wears day-to-day.
+The styling must feel chosen by the creator, not by a stylist.
+This outfit category will carry through all derived UGC images — choose it deliberately.`
+      : modo === 'editorial' && hasModel
+      ? `\nSTYLING NOTE (EDITORIAL):
+Person wears an ELEGANT and COHERENT outfit aligned with the campaign concept.
+The outfit defines the styling language for all derived images — make it refined and product-forward.`
       : '';
 
     return `${paradigm}
 
-CAMPAIGN BRIEF: "${idea}"
+${intelligenceHeader}CAMPAIGN BRIEF: "${idea}"
+${ugcProductLock}
 
 ANCHOR IMAGE TASK:
 This image will define the visual world for the ENTIRE campaign. All other images will inherit its mood and aesthetic.
@@ -1110,15 +1190,15 @@ This image will define the visual world for the ENTIRE campaign. All other image
 - Lighting: ${lightingNote}
 - Pose/Placement: ${poseNote}
 - Background: ${bgNote}
+${stylingNote}
 
 ${lockSystem}
-${variantB_spine}
 
 🚫 NO TEXT IN THE IMAGE — pure photography only. No typography, no overlay, no slogan, no magazine headline, no poster layout, no brand copy inside the photo.
 🚫 NO disembodied product — do NOT place the product floating disproportionately large in the foreground with a tiny model behind.
 
 FINAL CHECKLIST:
-${hasProduct ? '✓ Product is the visual hero — same shape and color as product reference\n' : ''}${hasModel ? '✓ Face from MODEL REFERENCE only — outfit is creative and product-forward, NOT from the model reference photo\n' : ''}✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel, real skin, no studio' : 'editorial quality, intentional composition'}
+${hasProduct ? '✓ Product is the visual hero — same shape and color as product reference\n' : ''}${hasModel ? '✓ Face from MODEL REFERENCE only — outfit is real-life casual coherent with the brief, NOT from the model reference photo\n' : ''}✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel, real skin, no studio' : 'editorial quality, intentional composition'}
 ✓ NO text, no graphic design layout
 ✓ Product and model in same spatial plane — no disproportionate foreground product`;
   };
