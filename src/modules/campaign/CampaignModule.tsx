@@ -1499,7 +1499,7 @@ const CampaignModule: React.FC = () => {
                                 {(['product','inspiration','brand','model'] as const).map(role => {
                                   const roleSlots = currentSet.slots.filter(s => s.role === role);
                                   if (roleSlots.length === 0) return null;
-                                  const labels: Record<string, string> = { product: '📦 Producto', inspiration: '🖼️ Inspiración', brand: '🎨 Marca', model: '👤 Modelo' };
+                                  const labels: Record<string, string> = { product: 'Producto', inspiration: ' Inspiración', brand: 'Elementos de Marca', model: 'Personaje/Modelo' };
                                   return (
                                     <div key={role} className="flex flex-col gap-1.5">
                                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{labels[role]}</p>

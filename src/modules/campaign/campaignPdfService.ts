@@ -904,43 +904,49 @@ async function ensurePdfLibs(): Promise<{ jsPDF: any; html2canvas: any }> {
 }
 
 export async function downloadCampaignPdf(set: CampaignSet, filename?: string): Promise<void> {
-  // Carga las librerías en el documento principal (evita el problema de srcdoc)
   const { jsPDF, html2canvas } = await ensurePdfLibs();
 
-  // Construir el HTML y renderizarlo en un div oculto en el documento principal
-  const html = await buildHtml(set);
-
-  const container = document.createElement('div');
-  container.style.cssText = [
-    'position:fixed', 'left:-9999px', 'top:0',
-    'width:794px', 'background:#ffffff',
-    'visibility:hidden', 'pointer-events:none', 'z-index:-1',
-  ].join(';');
-  container.innerHTML = html;
-  document.body.appendChild(container);
-
-  // Esperar a que las fuentes (Google Fonts) carguen
-  await new Promise(r => setTimeout(r, 1200));
+  // Renderizar en un iframe oculto para que el CSS y las fuentes se apliquen correctamente
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1122px;border:none;visibility:hidden;';
+  document.body.appendChild(iframe);
 
   try {
-    const pages = container.querySelectorAll('.page');
+    const html = await buildHtml(set);
+
+    // Escribir el HTML completo en el iframe — así <style> y Google Fonts se cargan bien
+    const doc = iframe.contentDocument!;
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    // Esperar a que el iframe termine de renderizar (fuentes + layout)
+    await new Promise(r => setTimeout(r, 2000));
+
+    const pages = doc.querySelectorAll('.page');
     if (!pages.length) throw new Error('No se encontraron páginas en el HTML generado');
 
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
     for (let i = 0; i < pages.length; i++) {
       const page = pages[i] as HTMLElement;
+      const pageHeight = page.scrollHeight || page.offsetHeight || 1122;
+
       const canvas = await html2canvas(page, {
         scale: 2,
         useCORS: true,
+        allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
         width: 794,
-        height: page.offsetHeight,
+        height: pageHeight,
         windowWidth: 794,
+        scrollX: 0,
+        scrollY: 0,
       });
+
       const imgData = canvas.toDataURL('image/jpeg', 0.92);
-      const ratio   = page.offsetHeight / 794;
+      const ratio   = pageHeight / 794;
       if (i > 0) pdf.addPage();
       pdf.addImage(imgData, 'JPEG', 0, 0, 210, 210 * ratio);
     }
@@ -948,6 +954,6 @@ export async function downloadCampaignPdf(set: CampaignSet, filename?: string): 
     const safeName = (set.plan.tagline || 'campaña').replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ\s]/g, '').trim();
     pdf.save(filename ?? `Kit-${safeName}.pdf`);
   } finally {
-    document.body.removeChild(container);
+    document.body.removeChild(iframe);
   }
 }
