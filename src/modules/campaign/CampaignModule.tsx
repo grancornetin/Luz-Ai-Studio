@@ -16,6 +16,7 @@ import {
   buildCampaignPlanFromAnchor,
   generateCampaignImages,
 } from './campaignService';
+import type { HpiConfig } from '../../services/hpiService';
 import { downloadCampaignPdf, downloadCampaignHtml } from './campaignPdfService';
 import { campaignStorage } from './campaignStorage';
 import {
@@ -176,6 +177,11 @@ const CampaignModule: React.FC = () => {
   const [slots,      setSlots]      = useState<Record<ImageSlotRole, string[]>>({
     product: [], inspiration: [], brand: [], model: [],
   });
+
+  // HPI — Human Performance Intelligence
+  // Activa una capa de dirección creativa humana: expresión, pose, gesto, cámara.
+  // No reemplaza el prompt ni cambia el producto — solo mejora la naturalidad de la persona.
+  const [hpiEnabled, setHpiEnabled] = useState(true);
 
   // Anchor state
   const [anchorOptions,   setAnchorOptions]   = useState<string[]>([]);
@@ -366,6 +372,7 @@ const CampaignModule: React.FC = () => {
     setProgressStepIndex(0); setIsGenerating(false); setPartialImages([]);
     setFailedIndexes([]);
     setExpandedPieza(null); setActiveTab2('plan');
+    setHpiEnabled(true);
   };
 
   const openLightbox = (images: string[], idx: number) => {
@@ -430,6 +437,18 @@ const CampaignModule: React.FC = () => {
 
     try {
       setProgressStepIndex(1);
+
+      // Inferir género desde el slot de modelo (si hay imagen subida la IA lo interpreta,
+      // si no hay imagen usamos 'female' como default — banco más completo y variado)
+      const hasModelSlot = activeSlots.some(s => s.role === 'model');
+      const hpiConfig: HpiConfig = {
+        enabled:            hpiEnabled,
+        gender:             hasModelSlot ? 'neutral' : 'female',
+        modoVisual:         'ugc', // se sobreescribirá por variante dentro del servicio
+        includeGesture:     Math.random() > 0.5,
+        includePerformance: Math.random() > 0.5,
+      };
+
       const anchors = await generateAnchorImagesFromBrief(
         idea, activeSlots,
         { uid: user?.uid, sessionId: newSessionId() },
@@ -439,6 +458,7 @@ const CampaignModule: React.FC = () => {
           // sin filtrar vacíos para que el grid muestre los slots correctamente
           if (partialUrls) setAnchorOptions(partialUrls);
         },
+        hpiConfig,
       );
 
       setProgressStepIndex(2);
@@ -569,6 +589,16 @@ const CampaignModule: React.FC = () => {
 
       let images: string[];
 
+      // Config HPI para las imágenes de campaña (mantiene lo que eligió el usuario)
+      const hasModelSlotCampaign = activeSlots.some(s => s.role === 'model');
+      const campaignHpiConfig: HpiConfig = {
+        enabled:            hpiEnabled,
+        gender:             hasModelSlotCampaign ? 'neutral' : 'female',
+        modoVisual:         modoVisual,
+        includeGesture:     Math.random() > 0.5,
+        includePerformance: Math.random() > 0.5,
+      };
+
       if (retryIndexes) {
         // Regenerar solo piezas fallidas con el plan y análisis existentes
         const piezasToRetry = retryIndexes.map(i => activePlan!.piezas[i]);
@@ -589,6 +619,7 @@ const CampaignModule: React.FC = () => {
             }
           },
           activeAnalysis ?? undefined,
+          campaignHpiConfig,
         );
         images = [...partialImages];
         retryIndexes.forEach((origIdx, j) => {
@@ -605,6 +636,7 @@ const CampaignModule: React.FC = () => {
             if (done === total) setProgressStepIndex(3);
           },
           activeAnalysis ?? undefined,
+          campaignHpiConfig,
         );
       }
 
@@ -779,6 +811,39 @@ const CampaignModule: React.FC = () => {
                           Podés mencionar el producto, el precio, la fecha especial, el descuento, o el resultado que querés lograr.
                         </p>
                       </div>
+                      {/* ── Switch HPI ────────────────────────────── */}
+                      <button
+                        type="button"
+                        onClick={() => setHpiEnabled(v => !v)}
+                        className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl border transition-all text-left ${
+                          hpiEnabled
+                            ? 'border-brand-200 bg-brand-50 hover:bg-brand-100'
+                            : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        {/* Track del toggle */}
+                        <div className={`relative flex-shrink-0 w-10 h-6 rounded-full transition-colors duration-200 ${
+                          hpiEnabled ? 'bg-brand-600' : 'bg-slate-200'
+                        }`}>
+                          <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                            hpiEnabled ? 'translate-x-4' : 'translate-x-0'
+                          }`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-[13px] font-bold leading-tight ${hpiEnabled ? 'text-brand-900' : 'text-slate-700'}`}>
+                            Expresión y poses naturales
+                            {hpiEnabled && (
+                              <span className="ml-2 text-[9px] font-black uppercase tracking-wider bg-brand-600 text-white px-1.5 py-0.5 rounded-full">Activo</span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                            {hpiEnabled
+                              ? 'La IA aplica dirección de poses, expresiones faciales y gestos más naturales a las personas en tus imágenes.'
+                              : 'Activalo para que las personas en tus imágenes tengan poses y expresiones más naturales y menos rígidas.'}
+                          </p>
+                        </div>
+                      </button>
+
                       <div>
                         <div className="flex items-center justify-between mb-3">
                           <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em]">

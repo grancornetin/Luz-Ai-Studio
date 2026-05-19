@@ -23,10 +23,17 @@ import {
   getUgcFamilyById,
   getTopUgcFamilyFromPieces,
 } from './ugcIntelligence';
+import {
+  initHpiService,
+  buildHpiBlock,
+  getHpiNegatives,
+  type HpiConfig,
+} from '../../services/hpiService';
 
 // Precarga los JSON de inteligencia visual en background al importar este módulo
 initCampaignIntelligence();
 initUgcIntelligence();
+initHpiService();
 
 // ─── Negativos base (anatomía + identidad + texto — siempre) ──
 const NEGATIVE_BASE = [
@@ -656,6 +663,7 @@ function buildDerivedImagePrompt(
   selected:       ReturnType<typeof selectBestRefs>,
   hasAnchor:      boolean,
   anchorAnalysis?: CampaignAnchorAnalysis,
+  hpiConfig?:     HpiConfig,
 ): string {
   const hasModel   = !!selected.modelRef;
   const hasProduct = selected.productRefs.length > 0;
@@ -718,6 +726,12 @@ function buildDerivedImagePrompt(
     }
   }
 
+  // Bloque HPI — capa de dirección humana (expresión, pose, gesto, cámara, performance)
+  // Solo aplica cuando hay modelo subido explícitamente.
+  // Para shots de producto solo: NO inyectar — el ancla ya dice "no introducir persona"
+  // y HPI con instrucciones de pose podría hacer que Gemini invente alguien.
+  const hpiBlock = (hpiConfig && hasModel) ? buildHpiBlock(hpiConfig) : '';
+
   return `${anchorWorldLock ? anchorWorldLock + '\n' : ''}${paradigm}
 ${hasModel ? `🔴 IDENTITY LOCK: MODEL REF = face/hair/skin ONLY. Outfit category and styling family from ANCHOR CONTRACT above, NOT from model photo.\n` : ''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -734,6 +748,7 @@ ${pieza.imagePrompt}
 ${lockSystem}
 ${visualFamilyBlock}
 ${guardrailsBlock}
+${hpiBlock ? '\n' + hpiBlock : ''}
 
 CHANNEL: ${channelOpt}
 
@@ -1101,6 +1116,7 @@ export async function generateCampaignImages(
   sessionParams:  { uid?: string; sessionId?: string },
   onProgress?:    (done: number, total: number, partialUrls?: string[]) => void,
   anchorAnalysis?: CampaignAnchorAnalysis,
+  hpiConfig?:     HpiConfig,
 ): Promise<string[]> {
   const selected  = selectBestRefs(slots);
   const refs      = await buildStratifiedRefsCompressed(selected, anchorImage);
@@ -1126,10 +1142,19 @@ export async function generateCampaignImages(
   const partialResults: string[] = Array(total).fill('');
   const modo: ModoVisual = plan.modoVisual ?? 'editorial';
 
+  // Negativos base del modo + negativos anatómicos HPI (si está habilitado)
+  const hpiNegatives = (hpiConfig?.enabled && hpiConfig.gender)
+    ? getHpiNegatives(hpiConfig.gender).join(', ')
+    : '';
+  const buildNegative = (m: ModoVisual) => {
+    const base = getNegative(m);
+    return hpiNegatives ? `${base}, ${hpiNegatives}` : base;
+  };
+
   const generateOne = async (pieza: CampaignPiece, index: number): Promise<string> => {
     const url = await imageApiService.generateImage({
-      prompt:          buildDerivedImagePrompt(pieza, plan, selected, hasAnchor, anchorAnalysis),
-      negative:        getNegative(modo),
+      prompt:          buildDerivedImagePrompt(pieza, plan, selected, hasAnchor, anchorAnalysis, hpiConfig),
+      negative:        buildNegative(modo),
       referenceImages: refs,
       aspectRatio:     getAspectRatio(pieza.canal),
       module:          'campaign',
@@ -1174,6 +1199,7 @@ export async function generateAnchorImagesFromBrief(
   slots:         CampaignImageSlot[],
   sessionParams: { uid?: string; sessionId?: string },
   onProgress?:   (done: number, total: number, partialUrls?: string[]) => void,
+  hpiConfig?:    HpiConfig,
 ): Promise<string[]> {
   const selected = selectBestRefs(slots);
   const refs     = await buildStratifiedRefsCompressed(selected);
@@ -1189,6 +1215,9 @@ export async function generateAnchorImagesFromBrief(
 
   const buildBriefAnchorPrompt = (variant: 'A' | 'B'): string => {
     const modo: ModoVisual = variant === 'A' ? 'ugc' : 'editorial';
+    const anchorHpiConfig: HpiConfig | undefined = hpiConfig?.enabled
+      ? { ...hpiConfig, modoVisual: modo }
+      : undefined;
     const paradigm = modo === 'ugc' ? UGC_PARADIGM : EDITORIAL_PARADIGM;
     const lockSystem = buildLockSystem(selected, false, modo);
 
@@ -1256,6 +1285,7 @@ ${lockSystem}
 🚫 NO TEXT IN THE IMAGE — pure photography only. No typography, no overlay, no slogan, no magazine headline, no poster layout, no brand copy inside the photo.
 🚫 NO disembodied product — do NOT place the product floating disproportionately large in the foreground with a tiny model behind.
 🚫 NO cropped body — the anchor MUST show the full body head-to-toe. Feet must be visible.
+${anchorHpiConfig && hasModel ? '\n' + buildHpiBlock(anchorHpiConfig) : ''}
 
 FINAL CHECKLIST:
 ${hasProduct ? '✓ Product is the visual hero — same shape and color as product reference\n' : ''}${hasModel ? '✓ Face AND body from MODEL REFERENCE — same face, same body type, same proportions\n' : ''}${hasModel ? '✓ Outfit is real-life casual coherent with the brief, NOT copied from the model reference photo\n' : ''}✓ FULL BODY visible — head to toe, complete outfit and footwear, no cropping of lower body
