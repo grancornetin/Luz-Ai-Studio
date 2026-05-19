@@ -381,7 +381,14 @@ ${plan.dolorCentral ? `Core tension resolved: ${plan.dolorCentral}` : ''}
 ${ugcProductLock}
 
 ANCHOR IMAGE TASK:
-This image defines the visual world for the ENTIRE campaign. All other images inherit its mood.
+This image defines the visual world for the ENTIRE campaign. All other images inherit its mood, outfit, and environment.
+
+⚠️ FRAMING RULE — NON-NEGOTIABLE:
+This anchor image MUST show the model HEAD-TO-TOE (full body), regardless of pose.
+The complete outfit, footwear, and environment must be fully visible.
+This is required so derived campaign images can replicate the exact styling without having to invent missing clothing.
+Acceptable poses: standing, seated, leaning, lying down — ANY pose, as long as the full body is visible from head to feet.
+FORBIDDEN framing for the anchor: close-up, portrait, bust shot, torso crop, waist crop, or any frame that hides the feet or lower body.
 
 - ${hasProduct ? 'Product is the VISUAL HERO — clearly identifiable, prominent, exactly as in reference.' : 'The concept emotion is the visual hero.'}
 - ${hasModel ? 'Person: identity from MODEL REFERENCE only (face/hair/skin). Outfit comes from creative concept aligned with the campaign styling direction.' : 'No specific person required — cast someone fitting the target audience.'}
@@ -394,9 +401,11 @@ ${lockSystem}
 
 🚫 NO TEXT IN THE IMAGE — pure photography only. No typography, no overlay, no poster layout, no slogan, no magazine headline, no white border frame, no brand copy inside the photo.
 🚫 NO disembodied product scale — do NOT place the product floating in the foreground at a scale disproportionate to the model. Product and model must share the same spatial plane (worn, held, or placed at body level).
+🚫 NO cropped body — the anchor MUST show the full body head-to-toe. Feet must be visible.
 
 FINAL CHECKLIST:
-${hasProduct ? '✓ Product is the visual hero — same product, same shape and color as product reference\n' : ''}${hasModel ? '✓ Face AND body from MODEL REFERENCE — same face, same body type, same proportions\n' : ''}${hasModel ? '✓ Outfit is coherent with campaign concept, NOT copied from the model reference photo\n' : ''}✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel, real skin, no studio' : 'editorial quality, intentional composition, NO text inside image'}
+${hasProduct ? '✓ Product is the visual hero — same product, same shape and color as product reference\n' : ''}${hasModel ? '✓ Face AND body from MODEL REFERENCE — same face, same body type, same proportions\n' : ''}${hasModel ? '✓ Outfit is coherent with campaign concept, NOT copied from the model reference photo\n' : ''}✓ FULL BODY visible — head to toe, complete outfit and footwear, no cropping of lower body
+✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel, real skin, no studio' : 'editorial quality, intentional composition, NO text inside image'}
 ✓ NO text, no graphic design layout, no reference board artifacts
 ✓ Product and model in same spatial plane — no disproportionate foreground product floating in front of a distant model`;
 }
@@ -1214,7 +1223,14 @@ ${intelligenceHeader}CAMPAIGN BRIEF: "${idea}"
 ${ugcProductLock}
 
 ANCHOR IMAGE TASK:
-This image will define the visual world for the ENTIRE campaign. All other images will inherit its mood and aesthetic.
+This image will define the visual world for the ENTIRE campaign. All other images will inherit its mood, outfit, and environment.
+
+⚠️ FRAMING RULE — NON-NEGOTIABLE:
+This anchor image MUST show the model HEAD-TO-TOE (full body), regardless of pose.
+The complete outfit, footwear, and environment must be fully visible.
+This is required so derived campaign images can replicate the exact styling without having to invent missing clothing.
+Acceptable poses: standing, seated, leaning, lying down — ANY pose, as long as the full body is visible from head to feet.
+FORBIDDEN framing for the anchor: close-up, portrait, bust shot, torso crop, waist crop, or any frame that hides the feet or lower body.
 
 - ${hasProduct ? 'Product is the VISUAL HERO — clearly identifiable, prominent, exactly as in the reference.' : 'The concept emotion is the visual hero.'}
 - ${hasModel ? 'Person: identity from MODEL REFERENCE only (face/hair/skin). Outfit comes from the creative concept — NOT from the model reference photo.' : 'No specific person required — cast someone fitting the brief.'}
@@ -1227,9 +1243,11 @@ ${lockSystem}
 
 🚫 NO TEXT IN THE IMAGE — pure photography only. No typography, no overlay, no slogan, no magazine headline, no poster layout, no brand copy inside the photo.
 🚫 NO disembodied product — do NOT place the product floating disproportionately large in the foreground with a tiny model behind.
+🚫 NO cropped body — the anchor MUST show the full body head-to-toe. Feet must be visible.
 
 FINAL CHECKLIST:
-${hasProduct ? '✓ Product is the visual hero — same shape and color as product reference\n' : ''}${hasModel ? '✓ Face AND body from MODEL REFERENCE — same face, same body type, same proportions\n' : ''}${hasModel ? '✓ Outfit is real-life casual coherent with the brief, NOT copied from the model reference photo\n' : ''}✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel, real skin, no studio' : 'editorial quality, intentional composition'}
+${hasProduct ? '✓ Product is the visual hero — same shape and color as product reference\n' : ''}${hasModel ? '✓ Face AND body from MODEL REFERENCE — same face, same body type, same proportions\n' : ''}${hasModel ? '✓ Outfit is real-life casual coherent with the brief, NOT copied from the model reference photo\n' : ''}✓ FULL BODY visible — head to toe, complete outfit and footwear, no cropping of lower body
+✓ Visual mode: ${modo === 'ugc' ? 'organic iPhone feel, real skin, no studio' : 'editorial quality, intentional composition'}
 ✓ NO text, no graphic design layout
 ✓ Product and model in same spatial plane — no disproportionate foreground product`;
   };
