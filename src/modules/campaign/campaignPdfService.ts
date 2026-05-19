@@ -1,3 +1,5 @@
+import html2canvasLib from 'html2canvas';
+import { jsPDF as jsPDFLib } from 'jspdf';
 import { CampaignSet, CampaignPiece, ImageSlotRole, IMAGE_SLOT_META, CAMPAIGN_CHANNEL_META } from './types';
 
 // ─── SVG del logo (rayo doble) ────────────────────────────────
@@ -760,8 +762,8 @@ async function buildHtml(set: CampaignSet): Promise<string> {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 ${CSS}
 </head>
 <body>
@@ -897,39 +899,8 @@ export async function downloadCampaignHtml(set: CampaignSet, filename?: string):
   URL.revokeObjectURL(url);
 }
 
-// ─── Carga dinámica de scripts en el documento principal ──────
-// srcdoc bloquea scripts externos en browsers modernos.
-// Cargamos jsPDF y html2canvas una vez en window y los reutilizamos.
-
-function loadScript(src: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) {
-      // Ya existe — esperar a que esté listo si window aún no lo tiene
-      const check = () => {
-        if (src.includes('jspdf') && (window as any).jspdf) return resolve();
-        if (src.includes('html2canvas') && (window as any).html2canvas) return resolve();
-        setTimeout(check, 100);
-      };
-      check();
-      return;
-    }
-    const s = document.createElement('script');
-    s.src = src;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error(`No se pudo cargar: ${src}`));
-    document.head.appendChild(s);
-  });
-}
-
 async function ensurePdfLibs(): Promise<{ jsPDF: any; html2canvas: any }> {
-  await Promise.all([
-    loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'),
-    loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'),
-  ]);
-  const jsPDF = (window as any).jspdf?.jsPDF;
-  const html2canvas = (window as any).html2canvas;
-  if (!jsPDF || !html2canvas) throw new Error('No se pudieron cargar jsPDF o html2canvas');
-  return { jsPDF, html2canvas };
+  return { jsPDF: jsPDFLib, html2canvas: html2canvasLib };
 }
 
 export async function downloadCampaignPdf(set: CampaignSet, filename?: string): Promise<void> {
