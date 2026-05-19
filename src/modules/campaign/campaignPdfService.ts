@@ -937,20 +937,16 @@ export async function downloadCampaignPdf(set: CampaignSet, filename?: string): 
     buildConfigPage(setForConfig, lastPageNum),
   ].join('\n');
 
-  // Contenedor oculto en el documento principal — hereda todos los estilos de la app
+  // Contenedor fuera de pantalla — position:absolute para que html2canvas mida bien
+  // NO usar visibility:hidden ni z-index negativo: html2canvas los renderiza en blanco
   const container = document.createElement('div');
-  container.style.cssText = [
-    'position:fixed', 'left:-9999px', 'top:0',
-    'width:794px', 'background:#ffffff',
-    'visibility:hidden', 'pointer-events:none', 'z-index:-1',
-  ].join(';');
-  // Solo las páginas, no el HTML completo — así los estilos del doc principal se aplican
+  container.style.cssText = 'position:absolute;left:-9999px;top:0;width:794px;background:#ffffff;pointer-events:none;';
   container.innerHTML = pagesHtml;
   document.body.appendChild(container);
 
-  // Esperar a que Google Fonts cargue
+  // Esperar fonts + layout
   await document.fonts.ready;
-  await new Promise(r => setTimeout(r, 600));
+  await new Promise(r => setTimeout(r, 800));
 
   try {
     const pageEls = container.querySelectorAll('.page');
