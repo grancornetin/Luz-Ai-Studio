@@ -697,6 +697,76 @@ function buildConfigPage(set: CampaignSet, pageNum: number): string {
   </div>`;
 }
 
+// ─── HTML solo para PDF (sin toolbar, toast ni botones) ───────
+
+async function buildPdfHtml(set: CampaignSet): Promise<string> {
+  const base64Images = await Promise.all(
+    set.plan.piezas.map(p => compressForHtml(p.imageUrl, 900, 0.85))
+  );
+
+  const compressedSlots = await Promise.all(
+    set.slots.map(async s => ({ ...s, base64: await compressForHtml(s.base64, 200, 0.70) }))
+  );
+  const compressedAnchor        = await compressForHtml(set.anchorImage, 400, 0.80);
+  const compressedAnchorOptions = await Promise.all(
+    (set.anchorOptions ?? []).map(a => compressForHtml(a, 400, 0.80))
+  );
+  const setForConfig: typeof set = {
+    ...set,
+    slots:         compressedSlots,
+    anchorImage:   compressedAnchor,
+    anchorOptions: compressedAnchorOptions,
+  };
+
+  const lastPageNum = set.plan.piezas.length + 5;
+  const pages = [
+    buildCoverPage(set),
+    buildStrategyPage(setForConfig),
+    buildCalendarPage(set),
+    ...set.plan.piezas.map((p, i) =>
+      buildPiecePage(p, i, set.plan.piezas.length, base64Images[i])
+    ),
+    buildHashtagsPage(set, set.plan.piezas.length + 4),
+    buildConfigPage(setForConfig, lastPageNum),
+  ].join('\n');
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+${CSS}
+<style>
+/* Overrides para PDF — sin chrome de app */
+html, body { background: #ffffff !important; margin: 0; padding: 0; }
+.toolbar, #toast, .page-label, details, summary,
+button[onclick*="copyPrompt"], button[onclick*="exportPDF"],
+.btn-pdf, .btn-preview { display: none !important; }
+.canvas-wrap { padding: 0 !important; gap: 0 !important; background: #ffffff !important; }
+.page { box-shadow: none !important; page-break-after: always; margin: 0 !important; }
+/* Forzar object-fit cover con posicionamiento absoluto */
+.piece-img { overflow: hidden; }
+.piece-img img { position: absolute; top: 0; left: 0; width: 100% !important; height: 100% !important; object-fit: cover !important; object-position: center !important; }
+.piece-img { position: relative; }
+/* Ancla visual — tamaño fijo, no distorsionar */
+img[style*="width:160px"] { width: 160px !important; height: 213px !important; object-fit: cover !important; }
+img[style*="width:120px"] { width: 120px !important; height: 160px !important; object-fit: cover !important; }
+img[style*="width:110px"] { width: 110px !important; height: 146px !important; object-fit: cover !important; }
+img[style*="width:44px"]  { width:  44px !important; height:  44px !important; object-fit: cover !important; }
+img[style*="width:72px"]  { width:  72px !important; height:  72px !important; object-fit: cover !important; }
+</style>
+</head>
+<body>
+<div class="canvas-wrap">
+${pages}
+</div>
+</body>
+</html>`;
+}
+
 // ─── Construye el HTML completo ───────────────────────────────
 
 // Comprime un data URL a un tamaño máximo para el HTML (evita archivos >50MB)
@@ -906,31 +976,43 @@ async function ensurePdfLibs(): Promise<{ jsPDF: any; html2canvas: any }> {
 export async function downloadCampaignPdf(set: CampaignSet, filename?: string): Promise<void> {
   const { jsPDF, html2canvas } = await ensurePdfLibs();
 
-  // Renderizar en un iframe oculto para que el CSS y las fuentes se apliquen correctamente
+  // iframe oculto: el HTML completo se escribe aquí para que <style> y Google Fonts funcionen
   const iframe = document.createElement('iframe');
-  iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1122px;border:none;visibility:hidden;';
+  iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:2000px;border:none;opacity:0;pointer-events:none;';
   document.body.appendChild(iframe);
 
   try {
-    const html = await buildHtml(set);
+    const html = await buildPdfHtml(set);
 
-    // Escribir el HTML completo en el iframe — así <style> y Google Fonts se cargan bien
-    const doc = iframe.contentDocument!;
-    doc.open();
-    doc.write(html);
-    doc.close();
+    const iframeDoc = iframe.contentDocument!;
+    iframeDoc.open();
+    iframeDoc.write(html);
+    iframeDoc.close();
 
-    // Esperar a que el iframe termine de renderizar (fuentes + layout)
-    await new Promise(r => setTimeout(r, 2000));
+    // Esperar fuentes + layout completo
+    await new Promise<void>(resolve => {
+      const win = iframe.contentWindow as any;
+      if (win.document.fonts?.ready) {
+        win.document.fonts.ready.then(() => setTimeout(resolve, 800));
+      } else {
+        setTimeout(resolve, 2500);
+      }
+    });
 
-    const pages = doc.querySelectorAll('.page');
-    if (!pages.length) throw new Error('No se encontraron páginas en el HTML generado');
+    const pageEls = iframeDoc.querySelectorAll('.page');
+    if (!pageEls.length) throw new Error('No se encontraron páginas');
 
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const A4_W = 210;
 
-    for (let i = 0; i < pages.length; i++) {
-      const page = pages[i] as HTMLElement;
-      const pageHeight = page.scrollHeight || page.offsetHeight || 1122;
+    for (let i = 0; i < pageEls.length; i++) {
+      const page = pageEls[i] as HTMLElement;
+      // scrollHeight respeta el contenido real sin clip
+      const pageH = page.scrollHeight || 1122;
+
+      // Redimensionar iframe para que la página no esté recortada
+      iframe.style.height = `${pageH + 40}px`;
+      await new Promise(r => setTimeout(r, 50));
 
       const canvas = await html2canvas(page, {
         scale: 2,
@@ -939,19 +1021,21 @@ export async function downloadCampaignPdf(set: CampaignSet, filename?: string): 
         backgroundColor: '#ffffff',
         logging: false,
         width: 794,
-        height: pageHeight,
+        height: pageH,
         windowWidth: 794,
         scrollX: 0,
-        scrollY: 0,
+        scrollY: -iframeDoc.documentElement.scrollTop,
+        foreignObjectRendering: false,
       });
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.92);
-      const ratio   = pageHeight / 794;
+      const imgData = canvas.toDataURL('image/jpeg', 0.93);
+      const ratio   = pageH / 794;
       if (i > 0) pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', 0, 0, 210, 210 * ratio);
+      pdf.addImage(imgData, 'JPEG', 0, 0, A4_W, A4_W * ratio);
     }
 
-    const safeName = (set.plan.tagline || 'campaña').replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ\s]/g, '').trim();
+    const safeName = (set.plan.tagline || 'campaña')
+      .replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ\s]/g, '').trim();
     pdf.save(filename ?? `Kit-${safeName}.pdf`);
   } finally {
     document.body.removeChild(iframe);
