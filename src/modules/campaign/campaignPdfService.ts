@@ -281,40 +281,6 @@ function buildStrategyPage(set: CampaignSet): string {
     return `<div class="channel-chip"><span class="channel-icon">${m.icon}</span> ${esc(m.label)}</div>`;
   }).join('');
 
-  // Ancla visual y referencias del brief en columna derecha
-  const anchorSrc = set.anchorImage || '';
-  const anchorBlock = anchorSrc ? `
-    <div style="margin-bottom:20px">
-      <div class="strategy-label" style="margin-bottom:10px">Ancla Visual de Campaña</div>
-      <div style="position:relative;display:inline-block">
-        <img src="${anchorSrc}" style="width:160px;height:213px;object-fit:cover;border-radius:12px;border:2px solid var(--fucsia);display:block" />
-        <div style="position:absolute;top:8px;left:8px;background:var(--fucsia);color:white;font-family:var(--font-body);font-size:9px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;padding:3px 8px;border-radius:100px">Ancla elegida</div>
-      </div>
-      <p style="font-family:var(--font-body);font-size:11px;color:#64748b;margin-top:8px;line-height:1.5;max-width:160px">Define la luz, paleta y estética de toda la campaña</p>
-    </div>` : '';
-
-  // Miniaturas de referencia por rol
-  const slotGroups = (['product','inspiration','brand','model'] as const)
-    .map(role => {
-      const roleSlots = set.slots.filter(s => s.role === role).slice(0,2);
-      if (roleSlots.length === 0) return '';
-      const labels: Record<string, string> = { product: '📦 Producto', inspiration: '🖼️ Inspiración', brand: '🎨 Marca', model: '👤 Modelo' };
-      const thumbs = roleSlots.map(s =>
-        `<img src="${s.base64}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0" />`
-      ).join('');
-      return `
-        <div style="margin-bottom:12px">
-          <div style="font-family:var(--font-body);font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#64748b;margin-bottom:5px">${labels[role]}</div>
-          <div style="display:flex;gap:5px;flex-wrap:wrap">${thumbs}</div>
-        </div>`;
-    }).join('');
-
-  const refsBlock = (anchorBlock || slotGroups) ? `
-    <div style="width:180px;flex-shrink:0">
-      ${anchorBlock}
-      ${slotGroups ? `<div class="strategy-label" style="margin-bottom:10px">Imágenes de brief</div>${slotGroups}` : ''}
-    </div>` : '';
-
   return `
   <div class="page-label">Página 2 · Estrategia</div>
   <div class="page" id="page-2">
@@ -323,46 +289,41 @@ function buildStrategyPage(set: CampaignSet): string {
       <span class="section-header-badge">Visión general</span>
     </div>
     <div class="page-body">
-      <div style="display:flex;gap:24px;align-items:flex-start">
-        <div style="flex:1;min-width:0">
-          <div class="strategy-section">
-            <div class="strategy-label">Concepto Creativo</div>
-            <div class="strategy-title">${esc(plan.tagline)}</div>
-            <div class="strategy-text">${esc(plan.concepto)}</div>
-          </div>
-          <div class="divider"></div>
-          <div class="strategy-section">
-            <div class="strategy-label">Promesa de Campaña</div>
-            <div class="strategy-title">"${esc(plan.promesa)}"</div>
-            <div class="strategy-text">${esc(plan.resumen)}</div>
-          </div>
-          <div class="divider"></div>
-          <div class="strategy-section">
-            <div class="strategy-label">Canales Seleccionados</div>
-            <div class="channels-row">${canalesChips}</div>
-          </div>
-          <div class="divider"></div>
-          <div class="strategy-label" style="margin-bottom:12px">Resumen Ejecutivo</div>
-          <div class="exec-box">
-            <div class="exec-item">
-              <div class="exec-item-label">Piezas generadas</div>
-              <div class="exec-item-value accent">${plan.piezas.length} imágenes + copy</div>
-            </div>
-            <div class="exec-item">
-              <div class="exec-item-label">Duración</div>
-              <div class="exec-item-value">${plan.duracionDias} días de campaña</div>
-            </div>
-            <div class="exec-item">
-              <div class="exec-item-label">Frecuencia</div>
-              <div class="exec-item-value lime">1–2 piezas por día</div>
-            </div>
-            <div class="exec-item">
-              <div class="exec-item-label">Canales</div>
-              <div class="exec-item-value">${set.canales.length} canal${set.canales.length > 1 ? 'es' : ''} activo${set.canales.length > 1 ? 's' : ''}</div>
-            </div>
-          </div>
+      <div class="strategy-section">
+        <div class="strategy-label">Concepto Creativo</div>
+        <div class="strategy-title">${esc(plan.tagline)}</div>
+        <div class="strategy-text">${esc(plan.concepto)}</div>
+      </div>
+      <div class="divider"></div>
+      <div class="strategy-section">
+        <div class="strategy-label">Promesa de Campaña</div>
+        <div class="strategy-title">"${esc(plan.promesa)}"</div>
+        <div class="strategy-text">${esc(plan.resumen)}</div>
+      </div>
+      <div class="divider"></div>
+      <div class="strategy-section">
+        <div class="strategy-label">Canales Seleccionados</div>
+        <div class="channels-row">${canalesChips}</div>
+      </div>
+      <div class="divider"></div>
+      <div class="strategy-label" style="margin-bottom:12px">Resumen Ejecutivo</div>
+      <div class="exec-box">
+        <div class="exec-item">
+          <div class="exec-item-label">Piezas generadas</div>
+          <div class="exec-item-value accent">${plan.piezas.length} imágenes + copy</div>
         </div>
-        ${refsBlock}
+        <div class="exec-item">
+          <div class="exec-item-label">Duración</div>
+          <div class="exec-item-value">${plan.duracionDias} días de campaña</div>
+        </div>
+        <div class="exec-item">
+          <div class="exec-item-label">Frecuencia</div>
+          <div class="exec-item-value lime">1–2 piezas por día</div>
+        </div>
+        <div class="exec-item">
+          <div class="exec-item-label">Canales</div>
+          <div class="exec-item-value">${set.canales.length} canal${set.canales.length > 1 ? 'es' : ''} activo${set.canales.length > 1 ? 's' : ''}</div>
+        </div>
       </div>
     </div>
     ${pageFooter(2)}
@@ -899,20 +860,8 @@ export async function downloadCampaignHtml(set: CampaignSet, filename?: string):
   URL.revokeObjectURL(url);
 }
 
-// Inyecta el CSS del kit en el documento principal una sola vez
-function injectKitStyles(): void {
-  if (document.getElementById('campaign-pdf-styles')) return;
-  const style = document.createElement('style');
-  style.id = 'campaign-pdf-styles';
-  style.textContent = CSS.replace(/<\/?style>/g, '');
-  document.head.appendChild(style);
-}
-
 export async function downloadCampaignPdf(set: CampaignSet, filename?: string): Promise<void> {
-  // Inyectar estilos en el documento principal para que html2canvas los vea
-  injectKitStyles();
-
-  // Preparar imágenes
+  // 1. Preparar imágenes comprimidas
   const base64Images = await Promise.all(
     set.plan.piezas.map(p => compressForHtml(p.imageUrl, 900, 0.85))
   );
@@ -937,26 +886,65 @@ export async function downloadCampaignPdf(set: CampaignSet, filename?: string): 
     buildConfigPage(setForConfig, lastPageNum),
   ].join('\n');
 
-  // Contenedor fuera de pantalla — position:absolute para que html2canvas mida bien
-  // NO usar visibility:hidden ni z-index negativo: html2canvas los renderiza en blanco
-  const container = document.createElement('div');
-  container.style.cssText = 'position:absolute;left:-9999px;top:0;width:794px;background:#ffffff;pointer-events:none;';
-  container.innerHTML = pagesHtml;
-  document.body.appendChild(container);
+  // 2. HTML completo y limpio para el iframe (sin toolbar, sin toast, sin botones)
+  const fullHtml = `<!DOCTYPE html><html lang="es"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+${CSS}
+<style>
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#fff;width:794px}
+.page-label{display:none}
+details,summary{display:none}
+button[onclick*="copyPrompt"]{display:none!important}
+.page{overflow:hidden;box-shadow:none;margin:0;page-break-after:always}
+</style>
+</head><body>
+<div style="width:794px;background:#fff">
+${pagesHtml}
+</div>
+</body></html>`;
 
-  // Esperar fonts + layout
-  await document.fonts.ready;
-  await new Promise(r => setTimeout(r, 800));
+  // 3. Iframe visible pero fuera de pantalla — html2canvas NECESITA que sea visible
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;top:0;left:-900px;width:794px;height:1200px;border:none;background:#fff;';
+  document.body.appendChild(iframe);
 
   try {
-    const pageEls = container.querySelectorAll('.page');
-    if (!pageEls.length) throw new Error('No se encontraron páginas');
+    // 4. Cargar el HTML en el iframe y esperar el evento load
+    await new Promise<void>((resolve, reject) => {
+      iframe.onload = () => resolve();
+      iframe.onerror = () => reject(new Error('Error cargando iframe'));
+      // srcdoc carga sin petición de red
+      iframe.srcdoc = fullHtml;
+    });
+
+    // 5. Esperar fuentes dentro del iframe
+    const iWin = iframe.contentWindow as any;
+    const iDoc = iframe.contentDocument!;
+    if (iWin.document?.fonts?.ready) {
+      await iWin.document.fonts.ready;
+    }
+    await new Promise(r => setTimeout(r, 1000));
+
+    // 6. html2canvas usa la instancia del iframe, no la del documento principal
+    const h2c: typeof html2canvasLib = iWin.html2canvas ?? html2canvasLib;
+
+    const pageEls = iDoc.querySelectorAll('.page');
+    if (!pageEls.length) throw new Error('No se encontraron páginas en el iframe');
 
     const pdf = new jsPDFLib({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
     for (let i = 0; i < pageEls.length; i++) {
       const page = pageEls[i] as HTMLElement;
-      const pageH = page.scrollHeight || page.offsetHeight || 1122;
+      const pageH = page.scrollHeight || 1122;
+
+      // Redimensionar el iframe a la altura de esta página para que no haya recorte
+      iframe.style.height = `${pageH}px`;
+      await new Promise(r => setTimeout(r, 30));
 
       const canvas = await html2canvasLib(page, {
         scale: 2,
@@ -980,6 +968,6 @@ export async function downloadCampaignPdf(set: CampaignSet, filename?: string): 
     const safeName = (set.plan.tagline || 'campaña').replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ\s]/g, '').trim();
     pdf.save(filename ?? `Kit-${safeName}.pdf`);
   } finally {
-    document.body.removeChild(container);
+    document.body.removeChild(iframe);
   }
 }
