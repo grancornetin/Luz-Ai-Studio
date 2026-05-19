@@ -364,6 +364,32 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
     }
   };
 
+  // Convierte una URL pública o data URL a { data, mimeType } para la API.
+  // Las imágenes generadas llegan como URLs HTTPS — hay que fetchearlas y
+  // convertirlas a base64 porque la API solo acepta inlineData.
+  const urlToRef = async (url: string, label: string): Promise<{ data: string; mimeType: string } | null> => {
+    try {
+      // data URL o base64 sin prefijo → extractImageRef directo
+      if (url.startsWith('data:')) return extractImageRef(url, label);
+
+      // URL pública → fetch → blob → base64
+      const res = await fetch(url, { mode: 'cors' });
+      if (!res.ok) throw new Error(`fetch ${res.status}`);
+      const blob = await res.blob();
+      const mimeType = blob.type || 'image/jpeg';
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = () => resolve((reader.result as string).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      return { data: base64, mimeType };
+    } catch (e) {
+      console.warn(`[generateCollage] No se pudo convertir ${label}:`, e);
+      return null;
+    }
+  };
+
   // Genera el collage final pasando las N imágenes generadas como referencias adicionales.
   const generateCollage = async (
     state: WizardState,
@@ -388,12 +414,11 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
       'HARD RULES: do not invent product details, preserve original product shape and colors, no human figures unless already present in the source shots.',
     ].join('\n');
 
-    const shotRefs = validShots
-      .map((img, i) => {
-        try { return extractImageRef(img, `gridCell[${i}]`); }
-        catch { return null; }
-      })
-      .filter(Boolean) as Array<{ data: string; mimeType: string }>;
+    // Convertir las URLs de los shots generados a base64 para pasarlas como
+    // inlineData a la API (las URLs HTTPS no son válidas como referenceImages).
+    const shotRefs = (
+      await Promise.all(validShots.map((img, i) => urlToRef(img, `gridCell[${i}]`)))
+    ).filter(Boolean) as Array<{ data: string; mimeType: string }>;
 
     return imageApiService.generateImage({
       prompt:          collagePrompt,
