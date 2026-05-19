@@ -60,6 +60,10 @@ const NEGATIVE_UGC = [
   'neutral blank expression', 'model stare',
   // Fondo de estudio
   'white seamless background', 'studio backdrop', 'neutral studio',
+  // Encuadre cortado — crítico para el ancla
+  'cropped body', 'bust shot', 'torso crop', 'waist crop', 'portrait crop',
+  'close-up of face only', 'upper body only', 'cut off feet', 'headless body',
+  'partial body', 'body out of frame', 'legs not visible', 'feet not visible',
   // Drift de producto — el producto no puede cambiar de forma, color ni categoría
   'different product shape', 'wrong product color', 'invented product', 'generic substitute',
   'product replacement', 'similar but different product', 'changed packaging',
@@ -82,6 +86,10 @@ const NEGATIVE_EDITORIAL = [
   'slogan inside image', 'poster layout', 'magazine headline in image',
   'editorial text overlay', 'white border frame layout', 'graphic design text',
   'brand copy inside image', 'written words on photo', 'typographic poster',
+  // Encuadre cortado — crítico para el ancla
+  'cropped body', 'bust shot', 'torso crop', 'waist crop', 'portrait crop',
+  'close-up of face only', 'upper body only', 'cut off feet', 'headless body',
+  'partial body', 'body out of frame', 'legs not visible', 'feet not visible',
   // Drift de outfit/styling
   'catsuit', 'latex bodysuit', 'mini dress', 'micro skirt', 'sporty leggings',
   'casual pants', 'athleisure outfit', 'overly sensual styling',
@@ -347,8 +355,8 @@ function buildAnchorPrompt(
     ? 'Natural ambient — window, sun, or outdoor. Imperfect and alive.'
     : 'Beautiful controlled natural light — golden hour or clean window.';
   const poseNote = modo === 'ugc'
-    ? (hasModel ? 'Organic, asymmetric, mid-movement. Weight shifted. NOT catalog.' : 'Organic product placement in real-life context.')
-    : (hasModel ? 'Confident and expressive. Aspirational, not stiff.' : 'Hero product — perfectly lit, intentional composition.');
+    ? (hasModel ? 'Full body visible head-to-toe. Organic, asymmetric, mid-movement. Weight shifted. NOT catalog. Feet must be in frame.' : 'Organic product placement in real-life context.')
+    : (hasModel ? 'Full body visible head-to-toe. Confident and expressive. Aspirational, not stiff. Feet must be in frame.' : 'Hero product — perfectly lit, intentional composition.');
   const bgNote = modo === 'ugc'
     ? 'Real inhabited environment — home, café, street.'
     : 'Curated environment OR minimal clean — serves the concept.';
@@ -371,7 +379,15 @@ The styling must feel like it was chosen by the creator, not by a stylist.
 This outfit category will carry through all derived UGC images — choose it deliberately.`
     : '';
 
-  return `${paradigm}
+  return `⚠️ ANCHOR FRAMING — ABSOLUTE RULE, READ FIRST:
+FULL BODY SHOT — HEAD TO TOE. This is the single most important constraint of this image.
+The model's complete body must be visible: face, torso, legs, and feet — all in frame.
+Outfit and footwear must be fully visible with no cropping.
+ANY pose is valid (standing, seated, leaning, lying down) as long as the full body is visible.
+STRICTLY FORBIDDEN: close-up, bust shot, portrait crop, waist crop, torso-only, legs-only, or any frame where feet or head are cut off.
+If you cannot fit the full body in the frame — zoom out until you can.
+
+${paradigm}
 
 CAMPAIGN BRIEF:
 Concept: "${plan.concepto}"
@@ -382,13 +398,7 @@ ${ugcProductLock}
 
 ANCHOR IMAGE TASK:
 This image defines the visual world for the ENTIRE campaign. All other images inherit its mood, outfit, and environment.
-
-⚠️ FRAMING RULE — NON-NEGOTIABLE:
-This anchor image MUST show the model HEAD-TO-TOE (full body), regardless of pose.
-The complete outfit, footwear, and environment must be fully visible.
-This is required so derived campaign images can replicate the exact styling without having to invent missing clothing.
-Acceptable poses: standing, seated, leaning, lying down — ANY pose, as long as the full body is visible from head to feet.
-FORBIDDEN framing for the anchor: close-up, portrait, bust shot, torso crop, waist crop, or any frame that hides the feet or lower body.
+The anchor must establish the complete visual truth: full outfit, full body, complete environment — no gaps for the AI to invent.
 
 - ${hasProduct ? 'Product is the VISUAL HERO — clearly identifiable, prominent, exactly as in reference.' : 'The concept emotion is the visual hero.'}
 - ${hasModel ? 'Person: identity from MODEL REFERENCE only (face/hair/skin). Outfit comes from creative concept aligned with the campaign styling direction.' : 'No specific person required — cast someone fitting the target audience.'}
@@ -1186,8 +1196,8 @@ export async function generateAnchorImagesFromBrief(
       ? 'Natural ambient — window, sun, or outdoor. Imperfect and alive.'
       : 'Beautiful controlled natural light — golden hour or clean window.';
     const poseNote = modo === 'ugc'
-      ? (hasModel ? 'Organic, asymmetric, mid-movement. NOT catalog.' : 'Organic product placement in real-life context.')
-      : (hasModel ? 'Confident and expressive. Aspirational, not stiff.' : 'Hero product — perfectly lit, intentional composition.');
+      ? (hasModel ? 'Full body visible head-to-toe. Organic, asymmetric, mid-movement. Feet must be in frame. NOT catalog.' : 'Organic product placement in real-life context.')
+      : (hasModel ? 'Full body visible head-to-toe. Confident and expressive. Aspirational, not stiff. Feet must be in frame.' : 'Hero product — perfectly lit, intentional composition.');
     const bgNote = modo === 'ugc'
       ? 'Real inhabited environment — home, café, street.'
       : 'Curated environment OR minimal clean — serves the concept.';
@@ -1217,20 +1227,22 @@ Person wears an ELEGANT and COHERENT outfit aligned with the campaign concept.
 The outfit defines the styling language for all derived images — make it refined and product-forward.`
       : '';
 
-    return `${paradigm}
+    return `⚠️ ANCHOR FRAMING — ABSOLUTE RULE, READ FIRST:
+FULL BODY SHOT — HEAD TO TOE. This is the single most important constraint of this image.
+The model's complete body must be visible: face, torso, legs, and feet — all in frame.
+Outfit and footwear must be fully visible with no cropping.
+ANY pose is valid (standing, seated, leaning, lying down) as long as the full body is visible.
+STRICTLY FORBIDDEN: close-up, bust shot, portrait crop, waist crop, torso-only, legs-only, or any frame where feet or head are cut off.
+If you cannot fit the full body in the frame — zoom out until you can.
+
+${paradigm}
 
 ${intelligenceHeader}CAMPAIGN BRIEF: "${idea}"
 ${ugcProductLock}
 
 ANCHOR IMAGE TASK:
 This image will define the visual world for the ENTIRE campaign. All other images will inherit its mood, outfit, and environment.
-
-⚠️ FRAMING RULE — NON-NEGOTIABLE:
-This anchor image MUST show the model HEAD-TO-TOE (full body), regardless of pose.
-The complete outfit, footwear, and environment must be fully visible.
-This is required so derived campaign images can replicate the exact styling without having to invent missing clothing.
-Acceptable poses: standing, seated, leaning, lying down — ANY pose, as long as the full body is visible from head to feet.
-FORBIDDEN framing for the anchor: close-up, portrait, bust shot, torso crop, waist crop, or any frame that hides the feet or lower body.
+The anchor must establish the complete visual truth: full outfit, full body, complete environment — no gaps for the AI to invent.
 
 - ${hasProduct ? 'Product is the VISUAL HERO — clearly identifiable, prominent, exactly as in the reference.' : 'The concept emotion is the visual hero.'}
 - ${hasModel ? 'Person: identity from MODEL REFERENCE only (face/hair/skin). Outfit comes from the creative concept — NOT from the model reference photo.' : 'No specific person required — cast someone fitting the brief.'}
