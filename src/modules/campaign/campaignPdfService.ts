@@ -1,5 +1,3 @@
-import html2canvasLib from 'html2canvas';
-import { jsPDF as jsPDFLib } from 'jspdf';
 import { CampaignSet, CampaignPiece, ImageSlotRole, IMAGE_SLOT_META, CAMPAIGN_CHANNEL_META } from './types';
 
 // ─── SVG del logo (rayo doble) ────────────────────────────────
@@ -202,7 +200,14 @@ body{font-family:var(--font-body);background:#1a1a2e;color:var(--dark-text);-web
 .htag-group-bg.fucsia-bg{background:rgba(247,44,91,0.07);border:1px solid rgba(247,44,91,0.18);}
 .htag-group-bg.violet-bg{background:rgba(124,58,237,0.07);border:1px solid rgba(124,58,237,0.18);}
 .htag-group-bg.lime-bg{background:rgba(228,241,172,0.5);border:1px solid rgba(155,194,30,0.35);}
-@media print{body{background:white;}.toolbar{display:none;}.canvas-wrap{padding:0;gap:0;}.page{box-shadow:none;page-break-after:always;}.page-label{display:none;}}
+@media print{
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+  html,body{background:white!important;margin:0;padding:0;}
+  .toolbar,.page-label,#toast,details,summary,button[onclick*="copyPrompt"]{display:none!important;}
+  .canvas-wrap{padding:0!important;gap:0!important;background:white!important;display:block!important;}
+  .page{box-shadow:none!important;margin:0!important;page-break-after:always!important;break-after:page!important;page-break-inside:avoid!important;width:100%!important;}
+  .page:last-child{page-break-after:auto!important;break-after:auto!important;}
+}
 </style>`;
 
 // ─── Generadores de páginas HTML ──────────────────────────────
@@ -723,8 +728,6 @@ async function buildHtml(set: CampaignSet): Promise<string> {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-<script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 ${CSS}
 </head>
 <body>
@@ -735,8 +738,7 @@ ${CSS}
     <span class="toolbar-brand">Luz <span>IA</span> Studio</span>
   </div>
   <div class="toolbar-actions">
-    <button class="btn-preview" onclick="window.print()">🖨 Imprimir</button>
-    <button class="btn-pdf" onclick="exportPDF()">
+    <button class="btn-pdf" onclick="window.print()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
         <path d="M12 16V8m0 8-3-3m3 3 3-3M20 20H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2Z"/>
       </svg>
@@ -816,31 +818,8 @@ function copyPrompt(el) {
 }
 
 // ── Exportar PDF ──────────────────────────────────────────────
-async function exportPDF() {
-  const btn = document.querySelector('.btn-pdf');
-  btn.textContent = '⏳ Generando PDF...';
-  btn.disabled = true;
-  try {
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const pages = document.querySelectorAll('.page');
-    for (let i = 0; i < pages.length; i++) {
-      const canvas = await html2canvas(pages[i], {
-        scale: 2, useCORS: true, backgroundColor: null,
-        logging: false, width: 794, height: pages[i].offsetHeight
-      });
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const ratio = pages[i].offsetHeight / 794;
-      if (i > 0) pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', 0, 0, 210, 210 * ratio);
-    }
-    pdf.save('${campaignTitle.replace(/[^a-zA-Z0-9]/g, '-')}.pdf');
-  } catch(e) {
-    console.error(e);
-    alert('Error al generar PDF. Usá el botón Imprimir como alternativa.');
-  }
-  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:15px;height:15px"><path d="M12 16V8m0 8-3-3m3 3 3-3M20 20H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2Z"/></svg> Exportar PDF';
-  btn.disabled = false;
+function exportPDF() {
+  window.print();
 }
 </script>
 </body>
@@ -860,114 +839,33 @@ export async function downloadCampaignHtml(set: CampaignSet, filename?: string):
   URL.revokeObjectURL(url);
 }
 
-export async function downloadCampaignPdf(set: CampaignSet, filename?: string): Promise<void> {
-  // 1. Preparar imágenes comprimidas
-  const base64Images = await Promise.all(
-    set.plan.piezas.map(p => compressForHtml(p.imageUrl, 900, 0.85))
-  );
-  const compressedSlots = await Promise.all(
-    set.slots.map(async s => ({ ...s, base64: await compressForHtml(s.base64, 200, 0.70) }))
-  );
-  const compressedAnchor = await compressForHtml(set.anchorImage, 400, 0.80);
-  const compressedAnchorOptions = await Promise.all(
-    (set.anchorOptions ?? []).map(a => compressForHtml(a, 400, 0.80))
-  );
-  const setForConfig: typeof set = {
-    ...set, slots: compressedSlots, anchorImage: compressedAnchor, anchorOptions: compressedAnchorOptions,
-  };
+export async function downloadCampaignPdf(set: CampaignSet): Promise<void> {
+  // Genera el HTML y abre una ventana nueva que dispara window.print() automáticamente.
+  // El navegador renderiza el PDF directamente — sin html2canvas, sin distorsión.
+  const html = await buildHtml(set);
 
-  const lastPageNum = set.plan.piezas.length + 5;
-  const pagesHtml = [
-    buildCoverPage(set),
-    buildStrategyPage(setForConfig),
-    buildCalendarPage(set),
-    ...set.plan.piezas.map((p, i) => buildPiecePage(p, i, set.plan.piezas.length, base64Images[i])),
-    buildHashtagsPage(set, set.plan.piezas.length + 4),
-    buildConfigPage(setForConfig, lastPageNum),
-  ].join('\n');
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
 
-  // 2. HTML completo y limpio para el iframe (sin toolbar, sin toast, sin botones)
-  const fullHtml = `<!DOCTYPE html><html lang="es"><head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-${CSS}
-<style>
-*,*::before,*::after{box-sizing:border-box}
-html,body{margin:0;padding:0;background:#fff;width:794px}
-.page-label{display:none}
-details,summary{display:none}
-button[onclick*="copyPrompt"]{display:none!important}
-.page{overflow:hidden;box-shadow:none;margin:0;page-break-after:always}
-</style>
-</head><body>
-<div style="width:794px;background:#fff">
-${pagesHtml}
-</div>
-</body></html>`;
-
-  // 3. Iframe visible pero fuera de pantalla — html2canvas NECESITA que sea visible
-  const iframe = document.createElement('iframe');
-  iframe.style.cssText = 'position:fixed;top:0;left:-900px;width:794px;height:1200px;border:none;background:#fff;';
-  document.body.appendChild(iframe);
-
-  try {
-    // 4. Cargar el HTML en el iframe y esperar el evento load
-    await new Promise<void>((resolve, reject) => {
-      iframe.onload = () => resolve();
-      iframe.onerror = () => reject(new Error('Error cargando iframe'));
-      // srcdoc carga sin petición de red
-      iframe.srcdoc = fullHtml;
-    });
-
-    // 5. Esperar fuentes dentro del iframe
-    const iWin = iframe.contentWindow as any;
-    const iDoc = iframe.contentDocument!;
-    if (iWin.document?.fonts?.ready) {
-      await iWin.document.fonts.ready;
-    }
-    await new Promise(r => setTimeout(r, 1000));
-
-    // 6. html2canvas usa la instancia del iframe, no la del documento principal
-    const h2c: typeof html2canvasLib = iWin.html2canvas ?? html2canvasLib;
-
-    const pageEls = iDoc.querySelectorAll('.page');
-    if (!pageEls.length) throw new Error('No se encontraron páginas en el iframe');
-
-    const pdf = new jsPDFLib({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-    for (let i = 0; i < pageEls.length; i++) {
-      const page = pageEls[i] as HTMLElement;
-      const pageH = page.scrollHeight || 1122;
-
-      // Redimensionar el iframe a la altura de esta página para que no haya recorte
-      iframe.style.height = `${pageH}px`;
-      await new Promise(r => setTimeout(r, 30));
-
-      const canvas = await html2canvasLib(page, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        width: 794,
-        height: pageH,
-        windowWidth: 794,
-        scrollX: 0,
-        scrollY: 0,
-      });
-
-      const imgData = canvas.toDataURL('image/jpeg', 0.93);
-      const ratio = pageH / 794;
-      if (i > 0) pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', 0, 0, 210, 210 * ratio);
-    }
-
-    const safeName = (set.plan.tagline || 'campaña').replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ\s]/g, '').trim();
-    pdf.save(filename ?? `Kit-${safeName}.pdf`);
-  } finally {
-    document.body.removeChild(iframe);
+  const win = window.open(url, '_blank');
+  if (!win) {
+    // Fallback si el navegador bloqueó el popup: descarga el HTML
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Kit-${set.id.slice(-6)}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+    return;
   }
+
+  // Cuando la ventana termina de cargar, dispara print() automáticamente
+  win.onload = () => {
+    win.focus();
+    win.print();
+    // Libera el blob una vez que el diálogo se cierra
+    win.onafterprint = () => {
+      win.close();
+      URL.revokeObjectURL(url);
+    };
+  };
 }
