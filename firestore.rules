@@ -178,6 +178,11 @@ service cloud.firestore {
         allow read, write: if isOwner(userId) || isAdmin();
       }
 
+      // Perfiles de marca (Mis Marcas)
+      match /brandProfiles/{brandId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
       // Flags internos (ej: migración)
       match /meta/{docId} {
         allow read, write: if isOwner(userId) || isAdmin();

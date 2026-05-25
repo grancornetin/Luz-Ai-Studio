@@ -101,7 +101,11 @@ const PhotodumpModule: React.FC = () => {
   const [basePrompt,  setBasePrompt]  = useState('');
   const [outfitMode,  setOutfitMode]  = useState<PhotodumpOutfitMode>('generate');
   const [refs, setRefs] = useState<PhotodumpRefs>({
-    avatarRef: null, productRef: null, outfitRef: null, sceneRef: null, sceneText: '', outfitMode: 'generate',
+    avatarRef: null, bodyRef: null,
+    productRef: null, productRefs: [],
+    outfitRef: null,
+    sceneRef: null, sceneRefs: [],
+    sceneText: '', outfitMode: 'generate',
   });
 
   // Historia
@@ -187,7 +191,13 @@ const PhotodumpModule: React.FC = () => {
     await downloadAsZip(set.images.map(i => i.imageUrl), `photodump_${set.id.slice(-6)}.zip`, 'dump');
   };
 
-  const emptyRefs: PhotodumpRefs = { avatarRef: null, productRef: null, outfitRef: null, sceneRef: null, sceneText: '', outfitMode: 'generate' };
+  const emptyRefs: PhotodumpRefs = {
+    avatarRef: null, bodyRef: null,
+    productRef: null, productRefs: [],
+    outfitRef: null,
+    sceneRef: null, sceneRefs: [],
+    sceneText: '', outfitMode: 'generate',
+  };
 
   const resetCreator = () => {
     setStep(1); setBasePrompt(''); setRefs(emptyRefs); setOutfitMode('generate');
@@ -254,6 +264,7 @@ const PhotodumpModule: React.FC = () => {
             basePrompt, narrative, destino, sessionParams,
             plan.assignedFamilies,
             plan.sessionFamilies,
+            shots.length,
           );
           shotUrls.push(url);
           setPartialImages(prev => [...prev, url]);
@@ -338,6 +349,7 @@ const PhotodumpModule: React.FC = () => {
           savedShots[i], refsWithMode, ref0Url, ref0Analysis,
           basePrompt, narrative, destino, sessionParams,
           savedPlan.assignedFamilies, savedPlan.sessionFamilies,
+          savedShots.length,
         );
         newUrls[i] = url;
         setPartialImages(prev => { const n = [...prev]; n[i + 1] = url; return n; });

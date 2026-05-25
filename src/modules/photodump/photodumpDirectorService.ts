@@ -530,6 +530,50 @@ function selectSessionFamilies(): SessionFamilies {
 
 // ── Generación REF0 (imagen ancla) ───────────────────────────
 
+// ── Outfit lock completo (igual a Content Studio) ────────────
+function buildOutfitLockBlock(outfitMode: PhotodumpOutfitMode, basePrompt: string, hasOutfitRef: boolean): string {
+  if (outfitMode === 'keep') {
+    return `OUTFIT LOCK:
+- Maintain EXACTLY the outfit visible in the avatar reference image.
+- Same garments, same color, same fit, same fabric texture.
+- SHOE SPECIFICITY LOCK: Reproduce the exact shoe design from the avatar reference.
+  Same number of straps, same strap routing, same heel shape and height, same toe shape,
+  same hardware (buckles, clasps), same material finish, same color.
+  Do NOT simplify, reinterpret, or generalize the shoe.
+- Do NOT invent fabric continuation beyond what is visible in the reference.
+- Do NOT add or remove garments. The outfit is already established.`;
+  }
+  if (outfitMode === 'upload' && hasOutfitRef) {
+    return `OUTFIT LOCK (uploaded reference — binding):
+- Copy the exact garments from the outfit reference image.
+- Same color, fabric, cut, fit, and silhouette.
+- SHOE SPECIFICITY LOCK: Reproduce the exact shoe design from the outfit reference.
+  Same number of straps, same strap routing, same heel shape and height, same toe shape,
+  same hardware (buckles, clasps), same material finish (patent, suede, matte), same color.
+  Do NOT simplify, reinterpret, or generalize the shoe. It must be recognizably the same shoe.
+- For close-up shots: ONLY show what physically exists in the reference. DO NOT invent fabric
+  continuation, fake hems, or imaginary garment extensions beyond the visible framing.
+- Tights/hosiery color and opacity MUST match the outfit reference exactly. Do NOT change them.
+- This outfit OVERRIDES any clothing that might appear in the avatar or REF0 references.`;
+  }
+  // generate
+  return `OUTFIT: Choose the most fitting outfit for this scene based on the story brief ("${basePrompt}"),
+the narrative style, and the visual world. Keep it authentic, non-commercial, real-life appropriate.
+Maintain visual consistency with the overall set once established.`;
+}
+
+// ── Asignar escena por posición en el arco narrativo ─────────
+// shot 0-indexed; sceneRefs[0] es la escena principal, [1] y [2] son alternativas
+function getSceneRefForShot(refs: PhotodumpRefs, shotIndex: number, totalShots: number): string | null {
+  const extras = (refs.sceneRefs ?? []).filter(Boolean) as string[];
+  if (extras.length === 0) return refs.sceneRef;
+  // Dividir el arco en tramos iguales según cuántas escenas haya (máx 3 en total)
+  const allScenes = [refs.sceneRef, ...extras].filter(Boolean) as string[];
+  if (allScenes.length === 1) return allScenes[0];
+  const tramo = Math.floor(shotIndex / Math.ceil(totalShots / allScenes.length));
+  return allScenes[Math.min(tramo, allScenes.length - 1)];
+}
+
 export async function generatePhotodumpREF0(
   refs:        PhotodumpRefs,
   narrative:   PhotodumpNarrative,
@@ -548,22 +592,39 @@ export async function generatePhotodumpREF0(
 
   const outfitMode = refs.outfitMode ?? 'generate';
 
-  // Ordenar referencias: avatar triplicado al inicio para máximo peso de identidad
+  // ── Construir lista de referencias ───────────────────────────
+  // Avatar: cara x3 (identidad dominante) + cuerpo x1 (complexión secundaria)
   const refsToPass: (string | null)[] = [];
   if (refs.avatarRef) {
     refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
   }
-  // Solo incluir outfitRef como referencia visual cuando el usuario cargó uno explícitamente
+  if (refs.bodyRef) {
+    refsToPass.push(refs.bodyRef);
+  }
+  // Outfit: solo cuando el usuario cargó uno explícitamente
   if (outfitMode === 'upload' && refs.outfitRef) refsToPass.push(refs.outfitRef);
+  // Producto: referencia principal + ángulos adicionales
   if (refs.productRef) refsToPass.push(refs.productRef);
-  if (refs.sceneRef)   refsToPass.push(refs.sceneRef);
+  const extraProducts = (refs.productRefs ?? []).filter(Boolean) as string[];
+  extraProducts.forEach(r => refsToPass.push(r));
+  // Escena: siempre la escena principal en REF0
+  if (refs.sceneRef) refsToPass.push(refs.sceneRef);
 
-  const outfitInstruction =
-    outfitMode === 'keep'
-      ? 'OUTFIT: Maintain EXACTLY the outfit visible in the avatar reference image — same garments, same color, same fit. Do not change anything.'
-      : outfitMode === 'upload'
-      ? 'OUTFIT: Copy the exact garments from the outfit reference image — same color, fabric, cut, and fit. Faithfully reproduce only the parts of the outfit visible in this framing (e.g., do not show shoes if the shot is waist-up).'
-      : `OUTFIT: Choose the most fitting outfit for this scene based on the story brief ("${basePrompt}"), the narrative style, and the visual world. Keep it authentic, non-commercial, real-life appropriate.`;
+  const outfitInstruction = buildOutfitLockBlock(outfitMode, basePrompt, !!refs.outfitRef);
+
+  // Instrucción de complexión cuando se subió bodyRef
+  const bodyInstruction = refs.bodyRef
+    ? `PHYSIQUE LOCK: The body reference establishes the person's real physique — height, build, and proportions.
+Copy them faithfully. Do NOT generate a heavier, slimmer, taller, or shorter person than shown in the body reference.
+The body reference is secondary to the face reference for identity but binding for proportions.`
+    : '';
+
+  // Instrucción de producto multi-ángulo
+  const productInstruction = extraProducts.length > 0
+    ? `PRODUCT MULTI-ANGLE: Multiple product reference images are provided showing the same product from different angles.
+They all represent the SAME object. Use all angles to understand its exact shape, color, material, and details.
+Reproduce the product faithfully — same design, same finish, same proportions.`
+    : '';
 
   const prompt = `${LOCK_SYSTEM}
 
@@ -593,8 +654,10 @@ iPhone photo quality — handheld, natural light, real skin texture, no studio p
 The person looks like they are living their life — not posing for a photographer.
 Environment is real, light is natural or ambient, mood is aspirational but authentic.
 
-IDENTITY: Copy the face, hair, skin tone, and physical features EXACTLY from the reference images.
+IDENTITY: Copy the face, hair, skin tone, and physical features EXACTLY from the face reference images.
+${bodyInstruction}
 ${outfitInstruction}
+${productInstruction}
 
 Natural iPhone quality. UGC feel. One photo. Not a collage. Not a grid.
 
@@ -747,20 +810,26 @@ export async function generatePhotodumpShot(
   sessionParams:    { uid?: string; sessionId?: string },
   assignedFamilies: StorySupportFamily[] = [],
   sessionFamilies:  SessionFamilies = { storySupport: [], creatorAesthetic: [] },
+  totalShots:       number = 4,
 ): Promise<string> {
 
   const aspectInstr = getAspectInstruction(destino);
 
   const outfitMode = refs.outfitMode ?? 'generate';
 
-  // Ordenar referencias: avatar triplicado + ref0 + resto
+  // ── Construir lista de referencias por shot ───────────────────
+  // Cara x2 (identidad) + cuerpo x1 + REF0 (ancla visual) + outfit + producto(s) + escena asignada
   const refsToPass: string[] = [];
   if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
+  if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
   refsToPass.push(ref0Url);
-  // Solo incluir outfitRef cuando el usuario cargó uno explícitamente
   if (outfitMode === 'upload' && refs.outfitRef) refsToPass.push(refs.outfitRef);
   if (refs.productRef) refsToPass.push(refs.productRef);
-  if (refs.sceneRef)   refsToPass.push(refs.sceneRef);
+  const extraProducts = (refs.productRefs ?? []).filter(Boolean) as string[];
+  extraProducts.forEach(r => refsToPass.push(r));
+  // Escena: asignar según posición en el arco (0-indexed)
+  const sceneForShot = getSceneRefForShot(refs, shot.arcPosition - 1, totalShots);
+  if (sceneForShot) refsToPass.push(sceneForShot);
 
   const beatLabel =
     shot.beat === 'hook'        ? '🎣 HOOK — Para el scroll. La primera imagen de la historia.' :
@@ -807,14 +876,12 @@ ${shot.variationSpace.map((v, i) => `${i + 1}. ${v}`).join('\n')}
 
 SHOT IDENTITY:
 - Face reference (appears multiple times): EXACT identity, same bone structure, same hair, same skin tone.
-- REF0 (after face refs): establishes the visual world — same light, same scene, same color temp.
-${outfitMode === 'keep'
-  ? '- OUTFIT: Keep EXACTLY the outfit from the avatar reference. Same garments, same color, same fit throughout the whole set.'
-  : outfitMode === 'upload'
-  ? '- OUTFIT (uploaded reference): Copy faithfully — same color, fabric, cut. Only show parts visible in this shot\'s framing.'
-  : '- OUTFIT: Maintain visual consistency with REF0. Choose naturally appropriate clothing for the scene and brief context.'
-}
-- This shot is part of a STORY — it must connect to the same world as REF0.
+${refs.bodyRef ? '- Body reference: establishes physique (build, proportions). Do NOT make the person heavier or slimmer than shown.' : ''}
+- REF0 (after face/body refs): establishes the visual world — same light, same scene, same color temp.
+${buildOutfitLockBlock(outfitMode, basePrompt, !!refs.outfitRef)}
+${extraProducts.length > 0 ? `PRODUCT MULTI-ANGLE: Multiple product references show the same object from different angles. Use all of them to reproduce it faithfully.` : ''}
+${sceneForShot !== refs.sceneRef ? `SCENE NOTE: This shot uses an alternate scene reference (position ${shot.arcPosition} of ${totalShots} in the story arc). Integrate the person naturally into this new environment — same person, new setting.` : ''}
+- This shot is part of a STORY — it must connect to the same narrative world established in REF0.
 
 📱 iPhone UGC REALISM (NON-NEGOTIABLE):
 You are taking a new iPhone-style photo inside the same existing moment as REF0.

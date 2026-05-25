@@ -12,7 +12,7 @@ import {
   Zap, TrendingUp, User, Package, AlertCircle,
   Crown, ArrowRight, Sparkles, Clock, Images,
   Settings, FileText, Mail, CreditCard, UserCircle, Gift, ShoppingCart, Tag, LogOut, FolderOpen,
-  CalendarDays, Megaphone,
+  CalendarDays, Megaphone, Palette,
 } from 'lucide-react';
 import { MISSIONS, getUserMissions, completeMission, isMissionOnCooldown, type UserMissions } from '../services/missionsService';
 import { getReferralStats, redeemSpecialCode } from '../services/referralService';
@@ -177,14 +177,15 @@ interface DashboardProps {
   products?: ProductProfile[];
 }
 
-type DashTab = 'home' | 'account' | 'profile' | 'terms' | 'contact';
+type DashTab = 'home' | 'account' | 'profile' | 'brands' | 'terms' | 'contact';
 
 const NAV_TABS: { id: DashTab; label: string; icon: React.ReactNode; route?: string }[] = [
-  { id: 'home',    label: 'Inicio',   icon: <i className="fa-solid fa-house text-xs" /> },
-  { id: 'account', label: 'Cuenta',   icon: <CreditCard className="w-3.5 h-3.5" /> },
-  { id: 'profile', label: 'Perfil',   icon: <UserCircle className="w-3.5 h-3.5" />, route: '/cuenta' },
-  { id: 'terms',   label: 'Términos', icon: <FileText className="w-3.5 h-3.5" />,   route: '/terminos' },
-  { id: 'contact', label: 'Contacto', icon: <Mail className="w-3.5 h-3.5" />,       route: '/contacto' },
+  { id: 'home',    label: 'Inicio',     icon: <i className="fa-solid fa-house text-xs" /> },
+  { id: 'account', label: 'Cuenta',     icon: <CreditCard className="w-3.5 h-3.5" /> },
+  { id: 'profile', label: 'Perfil',     icon: <UserCircle className="w-3.5 h-3.5" />, route: '/cuenta' },
+  { id: 'brands',  label: 'Mis Marcas', icon: <Palette className="w-3.5 h-3.5" />,    route: '/mis-marcas' },
+  { id: 'terms',   label: 'Términos',   icon: <FileText className="w-3.5 h-3.5" />,   route: '/terminos' },
+  { id: 'contact', label: 'Contacto',   icon: <Mail className="w-3.5 h-3.5" />,       route: '/contacto' },
 ];
 
 const PREVIEW_PLANS = ['free', 'weekly', 'starter', 'pro', 'studio'] as const;

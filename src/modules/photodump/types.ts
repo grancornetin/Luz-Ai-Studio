@@ -28,12 +28,15 @@ export interface PhotodumpImage {
 
 // Referencias estructuradas del protagonista (base64 data URIs)
 export interface PhotodumpRefs {
-  avatarRef:   string | null;  // persona / modelo
-  productRef:  string | null;  // producto / objeto
-  outfitRef:   string | null;  // outfit / prendas (solo si outfitMode === 'upload')
-  sceneRef:    string | null;  // escena / ambiente
-  sceneText?:  string;         // descripción textual del lugar
-  outfitMode?: PhotodumpOutfitMode; // cómo tratar el outfit
+  avatarRef:    string | null;       // persona — foto del rostro (obligatoria si se sube persona)
+  bodyRef?:     string | null;       // persona — foto del cuerpo/complexión (opcional, ancla la figura)
+  productRef:   string | null;       // producto principal
+  productRefs?: (string | null)[];   // ángulos adicionales del mismo producto (máx 2 extras)
+  outfitRef:    string | null;       // outfit (solo si outfitMode === 'upload')
+  sceneRef:     string | null;       // escena principal
+  sceneRefs?:   (string | null)[];   // escenas adicionales para historias multi-ambiente (máx 2 extras)
+  sceneText?:   string;              // descripción textual del lugar
+  outfitMode?:  PhotodumpOutfitMode; // cómo tratar el outfit
 }
 
 export interface PhotodumpSet {
@@ -54,9 +57,9 @@ export interface PhotodumpSet {
 
 // Qué slots mostrar según el protagonista elegido
 export const PROTAGONIST_SLOTS: Record<PhotodumpProtagonist, (keyof PhotodumpRefs)[]> = {
-  person:  ['avatarRef', 'sceneRef'],
+  person:  ['avatarRef', 'bodyRef', 'sceneRef'],
   product: ['productRef', 'outfitRef', 'sceneRef'],
-  both:    ['avatarRef', 'productRef', 'outfitRef', 'sceneRef'],
+  both:    ['avatarRef', 'bodyRef', 'productRef', 'outfitRef', 'sceneRef'],
 };
 
 // ── Metadata ──────────────────────────────────────────────────

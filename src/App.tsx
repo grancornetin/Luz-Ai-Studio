@@ -54,6 +54,7 @@ const PlannerList      = lazy(() => import('./modules/planner/PlannerList'));
 const PlannerDetail    = lazy(() => import('./modules/planner/PlannerDetail'));
 const PlannerOnboarding = lazy(() => import('./modules/planner/PlannerOnboarding'));
 const PlannerWeek      = lazy(() => import('./modules/planner/PlannerWeek'));
+const BrandProfilesModule = lazy(() => import('./modules/brandProfiles/BrandProfilesModule'));
 
 const PLAN_STYLES: Record<string, { label: string; className: string }> = {
   free:    { label: 'Free',    className: 'bg-slate-100 text-slate-500' },
@@ -95,8 +96,9 @@ const MENU_GROUPS = [
     label: 'Planner',
     icon: 'fa-calendar-days',
     items: [
-      { path: '/planner',   label: 'Planner',   sublabel: 'Asistente de contenido', icon: 'fa-calendar-days' },
-      { path: '/projects',  label: 'Proyectos', sublabel: 'Biblioteca',             icon: 'fa-folder-open' },
+      { path: '/planner',     label: 'Planner',    sublabel: 'Asistente de contenido', icon: 'fa-calendar-days' },
+      { path: '/projects',    label: 'Proyectos',  sublabel: 'Biblioteca',             icon: 'fa-folder-open' },
+      { path: '/mis-marcas',  label: 'Mis Marcas', sublabel: 'Perfiles de marca',      icon: 'fa-palette' },
     ]
   },
   {
@@ -447,6 +449,7 @@ const AppContent: React.FC = () => {
                   <Route path="/planner/:id"    element={<PlannerWeek />} />
                   <Route path="/projects"        element={<Navigate to="/planner" replace />} />
                   <Route path="/projects/:id"   element={<Navigate to="/planner" replace />} />
+                  <Route path="/mis-marcas"     element={<BrandProfilesModule />} />
                   <Route path="/prompt-library" element={<Navigate to="/prompt-gallery" replace />} />
                   <Route path="/admin/batch"    element={<BatchProgressPanel />} />
                   <Route path="*"               element={<Navigate to="/dashboard" replace />} />
