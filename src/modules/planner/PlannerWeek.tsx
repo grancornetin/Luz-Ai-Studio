@@ -417,6 +417,15 @@ const PlannerWeek: React.FC = () => {
 
   useEffect(() => { loadProject(); }, [loadProject]);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { taskId } = (e as CustomEvent).detail;
+      handleDone(taskId);
+    };
+    window.addEventListener('planner:task:complete', handler);
+    return () => window.removeEventListener('planner:task:complete', handler);
+  }, [id, project]);
+
   const handleDone = async (entryId: string) => {
     if (!id || !project) return;
     await updateCalendarEntryStatus(id, entryId, 'done');
@@ -486,16 +495,6 @@ const PlannerWeek: React.FC = () => {
   const doneTasks  = calendar.filter(e => e.status === 'done').length;
   const pct        = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
   const allDone    = totalTasks > 0 && doneTasks === totalTasks;
-
-  // Escuchar marcado como hecho desde la burbuja flotante
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const { taskId } = (e as CustomEvent).detail;
-      handleDone(taskId);
-    };
-    window.addEventListener('planner:task:complete', handler);
-    return () => window.removeEventListener('planner:task:complete', handler);
-  }, [id, project]);
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-24 md:pb-10">
