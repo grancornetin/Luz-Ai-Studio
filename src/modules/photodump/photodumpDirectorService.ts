@@ -14,6 +14,9 @@ import {
   PhotodumpNarrative, PhotodumpProtagonist, PhotodumpDestino,
   PhotodumpRefs, NARRATIVE_META,
 } from './types';
+import {
+  getStorySupportFamilies, initPhotodumpIntelligence, StorySupportFamily,
+} from './photodumpIntelligence';
 
 // ── Tipos ─────────────────────────────────────────────────────
 
@@ -35,11 +38,13 @@ export interface PhotodumpShotDirective {
 }
 
 export interface PhotodumpSessionPlan {
-  narrative:     PhotodumpNarrative;
-  protagonist:   PhotodumpProtagonist;
-  destino:       PhotodumpDestino;
-  storyTheme:    string;
-  shots:         PhotodumpShotDirective[];
+  narrative:        PhotodumpNarrative;
+  protagonist:      PhotodumpProtagonist;
+  destino:          PhotodumpDestino;
+  storyTheme:       string;
+  shots:            PhotodumpShotDirective[];
+  assignedFamilies: StorySupportFamily[];   // Lista plana para compatibilidad
+  sessionFamilies:  SessionFamilies;        // Separadas por clase para asignación ordenada
 }
 
 export interface PhotodumpREF0Result {
@@ -486,14 +491,41 @@ export async function buildPhotodumpSessionPlan(
   destino:     PhotodumpDestino,
   basePrompt:  string,
 ): Promise<PhotodumpSessionPlan> {
-  const shots = buildStoryDirectives(6, protagonist, destino, narrative);
+  initPhotodumpIntelligence();
+  const shots          = buildStoryDirectives(6, protagonist, destino, narrative);
+  const sessionFamilies = selectSessionFamilies();
+  const assignedFamilies = [...sessionFamilies.storySupport, ...sessionFamilies.creatorAesthetic];
   return {
     narrative,
     protagonist,
     destino,
     storyTheme: `${NARRATIVE_META[narrative].label} · ${basePrompt.slice(0, 50)}`,
     shots,
+    assignedFamilies,
+    sessionFamilies,
   };
+}
+
+// Selecciona familias narrativas separadas por clase para la sesión.
+// story_support: orgánicas, cálidas — para hook, development y closing.
+// creator_aesthetic: más curadas — reservadas solo para shots de detalle/overhead.
+// Devuelve ambas listas para que pickFamilyForBeat pueda elegir con criterio de tono.
+export interface SessionFamilies {
+  storySupport:       StorySupportFamily[];
+  creatorAesthetic:   StorySupportFamily[];
+}
+
+function selectStorySupportFamilies(): StorySupportFamily[] {
+  const { storySupport, creatorAesthetic } = selectSessionFamilies();
+  return [...storySupport, ...creatorAesthetic];
+}
+
+function selectSessionFamilies(): SessionFamilies {
+  const all = getStorySupportFamilies();
+  const storySupport     = all.filter(f => f.usageClass === 'story_support');
+  const creatorAesthetic = all.filter(f => f.usageClass === 'creator_aesthetic');
+  // Ordenar cada grupo por avgScore descendente (ya viene ordenado desde getStorySupportFamilies)
+  return { storySupport, creatorAesthetic };
 }
 
 // ── Generación REF0 (imagen ancla) ───────────────────────────
@@ -603,15 +635,108 @@ function injectREF0Analysis(ref0Analysis: any): string {
   } catch { return ''; }
 }
 
+// Elige la familia narrativa más apropiada para un beat concreto.
+// hook → story_opener / world_building
+// Asigna familia por posición en el arco narrativo con criterio de tono coherente.
+//
+// Reglas de tono:
+//   hook      → story_support con 'story_opener' o 'world_building'
+//   closing   → story_support con 'mood_frame' o 'transition_frame'
+//   detail shots (DEV_DETAIL_TEXTURE, DEV_PRODUCT_OVERHEAD, DEV_PRODUCT_TEXTURE)
+//             → creator_aesthetic primero (composición más curada encaja bien)
+//   development resto → story_support rotando por índice (nunca la misma dos veces seguidas)
+//
+// La rotación es por índice global del shot (shotIndex), no por contador interno,
+// para que sea determinista y predecible en cada sesión.
+function pickFamilyForShot(
+  beat:     StoryBeat,
+  shotKey:  string,
+  shotIndex: number,
+  sessionFamilies: SessionFamilies,
+): StorySupportFamily | null {
+  const { storySupport, creatorAesthetic } = sessionFamilies;
+  if (storySupport.length === 0 && creatorAesthetic.length === 0) return null;
+
+  // Shots de detalle: preferir creator_aesthetic si está disponible
+  const isDetailShot = [
+    'DEV_DETAIL_TEXTURE',
+    'DEV_PRODUCT_OVERHEAD',
+    'DEV_PRODUCT_TEXTURE',
+  ].includes(shotKey);
+
+  if (isDetailShot && creatorAesthetic.length > 0) {
+    return creatorAesthetic[shotIndex % creatorAesthetic.length];
+  }
+
+  // Hook: buscar familia con posición story_opener o world_building
+  if (beat === 'hook') {
+    const match = storySupport.find(f =>
+      f.storyFamilyValue?.recommendedSequencePositions?.some(
+        p => ['story_opener', 'world_building'].includes(p)
+      )
+    );
+    return match ?? storySupport[0] ?? creatorAesthetic[0] ?? null;
+  }
+
+  // Closing: buscar familia con posición mood_frame o transition_frame
+  if (beat === 'closing') {
+    const match = storySupport.find(f =>
+      f.storyFamilyValue?.recommendedSequencePositions?.some(
+        p => ['mood_frame', 'transition_frame', 'context_frame'].includes(p)
+      )
+    );
+    return match ?? storySupport[storySupport.length - 1] ?? storySupport[0] ?? null;
+  }
+
+  // Development: rotar story_support por índice del shot para evitar repetición consecutiva
+  if (storySupport.length > 0) {
+    return storySupport[shotIndex % storySupport.length];
+  }
+
+  // Fallback: cualquier familia disponible
+  return creatorAesthetic[0] ?? null;
+}
+
+// Construye el bloque de texto que se inyecta en el prompt con la inteligencia
+// narrativa de la familia seleccionada. Solo incluye lo que aporta valor real.
+function buildFamilyInjectBlock(family: StorySupportFamily): string {
+  const lines: string[] = [
+    '─────────────────────────────────────────────────────',
+    '🎨 VISUAL FAMILY INTELLIGENCE (narrative guide):',
+  ];
+  if (family.storyDirective)
+    lines.push(`  Narrative role: ${family.storyDirective}`);
+  if (family.narrativeBehavior)
+    lines.push(`  Visual behavior: ${family.narrativeBehavior}`);
+  if (family.compositionPattern) {
+    const c = family.compositionPattern;
+    if (c.preferredShotType)  lines.push(`  Shot type: ${c.preferredShotType}`);
+    if (c.preferredLighting)  lines.push(`  Lighting: ${c.preferredLighting} (${c.lightQuality})`);
+    if (c.visualRhythm)       lines.push(`  Rhythm: ${c.visualRhythm}`);
+  }
+  if (family.psychologicalMechanisms.length > 0)
+    lines.push(`  Emotional triggers: ${family.psychologicalMechanisms.slice(0, 3).join(', ')}`);
+  if (family.promptBlock)
+    lines.push(`  Visual reference: ${family.promptBlock}`);
+  const exampleLabels = family.subfamilies.slice(0, 3).map(s => s.label).filter(Boolean);
+  if (exampleLabels.length > 0)
+    lines.push(`  Real shot examples: ${exampleLabels.join(', ')}`);
+  lines.push('  Use this as creative direction — NOT as literal instruction.');
+  lines.push('─────────────────────────────────────────────────────');
+  return lines.join('\n');
+}
+
 export async function generatePhotodumpShot(
-  shot:        PhotodumpShotDirective,
-  refs:        PhotodumpRefs,
-  ref0Url:     string,
-  ref0Analysis: any,
-  basePrompt:  string,
-  narrative:   PhotodumpNarrative,
-  destino:     PhotodumpDestino,
-  sessionParams: { uid?: string; sessionId?: string },
+  shot:             PhotodumpShotDirective,
+  refs:             PhotodumpRefs,
+  ref0Url:          string,
+  ref0Analysis:     any,
+  basePrompt:       string,
+  narrative:        PhotodumpNarrative,
+  destino:          PhotodumpDestino,
+  sessionParams:    { uid?: string; sessionId?: string },
+  assignedFamilies: StorySupportFamily[] = [],
+  sessionFamilies:  SessionFamilies = { storySupport: [], creatorAesthetic: [] },
 ): Promise<string> {
 
   const aspectInstr = getAspectInstruction(destino);
@@ -629,6 +754,11 @@ export async function generatePhotodumpShot(
     shot.beat === 'closing'     ? '✨ CLOSING — Cierre emocional. La imagen que queda.' :
                                   '📖 DEVELOPMENT — Desarrollo de la historia.';
 
+  const selectedFamily = pickFamilyForShot(
+    shot.beat, shot.key, shot.arcPosition - 1, sessionFamilies,
+  );
+  const familyBlock = selectedFamily ? buildFamilyInjectBlock(selectedFamily) : '';
+
   const prompt = `${LOCK_SYSTEM}
 
 ${PARADIGM_RULE}
@@ -643,6 +773,8 @@ ${injectREF0Analysis(ref0Analysis)}
 STORY CONTEXT: "${basePrompt}"
 NARRATIVE: ${NARRATIVE_META[narrative].label}
 FORMAT: ${aspectInstr}
+
+${familyBlock}
 
 SHOT ROLE: ${shot.role}
 SHOT PURPOSE: ${shot.purpose}

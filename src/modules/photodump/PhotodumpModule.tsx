@@ -228,6 +228,8 @@ const PhotodumpModule: React.FC = () => {
         const url = await generatePhotodumpShot(
           shots[i], refs, ref0Url, ref0Analysis,
           basePrompt, narrative, destino, sessionParams,
+          plan.assignedFamilies,
+          plan.sessionFamilies,
         );
         shotUrls.push(url);
         setPartialImages(prev => [...prev, url]);

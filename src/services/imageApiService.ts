@@ -115,7 +115,7 @@ export interface GenerateImageParams {
   prompt:           string;
   negative?:        string;
   referenceImages?: Array<{ data: string; mimeType: string }>;
-  aspectRatio?:     '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
+  aspectRatio?:     '1:1' | '3:4' | '4:3' | '4:5' | '9:16' | '16:9';
   shotIndex?:       number;
   totalShots?:      number;
   module?:          string;   // trazabilidad en logs
