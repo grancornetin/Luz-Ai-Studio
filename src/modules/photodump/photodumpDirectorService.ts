@@ -12,7 +12,7 @@ import { imageApiService } from '../../services/imageApiService';
 import { geminiService } from '../../services/geminiService';
 import {
   PhotodumpNarrative, PhotodumpProtagonist, PhotodumpDestino,
-  PhotodumpRefs, NARRATIVE_META,
+  PhotodumpRefs, PhotodumpOutfitMode, NARRATIVE_META,
 } from './types';
 import {
   getStorySupportFamilies, initPhotodumpIntelligence, StorySupportFamily,
@@ -973,5 +973,13 @@ Output ONLY valid JSON array:
 // ── Helper de UI ──────────────────────────────────────────────
 
 export function getRefsAsArray(refs: PhotodumpRefs): string[] {
-  return [refs.avatarRef, refs.productRef, refs.outfitRef, refs.sceneRef].filter(Boolean) as string[];
+  return [
+    refs.avatarRef,
+    refs.bodyRef ?? null,
+    refs.productRef,
+    ...((refs.productRefs ?? []).filter(Boolean)),
+    refs.outfitRef,
+    refs.sceneRef,
+    ...((refs.sceneRefs ?? []).filter(Boolean)),
+  ].filter(Boolean) as string[];
 }

@@ -491,104 +491,204 @@ const PhotodumpModule: React.FC = () => {
                       </div>
 
                       {/* Referencias del protagonista */}
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-1">
-                          Referencias del protagonista{' '}
-                          <span className="text-slate-400 font-medium normal-case tracking-normal">(opcional — para mantener identidad consistente)</span>
-                        </label>
-                        <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
-                          Subí fotos del personaje, producto, outfit o lugar que aparecerán en toda la historia. El director analiza cada referencia y bloquea la identidad en cada imagen generada.
-                        </p>
-                        <div className="grid grid-cols-4 gap-3">
-                          <div className="flex flex-col gap-1.5">
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em]">Persona</p>
-                            <ImageSlot
-                              value={refs.avatarRef}
-                              onChange={v => setRefs(r => ({ ...r, avatarRef: v }))}
-                              slotType="person"
-                              aspectRatio="portrait"
-                              hint="Foto del personaje"
-                              iconless={false}
-                            />
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-1">
+                            Referencias del protagonista{' '}
+                            <span className="text-slate-400 font-medium normal-case tracking-normal">(opcional — para mantener identidad consistente)</span>
+                          </label>
+                          <p className="text-[11px] text-slate-400 leading-relaxed">
+                            Subí fotos del personaje, producto, outfit o lugar. El director bloquea la identidad en cada imagen generada.
+                          </p>
+                        </div>
+
+                        {/* ── Persona ── */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-2">
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.12em]">Persona</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="flex flex-col gap-1">
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Cara <span className="text-brand-500">·</span> identidad</p>
+                              <ImageSlot
+                                value={refs.avatarRef}
+                                onChange={v => setRefs(r => ({ ...r, avatarRef: v }))}
+                                slotType="person"
+                                aspectRatio="portrait"
+                                hint="Foto del rostro — ancla la identidad facial"
+                                iconless={false}
+                              />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Cuerpo <span className="text-slate-300">·</span> opcional</p>
+                              <ImageSlot
+                                value={refs.bodyRef ?? null}
+                                onChange={v => setRefs(r => ({ ...r, bodyRef: v }))}
+                                slotType="person"
+                                aspectRatio="portrait"
+                                hint="Foto del cuerpo — fija la complexión y proporciones reales"
+                                iconless={false}
+                              />
+                            </div>
                           </div>
-                          <div className="flex flex-col gap-1.5">
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em]">Producto</p>
-                            <ImageSlot
-                              value={refs.productRef}
-                              onChange={v => setRefs(r => ({ ...r, productRef: v }))}
-                              slotType="product"
-                              aspectRatio="portrait"
-                              hint="Foto del producto"
-                              iconless={false}
-                            />
-                          </div>
-                          <div className="flex flex-col gap-1.5">
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em]">Outfit</p>
-                            {outfitMode !== 'upload' ? (
-                              <div className="flex flex-col gap-1">
-                                {([
-                                  { mode: 'keep'     as PhotodumpOutfitMode, label: 'Mantener',  sub: 'del avatar' },
-                                  { mode: 'generate' as PhotodumpOutfitMode, label: 'Generar',   sub: 'automático' },
-                                  { mode: 'upload'   as PhotodumpOutfitMode, label: 'Cargar',    sub: 'referencia' },
-                                ] as const).map(({ mode, label, sub }) => (
-                                  <button
-                                    key={mode}
-                                    type="button"
-                                    onClick={() => {
-                                      setOutfitMode(mode);
-                                      setRefs(r => ({ ...r, outfitMode: mode, outfitRef: mode !== 'upload' ? null : r.outfitRef }));
-                                    }}
-                                    className={`w-full flex flex-col items-center justify-center py-1.5 rounded-xl border text-center transition-all ${
-                                      outfitMode === mode
-                                        ? 'border-brand-500 bg-brand-50 text-brand-700'
-                                        : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
-                                    }`}
-                                  >
-                                    <span className="text-[10px] font-black leading-tight">{label}</span>
-                                    <span className="text-[9px] opacity-70 leading-tight">{sub}</span>
-                                  </button>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="relative">
-                                <ImageSlot
-                                  value={refs.outfitRef}
-                                  onChange={v => setRefs(r => ({ ...r, outfitRef: v, outfitMode: 'upload' }))}
-                                  slotType="outfit"
-                                  aspectRatio="portrait"
-                                  hint="Foto del outfit"
-                                  iconless={false}
-                                />
+                          {refs.bodyRef && (
+                            <p className="text-[10px] text-violet-600 leading-snug">
+                              ✓ La complexión y proporciones del cuerpo se bloquean en todas las imágenes.
+                            </p>
+                          )}
+                        </div>
+
+                        {/* ── Outfit ── */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-2">
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.12em]">Outfit</p>
+                          {outfitMode !== 'upload' ? (
+                            <div className="grid grid-cols-3 gap-1.5">
+                              {([
+                                { mode: 'generate' as PhotodumpOutfitMode, label: 'IA elige', sub: 'según el brief', desc: 'La IA inventa el outfit más adecuado para la historia y el contexto.' },
+                                { mode: 'keep'     as PhotodumpOutfitMode, label: 'Del avatar', sub: 'mismo outfit', desc: 'Copia y mantiene exactamente el outfit visible en la foto del personaje.' },
+                                { mode: 'upload'   as PhotodumpOutfitMode, label: 'Cargar foto', sub: 'outfit fijo', desc: 'Subís una foto del outfit y se respeta fielmente en todo el set.' },
+                              ] as const).map(({ mode, label, sub, desc }) => (
                                 <button
+                                  key={mode}
                                   type="button"
-                                  onClick={() => { setOutfitMode('generate'); setRefs(r => ({ ...r, outfitRef: null, outfitMode: 'generate' })); }}
-                                  className="absolute -top-1 -right-1 w-5 h-5 bg-slate-700 hover:bg-slate-900 text-white rounded-full text-[10px] font-black flex items-center justify-center transition-colors z-10"
-                                  title="Cambiar modo"
-                                >×</button>
+                                  title={desc}
+                                  onClick={() => {
+                                    setOutfitMode(mode);
+                                    setRefs(r => ({ ...r, outfitMode: mode, outfitRef: mode !== 'upload' ? null : r.outfitRef }));
+                                  }}
+                                  className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border text-center transition-all ${
+                                    outfitMode === mode
+                                      ? 'border-brand-500 bg-brand-50 text-brand-700'
+                                      : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                                  }`}
+                                >
+                                  <span className="text-[10px] font-black leading-tight">{label}</span>
+                                  <span className="text-[9px] opacity-70 leading-tight mt-0.5">{sub}</span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="relative">
+                              <ImageSlot
+                                value={refs.outfitRef}
+                                onChange={v => setRefs(r => ({ ...r, outfitRef: v, outfitMode: 'upload' }))}
+                                slotType="outfit"
+                                aspectRatio="portrait"
+                                hint="Foto del outfit — se respeta fielmente en todo el set"
+                                iconless={false}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => { setOutfitMode('generate'); setRefs(r => ({ ...r, outfitRef: null, outfitMode: 'generate' })); }}
+                                className="absolute -top-1 -right-1 w-5 h-5 bg-slate-700 hover:bg-slate-900 text-white rounded-full text-[10px] font-black flex items-center justify-center transition-colors z-10"
+                                title="Cambiar modo"
+                              >×</button>
+                            </div>
+                          )}
+                          <p className="text-[10px] text-slate-400 leading-snug">
+                            {outfitMode === 'generate' && 'La IA elige el outfit más adecuado para la escena y el brief.'}
+                            {outfitMode === 'keep'     && 'Se bloquea el outfit exacto visible en la foto del personaje. Cada detalle (zapatos, telas, color) se mantiene en todo el set.'}
+                            {outfitMode === 'upload'   && 'El outfit cargado se bloquea con outfit lock completo — mismo color, corte, tela y zapatos en cada imagen.'}
+                          </p>
+                        </div>
+
+                        {/* ── Producto ── */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-2">
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.12em]">Producto</p>
+                          <div className="flex gap-2 items-start">
+                            <div className="flex-shrink-0">
+                              <ImageSlot
+                                value={refs.productRef}
+                                onChange={v => setRefs(r => ({ ...r, productRef: v }))}
+                                slotType="product"
+                                aspectRatio="portrait"
+                                hint="Foto principal del producto"
+                                iconless={false}
+                              />
+                            </div>
+                            {/* Ángulos adicionales — aparecen solo si hay producto principal */}
+                            {refs.productRef && (
+                              <div className="flex gap-1.5 flex-wrap">
+                                {[0, 1].map(i => (
+                                  <div key={i} className="w-14">
+                                    <ImageSlot
+                                      value={(refs.productRefs ?? [])[i] ?? null}
+                                      onChange={v => setRefs(r => {
+                                        const arr = [...(r.productRefs ?? [null, null])];
+                                        arr[i] = v;
+                                        return { ...r, productRefs: arr };
+                                      })}
+                                      slotType="product"
+                                      aspectRatio="portrait"
+                                      hint={`Ángulo ${i + 2} del mismo producto`}
+                                      iconless
+                                    />
+                                    <p className="text-[8px] text-center text-slate-400 mt-0.5">Ángulo {i + 2}</p>
+                                  </div>
+                                ))}
+                                <p className="text-[9px] text-slate-400 self-center leading-snug w-16">
+                                  Más ángulos = mejor fidelidad
+                                </p>
                               </div>
                             )}
                           </div>
-                          <div className="flex flex-col gap-1.5">
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em]">Escena</p>
-                            <ImageSlot
-                              value={refs.sceneRef}
-                              onChange={v => setRefs(r => ({ ...r, sceneRef: v }))}
-                              slotType="scene"
-                              aspectRatio="portrait"
-                              hint="Foto del lugar"
-                              iconless={false}
-                            />
-                          </div>
                         </div>
-                        {refs.sceneRef && (
-                          <input
-                            type="text"
-                            value={refs.sceneText ?? ''}
-                            onChange={e => setRefs(r => ({ ...r, sceneText: e.target.value }))}
-                            placeholder="Describe el lugar (opcional) — ej: departamento moderno con plantas, Buenos Aires"
-                            className="w-full mt-2 bg-white border border-slate-200 rounded-xl px-3 py-2 text-[12px] text-slate-700 outline-none focus:border-brand-400 transition-all"
-                          />
-                        )}
+
+                        {/* ── Escena ── */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.12em]">Escena</p>
+                            {(refs.sceneRefs ?? []).filter(Boolean).length === 0 && (
+                              <span className="text-[9px] text-slate-400">Hasta 3 ambientes distintos</span>
+                            )}
+                          </div>
+                          <div className="flex gap-2 items-start flex-wrap">
+                            <div className="flex-shrink-0">
+                              <ImageSlot
+                                value={refs.sceneRef}
+                                onChange={v => setRefs(r => ({ ...r, sceneRef: v }))}
+                                slotType="scene"
+                                aspectRatio="portrait"
+                                hint="Escena principal"
+                                iconless={false}
+                              />
+                            </div>
+                            {/* Escenas adicionales — para historias multi-ambiente */}
+                            {refs.sceneRef && (
+                              <>
+                                {[0, 1].map(i => (
+                                  <div key={i} className="w-14">
+                                    <ImageSlot
+                                      value={(refs.sceneRefs ?? [])[i] ?? null}
+                                      onChange={v => setRefs(r => {
+                                        const arr = [...(r.sceneRefs ?? [null, null])];
+                                        arr[i] = v;
+                                        return { ...r, sceneRefs: arr };
+                                      })}
+                                      slotType="scene"
+                                      aspectRatio="portrait"
+                                      hint={`Ambiente ${i + 2} de la historia`}
+                                      iconless
+                                    />
+                                    <p className="text-[8px] text-center text-slate-400 mt-0.5">Lugar {i + 2}</p>
+                                  </div>
+                                ))}
+                              </>
+                            )}
+                          </div>
+                          {refs.sceneRef && (
+                            <input
+                              type="text"
+                              value={refs.sceneText ?? ''}
+                              onChange={e => setRefs(r => ({ ...r, sceneText: e.target.value }))}
+                              placeholder="Describe el lugar (opcional) — ej: departamento moderno con plantas, Buenos Aires"
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[12px] text-slate-700 outline-none focus:border-brand-400 transition-all"
+                            />
+                          )}
+                          {(refs.sceneRefs ?? []).filter(Boolean).length > 0 && (
+                            <p className="text-[10px] text-violet-600 leading-snug">
+                              ✓ Historia multi-ambiente — las escenas se distribuyen por el arco narrativo del set.
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
 
