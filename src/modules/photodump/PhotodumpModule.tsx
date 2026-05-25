@@ -928,12 +928,15 @@ const PhotodumpModule: React.FC = () => {
                       </div>
                       <div className={`grid gap-3 ${count <= 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3'}`}>
                         {Array.from({ length: count }).map((_, i) => {
-                          const imgUrl   = partialImages[i + 1] ?? ''; // +1 porque index 0 es REF0
-                          const done     = !!imgUrl;
-                          const isFailed = failedIndexes.includes(i);
+                          // partialImages[0] = REF0 ancla; shots empiezan en índice 1
+                          const shotUrl  = partialImages[i + 1] ?? null;
+                          const imgUrl   = shotUrl ?? '';
+                          const done     = !!shotUrl;
+                          const isFailed = !isGenerating && failedIndexes.includes(i);
                           const retrying = retryingIndexes.includes(i);
-                          const active   = !done && !isFailed && !retrying && progress
-                            ? i === progress.completed && isGenerating
+                          // "active" = es el slot que se está generando ahora mismo
+                          const active   = isGenerating && !done && !isFailed && !retrying
+                            ? i === (progress?.completed ?? 0)
                             : false;
                           return (
                             <div key={i}

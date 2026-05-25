@@ -88,7 +88,7 @@ export function parseErrorCode(raw: unknown): AppError {
     return { code: ErrorCode.RATE_LIMIT, message: 'Demasiadas solicitudes simultáneas. Espera unos segundos e intenta de nuevo.' };
   }
   if (lower.includes('timeout') || lower.includes('timed out')) {
-    return { code: ErrorCode.TIMEOUT, message: 'La generación tardó demasiado. Puedes reintentar — tus créditos serán reembolsados.' };
+    return { code: ErrorCode.TIMEOUT, message: 'La generación tardó demasiado. Podés reintentar sin costo adicional.' };
   }
   if (lower.includes('face') || lower.includes('rostro') || lower.includes('no face') || lower.includes('face not detected')) {
     return { code: ErrorCode.FACE_NOT_DETECTED, message: 'No se detectó un rostro claro en la foto. Prueba con otra imagen donde el rostro sea visible de frente.' };
@@ -245,7 +245,7 @@ async function generateImageOnce(params: GenerateImageParams): Promise<string> {
     }
   }
 
-  const timeoutErr = new Error(`La generación tardó demasiado. Tus créditos serán reembolsados automáticamente.`) as any;
+  const timeoutErr = new Error(`La generación tardó demasiado. Podés reintentar sin costo adicional.`) as any;
   timeoutErr.code = ErrorCode.TIMEOUT;
   throw timeoutErr;
 }
