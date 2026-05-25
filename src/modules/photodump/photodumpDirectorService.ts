@@ -546,14 +546,24 @@ export async function generatePhotodumpREF0(
   const mainRef = refs.avatarRef ?? refs.productRef ?? refs.outfitRef ?? refs.sceneRef;
   if (!mainRef) throw new Error('Se necesita al menos una referencia para generar el ancla visual.');
 
+  const outfitMode = refs.outfitMode ?? 'generate';
+
   // Ordenar referencias: avatar triplicado al inicio para máximo peso de identidad
   const refsToPass: (string | null)[] = [];
   if (refs.avatarRef) {
     refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
   }
-  if (refs.outfitRef)  refsToPass.push(refs.outfitRef);
+  // Solo incluir outfitRef como referencia visual cuando el usuario cargó uno explícitamente
+  if (outfitMode === 'upload' && refs.outfitRef) refsToPass.push(refs.outfitRef);
   if (refs.productRef) refsToPass.push(refs.productRef);
   if (refs.sceneRef)   refsToPass.push(refs.sceneRef);
+
+  const outfitInstruction =
+    outfitMode === 'keep'
+      ? 'OUTFIT: Maintain EXACTLY the outfit visible in the avatar reference image — same garments, same color, same fit. Do not change anything.'
+      : outfitMode === 'upload'
+      ? 'OUTFIT: Copy the exact garments from the outfit reference image — same color, fabric, cut, and fit. Faithfully reproduce only the parts of the outfit visible in this framing (e.g., do not show shoes if the shot is waist-up).'
+      : `OUTFIT: Choose the most fitting outfit for this scene based on the story brief ("${basePrompt}"), the narrative style, and the visual world. Keep it authentic, non-commercial, real-life appropriate.`;
 
   const prompt = `${LOCK_SYSTEM}
 
@@ -584,7 +594,7 @@ The person looks like they are living their life — not posing for a photograph
 Environment is real, light is natural or ambient, mood is aspirational but authentic.
 
 IDENTITY: Copy the face, hair, skin tone, and physical features EXACTLY from the reference images.
-OUTFIT: Copy the exact garments from the outfit reference — same color, fabric, fit.
+${outfitInstruction}
 
 Natural iPhone quality. UGC feel. One photo. Not a collage. Not a grid.
 
@@ -741,11 +751,14 @@ export async function generatePhotodumpShot(
 
   const aspectInstr = getAspectInstruction(destino);
 
+  const outfitMode = refs.outfitMode ?? 'generate';
+
   // Ordenar referencias: avatar triplicado + ref0 + resto
   const refsToPass: string[] = [];
   if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
   refsToPass.push(ref0Url);
-  if (refs.outfitRef)  refsToPass.push(refs.outfitRef);
+  // Solo incluir outfitRef cuando el usuario cargó uno explícitamente
+  if (outfitMode === 'upload' && refs.outfitRef) refsToPass.push(refs.outfitRef);
   if (refs.productRef) refsToPass.push(refs.productRef);
   if (refs.sceneRef)   refsToPass.push(refs.sceneRef);
 
@@ -795,7 +808,12 @@ ${shot.variationSpace.map((v, i) => `${i + 1}. ${v}`).join('\n')}
 SHOT IDENTITY:
 - Face reference (appears multiple times): EXACT identity, same bone structure, same hair, same skin tone.
 - REF0 (after face refs): establishes the visual world — same light, same scene, same color temp.
-- Outfit reference: EXACT same garments — same color, fabric, fit.
+${outfitMode === 'keep'
+  ? '- OUTFIT: Keep EXACTLY the outfit from the avatar reference. Same garments, same color, same fit throughout the whole set.'
+  : outfitMode === 'upload'
+  ? '- OUTFIT (uploaded reference): Copy faithfully — same color, fabric, cut. Only show parts visible in this shot\'s framing.'
+  : '- OUTFIT: Maintain visual consistency with REF0. Choose naturally appropriate clothing for the scene and brief context.'
+}
 - This shot is part of a STORY — it must connect to the same world as REF0.
 
 📱 iPhone UGC REALISM (NON-NEGOTIABLE):

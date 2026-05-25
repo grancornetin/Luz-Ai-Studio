@@ -4,6 +4,12 @@ export type PhotodumpDestino = 'feed' | 'stories' | 'tiktok';
 export type PhotodumpNarrative = 'day' | 'journey' | 'brand' | 'character' | 'product_hero' | 'custom';
 export type PhotodumpProtagonist = 'person' | 'product' | 'both';
 
+// Cómo se maneja el outfit en el set
+// 'keep'     → usar el outfit visible en la imagen del avatar (no inventar nada)
+// 'generate' → la IA elige el outfit más adecuado según el brief, refs y destino
+// 'upload'   → el usuario cargó un outfit específico que debe respetarse fielmente
+export type PhotodumpOutfitMode = 'keep' | 'generate' | 'upload';
+
 export interface PhotodumpScene {
   moment:      string;
   scenePrompt: string;
@@ -22,11 +28,12 @@ export interface PhotodumpImage {
 
 // Referencias estructuradas del protagonista (base64 data URIs)
 export interface PhotodumpRefs {
-  avatarRef:  string | null;  // persona / modelo
-  productRef: string | null;  // producto / objeto
-  outfitRef:  string | null;  // outfit / prendas
-  sceneRef:   string | null;  // escena / ambiente
-  sceneText?: string;         // descripción textual del lugar
+  avatarRef:   string | null;  // persona / modelo
+  productRef:  string | null;  // producto / objeto
+  outfitRef:   string | null;  // outfit / prendas (solo si outfitMode === 'upload')
+  sceneRef:    string | null;  // escena / ambiente
+  sceneText?:  string;         // descripción textual del lugar
+  outfitMode?: PhotodumpOutfitMode; // cómo tratar el outfit
 }
 
 export interface PhotodumpSet {

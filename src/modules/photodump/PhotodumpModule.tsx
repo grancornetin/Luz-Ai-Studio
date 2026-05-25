@@ -20,7 +20,8 @@ import { newSessionId } from '../../services/imageApiService';
 import { photodumpStorage } from './photodumpStorage';
 import {
   PhotodumpSet, PhotodumpNarrative, PhotodumpProtagonist, PhotodumpDestino,
-  PhotodumpRefs, NARRATIVE_META, PROTAGONIST_META, DESTINO_META, STORY_ARC_META,
+  PhotodumpRefs, PhotodumpOutfitMode,
+  NARRATIVE_META, PROTAGONIST_META, DESTINO_META, STORY_ARC_META,
 } from './types';
 import {
   buildPhotodumpSessionPlan,
@@ -98,8 +99,9 @@ const PhotodumpModule: React.FC = () => {
 
   // Brief
   const [basePrompt,  setBasePrompt]  = useState('');
+  const [outfitMode,  setOutfitMode]  = useState<PhotodumpOutfitMode>('generate');
   const [refs, setRefs] = useState<PhotodumpRefs>({
-    avatarRef: null, productRef: null, outfitRef: null, sceneRef: null, sceneText: '',
+    avatarRef: null, productRef: null, outfitRef: null, sceneRef: null, sceneText: '', outfitMode: 'generate',
   });
 
   // Historia
@@ -122,6 +124,14 @@ const PhotodumpModule: React.FC = () => {
   const [partialImages,     setPartialImages]     = useState<string[]>([]);
   const [error,             setError]             = useState<string | null>(null);
   const [currentSet,        setCurrentSet]        = useState<PhotodumpSet | null>(null);
+  // Resiliencia: índices fallidos + estado para retry sin recargar todo
+  const [failedIndexes,     setFailedIndexes]     = useState<number[]>([]);
+  const [retryingIndexes,   setRetryingIndexes]   = useState<number[]>([]);
+  // Guardamos plan y shots parciales para poder hacer retry sin regenerar todo
+  const [savedPlan,         setSavedPlan]         = useState<any>(null);
+  const [savedShotUrls,     setSavedShotUrls]     = useState<string[]>([]);
+  const [savedShots,        setSavedShots]        = useState<any[]>([]);
+  const [savedCaptions,     setSavedCaptions]     = useState<any[]>([]);
 
   // Resultados UI
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -170,13 +180,14 @@ const PhotodumpModule: React.FC = () => {
     await downloadAsZip(set.images.map(i => i.imageUrl), `photodump_${set.id.slice(-6)}.zip`, 'dump');
   };
 
-  const emptyRefs: PhotodumpRefs = { avatarRef: null, productRef: null, outfitRef: null, sceneRef: null, sceneText: '' };
+  const emptyRefs: PhotodumpRefs = { avatarRef: null, productRef: null, outfitRef: null, sceneRef: null, sceneText: '', outfitMode: 'generate' };
 
   const resetCreator = () => {
-    setStep(1); setBasePrompt(''); setRefs(emptyRefs); setNarrative('day');
-    setProtagonist('both'); setCustomStory(''); setCount(4); setDestino('feed');
+    setStep(1); setBasePrompt(''); setRefs(emptyRefs); setOutfitMode('generate');
+    setNarrative('day'); setProtagonist('both'); setCustomStory(''); setCount(4); setDestino('feed');
     setCurrentSet(null); setError(null); setProgress(null);
     setProgressStepIndex(0); setIsGenerating(false); setPartialImages([]);
+    setFailedIndexes([]); setSavedPlan(null); setSavedShotUrls([]);
   };
 
   // ── GENERACIÓN PRINCIPAL ──────────────────────────────────
@@ -202,66 +213,78 @@ const PhotodumpModule: React.FC = () => {
     setError(null);
     setCurrentSet(null);
     setPartialImages([]);
+    setFailedIndexes([]);
     setProgressStepIndex(0);
     setProgress({ total: count, completed: 0 });
 
     try {
       const sessionId = newSessionId();
       const sessionParams = { uid: user?.uid, sessionId };
+      const refsWithMode = { ...refs, outfitMode };
 
       // Paso 1: armar plan narrativo (shot directives)
       setProgressStepIndex(0);
       const plan = await buildPhotodumpSessionPlan(narrative, protagonist, destino, basePrompt);
       const shots = plan.shots.slice(0, count);
+      setSavedShots(shots);
+      setSavedPlan(plan);
 
       // Paso 2: generar imagen ancla REF0
       setProgressStepIndex(1);
       const { imageUrl: ref0Url, ref0Analysis } = await generatePhotodumpREF0(
-        refs, narrative, protagonist, destino, basePrompt, sessionParams,
+        refsWithMode, narrative, protagonist, destino, basePrompt, sessionParams,
       );
       setPartialImages([ref0Url]);
 
-      // Paso 3: generar shots narrativos en paralelo controlado
+      // Paso 3: generar shots — fallo individual no cancela el set
       setProgressStepIndex(2);
       const shotUrls: string[] = [];
+      const failed: number[] = [];
       for (let i = 0; i < shots.length; i++) {
-        const url = await generatePhotodumpShot(
-          shots[i], refs, ref0Url, ref0Analysis,
-          basePrompt, narrative, destino, sessionParams,
-          plan.assignedFamilies,
-          plan.sessionFamilies,
-        );
-        shotUrls.push(url);
-        setPartialImages(prev => [...prev, url]);
+        try {
+          const url = await generatePhotodumpShot(
+            shots[i], refsWithMode, ref0Url, ref0Analysis,
+            basePrompt, narrative, destino, sessionParams,
+            plan.assignedFamilies,
+            plan.sessionFamilies,
+          );
+          shotUrls.push(url);
+          setPartialImages(prev => [...prev, url]);
+        } catch {
+          shotUrls.push('');
+          failed.push(i);
+          setPartialImages(prev => [...prev, '']);
+        }
         setProgress({ total: shots.length, completed: i + 1 });
       }
 
       // Paso 4: generar captions y hashtags
       setProgressStepIndex(3);
       const captions = await generatePhotodumpCaptions(basePrompt, narrative, shots);
+      setSavedCaptions(captions);
+      setSavedShotUrls(shotUrls);
 
       setProgressStepIndex(4);
 
-      const set: PhotodumpSet = {
-        id:          Date.now().toString(),
-        createdAt:   Date.now(),
-        basePrompt, narrative, protagonist, destino, customStory, count,
-        refs: { avatarRef: null, productRef: null, outfitRef: null, sceneRef: null },
-        images: shotUrls.filter(Boolean).map((url, i) => ({
-          imageUrl: url,
-          moment:   captions[i]?.moment   ?? `Momento ${i + 1}`,
-          caption:  captions[i]?.caption  ?? '',
-          hashtags: captions[i]?.hashtags ?? '',
-          prompt:   shots[i]?.purpose     ?? '',
-          order:    i + 1,
-        })),
-      };
+      if (failed.length > 0 && shotUrls.filter(Boolean).length === 0) {
+        // Todas fallaron — reembolso completo
+        if (!isAdmin) {
+          await refundProCredit().catch(() => {});
+          await deductCredits(-imageCreditCost).catch(() => {});
+          await refreshCredits().catch(() => {});
+        }
+        setError('No se pudo generar ninguna imagen. La API puede estar saturada — intentá de nuevo.');
+        setStep(3);
+        return;
+      }
 
-      await photodumpStorage.save(set);
-      await loadSets();
-      setCurrentSet(set);
-      setStep(5);
-      await refreshCredits();
+      if (failed.length > 0) {
+        setFailedIndexes(failed);
+        // No reembolsar — hay imágenes válidas, se puede reintentar o continuar
+        return; // quedamos en paso 4 con el panel de retry visible
+      }
+
+      await finalizarSet(shotUrls, shots, captions);
     } catch (err: any) {
       setError(err?.message || 'Error generando el photodump.');
       if (!isAdmin) {
@@ -274,6 +297,90 @@ const PhotodumpModule: React.FC = () => {
       setIsGenerating(false);
       setProgress(null);
     }
+  };
+
+  // ── Retry de imágenes fallidas (sin costo adicional) ──────
+  const handleRetryFailed = async () => {
+    if (failedIndexes.length === 0 || savedPlan === null) return;
+
+    setIsGenerating(true);
+    setError(null);
+    setRetryingIndexes(failedIndexes);
+
+    const sessionId = newSessionId();
+    const sessionParams = { uid: user?.uid, sessionId };
+    const refsWithMode = { ...refs, outfitMode };
+    const newUrls = [...savedShotUrls];
+    const stillFailed: number[] = [];
+
+    const { imageUrl: ref0Url, ref0Analysis } = await (async () => {
+      try {
+        return await generatePhotodumpREF0(
+          refsWithMode, narrative, protagonist, destino, basePrompt, sessionParams,
+        );
+      } catch {
+        // Si REF0 falla en retry, usamos la primera imagen existente como ancla
+        const fallback = savedShotUrls.find(Boolean) ?? '';
+        return { imageUrl: fallback, ref0Analysis: null };
+      }
+    })();
+
+    for (const i of failedIndexes) {
+      try {
+        const url = await generatePhotodumpShot(
+          savedShots[i], refsWithMode, ref0Url, ref0Analysis,
+          basePrompt, narrative, destino, sessionParams,
+          savedPlan.assignedFamilies, savedPlan.sessionFamilies,
+        );
+        newUrls[i] = url;
+        setPartialImages(prev => { const n = [...prev]; n[i + 1] = url; return n; });
+      } catch {
+        stillFailed.push(i);
+      }
+    }
+
+    setSavedShotUrls(newUrls);
+    setRetryingIndexes([]);
+
+    if (stillFailed.length > 0) {
+      setFailedIndexes(stillFailed);
+      setIsGenerating(false);
+      return;
+    }
+
+    setFailedIndexes([]);
+    await finalizarSet(newUrls, savedShots, savedCaptions);
+    setIsGenerating(false);
+  };
+
+  // ── Avanzar con las imágenes que se generaron (sin retry) ─
+  const handleContinuePartial = async () => {
+    await finalizarSet(savedShotUrls, savedShots, savedCaptions);
+  };
+
+  // ── Guardar el set y avanzar al paso 5 ───────────────────
+  const finalizarSet = async (shotUrls: string[], shots: any[], captions: any[]) => {
+    const set: PhotodumpSet = {
+      id:          Date.now().toString(),
+      createdAt:   Date.now(),
+      basePrompt, narrative, protagonist, destino, customStory, count,
+      refs: { avatarRef: null, productRef: null, outfitRef: null, sceneRef: null, outfitMode },
+      images: shotUrls.map((url, i) => ({
+        imageUrl: url,
+        moment:   captions[i]?.moment   ?? `Momento ${i + 1}`,
+        caption:  captions[i]?.caption  ?? '',
+        hashtags: captions[i]?.hashtags ?? '',
+        prompt:   shots[i]?.purpose     ?? '',
+        order:    i + 1,
+      })).filter(img => img.imageUrl),
+    };
+
+    await photodumpStorage.save(set);
+    await loadSets();
+    setCurrentSet(set);
+    setFailedIndexes([]);
+    setStep(5);
+    await refreshCredits();
   };
 
   // ─────────────────────────────────────────────────────────────
@@ -398,14 +505,49 @@ const PhotodumpModule: React.FC = () => {
                           </div>
                           <div className="flex flex-col gap-1.5">
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em]">Outfit</p>
-                            <ImageSlot
-                              value={refs.outfitRef}
-                              onChange={v => setRefs(r => ({ ...r, outfitRef: v }))}
-                              slotType="outfit"
-                              aspectRatio="portrait"
-                              hint="Foto del outfit"
-                              iconless={false}
-                            />
+                            {outfitMode !== 'upload' ? (
+                              <div className="flex flex-col gap-1">
+                                {([
+                                  { mode: 'keep'     as PhotodumpOutfitMode, label: 'Mantener',  sub: 'del avatar' },
+                                  { mode: 'generate' as PhotodumpOutfitMode, label: 'Generar',   sub: 'automático' },
+                                  { mode: 'upload'   as PhotodumpOutfitMode, label: 'Cargar',    sub: 'referencia' },
+                                ] as const).map(({ mode, label, sub }) => (
+                                  <button
+                                    key={mode}
+                                    type="button"
+                                    onClick={() => {
+                                      setOutfitMode(mode);
+                                      setRefs(r => ({ ...r, outfitMode: mode, outfitRef: mode !== 'upload' ? null : r.outfitRef }));
+                                    }}
+                                    className={`w-full flex flex-col items-center justify-center py-1.5 rounded-xl border text-center transition-all ${
+                                      outfitMode === mode
+                                        ? 'border-brand-500 bg-brand-50 text-brand-700'
+                                        : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                                    }`}
+                                  >
+                                    <span className="text-[10px] font-black leading-tight">{label}</span>
+                                    <span className="text-[9px] opacity-70 leading-tight">{sub}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="relative">
+                                <ImageSlot
+                                  value={refs.outfitRef}
+                                  onChange={v => setRefs(r => ({ ...r, outfitRef: v, outfitMode: 'upload' }))}
+                                  slotType="outfit"
+                                  aspectRatio="portrait"
+                                  hint="Foto del outfit"
+                                  iconless={false}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => { setOutfitMode('generate'); setRefs(r => ({ ...r, outfitRef: null, outfitMode: 'generate' })); }}
+                                  className="absolute -top-1 -right-1 w-5 h-5 bg-slate-700 hover:bg-slate-900 text-white rounded-full text-[10px] font-black flex items-center justify-center transition-colors z-10"
+                                  title="Cambiar modo"
+                                >×</button>
+                              </div>
+                            )}
                           </div>
                           <div className="flex flex-col gap-1.5">
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em]">Escena</p>
@@ -714,10 +856,19 @@ const PhotodumpModule: React.FC = () => {
                 <div className="fade-in p-4 md:p-8">
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-7 items-start">
                     <div className="md:col-span-5 lg:col-span-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-2 h-2 rounded-full bg-brand-600 animate-pulse" />
-                        <span className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Generando · no cierres esta ventana</span>
-                      </div>
+                      {isGenerating ? (
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-2 h-2 rounded-full bg-brand-600 animate-pulse" />
+                          <span className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Generando · no cierres esta ventana</span>
+                        </div>
+                      ) : failedIndexes.length > 0 ? (
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-2 h-2 rounded-full bg-rose-500" />
+                          <span className="text-[10px] font-black text-rose-600 uppercase tracking-[0.18em]">
+                            {failedIndexes.length} imagen{failedIndexes.length > 1 ? 'es' : ''} no se generó{failedIndexes.length > 1 ? 'n' : ''}
+                          </span>
+                        </div>
+                      ) : null}
                       <h2 className="font-display font-extrabold italic uppercase tracking-tight text-[22px] md:text-[26px] text-slate-900 leading-tight"
                         style={{ fontFamily: 'Syne, Inter, sans-serif', letterSpacing: '-0.025em' }}>
                         {NARRATIVE_META[narrative].label}
@@ -725,48 +876,94 @@ const PhotodumpModule: React.FC = () => {
                       <div className="text-[13px] text-slate-500 mt-1 mb-4 line-clamp-2 italic">
                         "{basePrompt}"
                       </div>
-                      <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-[18px]">
-                        <GenProgress
-                          steps={GENERATION_STEPS}
-                          currentStepIndex={progressStepIndex}
-                          completedShots={partialImages.map((url, i) => ({ url, index: i }))}
-                          totalShots={count}
-                        />
-                      </div>
+                      {isGenerating && (
+                        <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-[18px]">
+                          <GenProgress
+                            steps={GENERATION_STEPS}
+                            currentStepIndex={progressStepIndex}
+                            completedShots={partialImages.map((url, i) => ({ url, index: i }))}
+                            totalShots={count}
+                          />
+                        </div>
+                      )}
+                      {/* Panel de imágenes fallidas */}
+                      {!isGenerating && failedIndexes.length > 0 && (
+                        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 space-y-3">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-rose-500 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-[12px] font-bold text-rose-800">
+                                {failedIndexes.length} imagen{failedIndexes.length > 1 ? 'es no se generaron' : ' no se generó'} correctamente.
+                              </p>
+                              <p className="text-[11px] text-rose-600 mt-0.5 leading-snug">
+                                Podés regenerarlas sin costo adicional — se usan las mismas referencias y estilo.
+                              </p>
+                            </div>
+                          </div>
+                          <button type="button" onClick={handleRetryFailed}
+                            className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[12px] font-bold transition-colors flex items-center justify-center gap-2">
+                            <RefreshCw size={13} />
+                            Regenerar {failedIndexes.length} imagen{failedIndexes.length > 1 ? 'es' : ''}
+                          </button>
+                          <button type="button" onClick={handleContinuePartial}
+                            className="w-full py-2 text-[11px] text-rose-500 hover:text-rose-700 font-semibold transition-colors">
+                            Continuar con las {count - failedIndexes.length} que se generaron →
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <div className="md:col-span-7 lg:col-span-8">
-                      <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.14em] mb-3">
-                        Imágenes del set · {progress?.completed ?? 0} de {count} listas
+                      <div className="flex justify-between items-baseline mb-3">
+                        <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.14em]">
+                          Imágenes del set
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          {isGenerating
+                            ? `${progress?.completed ?? 0} de ${count} listas`
+                            : failedIndexes.length > 0
+                            ? `${count - failedIndexes.length} de ${count} generadas`
+                            : `${count} de ${count} listas`}
+                        </div>
                       </div>
                       <div className={`grid gap-3 ${count <= 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3'}`}>
                         {Array.from({ length: count }).map((_, i) => {
-                          const imgUrl   = partialImages[i] ?? '';
+                          const imgUrl   = partialImages[i + 1] ?? ''; // +1 porque index 0 es REF0
                           const done     = !!imgUrl;
-                          const failed   = !done && !isGenerating && !!error;
-                          const active   = !done && !failed && progress ? i === progress.completed && isGenerating : false;
+                          const isFailed = failedIndexes.includes(i);
+                          const retrying = retryingIndexes.includes(i);
+                          const active   = !done && !isFailed && !retrying && progress
+                            ? i === progress.completed && isGenerating
+                            : false;
                           return (
                             <div key={i}
                               style={{ aspectRatio: DESTINO_META[destino].aspectRatio }}
                               className={`relative rounded-2xl overflow-hidden transition-all ${
-                                done   ? 'fade-in shadow-md' :
-                                failed ? 'border-2 border-rose-300 bg-rose-50' :
-                                active ? 'border-2 border-brand-600 bg-slate-100 animate-pulse' :
+                                done     ? 'fade-in shadow-md' :
+                                retrying ? 'border-2 border-amber-400 bg-amber-50 animate-pulse' :
+                                isFailed ? 'border-2 border-rose-300 bg-rose-50' :
+                                active   ? 'border-2 border-brand-600 bg-slate-100 animate-pulse' :
                                 'bg-slate-100'
                               }`}>
                               {imgUrl && <img src={imgUrl} alt={`Imagen ${i + 1}`} className="w-full h-full object-cover" />}
+                              {retrying && (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                                  <div className="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                                  <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wider">Reintentando</span>
+                                </div>
+                              )}
                               {active && !imgUrl && (
                                 <div className="absolute inset-0 flex items-center justify-center">
                                   <div className="bg-white/95 rounded-full px-3.5 py-1.5 text-[10px] font-bold text-brand-600 tracking-[0.12em] uppercase">Generando...</div>
                                 </div>
                               )}
-                              {failed && (
+                              {isFailed && !retrying && (
                                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
                                   <AlertTriangle className="w-5 h-5 text-rose-400" strokeWidth={1.5} />
                                   <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wider">No generada</span>
                                 </div>
                               )}
-                              {!done && !active && !failed && (
+                              {!done && !active && !isFailed && !retrying && (
                                 <div className="absolute top-2 left-2 text-[10px] text-slate-400 font-semibold">{i + 1}</div>
                               )}
                               {done && (
@@ -844,86 +1041,78 @@ const PhotodumpModule: React.FC = () => {
                     </div>
                   </details>
 
-                  {/* Tarjetas grandes de imágenes */}
-                  <div className="space-y-8">
+                  {/* Grid de imágenes — 2 columnas tipo Campaign */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {currentSet.images.map((img, i) => (
-                      <div key={i} className="bg-white border border-slate-100 rounded-[28px] overflow-hidden shadow-sm">
-                        {/* Imagen grande con zoom al click */}
+                      <div key={i}
+                        className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-brand-200 transition-all cursor-pointer group"
+                        onClick={() => openLightbox(currentSet.images.map(x => x.imageUrl), i)}
+                      >
+                        {/* Imagen */}
                         <div
                           style={{ aspectRatio: DESTINO_META[currentSet.destino ?? 'feed'].aspectRatio }}
-                          className="relative cursor-zoom-in group overflow-hidden"
-                          onClick={() => openLightbox(currentSet.images.map(x => x.imageUrl), i)}
+                          className="relative bg-slate-100 overflow-hidden"
                         >
                           <img
                             src={img.imageUrl}
                             alt={img.moment}
-                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                           />
-                          {/* Overlay con número y momento */}
-                          <div className="absolute top-3 left-3 flex gap-2">
-                            <div className="bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-full">
-                              <span className="text-[10px] font-black text-white">#{i + 1}</span>
+                          {/* Número + momento */}
+                          <div className="absolute top-2 left-2 flex gap-1.5">
+                            <div className="bg-white/90 backdrop-blur-sm rounded-full w-6 h-6 flex items-center justify-center">
+                              <span className="text-[10px] font-black text-brand-600">{i + 1}</span>
                             </div>
                             <div className="bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-full">
                               <span className="text-[10px] font-semibold text-white">{img.moment}</span>
                             </div>
                           </div>
-                          {/* Botón de descarga en hover */}
-                          <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {/* Overlay hover */}
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3 gap-2">
                             <button
                               type="button"
                               onClick={e => { e.stopPropagation(); const a = document.createElement('a'); a.href = img.imageUrl; a.download = `photodump_${i + 1}.png`; a.click(); }}
-                              className="bg-black/60 backdrop-blur-sm hover:bg-black/80 text-white rounded-xl px-3 py-1.5 text-[10px] font-bold flex items-center gap-1.5 transition-colors"
+                              className="flex-1 py-1.5 rounded-xl bg-white/90 text-[11px] font-semibold text-slate-800 text-center hover:bg-white transition-colors flex items-center justify-center gap-1"
                             >
                               <Download size={11} /> Descargar
                             </button>
-                          </div>
-                          {/* Icono zoom */}
-                          <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <div className="bg-black/50 backdrop-blur-sm p-1.5 rounded-xl">
-                              <ImageIcon size={13} className="text-white" />
+                            <div className="flex-1 py-1.5 rounded-xl bg-brand-600 text-[11px] font-semibold text-white text-center flex items-center justify-center gap-1">
+                              <ImageIcon size={11} /> Ver →
                             </div>
                           </div>
                         </div>
 
-                        {/* Bloque de texto debajo */}
-                        <div className="p-4 space-y-3">
+                        {/* Body */}
+                        <div className="p-3.5 space-y-2.5">
                           {/* Caption */}
                           <div>
-                            <div className="flex items-center justify-between mb-1.5">
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Caption</p>
-                              <button
-                                type="button"
-                                onClick={() => copyText(img.caption + '\n\n' + img.hashtags, `full-${i}`)}
-                                className="flex items-center gap-1 px-2.5 py-1 bg-brand-50 hover:bg-brand-100 text-brand-600 rounded-lg text-[9px] font-black uppercase tracking-wide transition-colors"
-                              >
-                                {copiedKey === `full-${i}` ? <><Check size={9} /> Copiado</> : <><Copy size={9} /> Copiar todo</>}
-                              </button>
-                            </div>
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="text-[14px] text-slate-800 flex-1 leading-relaxed">{img.caption}</p>
-                              <button
-                                type="button"
-                                onClick={() => copyText(img.caption, `cap-${i}`)}
-                                className="w-7 h-7 bg-slate-100 hover:bg-brand-50 text-slate-400 hover:text-brand-600 rounded-lg flex items-center justify-center transition-all flex-shrink-0 mt-0.5"
-                              >
-                                {copiedKey === `cap-${i}` ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
-                              </button>
-                            </div>
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Caption</p>
+                            <p className="text-[12px] text-slate-700 leading-relaxed line-clamp-3">{img.caption}</p>
                           </div>
 
                           {/* Hashtags */}
-                          <div>
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-[12px] text-violet-600 flex-1 leading-relaxed">{img.hashtags}</p>
-                              <button
-                                type="button"
-                                onClick={() => copyText(img.hashtags, `ht-${i}`)}
-                                className="w-7 h-7 bg-slate-100 hover:bg-violet-50 text-slate-400 hover:text-violet-600 rounded-lg flex items-center justify-center transition-all flex-shrink-0"
-                              >
-                                {copiedKey === `ht-${i}` ? <Check size={11} className="text-emerald-500" /> : <Hash size={11} />}
-                              </button>
-                            </div>
+                          {img.hashtags && (
+                            <p className="text-[11px] text-violet-500 leading-relaxed line-clamp-2">{img.hashtags}</p>
+                          )}
+
+                          {/* Footer acciones */}
+                          <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); copyText(img.caption + '\n\n' + img.hashtags, `full-${i}`); }}
+                              className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-brand-600 transition-colors"
+                            >
+                              {copiedKey === `full-${i}` ? <Check size={9} className="text-emerald-500" /> : <Copy size={9} />}
+                              {copiedKey === `full-${i}` ? 'Copiado' : 'Copiar caption + hashtags'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); copyText(img.hashtags, `ht-${i}`); }}
+                              className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-violet-600 transition-colors"
+                            >
+                              {copiedKey === `ht-${i}` ? <Check size={9} className="text-emerald-500" /> : <Hash size={9} />}
+                              {copiedKey === `ht-${i}` ? 'Copiado' : 'Solo hashtags'}
+                            </button>
                           </div>
                         </div>
                       </div>
