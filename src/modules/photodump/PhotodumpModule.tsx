@@ -176,6 +176,13 @@ const PhotodumpModule: React.FC = () => {
     setLightboxImages(images); setLightboxIndex(idx); setLightboxOpen(true);
   };
 
+  const openSetFromLibrary = (set: PhotodumpSet) => {
+    setCurrentSet(set);
+    setStep(5);
+    setActiveTab('create');
+    window.scrollTo(0, 0);
+  };
+
   const downloadSetZip = async (set: PhotodumpSet) => {
     await downloadAsZip(set.images.map(i => i.imageUrl), `photodump_${set.id.slice(-6)}.zip`, 'dump');
   };
@@ -1200,8 +1207,9 @@ const PhotodumpModule: React.FC = () => {
                   ...(set.refs?.outfitRef   ? [{ label: 'Outfit',    src: set.refs.outfitRef }]   : []),
                   ...(set.refs?.sceneRef    ? [{ label: 'Escena',    src: set.refs.sceneRef }]    : []),
                 ]}
-                onClick={() => openLightbox(set.images.map(x => x.imageUrl), 0)}
+                onClick={() => openSetFromLibrary(set)}
                 actions={[
+                  { label: 'Ver →', onClick: e => { e.stopPropagation(); openSetFromLibrary(set); }, variant: 'primary' },
                   { label: '↓ ZIP', onClick: e => { e.stopPropagation(); downloadSetZip(set); }, variant: 'secondary' },
                   { label: '', icon: <Trash2 size={12} />, onClick: async e => { e.stopPropagation(); setDeletingId(set.id); await photodumpStorage.delete(set.id); await loadSets(); setDeletingId(null); }, variant: 'danger', loading: deletingId === set.id, title: 'Eliminar' },
                 ]}
