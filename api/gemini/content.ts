@@ -21,7 +21,7 @@ function getGenAIClient(location: string = 'us-central1'): GoogleGenAI {
 }
 
 interface ContentRequest {
-  action: 'extractAvatarProfile' | 'analyzeProduct' | 'analyzeOutfit' | 'generateText' | 'assistantChat';
+  action: 'extractAvatarProfile' | 'analyzeProduct' | 'analyzeOutfit' | 'generateText' | 'generatePlainText' | 'assistantChat';
   images?: string[];
   mimeTypes?: string[];
   prompt: string;
@@ -79,7 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } else if (body.action === 'generateText') {
       config.responseMimeType = 'application/json';
     }
-    // assistantChat: sin responseMimeType → texto plano conversacional
+    // generatePlainText y assistantChat: sin responseMimeType → texto plano
 
     // Construir parts
     const parts: Array<any> = [];
@@ -96,6 +96,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     parts.push({ text: body.prompt });
+
+    // ─── ACCIÓN ESPECÍFICA: generatePlainText ───────────────────────
+    // Devuelve texto plano sin forzar JSON — para mejoras de texto libre.
+    if (body.action === 'generatePlainText') {
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents: [{ role: 'user', parts }],
+        config: {},
+      });
+
+      const text = response.candidates?.[0]?.content?.parts
+        ?.map((p: any) => p.text || '').filter(Boolean).join('') || '';
+
+      return res.status(200).json({ success: true, text });
+    }
 
     // ─── ACCIÓN ESPECÍFICA: assistantChat ────────────────────────────
     if (body.action === 'assistantChat') {

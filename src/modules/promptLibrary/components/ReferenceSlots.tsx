@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ReferenceSlot } from '../types/promptTypes';
-import { Upload, Trash2, Lock, Unlock, User, ShoppingBag, Shirt, MapPin, ChevronDown } from 'lucide-react';
+import { Trash2, Lock, Unlock, User, ShoppingBag, Shirt, MapPin, ChevronDown } from 'lucide-react';
 
 interface Props {
   slots: ReferenceSlot[];
@@ -42,19 +42,28 @@ const SlotCard: React.FC<{
   if (!slot.imageUrl) {
     return (
       <label
-        className={`cursor-pointer flex flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed transition-all ${meta.color} hover:opacity-80`}
+        className={`cursor-pointer flex flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed transition-all hover:opacity-80 ${
+          isActive
+            ? 'border-brand-400 bg-brand-50 shadow-[0_0_0_3px_rgba(255,116,139,0.15)]'
+            : meta.color
+        }`}
         style={{ aspectRatio: '4/5' }}
-        title={meta.hint}
+        title={isActive ? `@${token} está en tu prompt — sube una imagen para esta referencia` : meta.hint}
       >
         <input type="file" hidden accept="image/*"
           onChange={e => { if (e.target.files?.[0]) onUpload(slot.id, e.target.files[0]); }}
         />
-        <div className="w-7 h-7 rounded-xl bg-white/60 flex items-center justify-center">
+        <div className={`w-7 h-7 rounded-xl flex items-center justify-center ${isActive ? 'bg-brand-100 text-brand-600' : 'bg-white/60'}`}>
           {meta.icon}
         </div>
         {!compact && (
-          <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider text-center px-1 leading-tight">
-            {slot.label}
+          <span className={`text-[9px] font-black uppercase tracking-wider text-center px-1 leading-tight ${isActive ? 'text-brand-600' : 'text-slate-500'}`}>
+            {isActive ? `@${token}` : slot.label}
+          </span>
+        )}
+        {isActive && !compact && (
+          <span className="text-[7px] font-black text-brand-400 uppercase tracking-wider">
+            sube imagen
           </span>
         )}
       </label>
@@ -62,6 +71,9 @@ const SlotCard: React.FC<{
   }
 
   const currentPriority = PRIORITY_OPTIONS.find(p => p.value === slot.priority);
+
+  const lockHint    = slot.locked ? 'Rostro bloqueado' : 'Bloquear rostro';
+  const priorityHints: Record<string, string> = { high: 'Influencia alta', medium: 'Influencia media', low: 'Influencia baja' };
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -101,7 +113,9 @@ const SlotCard: React.FC<{
           className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all flex-shrink-0 ${
             slot.locked ? 'bg-brand-100 text-brand-600' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
           }`}
-          title={slot.locked ? 'Desbloquear' : 'Bloquear identidad'}
+          title={slot.locked
+            ? 'Identidad bloqueada: la IA preservará el rostro exacto de esta persona al generar'
+            : 'Bloquear identidad: actívalo para que la IA preserve el rostro exacto de esta persona'}
         >
           {slot.locked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
         </button>
@@ -113,6 +127,7 @@ const SlotCard: React.FC<{
             className={`w-full flex items-center justify-between gap-0.5 px-1.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-wide transition-all ${
               currentPriority ? currentPriority.color : 'bg-slate-100 text-slate-400'
             }`}
+            title="Prioridad: controla cuánto peso le da la IA a esta referencia. High = predomina en la imagen, Medium = equilibrada, Low = influencia sutil"
           >
             <span>{currentPriority?.label ?? 'P'}</span>
             <ChevronDown className="w-2 h-2" />
@@ -126,6 +141,11 @@ const SlotCard: React.FC<{
                   className={`w-full flex items-center gap-2 px-2 py-1.5 text-[9px] font-black uppercase hover:bg-slate-50 transition-colors ${
                     slot.priority === p.value ? 'text-brand-600' : 'text-slate-600'
                   }`}
+                  title={
+                    p.value === 'high'   ? 'Alta: esta referencia domina la composición' :
+                    p.value === 'medium' ? 'Media: peso equilibrado entre referencias' :
+                                          'Baja: influencia sutil, sin dominar la imagen'
+                  }
                 >
                   <span className={`w-3 h-3 rounded-full flex items-center justify-center text-[7px] text-white ${p.color}`}>{p.label}</span>
                   {p.fullLabel}
@@ -138,10 +158,22 @@ const SlotCard: React.FC<{
         <button
           onClick={() => onRemove(slot.id)}
           className="w-7 h-7 flex items-center justify-center hover:bg-red-50 hover:text-red-500 text-slate-400 rounded-lg transition-all flex-shrink-0"
-          title="Eliminar"
+          title="Eliminar referencia"
         >
           <Trash2 className="w-3 h-3" />
         </button>
+      </div>
+
+      {/* Hints bajo controles */}
+      <div className="flex items-center justify-between px-0.5">
+        <span className={`text-[7px] font-bold uppercase tracking-wider ${slot.locked ? 'text-brand-500' : 'text-slate-300'}`}>
+          {lockHint}
+        </span>
+        {slot.priority && (
+          <span className="text-[7px] font-bold uppercase tracking-wider text-slate-300">
+            {priorityHints[slot.priority]}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -156,7 +188,7 @@ const ReferenceSlots: React.FC<Props> = ({
   // Agrupar slots por índice de persona (1-4)
   const personGroups = [1, 2, 3, 4].map(idx => ({
     idx,
-    person: slots.find(s => s.type === 'person' && s.personIndex === idx || s.id === `person-${idx}`),
+    person: slots.find(s => (s.type === 'person' && s.personIndex === idx) || s.id === `person-${idx}`),
     outfit: slots.find(s => s.type === 'outfit' && s.personIndex === idx),
   }));
 

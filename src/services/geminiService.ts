@@ -123,6 +123,17 @@ export const geminiService = {
     } catch (e) { return this.handleApiError(e); }
   },
 
+  async generatePlainText(prompt: string): Promise<string> {
+    try {
+      const result = await callContentApi({
+        action: 'generatePlainText',
+        prompt,
+        model:  'gemini-2.5-flash',
+      });
+      return result.text || '';
+    } catch (e) { return this.handleApiError(e); }
+  },
+
   // ── Campaign Plan — análisis multimodal con imágenes de referencia ──────────
   async generateCampaignPlan(prompt: string, slots: { base64: string }[]): Promise<string> {
     try {

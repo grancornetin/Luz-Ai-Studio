@@ -75,9 +75,7 @@ const PromptInput: React.FC<PromptInputProps> = ({ value, onChange, onAutoFormat
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/(@\w+)/g, '<mark style="background:transparent;color:var(--brand-600,#FF748B);font-weight:600;">$1</mark>')
-      // preserve newlines and spaces for mirror
-      .replace(/\n/g, '<br>')
-      .replace(/ /g, '&nbsp;');
+      .replace(/\n/g, '<br>');
   };
 
   const tokenCount = (value.match(/@\w+/g) || []).length;
@@ -91,26 +89,7 @@ const PromptInput: React.FC<PromptInputProps> = ({ value, onChange, onAutoFormat
             : 'border-slate-100 bg-slate-50'
         }`}
       >
-        {/* Mirror layer for token highlights — sits behind textarea */}
-        <div
-          ref={mirrorRef}
-          aria-hidden="true"
-          className="absolute inset-0 pointer-events-none select-none overflow-hidden"
-          style={{
-            padding: '24px 24px 64px',
-            fontSize: 14,
-            lineHeight: '1.6',
-            fontFamily: 'inherit',
-            fontWeight: 500,
-            color: 'var(--slate-800, #1e293b)',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            overflowY: 'hidden',
-          }}
-          dangerouslySetInnerHTML={{ __html: renderHighlighted(value) || '' }}
-        />
-
-        {/* Real textarea — transparent text so mirror shows through */}
+        {/* Real textarea — text is transparent so the mirror layer paints it */}
         <textarea
           ref={textareaRef}
           value={value}
@@ -119,21 +98,44 @@ const PromptInput: React.FC<PromptInputProps> = ({ value, onChange, onAutoFormat
           onBlur={() => { setIsFocused(false); setShowMenu(false); }}
           onScroll={syncScroll}
           placeholder={placeholder || 'Escribe tu visión. Usa @ para invocar referencias, o aplica una plantilla arriba para empezar.'}
-          className="relative w-full bg-transparent outline-none resize-none leading-relaxed font-medium text-slate-800 placeholder:text-slate-400 placeholder:font-normal"
+          className="relative w-full bg-transparent outline-none resize-none font-medium placeholder:text-slate-400 placeholder:font-normal"
           style={{
             padding: '24px 24px 64px',
             fontSize: 14,
+            lineHeight: 1.625,
             minHeight: 140,
             maxHeight: MAX_HEIGHT,
             caretColor: 'var(--brand-600, #FF748B)',
-            color: value ? 'var(--slate-800, #1e293b)' : undefined,
-            // Hide text visually when mirror is active (highlights replace it)
-            WebkitTextFillColor: value ? 'transparent' : undefined,
+            color: 'transparent',
+            WebkitTextFillColor: 'transparent',
+            position: 'relative',
+            zIndex: 2,
           }}
         />
 
+        {/* Mirror layer — behind textarea, paints text + highlights @tokens */}
+        <div
+          ref={mirrorRef}
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none select-none overflow-hidden"
+          style={{
+            padding: '24px 24px 64px',
+            fontSize: 14,
+            lineHeight: 1.625,
+            fontFamily: 'inherit',
+            fontWeight: 500,
+            color: '#1e293b',
+            whiteSpace: 'pre-wrap',
+            overflowWrap: 'break-word',
+            overflowY: 'scroll',
+            scrollbarWidth: 'none',
+            zIndex: 1,
+          }}
+          dangerouslySetInnerHTML={{ __html: renderHighlighted(value) || '' }}
+        />
+
         {/* Footer */}
-        <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-white/80 backdrop-blur-sm">
+        <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-white/80 backdrop-blur-sm" style={{ zIndex: 3 }}>
           <div className="flex items-center gap-3">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
               {value.length} car.

@@ -1,5 +1,16 @@
 import React, { useState } from 'react';
-import { Plus, Edit3, Trash2, Star, StarOff, AlertCircle, Palette, Tag, Clock, CalendarDays } from 'lucide-react';
+import { Plus, Edit3, Trash2, Star, StarOff, AlertCircle, Palette, Tag, Clock, CalendarDays, Download } from 'lucide-react';
+import { downloadBrandReport } from '../../utils/brandReportUtils';
+
+function isColorDark(hex: string): boolean {
+  if (!hex || hex[0] !== '#') return false;
+  const h = hex.replace('#', '');
+  const v = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const r = parseInt(v.slice(0, 2), 16);
+  const g = parseInt(v.slice(2, 4), 16);
+  const b = parseInt(v.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) < 140;
+}
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useBrandProfiles } from '../../hooks/useBrandProfiles';
@@ -41,6 +52,8 @@ function BrandCard({ profile, onEdit, onDelete, onSetDefault, deleting }: BrandC
   const primaryColor = profile.visualIdentity?.colors?.[0]?.hex || '#F72C5B';
   const initial = (profile.brandName || 'M').slice(0, 1).toUpperCase();
   const logoAsset = profile.visualIdentity?.assets?.find(a => a.type === 'logo');
+  const isPng = logoAsset?.mimeType === 'image/png' || logoAsset?.fileName?.toLowerCase().endsWith('.png');
+  const avatarBg = logoAsset && isPng && !isColorDark(primaryColor) ? '#000000' : primaryColor;
   const st = STATUS_LABELS[profile.status] || STATUS_LABELS.incomplete;
   const isComplete = profile.status === 'complete' || profile.status === 'advanced';
 
@@ -62,10 +75,10 @@ function BrandCard({ profile, onEdit, onDelete, onSetDefault, deleting }: BrandC
         <div className="flex items-start gap-3 mb-4">
           <div
             className="w-12 h-12 rounded-xl flex-shrink-0 overflow-hidden flex items-center justify-center text-white font-black text-lg shadow-sm"
-            style={{ background: primaryColor }}
+            style={{ background: avatarBg }}
           >
             {logoAsset ? (
-              <img src={logoAsset.url} alt={profile.brandName} className="w-full h-full object-cover" />
+              <img src={logoAsset.url} alt={profile.brandName} className="w-10 h-10 object-contain" />
             ) : initial}
           </div>
           <div className="flex-1 min-w-0">
@@ -176,6 +189,13 @@ function BrandCard({ profile, onEdit, onDelete, onSetDefault, deleting }: BrandC
               >
                 {profile.isDefault ? <Star size={12} style={{ fill: '#F72C5B', color: '#F72C5B' }} /> : <StarOff size={12} />}
                 {profile.isDefault ? 'Predeterminada' : 'Predeterminar'}
+              </button>
+              <button
+                onClick={() => downloadBrandReport(profile)}
+                title="Descargar informe de marca"
+                className="flex items-center justify-center px-3 py-1.5 rounded-xl text-[11px] text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
+              >
+                <Download size={12} />
               </button>
               <button
                 onClick={() => setConfirmDelete(true)}

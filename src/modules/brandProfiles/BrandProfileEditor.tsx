@@ -1,12 +1,13 @@
 import React, { useState, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Check, Save, Sparkles, AlertCircle, ArrowLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Save, Sparkles, AlertCircle, ArrowLeft, Download } from 'lucide-react';
 import { BrandProfileLivePreview } from './components/BrandProfileLivePreview';
 import { BrandColorPaletteEditor } from './components/BrandColorPaletteEditor';
 import { BrandAssetUploader } from './components/BrandAssetUploader';
 import { BrandAISummaryStep } from './components/BrandAISummaryStep';
 import { brandProfileAiService } from '../../services/brandProfileAiService';
 import { brandProfileService } from '../../services/brandProfileService';
-import type { BrandProfile, BrandColor } from './types';
+import { downloadBrandReport } from '../../utils/brandReportUtils';
+import type { BrandProfile, BrandColor, BrandAsset } from './types';
 import { EMPTY_BRAND_PROFILE } from './types';
 
 const WIZARD_STEPS = [
@@ -222,7 +223,7 @@ function StepIdentity({ data, set, userId }: { data: Partial<BrandProfile>; set:
   ] as const;
 
   const CATEGORIES = ['Ropa / moda','Accesorios','Cosmética / skincare','Belleza','Hogar / decoración','Velas / aromas','Alimentos','Artesanía','Tecnología','Infantil','Mascotas','Fitness / bienestar','Otro'];
-  const COUNTRIES = ['Chile','Argentina','Colombia','México','Perú','Otro'];
+  const COUNTRIES = ['Chile','Argentina','Colombia','México','Perú','Uruguay','Ecuador','Bolivia','Venezuela','Costa Rica','Otro'];
 
   return (
     <div className="space-y-6">
@@ -235,8 +236,8 @@ function StepIdentity({ data, set, userId }: { data: Partial<BrandProfile>; set:
         <input className={inputCls()} value={data.brandName || ''} onChange={e => set({ brandName: e.target.value })} placeholder="Ej: CIGNIA, Aurora Velas..." />
       </FormField>
 
-      <FormField label="¿En qué país vendes principalmente?">
-        <ChipSelector options={COUNTRIES} value={data.country || ''} onChange={v => set({ country: v as string })} multi={false} />
+      <FormField label="¿En qué países vendes?" hint="Puedes elegir más de uno si vendes en varios países.">
+        <ChipSelector options={COUNTRIES} value={data.country ? data.country.split(', ') : []} onChange={v => set({ country: (v as string[]).join(', ') })} multi={true} />
       </FormField>
 
       <FormField label="¿Cómo funciona tu negocio principalmente?">
@@ -298,8 +299,8 @@ function StepCustomer({ data, set }: { data: Partial<BrandProfile>; set: (p: Par
         <ChipSelector options={GENDER} value={tc.genderFocus} onChange={v => setTc({ genderFocus: v as string })} multi={false} />
       </FormField>
 
-      <FormField label="Edad aproximada">
-        <ChipSelector options={AGES} value={tc.ageRange} onChange={v => setTc({ ageRange: v as string })} multi={false} />
+      <FormField label="Edad aproximada" hint="Puedes elegir más de un rango si tu marca apela a edades distintas.">
+        <ChipSelector options={AGES} value={typeof tc.ageRange === 'string' ? (tc.ageRange ? [tc.ageRange] : []) : (tc.ageRange as unknown as string[] || [])} onChange={v => setTc({ ageRange: (v as string[]).join(', ') })} multi={true} />
       </FormField>
 
       <FormField label="¿Qué busca esa persona cuando compra productos como los tuyos?" hint="Puedes elegir más de una.">
@@ -327,7 +328,7 @@ function StepPerception({ data, set }: { data: Partial<BrandProfile>; set: (p: P
 
   const LEVELS = ['Económica','Accesible','Media','Media-alta','Premium','No estoy segura'];
   const REASONS = ['Precio','Calidad','Atención personalizada','Rapidez de entrega','Diseño','Variedad','Empaque','Exclusividad','Cercanía','Confianza','Hecho a mano','Otro','No sé todavía'];
-  const COMPETITORS = ['Tiendas de Instagram','Grandes tiendas / retail','Shein / marketplaces','Emprendedoras similares','Tiendas físicas locales','Marcas premium','No estoy segura'];
+  const COMPETITORS = ['Tiendas de Instagram','Grandes tiendas / retail','Shein / marketplaces','Tiendas físicas locales','Marcas premium','No estoy segura'];
 
   const findDiff = async () => {
     setAiLoading(true);
@@ -637,6 +638,16 @@ function StepRules({ data, set }: { data: Partial<BrandProfile>; set: (p: Partia
   );
 }
 
+function isHexDark(hex: string): boolean {
+  if (!hex || hex[0] !== '#') return false;
+  const h = hex.replace('#', '');
+  const v = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const r = parseInt(v.slice(0, 2), 16);
+  const g = parseInt(v.slice(2, 4), 16);
+  const b = parseInt(v.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) < 140;
+}
+
 // ── STEP 9: CONFIRMACIÓN ────────────────────────────────────────────────────────
 function StepDone({ data, onSeeAll, onCreateAnother, onGoPlanner }: {
   data: Partial<BrandProfile>;
@@ -646,6 +657,9 @@ function StepDone({ data, onSeeAll, onCreateAnother, onGoPlanner }: {
 }) {
   const primaryColor = data.visualIdentity?.colors?.[0]?.hex || '#F72C5B';
   const initial = (data.brandName || 'M').slice(0, 1).toUpperCase();
+  const logoAsset = data.visualIdentity?.assets?.find(a => a.type === 'logo');
+  const isPng = logoAsset?.mimeType === 'image/png' || logoAsset?.fileName?.toLowerCase().endsWith('.png');
+  const avatarBg = logoAsset && isPng && !isHexDark(primaryColor) ? '#000000' : primaryColor;
   const score = brandProfileService.calculateCompletionScore(data);
   const status = brandProfileService.resolveBrandStatus(data);
   const isComplete = status === 'complete' || status === 'advanced';
@@ -654,10 +668,12 @@ function StepDone({ data, onSeeAll, onCreateAnother, onGoPlanner }: {
     <div className="space-y-6 max-w-lg">
       <div className="text-center space-y-4">
         <div
-          className="w-20 h-20 rounded-3xl flex items-center justify-center text-white font-black text-3xl mx-auto shadow-xl"
-          style={{ background: primaryColor }}
+          className="w-20 h-20 rounded-3xl overflow-hidden flex items-center justify-center text-white font-black text-3xl mx-auto shadow-xl"
+          style={{ background: avatarBg }}
         >
-          {initial}
+          {logoAsset ? (
+            <img src={logoAsset.url} alt={data.brandName} className="w-16 h-16 object-contain" />
+          ) : initial}
         </div>
         <div>
           <h2 className="text-2xl font-black text-slate-800">{data.brandName || 'Tu marca'}</h2>
@@ -707,6 +723,12 @@ function StepDone({ data, onSeeAll, onCreateAnother, onGoPlanner }: {
         <button onClick={onSeeAll} className="w-full py-3 rounded-2xl text-sm font-black uppercase tracking-wider text-white" style={{ background: '#F72C5B' }}>
           Ver mis marcas
         </button>
+        <button
+          onClick={() => downloadBrandReport(data)}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-black uppercase tracking-wider bg-slate-800 text-white hover:bg-slate-700 transition-all"
+        >
+          <Download size={15} /> Descargar informe de marca
+        </button>
         <button onClick={onCreateAnother} className="w-full py-3 rounded-2xl text-sm font-black uppercase tracking-wider bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all">
           Crear otra marca
         </button>
@@ -724,31 +746,39 @@ export const BrandProfileEditor: React.FC<Props> = ({ userId, existingProfile, o
   const [data, setData] = useState<Partial<BrandProfile>>(
     existingProfile || { ...EMPTY_BRAND_PROFILE, userId, brandName: '' }
   );
+  const [activeProfileId, setActiveProfileId] = useState<string | undefined>(existingProfile?.id);
+  // ref espejo para evitar race condition: saveProfile lee el ID actualizado aunque el state no haya re-renderizado
+  const activeProfileIdRef = React.useRef<string | undefined>(existingProfile?.id);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showMobilePreview, setShowMobilePreview] = useState(false);
 
-  const brandId = existingProfile?.id || 'draft';
+  const brandId = activeProfileId || 'draft';
 
   const set = useCallback((patch: Partial<BrandProfile>) => {
     setData(prev => ({ ...prev, ...patch }));
   }, []);
 
-  const saveProfile = async (isFinal = false): Promise<BrandProfile | null> => {
-    if (!data.brandName?.trim()) {
+  const saveProfile = async (currentData: Partial<BrandProfile>, isFinal = false): Promise<BrandProfile | null> => {
+    if (!currentData.brandName?.trim()) {
       setSaveError('Escribe un nombre para tu marca antes de guardar.');
       return null;
     }
     setSaving(true);
     setSaveError(null);
     try {
-      if (existingProfile?.id) {
-        await brandProfileService.updateBrandProfile(userId, existingProfile.id, data);
-        const updated = { ...existingProfile, ...data } as BrandProfile;
+      const profileId = activeProfileIdRef.current;
+      if (profileId) {
+        await brandProfileService.updateBrandProfile(userId, profileId, currentData);
+        const updated = { ...existingProfile, ...currentData, id: profileId, userId } as BrandProfile;
+        setData(updated);
         return updated;
       } else {
-        const newId = await brandProfileService.createBrandProfile(userId, data as BrandProfile);
-        const newProfile = { id: newId, ...data } as BrandProfile;
+        const newId = await brandProfileService.createBrandProfile(userId, currentData as BrandProfile);
+        const newProfile = { ...currentData, id: newId, userId } as BrandProfile;
+        activeProfileIdRef.current = newId;
+        setActiveProfileId(newId);
+        setData(newProfile);
         return newProfile;
       }
     } catch (err: any) {
@@ -762,8 +792,8 @@ export const BrandProfileEditor: React.FC<Props> = ({ userId, existingProfile, o
   const handleNext = async () => {
     if (step < WIZARD_STEPS.length - 1) {
       if (step > 0) {
-        // Auto-save silencioso en cada paso
-        await saveProfile(false);
+        const saved = await saveProfile(data, false);
+        if (!saved) return;
       }
       setStep(s => s + 1);
     }
@@ -775,12 +805,12 @@ export const BrandProfileEditor: React.FC<Props> = ({ userId, existingProfile, o
   };
 
   const handleSaveDraft = async () => {
-    const saved = await saveProfile(false);
+    const saved = await saveProfile(data, false);
     if (saved) onSaved(saved);
   };
 
   const handleFinish = async () => {
-    const saved = await saveProfile(true);
+    const saved = await saveProfile(data, true);
     if (saved) onSaved(saved);
   };
 
@@ -811,8 +841,9 @@ export const BrandProfileEditor: React.FC<Props> = ({ userId, existingProfile, o
               return (
                 <button
                   key={s.id}
+                  disabled={saving}
                   onClick={() => setStep(i)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all disabled:opacity-50 ${
                     st === 'active' ? 'text-white shadow-sm' : st === 'done' ? 'text-slate-600 hover:bg-slate-50' : 'text-slate-400 hover:bg-slate-50'
                   }`}
                   style={st === 'active' ? { background: '#F72C5B' } : {}}

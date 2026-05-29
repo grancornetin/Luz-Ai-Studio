@@ -76,7 +76,7 @@ function ColorBlock({
     <div className="relative rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-white">
       {/* Swatch grande */}
       <div
-        className="h-24 w-full flex items-end justify-between p-3 cursor-pointer"
+        className="h-32 w-full flex items-end justify-between p-3 cursor-pointer"
         style={{ background: color.hex }}
         onClick={() => setEditingHex(true)}
       >
@@ -239,7 +239,7 @@ export const BrandColorPaletteEditor: React.FC<Props> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-4">
         {colors.map(color => (
           <ColorBlock
             key={color.id}

@@ -28,15 +28,22 @@ function PreviewShell({ eyebrow, title, children }: { eyebrow?: string; title: s
 function IdentityPreview({ data }: { data: Partial<BrandProfile> }) {
   const primaryColor = data.visualIdentity?.colors?.[0]?.hex || '#F72C5B';
   const initial = (data.brandName || 'M').slice(0, 1).toUpperCase();
+  const logo = data.visualIdentity?.assets?.find(a => a.type === 'logo');
+  const isPng = logo?.mimeType === 'image/png' || logo?.fileName?.toLowerCase().endsWith('.png');
+  const bgIsDark = isColorDark(primaryColor);
+  const avatarBg = isPng && !bgIsDark ? '#000000' : primaryColor;
+
   return (
     <PreviewShell title="Tu marca al instante">
       <div className="space-y-3">
         <div className="flex items-center gap-3">
           <div
-            className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-black text-lg shadow-md"
-            style={{ background: primaryColor }}
+            className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-black text-lg shadow-md overflow-hidden"
+            style={{ background: avatarBg }}
           >
-            {initial}
+            {logo ? (
+              <img src={logo.url} alt="logo" className="w-10 h-10 object-contain" />
+            ) : initial}
           </div>
           <div>
             <p className="font-black text-slate-800 text-sm">{data.brandName || 'Tu marca'}</p>
@@ -159,19 +166,37 @@ function TonePreview({ data }: { data: Partial<BrandProfile> }) {
   );
 }
 
+function isColorDark(hex: string): boolean {
+  if (!hex || hex[0] !== '#') return false;
+  const h = hex.replace('#', '');
+  const v = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const r = parseInt(v.slice(0, 2), 16);
+  const g = parseInt(v.slice(2, 4), 16);
+  const b = parseInt(v.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) < 140;
+}
+
 // Pantalla 6 — Visual
 function VisualPreview({ data }: { data: Partial<BrandProfile> }) {
   const colors = data.visualIdentity?.colors || [];
   const primaryColor = colors[0]?.hex || '#F72C5B';
   const initial = (data.brandName || 'M').slice(0, 1).toUpperCase();
   const logo = data.visualIdentity?.assets?.find(a => a.type === 'logo');
+  const isPng = logo?.mimeType === 'image/png' || logo?.fileName?.toLowerCase().endsWith('.png');
+  // Si el logo es PNG (posiblemente sin fondo) y el color primario es claro, usar fondo negro
+  const bgIsDark = isColorDark(primaryColor);
+  const logoBg = isPng && !bgIsDark ? '#000000' : `linear-gradient(135deg, ${primaryColor}dd, ${primaryColor}88)`;
+
   return (
     <PreviewShell title="Vista previa de marca">
       <div className="rounded-xl border border-slate-100 overflow-hidden">
         {/* Mock post */}
-        <div className="h-28 flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${primaryColor}dd, ${primaryColor}88)` }}>
+        <div
+          className="h-28 flex items-center justify-center"
+          style={{ background: logoBg }}
+        >
           {logo ? (
-            <img src={logo.url} alt="logo" className="h-16 w-16 object-contain" />
+            <img src={logo.url} alt="logo" className="h-16 w-auto max-w-[80%] object-contain" style={{ display: 'block' }} />
           ) : (
             <div className="w-14 h-14 bg-white/90 rounded-xl flex items-center justify-center font-black text-2xl" style={{ color: primaryColor }}>
               {initial}
