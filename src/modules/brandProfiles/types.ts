@@ -18,6 +18,17 @@ export interface BrandAsset {
   notes?: string;
 }
 
+export interface BrandSocialInsights {
+  instagramHandle: string;
+  followers: string;
+  reachDiagnosis: string;
+  reelsInsight: string;
+  carouselInsight: string;
+  bestTime: string;
+  notes: string;
+  updatedAt: number;
+}
+
 export type BusinessModel =
   | 'self_made_products'
   | 'supplier_products'
@@ -95,6 +106,8 @@ export interface BrandProfile {
     trustBuilders: string[];
     customerDoubts: string[];
   };
+
+  socialInsights?: BrandSocialInsights;
 
   aiSummary: {
     brandEssence: string;

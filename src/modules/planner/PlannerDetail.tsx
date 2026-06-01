@@ -11,6 +11,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   getProject, removeItemFromProject, exportProjectAsZip,
   addItemToProject, updateProjectName,
+  updateGrowthPlanTaskStatus,
   Project, ProjectItem, ChecklistItem, CalendarEntry,
 } from '../../services/projectService';
 import {
@@ -22,6 +23,8 @@ import { ImageLightbox } from '../../components/shared/ImageLightbox';
 import { readAndCompressFile } from '../../utils/imageUtils';
 import ContentPlannerCopilot from '../contentPlanner/ContentPlannerCopilot';
 import WeeklyCalendar from '../contentPlanner/WeeklyCalendar';
+import { GrowthPlannerResults } from './components/GrowthPlannerMock';
+import type { GrowthTask } from './growthPlannerTypes';
 
 type Tab = 'copilot' | 'images' | 'calendar';
 
@@ -124,6 +127,22 @@ const PlannerDetail: React.FC = () => {
   );
   if (error)    return <div className="p-8 text-center text-red-500 text-sm">{error}</div>;
   if (!project) return <div className="p-8 text-center text-slate-400 text-sm">Plan no encontrado</div>;
+
+  if (project.growthPlan) {
+    return (
+      <GrowthPlannerResults
+        plan={project.growthPlan}
+        onBack={() => navigate('/planner')}
+        onUpdateTask={async (taskId: string, updates: Partial<GrowthTask>) => {
+          if (!id || !updates.status) return;
+          const updatedPlan = await updateGrowthPlanTaskStatus(id, taskId, updates.status);
+          if (updatedPlan) {
+            setProject(prev => prev ? { ...prev, growthPlan: updatedPlan } : prev);
+          }
+        }}
+      />
+    );
+  }
 
   const references  = project.items.filter(i => i.type === 'reference');
   const results     = project.items.filter(i => i.type === 'result');

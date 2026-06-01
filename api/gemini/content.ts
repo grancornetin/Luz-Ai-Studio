@@ -29,7 +29,16 @@ interface ContentRequest {
   model?: string;
 }
 
-import { setSecurityHeaders, setCorsHeaders, validateBase64Image, validatePrompt, validateChatPrompt, verifyAuth } from '../_middleware.js';
+import {
+  checkRateLimit,
+  getDataRatelimit,
+  setSecurityHeaders,
+  setCorsHeaders,
+  validateBase64Image,
+  validatePrompt,
+  validateChatPrompt,
+  verifyAuth,
+} from '../_middleware.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setSecurityHeaders(res);
@@ -40,7 +49,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    await verifyAuth(req);
+    const uid = await verifyAuth(req);
+    if (!(await checkRateLimit(getDataRatelimit(), uid, res))) return;
   } catch {
     return res.status(401).json({ error: 'Unauthorized' });
   }

@@ -14,6 +14,7 @@ import {
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { v4 as uuidv4 } from 'uuid';
+import type { GrowthStrategicPlan, GrowthTask, GrowthTaskStatus } from '../modules/planner/growthPlannerTypes';
 
 // ── Core types ────────────────────────────────────────────────
 
@@ -90,6 +91,7 @@ export interface Project {
   conversation?: ProjectMessage[];
   checklist?: ChecklistItem[];
   calendar?: CalendarEntry[];
+  growthPlan?: GrowthStrategicPlan;
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -252,6 +254,39 @@ export const savePlannerBrief = async (
   });
 };
 
+export const saveGrowthPlan = async (
+  projectId: string,
+  growthPlan: GrowthStrategicPlan,
+): Promise<void> => {
+  const docRef = getProjectDocRef(projectId);
+  await updateDoc(docRef, {
+    growthPlan,
+    updatedAt: Timestamp.now(),
+  });
+};
+
+export const updateGrowthPlanTaskStatus = async (
+  projectId: string,
+  taskId: string,
+  status: GrowthTaskStatus,
+): Promise<GrowthStrategicPlan | null> => {
+  const docRef = getProjectDocRef(projectId);
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) return null;
+  const growthPlan = snap.data().growthPlan as GrowthStrategicPlan | undefined;
+  if (!growthPlan) return null;
+
+  const tasks: GrowthTask[] = growthPlan.tasks.map(task =>
+    task.id === taskId ? { ...task, status } : task,
+  );
+  const updatedPlan = { ...growthPlan, tasks };
+  await updateDoc(docRef, {
+    growthPlan: updatedPlan,
+    updatedAt: Timestamp.now(),
+  });
+  return updatedPlan;
+};
+
 // ── Export ZIP ────────────────────────────────────────────────
 
 export const exportProjectAsZip = async (projectId: string, projectName?: string): Promise<void> => {
@@ -297,6 +332,11 @@ export const exportProjectAsZip = async (projectId: string, projectName?: string
       .map(e => `${e.dayLabel}: ${e.contentType} [${e.status}]\nPrompt: ${e.prompt}`)
       .join('\n\n');
     zip.file('calendario.txt', calTxt);
+  }
+
+  if (project.growthPlan) {
+    zip.file('planner_estrategico.json', JSON.stringify(project.growthPlan, null, 2));
+    zip.file('planner_estrategico_validacion.md', project.growthPlan.validationReportMarkdown || '');
   }
 
   zip.file('metadata.json', JSON.stringify(metadata, null, 2));

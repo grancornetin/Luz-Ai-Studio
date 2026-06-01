@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   CalendarDays,
@@ -28,18 +29,23 @@ import { useBrandProfiles } from '../../../hooks/useBrandProfiles';
 import { WizardStepper } from '../../../components/shared/WizardStepper';
 import { WizardFooter } from '../../../components/shared/WizardFooter';
 import { GenerationProgress } from '../../../components/shared/GenerationProgress';
+import { compressImageForUpload, readAndCompressFile } from '../../../utils/imageUtils';
+import { createProject, saveGrowthPlan } from '../../../services/projectService';
+import { brandProfileService } from '../../../services/brandProfileService';
 import { useAuth } from '../../auth/AuthContext';
 import type { BrandProfile } from '../../brandProfiles/types';
 import {
   GROWTH_DEMO_BRAND,
   GROWTH_DEMO_METRICS,
   GROWTH_DEMO_PRODUCTS,
-  generateGrowthPlannerMockPlan,
 } from '../growthPlannerMockData';
+import { generateGrowthPlanWithGemini } from '../services/growthPlannerAiService';
 import {
   GrowthBrand,
   GrowthContentModule,
+  GrowthInstagramMetrics,
   GrowthPlanDuration,
+  GrowthProduct,
   GrowthStrategicPlan,
   GrowthTask,
   GrowthTaskStatus,
@@ -47,7 +53,8 @@ import {
 
 const STEPS = [
   { id: 'duration', label: 'Duracion' },
-  { id: 'inputs', label: 'Marca y datos' },
+  { id: 'inputs', label: 'Marca' },
+  { id: 'products', label: 'Productos' },
   { id: 'review', label: 'Revision' },
 ];
 
@@ -121,6 +128,51 @@ function mapBrandProfileToGrowthBrand(profile: BrandProfile): GrowthBrand {
     mainSalesChannel: channels.length ? channels.join(' y ') : GROWTH_DEMO_BRAND.mainSalesChannel,
     activeSocials: platformFromSalesChannels(channels),
   };
+}
+
+function socialFromProfile(profile?: BrandProfile): GrowthInstagramMetrics {
+  const social = profile?.socialInsights;
+  return {
+    followers: social?.followers || GROWTH_DEMO_METRICS.followers,
+    reachDiagnosis: social?.reachDiagnosis || GROWTH_DEMO_METRICS.reachDiagnosis,
+    reelsInsight: social?.reelsInsight || GROWTH_DEMO_METRICS.reelsInsight,
+    carouselInsight: social?.carouselInsight || GROWTH_DEMO_METRICS.carouselInsight,
+    bestTime: social?.bestTime || GROWTH_DEMO_METRICS.bestTime,
+  };
+}
+
+function parseProducts(text: string): GrowthProduct[] {
+  const lines = text
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .slice(0, 20);
+
+  return lines.map((line, index) => {
+    const [name, category = 'Producto', price = 'Precio no indicado', benefit = 'Beneficio por definir'] =
+      line.split('|').map(part => part.trim());
+    return {
+      id: `product_${index + 1}`,
+      name: name || `Producto ${index + 1}`,
+      category,
+      description: line,
+      price,
+      stock: 'Prioridad seleccionada para este plan',
+      benefit,
+    };
+  });
+}
+
+function defaultProductsText() {
+  return GROWTH_DEMO_PRODUCTS
+    .map(product => `${product.name} | ${product.category} | ${product.price} | ${product.benefit}`)
+    .join('\n');
+}
+
+function stripDataUrl(dataUrl: string) {
+  const [header, data] = dataUrl.split(',');
+  const mimeType = header.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
+  return { data: data || dataUrl, mimeType };
 }
 
 function statusCounts(tasks: GrowthTask[]) {
@@ -242,6 +294,15 @@ const WizardView: React.FC<{
   duration: GrowthPlanDuration;
   setDuration: (duration: GrowthPlanDuration) => void;
   selectedBrand: GrowthBrand;
+  socialMetrics: GrowthInstagramMetrics;
+  setSocialMetrics: (metrics: GrowthInstagramMetrics) => void;
+  productsText: string;
+  setProductsText: (text: string) => void;
+  productPreviews: string[];
+  productImageCount: number;
+  imageError: string;
+  onProductImagesChange: (files: FileList | null) => void;
+  onRemoveProductImage: (index: number) => void;
   selectedBrandProfileId: string;
   setSelectedBrandProfileId: (id: string) => void;
   brandProfiles: BrandProfile[];
@@ -253,6 +314,15 @@ const WizardView: React.FC<{
   duration,
   setDuration,
   selectedBrand,
+  socialMetrics,
+  setSocialMetrics,
+  productsText,
+  setProductsText,
+  productPreviews,
+  productImageCount,
+  imageError,
+  onProductImagesChange,
+  onRemoveProductImage,
   selectedBrandProfileId,
   setSelectedBrandProfileId,
   brandProfiles,
@@ -270,7 +340,7 @@ const WizardView: React.FC<{
           <ArrowLeft className="w-5 h-5 text-slate-400" />
         </button>
         <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-rose-500">Mock seguro</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-rose-500">Gemini 2.5 Flash</p>
           <h1 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900">
             Planner Estrategico
           </h1>
@@ -285,7 +355,7 @@ const WizardView: React.FC<{
         <section className="space-y-5">
           <div>
             <h2 className="text-2xl font-black uppercase italic tracking-tight text-slate-900">Elegir duracion</h2>
-            <p className="text-sm text-slate-500 mt-1">La generacion es mock local y no consume creditos ni IA.</p>
+            <p className="text-sm text-slate-500 mt-1">La IA armara una estrategia ejecutable con una sola llamada a Gemini 2.5 Flash.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {([7, 14, 30] as GrowthPlanDuration[]).map(days => (
@@ -314,7 +384,7 @@ const WizardView: React.FC<{
           <div>
             <h2 className="text-2xl font-black uppercase italic tracking-tight text-slate-900">Marca y datos base</h2>
             <p className="text-sm text-slate-500 mt-1">
-              Puedes usar una marca real de Mis Marcas. Productos y metricas siguen siendo demo en esta fase.
+              Usa una marca real y actualiza sus metricas de redes. Esta informacion queda como memoria para futuros planes.
             </p>
           </div>
 
@@ -322,7 +392,7 @@ const WizardView: React.FC<{
             <div className="flex items-center justify-between gap-3 mb-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Perfil de marca</p>
-                <p className="text-xs text-slate-500 mt-1">Lectura real opcional, sin guardar cambios en Firestore.</p>
+                <p className="text-xs text-slate-500 mt-1">Si eliges una marca real, las metricas se guardan en Mis Marcas.</p>
               </div>
               {loadingBrands && <Loader2 className="w-4 h-4 animate-spin text-slate-300" />}
             </div>
@@ -342,7 +412,7 @@ const WizardView: React.FC<{
                     : 'border-slate-100 bg-slate-50 hover:border-slate-200'
                 }`}
               >
-                <p className="text-[10px] font-black uppercase tracking-widest text-rose-500">Demo</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-rose-500">Ejemplo</p>
                 <p className="text-sm font-black text-slate-900 mt-1">{GROWTH_DEMO_BRAND.name}</p>
                 <p className="text-xs text-slate-500 mt-1">{GROWTH_DEMO_BRAND.category}</p>
               </button>
@@ -372,7 +442,7 @@ const WizardView: React.FC<{
 
               {!loadingBrands && brandProfiles.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs text-slate-400">
-                  No hay perfiles reales todavia. El mock usara CIGNIA.
+                  No hay perfiles reales todavia. Se usara una marca de ejemplo para empezar.
                 </div>
               )}
             </div>
@@ -381,7 +451,7 @@ const WizardView: React.FC<{
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="bg-white border border-slate-100 rounded-2xl p-5 lg:col-span-1">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">
-                {selectedBrandProfileId === 'demo' ? 'Marca demo' : 'Marca real seleccionada'}
+                {selectedBrandProfileId === 'demo' ? 'Marca de ejemplo' : 'Marca real seleccionada'}
               </p>
               <h3 className="text-xl font-black uppercase italic text-slate-900">{selectedBrand.name}</h3>
               <p className="text-sm text-slate-500 mt-1">{selectedBrand.category}</p>
@@ -391,7 +461,7 @@ const WizardView: React.FC<{
               </div>
             </div>
             <div className="bg-white border border-slate-100 rounded-2xl p-5 lg:col-span-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Productos demo</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Productos iniciales</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {GROWTH_DEMO_PRODUCTS.map(product => (
                   <div key={product.id} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
@@ -405,34 +475,122 @@ const WizardView: React.FC<{
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-            <MetricCard label="Seguidores" value={GROWTH_DEMO_METRICS.followers} icon={<Instagram className="w-4 h-4" />} />
-            <MetricCard label="Alcance" value={GROWTH_DEMO_METRICS.reachDiagnosis} icon={<TrendingUp className="w-4 h-4" />} />
-            <MetricCard label="Reels" value={GROWTH_DEMO_METRICS.reelsInsight} icon={<Play className="w-4 h-4" />} />
-            <MetricCard label="Carruseles" value={GROWTH_DEMO_METRICS.carouselInsight} icon={<FileText className="w-4 h-4" />} />
-            <MetricCard label="Horario" value={GROWTH_DEMO_METRICS.bestTime} icon={<Clock className="w-4 h-4" />} />
+            <MetricCard label="Seguidores" value={socialMetrics.followers} icon={<Instagram className="w-4 h-4" />} />
+            <MetricCard label="Alcance" value={socialMetrics.reachDiagnosis} icon={<TrendingUp className="w-4 h-4" />} />
+            <MetricCard label="Reels" value={socialMetrics.reelsInsight} icon={<Play className="w-4 h-4" />} />
+            <MetricCard label="Carruseles" value={socialMetrics.carouselInsight} icon={<FileText className="w-4 h-4" />} />
+            <MetricCard label="Horario" value={socialMetrics.bestTime} icon={<Clock className="w-4 h-4" />} />
+          </div>
+          <div className="bg-white border border-slate-100 rounded-2xl p-5">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">Metricas de redes</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {([
+                ['followers', 'Seguidores'],
+                ['reachDiagnosis', 'Diagnostico de alcance'],
+                ['reelsInsight', 'Insight de Reels'],
+                ['carouselInsight', 'Insight de carruseles'],
+                ['bestTime', 'Mejor horario'],
+              ] as const).map(([key, label]) => (
+                <label key={key} className="space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
+                  <input
+                    value={socialMetrics[key]}
+                    onChange={event => setSocialMetrics({ ...socialMetrics, [key]: event.target.value })}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none focus:border-rose-300 focus:bg-white"
+                  />
+                </label>
+              ))}
+            </div>
           </div>
         </section>
       )}
 
       {step === 3 && (
+        <section className="space-y-5">
+          <div>
+            <h2 className="text-2xl font-black uppercase italic tracking-tight text-slate-900">Productos a vender</h2>
+            <p className="text-sm text-slate-500 mt-1">
+              Describe varios productos. Las imagenes son apoyo visual: maximo 5 por generacion para cuidar Vercel y costos.
+            </p>
+          </div>
+          <div className="bg-white border border-slate-100 rounded-2xl p-5">
+            <label className="space-y-2 block">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Catalogo prioritario</span>
+              <textarea
+                value={productsText}
+                onChange={event => setProductsText(event.target.value)}
+                rows={8}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 outline-none focus:border-rose-300 focus:bg-white"
+                placeholder="Producto | Categoria | Precio | Beneficio principal"
+              />
+            </label>
+            <p className="text-[11px] text-slate-400 mt-2">
+              Formato sugerido: Producto | Categoria | Precio | Beneficio. Puedes escribir hasta 20 lineas.
+            </p>
+          </div>
+          <div className="bg-white border border-slate-100 rounded-2xl p-5">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Imagenes de producto</p>
+                <p className="text-xs text-slate-500 mt-1">{productImageCount}/5 imagenes seleccionadas</p>
+              </div>
+              <label className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-white cursor-pointer" style={{ background: '#F72C5B' }}>
+                Subir
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={event => {
+                    onProductImagesChange(event.target.files);
+                    event.target.value = '';
+                  }}
+                />
+              </label>
+            </div>
+            {imageError && <p className="text-xs font-bold text-red-500 mb-3">{imageError}</p>}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {productPreviews.map((preview, index) => (
+                <div key={preview} className="relative aspect-square rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
+                  <img src={preview} alt="" className="w-full h-full object-cover" />
+                  <button
+                    onClick={() => onRemoveProductImage(index)}
+                    className="absolute top-1.5 right-1.5 p-1 rounded-full bg-white/90 shadow"
+                  >
+                    <X className="w-3 h-3 text-slate-500" />
+                  </button>
+                </div>
+              ))}
+              {productPreviews.length === 0 && (
+                <div className="col-span-2 md:col-span-5 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-xs text-slate-400">
+                  Puedes generar el plan solo con texto. Las imagenes ayudan a Gemini a entender estilo, colores y packaging.
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {step === 4 && (
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div className="bg-white border border-slate-100 rounded-2xl p-6 space-y-4">
             <h2 className="text-2xl font-black uppercase italic tracking-tight text-slate-900">Revision final</h2>
             <p className="text-sm text-slate-500">
-              Se generara un plan mock de {duration} dias para {selectedBrand.name}. No se guarda en Firestore y no llama Gemini.
+              Se generara un plan real de {duration} dias para {selectedBrand.name}, usando Gemini 2.5 Flash.
             </p>
             <div className="grid grid-cols-2 gap-3">
               <MetricCard label="Marca" value={selectedBrand.name} icon={<Target className="w-4 h-4" />} />
               <MetricCard label="Duracion" value={`${duration} dias`} icon={<CalendarDays className="w-4 h-4" />} />
-              <MetricCard label="Tareas" value={duration === 30 ? '12 tareas' : duration === 14 ? '6 tareas' : '4 tareas'} icon={<ListTodo className="w-4 h-4" />} />
+              <MetricCard label="Productos" value={`${parseProducts(productsText).length} producto(s)`} icon={<Package className="w-4 h-4" />} />
+              <MetricCard label="Imagenes" value={`${productImageCount}/5`} icon={<Eye className="w-4 h-4" />} />
             </div>
           </div>
           <div className="rounded-2xl p-6 text-white flex flex-col justify-between min-h-[260px]" style={{ background: '#0f172a' }}>
             <div>
               <Sparkles className="w-8 h-8 text-rose-300 mb-4" />
-              <h3 className="text-2xl font-black uppercase italic tracking-tight">Listo para simular</h3>
+              <h3 className="text-2xl font-black uppercase italic tracking-tight">Listo para generar</h3>
               <p className="text-sm text-slate-300 mt-2">
-                El objetivo de esta fase es validar estructura, detalle de tareas, tabs y export.
+                Se guardara el plan y podras volver a abrirlo desde Mis Planes.
               </p>
             </div>
             <button
@@ -441,7 +599,7 @@ const WizardView: React.FC<{
               style={{ background: '#F72C5B' }}
             >
               <Zap className="w-4 h-4" />
-              Generar mock
+              Generar plan
             </button>
           </div>
         </section>
@@ -450,7 +608,7 @@ const WizardView: React.FC<{
       <WizardFooter
         onBack={step === 1 ? onBack : () => setStep(step - 1)}
         onContinue={step === STEPS.length ? onGenerate : () => setStep(step + 1)}
-        continueLabel={step === STEPS.length ? 'Generar mock' : 'Continuar'}
+        continueLabel={step === STEPS.length ? 'Generar plan' : 'Continuar'}
       />
     </div>
   );
@@ -459,35 +617,47 @@ const WizardView: React.FC<{
 const GeneratingView: React.FC<{
   duration: GrowthPlanDuration;
   selectedBrand: GrowthBrand;
-  brandSourceLabel: string;
+  products: GrowthProduct[];
+  socialMetrics: GrowthInstagramMetrics;
+  productImageRefs: { data: string; mimeType: string; label: string }[];
   onComplete: (plan: GrowthStrategicPlan) => void;
-}> = ({ duration, selectedBrand, brandSourceLabel, onComplete }) => {
+  onError: (message: string) => void;
+}> = ({ duration, selectedBrand, products, socialMetrics, productImageRefs, onComplete, onError }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [phrase, setPhrase] = useState(0);
   const phrases = [
-    'Estoy ordenando los formatos para no repetir ideas.',
-    'Estoy cruzando productos demo con objetivo comercial.',
-    'Estoy preparando tareas que puedas ejecutar sin IA real.',
+    'Estoy cruzando marca, productos y metricas sin usar busqueda externa.',
+    'Estoy creando tareas con recetas de ejecucion y prompts reutilizables.',
+    'Estoy validando que el plan tenga calendario, CTA y foco comercial.',
   ];
 
   useEffect(() => {
+    let cancelled = false;
     const stepTimer = window.setInterval(() => {
       setCurrentStep(prev => Math.min(prev + 1, GENERATION_STEPS.length - 1));
-    }, 550);
+    }, 900);
     const phraseTimer = window.setInterval(() => setPhrase(prev => (prev + 1) % phrases.length), 900);
-    const finishTimer = window.setTimeout(() => {
-      onComplete(generateGrowthPlannerMockPlan(duration, {
-        brand: selectedBrand,
-        brandSourceLabel,
-      }));
-    }, 4200);
+
+    generateGrowthPlanWithGemini({
+      duration,
+      brand: selectedBrand,
+      products,
+      instagramMetrics: socialMetrics,
+      productImageRefs,
+    })
+      .then(async plan => {
+        if (!cancelled) await onComplete(plan);
+      })
+      .catch(error => {
+        if (!cancelled) onError(error?.message || 'No se pudo generar el plan.');
+      });
 
     return () => {
+      cancelled = true;
       window.clearInterval(stepTimer);
       window.clearInterval(phraseTimer);
-      window.clearTimeout(finishTimer);
     };
-  }, [brandSourceLabel, duration, onComplete, selectedBrand]);
+  }, [duration, onComplete, onError, productImageRefs, products, selectedBrand, socialMetrics]);
 
   return (
     <div className="max-w-2xl mx-auto py-16 space-y-8">
@@ -495,8 +665,8 @@ const GeneratingView: React.FC<{
         <div className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center mb-4" style={{ background: 'rgba(247,44,91,0.1)' }}>
           <Loader2 className="w-7 h-7 animate-spin" style={{ color: '#F72C5B' }} />
         </div>
-        <h1 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900">Simulando estrategia</h1>
-        <p className="text-sm text-slate-500 mt-2">No se esta llamando a Gemini. Esto es un mock local.</p>
+        <h1 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900">Generando estrategia</h1>
+        <p className="text-sm text-slate-500 mt-2">Gemini 2.5 Flash esta armando un plan real con una sola llamada.</p>
       </div>
       <div className="bg-white border border-slate-100 rounded-2xl p-6">
         <GenerationProgress steps={GENERATION_STEPS} currentStepIndex={currentStep} />
@@ -621,7 +791,7 @@ const TasksTab: React.FC<{ plan: GrowthStrategicPlan; onOpen: (task: GrowthTask)
 
 const ConfigTab: React.FC<{ plan: GrowthStrategicPlan }> = ({ plan }) => (
   <div className="bg-white border border-slate-100 rounded-2xl p-6 max-w-3xl space-y-5">
-    <h2 className="text-lg font-black uppercase italic tracking-tight text-slate-900">Configuracion mock</h2>
+    <h2 className="text-lg font-black uppercase italic tracking-tight text-slate-900">Configuracion</h2>
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
       <MetricCard label="Marca" value={plan.brand.name} icon={<Target className="w-4 h-4" />} />
       <MetricCard label="Objetivo" value={plan.mainGoal} icon={<TrendingUp className="w-4 h-4" />} />
@@ -630,7 +800,7 @@ const ConfigTab: React.FC<{ plan: GrowthStrategicPlan }> = ({ plan }) => (
     </div>
     <div className="rounded-xl bg-amber-50 border border-amber-100 p-4">
       <p className="text-xs text-amber-800 font-bold">
-        Esta fase no guarda schema nuevo en Firestore, no conecta IA real y no precarga modulos externos.
+        Este plan fue generado con Gemini 2.5 Flash sin grounding ni generacion automatica de imagenes.
       </p>
     </div>
   </div>
@@ -787,7 +957,7 @@ const TaskDetail: React.FC<{
   );
 };
 
-const ResultsView: React.FC<{
+export const GrowthPlannerResults: React.FC<{
   plan: GrowthStrategicPlan;
   onBack: () => void;
   onUpdateTask: (taskId: string, updates: Partial<GrowthTask>) => void;
@@ -810,7 +980,7 @@ const ResultsView: React.FC<{
             <ArrowLeft className="w-5 h-5 text-slate-400" />
           </button>
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-rose-500">Growth Planner mock</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-rose-500">Planner estrategico</p>
             <h1 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900">
               Estrategia {plan.duration} dias
             </h1>
@@ -874,6 +1044,7 @@ const ResultsView: React.FC<{
 };
 
 const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const {
     profiles: brandProfiles,
@@ -884,6 +1055,11 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
   const [view, setView] = useState<'wizard' | 'generating' | 'results'>('wizard');
   const [plan, setPlan] = useState<GrowthStrategicPlan | null>(null);
   const [selectedBrandProfileId, setSelectedBrandProfileId] = useState('demo');
+  const [socialMetrics, setSocialMetrics] = useState<GrowthInstagramMetrics>(GROWTH_DEMO_METRICS);
+  const [productsText, setProductsText] = useState(defaultProductsText());
+  const [productImages, setProductImages] = useState<{ dataUrl: string; name: string }[]>([]);
+  const [imageError, setImageError] = useState('');
+  const [generationError, setGenerationError] = useState('');
 
   useEffect(() => {
     if (selectedBrandProfileId !== 'demo') return;
@@ -900,13 +1076,75 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
   const selectedBrand = selectedBrandProfile
     ? mapBrandProfileToGrowthBrand(selectedBrandProfile)
     : GROWTH_DEMO_BRAND;
-  const brandSourceLabel = selectedBrandProfile ? 'perfil de marca real' : 'marca demo';
 
-  const handleGenerate = () => setView('generating');
+  useEffect(() => {
+    setSocialMetrics(socialFromProfile(selectedBrandProfile));
+  }, [selectedBrandProfile?.id]);
 
-  const handleComplete = (nextPlan: GrowthStrategicPlan) => {
+  const products = useMemo(() => parseProducts(productsText), [productsText]);
+
+  const productImageRefs = useMemo(() => productImages.map(image => ({
+    ...stripDataUrl(image.dataUrl),
+    label: image.name,
+  })), [productImages]);
+
+  const handleProductImagesChange = async (files: FileList | null) => {
+    setImageError('');
+    const incoming = Array.from(files ?? []);
+    if (!incoming.length) return;
+    const available = Math.max(0, 5 - productImages.length);
+    if (!available) {
+      setImageError('Ya seleccionaste el maximo de 5 imagenes.');
+      return;
+    }
+    if (incoming.length > available) {
+      setImageError(`Solo se agregaron ${available} imagen(es). El maximo por generacion es 5.`);
+    }
+    const selected = incoming.slice(0, available);
+    const compressed = await Promise.all(selected.map(async file => ({
+      dataUrl: await compressImageForUpload(await readAndCompressFile(file), 640, 0.72),
+      name: file.name,
+    })));
+    setProductImages(prev => [...prev, ...compressed]);
+  };
+
+  const handleRemoveProductImage = (index: number) => {
+    setProductImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleGenerate = async () => {
+    setGenerationError('');
+    if (!products.length) {
+      setGenerationError('Agrega al menos un producto para generar el plan.');
+      return;
+    }
+
+    if (user?.uid && selectedBrandProfile) {
+      await brandProfileService.updateBrandSocialInsights(user.uid, selectedBrandProfile.id, {
+        instagramHandle: selectedBrandProfile.socialInsights?.instagramHandle || '',
+        followers: socialMetrics.followers,
+        reachDiagnosis: socialMetrics.reachDiagnosis,
+        reelsInsight: socialMetrics.reelsInsight,
+        carouselInsight: socialMetrics.carouselInsight,
+        bestTime: socialMetrics.bestTime,
+        notes: selectedBrandProfile.socialInsights?.notes || '',
+        updatedAt: Date.now(),
+      }).catch(error => console.warn('[GrowthPlanner] social insights not saved', error));
+    }
+
+    setView('generating');
+  };
+
+  const handleComplete = async (nextPlan: GrowthStrategicPlan) => {
     setPlan(nextPlan);
-    setView('results');
+    const project = await createProject(`Plan ${nextPlan.brand.name} ${nextPlan.duration} dias`);
+    await saveGrowthPlan(project.id, nextPlan);
+    navigate(`/planner/${project.id}`);
+  };
+
+  const handleGenerationError = (message: string) => {
+    setGenerationError(message);
+    setView('wizard');
   };
 
   const handleUpdateTask = (taskId: string, updates: Partial<GrowthTask>) => {
@@ -921,15 +1159,18 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
       <GeneratingView
         duration={duration}
         selectedBrand={selectedBrand}
-        brandSourceLabel={brandSourceLabel}
+        products={products}
+        socialMetrics={socialMetrics}
+        productImageRefs={productImageRefs}
         onComplete={handleComplete}
+        onError={handleGenerationError}
       />
     );
   }
 
   if (view === 'results' && plan) {
     return (
-      <ResultsView
+      <GrowthPlannerResults
         plan={plan}
         onBack={() => setView('wizard')}
         onUpdateTask={handleUpdateTask}
@@ -942,6 +1183,15 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
       duration={duration}
       setDuration={setDuration}
       selectedBrand={selectedBrand}
+      socialMetrics={socialMetrics}
+      setSocialMetrics={setSocialMetrics}
+      productsText={productsText}
+      setProductsText={setProductsText}
+      productPreviews={productImages.map(image => image.dataUrl)}
+      productImageCount={productImages.length}
+      imageError={imageError || generationError}
+      onProductImagesChange={handleProductImagesChange}
+      onRemoveProductImage={handleRemoveProductImage}
       selectedBrandProfileId={selectedBrandProfileId}
       setSelectedBrandProfileId={setSelectedBrandProfileId}
       brandProfiles={brandProfiles}

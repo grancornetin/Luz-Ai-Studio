@@ -16,6 +16,7 @@ const PlannerList: React.FC = () => {
   const navigate = useNavigate();
   const { projects, loading, error, removeProject, exportProject } = useProjects();
   const [exportingId, setExportingId] = useState<string | null>(null);
+  const strategicPlans = projects.filter(project => project.growthPlan);
 
   const handleCreate = () => {
     navigate('/planner/nuevo');
@@ -70,7 +71,7 @@ const PlannerList: React.FC = () => {
       )}
 
       {/* Estado vacío */}
-      {!loading && projects.length === 0 && (
+      {!loading && strategicPlans.length === 0 && (
         <div
           onClick={handleCreate}
           className="group text-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-200 hover:border-rose-300 transition-all cursor-pointer"
@@ -92,13 +93,16 @@ const PlannerList: React.FC = () => {
       )}
 
       {/* Grid de planes */}
-      {projects.length > 0 && (
+      {strategicPlans.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {projects.map(proj => {
+          {strategicPlans.map(proj => {
             const thumbs     = proj.items.slice(0, 4).map(i => i.url);
             const updatedAt  = proj.updatedAt?.toDate ? proj.updatedAt.toDate() : new Date();
-            const totalDays  = proj.calendar?.length ?? 0;
-            const doneDays   = proj.calendar?.filter(e => e.status === 'done').length ?? 0;
+            const growthTasks = proj.growthPlan?.tasks ?? [];
+            const totalDays  = growthTasks.length || proj.calendar?.length || 0;
+            const doneDays   = growthTasks.length
+              ? growthTasks.filter(task => task.status === 'ready' || task.status === 'published').length
+              : proj.calendar?.filter(e => e.status === 'done').length ?? 0;
             const hasCalendar = totalDays > 0;
             const pct        = hasCalendar ? Math.round((doneDays / totalDays) * 100) : 0;
 
@@ -151,7 +155,7 @@ const PlannerList: React.FC = () => {
                               : <Clock className="w-3 h-3 text-slate-400" />
                             }
                             <span className={`text-[10px] font-black ${pct === 100 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                              {doneDays}/{totalDays} días
+                              {doneDays}/{totalDays} tareas
                             </span>
                           </div>
                         ) : (

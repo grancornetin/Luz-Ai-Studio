@@ -135,6 +135,22 @@ export const brandProfileService = {
     }
   },
 
+  async updateBrandSocialInsights(
+    userId: string,
+    brandId: string,
+    socialInsights: NonNullable<BrandProfile['socialInsights']>,
+  ): Promise<void> {
+    try {
+      await updateDoc(brandDoc(userId, brandId), {
+        socialInsights,
+        updatedAt: Date.now(),
+      });
+    } catch (err) {
+      console.error('[brandProfileService] updateBrandSocialInsights error:', err);
+      throw new Error('No se pudieron guardar las metricas de redes.');
+    }
+  },
+
   async deleteBrandProfile(userId: string, brandId: string): Promise<void> {
     try {
       await deleteDoc(brandDoc(userId, brandId));
