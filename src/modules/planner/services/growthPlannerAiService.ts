@@ -1,4 +1,5 @@
 import { getAuth } from 'firebase/auth';
+import { Type } from '@google/genai';
 import { v4 as uuidv4 } from 'uuid';
 import type {
   GrowthBrand,
@@ -23,6 +24,211 @@ interface GenerateGrowthPlanInput {
 const CONTENT_ENDPOINT = '/api/gemini/content';
 const POLL_INTERVAL_MS = 2000;
 const MAX_POLL_ATTEMPTS = 90;
+const FUNNEL_ROLE_VALUES = ['atraer', 'generar_deseo', 'construir_confianza', 'convertir'];
+const CONTENT_MODULE_VALUES = ['product', 'ugc', 'scene', 'prompt', 'outfit', 'none'];
+const TASK_STATUS_VALUES = ['pending', 'in_progress', 'ready', 'published', 'skipped'];
+
+const stringArraySchema = { type: Type.ARRAY, items: { type: Type.STRING } };
+const executionStepSchema = {
+  type: Type.OBJECT,
+  properties: {
+    title: { type: Type.STRING },
+    module: { type: Type.STRING, enum: CONTENT_MODULE_VALUES },
+    instruction: { type: Type.STRING },
+    ctaLabel: { type: Type.STRING },
+    status: { type: Type.STRING, enum: ['pending', 'ready'] },
+  },
+  required: ['title', 'module', 'instruction', 'ctaLabel', 'status'],
+};
+
+const taskSchema = {
+  type: Type.OBJECT,
+  properties: {
+    week: { type: Type.NUMBER },
+    dayLabel: { type: Type.STRING },
+    date: { type: Type.STRING },
+    platform: { type: Type.STRING },
+    contentType: { type: Type.STRING },
+    funnelRole: { type: Type.STRING, enum: FUNNEL_ROLE_VALUES },
+    module: { type: Type.STRING, enum: CONTENT_MODULE_VALUES },
+    moduleReason: { type: Type.STRING },
+    suggestedTime: { type: Type.STRING },
+    visualConcept: { type: Type.STRING },
+    whyItWorks: { type: Type.STRING },
+    caption: { type: Type.STRING },
+    hashtags: { type: Type.STRING },
+    prompt: { type: Type.STRING },
+    slotInstructions: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          slot: { type: Type.STRING },
+          instruction: { type: Type.STRING },
+        },
+        required: ['slot', 'instruction'],
+      },
+    },
+    requiredAssets: stringArraySchema,
+    executionRecipe: {
+      type: Type.OBJECT,
+      properties: {
+        overview: { type: Type.STRING },
+        steps: { type: Type.ARRAY, items: executionStepSchema },
+      },
+      required: ['overview', 'steps'],
+    },
+    shotGuide: {
+      type: Type.OBJECT,
+      properties: {
+        duration: { type: Type.STRING },
+        shots: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              shot: { type: Type.NUMBER },
+              duration: { type: Type.STRING },
+              instruction: { type: Type.STRING },
+            },
+            required: ['shot', 'duration', 'instruction'],
+          },
+        },
+        onScreenText: stringArraySchema,
+        inspirationSearches: stringArraySchema,
+        whatToAvoid: stringArraySchema,
+      },
+      required: ['duration', 'shots', 'onScreenText', 'inspirationSearches', 'whatToAvoid'],
+    },
+    engagementHook: { type: Type.STRING },
+    status: { type: Type.STRING, enum: TASK_STATUS_VALUES },
+  },
+  required: [
+    'week',
+    'dayLabel',
+    'date',
+    'platform',
+    'contentType',
+    'funnelRole',
+    'module',
+    'moduleReason',
+    'suggestedTime',
+    'visualConcept',
+    'whyItWorks',
+    'caption',
+    'hashtags',
+    'prompt',
+    'slotInstructions',
+    'requiredAssets',
+    'executionRecipe',
+    'shotGuide',
+    'engagementHook',
+    'status',
+  ],
+};
+
+const GROWTH_PLANNER_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    businessStage: { type: Type.STRING },
+    mainGoal: { type: Type.STRING },
+    commercialFocus: { type: Type.STRING },
+    strategyGoal: { type: Type.STRING },
+    businessDiagnosis: { type: Type.STRING },
+    nicheInsights: stringArraySchema,
+    planNarrative: { type: Type.STRING },
+    strategicTip: { type: Type.STRING },
+    roadmap: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          week: { type: Type.NUMBER },
+          title: { type: Type.STRING },
+          objective: { type: Type.STRING },
+          funnelRole: { type: Type.STRING, enum: FUNNEL_ROLE_VALUES },
+          hint: { type: Type.STRING },
+        },
+        required: ['week', 'title', 'objective', 'funnelRole', 'hint'],
+      },
+    },
+    tasks: { type: Type.ARRAY, items: taskSchema },
+    brandAnalysis: {
+      type: Type.OBJECT,
+      properties: {
+        stageInterpretation: { type: Type.STRING },
+        targetAnalysis: { type: Type.STRING },
+        voiceGuide: { type: Type.STRING },
+      },
+      required: ['stageInterpretation', 'targetAnalysis', 'voiceGuide'],
+    },
+    productAnalysis: {
+      type: Type.OBJECT,
+      properties: {
+        productWarnings: stringArraySchema,
+        confidenceByProduct: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              productId: { type: Type.STRING },
+              level: { type: Type.NUMBER },
+              reason: { type: Type.STRING },
+            },
+            required: ['productId', 'level', 'reason'],
+          },
+        },
+        categorizationSummary: { type: Type.STRING },
+      },
+      required: ['productWarnings', 'confidenceByProduct', 'categorizationSummary'],
+    },
+    socialMetricsAnalysis: {
+      type: Type.OBJECT,
+      properties: {
+        audienceInsights: { type: Type.STRING },
+        engagementLevel: { type: Type.STRING },
+        confidenceMapping: { type: Type.STRING },
+      },
+      required: ['audienceInsights', 'engagementLevel', 'confidenceMapping'],
+    },
+    nicheResearch: {
+      type: Type.OBJECT,
+      properties: {
+        trends: stringArraySchema,
+        competitorGaps: stringArraySchema,
+        researchMode: { type: Type.STRING },
+      },
+      required: ['trends', 'competitorGaps', 'researchMode'],
+    },
+    generationLog: {
+      type: Type.OBJECT,
+      properties: {
+        warnings: stringArraySchema,
+        fixedErrors: stringArraySchema,
+      },
+      required: ['warnings', 'fixedErrors'],
+    },
+    validationReportMarkdown: { type: Type.STRING },
+  },
+  required: [
+    'businessStage',
+    'mainGoal',
+    'commercialFocus',
+    'strategyGoal',
+    'businessDiagnosis',
+    'nicheInsights',
+    'planNarrative',
+    'strategicTip',
+    'roadmap',
+    'tasks',
+    'brandAnalysis',
+    'productAnalysis',
+    'socialMetricsAnalysis',
+    'nicheResearch',
+    'generationLog',
+    'validationReportMarkdown',
+  ],
+};
 
 function taskRange(duration: GrowthPlanDuration) {
   if (duration === 7) return { min: 4, max: 4, maxOutputTokens: 4096 };
@@ -30,18 +236,64 @@ function taskRange(duration: GrowthPlanDuration) {
   return { min: 10, max: 10, maxOutputTokens: 8192 };
 }
 
-function parseJsonFromText(text: string): unknown {
-  const clean = text.trim().replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
-  try {
-    return JSON.parse(clean);
-  } catch {
-    const start = clean.indexOf('{');
-    const end = clean.lastIndexOf('}');
-    if (start >= 0 && end > start) {
-      return JSON.parse(clean.slice(start, end + 1));
+function cleanJsonText(text: string): string {
+  return text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+}
+
+function extractJsonCandidate(text: string): string {
+  const clean = cleanJsonText(text);
+  const start = clean.indexOf('{');
+  const end = clean.lastIndexOf('}');
+  if (start >= 0 && end > start) return clean.slice(start, end + 1);
+  return clean;
+}
+
+function balanceJsonClosings(text: string): string {
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+
+  for (const char of text) {
+    if (escaped) {
+      escaped = false;
+      continue;
     }
-    throw new Error('Gemini no devolvio JSON valido.');
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (char === '{') stack.push('}');
+    if (char === '[') stack.push(']');
+    if ((char === '}' || char === ']') && stack[stack.length - 1] === char) stack.pop();
   }
+
+  return text + stack.reverse().join('');
+}
+
+function repairJsonText(text: string): string {
+  return balanceJsonClosings(extractJsonCandidate(text)
+    .replace(/,\s*([}\]])/g, '$1')
+    .replace(/}\s*{/g, '},{')
+    .replace(/]\s*\[/g, '],[')
+    .replace(/"\s*\n\s*"/g, '","'));
+}
+
+function parseJsonFromText(text: string): unknown {
+  const candidate = extractJsonCandidate(text);
+  const attempts = [candidate, repairJsonText(candidate)];
+  for (const attempt of attempts) {
+    try {
+      return JSON.parse(attempt);
+    } catch {
+      // Try the next cleanup strategy.
+    }
+  }
+  throw new Error('Gemini devolvio JSON incompleto. Reintenta con un plan de 7 dias o menos imagenes.');
 }
 
 function asArray<T>(value: T[] | undefined, fallback: T[]): T[] {
@@ -296,6 +548,7 @@ export async function generateGrowthPlanWithGemini(input: GenerateGrowthPlanInpu
       action: 'generateTextAsync',
       model: 'gemini-2.5-flash',
       prompt: buildPrompt(input),
+      schema: GROWTH_PLANNER_SCHEMA,
       images: input.productImageRefs.map(image => image.data),
       mimeTypes: input.productImageRefs.map(image => image.mimeType),
       generationConfig: {

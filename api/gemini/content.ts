@@ -98,13 +98,64 @@ function extractText(response: any): string {
     ?.map((p: any) => p.text || '').filter(Boolean).join('') || '';
 }
 
-function parseJsonMaybe(text: string): unknown {
-  try {
-    const clean = text.replace(/```json\s*|\s*```/g, '').trim();
-    return JSON.parse(clean);
-  } catch {
-    return null;
+function cleanJsonText(text: string): string {
+  return text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+}
+
+function extractJsonCandidate(text: string): string {
+  const clean = cleanJsonText(text);
+  const start = clean.indexOf('{');
+  const end = clean.lastIndexOf('}');
+  if (start >= 0 && end > start) return clean.slice(start, end + 1);
+  return clean;
+}
+
+function balanceJsonClosings(text: string): string {
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+
+  for (const char of text) {
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (char === '{') stack.push('}');
+    if (char === '[') stack.push(']');
+    if ((char === '}' || char === ']') && stack[stack.length - 1] === char) stack.pop();
   }
+
+  return text + stack.reverse().join('');
+}
+
+function repairJsonText(text: string): string {
+  return balanceJsonClosings(extractJsonCandidate(text)
+    .replace(/,\s*([}\]])/g, '$1')
+    .replace(/}\s*{/g, '},{')
+    .replace(/]\s*\[/g, '],[')
+    .replace(/"\s*\n\s*"/g, '","'));
+}
+
+function parseJsonMaybe(text: string): unknown {
+  const candidate = extractJsonCandidate(text);
+  const attempts = [candidate, repairJsonText(candidate)];
+  for (const attempt of attempts) {
+    try {
+      return JSON.parse(attempt);
+    } catch {
+      // Try the next cleanup strategy.
+    }
+  }
+  return null;
 }
 
 function buildParts(body: Pick<ContentRequest, 'images' | 'mimeTypes' | 'prompt'>): any[] {
