@@ -53,7 +53,6 @@ const PhotodumpModule  = lazy(() => import('./modules/photodump/PhotodumpModule'
 const PlannerList      = lazy(() => import('./modules/planner/PlannerList'));
 const PlannerDetail    = lazy(() => import('./modules/planner/PlannerDetail'));
 const PlannerOnboarding = lazy(() => import('./modules/planner/PlannerOnboarding'));
-const PlannerWeek      = lazy(() => import('./modules/planner/PlannerWeek'));
 const BrandProfilesModule = lazy(() => import('./modules/brandProfiles/BrandProfilesModule'));
 
 const PLAN_STYLES: Record<string, { label: string; className: string }> = {
@@ -446,7 +445,7 @@ const AppContent: React.FC = () => {
                   <Route path="/cuenta"         element={<AccountSettings />} />
                   <Route path="/planner"         element={<PlannerList />} />
                   <Route path="/planner/nuevo"  element={<PlannerOnboarding />} />
-                  <Route path="/planner/:id"    element={<PlannerWeek />} />
+                  <Route path="/planner/:id"    element={<PlannerDetail />} />
                   <Route path="/projects"        element={<Navigate to="/planner" replace />} />
                   <Route path="/projects/:id"   element={<Navigate to="/planner" replace />} />
                   <Route path="/mis-marcas"     element={<BrandProfilesModule />} />
