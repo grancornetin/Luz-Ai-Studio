@@ -291,6 +291,8 @@ const TaskCard: React.FC<{
 );
 
 const WizardView: React.FC<{
+  step: number;
+  setStep: (step: number) => void;
   duration: GrowthPlanDuration;
   setDuration: (duration: GrowthPlanDuration) => void;
   selectedBrand: GrowthBrand;
@@ -301,6 +303,7 @@ const WizardView: React.FC<{
   productPreviews: string[];
   productImageCount: number;
   imageError: string;
+  generationError: string;
   onProductImagesChange: (files: FileList | null) => void;
   onRemoveProductImage: (index: number) => void;
   selectedBrandProfileId: string;
@@ -311,6 +314,8 @@ const WizardView: React.FC<{
   onBack: () => void;
   onGenerate: () => void;
 }> = ({
+  step,
+  setStep,
   duration,
   setDuration,
   selectedBrand,
@@ -321,6 +326,7 @@ const WizardView: React.FC<{
   productPreviews,
   productImageCount,
   imageError,
+  generationError,
   onProductImagesChange,
   onRemoveProductImage,
   selectedBrandProfileId,
@@ -331,8 +337,6 @@ const WizardView: React.FC<{
   onBack,
   onGenerate,
 }) => {
-  const [step, setStep] = useState(1);
-
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-28 md:pb-8">
       <div className="flex items-center gap-3">
@@ -350,6 +354,13 @@ const WizardView: React.FC<{
       <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
         <WizardStepper steps={STEPS} current={step} onJump={setStep} />
       </div>
+
+      {generationError && (
+        <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
+          <p className="text-xs font-black uppercase tracking-widest text-red-500 mb-1">No se pudo generar el plan</p>
+          <p className="text-sm font-bold text-red-700 leading-relaxed">{generationError}</p>
+        </div>
+      )}
 
       {step === 1 && (
         <section className="space-y-5">
@@ -666,7 +677,7 @@ const GeneratingView: React.FC<{
           <Loader2 className="w-7 h-7 animate-spin" style={{ color: '#F72C5B' }} />
         </div>
         <h1 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900">Generando estrategia</h1>
-        <p className="text-sm text-slate-500 mt-2">Gemini 2.5 Flash esta armando un plan real con una sola llamada.</p>
+        <p className="text-sm text-slate-500 mt-2">Luz IA está armando tu plan personalizado.</p>
       </div>
       <div className="bg-white border border-slate-100 rounded-2xl p-6">
         <GenerationProgress steps={GENERATION_STEPS} currentStepIndex={currentStep} />
@@ -1055,6 +1066,7 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
   const [view, setView] = useState<'wizard' | 'generating' | 'results'>('wizard');
   const [plan, setPlan] = useState<GrowthStrategicPlan | null>(null);
   const [selectedBrandProfileId, setSelectedBrandProfileId] = useState('demo');
+  const [wizardStep, setWizardStep] = useState(1);
   const [socialMetrics, setSocialMetrics] = useState<GrowthInstagramMetrics>(GROWTH_DEMO_METRICS);
   const [productsText, setProductsText] = useState(defaultProductsText());
   const [productImages, setProductImages] = useState<{ dataUrl: string; name: string }[]>([]);
@@ -1143,7 +1155,9 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
   };
 
   const handleGenerationError = (message: string) => {
+    console.error('[GrowthPlanner] generation failed:', message);
     setGenerationError(message);
+    setWizardStep(STEPS.length);
     setView('wizard');
   };
 
@@ -1180,6 +1194,8 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
 
   return (
     <WizardView
+      step={wizardStep}
+      setStep={setWizardStep}
       duration={duration}
       setDuration={setDuration}
       selectedBrand={selectedBrand}
@@ -1189,7 +1205,8 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
       setProductsText={setProductsText}
       productPreviews={productImages.map(image => image.dataUrl)}
       productImageCount={productImages.length}
-      imageError={imageError || generationError}
+      imageError={imageError}
+      generationError={generationError}
       onProductImagesChange={handleProductImagesChange}
       onRemoveProductImage={handleRemoveProductImage}
       selectedBrandProfileId={selectedBrandProfileId}
