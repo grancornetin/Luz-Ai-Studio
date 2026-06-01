@@ -24,9 +24,12 @@ import {
   X,
   Zap,
 } from 'lucide-react';
+import { useBrandProfiles } from '../../../hooks/useBrandProfiles';
 import { WizardStepper } from '../../../components/shared/WizardStepper';
 import { WizardFooter } from '../../../components/shared/WizardFooter';
 import { GenerationProgress } from '../../../components/shared/GenerationProgress';
+import { useAuth } from '../../auth/AuthContext';
+import type { BrandProfile } from '../../brandProfiles/types';
 import {
   GROWTH_DEMO_BRAND,
   GROWTH_DEMO_METRICS,
@@ -34,6 +37,7 @@ import {
   generateGrowthPlannerMockPlan,
 } from '../growthPlannerMockData';
 import {
+  GrowthBrand,
   GrowthContentModule,
   GrowthPlanDuration,
   GrowthStrategicPlan,
@@ -43,7 +47,7 @@ import {
 
 const STEPS = [
   { id: 'duration', label: 'Duracion' },
-  { id: 'inputs', label: 'Datos demo' },
+  { id: 'inputs', label: 'Marca y datos' },
   { id: 'review', label: 'Revision' },
 ];
 
@@ -86,6 +90,37 @@ type GrowthTab = (typeof TABS)[number]['id'];
 
 interface GrowthPlannerMockProps {
   onBack: () => void;
+}
+
+function platformFromSalesChannels(channels: string[]): GrowthBrand['activeSocials'] {
+  const joined = channels.join(' ').toLowerCase();
+  const platforms: GrowthBrand['activeSocials'] = [];
+  if (joined.includes('instagram')) {
+    platforms.push('Instagram Feed', 'Stories');
+  }
+  if (joined.includes('tiktok')) platforms.push('TikTok');
+  if (joined.includes('whatsapp')) platforms.push('WhatsApp');
+  if (joined.includes('facebook')) platforms.push('Facebook');
+  return platforms.length ? Array.from(new Set(platforms)) as GrowthBrand['activeSocials'] : GROWTH_DEMO_BRAND.activeSocials;
+}
+
+function mapBrandProfileToGrowthBrand(profile: BrandProfile): GrowthBrand {
+  const channels = profile.commercialRules?.mainSalesChannels ?? [];
+  const tone = profile.aiSummary?.voiceGuidelines
+    || profile.voice?.toneKeywords?.join(', ')
+    || profile.voice?.formality
+    || GROWTH_DEMO_BRAND.tone;
+
+  return {
+    name: profile.brandName || GROWTH_DEMO_BRAND.name,
+    category: profile.mainCategory || profile.shortDescription || GROWTH_DEMO_BRAND.category,
+    idealClient: profile.aiSummary?.targetCustomerSummary
+      || profile.targetCustomer?.freeDescription
+      || GROWTH_DEMO_BRAND.idealClient,
+    tone,
+    mainSalesChannel: channels.length ? channels.join(' y ') : GROWTH_DEMO_BRAND.mainSalesChannel,
+    activeSocials: platformFromSalesChannels(channels),
+  };
 }
 
 function statusCounts(tasks: GrowthTask[]) {
@@ -206,9 +241,26 @@ const TaskCard: React.FC<{
 const WizardView: React.FC<{
   duration: GrowthPlanDuration;
   setDuration: (duration: GrowthPlanDuration) => void;
+  selectedBrand: GrowthBrand;
+  selectedBrandProfileId: string;
+  setSelectedBrandProfileId: (id: string) => void;
+  brandProfiles: BrandProfile[];
+  loadingBrands: boolean;
+  brandError: string | null;
   onBack: () => void;
   onGenerate: () => void;
-}> = ({ duration, setDuration, onBack, onGenerate }) => {
+}> = ({
+  duration,
+  setDuration,
+  selectedBrand,
+  selectedBrandProfileId,
+  setSelectedBrandProfileId,
+  brandProfiles,
+  loadingBrands,
+  brandError,
+  onBack,
+  onGenerate,
+}) => {
   const [step, setStep] = useState(1);
 
   return (
@@ -260,17 +312,82 @@ const WizardView: React.FC<{
       {step === 2 && (
         <section className="space-y-5">
           <div>
-            <h2 className="text-2xl font-black uppercase italic tracking-tight text-slate-900">Datos demo</h2>
-            <p className="text-sm text-slate-500 mt-1">Estos datos simulan marca, productos y screenshots de Instagram.</p>
+            <h2 className="text-2xl font-black uppercase italic tracking-tight text-slate-900">Marca y datos base</h2>
+            <p className="text-sm text-slate-500 mt-1">
+              Puedes usar una marca real de Mis Marcas. Productos y metricas siguen siendo demo en esta fase.
+            </p>
           </div>
+
+          <div className="bg-white border border-slate-100 rounded-2xl p-5">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Perfil de marca</p>
+                <p className="text-xs text-slate-500 mt-1">Lectura real opcional, sin guardar cambios en Firestore.</p>
+              </div>
+              {loadingBrands && <Loader2 className="w-4 h-4 animate-spin text-slate-300" />}
+            </div>
+
+            {brandError && (
+              <div className="mb-4 rounded-xl bg-red-50 border border-red-100 p-3 text-xs font-bold text-red-700">
+                {brandError}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <button
+                onClick={() => setSelectedBrandProfileId('demo')}
+                className={`text-left rounded-2xl border p-4 transition-all ${
+                  selectedBrandProfileId === 'demo'
+                    ? 'border-rose-300 bg-rose-50'
+                    : 'border-slate-100 bg-slate-50 hover:border-slate-200'
+                }`}
+              >
+                <p className="text-[10px] font-black uppercase tracking-widest text-rose-500">Demo</p>
+                <p className="text-sm font-black text-slate-900 mt-1">{GROWTH_DEMO_BRAND.name}</p>
+                <p className="text-xs text-slate-500 mt-1">{GROWTH_DEMO_BRAND.category}</p>
+              </button>
+
+              {brandProfiles.map(profile => (
+                <button
+                  key={profile.id}
+                  onClick={() => setSelectedBrandProfileId(profile.id)}
+                  className={`text-left rounded-2xl border p-4 transition-all ${
+                    selectedBrandProfileId === profile.id
+                      ? 'border-rose-300 bg-rose-50'
+                      : 'border-slate-100 bg-slate-50 hover:border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Mis Marcas</p>
+                    {profile.isDefault && (
+                      <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">
+                        Default
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm font-black text-slate-900 mt-1">{profile.brandName || 'Marca sin nombre'}</p>
+                  <p className="text-xs text-slate-500 mt-1">{profile.mainCategory || profile.shortDescription || 'Sin categoria'}</p>
+                </button>
+              ))}
+
+              {!loadingBrands && brandProfiles.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs text-slate-400">
+                  No hay perfiles reales todavia. El mock usara CIGNIA.
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="bg-white border border-slate-100 rounded-2xl p-5 lg:col-span-1">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Marca demo</p>
-              <h3 className="text-xl font-black uppercase italic text-slate-900">{GROWTH_DEMO_BRAND.name}</h3>
-              <p className="text-sm text-slate-500 mt-1">{GROWTH_DEMO_BRAND.category}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">
+                {selectedBrandProfileId === 'demo' ? 'Marca demo' : 'Marca real seleccionada'}
+              </p>
+              <h3 className="text-xl font-black uppercase italic text-slate-900">{selectedBrand.name}</h3>
+              <p className="text-sm text-slate-500 mt-1">{selectedBrand.category}</p>
               <div className="mt-4 space-y-2 text-xs text-slate-600">
-                <p><span className="font-black">Tono:</span> {GROWTH_DEMO_BRAND.tone}</p>
-                <p><span className="font-black">Canal:</span> {GROWTH_DEMO_BRAND.mainSalesChannel}</p>
+                <p><span className="font-black">Tono:</span> {selectedBrand.tone}</p>
+                <p><span className="font-black">Canal:</span> {selectedBrand.mainSalesChannel}</p>
               </div>
             </div>
             <div className="bg-white border border-slate-100 rounded-2xl p-5 lg:col-span-2">
@@ -302,9 +419,10 @@ const WizardView: React.FC<{
           <div className="bg-white border border-slate-100 rounded-2xl p-6 space-y-4">
             <h2 className="text-2xl font-black uppercase italic tracking-tight text-slate-900">Revision final</h2>
             <p className="text-sm text-slate-500">
-              Se generara un plan mock de {duration} dias para CIGNIA. No se guarda en Firestore y no llama Gemini.
+              Se generara un plan mock de {duration} dias para {selectedBrand.name}. No se guarda en Firestore y no llama Gemini.
             </p>
             <div className="grid grid-cols-2 gap-3">
+              <MetricCard label="Marca" value={selectedBrand.name} icon={<Target className="w-4 h-4" />} />
               <MetricCard label="Duracion" value={`${duration} dias`} icon={<CalendarDays className="w-4 h-4" />} />
               <MetricCard label="Tareas" value={duration === 30 ? '12 tareas' : duration === 14 ? '6 tareas' : '4 tareas'} icon={<ListTodo className="w-4 h-4" />} />
             </div>
@@ -338,7 +456,12 @@ const WizardView: React.FC<{
   );
 };
 
-const GeneratingView: React.FC<{ duration: GrowthPlanDuration; onComplete: (plan: GrowthStrategicPlan) => void }> = ({ duration, onComplete }) => {
+const GeneratingView: React.FC<{
+  duration: GrowthPlanDuration;
+  selectedBrand: GrowthBrand;
+  brandSourceLabel: string;
+  onComplete: (plan: GrowthStrategicPlan) => void;
+}> = ({ duration, selectedBrand, brandSourceLabel, onComplete }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [phrase, setPhrase] = useState(0);
   const phrases = [
@@ -353,7 +476,10 @@ const GeneratingView: React.FC<{ duration: GrowthPlanDuration; onComplete: (plan
     }, 550);
     const phraseTimer = window.setInterval(() => setPhrase(prev => (prev + 1) % phrases.length), 900);
     const finishTimer = window.setTimeout(() => {
-      onComplete(generateGrowthPlannerMockPlan(duration));
+      onComplete(generateGrowthPlannerMockPlan(duration, {
+        brand: selectedBrand,
+        brandSourceLabel,
+      }));
     }, 4200);
 
     return () => {
@@ -361,7 +487,7 @@ const GeneratingView: React.FC<{ duration: GrowthPlanDuration; onComplete: (plan
       window.clearInterval(phraseTimer);
       window.clearTimeout(finishTimer);
     };
-  }, [duration, onComplete]);
+  }, [brandSourceLabel, duration, onComplete, selectedBrand]);
 
   return (
     <div className="max-w-2xl mx-auto py-16 space-y-8">
@@ -748,9 +874,33 @@ const ResultsView: React.FC<{
 };
 
 const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
+  const { user } = useAuth();
+  const {
+    profiles: brandProfiles,
+    loading: loadingBrands,
+    error: brandError,
+  } = useBrandProfiles(user?.uid);
   const [duration, setDuration] = useState<GrowthPlanDuration>(30);
   const [view, setView] = useState<'wizard' | 'generating' | 'results'>('wizard');
   const [plan, setPlan] = useState<GrowthStrategicPlan | null>(null);
+  const [selectedBrandProfileId, setSelectedBrandProfileId] = useState('demo');
+
+  useEffect(() => {
+    if (selectedBrandProfileId !== 'demo') return;
+
+    const preferredProfile = brandProfiles.find(profile => profile.isDefault) ?? brandProfiles[0];
+    if (preferredProfile) {
+      setSelectedBrandProfileId(preferredProfile.id);
+    }
+  }, [brandProfiles, selectedBrandProfileId]);
+
+  const selectedBrandProfile = selectedBrandProfileId === 'demo'
+    ? undefined
+    : brandProfiles.find(profile => profile.id === selectedBrandProfileId);
+  const selectedBrand = selectedBrandProfile
+    ? mapBrandProfileToGrowthBrand(selectedBrandProfile)
+    : GROWTH_DEMO_BRAND;
+  const brandSourceLabel = selectedBrandProfile ? 'perfil de marca real' : 'marca demo';
 
   const handleGenerate = () => setView('generating');
 
@@ -767,7 +917,14 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
   };
 
   if (view === 'generating') {
-    return <GeneratingView duration={duration} onComplete={handleComplete} />;
+    return (
+      <GeneratingView
+        duration={duration}
+        selectedBrand={selectedBrand}
+        brandSourceLabel={brandSourceLabel}
+        onComplete={handleComplete}
+      />
+    );
   }
 
   if (view === 'results' && plan) {
@@ -784,6 +941,12 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
     <WizardView
       duration={duration}
       setDuration={setDuration}
+      selectedBrand={selectedBrand}
+      selectedBrandProfileId={selectedBrandProfileId}
+      setSelectedBrandProfileId={setSelectedBrandProfileId}
+      brandProfiles={brandProfiles}
+      loadingBrands={loadingBrands}
+      brandError={brandError}
       onBack={onBack}
       onGenerate={handleGenerate}
     />

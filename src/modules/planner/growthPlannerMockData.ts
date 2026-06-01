@@ -7,6 +7,11 @@ import {
   GrowthTask,
 } from './growthPlannerTypes';
 
+interface GrowthMockPlanOptions {
+  brand?: GrowthBrand;
+  brandSourceLabel?: string;
+}
+
 export const GROWTH_DEMO_BRAND: GrowthBrand = {
   name: 'CIGNIA',
   category: 'Accesorios femeninos',
@@ -290,22 +295,29 @@ function buildTasks(duration: GrowthPlanDuration): GrowthTask[] {
   });
 }
 
-export function generateGrowthPlannerMockPlan(duration: GrowthPlanDuration): GrowthStrategicPlan {
+export function generateGrowthPlannerMockPlan(
+  duration: GrowthPlanDuration,
+  options: GrowthMockPlanOptions = {},
+): GrowthStrategicPlan {
   const tasks = buildTasks(duration);
   const weeks = duration === 30 ? 4 : duration === 14 ? 2 : 1;
+  const brand = options.brand ?? GROWTH_DEMO_BRAND;
+  const brandName = brand.name || GROWTH_DEMO_BRAND.name;
+  const brandCategory = brand.category || GROWTH_DEMO_BRAND.category;
+  const sourceLabel = options.brandSourceLabel ?? 'marca demo';
 
   return {
     id: `growth_mock_${Date.now()}`,
     createdAt: new Date().toISOString(),
     duration,
-    brand: GROWTH_DEMO_BRAND,
+    brand,
     products: GROWTH_DEMO_PRODUCTS,
     instagramMetrics: GROWTH_DEMO_METRICS,
     businessStage: 'Ventas irregulares con audiencia existente.',
     mainGoal: 'Aumentar mensajes y ventas por DM sin perder tono elegante.',
     commercialFocus: 'Linea dorada basica',
     strategyGoal: 'Reactivar alcance y convertir interes en mensajes',
-    businessDiagnosis: 'CIGNIA tiene una base de seguidores atractiva, pero necesita transformar alcance disperso en conversaciones de compra con piezas mas claras y repetibles.',
+    businessDiagnosis: `${brandName} tiene una base de marca atractiva en ${brandCategory}, pero necesita transformar alcance disperso en conversaciones de compra con piezas mas claras y repetibles.`,
     nicheInsights: [
       'Los accesorios se venden mejor cuando se muestran en uso y no solo aislados.',
       'Las dudas sobre calidad y durabilidad deben aparecer antes del CTA de venta.',
@@ -327,9 +339,9 @@ export function generateGrowthPlannerMockPlan(duration: GrowthPlanDuration): Gro
     })),
     tasks,
     brandAnalysis: {
-      stageInterpretation: 'Marca con audiencia relevante, pero ventas todavia irregulares.',
-      targetAnalysis: 'Clientas que buscan accesorios delicados, faciles de combinar y con confianza de compra.',
-      voiceGuide: 'Cercana, elegante y concreta. Evitar presion excesiva o palabras como barato.',
+      stageInterpretation: `Marca tomada desde ${sourceLabel}; se mantiene el diagnostico mock de ventas irregulares.`,
+      targetAnalysis: brand.idealClient || 'Clientas que buscan accesorios delicados, faciles de combinar y con confianza de compra.',
+      voiceGuide: brand.tone || 'Cercana, elegante y concreta. Evitar presion excesiva o palabras como barato.',
     },
     productAnalysis: {
       productWarnings: ['Faltan fotos de producto en uso real para aumentar confianza.'],
@@ -356,7 +368,7 @@ export function generateGrowthPlannerMockPlan(duration: GrowthPlanDuration): Gro
       hasImages: true,
       hasMetrics: true,
       researchMode: 'mock-local',
-      warnings: ['Plan generado con datos demo; no usa IA ni Firestore en esta fase.'],
+      warnings: [`Plan generado con ${sourceLabel}; productos y metricas siguen siendo demo. No usa IA ni cambia Firestore.`],
       validationChecks: {
         datesValid: true,
         languageValid: true,
@@ -369,6 +381,6 @@ export function generateGrowthPlannerMockPlan(duration: GrowthPlanDuration): Gro
       },
       fixedErrors: [],
     },
-    validationReportMarkdown: `# Growth Planner Mock - CIGNIA\n\nPlan de ${duration} dias generado con datos demo para validar integracion visual dentro de Luz IA Studio.`,
+    validationReportMarkdown: `# Growth Planner Mock - ${brandName}\n\nPlan de ${duration} dias generado con ${sourceLabel} para validar integracion visual dentro de Luz IA Studio.`,
   };
 }
