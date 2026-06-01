@@ -7,11 +7,12 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, Loader2, Sparkles,
   ShoppingBag, Users, Rocket, Radio,
-  ImagePlus, X,
+  ImagePlus, X, CalendarDays,
 } from 'lucide-react';
 import { getAuth } from 'firebase/auth';
 import { createProject, saveCalendar, savePlannerBrief, CalendarEntry } from '../../services/projectService';
 import { v4 as uuidv4 } from 'uuid';
+import GrowthPlannerMock from './components/GrowthPlannerMock';
 
 // ── Constantes ────────────────────────────────────────────────
 
@@ -196,6 +197,7 @@ const TOTAL_STEPS = 4;
 const PlannerOnboarding: React.FC = () => {
   const navigate = useNavigate();
 
+  const [plannerMode, setPlannerMode] = useState<'select' | 'quick' | 'growth'>('select');
   const [step, setStep]               = useState(1);
   const [product, setProduct]         = useState('');
   const [productImages, setProductImages] = useState<File[]>([]);
@@ -256,6 +258,82 @@ const PlannerOnboarding: React.FC = () => {
       setGenerating(false);
     }
   };
+
+  if (plannerMode === 'growth') {
+    return <GrowthPlannerMock onBack={() => setPlannerMode('select')} />;
+  }
+
+  if (plannerMode === 'select') {
+    return (
+      <div className="max-w-4xl mx-auto space-y-8">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/planner')}
+            className="p-2 rounded-xl hover:bg-slate-100 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5 text-slate-400" />
+          </button>
+          <div>
+            <h1 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900">
+              Nuevo plan
+            </h1>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mt-0.5">
+              Elegi como queres planificar tu contenido
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <button
+            onClick={() => setPlannerMode('quick')}
+            className="group bg-white border-2 border-slate-100 hover:border-rose-200 rounded-3xl p-6 text-left transition-all hover:shadow-lg"
+          >
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5 transition-transform group-hover:scale-105" style={{ background: 'rgba(247,44,91,0.08)' }}>
+              <CalendarDays className="w-6 h-6" style={{ color: '#F72C5B' }} />
+            </div>
+            <p className="text-lg font-black uppercase italic tracking-tight text-slate-900">
+              Planner rapido actual
+            </p>
+            <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+              El flujo existente de 4 pasos para armar una semana con Gemini y guardar el calendario en tus planes.
+            </p>
+            <div className="mt-5 inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest" style={{ color: '#F72C5B' }}>
+              Usar flujo actual
+              <ArrowRight className="w-4 h-4" />
+            </div>
+          </button>
+
+          <button
+            onClick={() => setPlannerMode('growth')}
+            className="group bg-slate-900 border-2 border-slate-900 rounded-3xl p-6 text-left transition-all hover:shadow-xl text-white overflow-hidden relative"
+          >
+            <div className="absolute top-4 right-4 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-white/10 text-white/70">
+              Mock fase 1
+            </div>
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5 transition-transform group-hover:scale-105" style={{ background: '#F72C5B' }}>
+              <Rocket className="w-6 h-6 text-white" />
+            </div>
+            <p className="text-lg font-black uppercase italic tracking-tight">
+              Planner estrategico
+            </p>
+            <p className="text-sm text-slate-300 mt-2 leading-relaxed">
+              Prototipo integrado con duracion 7/14/30, marca demo, productos demo, tabs, detalle de tareas y export JSON.
+            </p>
+            <div className="mt-5 inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-rose-300">
+              Abrir Growth Planner
+              <ArrowRight className="w-4 h-4" />
+            </div>
+          </button>
+        </div>
+
+        <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+          <p className="text-xs text-amber-800 font-bold leading-relaxed">
+            El Planner estrategico de esta fase es solo UI/mock: no llama IA, no crea endpoints y no cambia Firestore.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto">
