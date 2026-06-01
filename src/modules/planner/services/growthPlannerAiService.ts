@@ -27,6 +27,35 @@ const MAX_POLL_ATTEMPTS = 90;
 const FUNNEL_ROLE_VALUES = ['atraer', 'generar_deseo', 'construir_confianza', 'convertir'];
 const CONTENT_MODULE_VALUES = ['product', 'ugc', 'scene', 'prompt', 'outfit', 'none'];
 const TASK_STATUS_VALUES = ['pending', 'in_progress', 'ready', 'published', 'skipped'];
+const ALLOWED_SLOTS = ['@producto1', '@producto2', '@persona1', '@outfit1', '@escena1', '@referencia1'];
+
+export const weakMarketingPhrases = [
+  'empoderar',
+  'empoderamiento',
+  'pasion',
+  'pasión',
+  'contenido de valor',
+  'brillar',
+  'upgrade',
+  'transforma tu negocio',
+  'calidad profesional sin gastar una fortuna',
+  'lista para brillar',
+  'lleva tu marca al siguiente nivel',
+];
+
+const weakPhraseReplacements: Record<string, string> = {
+  empoderar: 'ayudar a crear contenido mas profesional con menos friccion',
+  empoderamiento: 'autonomia para producir contenido comercial',
+  pasion: 'oficio y constancia comercial',
+  pasión: 'oficio y constancia comercial',
+  'contenido de valor': 'contenido que explica una ventaja concreta y facilita la compra',
+  brillar: 'verse mas profesional frente al cliente',
+  upgrade: 'mejora visible',
+  'transforma tu negocio': 'mejora el proceso de venta y publicacion',
+  'calidad profesional sin gastar una fortuna': 'imagenes mas cuidadas sin contratar una produccion completa',
+  'lista para brillar': 'lista para publicar con claridad comercial',
+  'lleva tu marca al siguiente nivel': 'ordena la marca para vender con mas consistencia',
+};
 
 const stringArraySchema = { type: Type.ARRAY, items: { type: Type.STRING } };
 const executionStepSchema = {
@@ -318,9 +347,492 @@ function safeRole(role: string | undefined): GrowthFunnelRole {
     : 'atraer';
 }
 
+interface ProductNormalizationResult {
+  products: GrowthProduct[];
+  warnings: string[];
+  fixedErrors: string[];
+  ignoredLines: string[];
+}
+
+interface ValidationContext {
+  warnings: string[];
+  fixedErrors: string[];
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values.map(value => value.trim()).filter(Boolean)));
+}
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 50) || `product_${Date.now()}`;
+}
+
+function cleanProductLine(line: string): string {
+  return line
+    .replace(/^#{1,6}\s*/, '')
+    .replace(/^[-*•]\s*/, '')
+    .trim();
+}
+
+function parseProductHeading(line: string): { name: string; price: string } | null {
+  const clean = cleanProductLine(line);
+  const match = clean.match(/^(plan\s+[a-z0-9 áéíóúñ]+?)\s*(?:[-–—|:]|\s{2,})\s*(.+)$/i);
+  if (match) return { name: match[1].trim(), price: match[2].trim() };
+  if (/^plan\s+[a-z0-9 áéíóúñ]+$/i.test(clean)) return { name: clean, price: 'Precio no indicado' };
+  return null;
+}
+
+function productFromLines(lines: string[], index: number, ctx: ProductNormalizationResult): GrowthProduct | null {
+  if (!lines.length) return null;
+  const heading = parseProductHeading(lines[0]);
+  if (!heading) {
+    const pipeParts = lines[0].split('|').map(part => part.trim()).filter(Boolean);
+    if (pipeParts.length >= 2) {
+      const [name, category = 'Producto', price = 'Precio no indicado', benefit = 'Beneficio por definir'] = pipeParts;
+      return {
+        id: slugify(name || `Producto ${index + 1}`),
+        name: name || `Producto ${index + 1}`,
+        category,
+        description: lines.join(' '),
+        price,
+        stock: 'Prioridad seleccionada para este plan',
+        benefit,
+        rawSourceLines: lines,
+      };
+    }
+    ctx.ignoredLines.push(...lines);
+    ctx.warnings.push(`Linea no agrupada como producto: ${lines[0]}`);
+    return null;
+  }
+
+  const body = lines.slice(1).map(cleanProductLine);
+  const credits = body.find(line => /credito|crédito/i.test(line)) || '';
+  const idealFor = body.find(line => /para el|para la|ideal para|emprendedor|emprendedora|marca/i.test(line)) || '';
+  const messageKey = body.find(line => /mensaje clave/i.test(line))?.replace(/mensaje clave\s*:?\s*/i, '') || '';
+  const useCases = body
+    .filter(line => /lanzamiento|campana|campaña|uso|crear|publica|publicar/i.test(line))
+    .slice(0, 4);
+  const benefit = messageKey
+    || body.find(line => /permite|ayuda|sirve|ideal/i.test(line))
+    || 'Beneficio comercial por completar.';
+  const warnings: string[] = [];
+  if (!credits) warnings.push('Sin creditos detectados');
+  if (!idealFor) warnings.push('Sin publico ideal detectado');
+  if (!messageKey) warnings.push('Sin mensaje clave detectado');
+
+  if (lines.length > 1) {
+    ctx.fixedErrors.push(`${heading.name}: producto agrupado automaticamente desde ${lines.length} lineas.`);
+  }
+  warnings.forEach(warning => ctx.warnings.push(`${heading.name}: ${warning}.`));
+
+  return {
+    id: slugify(heading.name),
+    name: heading.name,
+    category: /plan/i.test(heading.name) ? 'Plan de suscripcion' : 'Producto',
+    description: lines.join(' '),
+    price: heading.price,
+    stock: credits || 'Disponibilidad no indicada',
+    benefit,
+    credits,
+    idealFor,
+    useCases,
+    messageKey,
+    rawSourceLines: lines,
+    warnings,
+  };
+}
+
+function normalizePlannerProductsDetailed(rawProducts: string | GrowthProduct[]): ProductNormalizationResult {
+  const result: ProductNormalizationResult = { products: [], warnings: [], fixedErrors: [], ignoredLines: [] };
+
+  if (Array.isArray(rawProducts)) {
+    const products = rawProducts.map((product, index) => ({
+      ...product,
+      id: product.id || slugify(product.name || `Producto ${index + 1}`),
+      rawSourceLines: product.rawSourceLines || [product.description || product.name],
+      warnings: product.warnings || [],
+    }));
+    result.products = products;
+    products.flatMap(product => product.warnings || []).forEach(warning => result.warnings.push(warning));
+    return result;
+  }
+
+  const lines = rawProducts
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+  let current: string[] = [];
+
+  lines.forEach(line => {
+    const isHeading = Boolean(parseProductHeading(line));
+    const isPipeProduct = line.includes('|') && !/^[-*•]/.test(line);
+    if ((isHeading || isPipeProduct) && current.length) {
+      const product = productFromLines(current, result.products.length, result);
+      if (product) result.products.push(product);
+      current = [];
+    }
+    current.push(line);
+  });
+
+  if (current.length) {
+    const product = productFromLines(current, result.products.length, result);
+    if (product) result.products.push(product);
+  }
+
+  if (!result.products.length && lines.length) {
+    result.products = lines.slice(0, 20).map((line, index) => ({
+      id: `product_${index + 1}`,
+      name: cleanProductLine(line) || `Producto ${index + 1}`,
+      category: 'Producto',
+      description: line,
+      price: 'Precio no indicado',
+      stock: 'Prioridad seleccionada para este plan',
+      benefit: 'Beneficio por definir',
+      rawSourceLines: [line],
+      warnings: ['Producto creado con baja confianza desde una linea suelta'],
+    }));
+    result.warnings.push('Productos creados con baja confianza porque no se detectaron encabezados ni separadores claros.');
+  }
+
+  return result;
+}
+
+export function normalizePlannerProducts(rawProducts: string | GrowthProduct[]): GrowthProduct[] {
+  return normalizePlannerProductsDetailed(rawProducts).products;
+}
+
+function toIsoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function startOfToday(): Date {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function parseDateOrNull(value: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatDayLabel(date: Date, index: number): string {
+  const days = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
+  const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  return `${days[date.getDay()]} ${date.getDate()} ${months[date.getMonth()] || ''}`.trim() || `Dia ${index + 1}`;
+}
+
+function validateAndFixTaskDates(tasks: GrowthTask[], duration: GrowthPlanDuration, ctx: ValidationContext, planStartDate?: string) {
+  const today = startOfToday();
+  const requested = planStartDate ? parseDateOrNull(planStartDate) : null;
+  const base = requested && requested >= today ? requested : today;
+  const max = new Date(base);
+  max.setDate(base.getDate() + duration - 1);
+  let fixes = 0;
+
+  const fixedTasks = tasks.map((task, index) => {
+    const current = parseDateOrNull(task.date);
+    const spreadOffset = Math.min(duration - 1, Math.floor(index * duration / Math.max(tasks.length, 1)));
+    const fallback = new Date(base);
+    fallback.setDate(base.getDate() + spreadOffset);
+    const shouldFix = !current || current < base || current > max;
+    if (!shouldFix) return task;
+    fixes += 1;
+    ctx.fixedErrors.push(`Fecha corregida en tarea ${index + 1}: ${task.date || 'sin fecha'} -> ${toIsoDate(fallback)}.`);
+    return {
+      ...task,
+      date: toIsoDate(fallback),
+      dayLabel: formatDayLabel(fallback, index),
+    };
+  });
+
+  const datesValid = fixedTasks.every(task => {
+    const date = parseDateOrNull(task.date);
+    return Boolean(date && date >= base && date <= max);
+  });
+
+  return {
+    tasks: fixedTasks,
+    dateBaseUsed: toIsoDate(base),
+    dateFixesApplied: fixes,
+    datesValid,
+    noPastDates: fixedTasks.every(task => {
+      const date = parseDateOrNull(task.date);
+      return Boolean(date && date >= today);
+    }),
+  };
+}
+
+function normalizeSlotName(slot: string): string {
+  const clean = slot.trim().toLowerCase();
+  if (clean.includes('producto')) return '@producto1';
+  if (clean.includes('persona') || clean.includes('modelo') || clean.includes('creador')) return '@persona1';
+  if (clean.includes('outfit') || clean.includes('prenda')) return '@outfit1';
+  if (clean.includes('escena') || clean.includes('superficie') || clean.includes('fondo')) return '@escena1';
+  if (clean.includes('referencia')) return '@referencia1';
+  return ALLOWED_SLOTS.includes(slot) ? slot : '';
+}
+
+function normalizePromptSlots(task: GrowthTask, ctx: ValidationContext): GrowthTask {
+  const originalPrompt = task.prompt;
+  let prompt = task.prompt
+    .replace(/\[(PRODUCTO|PRODUCT|PLAN|SERVICIO)\]/gi, '@producto1')
+    .replace(/\[(PRODUCTO2|PRODUCT_2|SEGUNDO_PRODUCTO)\]/gi, '@producto2')
+    .replace(/\[(PERSONA|MODELO|CREADORA|CREADOR)\]/gi, '@persona1')
+    .replace(/\[(OUTFIT|PRENDA|LOOK)\]/gi, '@outfit1')
+    .replace(/\[(ESCENA|SUPERFICIE|FONDO|SET)\]/gi, '@escena1')
+    .replace(/\[(REFERENCIA|REF)\]/gi, '@referencia1');
+
+  if (/\[[^\]]+\]/.test(prompt)) {
+    ctx.warnings.push(`Tarea "${task.contentType}": quedaron placeholders no estandarizados en el prompt.`);
+    prompt = prompt.replace(/\[[^\]]+\]/g, '').replace(/\s{2,}/g, ' ').trim();
+  }
+
+  const textSuggestsProduct = /producto|plan|oferta|precio|catalogo|catálogo|pack|suscripcion|suscripción/i.test(
+    `${task.contentType} ${task.visualConcept} ${task.caption} ${prompt}`,
+  );
+  if (task.module !== 'none' && textSuggestsProduct && !/@producto[12]\b/.test(prompt)) {
+    prompt = `Usa @producto1 como producto principal. ${prompt}`.trim();
+    ctx.fixedErrors.push(`Slot @producto1 agregado en tarea "${task.contentType}".`);
+  }
+
+  const slotInstructions = task.slotInstructions
+    .map(slot => {
+      const normalized = normalizeSlotName(slot.slot);
+      if (!normalized) {
+        ctx.warnings.push(`Slot descartado en tarea "${task.contentType}": ${slot.slot}.`);
+        return null;
+      }
+      return { ...slot, slot: normalized };
+    })
+    .filter(Boolean) as GrowthTask['slotInstructions'];
+
+  ALLOWED_SLOTS.forEach(slot => {
+    if (prompt.includes(slot) && !slotInstructions.some(item => item.slot === slot)) {
+      slotInstructions.push({ slot, instruction: `Reemplaza ${slot} con el asset correspondiente antes de ejecutar.` });
+    }
+  });
+
+  if (prompt !== originalPrompt) {
+    ctx.fixedErrors.push(`Slots normalizados en tarea "${task.contentType}".`);
+  }
+
+  return { ...task, prompt, slotInstructions };
+}
+
+function validateModuleMapping(task: GrowthTask, ctx: ValidationContext): GrowthTask {
+  const text = `${task.platform} ${task.contentType} ${task.visualConcept} ${task.caption} ${task.moduleReason}`.toLowerCase();
+  let nextModule = task.module;
+  let reason = task.moduleReason;
+
+  if (/whatsapp|dm|mensaje directo|encuesta|texto|pantalla|screen|grabacion de pantalla|grabación de pantalla|proceso/i.test(text)) {
+    nextModule = 'none';
+    reason = 'Tarea manual o de comunicacion directa; no requiere modulo visual automatico.';
+  } else if (/unboxing|review|testimonio|persona|creadora|creador|mostrando|usando/i.test(text)) {
+    nextModule = 'ugc';
+    reason = 'Incluye persona o prueba social mostrando el producto.';
+  } else if (/flat lay|catalogo|catálogo|foto de producto|mockup|packaging|producto/i.test(text)) {
+    nextModule = 'product';
+    reason = 'Requiere imagen o composicion centrada en producto.';
+  } else if (/recrear|referencia|escena|composicion|composición/i.test(text)) {
+    nextModule = 'scene';
+    reason = 'Requiere recrear una escena o referencia visual.';
+  } else if (/outfit|look|prenda/i.test(text)) {
+    nextModule = 'outfit';
+    reason = 'Se relaciona con prendas u outfit.';
+  }
+
+  if (nextModule !== task.module) {
+    ctx.fixedErrors.push(`Modulo corregido en "${task.contentType}": ${task.module} -> ${nextModule}.`);
+  }
+
+  return { ...task, module: nextModule, moduleReason: reason };
+}
+
+function hashtagSeedFor(input: GenerateGrowthPlanInput): string[] {
+  const category = slugify(input.brand.category).replace(/_/g, '');
+  const brand = slugify(input.brand.name).replace(/_/g, '');
+  return uniqueStrings([
+    `#${category}`,
+    `#${brand}`,
+    '#emprendedoras',
+    '#contenidopararedes',
+    '#ventasonline',
+    '#marketingdigital',
+    '#negociodigital',
+    '#ecommerce',
+    '#instagramparanegocios',
+    '#creaciondecontenido',
+    '#marcapersonal',
+    '#tiendaonline',
+  ]);
+}
+
+function validateHashtags(task: GrowthTask, input: GenerateGrowthPlanInput, ctx: ValidationContext): GrowthTask {
+  if (task.platform === 'WhatsApp') {
+    if (task.hashtags.trim()) {
+      ctx.fixedErrors.push(`Hashtags eliminados en tarea WhatsApp "${task.contentType}".`);
+    }
+    return { ...task, hashtags: '' };
+  }
+
+  const existing = uniqueStrings((task.hashtags.match(/#[a-z0-9_áéíóúñ]+/gi) || [])
+    .filter(tag => !['#viral', '#fyp', '#parati', '#follow'].includes(tag.toLowerCase())));
+  const target = uniqueStrings([...existing, ...hashtagSeedFor(input)]).slice(0, 12);
+  if (target.length < 8 || target.join(' ') !== task.hashtags.trim()) {
+    ctx.fixedErrors.push(`Hashtags ajustados en tarea "${task.contentType}" (${existing.length} -> ${Math.max(target.length, 8)}).`);
+  }
+  return { ...task, hashtags: target.slice(0, Math.max(8, Math.min(12, target.length))).join(' ') };
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function filterWeakPhrasesText(value: string, field: string, ctx: ValidationContext): string {
+  let next = value;
+  weakMarketingPhrases.forEach(phrase => {
+    const regex = new RegExp(escapeRegExp(phrase), 'gi');
+    if (regex.test(next)) {
+      next = next.replace(regex, weakPhraseReplacements[phrase] || 'mensaje comercial concreto');
+      ctx.fixedErrors.push(`Frase debil filtrada en ${field}: "${phrase}".`);
+    }
+  });
+  return next;
+}
+
+function applyWeakPhraseFilter(plan: GrowthStrategicPlan, ctx: ValidationContext): GrowthStrategicPlan {
+  return {
+    ...plan,
+    strategyGoal: filterWeakPhrasesText(plan.strategyGoal, 'strategyGoal', ctx),
+    businessDiagnosis: filterWeakPhrasesText(plan.businessDiagnosis, 'businessDiagnosis', ctx),
+    planNarrative: filterWeakPhrasesText(plan.planNarrative, 'planNarrative', ctx),
+    strategicTip: filterWeakPhrasesText(plan.strategicTip, 'strategicTip', ctx),
+    tasks: plan.tasks.map(task => ({
+      ...task,
+      visualConcept: filterWeakPhrasesText(task.visualConcept, `visualConcept/${task.contentType}`, ctx),
+      whyItWorks: filterWeakPhrasesText(task.whyItWorks, `whyItWorks/${task.contentType}`, ctx),
+      caption: filterWeakPhrasesText(task.caption, `caption/${task.contentType}`, ctx),
+      prompt: filterWeakPhrasesText(task.prompt, `prompt/${task.contentType}`, ctx),
+      engagementHook: filterWeakPhrasesText(task.engagementHook, `engagementHook/${task.contentType}`, ctx),
+    })),
+  };
+}
+
+function validateSlots(tasks: GrowthTask[]): boolean {
+  return tasks.every(task => !/\[[^\]]+\]/.test(task.prompt)
+    && task.slotInstructions.every(slot => ALLOWED_SLOTS.includes(slot.slot)));
+}
+
+function validateModules(tasks: GrowthTask[]): boolean {
+  return tasks.every(task => CONTENT_MODULE_VALUES.includes(task.module));
+}
+
+function validateHashtagState(tasks: GrowthTask[]): boolean {
+  return tasks.every(task => {
+    const count = task.hashtags.match(/#[a-z0-9_áéíóúñ]+/gi)?.length || 0;
+    if (task.platform === 'WhatsApp') return task.hashtags.trim() === '';
+    return count >= 8 && count <= 12;
+  });
+}
+
+function containsWeakPhrase(plan: GrowthStrategicPlan): boolean {
+  const text = [
+    plan.strategyGoal,
+    plan.businessDiagnosis,
+    plan.planNarrative,
+    plan.strategicTip,
+    ...plan.tasks.flatMap(task => [task.visualConcept, task.whyItWorks, task.caption, task.prompt, task.engagementHook]),
+  ].join(' ').toLowerCase();
+  return weakMarketingPhrases.some(phrase => text.includes(phrase.toLowerCase()));
+}
+
+function markdownList(items: string[]): string {
+  return items.length ? items.map(item => `- ${item}`).join('\n') : '- Sin hallazgos.';
+}
+
+function buildValidationReport(plan: GrowthStrategicPlan): string {
+  const normalizedProducts = plan.normalizedProducts || plan.products;
+  const productRows = normalizedProducts.map(product =>
+    `| ${product.name} | ${product.price || '-'} | ${product.credits || '-'} | ${product.idealFor || '-'} | ${product.messageKey || product.benefit || '-'} | ${(product.warnings || []).join('; ') || '-'} |`,
+  ).join('\n');
+  const taskRows = plan.tasks.map(task =>
+    `| ${task.date} | ${task.dayLabel} | ${task.platform} | ${task.module} | ${task.funnelRole} | ${task.contentType} | ${task.engagementHook || '-'} |`,
+  ).join('\n');
+  const roadmap = plan.roadmap.map(item => `- Semana ${item.week}: ${item.title} - ${item.objective}`).join('\n') || '- Sin roadmap.';
+  const checks = plan.generationLog.validationChecks;
+
+  return `# Growth Planner Validation Report
+
+## 1. Input resumido
+- Marca: ${plan.brand.name}
+- Categoria: ${plan.brand.category}
+- Objetivo: ${plan.mainGoal}
+- Duracion: ${plan.duration} dias
+- Canal principal: ${plan.brand.mainSalesChannel}
+- Redes activas: ${plan.brand.activeSocials.join(', ')}
+
+## 2. Productos interpretados
+| Producto/plan | Precio | Creditos | Publico ideal | Mensaje clave | Warnings |
+| --- | --- | --- | --- | --- | --- |
+${productRows || '| - | - | - | - | - | Sin productos interpretados |'}
+
+## 3. Metricas usadas
+- Seguidores: ${plan.instagramMetrics.followers}
+- Alcance: ${plan.instagramMetrics.reachDiagnosis}
+- Horarios: ${plan.instagramMetrics.bestTime}
+- Formatos destacados: Reels: ${plan.instagramMetrics.reelsInsight}; Carrusel: ${plan.instagramMetrics.carouselInsight}
+- Confidence: ${plan.socialMetricsAnalysis.confidenceMapping || 'Media: datos declarados por la marca.'}
+
+## 4. Estrategia generada
+- Strategy goal: ${plan.strategyGoal}
+- Diagnostico: ${plan.businessDiagnosis}
+- Narrativa: ${plan.planNarrative}
+${roadmap}
+
+## 5. Tareas
+| Fecha | Dia | Plataforma | Modulo | Funnel role | Content type | CTA target |
+| --- | --- | --- | --- | --- | --- | --- |
+${taskRows}
+
+## 6. Validaciones
+- Fechas validas: ${checks.datesValid ? 'si' : 'no'}
+- Sin fechas pasadas: ${checks.noPastDates ? 'si' : 'no'}
+- Slots validos: ${checks.slotsValid ? 'si' : 'no'}
+- Modulos validos: ${checks.modulesValid ? 'si' : 'no'}
+- Hashtags validos: ${checks.hashtagsValid ? 'si' : 'no'}
+- Palabras debiles corregidas: ${checks.weakPhrasesFiltered ? 'si' : 'no'}
+- Productos normalizados: ${checks.productsNormalized ? 'si' : 'no'}
+
+## 7. Warnings
+${markdownList(plan.generationLog.warnings)}
+
+## 8. Fixed errors
+${markdownList(plan.generationLog.fixedErrors)}
+`;
+}
+
 function normalizePlan(raw: any, input: GenerateGrowthPlanInput): GrowthStrategicPlan {
   const now = new Date().toISOString();
-  const tasks: GrowthTask[] = asArray(raw?.tasks, []).map((task: any, index: number) => ({
+  const ctx: ValidationContext = {
+    warnings: asArray(raw?.generationLog?.warnings, []),
+    fixedErrors: asArray(raw?.generationLog?.fixedErrors, []),
+  };
+  const normalizedProductsResult = normalizePlannerProductsDetailed(input.products);
+  ctx.warnings.push(...normalizedProductsResult.warnings);
+  ctx.fixedErrors.push(...normalizedProductsResult.fixedErrors);
+  if (normalizedProductsResult.ignoredLines.length) {
+    ctx.warnings.push(`Lineas ignoradas al normalizar productos: ${normalizedProductsResult.ignoredLines.join(' | ')}`);
+  }
+  const normalizedProducts = normalizedProductsResult.products.length ? normalizedProductsResult.products : input.products;
+  let tasks: GrowthTask[] = asArray(raw?.tasks, []).map((task: any, index: number) => ({
     id: String(task?.id || uuidv4()),
     week: Number(task?.week || Math.floor(index / 4) + 1),
     dayLabel: String(task?.dayLabel || `Dia ${index + 1}`),
@@ -362,16 +874,24 @@ function normalizePlan(raw: any, input: GenerateGrowthPlanInput): GrowthStrategi
 
   if (!tasks.length) throw new Error('Gemini devolvio un plan sin tareas.');
 
-  return {
+  tasks = tasks
+    .map(task => validateModuleMapping(task, ctx))
+    .map(task => normalizePromptSlots(task, ctx))
+    .map(task => validateHashtags(task, input, ctx));
+  const dateValidation = validateAndFixTaskDates(tasks, input.duration, ctx);
+  tasks = dateValidation.tasks;
+
+  let plan: GrowthStrategicPlan = {
     id: String(raw?.id || `growth_${Date.now()}`),
     createdAt: String(raw?.createdAt || now),
     duration: input.duration,
     brand: input.brand,
-    products: input.products,
+    products: normalizedProducts,
+    normalizedProducts,
     instagramMetrics: input.instagramMetrics,
     businessStage: String(raw?.businessStage || 'Etapa comercial por validar'),
     mainGoal: String(raw?.mainGoal || 'Aumentar ventas con contenido estrategico'),
-    commercialFocus: String(raw?.commercialFocus || input.products.map(p => p.name).join(', ')),
+    commercialFocus: String(raw?.commercialFocus || normalizedProducts.map(p => p.name).join(', ')),
     strategyGoal: String(raw?.strategyGoal || 'Convertir interes en conversaciones de compra'),
     businessDiagnosis: String(raw?.businessDiagnosis || ''),
     nicheInsights: asArray(raw?.nicheInsights, []),
@@ -385,9 +905,19 @@ function normalizePlan(raw: any, input: GenerateGrowthPlanInput): GrowthStrategi
       voiceGuide: String(raw?.brandAnalysis?.voiceGuide || input.brand.tone),
     },
     productAnalysis: {
-      productWarnings: asArray(raw?.productAnalysis?.productWarnings, []),
-      confidenceByProduct: asArray(raw?.productAnalysis?.confidenceByProduct, []),
-      categorizationSummary: String(raw?.productAnalysis?.categorizationSummary || ''),
+      productWarnings: uniqueStrings([
+        ...asArray(raw?.productAnalysis?.productWarnings, []),
+        ...normalizedProducts.flatMap(product => product.warnings || []),
+      ]),
+      confidenceByProduct: normalizedProducts.map(product => ({
+        productId: product.id,
+        level: product.warnings?.length ? 65 : 85,
+        reason: product.warnings?.length
+          ? `Producto normalizado con advertencias: ${product.warnings.join(', ')}`
+          : 'Producto interpretado con estructura suficiente para planificar.',
+      })),
+      categorizationSummary: String(raw?.productAnalysis?.categorizationSummary
+        || `${normalizedProducts.length} producto(s)/plan(es) normalizados para la estrategia.`),
     },
     socialMetricsAnalysis: {
       audienceInsights: String(raw?.socialMetricsAnalysis?.audienceInsights || ''),
@@ -406,28 +936,50 @@ function normalizePlan(raw: any, input: GenerateGrowthPlanInput): GrowthStrategi
         'Productos procesados',
         'Metricas revisadas',
         'Plan generado con Gemini 2.5 Flash',
+        'Output normalizado y validado',
       ]),
       hasImages: input.productImageRefs.length > 0,
       hasMetrics: true,
       researchMode: 'gemini-2.5-flash sin grounding',
-      warnings: asArray(raw?.generationLog?.warnings, []),
-      validationChecks: raw?.generationLog?.validationChecks || {
-        datesValid: true,
+      dateBaseUsed: dateValidation.dateBaseUsed,
+      dateFixesApplied: dateValidation.dateFixesApplied,
+      warnings: uniqueStrings(ctx.warnings),
+      validationChecks: {
+        datesValid: dateValidation.datesValid,
+        noPastDates: dateValidation.noPastDates,
         languageValid: true,
-        taskCountValid: true,
-        modulesValid: true,
+        modulesValid: validateModules(tasks),
+        slotsValid: validateSlots(tasks),
+        hashtagsValid: validateHashtagState(tasks),
+        taskCountValid: tasks.length === taskRange(input.duration).max,
+        productsNormalized: normalizedProducts.length > 0,
+        weakPhrasesFiltered: true,
       },
-      fixedErrors: asArray(raw?.generationLog?.fixedErrors, []),
+      fixedErrors: uniqueStrings(ctx.fixedErrors),
     },
-    validationReportMarkdown: String(raw?.validationReportMarkdown || `# Planner Estrategico - ${input.brand.name}`),
+    validationReportMarkdown: '',
   };
+
+  plan = applyWeakPhraseFilter(plan, ctx);
+  plan.generationLog.warnings = uniqueStrings(ctx.warnings);
+  plan.generationLog.fixedErrors = uniqueStrings(ctx.fixedErrors);
+  plan.generationLog.validationChecks = {
+    ...plan.generationLog.validationChecks,
+    modulesValid: validateModules(plan.tasks),
+    slotsValid: validateSlots(plan.tasks),
+    hashtagsValid: validateHashtagState(plan.tasks),
+    weakPhrasesFiltered: !containsWeakPhrase(plan),
+  };
+  plan.validationReportMarkdown = buildValidationReport(plan);
+  return plan;
 }
 
 function buildPrompt(input: GenerateGrowthPlanInput): string {
   const range = taskRange(input.duration);
   const productSummary = input.products.map((product, index) =>
-    `${index + 1}. ${product.name} | ${product.category} | ${product.price} | ${product.benefit}`,
+    `${index + 1}. ${product.name} | ${product.category} | ${product.price} | ${product.credits || product.stock} | ${product.idealFor || product.benefit} | ${product.messageKey || product.benefit}`,
   ).join('\n');
+  const today = new Date().toISOString().slice(0, 10);
 
   return `Eres la directora estrategica de contenido de Luz IA Studio.
 Debes crear un Planner Estrategico real y ejecutable para una emprendedora LATAM.
@@ -437,6 +989,7 @@ REGLAS IMPORTANTES:
 - No uses busqueda web ni cites fuentes externas.
 - No inventes imagenes generadas.
 - Crea exactamente ${range.max} tareas. No crees mas.
+- Fecha actual/base: ${today}. Todas las tareas deben tener fechas futuras o de hoy dentro de los proximos ${input.duration} dias.
 - Cada tarea debe ser concreta, lista para ejecutar y conectada a un modulo de Luz IA.
 - Escribe compacto: maximo 1 frase por campo, captions de 1 parrafo y prompts de menos de 450 caracteres.
 - Cada executionRecipe debe tener maximo 3 pasos.
@@ -445,6 +998,8 @@ REGLAS IMPORTANTES:
 - Modulos validos: product, ugc, scene, prompt, outfit, none.
 - Funnel roles validos: atraer, generar_deseo, construir_confianza, convertir.
 - Status inicial de todas las tareas: pending.
+- Slots permitidos en prompt y slotInstructions: @producto1, @producto2, @persona1, @outfit1, @escena1, @referencia1.
+- No uses placeholders con corchetes como [PRODUCTO] o [ESCENA].
 - Usa espanol claro, cercano y comercial.
 
 MARCA:
@@ -484,8 +1039,8 @@ Devuelve un objeto compatible con esta forma:
     "whyItWorks": "string",
     "caption": "string",
     "hashtags": "#tag1 #tag2",
-    "prompt": "string con slots como [PRODUCTO], [COLOR], [ESCENA]",
-    "slotInstructions": [{"slot":"[PRODUCTO]","instruction":"string"}],
+    "prompt": "string con slots como @producto1, @escena1 o @referencia1",
+    "slotInstructions": [{"slot":"@producto1","instruction":"string"}],
     "requiredAssets": ["string"],
     "executionRecipe": {"overview":"string","steps":[{"title":"string","module":"product","instruction":"string","ctaLabel":"Abrir modulo","status":"pending"}]},
     "shotGuide": {"duration":"string","shots":[{"shot":1,"duration":"0-3s","instruction":"string"}],"onScreenText":["string"],"inspirationSearches":["string"],"whatToAvoid":["string"]},

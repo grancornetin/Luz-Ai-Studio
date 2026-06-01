@@ -39,7 +39,7 @@ import {
   GROWTH_DEMO_METRICS,
   GROWTH_DEMO_PRODUCTS,
 } from '../growthPlannerMockData';
-import { generateGrowthPlanWithGemini } from '../services/growthPlannerAiService';
+import { generateGrowthPlanWithGemini, normalizePlannerProducts } from '../services/growthPlannerAiService';
 import {
   GrowthBrand,
   GrowthContentModule,
@@ -142,25 +142,7 @@ function socialFromProfile(profile?: BrandProfile): GrowthInstagramMetrics {
 }
 
 function parseProducts(text: string): GrowthProduct[] {
-  const lines = text
-    .split('\n')
-    .map(line => line.trim())
-    .filter(Boolean)
-    .slice(0, 20);
-
-  return lines.map((line, index) => {
-    const [name, category = 'Producto', price = 'Precio no indicado', benefit = 'Beneficio por definir'] =
-      line.split('|').map(part => part.trim());
-    return {
-      id: `product_${index + 1}`,
-      name: name || `Producto ${index + 1}`,
-      category,
-      description: line,
-      price,
-      stock: 'Prioridad seleccionada para este plan',
-      benefit,
-    };
-  });
+  return normalizePlannerProducts(text);
 }
 
 function defaultProductsText() {
@@ -200,6 +182,7 @@ function buildValidationExport(plan: GrowthStrategicPlan) {
       products: plan.products,
       instagramMetrics: plan.instagramMetrics,
     },
+    normalizedProducts: plan.normalizedProducts || plan.products,
     brandAnalysis: plan.brandAnalysis,
     productAnalysis: plan.productAnalysis,
     socialMetricsAnalysis: plan.socialMetricsAnalysis,

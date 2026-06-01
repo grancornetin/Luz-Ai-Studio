@@ -25,6 +25,12 @@ export interface GrowthProduct {
   price: string;
   stock: string;
   benefit: string;
+  credits?: string;
+  idealFor?: string;
+  useCases?: string[];
+  messageKey?: string;
+  rawSourceLines?: string[];
+  warnings?: string[];
 }
 
 export interface GrowthInstagramMetrics {
@@ -106,6 +112,7 @@ export interface GrowthStrategicPlan {
   duration: GrowthPlanDuration;
   brand: GrowthBrand;
   products: GrowthProduct[];
+  normalizedProducts?: GrowthProduct[];
   instagramMetrics: GrowthInstagramMetrics;
   businessStage: string;
   mainGoal: string;
@@ -143,6 +150,8 @@ export interface GrowthStrategicPlan {
     hasImages: boolean;
     hasMetrics: boolean;
     researchMode: string;
+    dateBaseUsed?: string;
+    dateFixesApplied?: number;
     warnings: string[];
     validationChecks: Record<string, boolean>;
     fixedErrors: string[];
