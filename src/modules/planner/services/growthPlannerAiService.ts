@@ -21,6 +21,14 @@ interface GenerateGrowthPlanInput {
 }
 
 const CONTENT_ENDPOINT = '/api/gemini/content';
+const POLL_INTERVAL_MS = 2000;
+const MAX_POLL_ATTEMPTS = 90;
+
+function taskRange(duration: GrowthPlanDuration) {
+  if (duration === 7) return { min: 4, max: 4, maxOutputTokens: 4096 };
+  if (duration === 14) return { min: 6, max: 6, maxOutputTokens: 6144 };
+  return { min: 10, max: 10, maxOutputTokens: 8192 };
+}
 
 function parseJsonFromText(text: string): unknown {
   const clean = text.trim().replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
@@ -164,8 +172,9 @@ function normalizePlan(raw: any, input: GenerateGrowthPlanInput): GrowthStrategi
 }
 
 function buildPrompt(input: GenerateGrowthPlanInput): string {
+  const range = taskRange(input.duration);
   const productSummary = input.products.map((product, index) =>
-    `${index + 1}. ${product.name} | ${product.category} | ${product.price} | Stock/prioridad: ${product.stock} | Beneficio: ${product.benefit} | Descripcion: ${product.description}`,
+    `${index + 1}. ${product.name} | ${product.category} | ${product.price} | ${product.benefit}`,
   ).join('\n');
 
   return `Eres la directora estrategica de contenido de Luz IA Studio.
@@ -175,8 +184,12 @@ REGLAS IMPORTANTES:
 - Responde SOLO JSON valido. Sin markdown fuera del JSON.
 - No uses busqueda web ni cites fuentes externas.
 - No inventes imagenes generadas.
-- Crea entre ${input.duration === 7 ? '4 y 7' : input.duration === 14 ? '7 y 10' : '12 y 18'} tareas, no una tarea por cada dia necesariamente.
+- Crea exactamente ${range.max} tareas. No crees mas.
 - Cada tarea debe ser concreta, lista para ejecutar y conectada a un modulo de Luz IA.
+- Escribe compacto: maximo 1 frase por campo, captions de 1 parrafo y prompts de menos de 450 caracteres.
+- Cada executionRecipe debe tener maximo 3 pasos.
+- Cada shotGuide debe tener maximo 3 tomas.
+- nicheInsights, trends y competitorGaps deben tener maximo 3 items.
 - Modulos validos: product, ugc, scene, prompt, outfit, none.
 - Funnel roles validos: atraer, generar_deseo, construir_confianza, convertir.
 - Status inicial de todas las tareas: pending.
@@ -232,13 +245,46 @@ Devuelve un objeto compatible con esta forma:
   "socialMetricsAnalysis": {"audienceInsights":"string","engagementLevel":"string","confidenceMapping":"string"},
   "nicheResearch": {"trends":["string"],"competitorGaps":["string"],"researchMode":"gemini sin grounding"},
   "generationLog": {"warnings":["string"],"fixedErrors":[]},
-  "validationReportMarkdown": "string"
+  "validationReportMarkdown": "reporte breve de maximo 5 lineas"
 }`;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function pollGrowthPlanJob(jobId: string, token: string): Promise<any> {
+  for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+    await sleep(POLL_INTERVAL_MS);
+    const response = await fetch(CONTENT_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        action: 'getContentJobStatus',
+        payload: { jobId },
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(`No se pudo consultar la generacion (${response.status}). ${text}`);
+    }
+
+    const job = await response.json();
+    if (job.status === 'completed') return job.json || parseJsonFromText(job.text || '');
+    if (job.status === 'failed') throw new Error(job.error || 'La generacion fallo.');
+  }
+
+  throw new Error('La generacion sigue demorando demasiado. Reintenta con menos imagenes o un plan mas corto.');
 }
 
 export async function generateGrowthPlanWithGemini(input: GenerateGrowthPlanInput): Promise<GrowthStrategicPlan> {
   const token = await getAuth().currentUser?.getIdToken().catch(() => null);
   if (!token) throw new Error('Necesitas iniciar sesion para generar el plan.');
+  const range = taskRange(input.duration);
 
   const response = await fetch(CONTENT_ENDPOINT, {
     method: 'POST',
@@ -247,11 +293,16 @@ export async function generateGrowthPlanWithGemini(input: GenerateGrowthPlanInpu
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
-      action: 'generateText',
+      action: 'generateTextAsync',
       model: 'gemini-2.5-flash',
       prompt: buildPrompt(input),
       images: input.productImageRefs.map(image => image.data),
       mimeTypes: input.productImageRefs.map(image => image.mimeType),
+      generationConfig: {
+        temperature: 0.45,
+        maxOutputTokens: range.maxOutputTokens,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
     }),
   });
 
@@ -261,8 +312,8 @@ export async function generateGrowthPlanWithGemini(input: GenerateGrowthPlanInpu
   }
 
   const data = await response.json();
-  if (!data.success) throw new Error(data.error || 'Gemini no pudo generar el plan.');
+  if (!data.success || !data.jobId) throw new Error(data.error || 'No se pudo iniciar la generacion.');
 
-  const raw = data.json || parseJsonFromText(data.text || '');
+  const raw = await pollGrowthPlanJob(data.jobId, token);
   return normalizePlan(raw, input);
 }

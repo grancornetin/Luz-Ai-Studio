@@ -4,6 +4,8 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from '@google/genai';
+import { Redis } from '@upstash/redis';
+import { Client as QStashClient, Receiver } from '@upstash/qstash';
 
 function getCredentials(): Record<string, unknown> {
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '';
@@ -21,12 +23,63 @@ function getGenAIClient(location: string = 'us-central1'): GoogleGenAI {
 }
 
 interface ContentRequest {
-  action: 'extractAvatarProfile' | 'analyzeProduct' | 'analyzeOutfit' | 'generateText' | 'generatePlainText' | 'assistantChat';
+  action:
+    | 'extractAvatarProfile'
+    | 'analyzeProduct'
+    | 'analyzeOutfit'
+    | 'generateText'
+    | 'generateTextAsync'
+    | 'getContentJobStatus'
+    | 'runContentJob'
+    | 'generatePlainText'
+    | 'assistantChat';
   images?: string[];
   mimeTypes?: string[];
   prompt: string;
   schema?: Record<string, unknown>;
   model?: string;
+  generationConfig?: Record<string, unknown>;
+  payload?: Record<string, any>;
+}
+
+type ContentJobStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+interface ContentJob {
+  id: string;
+  status: ContentJobStatus;
+  uid: string;
+  createdAt: number;
+  updatedAt: number;
+  text?: string;
+  json?: unknown;
+  error?: string;
+}
+
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL!,
+  token: process.env.KV_REST_API_TOKEN!,
+});
+
+const qstash = new QStashClient({ token: process.env.QSTASH_TOKEN! });
+
+const receiver = new Receiver({
+  currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY!,
+  nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY!,
+});
+
+function generateContentJobId(): string {
+  return `content_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+async function saveContentJob(job: ContentJob): Promise<void> {
+  await redis.set(`content_job:${job.id}`, JSON.stringify(job), { ex: 3600 });
+}
+
+async function getContentJob(jobId: string): Promise<ContentJob | null> {
+  const data = await redis.get(`content_job:${jobId}`);
+  if (!data) return null;
+  if (typeof data === 'string') return JSON.parse(data) as ContentJob;
+  return data as ContentJob;
 }
 
 import {
@@ -40,6 +93,100 @@ import {
   verifyAuth,
 } from '../_middleware.js';
 
+function extractText(response: any): string {
+  return response.candidates?.[0]?.content?.parts
+    ?.map((p: any) => p.text || '').filter(Boolean).join('') || '';
+}
+
+function parseJsonMaybe(text: string): unknown {
+  try {
+    const clean = text.replace(/```json\s*|\s*```/g, '').trim();
+    return JSON.parse(clean);
+  } catch {
+    return null;
+  }
+}
+
+function buildParts(body: Pick<ContentRequest, 'images' | 'mimeTypes' | 'prompt'>): any[] {
+  const parts: Array<any> = [];
+  if (body.images && body.images.length > 0) {
+    for (let i = 0; i < body.images.length; i++) {
+      parts.push({
+        inlineData: {
+          mimeType: body.mimeTypes?.[i] || 'image/jpeg',
+          data: body.images[i],
+        },
+      });
+    }
+  }
+  parts.push({ text: body.prompt });
+  return parts;
+}
+
+async function processContentJob(jobId: string): Promise<void> {
+  const job = await getContentJob(jobId);
+  if (!job) {
+    console.error(`[ContentJob ${jobId}] job not found`);
+    return;
+  }
+
+  const storedPayload = await redis.get(`content_payload:${jobId}`);
+  if (!storedPayload) {
+    job.status = 'failed';
+    job.error = 'Payload no encontrado para la generacion.';
+    job.updatedAt = Date.now();
+    await saveContentJob(job);
+    return;
+  }
+
+  const body = typeof storedPayload === 'string'
+    ? JSON.parse(storedPayload) as ContentRequest
+    : storedPayload as ContentRequest;
+  const modelName = body.model || 'gemini-2.5-flash';
+  const ai = getGenAIClient('us-central1');
+  const config: Record<string, unknown> = { ...(body.generationConfig || {}) };
+  if (body.schema) {
+    config.responseMimeType = 'application/json';
+    config.responseSchema = body.schema;
+  } else {
+    config.responseMimeType = 'application/json';
+  }
+
+  job.status = 'processing';
+  job.updatedAt = Date.now();
+  await saveContentJob(job);
+
+  const abort = new AbortController();
+  const abortTimer = setTimeout(() => abort.abort(), 50_000);
+
+  try {
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: [{ role: 'user', parts: buildParts(body) }],
+      config,
+      abortSignal: abort.signal,
+    } as any);
+
+    clearTimeout(abortTimer);
+    const text = extractText(response);
+    job.status = 'completed';
+    job.text = text;
+    job.json = parseJsonMaybe(text);
+    job.updatedAt = Date.now();
+    await saveContentJob(job);
+    await redis.del(`content_payload:${jobId}`).catch(() => {});
+  } catch (error: any) {
+    clearTimeout(abortTimer);
+    job.status = 'failed';
+    job.error = error.name === 'AbortError' || error.message?.includes('aborted')
+      ? 'La generacion tardo demasiado. Reintenta con menos imagenes o un plan de menor duracion.'
+      : error.message || 'Error generando contenido.';
+    job.updatedAt = Date.now();
+    await saveContentJob(job);
+    console.error(`[ContentJob ${jobId}] failed:`, job.error);
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setSecurityHeaders(res);
   // CORS restringido a dominios autorizados (lista blanca centralizada en _middleware.ts).
@@ -48,17 +195,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (setCorsHeaders(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  const body = req.body as ContentRequest;
+  if (!body.action) return res.status(400).json({ error: 'Missing action' });
+
+  if (body.action === 'runContentJob') {
+    const signature = req.headers['upstash-signature'] as string;
+    if (!signature) return res.status(401).json({ error: 'Missing signature' });
+    try {
+      await receiver.verify({ signature, body: JSON.stringify(req.body) });
+    } catch {
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+    const jobId = body.payload?.jobId;
+    if (!jobId) return res.status(400).json({ error: 'Missing jobId' });
+    await processContentJob(jobId);
+    return res.status(200).json({ ok: true, jobId });
+  }
+
+  let uid = '';
   try {
-    const uid = await verifyAuth(req);
+    uid = await verifyAuth(req);
     if (!(await checkRateLimit(getDataRatelimit(), uid, res))) return;
   } catch {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
-    const body = req.body as ContentRequest;
     if (!body.action || !body.prompt) {
-      return res.status(400).json({ error: 'Missing action or prompt' });
+      if (body.action !== 'getContentJobStatus') {
+        return res.status(400).json({ error: 'Missing action or prompt' });
+      }
+    }
+
+    if (body.action === 'getContentJobStatus') {
+      const jobId = body.payload?.jobId;
+      if (!jobId) return res.status(400).json({ error: 'Missing jobId' });
+      const job = await getContentJob(jobId);
+      if (!job) return res.status(404).json({ error: 'Job not found' });
+      if (job.uid !== uid) return res.status(403).json({ error: 'Forbidden' });
+      return res.status(200).json({
+        success: true,
+        jobId: job.id,
+        status: job.status,
+        text: job.status === 'completed' ? job.text : undefined,
+        json: job.status === 'completed' ? job.json : undefined,
+        error: job.status === 'failed' ? job.error : undefined,
+      });
     }
 
     // Validar prompt — chat usa límite estricto, análisis de imagen el general
@@ -75,11 +257,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    if (body.action === 'generateTextAsync') {
+      const jobId = generateContentJobId();
+      const job: ContentJob = {
+        id: jobId,
+        status: 'pending',
+        uid,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      await Promise.all([
+        saveContentJob(job),
+        redis.set(`content_payload:${jobId}`, JSON.stringify(body), { ex: 3600 }),
+      ]);
+
+      const proto = req.headers['x-forwarded-proto'] || 'https';
+      const host = req.headers.host;
+      const baseUrl = process.env.WORKER_BASE_URL || `${proto}://${host}`;
+      await qstash.publishJSON({
+        url: `${baseUrl}/api/gemini/content`,
+        body: { action: 'runContentJob', payload: { jobId } },
+        retries: 1,
+      });
+
+      return res.status(202).json({
+        success: true,
+        jobId,
+        status: 'pending',
+      });
+    }
+
     const modelName = body.model || 'gemini-2.5-flash';
     const ai = getGenAIClient('us-central1');
 
     // Configuración base
-    const config: Record<string, unknown> = {};
+    const config: Record<string, unknown> = { ...(body.generationConfig || {}) };
 
     // assistantChat devuelve texto plano (nunca JSON)
     // generateText y acciones con schema fuerzan JSON
@@ -91,21 +304,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     // generatePlainText y assistantChat: sin responseMimeType → texto plano
 
-    // Construir parts
-    const parts: Array<any> = [];
-
-    if (body.images && body.images.length > 0) {
-      for (let i = 0; i < body.images.length; i++) {
-        parts.push({
-          inlineData: {
-            mimeType: body.mimeTypes?.[i] || 'image/jpeg',
-            data: body.images[i],
-          },
-        });
-      }
-    }
-
-    parts.push({ text: body.prompt });
+    const parts = buildParts(body);
 
     // ─── ACCIÓN ESPECÍFICA: generatePlainText ───────────────────────
     // Devuelve texto plano sin forzar JSON — para mejoras de texto libre.
@@ -116,8 +315,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         config: {},
       });
 
-      const text = response.candidates?.[0]?.content?.parts
-        ?.map((p: any) => p.text || '').filter(Boolean).join('') || '';
+      const text = extractText(response);
 
       return res.status(200).json({ success: true, text });
     }
@@ -130,8 +328,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         config: {}, // texto plano, sin JSON forzado
       });
 
-      const text = response.candidates?.[0]?.content?.parts
-        ?.map((p: any) => p.text || '').filter(Boolean).join('') || '';
+      const text = extractText(response);
 
       return res.status(200).json({ success: true, text });
     }
@@ -147,8 +344,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         config,
       });
 
-      const rawText = response.candidates?.[0]?.content?.parts
-        ?.map((p: any) => p.text || '').filter(Boolean).join('') || '{}';
+      const rawText = extractText(response) || '{}';
       
       // Limpiar markdown o basura que a veces devuelve el modelo
       const cleanText = rawText.replace(/```json\s*|\s*```/g, '').trim();
@@ -175,8 +371,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       config,
     });
 
-    const textContent = response.candidates?.[0]?.content?.parts
-      ?.map((p: any) => p.text || '').filter(Boolean).join('') || '';
+    const textContent = extractText(response);
 
     let parsedJson: unknown = null;
     if (config.responseMimeType === 'application/json' || body.action === 'generateText') {
