@@ -222,79 +222,6 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
     setLightboxOpen(false);
   };
 
-  // Importar modelo desde archivo JSON guardado (sin costo de créditos)
-  const handleImportJson = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        try {
-          const data = JSON.parse(ev.target?.result as string);
-
-          // Detectar formato: nativo de Luz IA (baseImages array de URLs/base64)
-          // o formato externo (modelImages array de {base64, mimeType})
-          let importedImages: string[] = [];
-          let importedName = '';
-
-          if (Array.isArray(data.baseImages) && data.baseImages.length > 0) {
-            // Formato nativo Luz IA
-            importedImages = data.baseImages;
-            importedName = data.name || file.name.replace('.json', '');
-          } else if (Array.isArray(data.modelImages) && data.modelImages.length > 0) {
-            // Formato base64 externo ({base64, mimeType})
-            importedImages = data.modelImages.map((img: { base64: string; mimeType: string }) =>
-              `data:${img.mimeType};base64,${img.base64}`
-            );
-            importedName = data.modelSpec?.name || file.name.replace('.json', '');
-          } else {
-            alert('El archivo JSON no contiene imágenes reconocibles. Verifica que sea un modelo exportado correctamente.');
-            return;
-          }
-
-          if (importedImages.length === 0) {
-            alert('No se encontraron imágenes en el archivo JSON.');
-            return;
-          }
-
-          const importedAvatar: AvatarProfile = {
-            id: Date.now().toString(),
-            name: importedName,
-            type: 'reference',
-            identityPrompt: data.identityPrompt || '',
-            physicalDescription: data.physicalDescription || '',
-            negativePrompt: data.negativePrompt || '',
-            baseImages: importedImages,
-            metadata: {
-              gender: data.metadata?.gender || data.modelSpec?.gender || '',
-              age: data.metadata?.age || '',
-              build: data.metadata?.build || '',
-              ethnicity: data.metadata?.ethnicity || data.modelSpec?.ethnicity || '',
-              eyes: data.metadata?.eyes || '',
-              hairColor: data.metadata?.hairColor || '',
-              hairType: data.metadata?.hairType || '',
-              hairLength: data.metadata?.hairLength || '',
-              personality: data.metadata?.personality || 'Profesional y elegante',
-              expression: data.metadata?.expression || 'Natural',
-              outfit: data.metadata?.outfit || '',
-            },
-            createdAt: data.createdAt || Date.now(),
-          };
-
-          onSave(importedAvatar);
-          alert(`Modelo "${importedName}" importado correctamente con ${importedImages.length} imagen${importedImages.length !== 1 ? 'es' : ''}.`);
-        } catch {
-          alert('El archivo no es un JSON válido o está corrupto.');
-        }
-      };
-      reader.readAsText(file);
-    };
-    input.click();
-  };
-
   const handleDownloadZip = async () => {
     if (previews.length === 0) return;
     await downloadAsZip(previews, `Avatar_DNA_Set_${name || 'avatar'}.zip`, `${name || 'vista'}`);
@@ -321,16 +248,6 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                   <ModuleTutorial moduleId="modelDnaPhotos" steps={TUTORIAL_CONFIGS.modelDnaPhotos} compact />
                 </div>
               </header>
-
-              {/* Importar modelo desde JSON */}
-              <button
-                onClick={handleImportJson}
-                disabled={isLoading}
-                className="w-full flex items-center justify-center gap-2 py-3 px-6 rounded-2xl border-2 border-dashed border-slate-200 text-slate-500 hover:border-brand-400 hover:text-brand-600 hover:bg-brand-50 transition-all text-[11px] font-black uppercase disabled:opacity-40"
-              >
-                <i className="fa-solid fa-file-import text-xs"></i>
-                Importar desde JSON
-              </button>
 
               <div className="space-y-4">
                 <input

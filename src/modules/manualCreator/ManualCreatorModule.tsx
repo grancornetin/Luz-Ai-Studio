@@ -69,6 +69,7 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
   const [previews, setPreviews] = useState<string[]>([]);
   const [progressStep, setProgressStep] = useState(0);
   const [pendingAvatarData, setPendingAvatarData] = useState<AvatarProfile | null>(null);
+  const [importedMode, setImportedMode] = useState(false);
 
   // Lightbox state
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -116,11 +117,92 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
   const handleSaveToLibrary = () => {
     if (pendingAvatarData) {
       onSave(pendingAvatarData);
-      setPreviews([]);
-      setPendingAvatarData(null);
-      setName('');
-      alert("Identidad guardada en la biblioteca con éxito.");
+      reset();
     }
+  };
+
+  const handleImportJson = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const json = JSON.parse(ev.target?.result as string);
+          let importedImages: string[] = [];
+          let importedName = '';
+          let importedMeta: Partial<AvatarProfile['metadata']> = {};
+
+          if (Array.isArray(json.baseImages) && json.baseImages.length > 0) {
+            importedImages = json.baseImages;
+            importedName = json.name || file.name.replace('.json', '');
+            importedMeta = json.metadata || {};
+          } else if (Array.isArray(json.modelImages) && json.modelImages.length > 0) {
+            importedImages = json.modelImages.map((img: { base64: string; mimeType: string }) =>
+              `data:${img.mimeType};base64,${img.base64}`
+            );
+            importedName = json.modelSpec?.name || file.name.replace('.json', '');
+            importedMeta = {
+              gender: json.modelSpec?.gender || '',
+              ethnicity: json.modelSpec?.ethnicity || '',
+            };
+          } else {
+            alert('El archivo JSON no contiene imágenes reconocibles.');
+            return;
+          }
+
+          setName(importedName);
+          setData(prev => ({
+            ...prev,
+            gender: (importedMeta.gender as 'mujer' | 'hombre') || prev.gender,
+            age: importedMeta.age || prev.age,
+            build: importedMeta.build || prev.build,
+            ethnicity: importedMeta.ethnicity || prev.ethnicity,
+            eyes: importedMeta.eyes || prev.eyes,
+            hairColor: importedMeta.hairColor || prev.hairColor,
+            hairType: importedMeta.hairType || prev.hairType,
+            hairLength: importedMeta.hairLength || prev.hairLength,
+            personality: importedMeta.personality || prev.personality,
+            expression: importedMeta.expression || prev.expression,
+            outfit: importedMeta.outfit || prev.outfit,
+          }));
+          setPreviews(importedImages);
+          setImportedMode(true);
+
+          const avatar: AvatarProfile = {
+            id: Date.now().toString(),
+            name: importedName,
+            type: 'manual',
+            identityPrompt: json.identityPrompt || '',
+            physicalDescription: json.physicalDescription || '',
+            negativePrompt: json.negativePrompt || "blurry, low quality",
+            baseImages: importedImages,
+            metadata: {
+              gender: importedMeta.gender || data.gender,
+              age: importedMeta.age || data.age,
+              build: importedMeta.build || data.build,
+              ethnicity: importedMeta.ethnicity || data.ethnicity,
+              eyes: importedMeta.eyes || data.eyes,
+              hairColor: importedMeta.hairColor || data.hairColor,
+              hairType: importedMeta.hairType || data.hairType,
+              hairLength: importedMeta.hairLength || data.hairLength,
+              personality: importedMeta.personality || data.personality,
+              expression: importedMeta.expression || data.expression,
+              outfit: importedMeta.outfit || data.outfit,
+            },
+            createdAt: json.createdAt || Date.now(),
+          };
+          setPendingAvatarData(avatar);
+        } catch {
+          alert('El archivo no es un JSON válido o está corrupto.');
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
   };
 
   const handleCreate = async () => {
@@ -214,6 +296,7 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
     setStatus('');
     setProgressStep(0);
     setIsProcessing(false);
+    setImportedMode(false);
   };
 
   return (
@@ -231,6 +314,16 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
                 <ModuleTutorial moduleId="modelDnaManual" steps={TUTORIAL_CONFIGS.modelDnaManual} compact />
               </div>
             </header>
+
+            {/* Importar desde JSON */}
+            <button
+              onClick={handleImportJson}
+              disabled={isProcessing}
+              className="w-full flex items-center justify-center gap-2 py-3 px-6 rounded-2xl border-2 border-dashed border-slate-200 text-slate-500 hover:border-brand-400 hover:text-brand-600 hover:bg-brand-50 transition-all text-[11px] font-black uppercase disabled:opacity-40"
+            >
+              <i className="fa-solid fa-file-import text-xs"></i>
+              Importar modelo desde JSON
+            </button>
 
             <div className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
@@ -327,18 +420,29 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
               </div>
             </div>
 
-            <div className="pt-4">
-              <GenerateButton
-                onClick={handleCreate}
-                loading={isProcessing}
-                disabled={!name || isProcessing}
-                label="Sintetizar ADN Maestro"
-                loadingLabel={status || 'Sintetizando...'}
-                imageCount={4}
-                fixedModel="gemini"
-                creditsAfter={creditsAfter}
-                className="py-5 rounded-[24px]"
-              />
+            <div className="pt-4 space-y-3">
+              {importedMode ? (
+                <button
+                  onClick={handleSaveToLibrary}
+                  disabled={!pendingAvatarData}
+                  className="w-full py-5 bg-brand-500 text-white rounded-[24px] text-[11px] font-black uppercase shadow-lg hover:bg-brand-400 transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+                >
+                  <i className="fa-solid fa-check"></i>
+                  Guardar en biblioteca
+                </button>
+              ) : (
+                <GenerateButton
+                  onClick={handleCreate}
+                  loading={isProcessing}
+                  disabled={!name || isProcessing}
+                  label="Sintetizar ADN Maestro"
+                  loadingLabel={status || 'Sintetizando...'}
+                  imageCount={4}
+                  fixedModel="gemini"
+                  creditsAfter={creditsAfter}
+                  className="py-5 rounded-[24px]"
+                />
+              )}
             </div>
           </section>
 
@@ -359,7 +463,9 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
               <header className="flex flex-col sm:flex-row justify-between items-center gap-4 border-b border-white/10 pb-6">
                 <div>
                   <h3 className="text-white font-black text-xl uppercase italic tracking-tighter">{name}</h3>
-                  <p className="text-brand-400 text-[8px] font-black uppercase tracking-widest">Sintetizado via ADN</p>
+                  <p className="text-brand-400 text-[8px] font-black uppercase tracking-widest">
+                    {importedMode ? 'Importado desde JSON' : 'Sintetizado via ADN'}
+                  </p>
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
                   <button 
