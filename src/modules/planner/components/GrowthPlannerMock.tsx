@@ -806,8 +806,10 @@ const TaskDetail: React.FC<{
   onStatusChange: (status: GrowthTaskStatus) => void;
 }> = ({ task, onClose, onStatusChange }) => {
   const meta = MODULE_META[task.module];
+  const displayPrompt = task.prompt || task.supportPrompt || '';
+  const promptLabel = task.prompt ? 'Prompt con slots' : 'Prompt de apoyo';
   const copyPrompt = () => {
-    if (task.prompt) navigator.clipboard.writeText(task.prompt);
+    if (displayPrompt) navigator.clipboard.writeText(displayPrompt);
   };
 
   return (
@@ -887,15 +889,15 @@ const TaskDetail: React.FC<{
 
               <section className="bg-white border border-slate-100 rounded-2xl p-5">
                 <div className="flex items-center justify-between gap-3 mb-2">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prompt con slots</p>
-                  {task.prompt && (
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{promptLabel}</p>
+                  {displayPrompt && (
                     <button onClick={copyPrompt} className="text-[10px] font-black uppercase tracking-widest text-rose-500 flex items-center gap-1">
                       <Copy className="w-3 h-3" /> Copiar
                     </button>
                   )}
                 </div>
-                {task.prompt ? (
-                  <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 rounded-xl p-3 italic">{task.prompt}</p>
+                {displayPrompt ? (
+                  <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 rounded-xl p-3 italic">{displayPrompt}</p>
                 ) : (
                   <p className="text-xs text-slate-400 italic">Esta tarea es manual y no requiere prompt.</p>
                 )}

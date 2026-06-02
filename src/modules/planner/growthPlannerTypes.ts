@@ -29,6 +29,7 @@ export interface GrowthProduct {
   idealFor?: string;
   useCases?: string[];
   messageKey?: string;
+  inferredFields?: string[];
   rawSourceLines?: string[];
   warnings?: string[];
 }
@@ -90,6 +91,8 @@ export interface GrowthTask {
   caption: string;
   hashtags: string;
   prompt: string;
+  supportPrompt?: string;
+  supportModule?: GrowthContentModule;
   slotInstructions: GrowthSlotInstruction[];
   requiredAssets: string[];
   executionRecipe: GrowthExecutionRecipe;
@@ -152,6 +155,11 @@ export interface GrowthStrategicPlan {
     researchMode: string;
     dateBaseUsed?: string;
     dateFixesApplied?: number;
+    expectedTasks?: number;
+    generatedTasks?: number;
+    tasksAddedByFallback?: number;
+    roadmapWeeksGenerated?: number;
+    channelUsage?: Record<string, number>;
     warnings: string[];
     validationChecks: Record<string, boolean>;
     fixedErrors: string[];
