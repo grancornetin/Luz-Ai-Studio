@@ -53,6 +53,7 @@ export const CREDIT_COSTS = {
   OUTFIT_PER_GARMENT:     2,   // 1 imagen por prenda (varía según modelo)
   PRODUCT_ANALYSIS:       0,   // texto — gratis
   PRODUCT_GENERATION:     2,   // 1 imagen (varía según modelo)
+  PLANNER_STRATEGIC_PLAN: 2,   // Planner Estrategico: estrategia + tareas con Gemini texto
   VARIATIONS_AI:          0,   // texto — gratis
   // Galería de prompts
   REVEAL_PROMPT:          1,   // revelar prompt completo — precio fijo
@@ -68,6 +69,7 @@ export type CreditCostKey = keyof typeof CREDIT_COSTS;
 export const PRO_CREDIT_COSTS = {
   CAMPAIGN_SESSION:  1,   // 1 pro-credit por sesión Campaign (más las imágenes en créditos normales)
   PHOTODUMP_SESSION: 1,   // 1 pro-credit por sesión Photodump
+  PLANNER_SESSION:   1,   // 1 pro-credit por plan estrategico generado
 } as const;
 
 /** Pro-credits incluidos por plan al renovar. */

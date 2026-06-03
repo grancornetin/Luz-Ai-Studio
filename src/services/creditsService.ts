@@ -89,6 +89,9 @@ async function getUserCreditsDoc(uid: string): Promise<UserCreditsDoc> {
     creditsUsedThisPeriod: d.creditsUsedThisPeriod || 0,
     topUpCredits:          d.topUpCredits || 0,
     lastPeriodReset:       d.lastPeriodReset,
+    proCreditsAvailable:   d.proCreditsAvailable || 0,
+    proCreditsUsedThisPeriod: d.proCreditsUsedThisPeriod || 0,
+    proTopUpCredits:       d.proTopUpCredits || 0,
   };
 }
 
@@ -194,3 +197,30 @@ export async function refundProCredit(_uid: string): Promise<boolean> {
   }
 }
 
+export async function deductMixedCredits(
+  _uid: string,
+  normalCost: number,
+  proCost: number,
+): Promise<boolean> {
+  if (normalCost <= 0 && proCost <= 0) return true;
+  try {
+    const data = await callCreditsApi('deductMixed', { normalCost, proCost });
+    return data?.ok === true;
+  } catch {
+    return false;
+  }
+}
+
+export async function refundMixedCredits(
+  _uid: string,
+  normalCost: number,
+  proCost: number,
+): Promise<boolean> {
+  if (normalCost <= 0 && proCost <= 0) return true;
+  try {
+    const data = await callCreditsApi('refundMixed', { normalCost, proCost });
+    return data?.ok === true;
+  } catch {
+    return false;
+  }
+}

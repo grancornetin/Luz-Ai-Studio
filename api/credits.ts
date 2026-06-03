@@ -29,6 +29,7 @@ function getAdminDb() {
 
 const PLAN_PERIOD_CREDITS: Record<string, number> = {
   free:    10,
+  weekly:  60,
   explorer: 60,
   starter:  200,
   pro:      500,
@@ -38,6 +39,7 @@ const PLAN_PERIOD_CREDITS: Record<string, number> = {
 
 const PLAN_PERIOD_DAYS: Record<string, number> = {
   free:    36500,
+  weekly:  7,
   explorer: 7,
   starter:  30,
   pro:      30,
@@ -47,6 +49,20 @@ const PLAN_PERIOD_DAYS: Record<string, number> = {
 
 function getPeriodLimit(plan: string): number {
   return PLAN_PERIOD_CREDITS[plan] ?? 0;
+}
+
+const PLAN_PERIOD_PRO_CREDITS: Record<string, number> = {
+  free:     2,
+  weekly:   15,
+  explorer: 15,
+  starter:  80,
+  pro:      200,
+  studio:   500,
+  admin:    999999,
+};
+
+function getProPeriodLimit(plan: string): number {
+  return PLAN_PERIOD_PRO_CREDITS[plan] ?? 0;
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -154,6 +170,184 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ── resetPeriod ────────────────────────────────────────────────────────────
     // Comprueba si el período del usuario ya venció y resetea el contador.
     // El cliente lo llama al cargar créditos; el server decide si aplica.
+    if (action === 'deductPro') {
+      const cost = Number(payload?.cost || 1);
+      if (!cost || cost <= 0) return res.status(400).json({ error: 'Invalid cost' });
+
+      let ok = false;
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(userRef);
+        if (!snap.exists) throw new Error('User not found');
+
+        const d = snap.data()!;
+        const plan = d.plan || 'free';
+        if (plan === 'admin') { ok = true; return; }
+
+        const topUp = Number(d.proTopUpCredits) || 0;
+        const used = Number(d.proCreditsUsedThisPeriod) || 0;
+        const remaining = getProPeriodLimit(plan) - used;
+        let topUpDeduct = 0;
+        let periodDeduct = 0;
+
+        if (remaining >= cost) {
+          periodDeduct = cost;
+        } else if (remaining > 0 && (remaining + topUp) >= cost) {
+          periodDeduct = remaining;
+          topUpDeduct = cost - remaining;
+        } else if (topUp >= cost) {
+          topUpDeduct = cost;
+        } else {
+          throw new Error('Insufficient pro credits');
+        }
+
+        const updates: Record<string, any> = { updatedAt: FieldValue.serverTimestamp() };
+        if (periodDeduct > 0) updates.proCreditsUsedThisPeriod = used + periodDeduct;
+        if (topUpDeduct > 0) updates.proTopUpCredits = topUp - topUpDeduct;
+        tx.update(userRef, updates);
+        ok = true;
+      });
+
+      return res.status(200).json({ ok });
+    }
+
+    if (action === 'refundPro') {
+      const cost = Number(payload?.cost || 1);
+      if (!cost || cost <= 0) return res.status(400).json({ error: 'Invalid cost' });
+
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(userRef);
+        if (!snap.exists) throw new Error('User not found');
+
+        const d = snap.data()!;
+        if (d.plan === 'admin') return;
+
+        const used = Number(d.proCreditsUsedThisPeriod) || 0;
+        const topUp = Number(d.proTopUpCredits) || 0;
+        const periodRefund = Math.min(cost, used);
+        const topUpRefund = cost - periodRefund;
+
+        const updates: Record<string, any> = { updatedAt: FieldValue.serverTimestamp() };
+        if (periodRefund > 0) updates.proCreditsUsedThisPeriod = Math.max(0, used - periodRefund);
+        if (topUpRefund > 0) updates.proTopUpCredits = topUp + topUpRefund;
+        tx.update(userRef, updates);
+      });
+
+      return res.status(200).json({ ok: true });
+    }
+
+    if (action === 'deductMixed') {
+      const normalCost = Number(payload?.normalCost || 0);
+      const proCost = Number(payload?.proCost || 0);
+      if (normalCost < 0 || proCost < 0 || (normalCost <= 0 && proCost <= 0)) {
+        return res.status(400).json({ error: 'Invalid mixed cost' });
+      }
+
+      let ok = false;
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(userRef);
+        if (!snap.exists) throw new Error('User not found');
+
+        const d = snap.data()!;
+        const plan = d.plan || 'free';
+        if (plan === 'admin') { ok = true; return; }
+
+        const updates: Record<string, any> = { updatedAt: FieldValue.serverTimestamp() };
+
+        if (normalCost > 0) {
+          const topUp = Number(d.topUpCredits) || 0;
+          const used = Number(d.creditsUsedThisPeriod) || 0;
+          const remaining = getPeriodLimit(plan) - used;
+          let topUpDeduct = 0;
+          let periodDeduct = 0;
+
+          if (remaining >= normalCost) {
+            periodDeduct = normalCost;
+          } else if (remaining > 0 && (remaining + topUp) >= normalCost) {
+            periodDeduct = remaining;
+            topUpDeduct = normalCost - remaining;
+          } else if (topUp >= normalCost) {
+            topUpDeduct = normalCost;
+          } else {
+            throw new Error('Insufficient credits');
+          }
+
+          if (periodDeduct > 0) updates.creditsUsedThisPeriod = used + periodDeduct;
+          if (topUpDeduct > 0) updates.topUpCredits = topUp - topUpDeduct;
+          updates['credits.available'] = Math.max(0, (d.credits?.available || 0) - normalCost);
+        }
+
+        if (proCost > 0) {
+          const topUp = Number(d.proTopUpCredits) || 0;
+          const used = Number(d.proCreditsUsedThisPeriod) || 0;
+          const remaining = getProPeriodLimit(plan) - used;
+          let topUpDeduct = 0;
+          let periodDeduct = 0;
+
+          if (remaining >= proCost) {
+            periodDeduct = proCost;
+          } else if (remaining > 0 && (remaining + topUp) >= proCost) {
+            periodDeduct = remaining;
+            topUpDeduct = proCost - remaining;
+          } else if (topUp >= proCost) {
+            topUpDeduct = proCost;
+          } else {
+            throw new Error('Insufficient pro credits');
+          }
+
+          if (periodDeduct > 0) updates.proCreditsUsedThisPeriod = used + periodDeduct;
+          if (topUpDeduct > 0) updates.proTopUpCredits = topUp - topUpDeduct;
+        }
+
+        tx.update(userRef, updates);
+        ok = true;
+      });
+
+      return res.status(200).json({ ok });
+    }
+
+    if (action === 'refundMixed') {
+      const normalCost = Number(payload?.normalCost || 0);
+      const proCost = Number(payload?.proCost || 0);
+      if (normalCost < 0 || proCost < 0 || (normalCost <= 0 && proCost <= 0)) {
+        return res.status(400).json({ error: 'Invalid mixed cost' });
+      }
+
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(userRef);
+        if (!snap.exists) throw new Error('User not found');
+
+        const d = snap.data()!;
+        if (d.plan === 'admin') return;
+
+        const updates: Record<string, any> = { updatedAt: FieldValue.serverTimestamp() };
+
+        if (normalCost > 0) {
+          const used = Number(d.creditsUsedThisPeriod) || 0;
+          const topUp = Number(d.topUpCredits) || 0;
+          const periodRefund = Math.min(normalCost, used);
+          const topUpRefund = normalCost - periodRefund;
+
+          updates['credits.available'] = FieldValue.increment(normalCost);
+          if (periodRefund > 0) updates.creditsUsedThisPeriod = Math.max(0, used - periodRefund);
+          if (topUpRefund > 0) updates.topUpCredits = topUp + topUpRefund;
+        }
+
+        if (proCost > 0) {
+          const used = Number(d.proCreditsUsedThisPeriod) || 0;
+          const topUp = Number(d.proTopUpCredits) || 0;
+          const periodRefund = Math.min(proCost, used);
+          const topUpRefund = proCost - periodRefund;
+
+          if (periodRefund > 0) updates.proCreditsUsedThisPeriod = Math.max(0, used - periodRefund);
+          if (topUpRefund > 0) updates.proTopUpCredits = topUp + topUpRefund;
+        }
+
+        tx.update(userRef, updates);
+      });
+
+      return res.status(200).json({ ok: true });
+    }
+
     if (action === 'resetPeriod') {
       const snap = await userRef.get();
       if (!snap.exists) return res.status(200).json({ reset: false });

@@ -8,7 +8,12 @@ import {
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
 import { userService, UserCredits, UserStats, PLAN_CREDITS } from '../../services/userService';
-import { deductProCredit as _deductProCredit, refundProCredit as _refundProCredit } from '../../services/creditsService';
+import {
+  deductMixedCredits as _deductMixedCredits,
+  deductProCredit as _deductProCredit,
+  refundMixedCredits as _refundMixedCredits,
+  refundProCredit as _refundProCredit,
+} from '../../services/creditsService';
 import { PLAN_PRO_CREDITS } from '../../services/creditConfig';
 import { handleFirestoreError, OperationType } from '../../services/firestoreUtils';
 import { autoCheckMissions } from '../../services/missionsService';
@@ -72,6 +77,8 @@ interface AuthContextType {
   proCredits: number;
   deductProCredit: () => Promise<boolean>;
   refundProCredit: () => Promise<boolean>;
+  deductMixedCredits: (normalCost: number, proCost: number) => Promise<boolean>;
+  refundMixedCredits: (normalCost: number, proCost: number) => Promise<boolean>;
 }
 
 const DEFAULT_CREDITS: UserCredits = { available: 0, used: 0, plan: 'free' };
@@ -313,6 +320,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return ok;
   };
 
+  const handleDeductMixedCredits = async (normalCost: number, proCost: number): Promise<boolean> => {
+    if (!user) return false;
+    if (isAdmin && !previewPlan) return true;
+    const ok = await _deductMixedCredits(user.uid, normalCost, proCost);
+    if (ok) {
+      await refreshCredits();
+    }
+    return ok;
+  };
+
+  const handleRefundMixedCredits = async (normalCost: number, proCost: number): Promise<boolean> => {
+    if (!user) return false;
+    if (isAdmin && !previewPlan) return true;
+    const ok = await _refundMixedCredits(user.uid, normalCost, proCost);
+    if (ok) {
+      await refreshCredits();
+    }
+    return ok;
+  };
+
   const isAdmin = profile?.role === 'admin';
 
   // Cuando el admin simula un plan, los créditos visibles cambian pero isAdmin se mantiene
@@ -334,6 +361,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       proCredits: effectiveProCredits,
       deductProCredit: handleDeductProCredit,
       refundProCredit: handleRefundProCredit,
+      deductMixedCredits: handleDeductMixedCredits,
+      refundMixedCredits: handleRefundMixedCredits,
     }}>
       {children}
     </AuthContext.Provider>

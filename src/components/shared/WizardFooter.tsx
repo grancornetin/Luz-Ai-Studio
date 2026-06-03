@@ -6,7 +6,7 @@ interface WizardFooterProps {
   onContinue: () => void;
   continueLabel?: string;
   disabled?: boolean;
-  costInfo?: { cost: number; label?: string };
+  costInfo?: { cost: number; label?: string; proCost?: number; proLabel?: string };
   loading?: boolean;
 }
 
@@ -56,6 +56,11 @@ export const WizardFooter: React.FC<WizardFooterProps> = ({
           <div className="t-display text-[22px] text-slate-900 leading-none mt-0.5">
             {costInfo.cost}{' '}
             <span className="text-xs text-slate-500 font-semibold normal-case">cr</span>
+            {costInfo.proCost !== undefined && costInfo.proCost > 0 && (
+              <span className="text-xs text-slate-500 font-semibold normal-case">
+                {' '}+ {costInfo.proCost} {costInfo.proLabel || 'especial'}
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -84,6 +89,7 @@ export const WizardFooter: React.FC<WizardFooterProps> = ({
         {costInfo && (
           <span className="md:hidden text-[10px] font-semibold opacity-90">
             {costInfo.cost} cr
+            {costInfo.proCost !== undefined && costInfo.proCost > 0 ? ` + ${costInfo.proCost} ${costInfo.proLabel || 'especial'}` : ''}
           </span>
         )}
       </button>

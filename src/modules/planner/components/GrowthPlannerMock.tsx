@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -32,6 +32,7 @@ import { GenerationProgress } from '../../../components/shared/GenerationProgres
 import { compressImageForUpload, readAndCompressFile } from '../../../utils/imageUtils';
 import { createProject, saveGrowthPlan } from '../../../services/projectService';
 import { brandProfileService } from '../../../services/brandProfileService';
+import { CREDIT_COSTS, PRO_CREDIT_COSTS } from '../../../services/creditConfig';
 import { useAuth } from '../../auth/AuthContext';
 import type { BrandProfile } from '../../brandProfiles/types';
 import {
@@ -58,15 +59,26 @@ const STEPS = [
   { id: 'review', label: 'Revision' },
 ];
 
-const GENERATION_STEPS = [
-  { id: 'brand', label: 'Analizando marca' },
-  { id: 'products', label: 'Leyendo productos' },
-  { id: 'images', label: 'Analizando imagenes' },
-  { id: 'metrics', label: 'Leyendo metricas de Instagram' },
-  { id: 'strategy', label: 'Disenando estrategia' },
-  { id: 'tasks', label: 'Creando tareas' },
-  { id: 'validation', label: 'Validando tono y CTA' },
+function generationStepsForDuration(duration: GrowthPlanDuration) {
+  const weekCount = duration === 30 ? 4 : duration === 14 ? 2 : 1;
+  return [
+    { id: 'strategy', label: 'Disenando estrategia base' },
+    ...Array.from({ length: weekCount }).map((_, index) => ({
+      id: `week_${index + 1}`,
+      label: weekCount === 1 ? 'Generando plan de 7 dias' : `Generando semana ${index + 1}`,
+    })),
+    { id: 'validation', label: 'Validando y guardando plan' },
+  ];
+}
+
+const GENERATION_PHRASES = [
+  'Estoy cruzando marca, productos y metricas sin usar busqueda externa.',
+  'Estoy creando cada semana con Gemini para evitar tareas genericas.',
+  'Estoy validando calendario, CTA, modulos y prompts antes de mostrar el plan.',
 ];
+
+const PLANNER_NORMAL_CREDIT_COST = CREDIT_COSTS.PLANNER_STRATEGIC_PLAN;
+const PLANNER_PRO_CREDIT_COST = PRO_CREDIT_COSTS.PLANNER_SESSION;
 
 const STATUS_META: Record<GrowthTaskStatus, { label: string; className: string }> = {
   pending: { label: 'Pendiente', className: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -294,6 +306,9 @@ const WizardView: React.FC<{
   brandProfiles: BrandProfile[];
   loadingBrands: boolean;
   brandError: string | null;
+  creditsAvailable: number;
+  proCreditsAvailable: number;
+  isAdmin: boolean;
   onBack: () => void;
   onGenerate: () => void;
 }> = ({
@@ -317,9 +332,17 @@ const WizardView: React.FC<{
   brandProfiles,
   loadingBrands,
   brandError,
+  creditsAvailable,
+  proCreditsAvailable,
+  isAdmin,
   onBack,
   onGenerate,
 }) => {
+  const plannerCreditsAfter = Math.max(0, creditsAvailable - PLANNER_NORMAL_CREDIT_COST);
+  const plannerProCreditsAfter = Math.max(0, proCreditsAvailable - PLANNER_PRO_CREDIT_COST);
+  const insufficientPlannerCredits = !isAdmin && creditsAvailable < PLANNER_NORMAL_CREDIT_COST;
+  const insufficientPlannerProCredits = !isAdmin && proCreditsAvailable < PLANNER_PRO_CREDIT_COST;
+
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-28 md:pb-8">
       <div className="flex items-center gap-3">
@@ -586,14 +609,53 @@ const WizardView: React.FC<{
               <p className="text-sm text-slate-300 mt-2">
                 Se guardara el plan y podras volver a abrirlo desde Mis Planes.
               </p>
+              <div className="relative bg-slate-950/70 border border-white/10 rounded-2xl p-4 mt-5 overflow-hidden">
+                <div className="absolute -top-10 -right-10 w-[140px] h-[140px] rounded-full pointer-events-none"
+                  style={{ background: 'rgba(247,44,91,0.25)', filter: 'blur(40px)' }} />
+                <div className="relative">
+                  <div className="text-[10px] font-bold text-pink-300 uppercase tracking-[0.14em] mb-3.5">Resumen del costo</div>
+                  <div className="flex flex-col gap-2 mb-3.5 text-[13px]">
+                    <div className="flex justify-between items-baseline">
+                      <span className="opacity-70">Plan estrategico</span>
+                      <span className="font-semibold">{PLANNER_NORMAL_CREDIT_COST} cr</span>
+                    </div>
+                    <div className="flex justify-between items-baseline">
+                      <span className="opacity-70">Sesion Planner</span>
+                      <span className="font-semibold">{PLANNER_PRO_CREDIT_COST} especial</span>
+                    </div>
+                    <div className="h-px bg-white/10 my-1" />
+                    <div className="flex justify-between items-baseline">
+                      <span className="opacity-85 text-[13px]">A pagar ahora</span>
+                      <span className="font-display font-extrabold italic text-[34px] tracking-tight leading-none" style={{ fontFamily: 'Syne, Inter, sans-serif' }}>
+                        {PLANNER_NORMAL_CREDIT_COST}{' '}
+                        <span className="text-sm opacity-70 font-semibold not-italic tracking-normal">cr</span>
+                        <span className="text-sm opacity-70 font-semibold not-italic tracking-normal"> + {PLANNER_PRO_CREDIT_COST} esp.</span>
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-px bg-white/10 mb-3" />
+                  <div className={`text-[11px] leading-[1.5] ${insufficientPlannerCredits || insufficientPlannerProCredits ? 'text-rose-300' : 'opacity-70'}`}>
+                    {insufficientPlannerCredits
+                      ? <><strong>Creditos insuficientes.</strong> Te faltan {PLANNER_NORMAL_CREDIT_COST - creditsAvailable} cr.</>
+                      : insufficientPlannerProCredits
+                        ? <><strong>Credito especial insuficiente.</strong> Te falta {PLANNER_PRO_CREDIT_COST - proCreditsAvailable} especial.</>
+                        : <>Te quedaran <strong>{isAdmin ? '∞' : plannerCreditsAfter} cr</strong> y <strong>{isAdmin ? '∞' : plannerProCreditsAfter} especiales</strong> despues.</>}
+                  </div>
+                </div>
+              </div>
             </div>
             <button
               onClick={onGenerate}
-              className="mt-6 w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-black uppercase tracking-widest text-white"
-              style={{ background: '#F72C5B' }}
+              disabled={insufficientPlannerCredits || insufficientPlannerProCredits}
+              className={`mt-6 w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-black uppercase tracking-widest text-white transition-all ${
+                insufficientPlannerCredits || insufficientPlannerProCredits
+                  ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                  : ''
+              }`}
+              style={insufficientPlannerCredits || insufficientPlannerProCredits ? undefined : { background: '#F72C5B' }}
             >
               <Zap className="w-4 h-4" />
-              Generar plan
+              Generar plan · {PLANNER_NORMAL_CREDIT_COST} cr + {PLANNER_PRO_CREDIT_COST} especial
             </button>
           </div>
         </section>
@@ -602,7 +664,14 @@ const WizardView: React.FC<{
       <WizardFooter
         onBack={step === 1 ? onBack : () => setStep(step - 1)}
         onContinue={step === STEPS.length ? onGenerate : () => setStep(step + 1)}
-        continueLabel={step === STEPS.length ? 'Generar plan' : 'Continuar'}
+        continueLabel={step === STEPS.length ? `Generar plan · ${PLANNER_NORMAL_CREDIT_COST} cr + ${PLANNER_PRO_CREDIT_COST} especial` : 'Continuar'}
+        disabled={step === STEPS.length && (insufficientPlannerCredits || insufficientPlannerProCredits)}
+        costInfo={step === STEPS.length ? {
+          cost: PLANNER_NORMAL_CREDIT_COST,
+          label: 'Planner estrategico',
+          proCost: PLANNER_PRO_CREDIT_COST,
+          proLabel: 'especial',
+        } : undefined}
       />
     </div>
   );
@@ -617,28 +686,36 @@ const GeneratingView: React.FC<{
   onComplete: (plan: GrowthStrategicPlan) => void;
   onError: (message: string) => void;
 }> = ({ duration, selectedBrand, products, socialMetrics, productImageRefs, onComplete, onError }) => {
+  const generationSteps = useMemo(() => generationStepsForDuration(duration), [duration]);
+  const generationPromiseRef = useRef<Promise<GrowthStrategicPlan> | null>(null);
+  const isMountedRef = useRef(true);
   const [currentStep, setCurrentStep] = useState(0);
+  const [currentPhaseLabel, setCurrentPhaseLabel] = useState(generationSteps[0]?.label || 'Disenando estrategia base');
   const [phrase, setPhrase] = useState(0);
-  const phrases = [
-    'Estoy cruzando marca, productos y metricas sin usar busqueda externa.',
-    'Estoy creando tareas con recetas de ejecucion y prompts reutilizables.',
-    'Estoy validando que el plan tenga calendario, CTA y foco comercial.',
-  ];
 
   useEffect(() => {
+    isMountedRef.current = true;
     let cancelled = false;
-    const stepTimer = window.setInterval(() => {
-      setCurrentStep(prev => Math.min(prev + 1, GENERATION_STEPS.length - 1));
-    }, 900);
-    const phraseTimer = window.setInterval(() => setPhrase(prev => (prev + 1) % phrases.length), 900);
+    const phraseTimer = window.setInterval(() => setPhrase(prev => (prev + 1) % GENERATION_PHRASES.length), 1200);
 
-    generateGrowthPlanWithGemini({
-      duration,
-      brand: selectedBrand,
-      products,
-      instagramMetrics: socialMetrics,
-      productImageRefs,
-    })
+    if (!generationPromiseRef.current) {
+      generationPromiseRef.current = generateGrowthPlanWithGemini({
+        duration,
+        brand: selectedBrand,
+        products,
+        instagramMetrics: socialMetrics,
+        productImageRefs,
+      }, {
+        onProgress: progress => {
+          if (!isMountedRef.current) return;
+          const nextStep = generationSteps.findIndex(step => step.id === progress.stepId);
+          setCurrentStep(current => (nextStep >= 0 ? nextStep : current));
+          setCurrentPhaseLabel(progress.label);
+        },
+      });
+    }
+
+    generationPromiseRef.current
       .then(async plan => {
         if (!cancelled) await onComplete(plan);
       })
@@ -648,10 +725,10 @@ const GeneratingView: React.FC<{
 
     return () => {
       cancelled = true;
-      window.clearInterval(stepTimer);
+      isMountedRef.current = false;
       window.clearInterval(phraseTimer);
     };
-  }, [duration, onComplete, onError, productImageRefs, products, selectedBrand, socialMetrics]);
+  }, [duration, generationSteps, onComplete, onError, productImageRefs, products, selectedBrand, socialMetrics]);
 
   return (
     <div className="max-w-2xl mx-auto py-16 space-y-8">
@@ -663,8 +740,11 @@ const GeneratingView: React.FC<{
         <p className="text-sm text-slate-500 mt-2">Luz IA está armando tu plan personalizado.</p>
       </div>
       <div className="bg-white border border-slate-100 rounded-2xl p-6">
-        <GenerationProgress steps={GENERATION_STEPS} currentStepIndex={currentStep} />
-        <p className="text-center text-xs text-slate-400 italic mt-6">{phrases[phrase]}</p>
+        <GenerationProgress steps={generationSteps} currentStepIndex={currentStep} />
+        <p className="text-center text-xs font-black uppercase tracking-widest mt-6" style={{ color: '#F72C5B' }}>
+          {currentPhaseLabel}
+        </p>
+        <p className="text-center text-xs text-slate-400 italic mt-2">{GENERATION_PHRASES[phrase]}</p>
       </div>
     </div>
   );
@@ -1041,12 +1121,20 @@ export const GrowthPlannerResults: React.FC<{
 
 const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const {
+    user,
+    credits,
+    proCredits,
+    isAdmin,
+    deductMixedCredits,
+    refundMixedCredits,
+  } = useAuth();
   const {
     profiles: brandProfiles,
     loading: loadingBrands,
     error: brandError,
   } = useBrandProfiles(user?.uid);
+  const plannerChargeRef = useRef(false);
   const [duration, setDuration] = useState<GrowthPlanDuration>(30);
   const [view, setView] = useState<'wizard' | 'generating' | 'results'>('wizard');
   const [plan, setPlan] = useState<GrowthStrategicPlan | null>(null);
@@ -1109,12 +1197,37 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
     setProductImages(prev => prev.filter((_, i) => i !== index));
   };
 
+  const refundPlannerCharge = async () => {
+    if (!plannerChargeRef.current) return;
+    plannerChargeRef.current = false;
+    await refundMixedCredits(PLANNER_NORMAL_CREDIT_COST, PLANNER_PRO_CREDIT_COST).catch(() => false);
+  };
+
   const handleGenerate = async () => {
     setGenerationError('');
     if (!products.length) {
       setGenerationError('Agrega al menos un producto para generar el plan.');
       return;
     }
+    if (!user) {
+      setGenerationError('Necesitas iniciar sesion para generar el plan.');
+      return;
+    }
+    if (!isAdmin && credits.available < PLANNER_NORMAL_CREDIT_COST) {
+      setGenerationError(`Necesitas ${PLANNER_NORMAL_CREDIT_COST} creditos para generar este plan. Tienes ${credits.available}.`);
+      return;
+    }
+    if (!isAdmin && proCredits < PLANNER_PRO_CREDIT_COST) {
+      setGenerationError(`Necesitas ${PLANNER_PRO_CREDIT_COST} credito especial para generar este plan. Tienes ${proCredits}.`);
+      return;
+    }
+
+    const charged = await deductMixedCredits(PLANNER_NORMAL_CREDIT_COST, PLANNER_PRO_CREDIT_COST);
+    if (!charged) {
+      setGenerationError('No se pudo descontar el costo del plan. Revisa tus creditos disponibles.');
+      return;
+    }
+    plannerChargeRef.current = true;
 
     if (user?.uid && selectedBrandProfile) {
       await brandProfileService.updateBrandSocialInsights(user.uid, selectedBrandProfile.id, {
@@ -1136,11 +1249,13 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
     setPlan(nextPlan);
     const project = await createProject(`Plan ${nextPlan.brand.name} ${nextPlan.duration} dias`);
     await saveGrowthPlan(project.id, nextPlan);
+    plannerChargeRef.current = false;
     navigate(`/planner/${project.id}`);
   };
 
-  const handleGenerationError = (message: string) => {
+  const handleGenerationError = async (message: string) => {
     console.error('[GrowthPlanner] generation failed:', message);
+    await refundPlannerCharge();
     setGenerationError(message);
     setWizardStep(STEPS.length);
     setView('wizard');
@@ -1199,6 +1314,9 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
       brandProfiles={brandProfiles}
       loadingBrands={loadingBrands}
       brandError={brandError}
+      creditsAvailable={credits.available}
+      proCreditsAvailable={proCredits}
+      isAdmin={isAdmin}
       onBack={onBack}
       onGenerate={handleGenerate}
     />

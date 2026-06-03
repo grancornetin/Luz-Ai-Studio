@@ -121,6 +121,11 @@ const PhotodumpModule: React.FC = () => {
   const [step,      setStep]      = useState<WizardStep>(1);
   const [activeTab, setActiveTab] = useState<'create' | 'library'>('create');
 
+  // Acordeones de referencias (paso 1)
+  const [openRef, setOpenRef] = useState<'persona' | 'outfit' | 'producto' | 'escena' | null>(null);
+  const toggleRef = (key: 'persona' | 'outfit' | 'producto' | 'escena') =>
+    setOpenRef(prev => prev === key ? null : key);
+
   // Generación
   const [isGenerating,      setIsGenerating]      = useState(false);
   const [progressStepIndex, setProgressStepIndex] = useState(0);
@@ -490,207 +495,310 @@ const PhotodumpModule: React.FC = () => {
                         </p>
                       </div>
 
-                      {/* Referencias del protagonista */}
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-1">
-                            Referencias del protagonista{' '}
-                            <span className="text-slate-400 font-medium normal-case tracking-normal">(opcional — para mantener identidad consistente)</span>
-                          </label>
-                          <p className="text-[11px] text-slate-400 leading-relaxed">
-                            Subí fotos del personaje, producto, outfit o lugar. El director bloquea la identidad en cada imagen generada.
-                          </p>
-                        </div>
+                      {/* Referencias del protagonista — acordeones colapsables */}
+                      <div className="space-y-2">
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em]">
+                          Referencias <span className="text-slate-400 font-medium normal-case tracking-normal">(opcional)</span>
+                        </label>
 
                         {/* ── Persona ── */}
-                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-3">
-                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.12em]">Persona</p>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="flex flex-col gap-1.5">
-                              <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-wider">Cara · identidad</p>
-                              <ImageSlot
-                                value={refs.avatarRef}
-                                onChange={v => setRefs(r => ({ ...r, avatarRef: v }))}
-                                slotType="person"
-                                aspectRatio="portrait"
-                                hint="Foto del rostro — ancla la identidad facial"
-                                iconless={false}
-                              />
-                              <p className="text-[9px] text-slate-400 leading-snug">Ancla rasgos, color de piel y forma del rostro</p>
+                        {(() => {
+                          const hasContent = !!(refs.avatarRef || refs.bodyRef);
+                          const isOpen = openRef === 'persona';
+                          const thumbs = [refs.avatarRef, refs.bodyRef].filter(Boolean) as string[];
+                          return (
+                            <div className={`border rounded-2xl overflow-hidden transition-all ${isOpen ? 'border-indigo-200 bg-indigo-50/40' : 'border-slate-200 bg-white'}`}>
+                              <button
+                                type="button"
+                                onClick={() => toggleRef('persona')}
+                                className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left"
+                              >
+                                <span className="text-[10px] font-black text-slate-600 uppercase tracking-[0.12em] flex-1">Persona</span>
+                                {hasContent && !isOpen && (
+                                  <div className="flex gap-1 items-center">
+                                    {thumbs.map((src, i) => (
+                                      <img key={i} src={src} className="w-6 h-8 object-cover rounded-md border border-white shadow-sm" />
+                                    ))}
+                                    <span className="text-[9px] text-indigo-600 font-bold ml-1">{thumbs.length} foto{thumbs.length > 1 ? 's' : ''}</span>
+                                  </div>
+                                )}
+                                {!hasContent && !isOpen && (
+                                  <span className="text-[9px] text-slate-400">Cara + cuerpo</span>
+                                )}
+                                <ChevronDown size={14} className={`text-slate-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
+                              </button>
+                              {isOpen && (
+                                <div className="px-3.5 pb-3.5 space-y-3">
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div className="flex flex-col gap-1.5">
+                                      <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-wider">Cara · identidad</p>
+                                      <ImageSlot
+                                        value={refs.avatarRef}
+                                        onChange={v => setRefs(r => ({ ...r, avatarRef: v }))}
+                                        slotType="person"
+                                        aspectRatio="portrait"
+                                        hint="Foto del rostro — ancla la identidad facial"
+                                        iconless={false}
+                                      />
+                                      <p className="text-[9px] text-slate-400 leading-snug">Ancla rasgos, piel y forma del rostro</p>
+                                    </div>
+                                    <div className="flex flex-col gap-1.5">
+                                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Cuerpo · opcional</p>
+                                      <ImageSlot
+                                        value={refs.bodyRef ?? null}
+                                        onChange={v => setRefs(r => ({ ...r, bodyRef: v }))}
+                                        slotType="body"
+                                        aspectRatio="portrait"
+                                        hint="Foto del cuerpo — fija la complexión y proporciones reales"
+                                        iconless={false}
+                                      />
+                                      <p className="text-[9px] text-slate-400 leading-snug">Fija silueta y proporciones</p>
+                                    </div>
+                                  </div>
+                                  {hasContent && (
+                                    <button type="button" onClick={() => toggleRef('persona')}
+                                      className="w-full text-[10px] text-slate-400 hover:text-slate-600 py-1 transition-colors">
+                                      Minimizar ↑
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                            <div className="flex flex-col gap-1.5">
-                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Cuerpo · opcional</p>
-                              <ImageSlot
-                                value={refs.bodyRef ?? null}
-                                onChange={v => setRefs(r => ({ ...r, bodyRef: v }))}
-                                slotType="body"
-                                aspectRatio="portrait"
-                                hint="Foto del cuerpo — fija la complexión y proporciones reales"
-                                iconless={false}
-                              />
-                              <p className="text-[9px] text-slate-400 leading-snug">Fija silueta, altura y proporciones</p>
-                            </div>
-                          </div>
-                          {refs.bodyRef && (
-                            <p className="text-[10px] text-violet-600 leading-snug">
-                              ✓ Complexión y proporciones bloqueadas en todas las imágenes.
-                            </p>
-                          )}
-                        </div>
+                          );
+                        })()}
 
                         {/* ── Outfit ── */}
-                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-3">
-                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.12em]">Outfit</p>
-                          <div className="grid grid-cols-3 gap-1.5">
-                            {([
-                              { mode: 'generate' as PhotodumpOutfitMode, label: 'IA elige', sub: 'según el brief', desc: 'La IA inventa el outfit más adecuado para la historia y el contexto.' },
-                              { mode: 'keep'     as PhotodumpOutfitMode, label: 'Del avatar', sub: 'mismo outfit', desc: 'Copia y mantiene exactamente el outfit visible en la foto del personaje.' },
-                              { mode: 'upload'   as PhotodumpOutfitMode, label: 'Cargar foto', sub: 'outfit fijo', desc: 'Subís una foto del outfit y se respeta fielmente en todo el set.' },
-                            ] as const).map(({ mode, label, sub, desc }) => (
+                        {(() => {
+                          const hasContent = outfitMode !== 'generate' || !!refs.outfitRef;
+                          const isOpen = openRef === 'outfit';
+                          const modeLabel = outfitMode === 'generate' ? 'IA elige' : outfitMode === 'keep' ? 'Del avatar' : 'Foto cargada';
+                          return (
+                            <div className={`border rounded-2xl overflow-hidden transition-all ${isOpen ? 'border-purple-200 bg-purple-50/30' : 'border-slate-200 bg-white'}`}>
                               <button
-                                key={mode}
                                 type="button"
-                                title={desc}
-                                onClick={() => {
-                                  setOutfitMode(mode);
-                                  setRefs(r => ({ ...r, outfitMode: mode, outfitRef: mode !== 'upload' ? null : r.outfitRef }));
-                                }}
-                                className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-xl border text-center transition-all ${
-                                  outfitMode === mode
-                                    ? 'border-brand-500 bg-brand-50 text-brand-700'
-                                    : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
-                                }`}
+                                onClick={() => toggleRef('outfit')}
+                                className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left"
                               >
-                                <span className="text-[10px] font-black leading-tight">{label}</span>
-                                <span className="text-[9px] opacity-70 leading-tight mt-0.5">{sub}</span>
+                                <span className="text-[10px] font-black text-slate-600 uppercase tracking-[0.12em] flex-1">Outfit</span>
+                                {!isOpen && (
+                                  <div className="flex items-center gap-2">
+                                    {refs.outfitRef && (
+                                      <img src={refs.outfitRef} className="w-6 h-8 object-cover rounded-md border border-white shadow-sm" />
+                                    )}
+                                    <span className={`text-[9px] font-bold ${outfitMode !== 'generate' ? 'text-purple-600' : 'text-slate-400'}`}>{modeLabel}</span>
+                                  </div>
+                                )}
+                                <ChevronDown size={14} className={`text-slate-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
                               </button>
-                            ))}
-                          </div>
-                          {outfitMode === 'upload' && (
-                            <div className="relative">
-                              <ImageSlot
-                                value={refs.outfitRef}
-                                onChange={v => setRefs(r => ({ ...r, outfitRef: v, outfitMode: 'upload' }))}
-                                slotType="outfit"
-                                aspectRatio="portrait"
-                                hint="Foto del outfit — se respeta fielmente en todo el set"
-                                iconless={false}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => { setOutfitMode('generate'); setRefs(r => ({ ...r, outfitRef: null, outfitMode: 'generate' })); }}
-                                className="absolute -top-1 -right-1 w-5 h-5 bg-slate-700 hover:bg-slate-900 text-white rounded-full text-[10px] font-black flex items-center justify-center transition-colors z-10"
-                                title="Cambiar modo"
-                              >×</button>
+                              {isOpen && (
+                                <div className="px-3.5 pb-3.5 space-y-3">
+                                  <div className="grid grid-cols-3 gap-1.5">
+                                    {([
+                                      { mode: 'generate' as PhotodumpOutfitMode, label: 'IA elige', sub: 'según el brief' },
+                                      { mode: 'keep'     as PhotodumpOutfitMode, label: 'Del avatar', sub: 'mismo outfit' },
+                                      { mode: 'upload'   as PhotodumpOutfitMode, label: 'Cargar foto', sub: 'outfit fijo' },
+                                    ] as const).map(({ mode, label, sub }) => (
+                                      <button
+                                        key={mode}
+                                        type="button"
+                                        onClick={() => {
+                                          setOutfitMode(mode);
+                                          setRefs(r => ({ ...r, outfitMode: mode, outfitRef: mode !== 'upload' ? null : r.outfitRef }));
+                                        }}
+                                        className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-xl border text-center transition-all ${
+                                          outfitMode === mode
+                                            ? 'border-brand-500 bg-brand-50 text-brand-700'
+                                            : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                                        }`}
+                                      >
+                                        <span className="text-[10px] font-black leading-tight">{label}</span>
+                                        <span className="text-[9px] opacity-70 leading-tight mt-0.5">{sub}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                  {outfitMode === 'upload' && (
+                                    <ImageSlot
+                                      value={refs.outfitRef}
+                                      onChange={v => setRefs(r => ({ ...r, outfitRef: v, outfitMode: 'upload' }))}
+                                      slotType="outfit"
+                                      aspectRatio="portrait"
+                                      hint="Foto del outfit — se respeta fielmente en todo el set"
+                                      iconless={false}
+                                    />
+                                  )}
+                                  <p className="text-[10px] text-slate-400 leading-snug">
+                                    {outfitMode === 'generate' && 'La IA elige el outfit más adecuado para la escena y el brief.'}
+                                    {outfitMode === 'keep'     && 'Se bloquea el outfit exacto visible en la foto del personaje.'}
+                                    {outfitMode === 'upload'   && 'El outfit cargado se bloquea — mismo color, corte, tela y zapatos en cada imagen.'}
+                                  </p>
+                                  <button type="button" onClick={() => toggleRef('outfit')}
+                                    className="w-full text-[10px] text-slate-400 hover:text-slate-600 py-1 transition-colors">
+                                    Minimizar ↑
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                          )}
-                          <p className="text-[10px] text-slate-400 leading-snug">
-                            {outfitMode === 'generate' && 'La IA elige el outfit más adecuado para la escena y el brief.'}
-                            {outfitMode === 'keep'     && 'Se bloquea el outfit exacto visible en la foto del personaje.'}
-                            {outfitMode === 'upload'   && 'El outfit cargado se bloquea — mismo color, corte, tela y zapatos en cada imagen.'}
-                          </p>
-                        </div>
+                          );
+                        })()}
 
                         {/* ── Producto ── */}
-                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.12em]">Producto</p>
-                            {refs.productRef && (
-                              <span className="text-[9px] text-emerald-600 font-bold">+ Más ángulos = mejor fidelidad</span>
-                            )}
-                          </div>
-                          {/* Mini-galería de producto: principal + hasta 2 ángulos extra */}
-                          <div className="grid grid-cols-3 gap-2">
-                            {/* Slot principal */}
-                            <div className="flex flex-col gap-1">
-                              <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-wider">Principal</p>
-                              <ImageSlot
-                                value={refs.productRef}
-                                onChange={v => setRefs(r => ({ ...r, productRef: v }))}
-                                slotType="product"
-                                aspectRatio="portrait"
-                                hint="Foto principal del producto"
-                                iconless={false}
-                              />
+                        {(() => {
+                          const extraCount = (refs.productRefs ?? []).filter(Boolean).length;
+                          const hasContent = !!refs.productRef;
+                          const isOpen = openRef === 'producto';
+                          return (
+                            <div className={`border rounded-2xl overflow-hidden transition-all ${isOpen ? 'border-emerald-200 bg-emerald-50/30' : 'border-slate-200 bg-white'}`}>
+                              <button
+                                type="button"
+                                onClick={() => toggleRef('producto')}
+                                className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left"
+                              >
+                                <span className="text-[10px] font-black text-slate-600 uppercase tracking-[0.12em] flex-1">Producto</span>
+                                {!isOpen && hasContent && (
+                                  <div className="flex items-center gap-1">
+                                    <img src={refs.productRef!} className="w-6 h-8 object-cover rounded-md border border-white shadow-sm" />
+                                    {(refs.productRefs ?? []).filter(Boolean).map((src, i) => (
+                                      <img key={i} src={src!} className="w-6 h-8 object-cover rounded-md border border-white shadow-sm" />
+                                    ))}
+                                    <span className="text-[9px] text-emerald-600 font-bold ml-1">
+                                      {1 + extraCount} foto{1 + extraCount > 1 ? 's' : ''}
+                                    </span>
+                                  </div>
+                                )}
+                                {!isOpen && !hasContent && (
+                                  <span className="text-[9px] text-slate-400">Hasta 3 ángulos</span>
+                                )}
+                                <ChevronDown size={14} className={`text-slate-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
+                              </button>
+                              {isOpen && (
+                                <div className="px-3.5 pb-3.5 space-y-3">
+                                  <div className="grid grid-cols-3 gap-2">
+                                    <div className="flex flex-col gap-1">
+                                      <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-wider">Principal</p>
+                                      <ImageSlot
+                                        value={refs.productRef}
+                                        onChange={v => setRefs(r => ({ ...r, productRef: v }))}
+                                        slotType="product"
+                                        aspectRatio="portrait"
+                                        hint="Foto principal del producto"
+                                        iconless={false}
+                                      />
+                                    </div>
+                                    {[0, 1].map(i => (
+                                      <div key={i} className="flex flex-col gap-1">
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Ángulo {i + 2}</p>
+                                        <ImageSlot
+                                          value={(refs.productRefs ?? [])[i] ?? null}
+                                          onChange={v => setRefs(r => {
+                                            const arr = [...(r.productRefs ?? [null, null])];
+                                            arr[i] = v;
+                                            return { ...r, productRefs: arr };
+                                          })}
+                                          slotType="product"
+                                          aspectRatio="portrait"
+                                          hint={`Ángulo ${i + 2} del mismo producto`}
+                                          iconless={false}
+                                          disabled={!refs.productRef}
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {!refs.productRef && (
+                                    <p className="text-[9px] text-slate-400 leading-snug">Subí la foto principal para agregar ángulos.</p>
+                                  )}
+                                  <button type="button" onClick={() => toggleRef('producto')}
+                                    className="w-full text-[10px] text-slate-400 hover:text-slate-600 py-1 transition-colors">
+                                    Minimizar ↑
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                            {/* Ángulos adicionales — siempre visibles, se activan cuando hay producto principal */}
-                            {[0, 1].map(i => (
-                              <div key={i} className="flex flex-col gap-1">
-                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Ángulo {i + 2}</p>
-                                <ImageSlot
-                                  value={(refs.productRefs ?? [])[i] ?? null}
-                                  onChange={v => setRefs(r => {
-                                    const arr = [...(r.productRefs ?? [null, null])];
-                                    arr[i] = v;
-                                    return { ...r, productRefs: arr };
-                                  })}
-                                  slotType="product"
-                                  aspectRatio="portrait"
-                                  hint={`Ángulo ${i + 2} del mismo producto`}
-                                  iconless={false}
-                                  disabled={!refs.productRef}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                          {!refs.productRef && (
-                            <p className="text-[9px] text-slate-400 leading-snug">Subí primero la foto principal para agregar ángulos adicionales.</p>
-                          )}
-                        </div>
+                          );
+                        })()}
 
                         {/* ── Escena ── */}
-                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.12em]">Escena</p>
-                            {(refs.sceneRefs ?? []).filter(Boolean).length > 0 && (
-                              <span className="text-[9px] text-violet-600 font-bold">Historia multi-ambiente ✓</span>
-                            )}
-                          </div>
-                          {/* Mini-galería de escenas: principal + hasta 2 ambientes extra */}
-                          <div className="grid grid-cols-3 gap-2">
-                            <div className="flex flex-col gap-1">
-                              <p className="text-[9px] font-bold text-blue-500 uppercase tracking-wider">Principal</p>
-                              <ImageSlot
-                                value={refs.sceneRef}
-                                onChange={v => setRefs(r => ({ ...r, sceneRef: v }))}
-                                slotType="scene"
-                                aspectRatio="portrait"
-                                hint="Escena principal"
-                                iconless={false}
-                              />
+                        {(() => {
+                          const extraScenes = (refs.sceneRefs ?? []).filter(Boolean).length;
+                          const hasContent = !!refs.sceneRef;
+                          const isOpen = openRef === 'escena';
+                          return (
+                            <div className={`border rounded-2xl overflow-hidden transition-all ${isOpen ? 'border-blue-200 bg-blue-50/30' : 'border-slate-200 bg-white'}`}>
+                              <button
+                                type="button"
+                                onClick={() => toggleRef('escena')}
+                                className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left"
+                              >
+                                <span className="text-[10px] font-black text-slate-600 uppercase tracking-[0.12em] flex-1">Escena</span>
+                                {!isOpen && hasContent && (
+                                  <div className="flex items-center gap-1">
+                                    <img src={refs.sceneRef!} className="w-6 h-8 object-cover rounded-md border border-white shadow-sm" />
+                                    {(refs.sceneRefs ?? []).filter(Boolean).map((src, i) => (
+                                      <img key={i} src={src!} className="w-6 h-8 object-cover rounded-md border border-white shadow-sm" />
+                                    ))}
+                                    <span className="text-[9px] text-blue-600 font-bold ml-1">
+                                      {1 + extraScenes} ambiente{1 + extraScenes > 1 ? 's' : ''}
+                                    </span>
+                                  </div>
+                                )}
+                                {!isOpen && !hasContent && (
+                                  <span className="text-[9px] text-slate-400">Hasta 3 ambientes</span>
+                                )}
+                                <ChevronDown size={14} className={`text-slate-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
+                              </button>
+                              {isOpen && (
+                                <div className="px-3.5 pb-3.5 space-y-3">
+                                  <div className="grid grid-cols-3 gap-2">
+                                    <div className="flex flex-col gap-1">
+                                      <p className="text-[9px] font-bold text-blue-500 uppercase tracking-wider">Principal</p>
+                                      <ImageSlot
+                                        value={refs.sceneRef}
+                                        onChange={v => setRefs(r => ({ ...r, sceneRef: v }))}
+                                        slotType="scene"
+                                        aspectRatio="portrait"
+                                        hint="Escena principal"
+                                        iconless={false}
+                                      />
+                                    </div>
+                                    {[0, 1].map(i => (
+                                      <div key={i} className="flex flex-col gap-1">
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Lugar {i + 2}</p>
+                                        <ImageSlot
+                                          value={(refs.sceneRefs ?? [])[i] ?? null}
+                                          onChange={v => setRefs(r => {
+                                            const arr = [...(r.sceneRefs ?? [null, null])];
+                                            arr[i] = v;
+                                            return { ...r, sceneRefs: arr };
+                                          })}
+                                          slotType="scene"
+                                          aspectRatio="portrait"
+                                          hint={`Ambiente ${i + 2} de la historia`}
+                                          iconless={false}
+                                          disabled={!refs.sceneRef}
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {refs.sceneRef && (
+                                    <input
+                                      type="text"
+                                      value={refs.sceneText ?? ''}
+                                      onChange={e => setRefs(r => ({ ...r, sceneText: e.target.value }))}
+                                      placeholder="Describe el lugar (opcional) — ej: departamento moderno con plantas"
+                                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[12px] text-slate-700 outline-none focus:border-brand-400 transition-all"
+                                    />
+                                  )}
+                                  {!refs.sceneRef && (
+                                    <p className="text-[9px] text-slate-400 leading-snug">Subí una escena principal para agregar más ambientes.</p>
+                                  )}
+                                  <button type="button" onClick={() => toggleRef('escena')}
+                                    className="w-full text-[10px] text-slate-400 hover:text-slate-600 py-1 transition-colors">
+                                    Minimizar ↑
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                            {[0, 1].map(i => (
-                              <div key={i} className="flex flex-col gap-1">
-                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Lugar {i + 2}</p>
-                                <ImageSlot
-                                  value={(refs.sceneRefs ?? [])[i] ?? null}
-                                  onChange={v => setRefs(r => {
-                                    const arr = [...(r.sceneRefs ?? [null, null])];
-                                    arr[i] = v;
-                                    return { ...r, sceneRefs: arr };
-                                  })}
-                                  slotType="scene"
-                                  aspectRatio="portrait"
-                                  hint={`Ambiente ${i + 2} de la historia`}
-                                  iconless={false}
-                                  disabled={!refs.sceneRef}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                          {refs.sceneRef && (
-                            <input
-                              type="text"
-                              value={refs.sceneText ?? ''}
-                              onChange={e => setRefs(r => ({ ...r, sceneText: e.target.value }))}
-                              placeholder="Describe el lugar (opcional) — ej: departamento moderno con plantas, Buenos Aires"
-                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-[12px] text-slate-700 outline-none focus:border-brand-400 transition-all"
-                            />
-                          )}
-                          {!refs.sceneRef && (
-                            <p className="text-[9px] text-slate-400 leading-snug">Subí una escena principal para agregar ambientes adicionales.</p>
-                          )}
-                        </div>
+                          );
+                        })()}
                       </div>
                     </div>
 

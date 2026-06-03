@@ -21,9 +21,21 @@ interface GenerateGrowthPlanInput {
   productImageRefs: { data: string; mimeType: string; label: string }[];
 }
 
+interface GrowthPlanGenerationProgress {
+  stepId: string;
+  label: string;
+}
+
+interface GenerateGrowthPlanOptions {
+  onProgress?: (progress: GrowthPlanGenerationProgress) => void;
+}
+
 const CONTENT_ENDPOINT = '/api/gemini/content';
 const POLL_INTERVAL_MS = 2000;
 const MAX_POLL_ATTEMPTS = 90;
+const MAX_WEEK_GENERATION_ATTEMPTS = 3;
+const MAX_WEEK_REPAIR_ATTEMPTS = 2;
+const ALLOW_GENERIC_TASK_FALLBACK = false;
 const FUNNEL_ROLE_VALUES = ['atraer', 'generar_deseo', 'construir_confianza', 'convertir'];
 const CONTENT_MODULE_VALUES = ['product', 'ugc', 'scene', 'prompt', 'outfit', 'none'];
 const TASK_STATUS_VALUES = ['pending', 'in_progress', 'ready', 'published', 'skipped'];
@@ -299,10 +311,64 @@ const GROWTH_PLANNER_SCHEMA = {
 };
 
 function taskRange(duration: GrowthPlanDuration) {
-  if (duration === 7) return { min: 5, max: 5, maxOutputTokens: 5120 };
-  if (duration === 14) return { min: 12, max: 12, maxOutputTokens: 8192 };
-  return { min: 25, max: 25, maxOutputTokens: 12288 };
+  if (duration === 7) return { min: 5, modelTasks: 5, maxOutputTokens: 4096 };
+  if (duration === 14) return { min: 12, modelTasks: 12, maxOutputTokens: 6144 };
+  return { min: 25, modelTasks: 25, maxOutputTokens: 8192 };
 }
+
+const GROWTH_STRATEGY_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    businessStage: { type: Type.STRING },
+    mainGoal: { type: Type.STRING },
+    commercialFocus: { type: Type.STRING },
+    strategyGoal: { type: Type.STRING },
+    businessDiagnosis: { type: Type.STRING },
+    nicheInsights: stringArraySchema,
+    planNarrative: { type: Type.STRING },
+    strategicTip: { type: Type.STRING },
+    roadmap: GROWTH_PLANNER_SCHEMA.properties.roadmap,
+    brandAnalysis: GROWTH_PLANNER_SCHEMA.properties.brandAnalysis,
+    productAnalysis: GROWTH_PLANNER_SCHEMA.properties.productAnalysis,
+    socialMetricsAnalysis: GROWTH_PLANNER_SCHEMA.properties.socialMetricsAnalysis,
+    nicheResearch: GROWTH_PLANNER_SCHEMA.properties.nicheResearch,
+    generationLog: GROWTH_PLANNER_SCHEMA.properties.generationLog,
+    validationReportMarkdown: { type: Type.STRING },
+  },
+  required: [
+    'businessStage',
+    'mainGoal',
+    'commercialFocus',
+    'strategyGoal',
+    'businessDiagnosis',
+    'nicheInsights',
+    'planNarrative',
+    'strategicTip',
+    'roadmap',
+    'brandAnalysis',
+    'productAnalysis',
+    'socialMetricsAnalysis',
+    'nicheResearch',
+    'generationLog',
+    'validationReportMarkdown',
+  ],
+};
+
+const TASK_BATCH_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    tasks: { type: Type.ARRAY, items: taskSchema },
+    generationLog: {
+      type: Type.OBJECT,
+      properties: {
+        warnings: stringArraySchema,
+        fixedErrors: stringArraySchema,
+      },
+      required: ['warnings', 'fixedErrors'],
+    },
+  },
+  required: ['tasks', 'generationLog'],
+};
 
 function cleanJsonText(text: string): string {
   return text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
@@ -995,6 +1061,10 @@ function ensureMinimumTasks(tasks: GrowthTask[], input: GenerateGrowthPlanInput,
   const generated = tasks.length;
   if (tasks.length >= expected) return { tasks, generated, added: 0, expected };
 
+  if (!ALLOW_GENERIC_TASK_FALLBACK) {
+    throw new Error(`Gemini devolvio ${generated} tareas, pero el plan necesita ${expected}. Se debe regenerar el bloque incompleto.`);
+  }
+
   const nextTasks = [...tasks];
   while (nextTasks.length < expected) {
     nextTasks.push(createFallbackTask(nextTasks.length, expected, input));
@@ -1350,35 +1420,127 @@ function normalizePlan(raw: any, input: GenerateGrowthPlanInput): GrowthStrategi
   return plan;
 }
 
-function buildPrompt(input: GenerateGrowthPlanInput): string {
-  const range = taskRange(input.duration);
-  const productSummary = input.products.map((product, index) =>
+function productSummaryForPrompt(products: GrowthProduct[]): string {
+  return products.map((product, index) =>
     `${index + 1}. ${product.name} | ${product.category} | ${product.price} | ${product.credits || product.stock} | ${product.idealFor || product.benefit} | ${product.messageKey || product.benefit}`,
   ).join('\n');
+}
+
+type TaskBatch = {
+  stepId: string;
+  week: number;
+  title: string;
+  taskCount: number;
+  dayStart: number;
+  dayEnd: number;
+  funnelRole: GrowthFunnelRole;
+  focus: string;
+};
+
+function taskBatchesForDuration(duration: GrowthPlanDuration): TaskBatch[] {
+  if (duration === 7) {
+    return [{
+      stepId: 'week_1',
+      week: 1,
+      title: 'Plan compacto de activacion',
+      taskCount: 5,
+      dayStart: 1,
+      dayEnd: 7,
+      funnelRole: 'atraer',
+      focus: 'Cubrir un mini embudo completo: problema, deseo, confianza, conversion y seguimiento.',
+    }];
+  }
+
+  if (duration === 14) {
+    return [
+      {
+        stepId: 'week_1',
+        week: 1,
+        title: 'Atraccion y deseo',
+        taskCount: 6,
+        dayStart: 1,
+        dayEnd: 7,
+        funnelRole: 'atraer',
+        focus: 'Mostrar problema, categoria, beneficios y primeras demostraciones del producto.',
+      },
+      {
+        stepId: 'week_2',
+        week: 2,
+        title: 'Confianza y conversion',
+        taskCount: 6,
+        dayStart: 8,
+        dayEnd: 14,
+        funnelRole: 'convertir',
+        focus: 'Resolver objeciones, usar prueba social, comparar opciones y cerrar por DM o canal principal.',
+      },
+    ];
+  }
+
+  return [
+    {
+      stepId: 'week_1',
+      week: 1,
+      title: 'Atraccion / problema visible',
+      taskCount: 6,
+      dayStart: 1,
+      dayEnd: 7,
+      funnelRole: 'atraer',
+      focus: 'Abrir interes con problemas reconocibles, diagnosticos y situaciones de compra reales.',
+    },
+    {
+      stepId: 'week_2',
+      week: 2,
+      title: 'Deseo / demostracion',
+      taskCount: 6,
+      dayStart: 8,
+      dayEnd: 14,
+      funnelRole: 'generar_deseo',
+      focus: 'Mostrar producto, uso, resultado esperado, antes/despues o comparaciones visuales.',
+    },
+    {
+      stepId: 'week_3',
+      week: 3,
+      title: 'Confianza / objeciones',
+      taskCount: 6,
+      dayStart: 15,
+      dayEnd: 21,
+      funnelRole: 'construir_confianza',
+      focus: 'Responder dudas, mostrar prueba social, explicar garantias y bajar friccion.',
+    },
+    {
+      stepId: 'week_4',
+      week: 4,
+      title: 'Conversion / cierre',
+      taskCount: 7,
+      dayStart: 22,
+      dayEnd: 30,
+      funnelRole: 'convertir',
+      focus: 'Activar CTA directo, mensajes a WhatsApp/DM, recordatorios, bundles o decision de compra.',
+    },
+  ];
+}
+
+function roadmapInstruction(duration: GrowthPlanDuration): string {
+  return taskBatchesForDuration(duration)
+    .map(batch => `Semana ${batch.week}: ${batch.title} - ${batch.focus}`)
+    .join('\n');
+}
+
+function buildStrategyPrompt(input: GenerateGrowthPlanInput): string {
   const today = new Date().toISOString().slice(0, 10);
+  const productSummary = productSummaryForPrompt(input.products);
 
   return `Eres la directora estrategica de contenido de Luz IA Studio.
-Debes crear un Planner Estrategico real y ejecutable para una emprendedora LATAM.
+Debes disenar la estrategia base de un Planner Estrategico para una emprendedora LATAM.
 
-REGLAS IMPORTANTES:
+REGLAS:
 - Responde SOLO JSON valido. Sin markdown fuera del JSON.
+- No generes tareas todavia. Solo diagnostico, roadmap y analisis.
 - No uses busqueda web ni cites fuentes externas.
-- No inventes imagenes generadas.
-- Crea al menos ${range.min} tareas reales para este plan.
-- Fecha actual/base: ${today}. Todas las tareas deben tener fechas futuras o de hoy dentro de los proximos ${input.duration} dias.
-- Cada tarea debe ser concreta, lista para ejecutar y conectada a un modulo de Luz IA.
-- Escribe compacto: maximo 1 frase por campo, captions de 1 parrafo y prompts de menos de 450 caracteres.
-- Cada executionRecipe debe tener maximo 3 pasos.
-- Cada shotGuide debe tener maximo 3 tomas.
-- nicheInsights, trends y competitorGaps deben tener maximo 3 items.
-- Modulos validos: product, ugc, scene, prompt, outfit, none.
-- Funnel roles validos: atraer, generar_deseo, construir_confianza, convertir.
-- Status inicial de todas las tareas: pending.
-- Slots permitidos en prompt y slotInstructions: @producto1, @producto2, @producto3, @producto4, @persona1, @outfit1, @escena1, @referencia1.
-- No uses placeholders con corchetes como [PRODUCTO] o [ESCENA].
-- Si module es none, prompt debe ser "".
-- Si una tarea manual necesita una idea visual auxiliar, usa supportModule y supportPrompt, no prompt.
-- Usa espanol claro, cercano y comercial.
+- Fecha actual/base: ${today}.
+- Escribe compacto, especifico y comercial. Evita frases genericas.
+- El roadmap debe respetar esta estructura:
+${roadmapInstruction(input.duration)}
 
 MARCA:
 ${JSON.stringify(input.brand, null, 2)}
@@ -1386,13 +1548,13 @@ ${JSON.stringify(input.brand, null, 2)}
 METRICAS/REDES GUARDADAS EN MARCA:
 ${JSON.stringify(input.instagramMetrics, null, 2)}
 
-PRODUCTOS A EMPUJAR EN ESTE PLAN:
+PRODUCTOS A EMPUJAR:
 ${productSummary}
 
 IMAGENES DE PRODUCTO:
-Se adjuntan ${input.productImageRefs.length} imagen(es) comprimidas como referencia visual. Usalas solo para entender material, estilo, color, packaging y nivel de confianza.
+Se adjuntan ${input.productImageRefs.length} imagen(es) comprimidas como referencia visual. Usalas solo para entender estilo, color, packaging y nivel de confianza.
 
-Devuelve un objeto compatible con esta forma:
+Devuelve este objeto sin tareas:
 {
   "businessStage": "string",
   "mainGoal": "string",
@@ -1403,13 +1565,94 @@ Devuelve un objeto compatible con esta forma:
   "planNarrative": "string",
   "strategicTip": "string",
   "roadmap": [{"week":1,"title":"string","objective":"string","funnelRole":"atraer","hint":"string"}],
+  "brandAnalysis": {"stageInterpretation":"string","targetAnalysis":"string","voiceGuide":"string"},
+  "productAnalysis": {"productWarnings":["string"],"confidenceByProduct":[{"productId":"id","level":80,"reason":"string"}],"categorizationSummary":"string"},
+  "socialMetricsAnalysis": {"audienceInsights":"string","engagementLevel":"string","confidenceMapping":"string"},
+  "nicheResearch": {"trends":["string"],"competitorGaps":["string"],"researchMode":"gemini sin grounding"},
+  "generationLog": {"warnings":["string"],"fixedErrors":[]},
+  "validationReportMarkdown": "reporte breve de maximo 5 lineas"
+}`;
+}
+
+function compactStrategyForPrompt(strategy: any): string {
+  return JSON.stringify({
+    strategyGoal: strategy?.strategyGoal,
+    businessDiagnosis: strategy?.businessDiagnosis,
+    planNarrative: strategy?.planNarrative,
+    strategicTip: strategy?.strategicTip,
+    roadmap: strategy?.roadmap,
+    brandAnalysis: strategy?.brandAnalysis,
+    productAnalysis: strategy?.productAnalysis,
+    socialMetricsAnalysis: strategy?.socialMetricsAnalysis,
+    nicheInsights: strategy?.nicheInsights,
+  }, null, 2);
+}
+
+function compactTaskSummary(tasks: any[]): string {
+  if (!tasks.length) return 'Aun no hay tareas generadas.';
+  return tasks.map((task, index) =>
+    `${index + 1}. Semana ${task.week} | ${task.date || task.dayLabel} | ${task.platform} | ${task.funnelRole} | ${task.contentType} | ${task.caption}`,
+  ).join('\n');
+}
+
+function buildTaskBatchPrompt(
+  input: GenerateGrowthPlanInput,
+  strategy: any,
+  batch: TaskBatch,
+  existingTasks: any[],
+  previousError = '',
+): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const productSummary = productSummaryForPrompt(input.products);
+
+  return `Eres la directora estrategica de contenido de Luz IA Studio.
+Genera SOLO las tareas de la ${batch.title} para un plan de ${input.duration} dias.
+
+REGLAS:
+- Responde SOLO JSON valido. Sin markdown fuera del JSON.
+- Crea EXACTAMENTE ${batch.taskCount} tareas.
+- Todas las tareas deben tener week=${batch.week}.
+- Las fechas deben estar entre el dia ${batch.dayStart} y el dia ${batch.dayEnd} del plan, contando desde ${today}, sin fechas pasadas.
+- Foco de esta semana: ${batch.focus}
+- Funnel principal sugerido: ${batch.funnelRole}; puedes mezclar roles si ayuda al embudo.
+- No repitas ideas ya generadas en otras semanas.
+- Cada tarea debe ser concreta, lista para ejecutar y conectada a un modulo de Luz IA.
+- Captions: 1 parrafo. Prompts: menos de 450 caracteres.
+- Cada executionRecipe debe tener maximo 3 pasos.
+- Cada shotGuide debe tener maximo 3 tomas.
+- Modulos validos: product, ugc, scene, prompt, outfit, none.
+- Si module es none, prompt debe ser "".
+- Si una tarea manual necesita apoyo visual, usa supportModule y supportPrompt.
+- Slots permitidos: @producto1, @producto2, @producto3, @producto4, @persona1, @outfit1, @escena1, @referencia1.
+- No uses placeholders con corchetes.
+- Status inicial de todas las tareas: pending.
+- Evita lenguaje generico como "brillar", "contenido de valor" o "llevar al siguiente nivel".
+${previousError ? `\nERROR A CORREGIR DEL INTENTO ANTERIOR:\n${previousError}\n` : ''}
+
+ESTRATEGIA BASE:
+${compactStrategyForPrompt(strategy)}
+
+MARCA:
+${JSON.stringify(input.brand, null, 2)}
+
+METRICAS/REDES:
+${JSON.stringify(input.instagramMetrics, null, 2)}
+
+PRODUCTOS:
+${productSummary}
+
+TAREAS YA GENERADAS:
+${compactTaskSummary(existingTasks)}
+
+Devuelve:
+{
   "tasks": [{
-    "week": 1,
+    "week": ${batch.week},
     "dayLabel": "Lunes 8 jun",
     "date": "YYYY-MM-DD",
     "platform": "Instagram Feed",
     "contentType": "string",
-    "funnelRole": "atraer",
+    "funnelRole": "${batch.funnelRole}",
     "module": "product",
     "moduleReason": "string",
     "suggestedTime": "19:00",
@@ -1417,7 +1660,7 @@ Devuelve un objeto compatible con esta forma:
     "whyItWorks": "string",
     "caption": "string",
     "hashtags": "#tag1 #tag2",
-    "prompt": "string con slots como @producto1, @producto2, @escena1 o @referencia1",
+    "prompt": "string con slots permitidos, o vacio si module es none",
     "supportModule": "product",
     "supportPrompt": "string opcional solo si module es none",
     "slotInstructions": [{"slot":"@producto1","instruction":"string"}],
@@ -1427,13 +1670,184 @@ Devuelve un objeto compatible con esta forma:
     "engagementHook": "string",
     "status": "pending"
   }],
-  "brandAnalysis": {"stageInterpretation":"string","targetAnalysis":"string","voiceGuide":"string"},
-  "productAnalysis": {"productWarnings":["string"],"confidenceByProduct":[{"productId":"id","level":80,"reason":"string"}],"categorizationSummary":"string"},
-  "socialMetricsAnalysis": {"audienceInsights":"string","engagementLevel":"string","confidenceMapping":"string"},
-  "nicheResearch": {"trends":["string"],"competitorGaps":["string"],"researchMode":"gemini sin grounding"},
-  "generationLog": {"warnings":["string"],"fixedErrors":[]},
-  "validationReportMarkdown": "reporte breve de maximo 5 lineas"
+  "generationLog": {"warnings":["string"],"fixedErrors":[]}
 }`;
+}
+
+function buildTaskRepairPrompt(
+  input: GenerateGrowthPlanInput,
+  strategy: any,
+  batch: TaskBatch,
+  existingTasks: any[],
+  brokenPayload: any,
+  errorMessage: string,
+): string {
+  return `${buildTaskBatchPrompt(input, strategy, batch, existingTasks, errorMessage)}
+
+JSON ANTERIOR A CORREGIR:
+${JSON.stringify(brokenPayload || {}, null, 2)}
+
+Corrige el JSON anterior y devuelve un bloque valido con EXACTAMENTE ${batch.taskCount} tareas completas para la semana ${batch.week}.`;
+}
+
+function validateTaskBatchPayload(raw: any, batch: TaskBatch): any[] {
+  const tasks = asArray<any>(raw?.tasks, []);
+  if (tasks.length < batch.taskCount) {
+    throw new Error(`La semana ${batch.week} devolvio ${tasks.length} tareas y necesita ${batch.taskCount}.`);
+  }
+
+  const selected = tasks.slice(0, batch.taskCount);
+  const missing = selected
+    .map((task, index) => {
+      const missingFields = [
+        'platform',
+        'contentType',
+        'funnelRole',
+        'module',
+        'moduleReason',
+        'visualConcept',
+        'whyItWorks',
+        'caption',
+        'slotInstructions',
+        'requiredAssets',
+        'executionRecipe',
+        'shotGuide',
+        'engagementHook',
+        'status',
+      ].filter(field => task?.[field] === undefined || task?.[field] === null || task?.[field] === '');
+      const recipeSteps = Array.isArray(task?.executionRecipe?.steps) ? task.executionRecipe.steps : [];
+      const shotGuide = task?.shotGuide;
+      if (!recipeSteps.length) missingFields.push('executionRecipe.steps');
+      if (!shotGuide || !Array.isArray(shotGuide.shots)) missingFields.push('shotGuide.shots');
+      return missingFields.length ? `Tarea ${index + 1}: ${missingFields.join(', ')}` : '';
+    })
+    .filter(Boolean);
+
+  if (missing.length) {
+    throw new Error(`La semana ${batch.week} tiene tareas incompletas: ${missing.join(' | ')}`);
+  }
+
+  return selected.map((task, index) => ({
+    ...task,
+    week: batch.week,
+    status: safeStatus(task?.status),
+    dayLabel: task?.dayLabel || `Dia ${batch.dayStart + index}`,
+  }));
+}
+
+async function startGrowthPlannerJob(params: {
+  token: string;
+  prompt: string;
+  schema: any;
+  images?: string[];
+  mimeTypes?: string[];
+  maxOutputTokens: number;
+  temperature?: number;
+}): Promise<any> {
+  const response = await fetch(CONTENT_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${params.token}`,
+    },
+    body: JSON.stringify({
+      action: 'generateTextAsync',
+      model: 'gemini-2.5-flash',
+      prompt: params.prompt,
+      schema: params.schema,
+      images: params.images || [],
+      mimeTypes: params.mimeTypes || [],
+      generationConfig: {
+        temperature: params.temperature ?? 0.45,
+        maxOutputTokens: params.maxOutputTokens,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`No se pudo generar el plan (${response.status}). ${text}`);
+  }
+
+  const data = await response.json();
+  if (!data.success || !data.jobId) throw new Error(data.error || 'No se pudo iniciar la generacion.');
+  return pollGrowthPlanJob(data.jobId, params.token);
+}
+
+async function generateStrategyWithRecovery(input: GenerateGrowthPlanInput, token: string): Promise<any> {
+  let lastError = '';
+  for (let attempt = 1; attempt <= MAX_WEEK_GENERATION_ATTEMPTS; attempt++) {
+    try {
+      return await startGrowthPlannerJob({
+        token,
+        prompt: buildStrategyPrompt(input),
+        schema: GROWTH_STRATEGY_SCHEMA,
+        images: input.productImageRefs.map(image => image.data),
+        mimeTypes: input.productImageRefs.map(image => image.mimeType),
+        maxOutputTokens: 4096,
+        temperature: 0.4,
+      });
+    } catch (error: any) {
+      lastError = error?.message || 'Estrategia incompleta.';
+    }
+  }
+
+  throw new Error(`No se pudo crear la estrategia base. ${lastError}`);
+}
+
+async function generateTaskBatchWithRecovery(
+  input: GenerateGrowthPlanInput,
+  token: string,
+  strategy: any,
+  batch: TaskBatch,
+  existingTasks: any[],
+): Promise<{ tasks: any[]; warnings: string[]; fixedErrors: string[] }> {
+  let lastRaw: any = null;
+  let lastError = '';
+
+  for (let attempt = 1; attempt <= MAX_WEEK_GENERATION_ATTEMPTS; attempt++) {
+    try {
+      lastRaw = await startGrowthPlannerJob({
+        token,
+        prompt: buildTaskBatchPrompt(input, strategy, batch, existingTasks, lastError),
+        schema: TASK_BATCH_SCHEMA,
+        maxOutputTokens: batch.taskCount >= 7 ? 6144 : 5120,
+        temperature: 0.45,
+      });
+      return {
+        tasks: validateTaskBatchPayload(lastRaw, batch),
+        warnings: asArray(lastRaw?.generationLog?.warnings, []),
+        fixedErrors: asArray(lastRaw?.generationLog?.fixedErrors, []),
+      };
+    } catch (error: any) {
+      lastError = error?.message || `La semana ${batch.week} vino incompleta.`;
+    }
+  }
+
+  for (let attempt = 1; attempt <= MAX_WEEK_REPAIR_ATTEMPTS; attempt++) {
+    try {
+      lastRaw = await startGrowthPlannerJob({
+        token,
+        prompt: buildTaskRepairPrompt(input, strategy, batch, existingTasks, lastRaw, lastError),
+        schema: TASK_BATCH_SCHEMA,
+        maxOutputTokens: batch.taskCount >= 7 ? 6144 : 5120,
+        temperature: 0.25,
+      });
+      return {
+        tasks: validateTaskBatchPayload(lastRaw, batch),
+        warnings: asArray(lastRaw?.generationLog?.warnings, []),
+        fixedErrors: [
+          ...asArray(lastRaw?.generationLog?.fixedErrors, []),
+          `Semana ${batch.week} corregida internamente tras ${MAX_WEEK_GENERATION_ATTEMPTS} intento(s).`,
+        ],
+      };
+    } catch (error: any) {
+      lastError = error?.message || `La correccion de la semana ${batch.week} vino incompleta.`;
+    }
+  }
+
+  throw new Error(`No se pudo completar la semana ${batch.week} sin tareas genericas. ${lastError}`);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -1468,40 +1882,42 @@ async function pollGrowthPlanJob(jobId: string, token: string): Promise<any> {
   throw new Error('La generacion sigue demorando demasiado. Reintenta con menos imagenes o un plan mas corto.');
 }
 
-export async function generateGrowthPlanWithGemini(input: GenerateGrowthPlanInput): Promise<GrowthStrategicPlan> {
+export async function generateGrowthPlanWithGemini(
+  input: GenerateGrowthPlanInput,
+  options: GenerateGrowthPlanOptions = {},
+): Promise<GrowthStrategicPlan> {
   const token = await getAuth().currentUser?.getIdToken().catch(() => null);
   if (!token) throw new Error('Necesitas iniciar sesion para generar el plan.');
-  const range = taskRange(input.duration);
 
-  const response = await fetch(CONTENT_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      action: 'generateTextAsync',
-      model: 'gemini-2.5-flash',
-      prompt: buildPrompt(input),
-      schema: GROWTH_PLANNER_SCHEMA,
-      images: input.productImageRefs.map(image => image.data),
-      mimeTypes: input.productImageRefs.map(image => image.mimeType),
-      generationConfig: {
-        temperature: 0.45,
-        maxOutputTokens: range.maxOutputTokens,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    }),
-  });
+  options.onProgress?.({ stepId: 'strategy', label: 'Disenando estrategia base' });
+  const strategy = await generateStrategyWithRecovery(input, token);
+  const batches = taskBatchesForDuration(input.duration);
+  const tasks: any[] = [];
+  const warnings: string[] = asArray(strategy?.generationLog?.warnings, []);
+  const fixedErrors: string[] = asArray(strategy?.generationLog?.fixedErrors, []);
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`No se pudo generar el plan (${response.status}). ${text}`);
+  for (const batch of batches) {
+    options.onProgress?.({ stepId: batch.stepId, label: `Generando semana ${batch.week}` });
+    const result = await generateTaskBatchWithRecovery(input, token, strategy, batch, tasks);
+    tasks.push(...result.tasks);
+    warnings.push(...result.warnings);
+    fixedErrors.push(...result.fixedErrors);
   }
 
-  const data = await response.json();
-  if (!data.success || !data.jobId) throw new Error(data.error || 'No se pudo iniciar la generacion.');
+  options.onProgress?.({ stepId: 'validation', label: 'Validando y guardando plan' });
 
-  const raw = await pollGrowthPlanJob(data.jobId, token);
+  const raw = {
+    ...strategy,
+    tasks,
+    generationLog: {
+      warnings,
+      fixedErrors,
+      steps: [
+        'Estrategia base generada con Gemini 2.5 Flash',
+        ...batches.map(batch => `Semana ${batch.week} generada con Gemini 2.5 Flash`),
+        'Plan consolidado sin tareas genericas',
+      ],
+    },
+  };
   return normalizePlan(raw, input);
 }
