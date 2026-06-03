@@ -36,6 +36,13 @@ const MAX_POLL_ATTEMPTS = 90;
 const MAX_WEEK_GENERATION_ATTEMPTS = 3;
 const MAX_WEEK_REPAIR_ATTEMPTS = 2;
 const ALLOW_GENERIC_TASK_FALLBACK = false;
+const MAX_PRODUCTS_IN_PROMPT = 30;
+const MAX_PRODUCT_LINE_CHARS = 220;
+const MAX_PRODUCT_SUMMARY_CHARS = 6500;
+const MAX_STRATEGY_CONTEXT_CHARS = 4500;
+const MAX_EXISTING_TASKS_CHARS = 3500;
+const MAX_ERROR_CONTEXT_CHARS = 1200;
+const MAX_REPAIR_JSON_CHARS = 4500;
 const FUNNEL_ROLE_VALUES = ['atraer', 'generar_deseo', 'construir_confianza', 'convertir'];
 const CONTENT_MODULE_VALUES = ['product', 'ugc', 'scene', 'prompt', 'outfit', 'none'];
 const TASK_STATUS_VALUES = ['pending', 'in_progress', 'ready', 'published', 'skipped'];
@@ -207,6 +214,49 @@ const taskSchema = {
   ],
 };
 
+const strategyBriefSchema = {
+  type: Type.OBJECT,
+  properties: {
+    masterObjective: { type: Type.STRING },
+    commercialPromise: { type: Type.STRING },
+    targetCustomer: { type: Type.STRING },
+    brandVoice: { type: Type.STRING },
+    priorityProducts: stringArraySchema,
+    mainObjections: stringArraySchema,
+    contentAngles: stringArraySchema,
+    prohibitedLanguage: stringArraySchema,
+    channelRules: stringArraySchema,
+    moduleRules: stringArraySchema,
+    weeklyAngles: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          week: { type: Type.NUMBER },
+          objective: { type: Type.STRING },
+          angle: { type: Type.STRING },
+          recommendedProducts: stringArraySchema,
+          ctaFocus: { type: Type.STRING },
+        },
+        required: ['week', 'objective', 'angle', 'recommendedProducts', 'ctaFocus'],
+      },
+    },
+  },
+  required: [
+    'masterObjective',
+    'commercialPromise',
+    'targetCustomer',
+    'brandVoice',
+    'priorityProducts',
+    'mainObjections',
+    'contentAngles',
+    'prohibitedLanguage',
+    'channelRules',
+    'moduleRules',
+    'weeklyAngles',
+  ],
+};
+
 const GROWTH_PLANNER_SCHEMA = {
   type: Type.OBJECT,
   properties: {
@@ -327,6 +377,7 @@ const GROWTH_STRATEGY_SCHEMA = {
     nicheInsights: stringArraySchema,
     planNarrative: { type: Type.STRING },
     strategicTip: { type: Type.STRING },
+    strategyBrief: strategyBriefSchema,
     roadmap: GROWTH_PLANNER_SCHEMA.properties.roadmap,
     brandAnalysis: GROWTH_PLANNER_SCHEMA.properties.brandAnalysis,
     productAnalysis: GROWTH_PLANNER_SCHEMA.properties.productAnalysis,
@@ -344,6 +395,7 @@ const GROWTH_STRATEGY_SCHEMA = {
     'nicheInsights',
     'planNarrative',
     'strategicTip',
+    'strategyBrief',
     'roadmap',
     'brandAnalysis',
     'productAnalysis',
@@ -1420,10 +1472,42 @@ function normalizePlan(raw: any, input: GenerateGrowthPlanInput): GrowthStrategi
   return plan;
 }
 
+function compactText(value: unknown, maxChars: number): string {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  return text.length > maxChars ? `${text.slice(0, Math.max(0, maxChars - 1)).trim()}…` : text;
+}
+
+function compactList(values: unknown, maxItems: number, maxItemChars: number): string[] {
+  return asArray<string>(values as string[] | undefined, [])
+    .map(value => compactText(value, maxItemChars))
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
 function productSummaryForPrompt(products: GrowthProduct[]): string {
-  return products.map((product, index) =>
-    `${index + 1}. ${product.name} | ${product.category} | ${product.price} | ${product.credits || product.stock} | ${product.idealFor || product.benefit} | ${product.messageKey || product.benefit}`,
-  ).join('\n');
+  const visibleProducts = products.slice(0, MAX_PRODUCTS_IN_PROMPT);
+  const lines = visibleProducts.map((product, index) => {
+    const line = [
+      `${index + 1}. ${product.name}`,
+      product.category,
+      product.price,
+      product.credits || product.stock,
+      product.idealFor || product.benefit,
+      product.messageKey || product.benefit,
+    ].map(part => compactText(part, 70)).filter(Boolean).join(' | ');
+    return compactText(line, MAX_PRODUCT_LINE_CHARS);
+  });
+
+  if (products.length > visibleProducts.length) {
+    const remainingNames = products
+      .slice(visibleProducts.length)
+      .map(product => compactText(product.name, 45))
+      .filter(Boolean)
+      .join(', ');
+    lines.push(`Otros ${products.length - visibleProducts.length} producto(s) disponibles: ${compactText(remainingNames, 900)}`);
+  }
+
+  return compactText(lines.join('\n'), MAX_PRODUCT_SUMMARY_CHARS);
 }
 
 type TaskBatch = {
@@ -1536,6 +1620,8 @@ Debes disenar la estrategia base de un Planner Estrategico para una emprendedora
 REGLAS:
 - Responde SOLO JSON valido. Sin markdown fuera del JSON.
 - No generes tareas todavia. Solo diagnostico, roadmap y analisis.
+- Crea un strategyBrief ejecutivo para que cada semana se genere despues consultando esa guia.
+- El strategyBrief debe ser corto, accionable y especifico: objetivo maestro, promesa, objeciones, productos prioritarios, angulos por semana, reglas de canal y reglas de modulo.
 - No uses busqueda web ni cites fuentes externas.
 - Fecha actual/base: ${today}.
 - Escribe compacto, especifico y comercial. Evita frases genericas.
@@ -1564,6 +1650,19 @@ Devuelve este objeto sin tareas:
   "nicheInsights": ["string"],
   "planNarrative": "string",
   "strategicTip": "string",
+  "strategyBrief": {
+    "masterObjective": "string",
+    "commercialPromise": "string",
+    "targetCustomer": "string",
+    "brandVoice": "string",
+    "priorityProducts": ["string"],
+    "mainObjections": ["string"],
+    "contentAngles": ["string"],
+    "prohibitedLanguage": ["string"],
+    "channelRules": ["string"],
+    "moduleRules": ["string"],
+    "weeklyAngles": [{"week":1,"objective":"string","angle":"string","recommendedProducts":["string"],"ctaFocus":"string"}]
+  },
   "roadmap": [{"week":1,"title":"string","objective":"string","funnelRole":"atraer","hint":"string"}],
   "brandAnalysis": {"stageInterpretation":"string","targetAnalysis":"string","voiceGuide":"string"},
   "productAnalysis": {"productWarnings":["string"],"confidenceByProduct":[{"productId":"id","level":80,"reason":"string"}],"categorizationSummary":"string"},
@@ -1574,25 +1673,50 @@ Devuelve este objeto sin tareas:
 }`;
 }
 
-function compactStrategyForPrompt(strategy: any): string {
-  return JSON.stringify({
-    strategyGoal: strategy?.strategyGoal,
-    businessDiagnosis: strategy?.businessDiagnosis,
-    planNarrative: strategy?.planNarrative,
-    strategicTip: strategy?.strategicTip,
-    roadmap: strategy?.roadmap,
-    brandAnalysis: strategy?.brandAnalysis,
-    productAnalysis: strategy?.productAnalysis,
-    socialMetricsAnalysis: strategy?.socialMetricsAnalysis,
-    nicheInsights: strategy?.nicheInsights,
-  }, null, 2);
+function strategyBriefForPrompt(strategy: any, batch: TaskBatch): string {
+  const brief = strategy?.strategyBrief || {};
+  const roadmapItem = asArray<any>(strategy?.roadmap, [])
+    .find(item => Number(item?.week) === batch.week);
+  const weeklyAngle = asArray<any>(brief?.weeklyAngles, [])
+    .find(item => Number(item?.week) === batch.week);
+
+  const compact = {
+    masterObjective: compactText(brief.masterObjective || strategy?.strategyGoal, 260),
+    commercialPromise: compactText(brief.commercialPromise || strategy?.planNarrative, 260),
+    targetCustomer: compactText(brief.targetCustomer || strategy?.brandAnalysis?.targetAnalysis, 240),
+    brandVoice: compactText(brief.brandVoice || strategy?.brandAnalysis?.voiceGuide, 220),
+    priorityProducts: compactList(brief.priorityProducts, 8, 90),
+    mainObjections: compactList(brief.mainObjections, 6, 120),
+    contentAngles: compactList(brief.contentAngles, 8, 120),
+    prohibitedLanguage: uniqueStrings([
+      ...compactList(brief.prohibitedLanguage, 8, 70),
+      'brillar',
+      'contenido de valor',
+      'llevar al siguiente nivel',
+    ]),
+    channelRules: compactList(brief.channelRules, 5, 130),
+    moduleRules: compactList(brief.moduleRules, 5, 130),
+    currentWeek: {
+      week: batch.week,
+      title: batch.title,
+      objective: compactText(weeklyAngle?.objective || roadmapItem?.objective || batch.focus, 260),
+      angle: compactText(weeklyAngle?.angle || roadmapItem?.hint || batch.focus, 260),
+      recommendedProducts: compactList(weeklyAngle?.recommendedProducts, 6, 90),
+      ctaFocus: compactText(weeklyAngle?.ctaFocus || (batch.funnelRole === 'convertir' ? 'DM, WhatsApp o checkout' : 'guardar, comentar o pedir informacion'), 160),
+      funnelRole: batch.funnelRole,
+    },
+    sourceFallback: brief?.masterObjective ? 'strategyBrief generado por Gemini' : 'fallback compacto desde estrategia base',
+  };
+
+  return compactText(JSON.stringify(compact, null, 2), MAX_STRATEGY_CONTEXT_CHARS);
 }
 
 function compactTaskSummary(tasks: any[]): string {
   if (!tasks.length) return 'Aun no hay tareas generadas.';
-  return tasks.map((task, index) =>
-    `${index + 1}. Semana ${task.week} | ${task.date || task.dayLabel} | ${task.platform} | ${task.funnelRole} | ${task.contentType} | ${task.caption}`,
-  ).join('\n');
+  const lines = tasks.map((task, index) =>
+    `${index + 1}. S${task.week} | ${task.date || task.dayLabel} | ${task.platform} | ${task.funnelRole} | ${compactText(task.contentType, 70)} | ${compactText(task.caption || task.visualConcept, 120)}`,
+  );
+  return compactText(lines.join('\n'), MAX_EXISTING_TASKS_CHARS);
 }
 
 function buildTaskBatchPrompt(
@@ -1609,6 +1733,7 @@ function buildTaskBatchPrompt(
 Genera SOLO las tareas de la ${batch.title} para un plan de ${input.duration} dias.
 
 REGLAS:
+- Antes de generar, consulta el BRIEF ESTRATEGICO OPERATIVO y alinea todas las tareas con el objetivo de esta semana.
 - Responde SOLO JSON valido. Sin markdown fuera del JSON.
 - Crea EXACTAMENTE ${batch.taskCount} tareas.
 - Todas las tareas deben tener week=${batch.week}.
@@ -1627,10 +1752,13 @@ REGLAS:
 - No uses placeholders con corchetes.
 - Status inicial de todas las tareas: pending.
 - Evita lenguaje generico como "brillar", "contenido de valor" o "llevar al siguiente nivel".
-${previousError ? `\nERROR A CORREGIR DEL INTENTO ANTERIOR:\n${previousError}\n` : ''}
+${previousError ? `\nERROR A CORREGIR DEL INTENTO ANTERIOR:\n${compactText(previousError, MAX_ERROR_CONTEXT_CHARS)}\n` : ''}
 
-ESTRATEGIA BASE:
-${compactStrategyForPrompt(strategy)}
+BRIEF ESTRATEGICO OPERATIVO:
+${strategyBriefForPrompt(strategy, batch)}
+
+OBJETIVO ESPECIFICO DE ESTA SEMANA:
+Semana ${batch.week} - ${batch.title}: ${batch.focus}
 
 MARCA:
 ${JSON.stringify(input.brand, null, 2)}
@@ -1682,10 +1810,10 @@ function buildTaskRepairPrompt(
   brokenPayload: any,
   errorMessage: string,
 ): string {
-  return `${buildTaskBatchPrompt(input, strategy, batch, existingTasks, errorMessage)}
+  return `${buildTaskBatchPrompt(input, strategy, batch, existingTasks, compactText(errorMessage, MAX_ERROR_CONTEXT_CHARS))}
 
 JSON ANTERIOR A CORREGIR:
-${JSON.stringify(brokenPayload || {}, null, 2)}
+${compactText(JSON.stringify(brokenPayload || {}, null, 2), MAX_REPAIR_JSON_CHARS)}
 
 Corrige el JSON anterior y devuelve un bloque valido con EXACTAMENTE ${batch.taskCount} tareas completas para la semana ${batch.week}.`;
 }
