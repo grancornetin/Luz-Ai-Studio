@@ -108,6 +108,25 @@ const getProjectDocRef = (projectId: string) => {
   return doc(db, 'users', user.uid, 'projects', projectId);
 };
 
+function removeUndefinedFields<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value
+      .filter(item => item !== undefined)
+      .map(item => removeUndefinedFields(item)) as T;
+  }
+
+  if (value && typeof value === 'object') {
+    if (value instanceof Timestamp || value instanceof Date) return value;
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, entry]) => entry !== undefined)
+        .map(([key, entry]) => [key, removeUndefinedFields(entry)]),
+    ) as T;
+  }
+
+  return value;
+}
+
 // ── CRUD básico ───────────────────────────────────────────────
 
 export const createProject = async (name: string): Promise<Project> => {
@@ -260,7 +279,7 @@ export const saveGrowthPlan = async (
 ): Promise<void> => {
   const docRef = getProjectDocRef(projectId);
   await updateDoc(docRef, {
-    growthPlan,
+    growthPlan: removeUndefinedFields(growthPlan),
     updatedAt: Timestamp.now(),
   });
 };
@@ -281,7 +300,7 @@ export const updateGrowthPlanTaskStatus = async (
   );
   const updatedPlan = { ...growthPlan, tasks };
   await updateDoc(docRef, {
-    growthPlan: updatedPlan,
+    growthPlan: removeUndefinedFields(updatedPlan),
     updatedAt: Timestamp.now(),
   });
   return updatedPlan;
