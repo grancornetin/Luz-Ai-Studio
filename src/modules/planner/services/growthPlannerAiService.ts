@@ -35,6 +35,7 @@ const POLL_INTERVAL_MS = 2000;
 const MAX_POLL_ATTEMPTS = 90;
 const MAX_WEEK_GENERATION_ATTEMPTS = 3;
 const MAX_WEEK_REPAIR_ATTEMPTS = 2;
+const MAX_COMPLETION_ROUNDS = 3;
 const ALLOW_GENERIC_TASK_FALLBACK = false;
 const MAX_PRODUCTS_IN_PROMPT = 30;
 const MAX_PRODUCT_LINE_CHARS = 220;
@@ -1604,6 +1605,40 @@ function taskBatchesForDuration(duration: GrowthPlanDuration): TaskBatch[] {
   ];
 }
 
+function taskBatchWithCount(batch: TaskBatch, taskCount: number): TaskBatch {
+  return {
+    ...batch,
+    taskCount,
+  };
+}
+
+function remainingDefaultTasks(batches: TaskBatch[], startIndex: number): number {
+  return batches
+    .slice(startIndex)
+    .reduce((total, batch) => total + batch.taskCount, 0);
+}
+
+function completionBatchForDuration(input: GenerateGrowthPlanInput, missingTasks: number): TaskBatch {
+  const defaultBatches = taskBatchesForDuration(input.duration);
+  const lastBatch = defaultBatches[defaultBatches.length - 1];
+  return {
+    stepId: 'completion',
+    week: lastBatch?.week || 1,
+    title: 'Complemento estrategico final',
+    taskCount: Math.max(1, missingTasks),
+    dayStart: lastBatch?.dayStart || 1,
+    dayEnd: input.duration,
+    funnelRole: 'convertir',
+    focus: 'Completar las tareas faltantes sin repetir ideas previas, reforzando los huecos del embudo y manteniendo la estrategia principal.',
+  };
+}
+
+function maxOutputTokensForTaskBatch(taskCount: number): number {
+  if (taskCount >= 8) return 8192;
+  if (taskCount >= 7) return 6144;
+  return 5120;
+}
+
 function roadmapInstruction(duration: GrowthPlanDuration): string {
   return taskBatchesForDuration(duration)
     .map(batch => `Semana ${batch.week}: ${batch.title} - ${batch.focus}`)
@@ -1735,7 +1770,7 @@ Genera SOLO las tareas de la ${batch.title} para un plan de ${input.duration} di
 REGLAS:
 - Antes de generar, consulta el BRIEF ESTRATEGICO OPERATIVO y alinea todas las tareas con el objetivo de esta semana.
 - Responde SOLO JSON valido. Sin markdown fuera del JSON.
-- Crea EXACTAMENTE ${batch.taskCount} tareas.
+- Intenta crear ${batch.taskCount} tareas completas. Si el modelo entrega menos tareas pero son buenas, el sistema compensara en otro bloque.
 - Todas las tareas deben tener week=${batch.week}.
 - Las fechas deben estar entre el dia ${batch.dayStart} y el dia ${batch.dayEnd} del plan, contando desde ${today}, sin fechas pasadas.
 - Foco de esta semana: ${batch.focus}
@@ -1815,45 +1850,17 @@ function buildTaskRepairPrompt(
 JSON ANTERIOR A CORREGIR:
 ${compactText(JSON.stringify(brokenPayload || {}, null, 2), MAX_REPAIR_JSON_CHARS)}
 
-Corrige el JSON anterior y devuelve un bloque valido con EXACTAMENTE ${batch.taskCount} tareas completas para la semana ${batch.week}.`;
+Corrige el JSON anterior y devuelve hasta ${batch.taskCount} tareas completas para la semana ${batch.week}. Si faltan tareas menores, prioriza que las tareas devueltas sean solidas y ejecutables.`;
 }
 
 function validateTaskBatchPayload(raw: any, batch: TaskBatch): any[] {
   const tasks = asArray<any>(raw?.tasks, []);
-  if (tasks.length < batch.taskCount) {
-    throw new Error(`La semana ${batch.week} devolvio ${tasks.length} tareas y necesita ${batch.taskCount}.`);
+  const minimumUsableTasks = 1;
+  if (tasks.length < minimumUsableTasks) {
+    throw new Error(`La semana ${batch.week} no devolvio tareas utilizables.`);
   }
 
-  const selected = tasks.slice(0, batch.taskCount);
-  const missing = selected
-    .map((task, index) => {
-      const missingFields = [
-        'platform',
-        'contentType',
-        'funnelRole',
-        'module',
-        'moduleReason',
-        'visualConcept',
-        'whyItWorks',
-        'caption',
-        'slotInstructions',
-        'requiredAssets',
-        'executionRecipe',
-        'shotGuide',
-        'engagementHook',
-        'status',
-      ].filter(field => task?.[field] === undefined || task?.[field] === null || task?.[field] === '');
-      const recipeSteps = Array.isArray(task?.executionRecipe?.steps) ? task.executionRecipe.steps : [];
-      const shotGuide = task?.shotGuide;
-      if (!recipeSteps.length) missingFields.push('executionRecipe.steps');
-      if (!shotGuide || !Array.isArray(shotGuide.shots)) missingFields.push('shotGuide.shots');
-      return missingFields.length ? `Tarea ${index + 1}: ${missingFields.join(', ')}` : '';
-    })
-    .filter(Boolean);
-
-  if (missing.length) {
-    throw new Error(`La semana ${batch.week} tiene tareas incompletas: ${missing.join(' | ')}`);
-  }
+  const selected = tasks.slice(0, Math.min(tasks.length, batch.taskCount));
 
   return selected.map((task, index) => ({
     ...task,
@@ -1940,7 +1947,7 @@ async function generateTaskBatchWithRecovery(
         token,
         prompt: buildTaskBatchPrompt(input, strategy, batch, existingTasks, lastError),
         schema: TASK_BATCH_SCHEMA,
-        maxOutputTokens: batch.taskCount >= 7 ? 6144 : 5120,
+        maxOutputTokens: maxOutputTokensForTaskBatch(batch.taskCount),
         temperature: 0.45,
       });
       return {
@@ -1959,7 +1966,7 @@ async function generateTaskBatchWithRecovery(
         token,
         prompt: buildTaskRepairPrompt(input, strategy, batch, existingTasks, lastRaw, lastError),
         schema: TASK_BATCH_SCHEMA,
-        maxOutputTokens: batch.taskCount >= 7 ? 6144 : 5120,
+        maxOutputTokens: maxOutputTokensForTaskBatch(batch.taskCount),
         temperature: 0.25,
       });
       return {
@@ -2023,13 +2030,45 @@ export async function generateGrowthPlanWithGemini(
   const tasks: any[] = [];
   const warnings: string[] = asArray(strategy?.generationLog?.warnings, []);
   const fixedErrors: string[] = asArray(strategy?.generationLog?.fixedErrors, []);
+  const expectedTasks = taskRange(input.duration).min;
 
-  for (const batch of batches) {
+  for (let index = 0; index < batches.length; index++) {
+    const batch = batches[index];
+    const remainingDefault = remainingDefaultTasks(batches, index + 1);
+    const neededToProtectMinimum = expectedTasks - tasks.length - remainingDefault;
+    const targetForThisBatch = Math.max(batch.taskCount, neededToProtectMinimum);
+    const effectiveBatch = taskBatchWithCount(batch, targetForThisBatch);
+
     options.onProgress?.({ stepId: batch.stepId, label: `Generando semana ${batch.week}` });
-    const result = await generateTaskBatchWithRecovery(input, token, strategy, batch, tasks);
+    const result = await generateTaskBatchWithRecovery(input, token, strategy, effectiveBatch, tasks);
     tasks.push(...result.tasks);
     warnings.push(...result.warnings);
     fixedErrors.push(...result.fixedErrors);
+
+    if (result.tasks.length < effectiveBatch.taskCount) {
+      fixedErrors.push(
+        `Semana ${batch.week} genero ${result.tasks.length}/${effectiveBatch.taskCount} tareas; el faltante se compensara en los siguientes bloques.`,
+      );
+    }
+  }
+
+  let completionRound = 0;
+  while (tasks.length < expectedTasks && completionRound < MAX_COMPLETION_ROUNDS) {
+    completionRound += 1;
+    const missingTasks = expectedTasks - tasks.length;
+    const completionBatch = completionBatchForDuration(input, missingTasks);
+    options.onProgress?.({
+      stepId: 'validation',
+      label: missingTasks === 1 ? 'Completando una tarea faltante' : `Completando ${missingTasks} tareas faltantes`,
+    });
+    const beforeCompletion = tasks.length;
+    const result = await generateTaskBatchWithRecovery(input, token, strategy, completionBatch, tasks);
+    tasks.push(...result.tasks.slice(0, missingTasks));
+    warnings.push(...result.warnings);
+    fixedErrors.push(
+      ...result.fixedErrors,
+      `Bloque complementario ${completionRound} agrego ${tasks.length - beforeCompletion} tarea(s) reales con Gemini.`,
+    );
   }
 
   options.onProgress?.({ stepId: 'validation', label: 'Validando y guardando plan' });
