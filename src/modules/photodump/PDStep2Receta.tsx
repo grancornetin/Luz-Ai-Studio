@@ -219,7 +219,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                     {/* Contenido expandido */}
                     {isOpen && (
                       <div className="px-3.5 pb-3.5 space-y-3">
-                        <div className={`grid gap-2 ${max <= 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                        <div className={`grid gap-2 ${max <= 2 ? 'grid-cols-2' : 'grid-cols-3 md:grid-cols-4'}`}>
                           {Array.from({ length: max }).map((_, i) => {
                             const images = getSlotImages(key);
                             const isFirst   = i === 0;
@@ -235,9 +235,9 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                                   value={images[i] ?? null}
                                   onChange={v => handleSlotChange(key, i, v)}
                                   slotType={slotType as any}
-                                  aspectRatio="portrait"
+                                  aspectRatio="square"
                                   disabled={isDisabled}
-                                  iconless={false}
+                                  iconless
                                 />
                               </div>
                             );

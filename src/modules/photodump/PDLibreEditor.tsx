@@ -119,13 +119,13 @@ const RefSlot: React.FC<RefSlotProps> = ({ slot, images, onAdd, onRemove }) => {
 
           {/* Agregar nueva imagen */}
           {canAdd && (
-            <div className="border-2 border-dashed border-slate-200 rounded-xl overflow-hidden">
+            <div className="border-2 border-dashed border-slate-200 rounded-xl overflow-hidden" style={{ maxWidth: 80 }}>
               <ImageSlot
                 value={null}
                 onChange={v => { if (v) onAdd(v); }}
                 slotType={slot.slotType}
-                aspectRatio="portrait"
-                iconless={false}
+                aspectRatio="square"
+                iconless
               />
             </div>
           )}
