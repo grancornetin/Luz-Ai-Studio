@@ -14,7 +14,10 @@ export type GrowthTaskPriority = 'primary' | 'support';
 
 export type GrowthCtaTarget =
   | 'Instagram DM'
+  | 'Comentario'
   | 'Facebook comentario'
+  | 'DM Facebook'
+  | 'Link'
   | 'WhatsApp'
   | 'Link en bio'
   | 'Guardar'

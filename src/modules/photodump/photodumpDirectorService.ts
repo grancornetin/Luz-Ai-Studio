@@ -5,7 +5,7 @@
  * pero orientada a storytelling orgánico en lugar de anuncios.
  *
  * UGC Studio  → Sesión fotográfica para ads (6 shots técnicos fijos)
- * Photodump   → Historia visual narrativa (N shots con arco: hook → development → closing)
+ * Photodump   → Constelación narrativa visual (N momentos orgánicos: context, detail, emotion, texture, action, atmosphere, reveal, candid)
  */
 import { ugcApiService } from '../../services/ugcApiService';
 import { imageApiService } from '../../services/imageApiService';
@@ -20,13 +20,24 @@ import {
 
 // ── Tipos ─────────────────────────────────────────────────────
 
-export type StoryBeat = 'hook' | 'development' | 'closing';
+export type MomentType =
+  | 'context'     // ambiente y mundo
+  | 'detail'      // fragmento íntimo — textura, objeto
+  | 'emotion'     // expresión o reacción genuina
+  | 'texture'     // material, superficie, profundidad
+  | 'action'      // alguien haciendo algo, en movimiento
+  | 'atmosphere'  // mood — luz, espacio, silencio
+  | 'reveal'      // ángulo que muestra algo nuevo
+  | 'candid';     // captura espontánea sin pose
+
+// Alias para compatibilidad con código existente que use StoryBeat
+export type StoryBeat = MomentType;
 
 export interface PhotodumpShotDirective {
   key:              string;          // 'S1' … 'S6'
-  beat:             StoryBeat;
-  role:             string;          // HOOK | DEVELOPMENT | CLOSING
-  purpose:          string;          // descripción para el prompt Gemini
+  beat:             MomentType;
+  role:             string;          // tipo de momento en mayúsculas
+  purpose:          string;          // descripción para el prompt
   requiredElements: string[];
   forbiddenElements: string[];
   variationSpace:   string[];        // 4 variaciones visuales a elegir
@@ -175,12 +186,13 @@ A grid or collage of multiple images is a HARD FAILURE.
 
 const STORY_MODE_DOMINANCE = `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📖 MODE DOMINANCE: PHOTODUMP — ORGANIC STORY MODE
+📖 MODE DOMINANCE: PHOTODUMP — ORGANIC VISUAL CONSTELLATION
 
 IDENTITY: This is a real person's Instagram photodump / carousel.
-Think "my day", "how it went", "a moment I wanted to share".
-The set tells a story. Each image is a chapter.
-The person is the protagonist — not a model, not a brand ambassador.
+Think "my day", "something I wanted to share", "a moment that happened".
+The set is a constellation of visual moments — each image stands on its own
+and connects to the others through mood, light, and world, not through narrative sequence.
+There is no "first act" or "last act". Every image belongs to the same world.
 
 CRITICAL RULES:
 - NO commercial feel. NO ad composition. NO product placement vibe.
@@ -188,19 +200,50 @@ CRITICAL RULES:
 - The person has a LIFE in these photos — they are not posing FOR a camera,
   they are being captured BY a camera that happens to be nearby.
 - VARIETY IS MANDATORY: each shot must have a different framing, angle, and emotional tone.
-- The set as a whole tells a coherent visual story with a beginning, middle, and end.
+- The set as a whole shares a coherent visual world — same light, same mood, same person.
 
 ANTI-AD RULES (NON-NEGOTIABLE):
 - No product-first compositions (even if a product is present).
-- No "look at the camera holding the product" shots unless it's the closing shot.
 - No symmetric centered compositions that feel composed for a brand.
 - No studio or controlled lighting feel.
 - No text overlays, no logo placement, no brand color dominance.
 
 WHAT MAKES A GREAT PHOTODUMP:
-- First image stops the scroll — unusual angle, strong emotion, or beautiful moment.
-- Middle images draw you into the world — details, textures, candid moments, context.
-- Last image makes you save or share — a feeling, a mood, an emotion that lands.
+- Each image could stand alone as a real moment — not as "image 1 of 4".
+- Together they feel like scrolling through someone's camera roll.
+- No single image announces itself as the "opener" or the "closer".
+- The emotional impact comes from variety and authenticity, not from sequence.
+`;
+
+const STORY_MODE_FACELESS = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎬 MODE DOMINANCE: FACELESS BTS — ORGANIC BEHIND-THE-SCENES CONTENT
+
+IDENTITY: This is 100% faceless content. No face, no head, no person visible.
+Think "behind the scenes", "this is how I pack orders", "the process you never see".
+The set shows the world of the brand/product through objects, hands, textures, and spaces.
+
+WHAT IS ALLOWED:
+- Hands and arms (without showing face or full body)
+- The product at any stage: raw material, in production, packaged, ready to ship
+- The workspace, tools, surfaces, materials
+- Packaging, labels, boxes, tissue paper, tape — any part of the prep process
+- Close-ups of textures, stitching, finishes, materials
+
+WHAT IS FORBIDDEN:
+- Any face, head, or recognizable person
+- Full-body shots that include the face
+- Selfies or portrait framing
+- Product catalog look (the BTS feel is mandatory — imperfect, real, honest)
+- Studio lighting, white background, commercial composition
+
+WHAT MAKES GREAT FACELESS CONTENT:
+- Hands doing something real — not posed, actively working
+- The product in a process, not finished and displayed
+- Surfaces that feel lived-in: scratched wood, fabric texture, kraft paper
+- Light that feels like a window, not a softbox
+- The viewer feels like they are looking over the creator's shoulder
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -227,42 +270,66 @@ function getAspectInstruction(destino: PhotodumpDestino): string {
   return 'Compose for 9:16 full vertical (TikTok). Bold framing, strong visual impact.';
 }
 
-// ── Shot Directives narrativos ────────────────────────────────
+// ── Shot Directives (constelación de momentos) ────────────────
 
 function buildStoryDirectives(
-  count:       number,
+  count:      number,
   protagonist: PhotodumpProtagonist,
-  destino:     PhotodumpDestino,
-  narrative:   PhotodumpNarrative,
+  destino:    PhotodumpDestino,
+  narrative:  PhotodumpNarrative,
 ): PhotodumpShotDirective[] {
 
   const ar = destino === 'feed' ? '4/5' : '9/16';
 
-  // Pool de shots disponibles según el protagonista
-  const allShots: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] = protagonist === 'product'
-    ? buildProductStoryShots()
-    : buildPersonStoryShots();
+  const isFaceless = narrative === 'faceless';
 
-  // Distribuir en arco narrativo
-  const beats = distributeBeat(count);
+  const allShots: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] =
+    isFaceless
+      ? buildFacelessBTSShots()
+      : protagonist === 'product'
+        ? buildProductStoryShots()
+        : buildPersonStoryShots();
 
-  return beats.map((beat, i) => {
-    // Asignar el shot más apropiado para este beat
-    const pool = allShots.filter(s =>
-      beat === 'hook'        ? s.beat === 'hook' :
-      beat === 'closing'     ? s.beat === 'closing' :
-      s.beat === 'development'
-    );
-    const shot = pool[i % pool.length] ?? allShots[i % allShots.length];
-    return { ...shot, beat, arcPosition: i + 1, aspectRatio: ar };
+  const moments = distributeMoments(count, protagonist, isFaceless);
+
+  return moments.map((moment, i) => {
+    const pool = allShots.filter(s => s.beat === moment);
+    const shot = pool[i % Math.max(pool.length, 1)] ?? allShots[i % allShots.length];
+    return { ...shot, beat: moment, arcPosition: i + 1, aspectRatio: ar };
   });
 }
 
-function distributeBeat(count: number): StoryBeat[] {
-  if (count === 3) return ['hook', 'development', 'closing'];
-  if (count === 4) return ['hook', 'development', 'development', 'closing'];
-  if (count === 5) return ['hook', 'development', 'development', 'development', 'closing'];
-  return ['hook', 'development', 'development', 'development', 'development', 'closing'];
+// Distribuye momentos visuales de forma orgánica, sin arco fijo.
+// Garantiza variedad: nunca dos momentos del mismo tipo consecutivos.
+// El orden varía según el count para evitar patrones repetitivos entre sesiones.
+function distributeMoments(
+  count:      number,
+  protagonist: PhotodumpProtagonist,
+  faceless:   boolean = false,
+): MomentType[] {
+  const personMoments: MomentType[] = [
+    'candid', 'context', 'emotion', 'detail', 'atmosphere', 'candid',
+  ];
+  const productMoments: MomentType[] = [
+    'context', 'texture', 'action', 'detail', 'atmosphere', 'reveal',
+  ];
+  // BTS faceless: cubre los 6 tipos de shots del pool buildFacelessBTSShots
+  const facelessMoments: MomentType[] = [
+    'context', 'action', 'detail', 'reveal', 'atmosphere', 'texture',
+  ];
+
+  const pool = faceless
+    ? facelessMoments
+    : protagonist === 'product'
+      ? productMoments
+      : personMoments;
+
+  // Rotar el punto de inicio según el count para que distintos tamaños
+  // de set empiecen con momentos diferentes (evita que "context" sea siempre primera)
+  const offset = count % pool.length;
+  const rotated = [...pool.slice(offset), ...pool.slice(0, offset)];
+
+  return rotated.slice(0, count);
 }
 
 // ── Person story shots ────────────────────────────────────────
@@ -270,27 +337,10 @@ function distributeBeat(count: number): StoryBeat[] {
 function buildPersonStoryShots(): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
   return [
     {
-      key:   'HOOK_SCROLL_STOP',
-      beat:  'hook',
-      role:  'HOOK',
-      purpose: 'La primera imagen que para el scroll. Ángulo o encuadre inesperado, emoción fuerte, o momento visualmente poderoso. El espectador no puede no detenerse. Medium shot o close-up, cara dominante, expresión con carácter.',
-      requiredElements: ['face_dominant_or_striking_angle', 'strong_emotion_or_mood', 'unexpected_composition', 'authentic_not_posed'],
-      forbiddenElements: ['symmetric_catalog_pose', 'neutral_expression', 'ad_composition', 'product_forward', 'studio_feel', 'beautification', 'mannequin_stance'],
-      variationSpace: [
-        'close-up ladeado desde abajo, cara mirando hacia arriba y al frente, expresión segura, luz lateral',
-        'medium shot desde arriba, persona mirando hacia el costado, pelo moviéndose, fondo desenfocado',
-        'close-up de tres cuartos con fondo de colores, expresión intensa o risas, luz natural dura',
-        'encuadre apretado desde costado, cara en perfil mirando a cámara al último momento, ambiente urbano',
-      ],
-      framing:     'MEDIUM_OR_CLOSE_UP',
-      composition: 'ASYMMETRIC_OR_UNEXPECTED',
-      cameraAngle: 'LOW_ANGLE_OR_EYE_LEVEL',
-    },
-    {
-      key:   'DEV_CANDID_MOMENT',
-      beat:  'development',
-      role:  'DEVELOPMENT',
-      purpose: 'Momento candidato real. La persona no "posa" — está haciendo algo: tomando algo, mirando lejos, acomodándose el cabello, riendo con alguien fuera de frame. Foto tomada por un amigo cercano, no por un fotógrafo. Medium shot.',
+      key:   'CANDID_REAL_MOMENT',
+      beat:  'candid',
+      role:  'CANDID MOMENT',
+      purpose: 'Captura espontánea — la persona no sabe que la están fotografiando o acaba de darse vuelta. Haciendo algo con las manos, mirando lejos, riendo sin motivo visible. La foto la tomó un amigo con el teléfono, no un fotógrafo.',
       requiredElements: ['candid_doing_something', 'face_engaged_not_posing_for_camera', 'action_has_intention', 'natural_hands_active'],
       forbiddenElements: ['looking_directly_at_camera_posed', 'static_purposeless_pose', 'hands_hanging_limp', 'catalog_stance', 'beautification', 'ad_feel'],
       variationSpace: [
@@ -304,27 +354,10 @@ function buildPersonStoryShots(): Omit<PhotodumpShotDirective, 'arcPosition' | '
       cameraAngle: 'EYE_LEVEL_CANDID',
     },
     {
-      key:   'DEV_SELFIE_AUTHENTIC',
-      beat:  'development',
-      role:  'DEVELOPMENT',
-      purpose: 'Selfie UGC auténtica — POV brazo extendido, hombro visible abajo del frame, cara cercana y ligeramente asimétrica. SIN teléfono visible. Luz natural. Se siente tomada en el momento, no producida.',
-      requiredElements: ['arm_extended_implied_pov', 'shoulder_visible_lower_frame', 'face_dominant_natural', 'handheld_organic_framing', 'no_phone_visible'],
-      forbiddenElements: ['phone_visible', 'third_person_portrait_framing', 'professional_lighting', 'symmetric_composition', 'studio_feel', 'beautification'],
-      variationSpace: [
-        'selfie con fondo de calle o fachada, sonrisa suave y natural',
-        'selfie levemente contrapicada, cielo o exterior suave de fondo, expresión alegre',
-        'selfie interior, fondo bokeh de café o sala, expresión calmada',
-        'selfie con entorno visible parcialmente, expresión espontánea como reacción a algo',
-      ],
-      framing:     'SELFIE',
-      composition: 'HANDHELD_ASYMMETRIC',
-      cameraAngle: 'SLIGHT_UPWARD_FROM_HAND_LEVEL',
-    },
-    {
-      key:   'DEV_LIFESTYLE_CONTEXT',
-      beat:  'development',
-      role:  'DEVELOPMENT',
-      purpose: 'Full body integrado al ambiente. La persona pertenece al lugar — no está posando ANTE el lugar. Pose con actitud: apoyada, sentada, caminando lento. El ambiente es visible y cuenta algo de la historia.',
+      key:   'CONTEXT_ENVIRONMENT',
+      beat:  'context',
+      role:  'CONTEXT MOMENT',
+      purpose: 'Full body integrado al ambiente. La persona pertenece al lugar — no está posando ANTE el lugar. El espacio es visible y cuenta algo. Outfit completo visible. Pose con actitud: apoyada, sentada, caminando.',
       requiredElements: ['full_body_visible', 'natural_weight_shifted_pose', 'environment_clearly_visible_and_real', 'person_belongs_in_space', 'outfit_visible_complete'],
       forbiddenElements: ['mannequin_stiff_pose', 'catalog_symmetrical_stance', 'studio_backdrop', 'environment_neutral_blank', 'walking_motion_blur', 'beautification'],
       variationSpace: [
@@ -338,10 +371,27 @@ function buildPersonStoryShots(): Omit<PhotodumpShotDirective, 'arcPosition' | '
       cameraAngle: 'EYE_LEVEL_OR_SLIGHTLY_LOW',
     },
     {
-      key:   'DEV_DETAIL_TEXTURE',
-      beat:  'development',
-      role:  'DEVELOPMENT',
-      purpose: 'Detail shot orgánico. Un elemento del frame — un detalle de la ropa, la textura de un material, las manos con algo, o un elemento del ambiente — contado como fragmento de la historia. Sin cara necesaria.',
+      key:   'EMOTION_FACE',
+      beat:  'emotion',
+      role:  'EMOTION MOMENT',
+      purpose: 'Una expresión real y fuerte que conecta directamente con quien mira. Cara dominante, ángulo o encuadre inesperado, mood con carácter. No una pose — una reacción genuina capturada en el momento justo.',
+      requiredElements: ['face_dominant_or_striking_angle', 'strong_emotion_or_mood', 'unexpected_composition', 'authentic_not_posed'],
+      forbiddenElements: ['symmetric_catalog_pose', 'neutral_expression', 'ad_composition', 'product_forward', 'studio_feel', 'beautification', 'mannequin_stance'],
+      variationSpace: [
+        'close-up ladeado desde abajo, cara mirando hacia arriba y al frente, expresión segura, luz lateral',
+        'medium shot desde arriba, persona mirando hacia el costado, pelo moviéndose, fondo desenfocado',
+        'close-up de tres cuartos con fondo de colores, expresión intensa o risas, luz natural dura',
+        'encuadre apretado desde costado, cara en perfil mirando a cámara al último momento',
+      ],
+      framing:     'MEDIUM_OR_CLOSE_UP',
+      composition: 'ASYMMETRIC_OR_UNEXPECTED',
+      cameraAngle: 'LOW_ANGLE_OR_EYE_LEVEL',
+    },
+    {
+      key:   'DETAIL_FRAGMENT',
+      beat:  'detail',
+      role:  'DETAIL MOMENT',
+      purpose: 'Un fragmento del mundo visible — un detalle de la ropa, la textura de un material, las manos con algo, un elemento del ambiente. Sin cara necesaria. El fragmento cuenta más que el todo.',
       requiredElements: ['detail_subject_fills_frame', 'texture_or_material_visible', 'real_context_background', 'intentional_framing'],
       forbiddenElements: ['face_dominant', 'full_body', 'forced_product_placement', 'studio_lighting', 'white_background', 'ad_composition'],
       variationSpace: [
@@ -355,21 +405,149 @@ function buildPersonStoryShots(): Omit<PhotodumpShotDirective, 'arcPosition' | '
       cameraAngle: 'TOP_DOWN_OR_MACRO_ANGLE',
     },
     {
-      key:   'CLOSING_EMOTIONAL',
-      beat:  'closing',
-      role:  'CLOSING',
-      purpose: 'La imagen que cierra la historia y genera acción — save, share, visita al perfil. Una emoción que queda, un momento que resume todo el set. Puede ser un close-up íntimo, una wide shot atmosférica, o una expresión que conecta directamente con quien mira.',
-      requiredElements: ['strong_emotional_resonance', 'memorable_composition', 'authentic_mood', 'story_feels_complete'],
-      forbiddenElements: ['neutral_generic_ending', 'catalog_final_shot', 'product_forward_close', 'ad_cta_feel', 'beautification', 'overly_posed'],
+      key:   'ATMOSPHERE_SELFIE',
+      beat:  'atmosphere',
+      role:  'ATMOSPHERE MOMENT',
+      purpose: 'Selfie UGC auténtica o portrait íntimo con mood dominante. El ambiente envuelve a la persona. Luz, color y espacio son tan importantes como la cara. Se siente tomada en un momento real, no producida.',
+      requiredElements: ['arm_extended_implied_pov', 'shoulder_visible_lower_frame', 'face_dominant_natural', 'handheld_organic_framing', 'no_phone_visible'],
+      forbiddenElements: ['phone_visible', 'third_person_portrait_framing', 'professional_lighting', 'symmetric_composition', 'studio_feel', 'beautification'],
       variationSpace: [
-        'close-up íntimo mirando a cámara, expresión suave y segura, como un último momento',
-        'wide shot atmosférica — persona pequeña en el ambiente, luz de hora dorada o azul',
-        'medium shot de espalda parcial mirando hacia algo fuera de frame, sensación de continuidad',
-        'close-up de expresión de alegría genuina o risa compartida, ojos cálidos, último frame que queda en la memoria',
+        'selfie con fondo de calle o fachada, sonrisa suave y natural',
+        'selfie levemente contrapicada, cielo o exterior suave de fondo, expresión alegre',
+        'selfie interior, fondo bokeh de café o sala, expresión calmada',
+        'selfie con entorno visible parcialmente, expresión espontánea como reacción a algo',
+      ],
+      framing:     'SELFIE',
+      composition: 'HANDHELD_ASYMMETRIC',
+      cameraAngle: 'SLIGHT_UPWARD_FROM_HAND_LEVEL',
+    },
+    {
+      key:   'REVEAL_ANGLE',
+      beat:  'reveal',
+      role:  'REVEAL MOMENT',
+      purpose: 'Un ángulo que muestra algo diferente del mismo mundo: espalda de la persona, reflejo en espejo, sombra proyectada, vista desde abajo, overhead del espacio. Un punto de vista que sorprende sin ser artificioso.',
+      requiredElements: ['strong_emotional_resonance', 'memorable_composition', 'authentic_mood', 'unexpected_angle_or_perspective'],
+      forbiddenElements: ['neutral_generic_pose', 'catalog_composition', 'ad_cta_feel', 'beautification', 'overly_posed'],
+      variationSpace: [
+        'espalda parcial mirando hacia algo fuera de frame, luz de hora dorada desde el frente',
+        'reflejo en espejo con la cámara y el ambiente visible detrás',
+        'sombra proyectada de la persona sobre una superficie interesante',
+        'overhead del espacio desde arriba — la persona pequeña en el ambiente',
       ],
       framing:     'CLOSE_UP_OR_WIDE_ATMOSPHERIC',
       composition: 'EMOTIONALLY_DRIVEN',
       cameraAngle: 'EYE_LEVEL_OR_SLIGHTLY_HIGH',
+    },
+  ];
+}
+
+// ── Faceless BTS shots ────────────────────────────────────────
+// Pool para contenido 100% sin rostro: empaque, manos trabajando, unboxing,
+// espacio de trabajo, texturas, despachos. No requiere avatarRef.
+
+function buildFacelessBTSShots(): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
+  return [
+    {
+      key:   'BTS_WORKSPACE',
+      beat:  'context',
+      role:  'BTS WORKSPACE',
+      purpose: 'El espacio de trabajo real — mesa, herramientas, materiales. Sin persona visible. El lugar cuenta la historia del proceso sin necesitar a nadie que lo explique.',
+      requiredElements: ['workspace_visible', 'tools_or_materials_in_place', 'real_light_not_studio', 'organic_arrangement_not_staged'],
+      forbiddenElements: ['face_or_person_visible', 'studio_lighting', 'white_background', 'catalog_composition', 'forced_branding'],
+      variationSpace: [
+        'overhead de mesa de trabajo con materiales, herramientas y el producto — luz de ventana',
+        'medium shot del espacio de fondo con el producto visible en contexto real',
+        'flat lay orgánico de los elementos del proceso: tijeras, etiquetas, cajas, el producto',
+        'vista desde un lateral del espacio de trabajo, profundidad de campo, fondo desenfocado',
+      ],
+      framing:     'WIDE_OR_OVERHEAD',
+      composition: 'WORKSPACE_IN_CONTEXT',
+      cameraAngle: 'OVERHEAD_OR_EYE_LEVEL',
+    },
+    {
+      key:   'BTS_HANDS_WORKING',
+      beat:  'action',
+      role:  'BTS HANDS IN ACTION',
+      purpose: 'Manos activas haciendo algo real — empacando, sellando, escribiendo, preparando. Sin cara. El gesto dice todo sobre el proceso y el cuidado que hay detrás.',
+      requiredElements: ['hands_active_in_frame', 'product_or_material_visible', 'action_has_clear_intention', 'real_context_visible'],
+      forbiddenElements: ['face_visible', 'hands_limp_or_static', 'studio_surface', 'forced_demonstration', 'ad_composition'],
+      variationSpace: [
+        'manos empacando o sellando el producto, movimiento natural, superficie de trabajo visible',
+        'manos escribiendo nota o etiqueta personalizada junto al producto',
+        'manos sosteniendo el producto terminado desde abajo, luz natural desde arriba',
+        'manos acomodando elementos dentro del packaging, proceso visible desde arriba',
+      ],
+      framing:     'CLOSE_UP_OR_MEDIUM',
+      composition: 'HANDS_AND_PRODUCT',
+      cameraAngle: 'SLIGHT_OVERHEAD_OR_EYE_LEVEL',
+    },
+    {
+      key:   'BTS_PACKAGING',
+      beat:  'detail',
+      role:  'BTS PACKAGING DETAIL',
+      purpose: 'El packaging de cerca — el detalle que enamora antes de que llegue. Textura del papel, cierre, etiqueta, cinta. Sin persona. La calidad habla sola.',
+      requiredElements: ['packaging_detail_fills_frame', 'texture_or_material_visible', 'real_light_showing_depth', 'intentional_framing'],
+      forbiddenElements: ['full_product_catalog_shot', 'face_visible', 'white_background', 'studio_lighting', 'forced_branding'],
+      variationSpace: [
+        'close-up del cierre del packaging — cinta, solapa, etiqueta — luz lateral que muestra textura',
+        'overhead del packaging abierto con el producto dentro, vista desde arriba',
+        'macro de la etiqueta o el branding impreso, fondo desenfocado',
+        'producto dentro del packaging a medio cerrar, proceso de preparación visible',
+      ],
+      framing:     'CLOSE_UP_OR_EXTREME_CLOSE_UP',
+      composition: 'DETAIL_FILL_FRAME',
+      cameraAngle: 'TOP_DOWN_OR_MACRO_ANGLE',
+    },
+    {
+      key:   'BTS_UNBOXING_MOMENT',
+      beat:  'reveal',
+      role:  'BTS UNBOXING REVEAL',
+      purpose: 'El momento de apertura — el producto saliendo del packaging. El reveal que anticipa la experiencia del cliente. Puede haber manos pero no cara.',
+      requiredElements: ['product_emerging_from_packaging', 'opening_or_reveal_gesture', 'real_context_surface', 'anticipation_in_the_frame'],
+      forbiddenElements: ['face_visible', 'studio_backdrop', 'catalog_composition', 'product_fully_unwrapped_static'],
+      variationSpace: [
+        'manos abriendo la caja, producto asomando, fondo del espacio visible',
+        'producto ya fuera del packaging, ambos visibles juntos sobre la superficie',
+        'overhead del packaging abierto y el producto al lado, momento post-apertura',
+        'close-up de la primera capa que se levanta — papel de seda, caja interior',
+      ],
+      framing:     'MEDIUM_OR_CLOSE_UP',
+      composition: 'REVEAL_IN_PROGRESS',
+      cameraAngle: 'SLIGHT_OVERHEAD_OR_EYE_LEVEL',
+    },
+    {
+      key:   'BTS_DISPATCH_STACK',
+      beat:  'atmosphere',
+      role:  'BTS DISPATCH ATMOSPHERE',
+      purpose: 'La atmósfera del proceso de despacho — cajas listas, pedidos apilados, el volumen del trabajo. Sin persona. Transmite actividad, comunidad de compradores, movimiento.',
+      requiredElements: ['multiple_packages_or_orders_visible', 'real_workspace_light', 'sense_of_volume_or_movement', 'organic_arrangement'],
+      forbiddenElements: ['face_visible', 'forced_perfect_arrangement', 'studio_lighting', 'catalog_symmetry'],
+      variationSpace: [
+        'overhead de varios pedidos listos sobre la mesa, etiquetas visibles, luz natural',
+        'medium shot de una pila de cajas o bolsas preparadas en el espacio real',
+        'close-up de una pila de paquetes, nombres o etiquetas apilados, fondo desenfocado',
+        'lateral de la mesa de despacho con pedidos en distintas etapas de preparación',
+      ],
+      framing:     'MEDIUM_OR_WIDE',
+      composition: 'VOLUME_AND_ATMOSPHERE',
+      cameraAngle: 'EYE_LEVEL_OR_OVERHEAD',
+    },
+    {
+      key:   'BTS_TEXTURE_CLOSE',
+      beat:  'texture',
+      role:  'BTS TEXTURE DETAIL',
+      purpose: 'La textura del producto o del material con el que está hecho. Un close-up que hace que quien mira quiera tocarlo. Sin persona, sin packaging — solo el material.',
+      requiredElements: ['extreme_close_up_texture', 'material_quality_visible', 'real_light_showing_depth', 'no_person_in_frame'],
+      forbiddenElements: ['full_product_shot', 'white_background', 'studio_lighting', 'face_visible', 'forced_branding'],
+      variationSpace: [
+        'macro de la textura del material principal del producto — tela, cuero, cerámica, papel',
+        'producto sobre superficie de contraste, sombra natural lateral que acentúa volumen',
+        'close-up del acabado o terminación — costura, borde, pintura, grabado',
+        'reflejo o brillo natural del material bajo luz de ventana, ángulo bajo',
+      ],
+      framing:     'EXTREME_CLOSE_UP',
+      composition: 'TEXTURE_FILL',
+      cameraAngle: 'MACRO_ANGLE',
     },
   ];
 }
@@ -379,10 +557,10 @@ function buildPersonStoryShots(): Omit<PhotodumpShotDirective, 'arcPosition' | '
 function buildProductStoryShots(): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
   return [
     {
-      key:   'HOOK_PRODUCT_STAR',
-      beat:  'hook',
-      role:  'HOOK',
-      purpose: 'El producto como protagonista del primer frame. No un shot de catálogo — un momento en que el producto aparece en su contexto real de vida. Ángulo o luz que lo hace visualmente imposible de ignorar.',
+      key:   'CONTEXT_PRODUCT_WORLD',
+      beat:  'context',
+      role:  'CONTEXT MOMENT',
+      purpose: 'El producto en su mundo real. No un shot de catálogo — un momento en que el producto aparece integrado a un ambiente de vida. El espacio cuenta tanto como el objeto.',
       requiredElements: ['product_dominant_in_frame', 'real_context_not_studio', 'striking_light_or_angle', 'texture_visible'],
       forbiddenElements: ['white_background', 'studio_lighting', 'catalog_composition', 'floating_product', 'ad_feel', 'text_overlay'],
       variationSpace: [
@@ -396,27 +574,10 @@ function buildProductStoryShots(): Omit<PhotodumpShotDirective, 'arcPosition' | 
       cameraAngle: 'LOW_ANGLE_OR_OVERHEAD',
     },
     {
-      key:   'DEV_PRODUCT_IN_USE',
-      beat:  'development',
-      role:  'DEVELOPMENT',
-      purpose: 'El producto siendo usado de forma real y natural. Manos activas, contexto de uso visible. No una demostración — un momento genuino de alguien usándolo.',
-      requiredElements: ['hands_using_product_naturally', 'product_clearly_visible', 'context_of_use_real', 'action_has_intention'],
-      forbiddenElements: ['static_product_display', 'forced_demonstration', 'studio_feel', 'ad_composition', 'product_floating'],
-      variationSpace: [
-        'manos aplicando, sosteniendo o usando el producto, gesto natural y cotidiano',
-        'producto en su contexto de uso — cocina, baño, mesa, cartera',
-        'overhead de la acción de usar el producto, manos visibles desde arriba',
-        'medium shot de alguien con el producto en un momento casual real',
-      ],
-      framing:     'MEDIUM',
-      composition: 'HANDS_AND_PRODUCT',
-      cameraAngle: 'EYE_LEVEL_OR_SLIGHT_OVERHEAD',
-    },
-    {
-      key:   'DEV_PRODUCT_TEXTURE',
-      beat:  'development',
-      role:  'DEVELOPMENT',
-      purpose: 'El detalle que enamora. Textura, materialidad, packaging, color. Un close-up que hace que quien mira quiera tocarlo.',
+      key:   'TEXTURE_PRODUCT_DETAIL',
+      beat:  'texture',
+      role:  'TEXTURE MOMENT',
+      purpose: 'El detalle que enamora. Textura, materialidad, packaging, color. Un close-up que hace que quien mira quiera tocarlo. Sin contexto humano necesario.',
       requiredElements: ['extreme_close_up_texture', 'material_quality_visible', 'real_light_showing_depth'],
       forbiddenElements: ['full_product_catalog_shot', 'white_background', 'studio_lighting', 'face_in_frame', 'ad_branding'],
       variationSpace: [
@@ -430,27 +591,44 @@ function buildProductStoryShots(): Omit<PhotodumpShotDirective, 'arcPosition' | 
       cameraAngle: 'MACRO_ANGLE',
     },
     {
-      key:   'DEV_PRODUCT_LIFESTYLE',
-      beat:  'development',
-      role:  'DEVELOPMENT',
-      purpose: 'El producto integrado al lifestyle — no siendo demostrado, sino viviendo en el mundo real. Forma parte de la escena como un elemento más, no como el foco de una ad.',
-      requiredElements: ['product_in_natural_scene', 'lifestyle_context_visible', 'product_not_highlighted_artificially'],
-      forbiddenElements: ['product_isolated', 'ad_spotlight_on_product', 'catalog_background', 'forced_product_placement'],
+      key:   'ACTION_PRODUCT_IN_USE',
+      beat:  'action',
+      role:  'ACTION MOMENT',
+      purpose: 'El producto siendo usado de forma real y natural. Manos activas, contexto de uso visible. No una demostración — un momento genuino en movimiento.',
+      requiredElements: ['hands_using_product_naturally', 'product_clearly_visible', 'context_of_use_real', 'action_has_intention'],
+      forbiddenElements: ['static_product_display', 'forced_demonstration', 'studio_feel', 'ad_composition', 'product_floating'],
       variationSpace: [
-        'producto en la mesa con otros objetos del día, integrado naturalmente',
-        'producto parcialmente visible en el contexto — asomándose de una cartera o sobre una silla',
-        'wide del espacio con el producto como elemento de la escena',
-        'overhead del flat lay del día — el producto como parte del mundo, no el centro',
+        'manos aplicando, sosteniendo o usando el producto, gesto natural y cotidiano',
+        'producto en su contexto de uso — cocina, baño, mesa, cartera',
+        'overhead de la acción de usar el producto, manos visibles desde arriba',
+        'medium shot del producto en un momento casual real, no demostración',
       ],
-      framing:     'WIDE_OR_MEDIUM',
-      composition: 'PRODUCT_AS_ELEMENT_IN_SCENE',
-      cameraAngle: 'OVERHEAD_OR_EYE_LEVEL',
+      framing:     'MEDIUM',
+      composition: 'HANDS_AND_PRODUCT',
+      cameraAngle: 'EYE_LEVEL_OR_SLIGHT_OVERHEAD',
     },
     {
-      key:   'DEV_PRODUCT_OVERHEAD',
-      beat:  'development',
-      role:  'DEVELOPMENT',
-      purpose: 'Overhead shot — flat lay orgánico. El producto con objetos que cuentan su mundo. No forzado ni simétrico — como si lo pusieran ahí de verdad.',
+      key:   'DETAIL_PRODUCT_FRAGMENT',
+      beat:  'detail',
+      role:  'DETAIL MOMENT',
+      purpose: 'Un fragmento del producto o su entorno inmediato. Un detalle que se perdería en un shot general pero que aquí es el protagonista absoluto.',
+      requiredElements: ['product_fragment_or_accessory_detail', 'real_surface_visible', 'intentional_tight_framing'],
+      forbiddenElements: ['full_product_visible', 'ad_composition', 'studio_surface', 'forced_branding'],
+      variationSpace: [
+        'detalle del cierre, hebilla o terminación del producto, luz lateral que muestra profundidad',
+        'producto parcialmente visible asomándose de un bolso, cajón o superficie',
+        'fragmento del packaging — etiqueta, textura del papel, colores del diseño',
+        'mano o dedo tocando el producto, solo el gesto visible, fondo desenfocado',
+      ],
+      framing:     'CLOSE_UP_OR_EXTREME_CLOSE_UP',
+      composition: 'DETAIL_FILL_FRAME',
+      cameraAngle: 'TOP_DOWN_OR_MACRO_ANGLE',
+    },
+    {
+      key:   'ATMOSPHERE_PRODUCT_OVERHEAD',
+      beat:  'atmosphere',
+      role:  'ATMOSPHERE MOMENT',
+      purpose: 'Overhead shot — flat lay orgánico con atmósfera. El producto con objetos que cuentan su mundo. No forzado ni simétrico — como si lo pusieran ahí de verdad. El mood del espacio es el protagonista.',
       requiredElements: ['overhead_angle', 'product_visible', 'complementary_objects_organic', 'real_surface_texture'],
       forbiddenElements: ['perfect_symmetric_flatlay', 'studio_surface', 'forced_brand_arrangement', 'ad_composition'],
       variationSpace: [
@@ -464,21 +642,21 @@ function buildProductStoryShots(): Omit<PhotodumpShotDirective, 'arcPosition' | 
       cameraAngle: 'DIRECTLY_OVERHEAD',
     },
     {
-      key:   'CLOSING_PRODUCT_EMOTIONAL',
-      beat:  'closing',
-      role:  'CLOSING',
-      purpose: 'El cierre de la historia del producto. Una imagen que hace que quien mira quiera tenerlo — no por ser un ad, sino por cómo encaja en una vida real que parece aspiracional.',
-      requiredElements: ['product_visible', 'emotional_or_aesthetic_resonance', 'real_context', 'memorable_composition'],
-      forbiddenElements: ['cta_feel', 'ad_ending', 'price_tag_or_text', 'white_background', 'studio'],
+      key:   'REVEAL_PRODUCT_LIFESTYLE',
+      beat:  'reveal',
+      role:  'REVEAL MOMENT',
+      purpose: 'El producto integrado al lifestyle desde un ángulo o perspectiva que revela su lugar en la vida real. No siendo demostrado — viviendo en el mundo. Un punto de vista que muestra algo nuevo del objeto o su contexto.',
+      requiredElements: ['product_in_natural_scene', 'lifestyle_context_visible', 'product_not_highlighted_artificially'],
+      forbiddenElements: ['product_isolated', 'ad_spotlight_on_product', 'catalog_background', 'forced_product_placement'],
       variationSpace: [
-        'producto sostenido o cerca de la persona en un momento de luz dorada',
         'producto en su lugar natural — estante, mesa de noche, tocador — con luz ambiental',
-        'close-up íntimo del producto como cierre meditativo — el objeto como símbolo',
-        'medium shot del producto con ambiente cálido que evoca el estilo de vida que representa',
+        'producto parcialmente visible en el contexto — asomándose de una cartera o sobre una silla',
+        'wide del espacio con el producto como elemento de la escena, no el centro',
+        'producto con ambiente cálido que evoca el estilo de vida que representa',
       ],
-      framing:     'MEDIUM_OR_CLOSE_UP',
-      composition: 'EMOTIONALLY_DRIVEN',
-      cameraAngle: 'EYE_LEVEL_OR_SLIGHT_LOW',
+      framing:     'WIDE_OR_MEDIUM',
+      composition: 'PRODUCT_AS_ELEMENT_IN_SCENE',
+      cameraAngle: 'OVERHEAD_OR_EYE_LEVEL',
     },
   ];
 }
@@ -626,11 +804,38 @@ They all represent the SAME object. Use all angles to understand its exact shape
 Reproduce the product faithfully — same design, same finish, same proportions.`
     : '';
 
+  const isFaceless = narrative === 'faceless';
+  const modeBlock  = isFaceless ? STORY_MODE_FACELESS : STORY_MODE_DOMINANCE;
+
+  const protagonistLine = isFaceless
+    ? 'PROTAGONIST: NO FACE. Show the product, the workspace, or hands doing something real. No person visible.'
+    : protagonist === 'product'
+      ? 'PROTAGONIST: The PRODUCT is the hero. Show it in its natural context with real, atmospheric lighting.'
+      : protagonist === 'person'
+        ? 'PROTAGONIST: The PERSON is the hero. Natural medium shot, authentic expression, real environment.'
+        : 'PROTAGONIST: The PERSON and PRODUCT together. Natural interaction, real context.';
+
+  const anchorShotDesc = isFaceless
+    ? `SHOT: Overhead or medium shot of the workspace/product — no face, no full body.
+Hands may be visible if actively doing something. Real surface, natural window light, organic arrangement.
+iPhone photo quality — handheld, imperfect, lived-in. NOT a catalog shot. NOT a styled flat lay.`
+    : `SHOT: Natural medium shot (waist-up or 3/4 body). Authentic, candid, story-opening feel.
+iPhone photo quality — handheld, natural light, real skin texture, no studio polish.
+The person looks like they are living their life — not posing for a photographer.
+Environment is real, light is natural or ambient, mood is aspirational but authentic.`;
+
+  const identityBlock = isFaceless
+    ? `${productInstruction}`
+    : `IDENTITY: Copy the face, hair, skin tone, and physical features EXACTLY from the face reference images.
+${bodyInstruction}
+${outfitInstruction}
+${productInstruction}`;
+
   const prompt = `${LOCK_SYSTEM}
 
 ${PARADIGM_RULE}
 
-${STORY_MODE_DOMINANCE}
+${modeBlock}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🎬 REF0 — VISUAL ANCHOR SHOT
@@ -640,24 +845,13 @@ NARRATIVE: ${narrativeCtx}
 FORMAT: ${aspectInstr}
 
 This is the ANCHOR image — it defines the visual world for the entire story set.
-It must establish: color temperature, lighting quality, environment feel, and protagonist identity.
+It must establish: color temperature, lighting quality, surface texture, and overall mood.
 
-${protagonist === 'product'
-  ? 'PROTAGONIST: The PRODUCT is the hero. Show it in its natural context with real, atmospheric lighting.'
-  : protagonist === 'person'
-    ? 'PROTAGONIST: The PERSON is the hero. Natural medium shot, authentic expression, real environment.'
-    : 'PROTAGONIST: The PERSON and PRODUCT together. Natural interaction, real context.'
-}
+${protagonistLine}
 
-SHOT: Natural medium shot (waist-up or 3/4 body). Authentic, candid, story-opening feel.
-iPhone photo quality — handheld, natural light, real skin texture, no studio polish.
-The person looks like they are living their life — not posing for a photographer.
-Environment is real, light is natural or ambient, mood is aspirational but authentic.
+${anchorShotDesc}
 
-IDENTITY: Copy the face, hair, skin tone, and physical features EXACTLY from the face reference images.
-${bodyInstruction}
-${outfitInstruction}
-${productInstruction}
+${identityBlock}
 
 Natural iPhone quality. UGC feel. One photo. Not a collage. Not a grid.
 
@@ -708,93 +902,141 @@ function injectREF0Analysis(ref0Analysis: any): string {
   } catch { return ''; }
 }
 
-// Elige la familia narrativa más apropiada para un beat concreto.
-// hook → story_opener / world_building
-// Asigna familia por posición en el arco narrativo con criterio de tono coherente.
+// Elige la familia narrativa más apropiada para un tipo de momento.
 //
-// Reglas de tono:
-//   hook      → story_support con 'story_opener' o 'world_building'
-//   closing   → story_support con 'mood_frame' o 'transition_frame'
-//   detail shots (DEV_DETAIL_TEXTURE, DEV_PRODUCT_OVERHEAD, DEV_PRODUCT_TEXTURE)
-//             → creator_aesthetic primero (composición más curada encaja bien)
-//   development resto → story_support rotando por índice (nunca la misma dos veces seguidas)
+// Lógica de protagonista:
+//   person  → preferir familias con compositionPattern.dominantElement === 'face'
+//             (candid selfie, morning routine con persona) sobre flat lays de producto
+//   product → preferir familias con dominantElement === 'product' (top-down, flat lay)
 //
-// La rotación es por índice global del shot (shotIndex), no por contador interno,
-// para que sea determinista y predecible en cada sesión.
+// Lógica de beat:
+//   detail / texture             → creator_aesthetic primero (composición más curada)
+//   atmosphere                   → story_support con 'mood_frame' o 'transition_frame'
+//   context / reveal             → story_support con 'story_opener' o 'world_building'
+//   emotion / candid / action    → story_support rotando por índice, priorizando face si person
+//
+// La rotación es por índice global del shot para que sea determinista por sesión.
 function pickFamilyForShot(
-  beat:     StoryBeat,
-  shotKey:  string,
-  shotIndex: number,
+  beat:            MomentType,
+  shotKey:         string,
+  shotIndex:       number,
   sessionFamilies: SessionFamilies,
+  protagonist:     PhotodumpProtagonist = 'person',
 ): StorySupportFamily | null {
   const { storySupport, creatorAesthetic } = sessionFamilies;
   if (storySupport.length === 0 && creatorAesthetic.length === 0) return null;
 
-  // Shots de detalle: preferir creator_aesthetic si está disponible
-  const isDetailShot = [
-    'DEV_DETAIL_TEXTURE',
-    'DEV_PRODUCT_OVERHEAD',
-    'DEV_PRODUCT_TEXTURE',
+  const all = [...storySupport, ...creatorAesthetic];
+
+  // Para persona: preferir familias donde la cara/persona domina el encuadre
+  const faceFamilies = all.filter(f =>
+    f.compositionPattern?.dominantElement === 'face'
+  );
+  // Para producto: preferir familias orientadas a producto (flat lay, top-down)
+  const productFamilies = all.filter(f =>
+    f.compositionPattern?.dominantElement === 'product'
+  );
+
+  // Shots de textura/detalle curados → creator_aesthetic (mejor composición para ese beat)
+  const isCuratedShot = [
+    'DETAIL_FRAGMENT', 'TEXTURE_PRODUCT_DETAIL', 'DETAIL_PRODUCT_FRAGMENT',
+    'ATMOSPHERE_PRODUCT_OVERHEAD', 'BTS_PACKAGING', 'BTS_WORKSPACE',
   ].includes(shotKey);
 
-  if (isDetailShot && creatorAesthetic.length > 0) {
+  if (isCuratedShot && creatorAesthetic.length > 0) {
+    // Para persona en shot curado: dentro de creator_aesthetic, preferir face si existe
+    if (protagonist === 'person') {
+      const faceAesthetic = creatorAesthetic.filter(
+        f => f.compositionPattern?.dominantElement === 'face'
+      );
+      const pool = faceAesthetic.length > 0 ? faceAesthetic : creatorAesthetic;
+      return pool[shotIndex % pool.length];
+    }
     return creatorAesthetic[shotIndex % creatorAesthetic.length];
   }
 
-  // Hook: buscar familia con posición story_opener o world_building
-  if (beat === 'hook') {
-    const match = storySupport.find(f =>
-      f.storyFamilyValue?.recommendedSequencePositions?.some(
-        p => ['story_opener', 'world_building'].includes(p)
-      )
-    );
-    return match ?? storySupport[0] ?? creatorAesthetic[0] ?? null;
-  }
-
-  // Closing: buscar familia con posición mood_frame o transition_frame
-  if (beat === 'closing') {
-    const match = storySupport.find(f =>
+  // Atmosphere: buscar familia con posición mood_frame o transition_frame
+  if (beat === 'atmosphere') {
+    const atmoPool = protagonist === 'person' && faceFamilies.length > 0
+      ? faceFamilies
+      : storySupport;
+    const match = atmoPool.find(f =>
       f.storyFamilyValue?.recommendedSequencePositions?.some(
         p => ['mood_frame', 'transition_frame', 'context_frame'].includes(p)
       )
     );
-    return match ?? storySupport[storySupport.length - 1] ?? storySupport[0] ?? null;
+    return match ?? atmoPool[atmoPool.length - 1] ?? storySupport[0] ?? null;
   }
 
-  // Development: rotar story_support por índice del shot para evitar repetición consecutiva
+  // Context / reveal: buscar familia con posición story_opener o world_building
+  if (beat === 'context' || beat === 'reveal') {
+    const ctxPool = protagonist === 'product' && productFamilies.length > 0
+      ? productFamilies
+      : storySupport;
+    const match = ctxPool.find(f =>
+      f.storyFamilyValue?.recommendedSequencePositions?.some(
+        p => ['story_opener', 'world_building', 'early_context', 'opener'].includes(p)
+      )
+    );
+    return match ?? ctxPool[0] ?? storySupport[0] ?? null;
+  }
+
+  // Emotion / candid: para persona, fuertemente preferir familia de cara
+  if ((beat === 'emotion' || beat === 'candid') && protagonist === 'person') {
+    if (faceFamilies.length > 0) return faceFamilies[shotIndex % faceFamilies.length];
+  }
+
+  // Action / todo lo demás: rotar story_support por índice
   if (storySupport.length > 0) {
     return storySupport[shotIndex % storySupport.length];
   }
 
-  // Fallback: cualquier familia disponible
   return creatorAesthetic[0] ?? null;
 }
 
 // Construye el bloque de texto que se inyecta en el prompt con la inteligencia
-// narrativa de la familia seleccionada. Solo incluye lo que aporta valor real.
+// narrativa de la familia seleccionada.
+//
+// Orden de prioridad en el bloque (mayor impacto primero):
+//   1. promptBlock  — descripción visual concreta de una foto real de esa familia
+//   2. compositionPattern — tipo de encuadre, luz, ritmo visual
+//   3. psychologicalMechanisms — qué debe despertar emocionalmente esta imagen
+//   4. narrativeBehavior — rol de este shot en la constelación
+//   5. ejemplos de subfamilia — nombres de shots reales para anclar la referencia
+//
+// storyDirective se omite: contiene texto de sistema ("Familia Story Support — alto valor...")
+// que no aporta guía creativa al modelo de imagen.
 function buildFamilyInjectBlock(family: StorySupportFamily): string {
   const lines: string[] = [
     '─────────────────────────────────────────────────────',
-    '🎨 VISUAL FAMILY INTELLIGENCE (narrative guide):',
+    '🎨 VISUAL FAMILY REFERENCE (use as creative direction — NOT as literal copy):',
   ];
-  if (family.storyDirective)
-    lines.push(`  Narrative role: ${family.storyDirective}`);
-  if (family.narrativeBehavior)
-    lines.push(`  Visual behavior: ${family.narrativeBehavior}`);
+
+  // 1. Referencia visual concreta — va primero para anclar el modelo visualmente
+  if (family.promptBlock)
+    lines.push(`  VISUAL REFERENCE: ${family.promptBlock}`);
+
+  // 2. Patrón de composición
   if (family.compositionPattern) {
     const c = family.compositionPattern;
     if (c.preferredShotType)  lines.push(`  Shot type: ${c.preferredShotType}`);
-    if (c.preferredLighting)  lines.push(`  Lighting: ${c.preferredLighting} (${c.lightQuality})`);
-    if (c.visualRhythm)       lines.push(`  Rhythm: ${c.visualRhythm}`);
+    if (c.preferredLighting)  lines.push(`  Lighting: ${c.preferredLighting} — quality: ${c.lightQuality}`);
+    if (c.visualRhythm)       lines.push(`  Visual rhythm: ${c.visualRhythm}`);
   }
+
+  // 3. Mecanismos emocionales — qué debe sentir quien ve la imagen
   if (family.psychologicalMechanisms.length > 0)
-    lines.push(`  Emotional triggers: ${family.psychologicalMechanisms.slice(0, 3).join(', ')}`);
-  if (family.promptBlock)
-    lines.push(`  Visual reference: ${family.promptBlock}`);
-  const exampleLabels = family.subfamilies.slice(0, 3).map(s => s.label).filter(Boolean);
+    lines.push(`  Emotional register: ${family.psychologicalMechanisms.slice(0, 3).join(', ')}`);
+
+  // 4. Comportamiento narrativo
+  if (family.narrativeBehavior)
+    lines.push(`  Narrative behavior: ${family.narrativeBehavior}`);
+
+  // 5. Ejemplos de shots reales de esta familia
+  const exampleLabels = family.subfamilies.slice(0, 2).map(s => s.label).filter(Boolean);
   if (exampleLabels.length > 0)
-    lines.push(`  Real shot examples: ${exampleLabels.join(', ')}`);
-  lines.push('  Use this as creative direction — NOT as literal instruction.');
+    lines.push(`  Shot examples from this family: ${exampleLabels.join(' · ')}`);
+
   lines.push('─────────────────────────────────────────────────────');
   return lines.join('\n');
 }
@@ -811,6 +1053,7 @@ export async function generatePhotodumpShot(
   assignedFamilies: StorySupportFamily[] = [],
   sessionFamilies:  SessionFamilies = { storySupport: [], creatorAesthetic: [] },
   totalShots:       number = 4,
+  protagonist:      PhotodumpProtagonist = 'person',
 ): Promise<string> {
 
   const aspectInstr = getAspectInstruction(destino);
@@ -831,26 +1074,61 @@ export async function generatePhotodumpShot(
   const sceneForShot = getSceneRefForShot(refs, shot.arcPosition - 1, totalShots);
   if (sceneForShot) refsToPass.push(sceneForShot);
 
-  const beatLabel =
-    shot.beat === 'hook'        ? '🎣 HOOK — Para el scroll. La primera imagen de la historia.' :
-    shot.beat === 'closing'     ? '✨ CLOSING — Cierre emocional. La imagen que queda.' :
-                                  '📖 DEVELOPMENT — Desarrollo de la historia.';
+  const momentLabel = {
+    candid:     '📱 CANDID — Captura espontánea sin pose ni artificio.',
+    context:    '🌍 CONTEXT — El mundo y ambiente de esta historia.',
+    emotion:    '💫 EMOTION — Una expresión o reacción genuina.',
+    detail:     '🔍 DETAIL — Un fragmento íntimo del mundo visible.',
+    texture:    '🧵 TEXTURE — Material, superficie, profundidad.',
+    action:     '⚡ ACTION — Alguien haciendo algo, en movimiento.',
+    atmosphere: '🌫 ATMOSPHERE — El mood: luz, espacio, silencio.',
+    reveal:     '👁 REVEAL — Un ángulo que muestra algo nuevo.',
+  }[shot.beat] ?? `📸 ${shot.beat.toUpperCase()}`;
+
+  const isFacelessShot = narrative === 'faceless';
+  const shotModeBlock  = isFacelessShot ? STORY_MODE_FACELESS : STORY_MODE_DOMINANCE;
 
   const selectedFamily = pickFamilyForShot(
-    shot.beat, shot.key, shot.arcPosition - 1, sessionFamilies,
+    shot.beat, shot.key, shot.arcPosition - 1, sessionFamilies, protagonist,
   );
   const familyBlock = selectedFamily ? buildFamilyInjectBlock(selectedFamily) : '';
+
+  const shotIdentityBlock = isFacelessShot
+    ? `SHOT IDENTITY:
+- REF0 establishes the visual world — same surface, same light, same color temperature.
+${extraProducts.length > 0 ? `PRODUCT MULTI-ANGLE: Multiple product references show the same object from different angles. Use all of them to reproduce it faithfully.` : refs.productRef ? `- Product reference: reproduce it faithfully — same design, finish, and proportions.` : ''}
+${sceneForShot ? `- Scene reference: same workspace / environment as established in REF0.` : ''}
+🚫 NO FACE. NO HEAD. NO FULL BODY. If hands appear, they must be actively doing something.`
+    : `SHOT IDENTITY:
+- Face reference (appears multiple times): EXACT identity, same bone structure, same hair, same skin tone.
+${refs.bodyRef ? '- Body reference: establishes physique (build, proportions). Do NOT make the person heavier or slimmer than shown.' : ''}
+- REF0 (after face/body refs): establishes the visual world — same light, same scene, same color temp.
+${buildOutfitLockBlock(outfitMode, basePrompt, !!refs.outfitRef)}
+${extraProducts.length > 0 ? `PRODUCT MULTI-ANGLE: Multiple product references show the same object from different angles. Use all of them to reproduce it faithfully.` : ''}
+${sceneForShot !== refs.sceneRef ? `SCENE NOTE: This shot uses an alternate scene reference (position ${shot.arcPosition} of ${totalShots} in the story arc). Integrate the person naturally into this new environment — same person, new setting.` : ''}`;
+
+  const ugcRealismBlock = isFacelessShot
+    ? `📱 iPhone BTS REALISM (NON-NEGOTIABLE):
+You are taking a new iPhone-style photo inside the same workspace/process as REF0.
+Natural window light, handheld imperfection, real surface texture — no studio polish.
+The result must look like a creator documenting their process on their phone.
+Organic, imperfect, lived-in. NOT editorial. NOT advertising. NOT staged. NO FACE.`
+    : `📱 iPhone UGC REALISM (NON-NEGOTIABLE):
+You are taking a new iPhone-style photo inside the same existing moment as REF0.
+Natural light, handheld imperfection, real skin texture, no studio polish.
+The result must look like someone captured this moment on their phone — not a photographer.
+Organic, imperfect, lived-in. NOT editorial. NOT advertising. NOT staged.`;
 
   const prompt = `${LOCK_SYSTEM}
 
 ${PARADIGM_RULE}
 
-${STORY_MODE_DOMINANCE}
+${shotModeBlock}
 
 ${injectREF0Analysis(ref0Analysis)}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎬 SHOT ${shot.arcPosition} of the story · ${beatLabel}
+📸 IMAGE ${shot.arcPosition} · ${momentLabel}
 
 STORY CONTEXT: "${basePrompt}"
 NARRATIVE: ${NARRATIVE_META[narrative].label}
@@ -874,20 +1152,10 @@ ${shot.forbiddenElements.map(e => `❌ ${e}`).join('\n')}
 VISUAL VARIATION OPTIONS (choose the most fitting for this scene):
 ${shot.variationSpace.map((v, i) => `${i + 1}. ${v}`).join('\n')}
 
-SHOT IDENTITY:
-- Face reference (appears multiple times): EXACT identity, same bone structure, same hair, same skin tone.
-${refs.bodyRef ? '- Body reference: establishes physique (build, proportions). Do NOT make the person heavier or slimmer than shown.' : ''}
-- REF0 (after face/body refs): establishes the visual world — same light, same scene, same color temp.
-${buildOutfitLockBlock(outfitMode, basePrompt, !!refs.outfitRef)}
-${extraProducts.length > 0 ? `PRODUCT MULTI-ANGLE: Multiple product references show the same object from different angles. Use all of them to reproduce it faithfully.` : ''}
-${sceneForShot !== refs.sceneRef ? `SCENE NOTE: This shot uses an alternate scene reference (position ${shot.arcPosition} of ${totalShots} in the story arc). Integrate the person naturally into this new environment — same person, new setting.` : ''}
+${shotIdentityBlock}
 - This shot is part of a STORY — it must connect to the same narrative world established in REF0.
 
-📱 iPhone UGC REALISM (NON-NEGOTIABLE):
-You are taking a new iPhone-style photo inside the same existing moment as REF0.
-Natural light, handheld imperfection, real skin texture, no studio polish.
-The result must look like someone captured this moment on their phone — not a photographer.
-Organic, imperfect, lived-in. NOT editorial. NOT advertising. NOT staged.
+${ugcRealismBlock}
 
 🚫 ONE SINGLE IMAGE:
 Generate ONE photo. No collage. No grid. No side by side. No reference board.
@@ -919,28 +1187,34 @@ export async function generatePhotodumpCaptions(
 ): Promise<Array<{ caption: string; hashtags: string; moment: string }>> {
 
   const storyContext = NARRATIVE_META[narrative].label;
-  const beatDescriptions = shots.map((s, i) =>
-    `Image ${i + 1} [${s.beat.toUpperCase()}]: ${s.purpose.slice(0, 80)}`
+  const momentDescriptions = shots.map((s, i) =>
+    `Image ${i + 1} [${s.role}]: ${s.purpose.slice(0, 80)}`
   ).join('\n');
 
   const prompt = `You are a social media copywriter for a Spanish-speaking content creator.
 Generate captions and hashtags for a ${shots.length}-image photodump carousel.
 
-STORY CONTEXT: "${basePrompt}"
+CONTEXT: "${basePrompt}"
 NARRATIVE: ${storyContext}
 
-STORY STRUCTURE:
-${beatDescriptions}
+These images are a visual constellation — organic moments from the same world.
+They are NOT structured as a story arc with a beginning and end.
+Each image is its own moment that happens to belong to the same set.
+
+VISUAL MOMENTS IN THIS SET:
+${momentDescriptions}
 
 For each image provide:
-1. "moment": story beat name in Spanish (3-5 words)
-2. "caption": engaging caption in Spanish (max 140 chars, conversational, authentic voice, 1-2 emojis — sounds like a REAL person, NOT a brand)
+1. "moment": short name of this visual moment in Spanish (3-5 words, NOT "la apertura" or "el cierre")
+2. "caption": engaging caption in Spanish (max 140 chars, conversational, authentic voice, 1-2 emojis — sounds like a REAL person posting to their stories, NOT a brand)
 3. "hashtags": 5-7 hashtags mix Spanish/English as single string
 
 Rules:
 - Captions must sound like someone talking to a friend, not writing an ad
-- The set of captions should feel like chapters of the same story
-- Vary the tone: some intimate, some energetic, some reflective
+- No caption should say "first", "last", "opening", "closing" or refer to sequence
+- Each caption stands alone as a moment — they don't need to be read in order
+- Vary the tone: some intimate, some energetic, some playful, some reflective
+- Avoid generic captions like "así empieza" or "hasta la próxima"
 
 Output ONLY valid JSON array:
 [{"moment":"...","caption":"...","hashtags":"..."}]`;
@@ -963,11 +1237,20 @@ Output ONLY valid JSON array:
   }
 
   // Fallback
-  return shots.map((s, i) => ({
-    moment:   s.beat === 'hook' ? 'La apertura' : s.beat === 'closing' ? 'El cierre' : `Momento ${i + 1}`,
-    caption:  s.beat === 'hook' ? 'Así empieza ☀️' : s.beat === 'closing' ? 'Hasta la próxima 🌅' : 'Momentos así 💫',
-    hashtags: '#lifestyle #organic #ugc #content #moments',
-  }));
+  const fallbackMoments: Record<string, { moment: string; caption: string }> = {
+    candid:     { moment: 'Un instante real',    caption: 'Sin filtros 📱'            },
+    context:    { moment: 'El lugar',            caption: 'Así se siente estar aquí ✨' },
+    emotion:    { moment: 'La cara lo dice todo', caption: 'Ese momento 💫'            },
+    detail:     { moment: 'El detalle',          caption: 'Las cosas pequeñas 🌿'      },
+    texture:    { moment: 'La textura',          caption: 'Quería que lo vieras 🤍'    },
+    action:     { moment: 'En movimiento',       caption: 'Pasando cosas ⚡'           },
+    atmosphere: { moment: 'El mood',             caption: 'Así estaba la cosa 🌫'      },
+    reveal:     { moment: 'Otro ángulo',         caption: 'Lo que no suelen ver 👁'   },
+  };
+  return shots.map((s, i) => {
+    const fb = fallbackMoments[s.beat] ?? { moment: `Momento ${i + 1}`, caption: 'Momentos así 💫' };
+    return { moment: fb.moment, caption: fb.caption, hashtags: '#lifestyle #organic #ugc #content #moments' };
+  });
 }
 
 // ── Helper de UI ──────────────────────────────────────────────

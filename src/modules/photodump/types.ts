@@ -1,7 +1,7 @@
 // ── Photodump Module Types ────────────────────────────────────
 
 export type PhotodumpDestino = 'feed' | 'stories' | 'tiktok';
-export type PhotodumpNarrative = 'day' | 'journey' | 'brand' | 'character' | 'product_hero' | 'custom';
+export type PhotodumpNarrative = 'day' | 'journey' | 'brand' | 'character' | 'product_hero' | 'faceless' | 'custom';
 export type PhotodumpProtagonist = 'person' | 'product' | 'both';
 
 // Cómo se maneja el outfit en el set
@@ -70,6 +70,7 @@ export const NARRATIVE_META: Record<PhotodumpNarrative, { label: string; descrip
   brand:        { label: 'Mundo de marca',           description: 'Estética, valores y lifestyle que representa la marca.',        icon: '✨' },
   character:    { label: 'El personaje y su mundo',  description: 'Quién es, qué hace, cómo vive.',                               icon: '🎭' },
   product_hero: { label: 'El producto es el héroe',  description: 'Close-ups, texturas, usos. El producto como protagonista.',    icon: '📦' },
+  faceless:     { label: 'Contenido faceless',       description: 'Sin rostro visible. BTS, empaque, manos, despachos, espacio de trabajo.', icon: '🎬' },
   custom:       { label: 'Historia personalizada',   description: 'Describe tu propia narrativa.',                                icon: '✍️' },
 };
 
@@ -85,8 +86,16 @@ export const DESTINO_META: Record<PhotodumpDestino, { label: string; icon: strin
   tiktok:  { label: 'TikTok',           icon: '🎵', aspectRatio: '9/16', hint: 'Video cover vertical · 9:16' },
 };
 
-export const STORY_ARC_META = {
-  hook:        { label: 'Gancho',      description: 'Para el scroll — la primera impresión',   color: 'text-brand-600 bg-brand-50' },
-  development: { label: 'Desarrollo',  description: 'La historia que engancha y conecta',       color: 'text-violet-700 bg-violet-50' },
-  closing:     { label: 'Cierre',      description: 'La imagen que genera acción — save, share', color: 'text-emerald-700 bg-emerald-50' },
+export const MOMENT_TYPE_META = {
+  context:    { label: 'Contexto',    description: 'El ambiente y el mundo donde ocurre todo',        color: 'text-brand-600 bg-brand-50'      },
+  detail:     { label: 'Detalle',     description: 'Un fragmento íntimo — textura, objeto, momento',  color: 'text-violet-700 bg-violet-50'    },
+  emotion:    { label: 'Emoción',     description: 'Una expresión o reacción real y genuina',         color: 'text-rose-700 bg-rose-50'        },
+  texture:    { label: 'Textura',     description: 'Material, superficie, profundidad visual',        color: 'text-amber-700 bg-amber-50'      },
+  action:     { label: 'Acción',      description: 'Alguien haciendo algo — en movimiento, vivo',     color: 'text-sky-700 bg-sky-50'          },
+  atmosphere: { label: 'Atmósfera',   description: 'El mood del momento — luz, espacio, silencio',   color: 'text-teal-700 bg-teal-50'        },
+  reveal:     { label: 'Reveal',      description: 'Un ángulo que muestra algo nuevo del set',        color: 'text-indigo-700 bg-indigo-50'    },
+  candid:     { label: 'Candid',      description: 'Captura espontánea — sin pose, sin artificio',    color: 'text-emerald-700 bg-emerald-50'  },
 };
+
+// Alias de compatibilidad — la UI que muestre etiquetas de arco puede usar MOMENT_TYPE_META
+export const STORY_ARC_META = MOMENT_TYPE_META;

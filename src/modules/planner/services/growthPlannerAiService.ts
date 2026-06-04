@@ -52,7 +52,10 @@ const CONTENT_MODULE_VALUES = ['product', 'ugc', 'scene', 'prompt', 'outfit', 'n
 const TASK_STATUS_VALUES = ['pending', 'in_progress', 'ready', 'published', 'skipped'];
 const ESTIMATED_EFFORT_VALUES = ['bajo', 'medio', 'alto'];
 const TASK_PRIORITY_VALUES = ['primary', 'support'];
-const CTA_TARGET_VALUES = ['Instagram DM', 'Facebook comentario', 'WhatsApp', 'Link en bio', 'Guardar', 'Responder story'];
+const CTA_TARGET_VALUES = ['Instagram DM', 'Comentario', 'Facebook comentario', 'DM Facebook', 'Link', 'WhatsApp', 'Link en bio', 'Guardar', 'Responder story'];
+const STORY_CONTENT_TYPES = ['Encuesta', 'Q&A', 'Secuencia de stories', 'Recordatorio', 'Demo rapida', 'Story estatica', 'Reel vertical'];
+const INSTAGRAM_FEED_CONTENT_TYPES = ['Reel', 'Carrusel', 'Post educativo', 'Post con imagen', 'Publicacion de prueba social', 'Demo rapida'];
+const FACEBOOK_CONTENT_TYPES = ['Post educativo', 'Publicacion de prueba social', 'Q&A', 'Encuesta', 'Reel', 'Carrusel'];
 const ALLOWED_SLOTS = [
   '@producto1',
   '@producto2',
@@ -566,6 +569,87 @@ function safeCtaTarget(value: string | undefined): GrowthCtaTarget {
     : 'Instagram DM';
 }
 
+function isTextualManualAction(task: GrowthTask): boolean {
+  return /encuesta|q&a|pregunta|respuesta|recordatorio|comentario|publicacion manual|publicaci[oÃ³]n manual|post educativo textual|texto|dm|whatsapp|sticker/i.test(
+    `${task.contentType} ${task.visualConcept} ${task.caption} ${task.executionRecipe.steps.map(step => step.instruction).join(' ')}`,
+  );
+}
+
+function ctaTargetsForPlatform(platform: GrowthTask['platform']): GrowthCtaTarget[] {
+  if (platform === 'Stories') return ['Responder story', 'Link en bio', 'Instagram DM'];
+  if (platform === 'Instagram Feed') return ['Instagram DM', 'Comentario', 'Guardar', 'Link en bio'];
+  if (platform === 'Facebook') return ['Facebook comentario', 'DM Facebook', 'Link'];
+  if (platform === 'WhatsApp') return ['WhatsApp'];
+  return ['Instagram DM', 'Comentario', 'Guardar'];
+}
+
+function normalizeCtaTargetForPlatform(task: GrowthTask, ctx: ValidationContext): GrowthTask {
+  const allowed = ctaTargetsForPlatform(task.platform);
+  if (allowed.includes(task.ctaTarget)) return task;
+  const text = `${task.contentType} ${task.caption} ${task.engagementHook}`.toLowerCase();
+  let ctaTarget: GrowthCtaTarget = allowed[0];
+
+  if (task.platform === 'Instagram Feed') {
+    ctaTarget = /guardar|guarda/.test(text) ? 'Guardar' : /coment/.test(text) ? 'Comentario' : 'Instagram DM';
+  } else if (task.platform === 'Facebook') {
+    ctaTarget = /dm|mensaje/.test(text) ? 'DM Facebook' : /link|bio|checkout/.test(text) ? 'Link' : 'Facebook comentario';
+  } else if (task.platform === 'Stories') {
+    ctaTarget = /link|bio|checkout/.test(text) ? 'Link en bio' : /dm|mensaje/.test(text) ? 'Instagram DM' : 'Responder story';
+  } else if (task.platform === 'WhatsApp') {
+    ctaTarget = 'WhatsApp';
+  }
+
+  ctx.fixedErrors.push(`CTA incompatible corregido en "${task.contentType}": ${task.ctaTarget} -> ${ctaTarget}.`);
+  return { ...task, ctaTarget };
+}
+
+function contentTypeFromAllowed(task: GrowthTask, allowed: string[]): string {
+  if (allowed.includes(task.contentType)) return task.contentType;
+  const text = `${task.contentType} ${task.visualConcept} ${task.caption}`.toLowerCase();
+  if (/encuesta|votar|elige|opcion|opci[oÃ³]n/.test(text) && allowed.includes('Encuesta')) return 'Encuesta';
+  if (/q&a|pregunta|duda|objecion|objeci[oÃ³]n/.test(text) && allowed.includes('Q&A')) return 'Q&A';
+  if (/recordatorio|cierre|stock|precio|dm/.test(text) && allowed.includes('Recordatorio')) return 'Recordatorio';
+  if (/demo|rapida|r[aÃ¡]pida|uso/.test(text) && allowed.includes('Demo rapida')) return 'Demo rapida';
+  if (/reel|video|vertical/.test(text) && allowed.includes('Reel')) return 'Reel';
+  if (/reel|video|vertical/.test(text) && allowed.includes('Reel vertical')) return 'Reel vertical';
+  if (/carrusel|comparacion|paso a paso|guia|guia/.test(text) && allowed.includes('Carrusel')) return 'Carrusel';
+  if (/prueba social|testimonio|review/.test(text) && allowed.includes('Publicacion de prueba social')) return 'Publicacion de prueba social';
+  if (/imagen|producto|foto/.test(text) && allowed.includes('Post con imagen')) return 'Post con imagen';
+  if (/post|educativo|explica|guia/.test(text) && allowed.includes('Post educativo')) return 'Post educativo';
+  return allowed[0];
+}
+
+function normalizePlatformFormatTask(task: GrowthTask, ctx: ValidationContext): GrowthTask {
+  let allowed: string[] | null = null;
+  if (task.platform === 'Stories') allowed = STORY_CONTENT_TYPES;
+  if (task.platform === 'Instagram Feed') allowed = INSTAGRAM_FEED_CONTENT_TYPES;
+  if (task.platform === 'Facebook') allowed = FACEBOOK_CONTENT_TYPES;
+  if (!allowed) return task;
+
+  const contentType = contentTypeFromAllowed(task, allowed);
+  if (contentType === task.contentType) return task;
+  ctx.fixedErrors.push(`Formato corregido para ${task.platform}: ${task.contentType} -> ${contentType}.`);
+  return { ...task, contentType };
+}
+
+function normalizeEngagementHookForCta(task: GrowthTask, ctx: ValidationContext): GrowthTask {
+  const lower = task.engagementHook.toLowerCase();
+  let engagementHook = task.engagementHook;
+  if (task.platform !== 'Stories' && /responde esta story|responde la story|sticker/.test(lower)) {
+    engagementHook = task.platform === 'Facebook'
+      ? 'Comenta PLAN y te recomendamos una opcion segun tu ritmo de publicacion.'
+      : 'Envianos DM con PLAN y te recomendamos una opcion segun tu ritmo de publicacion.';
+    ctx.fixedErrors.push(`CTA de story removido de ${task.platform} en "${task.contentType}".`);
+  }
+  if (task.platform !== 'Facebook' && /facebook|comenta en facebook/.test(lower)) {
+    engagementHook = task.platform === 'Stories'
+      ? 'Responde esta story con PLAN y revisamos que opcion te conviene.'
+      : 'Envianos DM con PLAN y revisamos que opcion te conviene.';
+    ctx.fixedErrors.push(`CTA de Facebook removido de ${task.platform} en "${task.contentType}".`);
+  }
+  return { ...task, engagementHook };
+}
+
 function inferStoryFormat(task: GrowthTask): string {
   const text = `${task.contentType} ${task.funnelRole} ${task.visualConcept}`.toLowerCase();
   if (/encuesta|votar|elige|opcion|opci[oÃ³]n/.test(text)) return 'Encuesta';
@@ -597,16 +681,21 @@ function inferCtaTarget(task: GrowthTask): GrowthCtaTarget {
 }
 
 function directPlanCta(task: GrowthTask, index: number): string {
+  if (task.ctaTarget === 'Responder story') return 'Responde esta story con CREDITOS si quieres saber cuantas imagenes necesitas al mes.';
+  if (task.ctaTarget === 'Facebook comentario') return 'Comenta PLAN y te recomendamos Explorer, Starter, Pro o Studio segun cuantos productos quieres mover.';
+  if (task.ctaTarget === 'DM Facebook') return 'Envianos DM por Facebook con PLAN y revisamos que opcion calza con tu ritmo de contenido.';
+  if (task.ctaTarget === 'Comentario') return 'Comenta PLAN y te recomendamos uno segun tu ritmo de publicacion.';
+  if (task.ctaTarget === 'WhatsApp') return 'Responde con STARTER, PRO o STUDIO y te ayudo a elegir segun tu volumen de contenido.';
+  if (task.ctaTarget === 'Link' || task.ctaTarget === 'Link en bio') return 'Abre el link y compara Explorer, Starter, Pro y Studio segun cuantos creditos necesitas al mes.';
+  if (task.ctaTarget === 'Guardar') return 'Guarda esta comparacion para elegir tu plan segun productos, tiempo y ritmo de publicacion.';
   const ctas = [
     'Escribenos STARTER y te decimos si 200 creditos alcanzan para tu ritmo de publicacion.',
-    'Comenta PLAN y te recomendamos Explorer, Starter, Pro o Studio segun cuantos productos quieres mover.',
-    'Responde esta story con CREDITOS si quieres saber cuantas imagenes necesitas al mes.',
     'Envianos DM con PRO si quieres ver que puedes producir con 500 creditos.',
     'Escribenos STUDIO si necesitas contenido para varios productos o campanas activas.',
-    'Comenta EXPLORER si quieres validar una semana de contenido con 60 creditos.',
+    'Envianos DM con EXPLORER si quieres validar una semana de contenido con 60 creditos.',
   ];
-  if (task.platform === 'Stories') return ctas[2];
-  if (task.platform === 'Facebook') return ctas[1];
+  if (task.platform === 'Stories') return 'Responde esta story con CREDITOS si quieres saber cuantas imagenes necesitas al mes.';
+  if (task.platform === 'Facebook') return 'Comenta PLAN y te recomendamos Explorer, Starter, Pro o Studio segun cuantos productos quieres mover.';
   if (task.platform === 'WhatsApp') return 'Responde con STARTER, PRO o STUDIO y te ayudo a elegir segun tu volumen de contenido.';
   return ctas[index % ctas.length];
 }
@@ -621,10 +710,10 @@ function normalizeCta(task: GrowthTask, index: number, ctx: ValidationContext): 
     ctaTarget = task.platform === 'Stories'
       ? 'Responder story'
       : task.platform === 'Facebook'
-        ? 'Facebook comentario'
+        ? index % 2 === 0 ? 'Facebook comentario' : 'DM Facebook'
         : task.platform === 'WhatsApp'
           ? 'WhatsApp'
-          : 'Instagram DM';
+          : index % 3 === 1 ? 'Comentario' : 'Instagram DM';
     engagementHook = directPlanCta({ ...task, ctaTarget }, index);
   } else if (/link en bio|haz clic|compra ahora|vende m[aÃ¡]s/.test(engagementHook.toLowerCase())) {
     ctaTarget = task.platform === 'Stories' ? 'Responder story' : task.platform === 'Facebook' ? 'Facebook comentario' : 'Instagram DM';
@@ -640,37 +729,36 @@ function normalizeCta(task: GrowthTask, index: number, ctx: ValidationContext): 
 }
 
 function normalizePlatformFormat(task: GrowthTask, ctx: ValidationContext): GrowthTask {
-  const lower = task.contentType.toLowerCase();
+  return normalizePlatformFormatTask(task, ctx);
+}
+
+function normalizePrimaryModule(task: GrowthTask, ctx: ValidationContext): GrowthTask {
   let next = task;
+  const text = `${task.contentType} ${task.visualConcept} ${task.caption} ${task.prompt} ${task.supportPrompt || ''}`.toLowerCase();
+  const previousModule = next.module;
 
-  if (task.platform === 'Stories' && /carrusel|carousel/.test(lower)) {
-    const contentType = inferStoryFormat(task);
-    next = { ...next, contentType };
-    ctx.fixedErrors.push(`Formato Stories corregido: Carrusel -> ${contentType}.`);
-  }
-
-  if (next.platform === 'Stories' && /encuesta|q&a|recordatorio/.test(next.contentType.toLowerCase()) && next.module !== 'none') {
+  if (isTextualManualAction(next)) {
     next = {
       ...next,
       module: 'none',
-      moduleReason: 'Formato nativo de Stories; se ejecuta con stickers, respuestas o texto directo.',
+      moduleReason: 'La accion principal es responder, preguntar, publicar texto o activar una interaccion nativa.',
       supportPrompt: next.prompt || next.supportPrompt,
-      supportModule: next.prompt ? next.module : next.supportModule,
+      supportModule: next.prompt ? previousModule : next.supportModule,
       prompt: '',
     };
-    ctx.fixedErrors.push(`Modulo ajustado a manual para Stories "${next.contentType}".`);
+  } else if (/reel|video|persona|creadora|creador|hablando|usando|try-on|ugc/.test(text)) {
+    next = { ...next, module: 'ugc', moduleReason: 'La pieza principal requiere una persona usando o explicando el producto.' };
+  } else if (/escena|referencia|recrear|ambiente|set/.test(text)) {
+    next = { ...next, module: 'scene', moduleReason: 'La pieza principal necesita una escena o referencia visual especifica.' };
+  } else if (/prompt|variacion|variaciones|guia de prompts|ideas de prompt/.test(text)) {
+    next = { ...next, module: 'prompt', moduleReason: 'La pieza principal se apoya en instrucciones o variaciones de prompt.' };
+  } else if (/producto|foto|catalogo|catalogo|carrusel|imagen/.test(text)) {
+    next = { ...next, module: 'product', moduleReason: 'La pieza principal esta centrada en producto o imagen de venta.' };
   }
 
-  if (next.platform === 'Instagram Feed' && /story|stories|encuesta/.test(next.contentType.toLowerCase())) {
-    next = { ...next, contentType: next.module === 'ugc' ? 'Reel' : 'Post con imagen' };
-    ctx.fixedErrors.push(`Formato Instagram Feed corregido en "${task.contentType}".`);
+  if (next.module !== previousModule) {
+    ctx.fixedErrors.push(`Modulo principal corregido en "${task.contentType}": ${previousModule} -> ${next.module}.`);
   }
-
-  if (next.platform === 'Facebook' && /story|stories|carrusel/.test(next.contentType.toLowerCase())) {
-    next = { ...next, contentType: next.funnelRole === 'construir_confianza' ? 'Q&A' : 'Post educativo' };
-    ctx.fixedErrors.push(`Formato Facebook corregido en "${task.contentType}".`);
-  }
-
   return next;
 }
 
@@ -1112,43 +1200,127 @@ function hashtagSeedFor(input: GenerateGrowthPlanInput): string[] {
 }
 
 function validateHashtags(task: GrowthTask, input: GenerateGrowthPlanInput, ctx: ValidationContext): GrowthTask {
-  if (task.platform === 'WhatsApp') {
+  if (task.platform === 'WhatsApp' || task.module === 'none') {
     if (task.hashtags.trim()) {
-      ctx.fixedErrors.push(`Hashtags eliminados en tarea WhatsApp "${task.contentType}".`);
+      ctx.fixedErrors.push(`Hashtags eliminados en tarea manual "${task.contentType}".`);
     }
     return { ...task, hashtags: '' };
   }
 
   const existing = uniqueStrings((task.hashtags.match(/#[a-z0-9_áéíóúñ]+/gi) || [])
     .filter(tag => !['#viral', '#fyp', '#parati', '#follow'].includes(tag.toLowerCase())));
-  const target = uniqueStrings([...existing, ...hashtagSeedFor(input)]).slice(0, 12);
-  if (target.length < 8 || target.join(' ') !== task.hashtags.trim()) {
-    ctx.fixedErrors.push(`Hashtags ajustados en tarea "${task.contentType}" (${existing.length} -> ${Math.max(target.length, 8)}).`);
+  const brandTag = '#LuzIAStudio';
+  const seed = hashtagSeedFor(input).filter(tag => tag.toLowerCase() !== brandTag.toLowerCase());
+
+  if (task.platform === 'Stories') {
+    const target = uniqueStrings([...existing, brandTag]).slice(0, 3);
+    if (target.join(' ') !== task.hashtags.trim()) {
+      ctx.fixedErrors.push(`Hashtags reducidos para Stories en "${task.contentType}".`);
+    }
+    return { ...task, hashtags: target.join(' ') };
   }
-  return { ...task, hashtags: target.slice(0, Math.max(8, Math.min(12, target.length))).join(' ') };
+
+  const target = uniqueStrings([...existing, brandTag, ...seed]).slice(0, 10);
+  const minimum = task.platform === 'Instagram Feed' || task.platform === 'Facebook' ? 6 : 4;
+  const finalTags = target.slice(0, Math.max(minimum, Math.min(10, target.length)));
+  if (finalTags.length < minimum || finalTags.join(' ') !== task.hashtags.trim()) {
+    ctx.fixedErrors.push(`Hashtags limpiados en tarea "${task.contentType}" (${existing.length} -> ${finalTags.length}).`);
+  }
+  return { ...task, hashtags: finalTags.join(' ') };
 }
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function filterWeakPhrasesText(value: string, field: string, ctx: ValidationContext): string {
-  let next = value;
+function weakLanguageLabels(text: string): string[] {
+  const labels: string[] = [];
+  const source = text.toLowerCase();
   weakMarketingPhrases.forEach(phrase => {
-    const regex = new RegExp(escapeRegExp(phrase), 'gi');
-    if (regex.test(next)) {
-      next = next.replace(regex, weakPhraseReplacements[phrase] || 'mensaje comercial concreto');
-      ctx.fixedErrors.push(`Frase debil filtrada en ${field}: "${phrase}".`);
-    }
+    if (source.includes(phrase.toLowerCase())) labels.push(phrase);
   });
   weakPhraseRules.forEach(rule => {
-    if (rule.pattern.test(next)) {
-      rule.pattern.lastIndex = 0;
-      next = next.replace(rule.pattern, rule.replacement);
-      ctx.fixedErrors.push(`Frase debil filtrada en ${field}: "${rule.label}".`);
-    }
+    rule.pattern.lastIndex = 0;
+    if (rule.pattern.test(text)) labels.push(rule.label);
     rule.pattern.lastIndex = 0;
   });
+  return uniqueStrings(labels);
+}
+
+function brokenSentenceLabels(text: string): string[] {
+  const labels: string[] = [];
+  const source = text.toLowerCase();
+  if (/mejorar fotos de producto sin montar un set\s+(esas|tus|tu|el|la|los|las|una|un|este|esta|esas|estas)\b/i.test(text)) {
+    labels.push('reemplazo pegado despues de "mejorar fotos de producto sin montar un set"');
+  }
+  if (/crear imagenes listas para publicar\s+(esas|tus|tu|el|la|los|las|una|un|este|esta)\b/i.test(text)) {
+    labels.push('reemplazo pegado despues de "crear imagenes listas para publicar"');
+  }
+  if (/\b(null|undefined)\b/i.test(text)) labels.push('texto visible null/undefined');
+  if (/\b(\w{4,})\b(?:\s+\1\b){1,}/i.test(source)) labels.push('repeticion consecutiva');
+  if (/sin montar un set\s+tu negocio|sin montar un set\s+tus fotos|sin montar un set\s+esas imagenes/i.test(text)) {
+    labels.push('frase rota por reemplazo mecanico');
+  }
+  return uniqueStrings(labels);
+}
+
+function naturalSentenceForContext(context: string): string {
+  const lower = context.toLowerCase();
+  if (lower.includes('caption')) {
+    return 'Una foto simple puede comunicar mejor cuando el producto se ve claro, con buena luz y una escena ordenada.';
+  }
+  if (lower.includes('visualconcept')) {
+    return 'Imagen limpia del producto con fondo simple, buena luz y composicion lista para publicar.';
+  }
+  if (lower.includes('whyitworks')) {
+    return 'Funciona porque muestra una accion concreta y facilita iniciar una conversacion de compra.';
+  }
+  if (lower.includes('prompt')) {
+    return 'Crea una imagen lista para publicar con @producto1, fondo limpio, buena luz y composicion clara para redes.';
+  }
+  if (lower.includes('instruction')) {
+    return 'Prepara una pieza simple, revisa que el producto se entienda y cierra con una accion clara.';
+  }
+  if (lower.includes('onscreentext')) {
+    return 'Imagen lista para publicar';
+  }
+  if (lower.includes('contenttype')) {
+    return 'Publicacion de prueba social';
+  }
+  if (lower.includes('businessdiagnosis')) {
+    return 'La marca necesita mostrar productos con mas claridad y convertir el interes en conversaciones de compra.';
+  }
+  if (lower.includes('strategictip')) {
+    return 'Publica una idea concreta por pieza y usa CTAs que abran conversacion por DM, comentario o story.';
+  }
+  if (lower.includes('plannarrative')) {
+    return 'El plan combina piezas de producto, prueba social y conversion para producir contenido con menos friccion.';
+  }
+  return 'Luz IA Studio ayuda a preparar contenido para redes con menos friccion y una accion comercial clara.';
+}
+
+function splitSentences(text: string): string[] {
+  return text.match(/[^.!?]+[.!?]?/g)?.map(sentence => sentence.trim()).filter(Boolean) || [text];
+}
+
+function rewriteWeakPhraseSentence(text: string, context: string): string {
+  if (!text || text.trim().toLowerCase() === 'null' || text.trim().toLowerCase() === 'undefined') return '';
+  const sentences = splitSentences(text);
+  const next = sentences.map(sentence => {
+    if (weakLanguageLabels(sentence).length || brokenSentenceLabels(sentence).length) {
+      return naturalSentenceForContext(context);
+    }
+    return sentence;
+  });
+  return uniqueStrings(next).join(' ').replace(/\s+/g, ' ').trim();
+}
+
+function filterWeakPhrasesText(value: string, field: string, ctx: ValidationContext): string {
+  const next = rewriteWeakPhraseSentence(value, field);
+  if (next !== value) {
+    const labels = uniqueStrings([...weakLanguageLabels(value), ...brokenSentenceLabels(value)]);
+    ctx.fixedErrors.push(`Frase reescrita en ${field}: ${labels.join(', ') || 'lenguaje poco natural'}.`);
+  }
   return next;
 }
 
@@ -1187,8 +1359,10 @@ function validateModules(tasks: GrowthTask[]): boolean {
 function validateHashtagState(tasks: GrowthTask[]): boolean {
   return tasks.every(task => {
     const count = task.hashtags.match(/#[a-z0-9_áéíóúñ]+/gi)?.length || 0;
-    if (task.platform === 'WhatsApp') return task.hashtags.trim() === '';
-    return count >= 8 && count <= 12;
+    if (task.platform === 'WhatsApp' || task.module === 'none') return task.hashtags.trim() === '';
+    if (task.platform === 'Stories') return count <= 3;
+    if (task.platform === 'Instagram Feed' || task.platform === 'Facebook') return count >= 6 && count <= 10;
+    return count >= 4 && count <= 10;
   });
 }
 
@@ -1201,7 +1375,7 @@ function validateCommercialFields(tasks: GrowthTask[]): boolean {
 }
 
 function validateStoriesFormats(tasks: GrowthTask[]): boolean {
-  return tasks.every(task => task.platform !== 'Stories' || !/carrusel|carousel/i.test(task.contentType));
+  return tasks.every(task => task.platform !== 'Stories' || STORY_CONTENT_TYPES.includes(task.contentType));
 }
 
 function directPlanSalesTasks(tasks: GrowthTask[]): GrowthTask[] {
@@ -1537,6 +1711,9 @@ function normalizeCommercialTask(task: GrowthTask, index: number, ctx: Validatio
       : inferCtaTarget(next),
   };
   next = normalizeCta(next, index, ctx);
+  next = normalizeCtaTargetForPlatform(next, ctx);
+  next = normalizeEngagementHookForCta(next, ctx);
+  next = normalizePrimaryModule(next, ctx);
   if (next.ctaTarget === 'Link en bio' && next.funnelRole !== 'convertir') {
     next = { ...next, ctaTarget: inferCtaTarget({ ...next, ctaTarget: 'Instagram DM' }) };
     ctx.fixedErrors.push(`CTA Link en bio reemplazado fuera de conversion en "${next.contentType}".`);
@@ -1636,21 +1813,156 @@ function effortDistributionValid(tasks: GrowthTask[], duration: GrowthPlanDurati
       && tasks[index - 2].estimatedEffort === 'alto');
 }
 
+function planTextEntries(plan: GrowthStrategicPlan): Array<{ path: string; text: string }> {
+  const entries: Array<{ path: string; text: string }> = [
+    { path: 'planNarrative', text: plan.planNarrative },
+    { path: 'businessDiagnosis', text: plan.businessDiagnosis },
+    { path: 'strategicTip', text: plan.strategicTip },
+  ];
+  plan.tasks.forEach((task, taskIndex) => {
+    entries.push(
+      { path: `tasks.${taskIndex}.caption`, text: task.caption },
+      { path: `tasks.${taskIndex}.visualConcept`, text: task.visualConcept },
+      { path: `tasks.${taskIndex}.whyItWorks`, text: task.whyItWorks },
+    );
+    task.shotGuide.onScreenText.forEach((text, index) => entries.push({ path: `tasks.${taskIndex}.shotGuide.onScreenText.${index}`, text }));
+    task.executionRecipe.steps.forEach((step, index) => entries.push({ path: `tasks.${taskIndex}.executionRecipe.steps.${index}.instruction`, text: step.instruction }));
+    task.shotGuide.shots.forEach((shot, index) => entries.push({ path: `tasks.${taskIndex}.shotGuide.shots.${index}.instruction`, text: shot.instruction }));
+  });
+  return entries;
+}
+
+function weakPhraseIssues(plan: GrowthStrategicPlan): string[] {
+  return planTextEntries(plan)
+    .flatMap(entry => weakLanguageLabels(entry.text).map(label => `${entry.path}: ${label}`));
+}
+
+function brokenSentenceIssues(plan: GrowthStrategicPlan): string[] {
+  return planTextEntries(plan)
+    .flatMap(entry => brokenSentenceLabels(entry.text).map(label => `${entry.path}: ${label}`));
+}
+
+function normalizeCaptionText(task: GrowthTask, index: number, ctx: ValidationContext): string {
+  const raw = task.caption.trim().toLowerCase() === 'null' || task.caption.trim().toLowerCase() === 'undefined'
+    ? ''
+    : task.caption;
+  if (raw !== task.caption) ctx.fixedErrors.push(`Caption null corregido en "${task.contentType}".`);
+  const rewritten = rewriteWeakPhraseSentence(raw, `caption/${task.contentType}`);
+  if (rewritten !== raw) {
+    const labels = uniqueStrings([...weakLanguageLabels(raw), ...brokenSentenceLabels(raw)]);
+    ctx.fixedErrors.push(`Caption limpiado en "${task.contentType}": ${labels.join(', ') || 'naturalidad'}.`);
+  }
+  const sentences = splitSentences(rewritten).filter(Boolean);
+  const weak = weakLanguageLabels(rewritten).length > 0;
+  const broken = brokenSentenceLabels(rewritten).length > 0;
+  const overlong = rewritten.length > 420 || sentences.length > 4;
+  const canned = /es hora de|descubre c[oÃ³]mo|tu negocio merece|resultados profesionales|resultados increibles|resultados incre[iÃ­]bles/i.test(rewritten);
+  if (rewritten && !weak && !broken && !overlong && !canned) return rewritten;
+
+  if (!rewritten && task.platform === 'WhatsApp') return '';
+
+  const opener = task.platform === 'Stories'
+    ? 'Una historia simple funciona mejor cuando pide una respuesta concreta.'
+    : task.platform === 'Facebook'
+      ? 'Una publicacion clara ayuda a que la gente entienda que opcion le conviene.'
+      : 'Una foto simple puede hacer que un producto se entienda mejor en redes.';
+  const middle = task.week >= 4
+    ? 'Compara el plan segun cuantos productos quieres mover y cuantas piezas necesitas al mes.'
+    : 'Muestra el producto con buena luz, una idea concreta y una accion facil de responder.';
+  const cta = task.engagementHook || directPlanCta(task, index);
+  ctx.fixedErrors.push(`Caption reescrito para sonar mas natural en "${task.contentType}".`);
+  return `${opener} ${middle} ${cta}`.trim();
+}
+
+function validatePlatformCtaCoherence(tasks: GrowthTask[]): boolean {
+  return tasks.every(task => ctaTargetsForPlatform(task.platform).includes(task.ctaTarget)
+    && !(task.platform !== 'Stories' && /responde esta story|sticker/i.test(task.engagementHook)));
+}
+
+function validatePlatformFormatState(tasks: GrowthTask[]): boolean {
+  return tasks.every(task => {
+    if (task.platform === 'Stories') return STORY_CONTENT_TYPES.includes(task.contentType);
+    if (task.platform === 'Instagram Feed') return INSTAGRAM_FEED_CONTENT_TYPES.includes(task.contentType);
+    if (task.platform === 'Facebook') return FACEBOOK_CONTENT_TYPES.includes(task.contentType);
+    return true;
+  });
+}
+
+function validatePrimaryModuleAction(tasks: GrowthTask[]): boolean {
+  return tasks.every(task => {
+    if (isTextualManualAction(task)) return task.module === 'none' && task.prompt === '';
+    if (task.module === 'none') return task.prompt === '';
+    return CONTENT_MODULE_VALUES.includes(task.module);
+  });
+}
+
+function validateCaptionsNatural(tasks: GrowthTask[]): boolean {
+  return tasks.every(task => {
+    if (task.caption.trim().toLowerCase() === 'null' || task.caption.trim().toLowerCase() === 'undefined') return false;
+    if (weakLanguageLabels(task.caption).length || brokenSentenceLabels(task.caption).length) return false;
+    if (/es hora de|descubre c[oÃ³]mo|tu negocio merece|resultados profesionales|resultados increibles|resultados incre[iÃ­]bles/i.test(task.caption)) return false;
+    return splitSentences(task.caption).length <= 4 && task.caption.length <= 480;
+  });
+}
+
+function rewriteFinalText(value: string, context: string, ctx: ValidationContext): string {
+  const next = rewriteWeakPhraseSentence(value, context);
+  if (next !== value) {
+    const labels = uniqueStrings([...weakLanguageLabels(value), ...brokenSentenceLabels(value)]);
+    ctx.fixedErrors.push(`Texto reescrito en escaneo final (${context}): ${labels.join(', ') || 'naturalidad'}.`);
+  }
+  return next;
+}
+
+function finalNaturalLanguageScan(plan: GrowthStrategicPlan, ctx: ValidationContext): GrowthStrategicPlan {
+  const tasks = plan.tasks.map((task, index) => {
+    let next = normalizePlatformFormatTask(task, ctx);
+    next = normalizePrimaryModule(next, ctx);
+    next = normalizeCtaTargetForPlatform(next, ctx);
+    next = normalizeEngagementHookForCta(next, ctx);
+    next = {
+      ...next,
+      caption: normalizeCaptionText(next, index, ctx),
+      visualConcept: rewriteFinalText(next.visualConcept, `visualConcept/${next.contentType}`, ctx),
+      whyItWorks: rewriteFinalText(next.whyItWorks, `whyItWorks/${next.contentType}`, ctx),
+      executionRecipe: {
+        ...next.executionRecipe,
+        steps: next.executionRecipe.steps.map(step => ({
+          ...step,
+          instruction: rewriteFinalText(step.instruction, `instruction/${next.contentType}`, ctx),
+        })),
+      },
+      shotGuide: {
+        ...next.shotGuide,
+        onScreenText: next.shotGuide.onScreenText
+          .map(text => rewriteFinalText(text, `onScreenText/${next.contentType}`, ctx))
+          .filter(Boolean),
+        shots: next.shotGuide.shots.map(shot => ({
+          ...shot,
+          instruction: rewriteFinalText(shot.instruction, `shotInstruction/${next.contentType}`, ctx),
+        })),
+      },
+    };
+    return next;
+  });
+
+  const nextPlan: GrowthStrategicPlan = {
+    ...plan,
+    planNarrative: rewriteFinalText(plan.planNarrative, 'planNarrative', ctx),
+    businessDiagnosis: rewriteFinalText(plan.businessDiagnosis, 'businessDiagnosis', ctx),
+    strategicTip: rewriteFinalText(plan.strategicTip, 'strategicTip', ctx),
+    tasks,
+  };
+
+  const weakAfter = weakPhraseIssues(nextPlan);
+  const brokenAfter = brokenSentenceIssues(nextPlan);
+  if (weakAfter.length) ctx.warnings.push(`Frases debiles restantes tras escaneo final: ${weakAfter.join(' | ')}`);
+  if (brokenAfter.length) ctx.warnings.push(`Frases rotas restantes tras escaneo final: ${brokenAfter.join(' | ')}`);
+  return nextPlan;
+}
+
 function containsWeakPhrase(plan: GrowthStrategicPlan): boolean {
-  const text = [
-    plan.strategyGoal,
-    plan.businessDiagnosis,
-    plan.planNarrative,
-    plan.strategicTip,
-    ...plan.tasks.flatMap(task => [task.contentType, task.moduleReason, task.visualConcept, task.whyItWorks, task.caption, task.prompt, task.supportPrompt || '', task.engagementHook]),
-  ].join(' ').toLowerCase();
-  return weakMarketingPhrases.some(phrase => text.includes(phrase.toLowerCase()))
-    || weakPhraseRules.some(rule => {
-      rule.pattern.lastIndex = 0;
-      const found = rule.pattern.test(text);
-      rule.pattern.lastIndex = 0;
-      return found;
-    });
+  return weakPhraseIssues(plan).length > 0;
 }
 
 function markdownList(items: string[]): string {
@@ -1664,6 +1976,12 @@ function buildValidationReport(plan: GrowthStrategicPlan): string {
   const ctas = ctaTargetCounts(plan.tasks);
   const formats = formatUsageByPlatform(plan.tasks);
   const directSales = directPlanSalesTasks(plan.tasks);
+  const weakRemaining = weakPhraseIssues(plan);
+  const brokenRemaining = brokenSentenceIssues(plan);
+  const ctaFixes = plan.generationLog.fixedErrors.filter(error => /CTA incompatible|CTA de story|CTA de Facebook|CTA Link en bio/i.test(error));
+  const nullCaptionFixes = plan.generationLog.fixedErrors.filter(error => /Caption null/i.test(error));
+  const supportModuleMoves = plan.generationLog.fixedErrors.filter(error => /Modulo principal corregido|Modulo ajustado|supportPrompt/i.test(error));
+  const hashtagFixes = plan.generationLog.fixedErrors.filter(error => /Hashtags/i.test(error));
   const productRows = normalizedProducts.map(product =>
     `| ${product.name} | ${product.price || '-'} | ${product.credits || '-'} | ${product.idealFor || '-'} | ${product.messageKey || product.benefit || '-'} | ${(product.inferredFields || []).join(', ') || '-'} | ${(product.warnings || []).join('; ') || '-'} |`,
   ).join('\n');
@@ -1758,13 +2076,38 @@ ${supportPrompts}
 - Distribucion de esfuerzo valida: ${checks.effortDistributionValid ? 'si' : 'no'}
 - Stories sin carrusel: ${checks.storiesFormatsValid ? 'si' : 'no'}
 - Venta directa por plan: ${checks.directPlanSalesPresent ? 'si' : 'no'}
+- Sin frases rotas: ${checks.noBrokenSentences ? 'si' : 'no'}
+- Sin captions null: ${checks.noNullCaptions ? 'si' : 'no'}
+- Plataforma/CTA coherente: ${checks.platformCtaCoherenceValid ? 'si' : 'no'}
+- Formato por plataforma valido: ${checks.platformFormatValid ? 'si' : 'no'}
+- Modulo principal coherente: ${checks.primaryModuleActionValid ? 'si' : 'no'}
+- Captions naturales: ${checks.captionsNaturalValid ? 'si' : 'no'}
 - Palabras debiles corregidas: ${checks.weakPhrasesFiltered ? 'si' : 'no'}
 - Productos normalizados: ${checks.productsNormalized ? 'si' : 'no'}
 
-## 7. Warnings
+## 7. Auditoria de lenguaje natural
+- Frases debiles restantes: ${weakRemaining.length}
+${markdownList(weakRemaining)}
+
+- Frases rotas detectadas: ${brokenRemaining.length}
+${markdownList(brokenRemaining)}
+
+- Conflictos plataforma/CTA corregidos: ${ctaFixes.length}
+${markdownList(ctaFixes)}
+
+- Captions null corregidos: ${nullCaptionFixes.length}
+${markdownList(nullCaptionFixes)}
+
+- Modulos movidos a supportModule o none: ${supportModuleMoves.length}
+${markdownList(supportModuleMoves)}
+
+- Hashtags reducidos/limpiados: ${hashtagFixes.length}
+${markdownList(hashtagFixes)}
+
+## 8. Warnings
 ${markdownList(plan.generationLog.warnings)}
 
-## 8. Fixed errors
+## 9. Fixed errors
 ${markdownList(plan.generationLog.fixedErrors)}
 `;
 }
@@ -1941,6 +2284,11 @@ function normalizePlan(raw: any, input: GenerateGrowthPlanInput): GrowthStrategi
   };
 
   plan = applyWeakPhraseFilter(plan, ctx);
+  plan = finalNaturalLanguageScan(plan, ctx);
+  plan = {
+    ...plan,
+    tasks: plan.tasks.map(task => validateHashtags(task, input, ctx)),
+  };
   plan.generationLog.warnings = uniqueStrings(ctx.warnings);
   plan.generationLog.fixedErrors = uniqueStrings(ctx.fixedErrors);
   plan.generationLog.validationChecks = {
@@ -1952,6 +2300,12 @@ function normalizePlan(raw: any, input: GenerateGrowthPlanInput): GrowthStrategi
     effortDistributionValid: effortDistributionValid(plan.tasks, plan.duration),
     storiesFormatsValid: validateStoriesFormats(plan.tasks),
     directPlanSalesPresent: directPlanSalesTasks(plan.tasks).length > 0,
+    noBrokenSentences: brokenSentenceIssues(plan).length === 0,
+    noNullCaptions: plan.tasks.every(task => task.caption.trim().toLowerCase() !== 'null' && task.caption.trim().toLowerCase() !== 'undefined'),
+    platformCtaCoherenceValid: validatePlatformCtaCoherence(plan.tasks),
+    platformFormatValid: validatePlatformFormatState(plan.tasks),
+    primaryModuleActionValid: validatePrimaryModuleAction(plan.tasks),
+    captionsNaturalValid: validateCaptionsNatural(plan.tasks),
     weakPhrasesFiltered: !containsWeakPhrase(plan),
   };
   plan.validationReportMarkdown = buildValidationReport(plan);
@@ -2264,18 +2618,24 @@ REGLAS:
 - No repitas ideas ya generadas en otras semanas.
 - Cada tarea debe ser concreta, lista para ejecutar y conectada a un modulo de Luz IA.
 - Cada tarea debe incluir estimatedEffort ("bajo", "medio", "alto"), taskPriority ("primary", "support") y ctaTarget.
-- ctaTarget valido: Instagram DM, Facebook comentario, WhatsApp, Link en bio, Guardar, Responder story.
+- ctaTarget valido: Instagram DM, Comentario, Facebook comentario, DM Facebook, Link, WhatsApp, Link en bio, Guardar, Responder story.
 - Prioriza CTAs conversacionales por DM/comentario/story. No abuses de "Link en bio".
 - Ejemplos de CTA: "Escribenos STARTER y te decimos si este plan te alcanza", "Comenta PLAN y te recomendamos uno segun tu ritmo", "Responde esta story con CREDITOS si quieres saber cuantas imagenes necesitas al mes".
-- Captions: 1 parrafo. Prompts: menos de 450 caracteres.
+- Captions: maximo 2-4 frases, humanas, concretas y sin sobreexplicar. Prompts: menos de 450 caracteres.
+- Evita captions con "es hora de", "descubre como", "tu negocio merece", "resultados profesionales" o "resultados increibles".
 - Cada executionRecipe debe tener maximo 3 pasos.
 - Cada shotGuide debe tener maximo 3 tomas.
 - Modulos validos: product, ugc, scene, prompt, outfit, none.
 - Si module es none, prompt debe ser "".
 - Si una tarea manual necesita apoyo visual, usa supportModule y supportPrompt.
-- Stories NO puede usar contentType "Carrusel". Usa Secuencia de stories, Encuesta, Q&A, Recordatorio o Demo rapida.
-- Instagram Feed puede usar Reel, Carrusel o Post con imagen.
-- Facebook puede usar Post educativo, Reel, Q&A o Publicacion de prueba social.
+- Stories NO puede usar contentType "Carrusel" ni "Post con imagen". Usa Encuesta, Q&A, Secuencia de stories, Recordatorio, Demo rapida, Story estatica o Reel vertical.
+- Instagram Feed puede usar Reel, Carrusel, Post educativo, Post con imagen, Publicacion de prueba social o Demo rapida. No uses Q&A de Stories.
+- Facebook puede usar Post educativo, Publicacion de prueba social, Q&A, Encuesta, Reel o Carrusel. No hables de stickers de Instagram en Facebook.
+- Si ctaTarget es "Responder story", platform debe ser Stories.
+- Si platform es Instagram Feed, usa Instagram DM, Comentario, Guardar o Link en bio.
+- Si platform es Facebook, usa Facebook comentario, DM Facebook o Link.
+- Si platform es Stories, usa Responder story, Link en bio o Instagram DM.
+- Encuesta, Q&A, Recordatorio, post educativo textual o publicacion manual deben usar module none. Si necesitan imagen de apoyo, mueve el prompt a supportPrompt y supportModule.
 - Para planes de 30 dias, reparte esfuerzo aproximado: 35% bajo, 35% medio, maximo 30% alto. No pongas mas de 2 tareas altas seguidas.
 - Si hay mas de una tarea el mismo dia, una debe ser taskPriority "primary" y la otra "support".
 - Slots permitidos: @producto1, @producto2, @producto3, @producto4, @persona1, @outfit1, @escena1, @referencia1.

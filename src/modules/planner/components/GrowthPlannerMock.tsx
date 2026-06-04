@@ -1135,6 +1135,8 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
     error: brandError,
   } = useBrandProfiles(user?.uid);
   const plannerChargeRef = useRef(false);
+  const completionHandledRef = useRef(false);
+  const generationStartingRef = useRef(false);
   const [duration, setDuration] = useState<GrowthPlanDuration>(30);
   const [view, setView] = useState<'wizard' | 'generating' | 'results'>('wizard');
   const [plan, setPlan] = useState<GrowthStrategicPlan | null>(null);
@@ -1204,6 +1206,7 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
   };
 
   const handleGenerate = async () => {
+    if (generationStartingRef.current) return;
     setGenerationError('');
     if (!products.length) {
       setGenerationError('Agrega al menos un producto para generar el plan.');
@@ -1222,8 +1225,11 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
       return;
     }
 
+    generationStartingRef.current = true;
+    completionHandledRef.current = false;
     const charged = await deductMixedCredits(PLANNER_NORMAL_CREDIT_COST, PLANNER_PRO_CREDIT_COST);
     if (!charged) {
+      generationStartingRef.current = false;
       setGenerationError('No se pudo descontar el costo del plan. Revisa tus creditos disponibles.');
       return;
     }
@@ -1243,9 +1249,12 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
     }
 
     setView('generating');
+    generationStartingRef.current = false;
   };
 
   const handleComplete = async (nextPlan: GrowthStrategicPlan) => {
+    if (completionHandledRef.current) return;
+    completionHandledRef.current = true;
     setPlan(nextPlan);
     const project = await createProject(`Plan ${nextPlan.brand.name} ${nextPlan.duration} dias`);
     await saveGrowthPlan(project.id, nextPlan);
@@ -1255,6 +1264,8 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
 
   const handleGenerationError = async (message: string) => {
     console.error('[GrowthPlanner] generation failed:', message);
+    completionHandledRef.current = false;
+    generationStartingRef.current = false;
     await refundPlannerCharge();
     setGenerationError(message);
     setWizardStep(STEPS.length);

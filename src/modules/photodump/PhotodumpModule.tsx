@@ -21,7 +21,7 @@ import { photodumpStorage } from './photodumpStorage';
 import {
   PhotodumpSet, PhotodumpNarrative, PhotodumpProtagonist, PhotodumpDestino,
   PhotodumpRefs, PhotodumpOutfitMode,
-  NARRATIVE_META, PROTAGONIST_META, DESTINO_META, STORY_ARC_META,
+  NARRATIVE_META, PROTAGONIST_META, DESTINO_META, STORY_ARC_META, MOMENT_TYPE_META,
 } from './types';
 import {
   buildPhotodumpSessionPlan,
@@ -270,6 +270,7 @@ const PhotodumpModule: React.FC = () => {
             plan.assignedFamilies,
             plan.sessionFamilies,
             shots.length,
+            protagonist,
           );
           shotUrls.push(url);
           setPartialImages(prev => [...prev, url]);
@@ -355,6 +356,7 @@ const PhotodumpModule: React.FC = () => {
           basePrompt, narrative, destino, sessionParams,
           savedPlan.assignedFamilies, savedPlan.sessionFamilies,
           savedShots.length,
+          protagonist,
         );
         newUrls[i] = url;
         setPartialImages(prev => { const n = [...prev]; n[i + 1] = url; return n; });
@@ -915,12 +917,12 @@ const PhotodumpModule: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Panel Story Arc */}
+                    {/* Panel Momentos visuales */}
                     <div className="md:sticky md:top-4">
                       <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Así se estructura el set</p>
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Momentos del set</p>
                         <div className="space-y-2">
-                          {Object.entries(STORY_ARC_META).map(([key, meta]) => (
+                          {Object.entries(MOMENT_TYPE_META).slice(0, 4).map(([key, meta]) => (
                             <div key={key} className="flex items-start gap-2.5">
                               <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full flex-shrink-0 mt-0.5 ${meta.color}`}>
                                 {meta.label}
@@ -931,7 +933,7 @@ const PhotodumpModule: React.FC = () => {
                         </div>
                         <div className="h-px bg-slate-200" />
                         <p className="text-[10px] text-slate-400 leading-relaxed">
-                          El director arma el arco automáticamente según la cantidad de imágenes elegida.
+                          El director elige los momentos más variados y orgánicos para tu historia.
                         </p>
                       </div>
 
