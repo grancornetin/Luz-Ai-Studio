@@ -4,12 +4,15 @@ import { v4 as uuidv4 } from 'uuid';
 import type {
   GrowthBrand,
   GrowthContentModule,
+  GrowthCtaTarget,
+  GrowthEstimatedEffort,
   GrowthFunnelRole,
   GrowthInstagramMetrics,
   GrowthPlanDuration,
   GrowthProduct,
   GrowthStrategicPlan,
   GrowthTask,
+  GrowthTaskPriority,
   GrowthTaskStatus,
 } from '../growthPlannerTypes';
 
@@ -47,6 +50,9 @@ const MAX_REPAIR_JSON_CHARS = 4500;
 const FUNNEL_ROLE_VALUES = ['atraer', 'generar_deseo', 'construir_confianza', 'convertir'];
 const CONTENT_MODULE_VALUES = ['product', 'ugc', 'scene', 'prompt', 'outfit', 'none'];
 const TASK_STATUS_VALUES = ['pending', 'in_progress', 'ready', 'published', 'skipped'];
+const ESTIMATED_EFFORT_VALUES = ['bajo', 'medio', 'alto'];
+const TASK_PRIORITY_VALUES = ['primary', 'support'];
+const CTA_TARGET_VALUES = ['Instagram DM', 'Facebook comentario', 'WhatsApp', 'Link en bio', 'Guardar', 'Responder story'];
 const ALLOWED_SLOTS = [
   '@producto1',
   '@producto2',
@@ -84,6 +90,14 @@ export const weakMarketingPhrases = [
   'transforma tus fotos',
   'marca exitosa',
   'emprendimiento inteligente',
+  'magia',
+  'magico',
+  'mÃ¡gico',
+  'infinitas posibilidades',
+  'escala tu marca',
+  'vende mas',
+  'vende mÃ¡s',
+  'impulso que necesita',
 ];
 
 const weakPhraseReplacements: Record<string, string> = {
@@ -112,7 +126,30 @@ const weakPhraseReplacements: Record<string, string> = {
   'transforma tus fotos': 'mejora tus imagenes para redes',
   'marca exitosa': 'marca con publicaciones mas consistentes',
   'emprendimiento inteligente': 'negocio que ahorra tiempo creando contenido visual para redes',
+  magia: 'proceso claro para crear imagenes listas para publicar',
+  magico: 'facil de ejecutar',
+  'mÃ¡gico': 'facil de ejecutar',
+  'infinitas posibilidades': 'variaciones visuales para campanas concretas',
+  'escala tu marca': 'organiza la produccion visual segun el volumen que necesitas',
+  'vende mas': 'abre conversaciones de compra mas claras',
+  'vende mÃ¡s': 'abre conversaciones de compra mas claras',
+  'impulso que necesita': 'siguiente accion comercial concreta',
 };
+
+const weakPhraseRules: Array<{ pattern: RegExp; label: string; replacement: string }> = [
+  { pattern: /\bmagia\b|\bm[aÃ¡]gic\w*/gi, label: 'magia/magico', replacement: 'proceso claro para crear imagenes listas para publicar' },
+  { pattern: /\brevista\b|\bim[aÃ¡]genes?\s+de\s+revista\b/gi, label: 'revista', replacement: 'imagenes listas para publicar' },
+  { pattern: /\bempoder\w+/gi, label: 'empoderar', replacement: 'dar autonomia para producir contenido comercial' },
+  { pattern: /\btransform\w+/gi, label: 'transformar', replacement: 'mejorar fotos de producto sin montar un set' },
+  { pattern: /\bescal\w+/gi, label: 'escalar', replacement: 'organizar la produccion visual segun el volumen de contenido' },
+  { pattern: /\b[eÃ©]xito\w*/gi, label: 'exito', replacement: 'resultado medible' },
+  { pattern: /\bbrill\w+/gi, label: 'brillar', replacement: 'verse claro y profesional en redes' },
+  { pattern: /\bimpulso\b|\bimpulso\s+que\s+necesita\b/gi, label: 'impulso', replacement: 'siguiente accion comercial concreta' },
+  { pattern: /\baliad\w+/gi, label: 'aliado', replacement: 'herramienta de produccion visual' },
+  { pattern: /\binfinitas\s+posibilidades\b/gi, label: 'infinitas posibilidades', replacement: 'variaciones visuales para campanas concretas' },
+  { pattern: /\bvende\s+m[aÃ¡]s\b/gi, label: 'vende mas', replacement: 'abre conversaciones de compra mas claras' },
+  { pattern: /\bcalidad\s+profesional\s+a\s+tu\s+alcance\b/gi, label: 'calidad profesional a tu alcance', replacement: 'mejorar fotos de producto sin montar un set' },
+];
 
 const stringArraySchema = { type: Type.ARRAY, items: { type: Type.STRING } };
 const executionStepSchema = {
@@ -189,6 +226,9 @@ const taskSchema = {
       required: ['duration', 'shots', 'onScreenText', 'inspirationSearches', 'whatToAvoid'],
     },
     engagementHook: { type: Type.STRING },
+    estimatedEffort: { type: Type.STRING, enum: ESTIMATED_EFFORT_VALUES },
+    taskPriority: { type: Type.STRING, enum: TASK_PRIORITY_VALUES },
+    ctaTarget: { type: Type.STRING, enum: CTA_TARGET_VALUES },
     status: { type: Type.STRING, enum: TASK_STATUS_VALUES },
   },
   required: [
@@ -211,6 +251,9 @@ const taskSchema = {
     'executionRecipe',
     'shotGuide',
     'engagementHook',
+    'estimatedEffort',
+    'taskPriority',
+    'ctaTarget',
     'status',
   ],
 };
@@ -503,6 +546,132 @@ function safeRole(role: string | undefined): GrowthFunnelRole {
   return ['atraer', 'generar_deseo', 'construir_confianza', 'convertir'].includes(role || '')
     ? role as GrowthFunnelRole
     : 'atraer';
+}
+
+function safeEstimatedEffort(value: string | undefined): GrowthEstimatedEffort {
+  return ESTIMATED_EFFORT_VALUES.includes(value || '')
+    ? value as GrowthEstimatedEffort
+    : 'medio';
+}
+
+function safeTaskPriority(value: string | undefined): GrowthTaskPriority {
+  return TASK_PRIORITY_VALUES.includes(value || '')
+    ? value as GrowthTaskPriority
+    : 'primary';
+}
+
+function safeCtaTarget(value: string | undefined): GrowthCtaTarget {
+  return CTA_TARGET_VALUES.includes(value || '')
+    ? value as GrowthCtaTarget
+    : 'Instagram DM';
+}
+
+function inferStoryFormat(task: GrowthTask): string {
+  const text = `${task.contentType} ${task.funnelRole} ${task.visualConcept}`.toLowerCase();
+  if (/encuesta|votar|elige|opcion|opci[oÃ³]n/.test(text)) return 'Encuesta';
+  if (/pregunta|objecion|objeci[oÃ³]n|duda|q&a|qa/.test(text)) return 'Q&A';
+  if (/recordatorio|cierre|dm|whatsapp|stock|precio/.test(text)) return 'Recordatorio';
+  if (/demo|uso|rapida|r[aÃ¡]pida|muestra/.test(text)) return 'Demo rapida';
+  return 'Secuencia de stories';
+}
+
+function inferEstimatedEffort(task: GrowthTask): GrowthEstimatedEffort {
+  const text = `${task.platform} ${task.contentType} ${task.module} ${task.executionRecipe.steps.map(step => step.instruction).join(' ')}`.toLowerCase();
+  const stepCount = task.executionRecipe.steps.length;
+  const shotCount = task.shotGuide.shots.length;
+  if (task.platform === 'WhatsApp' || /encuesta|q&a|recordatorio|comentario|guardar|responder story/.test(text)) return 'bajo';
+  if (task.platform === 'Stories' && stepCount <= 2) return 'bajo';
+  if (task.module === 'ugc' || task.module === 'scene' || task.module === 'outfit' || /reel|video|demo|try-on|produccion|producci[oÃ³]n/.test(text) || shotCount >= 3) return 'alto';
+  if (task.module === 'product' || task.module === 'prompt' || /carrusel|post educativo|publicaci[oÃ³]n/.test(text)) return 'medio';
+  return 'medio';
+}
+
+function inferCtaTarget(task: GrowthTask): GrowthCtaTarget {
+  const text = `${task.platform} ${task.funnelRole} ${task.contentType} ${task.caption} ${task.engagementHook}`.toLowerCase();
+  if (task.platform === 'Stories') return 'Responder story';
+  if (task.platform === 'WhatsApp') return 'WhatsApp';
+  if (task.platform === 'Facebook') return 'Facebook comentario';
+  if (/guardar|guarda/.test(text) && task.funnelRole !== 'convertir') return 'Guardar';
+  if (/link|bio|checkout/.test(text) && task.funnelRole === 'convertir') return 'Link en bio';
+  return 'Instagram DM';
+}
+
+function directPlanCta(task: GrowthTask, index: number): string {
+  const ctas = [
+    'Escribenos STARTER y te decimos si 200 creditos alcanzan para tu ritmo de publicacion.',
+    'Comenta PLAN y te recomendamos Explorer, Starter, Pro o Studio segun cuantos productos quieres mover.',
+    'Responde esta story con CREDITOS si quieres saber cuantas imagenes necesitas al mes.',
+    'Envianos DM con PRO si quieres ver que puedes producir con 500 creditos.',
+    'Escribenos STUDIO si necesitas contenido para varios productos o campanas activas.',
+    'Comenta EXPLORER si quieres validar una semana de contenido con 60 creditos.',
+  ];
+  if (task.platform === 'Stories') return ctas[2];
+  if (task.platform === 'Facebook') return ctas[1];
+  if (task.platform === 'WhatsApp') return 'Responde con STARTER, PRO o STUDIO y te ayudo a elegir segun tu volumen de contenido.';
+  return ctas[index % ctas.length];
+}
+
+function normalizeCta(task: GrowthTask, index: number, ctx: ValidationContext): GrowthTask {
+  let ctaTarget = safeCtaTarget(task.ctaTarget) || inferCtaTarget(task);
+  const text = `${task.contentType} ${task.caption} ${task.engagementHook}`.toLowerCase();
+  const sellsPlan = task.week >= 4 || /starter|\bpro\b|studio|explorer|credito|cr[eÃ©]dito|plan/.test(text);
+  let engagementHook = task.engagementHook;
+
+  if (sellsPlan || task.funnelRole === 'convertir') {
+    ctaTarget = task.platform === 'Stories'
+      ? 'Responder story'
+      : task.platform === 'Facebook'
+        ? 'Facebook comentario'
+        : task.platform === 'WhatsApp'
+          ? 'WhatsApp'
+          : 'Instagram DM';
+    engagementHook = directPlanCta({ ...task, ctaTarget }, index);
+  } else if (/link en bio|haz clic|compra ahora|vende m[aÃ¡]s/.test(engagementHook.toLowerCase())) {
+    ctaTarget = task.platform === 'Stories' ? 'Responder story' : task.platform === 'Facebook' ? 'Facebook comentario' : 'Instagram DM';
+    engagementHook = ctaTarget === 'Responder story'
+      ? 'Responde esta story con INFO y te mando una recomendacion concreta.'
+      : ctaTarget === 'Facebook comentario'
+        ? 'Comenta INFO y te mando la opcion mas simple para empezar.'
+        : 'Envianos DM con INFO y te ayudamos a elegir el siguiente paso.';
+    ctx.fixedErrors.push(`CTA generico reemplazado en "${task.contentType}".`);
+  }
+
+  return { ...task, ctaTarget, engagementHook };
+}
+
+function normalizePlatformFormat(task: GrowthTask, ctx: ValidationContext): GrowthTask {
+  const lower = task.contentType.toLowerCase();
+  let next = task;
+
+  if (task.platform === 'Stories' && /carrusel|carousel/.test(lower)) {
+    const contentType = inferStoryFormat(task);
+    next = { ...next, contentType };
+    ctx.fixedErrors.push(`Formato Stories corregido: Carrusel -> ${contentType}.`);
+  }
+
+  if (next.platform === 'Stories' && /encuesta|q&a|recordatorio/.test(next.contentType.toLowerCase()) && next.module !== 'none') {
+    next = {
+      ...next,
+      module: 'none',
+      moduleReason: 'Formato nativo de Stories; se ejecuta con stickers, respuestas o texto directo.',
+      supportPrompt: next.prompt || next.supportPrompt,
+      supportModule: next.prompt ? next.module : next.supportModule,
+      prompt: '',
+    };
+    ctx.fixedErrors.push(`Modulo ajustado a manual para Stories "${next.contentType}".`);
+  }
+
+  if (next.platform === 'Instagram Feed' && /story|stories|encuesta/.test(next.contentType.toLowerCase())) {
+    next = { ...next, contentType: next.module === 'ugc' ? 'Reel' : 'Post con imagen' };
+    ctx.fixedErrors.push(`Formato Instagram Feed corregido en "${task.contentType}".`);
+  }
+
+  if (next.platform === 'Facebook' && /story|stories|carrusel/.test(next.contentType.toLowerCase())) {
+    next = { ...next, contentType: next.funnelRole === 'construir_confianza' ? 'Q&A' : 'Post educativo' };
+    ctx.fixedErrors.push(`Formato Facebook corregido en "${task.contentType}".`);
+  }
+
+  return next;
 }
 
 interface ProductNormalizationResult {
@@ -972,6 +1141,14 @@ function filterWeakPhrasesText(value: string, field: string, ctx: ValidationCont
       ctx.fixedErrors.push(`Frase debil filtrada en ${field}: "${phrase}".`);
     }
   });
+  weakPhraseRules.forEach(rule => {
+    if (rule.pattern.test(next)) {
+      rule.pattern.lastIndex = 0;
+      next = next.replace(rule.pattern, rule.replacement);
+      ctx.fixedErrors.push(`Frase debil filtrada en ${field}: "${rule.label}".`);
+    }
+    rule.pattern.lastIndex = 0;
+  });
   return next;
 }
 
@@ -984,6 +1161,8 @@ function applyWeakPhraseFilter(plan: GrowthStrategicPlan, ctx: ValidationContext
     strategicTip: filterWeakPhrasesText(plan.strategicTip, 'strategicTip', ctx),
     tasks: plan.tasks.map(task => ({
       ...task,
+      contentType: filterWeakPhrasesText(task.contentType, `contentType/${task.contentType}`, ctx),
+      moduleReason: filterWeakPhrasesText(task.moduleReason, `moduleReason/${task.contentType}`, ctx),
       visualConcept: filterWeakPhrasesText(task.visualConcept, `visualConcept/${task.contentType}`, ctx),
       whyItWorks: filterWeakPhrasesText(task.whyItWorks, `whyItWorks/${task.contentType}`, ctx),
       caption: filterWeakPhrasesText(task.caption, `caption/${task.contentType}`, ctx),
@@ -1011,6 +1190,26 @@ function validateHashtagState(tasks: GrowthTask[]): boolean {
     if (task.platform === 'WhatsApp') return task.hashtags.trim() === '';
     return count >= 8 && count <= 12;
   });
+}
+
+function validateCommercialFields(tasks: GrowthTask[]): boolean {
+  return tasks.every(task =>
+    ESTIMATED_EFFORT_VALUES.includes(task.estimatedEffort)
+    && TASK_PRIORITY_VALUES.includes(task.taskPriority)
+    && CTA_TARGET_VALUES.includes(task.ctaTarget),
+  );
+}
+
+function validateStoriesFormats(tasks: GrowthTask[]): boolean {
+  return tasks.every(task => task.platform !== 'Stories' || !/carrusel|carousel/i.test(task.contentType));
+}
+
+function directPlanSalesTasks(tasks: GrowthTask[]): GrowthTask[] {
+  return tasks.filter(task =>
+    /explorer|starter|\bpro\b|studio|60|200|500|credito|cr[eÃ©]dito|costo por imagen|prompts|tiempo/i.test(
+      `${task.contentType} ${task.visualConcept} ${task.caption} ${task.engagementHook}`,
+    ),
+  );
 }
 
 function funnelRoleForIndex(index: number, total: number): GrowthFunnelRole {
@@ -1105,6 +1304,9 @@ function createFallbackTask(index: number, total: number, input: GenerateGrowthP
       whatToAvoid: ['Promesas genericas sin mostrar beneficio concreto.'],
     },
     engagementHook: role === 'convertir' ? 'Pide DM o clic con una condicion clara.' : 'Pregunta por una necesidad concreta del cliente.',
+    estimatedEffort: module === 'none' ? 'bajo' : 'medio',
+    taskPriority: role === 'convertir' ? 'primary' : 'support',
+    ctaTarget: platform === 'Stories' ? 'Responder story' : platform === 'WhatsApp' ? 'WhatsApp' : 'Instagram DM',
     status: 'pending',
   };
 }
@@ -1147,6 +1349,33 @@ function ensureRoadmap(roadmap: GrowthStrategicPlan['roadmap'], duration: Growth
 function countByPlatform(tasks: GrowthTask[]): Record<string, number> {
   return tasks.reduce<Record<string, number>>((acc, task) => {
     acc[task.platform] = (acc[task.platform] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+function countByValue<T extends string>(values: T[]): Record<T, number> {
+  return values.reduce<Record<T, number>>((acc, value) => {
+    acc[value] = (acc[value] || 0) + 1;
+    return acc;
+  }, {} as Record<T, number>);
+}
+
+function effortCounts(tasks: GrowthTask[]): Record<GrowthEstimatedEffort, number> {
+  return countByValue(tasks.map(task => task.estimatedEffort));
+}
+
+function priorityCounts(tasks: GrowthTask[]): Record<GrowthTaskPriority, number> {
+  return countByValue(tasks.map(task => task.taskPriority));
+}
+
+function ctaTargetCounts(tasks: GrowthTask[]): Record<GrowthCtaTarget, number> {
+  return countByValue(tasks.map(task => task.ctaTarget));
+}
+
+function formatUsageByPlatform(tasks: GrowthTask[]): Record<string, number> {
+  return tasks.reduce<Record<string, number>>((acc, task) => {
+    const key = `${task.platform} / ${task.contentType}`;
+    acc[key] = (acc[key] || 0) + 1;
     return acc;
   }, {});
 }
@@ -1204,15 +1433,224 @@ function rebalanceChannels(tasks: GrowthTask[], input: GenerateGrowthPlanInput, 
   return next;
 }
 
+function weekFourSalesAngle(index: number) {
+  const angles = [
+    {
+      plan: 'Explorer',
+      contentType: 'Que puedes crear con 60 creditos Explorer',
+      visualConcept: 'Comparacion simple de una semana de contenido usando 60 creditos: producto, variaciones y piezas para validar.',
+      caption: 'Explorer sirve para probar una semana de contenido sin comprometerte con un plan grande: valida productos, mide respuestas y decide el siguiente paso con datos.',
+      whyItWorks: 'Reduce la friccion de entrada y convierte dudas en una prueba concreta.',
+    },
+    {
+      plan: 'Starter',
+      contentType: 'Que puedes crear con 200 creditos Starter',
+      visualConcept: 'Mapa visual de 200 creditos aplicados a publicaciones semanales, imagenes de producto y variaciones para redes.',
+      caption: 'Starter es para marcas que necesitan publicar con constancia: 200 creditos te dan margen para fotos de producto, variaciones y piezas de apoyo durante el mes.',
+      whyItWorks: 'Explica volumen mensual con una unidad que la clienta entiende: cantidad de contenido.',
+    },
+    {
+      plan: 'Pro',
+      contentType: 'Cuando conviene pasar a Pro',
+      visualConcept: 'Escenario de marca con varios productos, campanas activas y necesidad de producir mas variaciones visuales.',
+      caption: 'Pro conviene cuando ya tienes varios productos o campanas activas y necesitas producir mas sin frenar cada semana por falta de creditos.',
+      whyItWorks: 'Vende el upgrade por necesidad operativa, no por promesa vaga.',
+    },
+    {
+      plan: 'Studio',
+      contentType: 'Cuando Studio tiene sentido',
+      visualConcept: 'Planificacion de contenido para muchas lineas de producto, equipo o marca con alto volumen visual.',
+      caption: 'Studio tiene sentido cuando necesitas contenido para varios productos, muchas pruebas visuales o un calendario comercial mas exigente.',
+      whyItWorks: 'Enmarca Studio como respuesta a volumen real de trabajo.',
+    },
+    {
+      plan: 'Comparacion',
+      contentType: 'Comparacion de costo por imagen',
+      visualConcept: 'Tabla clara comparando creditos, volumen de imagenes y tipo de usuaria ideal para cada plan.',
+      caption: 'No elijas el plan mas grande: elige el que calza con cuantas imagenes necesitas producir por semana y cuantos productos vas a mover.',
+      whyItWorks: 'Ayuda a decidir sin presion y baja objeciones de precio.',
+    },
+    {
+      plan: 'Objeciones',
+      contentType: 'No se si usare todos los creditos',
+      visualConcept: 'Q&A sobre creditos, prompts y tiempo disponible, con respuestas concretas para elegir plan.',
+      caption: 'Si no sabes si usaras todos los creditos, parte por tu ritmo real: cuantos productos tienes, cuantas publicaciones haces y cuanto tiempo puedes dedicar.',
+      whyItWorks: 'Responde objeciones antes de pedir el DM.',
+    },
+  ];
+  return angles[index % angles.length];
+}
+
+function contentTypeForSalesPlatform(task: GrowthTask, proposed: string): string {
+  if (task.platform === 'Stories') {
+    if (/objecion|objeci[oÃ³]n|no se|credito|cr[eÃ©]dito/.test(proposed.toLowerCase())) return 'Q&A';
+    return task.funnelRole === 'convertir' ? 'Recordatorio' : 'Secuencia de stories';
+  }
+  if (task.platform === 'Facebook') {
+    return /objecion|objeci[oÃ³]n|pregunta|cuando/.test(proposed.toLowerCase()) ? 'Q&A' : 'Post educativo';
+  }
+  if (task.platform === 'WhatsApp') return 'Mensaje de cierre';
+  if (task.platform === 'Instagram Feed') return /comparacion|que puedes|cu[aÃ¡]ndo|cuando/.test(proposed.toLowerCase()) ? 'Carrusel' : 'Post con imagen';
+  return proposed;
+}
+
+function strengthenWeekFourPlanSales(task: GrowthTask, index: number, ctx: ValidationContext): GrowthTask {
+  if (task.week < 4) return task;
+  const text = `${task.contentType} ${task.visualConcept} ${task.caption} ${task.whyItWorks}`.toLowerCase();
+  const alreadyConcrete = /explorer|starter|\bpro\b|studio|60|200|500|credito|cr[eÃ©]dito|costo por imagen|prompts|tiempo/.test(text);
+  const angle = weekFourSalesAngle(index);
+  const contentType = contentTypeForSalesPlatform(task, angle.contentType);
+  const next = {
+    ...task,
+    contentType: alreadyConcrete ? task.contentType : contentType,
+    visualConcept: alreadyConcrete ? task.visualConcept : angle.visualConcept,
+    caption: alreadyConcrete ? task.caption : angle.caption,
+    whyItWorks: alreadyConcrete ? task.whyItWorks : angle.whyItWorks,
+    funnelRole: 'convertir' as GrowthFunnelRole,
+    estimatedEffort: safeEstimatedEffort(task.estimatedEffort),
+  };
+
+  if (!alreadyConcrete) {
+    ctx.fixedErrors.push(`Semana 4 reforzada con venta concreta de plan ${angle.plan}.`);
+  }
+
+  return next;
+}
+
+function normalizeCommercialTask(task: GrowthTask, index: number, ctx: ValidationContext): GrowthTask {
+  let next = task;
+  next = normalizePlatformFormat(next, ctx);
+  next = strengthenWeekFourPlanSales(next, index, ctx);
+  const shouldInferCta = (next.platform === 'Stories' && task.ctaTarget !== 'Responder story')
+    || (next.platform === 'WhatsApp' && task.ctaTarget !== 'WhatsApp')
+    || (next.platform === 'Facebook' && task.ctaTarget === 'Instagram DM');
+  next = {
+    ...next,
+    estimatedEffort: task.estimatedEffort && ESTIMATED_EFFORT_VALUES.includes(task.estimatedEffort)
+      ? safeEstimatedEffort(task.estimatedEffort)
+      : inferEstimatedEffort(next),
+    taskPriority: task.taskPriority && TASK_PRIORITY_VALUES.includes(task.taskPriority)
+      ? safeTaskPriority(task.taskPriority)
+      : (next.funnelRole === 'convertir' || next.module !== 'none' ? 'primary' : 'support'),
+    ctaTarget: !shouldInferCta && task.ctaTarget && CTA_TARGET_VALUES.includes(task.ctaTarget)
+      ? safeCtaTarget(task.ctaTarget)
+      : inferCtaTarget(next),
+  };
+  next = normalizeCta(next, index, ctx);
+  if (next.ctaTarget === 'Link en bio' && next.funnelRole !== 'convertir') {
+    next = { ...next, ctaTarget: inferCtaTarget({ ...next, ctaTarget: 'Instagram DM' }) };
+    ctx.fixedErrors.push(`CTA Link en bio reemplazado fuera de conversion en "${next.contentType}".`);
+  }
+  if (next.platform === 'Stories' && /carrusel|carousel/.test(next.contentType.toLowerCase())) {
+    next = { ...next, contentType: inferStoryFormat(next) };
+  }
+  return next;
+}
+
+function normalizeTaskPriorities(tasks: GrowthTask[], ctx: ValidationContext): GrowthTask[] {
+  const byDate = tasks.reduce<Record<string, number[]>>((acc, task, index) => {
+    const key = task.date || task.dayLabel || `task_${index}`;
+    acc[key] = acc[key] || [];
+    acc[key].push(index);
+    return acc;
+  }, {});
+  const next = [...tasks];
+
+  Object.values(byDate).forEach(indexes => {
+    if (indexes.length <= 1) return;
+    let primaryIndex = indexes[0];
+    indexes.forEach(index => {
+      const task = next[index];
+      const current = next[primaryIndex];
+      const taskScore = (task.funnelRole === 'convertir' ? 3 : 0) + (task.estimatedEffort === 'alto' ? 2 : 0) + (task.module !== 'none' ? 1 : 0);
+      const currentScore = (current.funnelRole === 'convertir' ? 3 : 0) + (current.estimatedEffort === 'alto' ? 2 : 0) + (current.module !== 'none' ? 1 : 0);
+      if (taskScore > currentScore) primaryIndex = index;
+    });
+    indexes.forEach(index => {
+      next[index] = { ...next[index], taskPriority: index === primaryIndex ? 'primary' : 'support' };
+    });
+    ctx.fixedErrors.push(`Tareas del dia ${next[primaryIndex].dayLabel} marcadas como primary/support.`);
+  });
+
+  return next;
+}
+
+function normalizeEffortDistribution(tasks: GrowthTask[], duration: GrowthPlanDuration, ctx: ValidationContext): GrowthTask[] {
+  const next = tasks.map(task => ({ ...task, estimatedEffort: safeEstimatedEffort(task.estimatedEffort) }));
+
+  for (let index = 2; index < next.length; index++) {
+    if (
+      next[index].estimatedEffort === 'alto'
+      && next[index - 1].estimatedEffort === 'alto'
+      && next[index - 2].estimatedEffort === 'alto'
+    ) {
+      next[index] = { ...next[index], estimatedEffort: 'medio' };
+      ctx.fixedErrors.push(`Esfuerzo alto consecutivo reducido en "${next[index].contentType}".`);
+    }
+  }
+
+  if (duration !== 30) return next;
+
+  const total = next.length;
+  const targetLow = Math.ceil(total * 0.35);
+  const targetMedium = Math.ceil(total * 0.35);
+  const maxHigh = Math.floor(total * 0.3);
+
+  const counts = () => effortCounts(next);
+  const convertOne = (
+    from: GrowthEstimatedEffort,
+    to: GrowthEstimatedEffort,
+    preferSupport = false,
+  ) => {
+    const index = next.findIndex(task => task.estimatedEffort === from && (!preferSupport || task.taskPriority === 'support'));
+    const fallbackIndex = next.findIndex(task => task.estimatedEffort === from);
+    const targetIndex = index >= 0 ? index : fallbackIndex;
+    if (targetIndex < 0) return false;
+    next[targetIndex] = { ...next[targetIndex], estimatedEffort: to };
+    return true;
+  };
+
+  while ((counts().alto || 0) > maxHigh && convertOne('alto', 'medio', true)) {
+    ctx.fixedErrors.push('Distribucion de esfuerzo: una tarea alta paso a media para no saturar el mes.');
+  }
+  while ((counts().bajo || 0) < targetLow && (convertOne('medio', 'bajo', true) || convertOne('alto', 'bajo', true))) {
+    ctx.fixedErrors.push('Distribucion de esfuerzo: se aumento la proporcion de tareas bajas.');
+  }
+  while ((counts().medio || 0) < targetMedium && ((counts().bajo || 0) > targetLow ? convertOne('bajo', 'medio') : convertOne('alto', 'medio', true))) {
+    ctx.fixedErrors.push('Distribucion de esfuerzo: se aumento la proporcion de tareas medias.');
+  }
+
+  return next;
+}
+
+function effortDistributionValid(tasks: GrowthTask[], duration: GrowthPlanDuration): boolean {
+  if (duration !== 30 || !tasks.length) return true;
+  const counts = effortCounts(tasks);
+  const total = tasks.length;
+  return (counts.bajo || 0) >= Math.ceil(total * 0.35)
+    && (counts.medio || 0) >= Math.ceil(total * 0.35)
+    && (counts.alto || 0) <= Math.floor(total * 0.3)
+    && !tasks.some((task, index) => index >= 2
+      && task.estimatedEffort === 'alto'
+      && tasks[index - 1].estimatedEffort === 'alto'
+      && tasks[index - 2].estimatedEffort === 'alto');
+}
+
 function containsWeakPhrase(plan: GrowthStrategicPlan): boolean {
   const text = [
     plan.strategyGoal,
     plan.businessDiagnosis,
     plan.planNarrative,
     plan.strategicTip,
-    ...plan.tasks.flatMap(task => [task.visualConcept, task.whyItWorks, task.caption, task.prompt, task.supportPrompt || '', task.engagementHook]),
+    ...plan.tasks.flatMap(task => [task.contentType, task.moduleReason, task.visualConcept, task.whyItWorks, task.caption, task.prompt, task.supportPrompt || '', task.engagementHook]),
   ].join(' ').toLowerCase();
-  return weakMarketingPhrases.some(phrase => text.includes(phrase.toLowerCase()));
+  return weakMarketingPhrases.some(phrase => text.includes(phrase.toLowerCase()))
+    || weakPhraseRules.some(rule => {
+      rule.pattern.lastIndex = 0;
+      const found = rule.pattern.test(text);
+      rule.pattern.lastIndex = 0;
+      return found;
+    });
 }
 
 function markdownList(items: string[]): string {
@@ -1221,16 +1659,26 @@ function markdownList(items: string[]): string {
 
 function buildValidationReport(plan: GrowthStrategicPlan): string {
   const normalizedProducts = plan.normalizedProducts || plan.products;
+  const efforts = effortCounts(plan.tasks);
+  const priorities = priorityCounts(plan.tasks);
+  const ctas = ctaTargetCounts(plan.tasks);
+  const formats = formatUsageByPlatform(plan.tasks);
+  const directSales = directPlanSalesTasks(plan.tasks);
   const productRows = normalizedProducts.map(product =>
     `| ${product.name} | ${product.price || '-'} | ${product.credits || '-'} | ${product.idealFor || '-'} | ${product.messageKey || product.benefit || '-'} | ${(product.inferredFields || []).join(', ') || '-'} | ${(product.warnings || []).join('; ') || '-'} |`,
   ).join('\n');
   const taskRows = plan.tasks.map(task =>
-    `| ${task.date} | ${task.dayLabel} | ${task.platform} | ${task.module} | ${task.funnelRole} | ${task.contentType} | ${task.engagementHook || '-'} | ${task.supportPrompt ? 'si' : 'no'} |`,
+    `| ${task.date} | ${task.dayLabel} | ${task.platform} | ${task.module} | ${task.funnelRole} | ${task.contentType} | ${task.estimatedEffort} | ${task.taskPriority} | ${task.ctaTarget} | ${task.engagementHook || '-'} | ${task.supportPrompt ? 'si' : 'no'} |`,
   ).join('\n');
   const roadmap = plan.roadmap.map(item => `- Semana ${item.week}: ${item.title} - ${item.objective}`).join('\n') || '- Sin roadmap.';
   const checks = plan.generationLog.validationChecks;
   const channelUsage = plan.generationLog.channelUsage || countByPlatform(plan.tasks);
   const channelUsageText = Object.entries(channelUsage).map(([channel, count]) => `- ${channel}: ${count}`).join('\n') || '- Sin canales detectados.';
+  const effortText = ESTIMATED_EFFORT_VALUES.map(value => `- ${value}: ${efforts[value] || 0}`).join('\n');
+  const priorityText = TASK_PRIORITY_VALUES.map(value => `- ${value}: ${priorities[value] || 0}`).join('\n');
+  const ctaText = CTA_TARGET_VALUES.map(value => `- ${value}: ${ctas[value] || 0}`).join('\n');
+  const formatText = Object.entries(formats).map(([format, count]) => `- ${format}: ${count}`).join('\n') || '- Sin formatos detectados.';
+  const directSalesText = directSales.map(task => `- Semana ${task.week} / ${task.platform}: ${task.contentType} -> ${task.engagementHook}`).join('\n') || '- Sin tareas de venta directa por plan detectadas.';
   const supportPrompts = plan.tasks
     .filter(task => task.supportPrompt)
     .map(task => `- ${task.contentType}: supportModule=${task.supportModule || '-'}; supportPrompt=${task.supportPrompt}`)
@@ -1275,14 +1723,29 @@ ${roadmap}
 ${channelUsageText}
 
 ## 5. Tareas
-| Fecha | Dia | Plataforma | Modulo | Funnel role | Content type | CTA target | Support prompt |
-| --- | --- | --- | --- | --- | --- | --- | --- |
+| Fecha | Dia | Plataforma | Modulo | Funnel role | Content type | Esfuerzo | Prioridad | CTA target | CTA | Support prompt |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 ${taskRows}
 
-## 5.1 Slots detectados
+## 5.1 Distribucion de esfuerzo
+${effortText}
+
+## 5.2 Prioridad de tareas
+${priorityText}
+
+## 5.3 CTAs por canal
+${ctaText}
+
+## 5.4 Formatos por plataforma
+${formatText}
+
+## 5.5 Tareas con venta directa por plan
+${directSalesText}
+
+## 5.6 Slots detectados
 - ${slotSummary}
 
-## 5.2 Support prompts
+## 5.7 Support prompts
 ${supportPrompts}
 
 ## 6. Validaciones
@@ -1291,6 +1754,10 @@ ${supportPrompts}
 - Slots validos: ${checks.slotsValid ? 'si' : 'no'}
 - Modulos validos: ${checks.modulesValid ? 'si' : 'no'}
 - Hashtags validos: ${checks.hashtagsValid ? 'si' : 'no'}
+- Campos comerciales completos: ${checks.commercialFieldsValid ? 'si' : 'no'}
+- Distribucion de esfuerzo valida: ${checks.effortDistributionValid ? 'si' : 'no'}
+- Stories sin carrusel: ${checks.storiesFormatsValid ? 'si' : 'no'}
+- Venta directa por plan: ${checks.directPlanSalesPresent ? 'si' : 'no'}
 - Palabras debiles corregidas: ${checks.weakPhrasesFiltered ? 'si' : 'no'}
 - Productos normalizados: ${checks.productsNormalized ? 'si' : 'no'}
 
@@ -1354,6 +1821,9 @@ function normalizePlan(raw: any, input: GenerateGrowthPlanInput): GrowthStrategi
       whatToAvoid: asArray(task?.shotGuide?.whatToAvoid, []),
     },
     engagementHook: String(task?.engagementHook || 'Termina con una pregunta simple para abrir conversacion.'),
+    estimatedEffort: task?.estimatedEffort ? safeEstimatedEffort(task.estimatedEffort) : 'medio',
+    taskPriority: task?.taskPriority ? safeTaskPriority(task.taskPriority) : 'primary',
+    ctaTarget: task?.ctaTarget ? safeCtaTarget(task.ctaTarget) : 'Instagram DM',
     status: safeStatus(task?.status),
   }));
 
@@ -1362,17 +1832,24 @@ function normalizePlan(raw: any, input: GenerateGrowthPlanInput): GrowthStrategi
   const taskCompletion = ensureMinimumTasks(tasks, input, ctx);
   tasks = taskCompletion.tasks;
   tasks = tasks
+    .map((task, index) => normalizeCommercialTask(task, index, ctx))
     .map(task => validateModuleMapping(task, ctx))
+    .map((task, index) => normalizeCommercialTask(task, index, ctx))
     .map(task => normalizePromptSlots(task, ctx))
     .map(task => normalizeManualSupportPrompt(task, ctx))
     .map(task => validateHashtags(task, input, ctx));
   tasks = rebalanceChannels(tasks, input, ctx);
   tasks = tasks
+    .map((task, index) => normalizeCommercialTask(task, index, ctx))
     .map(task => validateModuleMapping(task, ctx))
+    .map((task, index) => normalizeCommercialTask(task, index, ctx))
     .map(task => normalizeManualSupportPrompt(task, ctx))
     .map(task => validateHashtags(task, input, ctx));
+  tasks = normalizeTaskPriorities(tasks, ctx);
+  tasks = normalizeEffortDistribution(tasks, input.duration, ctx);
   const dateValidation = validateAndFixTaskDates(tasks, input.duration, ctx);
   tasks = dateValidation.tasks;
+  tasks = normalizeTaskPriorities(tasks, ctx);
   const roadmap = ensureRoadmap(asArray(raw?.roadmap, []), input.duration, ctx);
 
   let plan: GrowthStrategicPlan = {
@@ -1452,6 +1929,10 @@ function normalizePlan(raw: any, input: GenerateGrowthPlanInput): GrowthStrategi
         hashtagsValid: validateHashtagState(tasks),
         taskCountValid: tasks.length >= taskCompletion.expected,
         productsNormalized: normalizedProducts.length > 0,
+        commercialFieldsValid: validateCommercialFields(tasks),
+        effortDistributionValid: effortDistributionValid(tasks, input.duration),
+        storiesFormatsValid: validateStoriesFormats(tasks),
+        directPlanSalesPresent: directPlanSalesTasks(tasks).length > 0,
         weakPhrasesFiltered: true,
       },
       fixedErrors: uniqueStrings(ctx.fixedErrors),
@@ -1467,6 +1948,10 @@ function normalizePlan(raw: any, input: GenerateGrowthPlanInput): GrowthStrategi
     modulesValid: validateModules(plan.tasks),
     slotsValid: validateSlots(plan.tasks),
     hashtagsValid: validateHashtagState(plan.tasks),
+    commercialFieldsValid: validateCommercialFields(plan.tasks),
+    effortDistributionValid: effortDistributionValid(plan.tasks, plan.duration),
+    storiesFormatsValid: validateStoriesFormats(plan.tasks),
+    directPlanSalesPresent: directPlanSalesTasks(plan.tasks).length > 0,
     weakPhrasesFiltered: !containsWeakPhrase(plan),
   };
   plan.validationReportMarkdown = buildValidationReport(plan);
@@ -1660,6 +2145,7 @@ REGLAS:
 - No uses busqueda web ni cites fuentes externas.
 - Fecha actual/base: ${today}.
 - Escribe compacto, especifico y comercial. Evita frases genericas.
+- Lenguaje prohibido: magia, imagenes de revista, transforma tu marca, empoderar, infinitas posibilidades, escala tu marca, exito, impulso, aliado, vende mas, calidad profesional a tu alcance.
 - El roadmap debe respetar esta estructura:
 ${roadmapInstruction(input.duration)}
 
@@ -1777,16 +2263,27 @@ REGLAS:
 - Funnel principal sugerido: ${batch.funnelRole}; puedes mezclar roles si ayuda al embudo.
 - No repitas ideas ya generadas en otras semanas.
 - Cada tarea debe ser concreta, lista para ejecutar y conectada a un modulo de Luz IA.
+- Cada tarea debe incluir estimatedEffort ("bajo", "medio", "alto"), taskPriority ("primary", "support") y ctaTarget.
+- ctaTarget valido: Instagram DM, Facebook comentario, WhatsApp, Link en bio, Guardar, Responder story.
+- Prioriza CTAs conversacionales por DM/comentario/story. No abuses de "Link en bio".
+- Ejemplos de CTA: "Escribenos STARTER y te decimos si este plan te alcanza", "Comenta PLAN y te recomendamos uno segun tu ritmo", "Responde esta story con CREDITOS si quieres saber cuantas imagenes necesitas al mes".
 - Captions: 1 parrafo. Prompts: menos de 450 caracteres.
 - Cada executionRecipe debe tener maximo 3 pasos.
 - Cada shotGuide debe tener maximo 3 tomas.
 - Modulos validos: product, ugc, scene, prompt, outfit, none.
 - Si module es none, prompt debe ser "".
 - Si una tarea manual necesita apoyo visual, usa supportModule y supportPrompt.
+- Stories NO puede usar contentType "Carrusel". Usa Secuencia de stories, Encuesta, Q&A, Recordatorio o Demo rapida.
+- Instagram Feed puede usar Reel, Carrusel o Post con imagen.
+- Facebook puede usar Post educativo, Reel, Q&A o Publicacion de prueba social.
+- Para planes de 30 dias, reparte esfuerzo aproximado: 35% bajo, 35% medio, maximo 30% alto. No pongas mas de 2 tareas altas seguidas.
+- Si hay mas de una tarea el mismo dia, una debe ser taskPriority "primary" y la otra "support".
 - Slots permitidos: @producto1, @producto2, @producto3, @producto4, @persona1, @outfit1, @escena1, @referencia1.
 - No uses placeholders con corchetes.
 - Status inicial de todas las tareas: pending.
-- Evita lenguaje generico como "brillar", "contenido de valor" o "llevar al siguiente nivel".
+- Evita lenguaje generico: magia, imagenes de revista, transforma tu marca, empoderar, infinitas posibilidades, escala tu marca, exito, impulso, aliado, vende mas, calidad profesional a tu alcance.
+- Usa lenguaje concreto: crear imagenes listas para publicar, mejorar fotos de producto sin montar un set, generar variaciones visuales para campanas, comparar planes segun cantidad de contenido, ahorrar tiempo en produccion visual.
+- Semana 4 debe vender mejor Explorer, Starter, Pro y Studio: que puedes hacer con 60 creditos Explorer, 200 Starter, cuando conviene Pro, cuando conviene Studio, costo por imagen y objeciones sobre creditos, prompts o tiempo.
 ${previousError ? `\nERROR A CORREGIR DEL INTENTO ANTERIOR:\n${compactText(previousError, MAX_ERROR_CONTEXT_CHARS)}\n` : ''}
 
 BRIEF ESTRATEGICO OPERATIVO:
@@ -1831,6 +2328,9 @@ Devuelve:
     "executionRecipe": {"overview":"string","steps":[{"title":"string","module":"product","instruction":"string","ctaLabel":"Abrir modulo","status":"pending"}]},
     "shotGuide": {"duration":"string","shots":[{"shot":1,"duration":"0-3s","instruction":"string"}],"onScreenText":["string"],"inspirationSearches":["string"],"whatToAvoid":["string"]},
     "engagementHook": "string",
+    "estimatedEffort": "medio",
+    "taskPriority": "primary",
+    "ctaTarget": "Instagram DM",
     "status": "pending"
   }],
   "generationLog": {"warnings":["string"],"fixedErrors":[]}

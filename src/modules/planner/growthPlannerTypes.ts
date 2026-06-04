@@ -8,6 +8,18 @@ export type GrowthTaskStatus = 'pending' | 'in_progress' | 'ready' | 'published'
 
 export type GrowthFunnelRole = 'atraer' | 'generar_deseo' | 'construir_confianza' | 'convertir';
 
+export type GrowthEstimatedEffort = 'bajo' | 'medio' | 'alto';
+
+export type GrowthTaskPriority = 'primary' | 'support';
+
+export type GrowthCtaTarget =
+  | 'Instagram DM'
+  | 'Facebook comentario'
+  | 'WhatsApp'
+  | 'Link en bio'
+  | 'Guardar'
+  | 'Responder story';
+
 export interface GrowthBrand {
   name: string;
   category: string;
@@ -98,6 +110,9 @@ export interface GrowthTask {
   executionRecipe: GrowthExecutionRecipe;
   shotGuide: GrowthShotGuide;
   engagementHook: string;
+  estimatedEffort: GrowthEstimatedEffort;
+  taskPriority: GrowthTaskPriority;
+  ctaTarget: GrowthCtaTarget;
   status: GrowthTaskStatus;
 }
 

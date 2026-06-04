@@ -73,7 +73,7 @@ function dayLabelFromOffset(offset: number): string {
   return `${dayNames[date.getDay()]} ${date.getDate()}`;
 }
 
-const taskTemplates: Array<Omit<GrowthTask, 'id' | 'week' | 'dayLabel' | 'date' | 'status'>> = [
+const taskTemplates: Array<Omit<GrowthTask, 'id' | 'week' | 'dayLabel' | 'date' | 'status' | 'estimatedEffort' | 'taskPriority' | 'ctaTarget'>> = [
   {
     platform: 'Instagram Feed',
     contentType: 'Carrusel de confianza',
@@ -290,6 +290,9 @@ function buildTasks(duration: GrowthPlanDuration): GrowthTask[] {
       week: Math.min(weeks, Math.floor((index * weeks) / count) + 1),
       dayLabel: dayLabelFromOffset(offset),
       date: isoDateFromOffset(offset),
+      estimatedEffort: template.platform === 'Stories' || template.platform === 'WhatsApp' ? 'bajo' : template.module === 'ugc' || template.module === 'scene' ? 'alto' : 'medio',
+      taskPriority: template.funnelRole === 'convertir' || template.module !== 'none' ? 'primary' : 'support',
+      ctaTarget: template.platform === 'Stories' ? 'Responder story' : template.platform === 'WhatsApp' ? 'WhatsApp' : 'Instagram DM',
       status: 'pending',
     };
   });
