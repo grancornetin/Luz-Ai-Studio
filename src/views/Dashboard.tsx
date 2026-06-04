@@ -100,15 +100,15 @@ const MODULE_GROUPS = [
     ]
   },
   {
-    groupLabel: 'Campañas Pro',
+    groupLabel: 'Contenido para vender',
     groupColor: 'bg-brand-600',
     modules: [
       {
         path: '/campaign',
-        title: 'CAMPAIGN GENERATOR',
-        subtitle: 'Director creativo IA',
-        description: 'Brief → escenas → imágenes + captions y titulares de anuncio. La IA diseña la campaña completa.',
-        icon: 'fa-megaphone',
+        title: 'CAMPAÑAS PUBLICITARIAS',
+        subtitle: 'Ideas + piezas para vender',
+        description: 'Arma escenas, imágenes, captions y titulares para lanzar o promocionar tu producto.',
+        icon: 'fa-bullhorn',
         accent: 'text-brand-600',
         bg: 'bg-brand-50',
         creditsGemini: 2,
@@ -118,21 +118,22 @@ const MODULE_GROUPS = [
       },
       {
         path: '/photodump',
-        title: 'PHOTODUMP MODE',
-        subtitle: 'Storyteller visual',
-        description: 'Sets de imágenes con narrativa real — como el photodump de un influencer. Captions incluidos.',
+        title: 'CONTENIDO ORGÁNICO',
+        subtitle: 'Historias para Instagram',
+        description: 'Crea sets de imágenes naturales para tu feed, con narrativa real y captions incluidos.',
         icon: 'fa-images',
         accent: 'text-violet-600',
         bg: 'bg-violet-50',
         creditsGemini: 2,
         creditsSeedream: null,
         proCredit: true,
+        lucideIcon: 'images',
       },
       {
         path: '/planner',
-        title: 'PLANNER',
-        subtitle: 'Tu asistente de contenido',
-        description: 'Planificá qué publicar, cuándo y con qué herramienta. El copiloto arma tu semana en segundos.',
+        title: 'PLANES DE CONTENIDO',
+        subtitle: 'Qué publicar cada día',
+        description: 'Organiza tu semana con ideas, captions y la herramienta exacta para crear cada pieza.',
         icon: 'fa-calendar-days',
         accent: 'text-rose-600',
         bg: 'bg-rose-50',
@@ -261,6 +262,14 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
   const handleTab = (tab: typeof NAV_TABS[0]) => {
     if (tab.route) { navigate(tab.route); return; }
     setActiveTab(tab.id);
+  };
+
+  const renderModuleIcon = (mod: typeof MODULE_GROUPS[number]['modules'][number]) => {
+    const iconClassName = `w-5 h-5 ${mod.accent}`;
+    if ((mod as any).lucideIcon === 'megaphone') return <Megaphone className={iconClassName} />;
+    if ((mod as any).lucideIcon === 'images') return <Images className={iconClassName} />;
+    if ((mod as any).lucideIcon === 'calendar') return <CalendarDays className={iconClassName} />;
+    return <i className={`fa-solid ${mod.icon} ${mod.accent}`}></i>;
   };
 
   return (
@@ -616,7 +625,7 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
               <Zap className="w-4 h-4 text-white opacity-80" />
               <div>
                 <p className="text-[9px] font-black uppercase tracking-widest opacity-70">Pro-credits</p>
-                <p className="text-sm font-black leading-none">{isAdmin ? '∞' : proCredits} sesiones Campaign/Photodump</p>
+                <p className="text-sm font-black leading-none">{isAdmin ? '∞' : proCredits} sesiones pro</p>
               </div>
             </div>
             <button
@@ -775,12 +784,12 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
                     <CalendarDays className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="t-display text-lg text-white">Planner</h3>
-                    <p className="t-meta text-white/70">Asistente de contenido</p>
+                    <h3 className="t-display text-lg text-white">Planes de contenido</h3>
+                    <p className="t-meta text-white/70">Qué publicar cada día</p>
                   </div>
                 </div>
                 <p className="text-sm text-white/85 font-medium leading-relaxed max-w-xs">
-                  Planificá tu semana, generá captions y descubrí 25 ideas para tu producto.
+                  Planificá tu semana, generá captions y descubrí ideas listas para tu producto.
                 </p>
               </div>
               <div className="w-9 h-9 rounded-full border border-white/30 flex items-center justify-center text-white/60 group-hover:bg-white transition-all flex-shrink-0 mt-1" style={{ '--hover-color': '#F72C5B' } as any}>
@@ -808,7 +817,7 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
                 className="group bg-white p-4 md:p-7 rounded-2xl md:rounded-[36px] border border-slate-100 shadow-sm hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer relative overflow-hidden flex md:block items-center gap-4 md:gap-0"
               >
                 <div className={`w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-[20px] ${mod.bg} flex-shrink-0 flex items-center justify-center text-lg md:text-xl md:mb-5 transition-transform group-hover:scale-110 group-hover:rotate-3`}>
-                  <i className={`fa-solid ${mod.icon} ${mod.accent}`}></i>
+                  {renderModuleIcon(mod)}
                 </div>
                 <div className="flex-1 space-y-0.5 md:space-y-1 md:mb-4 min-w-0">
                   <div className="flex items-baseline gap-2 flex-wrap">

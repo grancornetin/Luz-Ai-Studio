@@ -84,18 +84,18 @@ const MENU_GROUPS = [
     ]
   },
   {
-    label: 'Campañas Pro',
-    icon: 'fa-megaphone',
+    label: 'Contenido para vender',
+    icon: 'fa-bullhorn',
     items: [
-      { path: '/campaign',  label: 'Campaign Generator', sublabel: 'Director creativo IA', icon: 'fa-megaphone' },
-      { path: '/photodump', label: 'Photodump Mode',     sublabel: 'Storyteller visual',   icon: 'fa-images' },
+      { path: '/campaign',  label: 'Campañas publicitarias', sublabel: 'Ideas + piezas para vender', icon: 'fa-bullhorn' },
+      { path: '/photodump', label: 'Contenido orgánico',      sublabel: 'Historias para Instagram',  icon: 'fa-images' },
     ]
   },
   {
-    label: 'Planner',
+    label: 'Planes de contenido',
     icon: 'fa-calendar-days',
     items: [
-      { path: '/planner',     label: 'Planner',    sublabel: 'Asistente de contenido', icon: 'fa-calendar-days' },
+      { path: '/planner',     label: 'Planes de contenido', sublabel: 'Qué publicar cada día', icon: 'fa-calendar-days' },
       { path: '/projects',    label: 'Proyectos',  sublabel: 'Biblioteca',             icon: 'fa-folder-open' },
       { path: '/mis-marcas',  label: 'Mis Marcas', sublabel: 'Perfiles de marca',      icon: 'fa-palette' },
     ]

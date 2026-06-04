@@ -1905,6 +1905,308 @@ function validateCaptionsNatural(tasks: GrowthTask[]): boolean {
   });
 }
 
+function normalizeSpanishText(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(/\bconversion\b/gi, 'conversión')
+    .replace(/\bfriccion\b/gi, 'fricción')
+    .replace(/\bproduccion\b/gi, 'producción')
+    .replace(/\bcampanas\b/gi, 'campañas')
+    .replace(/\bimagenes\b/gi, 'imágenes')
+    .replace(/\bcuantas\b/gi, 'cuántas')
+    .replace(/\bcreditos\b/gi, 'créditos')
+    .replace(/\bpublicacion\b/gi, 'publicación')
+    .replace(/\bsuscripcion\b/gi, 'suscripción')
+    .replace(/\bEscribenos\b/g, 'Escríbenos')
+    .replace(/\bEnvianos\b/g, 'Envíanos')
+    .replace(/\bmodulo\b/gi, 'módulo')
+    .replace(/\bdiagnostico\b/gi, 'diagnóstico')
+    .replace(/\baccion\b/gi, 'acción')
+    .replace(/\bopcion\b/gi, 'opción')
+    .replace(/\bsegun\b/gi, 'según')
+    .replace(/\btambien\b/gi, 'también')
+    .replace(/\bmas\b/gi, 'más')
+    .replace(/\bdias\b/gi, 'días')
+    .replace(/\brapida\b/gi, 'rápida')
+    .replace(/\bestatica\b/gi, 'estática');
+}
+
+function hasSpanishOrthographyIssues(text: string): boolean {
+  return /\b(conversion|friccion|produccion|campanas|imagenes|cuantas|creditos|publicacion|suscripcion|Escribenos|Envianos|modulo|diagnostico)\b/i.test(text);
+}
+
+function normalizeTaskSpanishText(task: GrowthTask, ctx: ValidationContext): GrowthTask {
+  const before = JSON.stringify(task);
+  const next: GrowthTask = {
+    ...task,
+    moduleReason: normalizeSpanishText(task.moduleReason),
+    visualConcept: normalizeSpanishText(task.visualConcept),
+    whyItWorks: normalizeSpanishText(task.whyItWorks),
+    caption: normalizeSpanishText(task.caption),
+    prompt: normalizeSpanishText(task.prompt),
+    supportPrompt: task.supportPrompt ? normalizeSpanishText(task.supportPrompt) : task.supportPrompt,
+    engagementHook: normalizeSpanishText(task.engagementHook),
+    executionRecipe: {
+      ...task.executionRecipe,
+      overview: normalizeSpanishText(task.executionRecipe.overview),
+      steps: task.executionRecipe.steps.map(step => ({
+        ...step,
+        title: normalizeSpanishText(step.title),
+        instruction: normalizeSpanishText(step.instruction),
+        ctaLabel: normalizeSpanishText(step.ctaLabel),
+      })),
+    },
+    shotGuide: {
+      ...task.shotGuide,
+      duration: normalizeSpanishText(task.shotGuide.duration),
+      shots: task.shotGuide.shots.map(shot => ({
+        ...shot,
+        duration: normalizeSpanishText(shot.duration),
+        instruction: normalizeSpanishText(shot.instruction),
+      })),
+      onScreenText: task.shotGuide.onScreenText.map(normalizeSpanishText),
+      inspirationSearches: task.shotGuide.inspirationSearches.map(normalizeSpanishText),
+      whatToAvoid: task.shotGuide.whatToAvoid.map(normalizeSpanishText),
+    },
+  };
+  if (JSON.stringify(next) !== before) {
+    ctx.fixedErrors.push(`Acentos y ortografía visible corregidos en "${task.contentType}".`);
+  }
+  return next;
+}
+
+function taskInternalText(task: GrowthTask): string {
+  return [
+    task.platform,
+    task.contentType,
+    task.module,
+    task.supportModule || '',
+    task.visualConcept,
+    task.caption,
+    task.executionRecipe.overview,
+    ...task.executionRecipe.steps.map(step => step.instruction),
+    task.shotGuide.duration,
+    ...task.shotGuide.shots.map(shot => shot.instruction),
+    ...task.shotGuide.onScreenText,
+    task.ctaTarget,
+    task.engagementHook,
+  ].join(' ');
+}
+
+function taskOrthographyText(task: GrowthTask): string {
+  return [
+    task.visualConcept,
+    task.caption,
+    task.whyItWorks,
+    task.moduleReason,
+    task.prompt,
+    task.supportPrompt || '',
+    task.executionRecipe.overview,
+    ...task.executionRecipe.steps.flatMap(step => [step.title, step.instruction, step.ctaLabel]),
+    task.shotGuide.duration,
+    ...task.shotGuide.shots.flatMap(shot => [shot.duration, shot.instruction]),
+    ...task.shotGuide.onScreenText,
+    ...task.shotGuide.inspirationSearches,
+    ...task.shotGuide.whatToAvoid,
+    task.engagementHook,
+  ].join(' ');
+}
+
+function platformInternalConflictLabels(task: GrowthTask): string[] {
+  const text = taskInternalText(task).toLowerCase();
+  const labels: string[] = [];
+  if (task.platform === 'Instagram Feed') {
+    if (/story|stories|sticker|responde esta story|responder story|encuesta de story/.test(text)) labels.push('Feed menciona Stories o stickers');
+    if (/publicar en facebook|facebook/.test(text)) labels.push('Feed menciona Facebook');
+    if (!INSTAGRAM_FEED_CONTENT_TYPES.includes(task.contentType)) labels.push('Formato no valido para Instagram Feed');
+  }
+  if (task.platform === 'Stories') {
+    if (!/story|stories|sticker|responder|secuencia|encuesta|q&a|recordatorio/.test(text)) labels.push('Stories no usa lenguaje de stories');
+    if (/post con imagen|instagram feed|publicar en facebook|facebook/.test(text)) labels.push('Stories menciona otro formato o plataforma');
+    if (!STORY_CONTENT_TYPES.includes(task.contentType)) labels.push('Formato no valido para Stories');
+  }
+  if (task.platform === 'Facebook') {
+    if (/instagram stories|sticker de instagram|responde esta story|responder story/.test(text)) labels.push('Facebook menciona Instagram Stories');
+    if (!FACEBOOK_CONTENT_TYPES.includes(task.contentType)) labels.push('Formato no valido para Facebook');
+  }
+  return uniqueStrings(labels);
+}
+
+function isActionableHook(task: GrowthTask): boolean {
+  const hook = task.engagementHook.trim();
+  if (!hook) return false;
+  if (/^(la|el)\s+(frustraci[oó]n|oportunidad|deseo|miedo|problema)\s+de\b/i.test(hook)) return false;
+  return /comenta|responde|env[ií]anos|escr[ií]benos|guarda|abre|manda|pide|elige|vota|contesta|haz clic/i.test(hook);
+}
+
+function actionableHookForTask(task: GrowthTask): string {
+  if (task.ctaTarget === 'Responder story' || task.platform === 'Stories') {
+    return 'Responde esta story con CRÉDITOS y te orientamos según tu ritmo de publicación.';
+  }
+  if (task.ctaTarget === 'Facebook comentario' || task.platform === 'Facebook') {
+    return task.contentType.toLowerCase().includes('explorer')
+      ? 'Comenta EXPLORER si quieres validar una semana de contenido.'
+      : 'Comenta PLAN y te recomendamos una opción según tu ritmo de publicación.';
+  }
+  if (task.ctaTarget === 'Comentario') {
+    return 'Comenta FOTO si quieres que revisemos una imagen de tu producto.';
+  }
+  if (task.ctaTarget === 'Guardar') {
+    return 'Guarda esta guía para comparar planes antes de elegir.';
+  }
+  if (task.ctaTarget === 'WhatsApp') {
+    return 'Respóndenos con PLAN y te ayudamos a elegir según tus productos.';
+  }
+  return 'Envíanos DM con PLAN y te recomendamos uno.';
+}
+
+function coherentVisualConcept(task: GrowthTask): string {
+  if (task.platform === 'Stories') {
+    return `Secuencia de stories con ${task.contentType.toLowerCase()}, sticker visible y una pregunta simple para responder por DM.`;
+  }
+  if (task.platform === 'Facebook') {
+    return `Publicación para Facebook con mensaje claro, visual simple y CTA a comentario o mensaje privado.`;
+  }
+  if (task.contentType === 'Reel' || task.contentType === 'Demo rápida') {
+    return 'Reel para Instagram Feed mostrando el producto en uso, con una idea concreta y cierre hacia DM.';
+  }
+  if (task.contentType === 'Carrusel') {
+    return 'Carrusel para Instagram Feed con comparación clara, texto breve y cierre conversacional.';
+  }
+  return 'Post con imagen para Instagram Feed centrado en el producto, con visual limpio y CTA conversacional.';
+}
+
+function coherentCaption(task: GrowthTask): string {
+  if (task.platform === 'Stories') {
+    return `${task.contentType} simple para abrir conversación. Responde esta story con CRÉDITOS y te orientamos según tu ritmo de publicación.`;
+  }
+  if (task.platform === 'Facebook') {
+    return 'Una publicación clara ayuda a comparar opciones sin presión. Comenta PLAN y te recomendamos uno según tu ritmo de publicación.';
+  }
+  if (task.contentType === 'Carrusel') {
+    return 'Compara opciones antes de elegir un plan. Comenta PLAN y te recomendamos uno según cuántas imágenes necesitas al mes.';
+  }
+  return 'Una imagen clara puede hacer que tu producto se entienda mejor en redes. Envíanos DM con PLAN y revisamos qué opción te conviene.';
+}
+
+function coherentRecipe(task: GrowthTask): GrowthTask['executionRecipe'] {
+  if (task.platform === 'Stories') {
+    return {
+      overview: 'Crear una secuencia de stories simple y responder las interacciones.',
+      steps: [
+        { id: `${task.id}_coherent_step_1`, title: 'Preparar story', module: 'none', instruction: 'Publica una story con una pregunta, encuesta o Q&A según el contenido de la tarea.', ctaLabel: 'Preparar story', status: 'pending' },
+        { id: `${task.id}_coherent_step_2`, title: 'Responder', module: 'none', instruction: 'Responde manualmente a quienes interactúen y ofrece una recomendación concreta.', ctaLabel: 'Responder', status: 'pending' },
+      ],
+    };
+  }
+  if (task.platform === 'Facebook') {
+    return {
+      overview: 'Preparar una publicación para Facebook con CTA a comentario o mensaje.',
+      steps: [
+        { id: `${task.id}_coherent_step_1`, title: 'Crear publicación', module: task.module, instruction: 'Prepara el texto y el visual de apoyo para una publicación de Facebook.', ctaLabel: 'Preparar', status: 'pending' },
+        { id: `${task.id}_coherent_step_2`, title: 'Publicar en Facebook', module: 'none', instruction: 'Publica en Facebook y responde comentarios con una recomendación concreta.', ctaLabel: 'Publicar', status: 'pending' },
+      ],
+    };
+  }
+  return {
+    overview: 'Preparar una publicación para Instagram Feed con CTA a DM o comentario.',
+    steps: [
+      { id: `${task.id}_coherent_step_1`, title: 'Crear pieza', module: task.module, instruction: 'Genera o prepara la pieza visual para Instagram Feed sin usar stickers ni formato de story.', ctaLabel: 'Crear pieza', status: 'pending' },
+      { id: `${task.id}_coherent_step_2`, title: 'Publicar en Feed', module: 'none', instruction: 'Publica en Instagram Feed y cierra con un CTA a DM, comentario o guardado.', ctaLabel: 'Publicar', status: 'pending' },
+    ],
+  };
+}
+
+function coherentShotGuide(task: GrowthTask): GrowthTask['shotGuide'] {
+  if (task.platform === 'Stories') {
+    return {
+      duration: '2-3 stories',
+      shots: [
+        { shot: 1, duration: 'Story 1', instruction: 'Muestra el problema o comparación con texto breve.' },
+        { shot: 2, duration: 'Story 2', instruction: 'Agrega sticker de encuesta, pregunta o Q&A.' },
+        { shot: 3, duration: 'Story 3', instruction: 'Cierra pidiendo que respondan la story.' },
+      ],
+      onScreenText: ['Responde con CRÉDITOS', 'Te orientamos por DM'],
+      inspirationSearches: ['instagram story poll product'],
+      whatToAvoid: ['Usar formato de post de Feed', 'Pedir comentarios de Facebook'],
+    };
+  }
+  if (task.platform === 'Facebook') {
+    return {
+      duration: task.contentType === 'Reel' ? '15-30 segundos' : 'No aplica',
+      shots: task.contentType === 'Reel'
+        ? [
+          { shot: 1, duration: '0-5s', instruction: 'Muestra el producto o ejemplo principal.' },
+          { shot: 2, duration: '5-15s', instruction: 'Explica la comparación o beneficio de forma simple.' },
+          { shot: 3, duration: '15-30s', instruction: 'Cierra pidiendo comentario o mensaje en Facebook.' },
+        ]
+        : [],
+      onScreenText: ['Comenta PLAN', 'Te recomendamos una opción'],
+      inspirationSearches: ['facebook product post small business'],
+      whatToAvoid: ['Mencionar stickers de Instagram', 'Pedir que respondan una story'],
+    };
+  }
+  return {
+    duration: task.contentType === 'Reel' || task.contentType === 'Demo rápida' ? '15-30 segundos' : 'No aplica',
+    shots: task.contentType === 'Reel' || task.contentType === 'Demo rápida'
+      ? [
+        { shot: 1, duration: '0-5s', instruction: 'Muestra el producto o una foto inicial.' },
+        { shot: 2, duration: '5-15s', instruction: 'Enseña la mejora visual o comparación.' },
+        { shot: 3, duration: '15-30s', instruction: 'Cierra invitando a enviar DM o comentar.' },
+      ]
+      : [],
+    onScreenText: ['Guarda esta guía', 'Escríbenos PLAN'],
+    inspirationSearches: ['instagram feed product post'],
+    whatToAvoid: ['Hablar de stickers o stories', 'Pedir publicar en Facebook'],
+  };
+}
+
+function validateTaskInternalCoherence(task: GrowthTask, ctx?: ValidationContext): GrowthTask {
+  const before = JSON.stringify(task);
+  let next = normalizePlatformFormatTask(task, ctx || { warnings: [], fixedErrors: [] });
+  const issues = platformInternalConflictLabels(next);
+  const hookWasAbstract = !isActionableHook(next);
+
+  if (issues.length || hookWasAbstract) {
+    next = {
+      ...next,
+      visualConcept: coherentVisualConcept(next),
+      caption: coherentCaption(next),
+      executionRecipe: coherentRecipe(next),
+      shotGuide: coherentShotGuide(next),
+      engagementHook: hookWasAbstract ? actionableHookForTask(next) : next.engagementHook,
+    };
+    next = normalizeCtaTargetForPlatform(next, ctx || { warnings: [], fixedErrors: [] });
+    next = normalizePrimaryModule(next, ctx || { warnings: [], fixedErrors: [] });
+  }
+
+  next = normalizeTaskSpanishText(next, ctx || { warnings: [], fixedErrors: [] });
+  if (ctx && JSON.stringify(next) !== before) {
+    const reason = uniqueStrings([...issues, hookWasAbstract ? 'hook abstracto' : '']).join(', ') || 'coherencia interna';
+    ctx.fixedErrors.push(`Coherencia interna corregida en "${task.contentType}": ${reason}.`);
+  }
+  return next;
+}
+
+function taskInternalCoherenceIssues(tasks: GrowthTask[]): string[] {
+  return tasks.flatMap((task, index) => {
+    const issues = platformInternalConflictLabels(task);
+    if (!isActionableHook(task)) issues.push('hook no accionable');
+    if (hasSpanishOrthographyIssues(taskOrthographyText(task))) issues.push('acentos visibles pendientes');
+    return uniqueStrings(issues).map(issue => `Tarea ${index + 1} (${task.platform}/${task.contentType}): ${issue}`);
+  });
+}
+
+function spanishOrthographyValid(plan: GrowthStrategicPlan): boolean {
+  const roadmapText = plan.roadmap.map(item => `${item.title} ${item.objective} ${item.hint}`).join(' ');
+  const reportText = plan.validationReportMarkdown || '';
+  return !hasSpanishOrthographyIssues(`${plan.planNarrative} ${plan.businessDiagnosis} ${plan.strategicTip} ${roadmapText} ${plan.tasks.map(taskOrthographyText).join(' ')} ${reportText}`);
+}
+
+function actionableHooksValid(tasks: GrowthTask[]): boolean {
+  return tasks.every(isActionableHook);
+}
+
 function rewriteFinalText(value: string, context: string, ctx: ValidationContext): string {
   const next = rewriteWeakPhraseSentence(value, context);
   if (next !== value) {
@@ -1982,6 +2284,12 @@ function buildValidationReport(plan: GrowthStrategicPlan): string {
   const nullCaptionFixes = plan.generationLog.fixedErrors.filter(error => /Caption null/i.test(error));
   const supportModuleMoves = plan.generationLog.fixedErrors.filter(error => /Modulo principal corregido|Modulo ajustado|supportPrompt/i.test(error));
   const hashtagFixes = plan.generationLog.fixedErrors.filter(error => /Hashtags/i.test(error));
+  const internalIssues = taskInternalCoherenceIssues(plan.tasks);
+  const internalFixes = plan.generationLog.fixedErrors.filter(error => /Coherencia interna corregida/i.test(error));
+  const platformFixes = plan.generationLog.fixedErrors.filter(error => /Formato corregido|CTA incompatible|CTA de story|CTA de Facebook|Coherencia interna corregida/i.test(error));
+  const recipeFixes = internalFixes;
+  const hookFixes = plan.generationLog.fixedErrors.filter(error => /hook abstracto|hook accionable|Coherencia interna corregida/i.test(error));
+  const accentFixes = plan.generationLog.fixedErrors.filter(error => /Acentos y ortografia visible corregidos|Acentos y ortografía visible corregidos/i.test(error));
   const productRows = normalizedProducts.map(product =>
     `| ${product.name} | ${product.price || '-'} | ${product.credits || '-'} | ${product.idealFor || '-'} | ${product.messageKey || product.benefit || '-'} | ${(product.inferredFields || []).join(', ') || '-'} | ${(product.warnings || []).join('; ') || '-'} |`,
   ).join('\n');
@@ -2083,6 +2391,9 @@ ${supportPrompts}
 - Modulo principal coherente: ${checks.primaryModuleActionValid ? 'si' : 'no'}
 - Captions naturales: ${checks.captionsNaturalValid ? 'si' : 'no'}
 - Palabras debiles corregidas: ${checks.weakPhrasesFiltered ? 'si' : 'no'}
+- Coherencia interna por tarea: ${checks.taskInternalCoherenceValid ? 'si' : 'no'}
+- Ortografia visible corregida: ${checks.spanishOrthographyValid ? 'si' : 'no'}
+- Hooks accionables: ${checks.actionableHooksValid ? 'si' : 'no'}
 - Productos normalizados: ${checks.productsNormalized ? 'si' : 'no'}
 
 ## 7. Auditoria de lenguaje natural
@@ -2103,6 +2414,21 @@ ${markdownList(supportModuleMoves)}
 
 - Hashtags reducidos/limpiados: ${hashtagFixes.length}
 ${markdownList(hashtagFixes)}
+
+## Coherencia interna de tareas
+- Tareas revisadas: ${plan.tasks.length}
+- Tareas corregidas: ${internalFixes.length}
+- Conflictos detectados: ${internalIssues.length}
+- Plataformas corregidas: ${platformFixes.length}
+- Recipes reescritas: ${recipeFixes.length}
+- Hooks convertidos en accionables: ${hookFixes.length}
+- Textos con acentos corregidos: ${accentFixes.length}
+
+- Conflictos restantes:
+${markdownList(internalIssues)}
+
+- Correcciones aplicadas:
+${markdownList(uniqueStrings([...internalFixes, ...platformFixes, ...hookFixes, ...accentFixes]))}
 
 ## 8. Warnings
 ${markdownList(plan.generationLog.warnings)}
@@ -2287,6 +2613,20 @@ function normalizePlan(raw: any, input: GenerateGrowthPlanInput): GrowthStrategi
   plan = finalNaturalLanguageScan(plan, ctx);
   plan = {
     ...plan,
+    strategyGoal: normalizeSpanishText(plan.strategyGoal),
+    businessDiagnosis: normalizeSpanishText(plan.businessDiagnosis),
+    planNarrative: normalizeSpanishText(plan.planNarrative),
+    strategicTip: normalizeSpanishText(plan.strategicTip),
+    roadmap: plan.roadmap.map(item => ({
+      ...item,
+      title: normalizeSpanishText(item.title),
+      objective: normalizeSpanishText(item.objective),
+      hint: normalizeSpanishText(item.hint),
+    })),
+    tasks: plan.tasks.map(task => validateTaskInternalCoherence(task, ctx)),
+  };
+  plan = {
+    ...plan,
     tasks: plan.tasks.map(task => validateHashtags(task, input, ctx)),
   };
   plan.generationLog.warnings = uniqueStrings(ctx.warnings);
@@ -2307,8 +2647,15 @@ function normalizePlan(raw: any, input: GenerateGrowthPlanInput): GrowthStrategi
     primaryModuleActionValid: validatePrimaryModuleAction(plan.tasks),
     captionsNaturalValid: validateCaptionsNatural(plan.tasks),
     weakPhrasesFiltered: !containsWeakPhrase(plan),
+    taskInternalCoherenceValid: taskInternalCoherenceIssues(plan.tasks).length === 0,
+    actionableHooksValid: actionableHooksValid(plan.tasks),
   };
-  plan.validationReportMarkdown = buildValidationReport(plan);
+  plan.validationReportMarkdown = normalizeSpanishText(buildValidationReport(plan));
+  plan.generationLog.validationChecks = {
+    ...plan.generationLog.validationChecks,
+    spanishOrthographyValid: spanishOrthographyValid(plan),
+  };
+  plan.validationReportMarkdown = normalizeSpanishText(buildValidationReport(plan));
   return plan;
 }
 
@@ -2631,6 +2978,12 @@ REGLAS:
 - Stories NO puede usar contentType "Carrusel" ni "Post con imagen". Usa Encuesta, Q&A, Secuencia de stories, Recordatorio, Demo rapida, Story estatica o Reel vertical.
 - Instagram Feed puede usar Reel, Carrusel, Post educativo, Post con imagen, Publicacion de prueba social o Demo rapida. No uses Q&A de Stories.
 - Facebook puede usar Post educativo, Publicacion de prueba social, Q&A, Encuesta, Reel o Carrusel. No hables de stickers de Instagram en Facebook.
+- Coherencia interna obligatoria: platform, contentType, visualConcept, caption, executionRecipe, shotGuide, ctaTarget y engagementHook deben hablar de la misma plataforma.
+- Si platform es Instagram Feed, NO menciones story, stories, sticker, encuesta de story, responder story ni publicar en Facebook.
+- Si platform es Stories, usa lenguaje de stories: story, sticker, responder, secuencia, encuesta, Q&A o recordatorio.
+- Si platform es Facebook, habla de comentarios, publicacion, post, reel, carrusel, grupo o comunidad; no menciones Instagram Stories.
+- engagementHook debe ser accionable, no una idea abstracta. Empieza con Comenta, Responde, Envianos, Escribenos, Guarda o Abre.
+- Cuida acentos visibles: conversion/conversión, friccion/fricción, produccion/producción, imagenes/imágenes, creditos/créditos, publicacion/publicación.
 - Si ctaTarget es "Responder story", platform debe ser Stories.
 - Si platform es Instagram Feed, usa Instagram DM, Comentario, Guardar o Link en bio.
 - Si platform es Facebook, usa Facebook comentario, DM Facebook o Link.

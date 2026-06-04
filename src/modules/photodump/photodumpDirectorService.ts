@@ -13,10 +13,14 @@ import { geminiService } from '../../services/geminiService';
 import {
   PhotodumpNarrative, PhotodumpProtagonist, PhotodumpDestino,
   PhotodumpRefs, PhotodumpOutfitMode, NARRATIVE_META,
+  FreeScene, FreeSceneRefs,
 } from './types';
 import {
   getStorySupportFamilies, initPhotodumpIntelligence, StorySupportFamily,
 } from './photodumpIntelligence';
+import { buildHpiBlock, getHpiNegatives, initHpiService } from '../../services/hpiService';
+
+initHpiService();
 
 // ── Tipos ─────────────────────────────────────────────────────
 
@@ -1250,6 +1254,173 @@ Output ONLY valid JSON array:
   return shots.map((s, i) => {
     const fb = fallbackMoments[s.beat] ?? { moment: `Momento ${i + 1}`, caption: 'Momentos así 💫' };
     return { moment: fb.moment, caption: fb.caption, hashtags: '#lifestyle #organic #ugc #content #moments' };
+  });
+}
+
+// ── Modo libre: generación de escena individual ───────────────
+//
+// Lógica:
+//   1. El prompt del usuario va primero — es la directiva principal.
+//   2. LOCK_SYSTEM y PARADIGM_RULE se mantienen como invariantes.
+//   3. HPI se inyecta solo si hay avatar en esta escena Y el prompt del
+//      usuario no describe expresión ni pose explícitamente.
+//   4. Si la escena tiene relación con una anterior, el resultado de esa
+//      escena se adjunta como referencia adicional para coherencia visual.
+//   5. Se envían solo las referencias de esta escena — no se acumula el set.
+
+export interface FreeModeSceneParams {
+  scene:         FreeScene;
+  sceneIndex:    number;
+  destino:       PhotodumpDestino;
+  // Resultados generados de escenas anteriores, indexados por posición
+  priorResults:  (string | null)[];
+  sessionParams: { uid?: string; sessionId?: string };
+}
+
+// Detecta si el prompt del usuario ya describe expresión o pose
+// para evitar inyectar HPI redundante o contradictorio.
+function promptDescribesHuman(prompt: string): boolean {
+  const lower = prompt.toLowerCase();
+  const humanTerms = [
+    'sonriendo', 'mirando', 'posando', 'expresi', 'gesto', 'emocion',
+    'riendo', 'sentada', 'parada', 'caminando', 'pose', 'expresion',
+    'feliz', 'seria', 'pensativa', 'looking', 'smiling', 'sitting',
+    'standing', 'walking', 'laughing', 'expression', 'pose',
+  ];
+  return humanTerms.some(t => lower.includes(t));
+}
+
+function flattenFreeRefs(refs: FreeSceneRefs): (string | null)[] {
+  return [
+    ...(refs.avatar   ?? []),
+    ...(refs.outfit   ?? []),
+    ...(refs.producto ?? []),
+    ...(refs.escena   ?? []),
+  ];
+}
+
+export async function generateFreeModeScene(params: FreeModeSceneParams): Promise<string> {
+  const { scene, sceneIndex, destino, priorResults, sessionParams } = params;
+
+  const aspectInstr = getAspectInstruction(destino);
+  const hasAvatar   = (scene.refs.avatar ?? []).some(Boolean);
+
+  // ── Resolver referencias de esta escena ──────────────────────
+  // Si inheritRefs=true, usa los refs de la escena anterior (índice sceneIndex-1)
+  // Nota: la herencia real la resuelve el módulo antes de llamar a esta función,
+  // pasando los refs ya mezclados en scene.refs. Aquí solo usamos lo que llega.
+
+  const refsToPass: (string | null)[] = [];
+
+  // Avatar x3 (identidad dominante) si existe
+  const avatarImages = (scene.refs.avatar ?? []).filter(Boolean) as string[];
+  avatarImages.forEach(r => refsToPass.push(r, r, r));
+
+  // Outfit
+  (scene.refs.outfit ?? []).filter(Boolean).forEach(r => refsToPass.push(r));
+
+  // Producto
+  (scene.refs.producto ?? []).filter(Boolean).forEach(r => refsToPass.push(r));
+
+  // Escena
+  (scene.refs.escena ?? []).filter(Boolean).forEach(r => refsToPass.push(r));
+
+  // Relación con escena anterior: adjuntar resultado generado como ref visual
+  let continuityRef: string | null = null;
+  if (scene.relation && scene.relation !== 'ninguna') {
+    const match = scene.relation.match(/escena-(\d+)/);
+    if (match) {
+      const refIndex = parseInt(match[1], 10) - 1;
+      continuityRef = priorResults[refIndex] ?? null;
+    }
+  }
+  if (continuityRef) refsToPass.push(continuityRef);
+
+  // ── HPI — solo si hay avatar y el prompt no describe pose/expresión ──
+  const useHpi = hasAvatar && !promptDescribesHuman(scene.prompt);
+  const hpiBlock = useHpi
+    ? buildHpiBlock({
+        enabled:            true,
+        gender:             'female',
+        modoVisual:         'ugc',
+        includeGesture:     false,
+        includePerformance: false,
+      })
+    : '';
+
+  // ── Bloque de identidad ───────────────────────────────────────
+  const identityBlock = hasAvatar
+    ? `IDENTITY LOCK:
+- Face reference images appear multiple times — this is intentional. They are the ground truth.
+- Same bone structure, same eye shape and color, same nose, same lips, same jaw.
+- Same hair: color, length, texture, pattern.
+- Same skin tone: undertone, warmth, complexion depth.
+- The face reference OVERRIDES every other image.
+
+⚠️ ANTI-COLLAGE RULE:
+- Face references are VISUAL GUIDES for identity ONLY — NOT elements to paste.
+- Generate ONE single seamless photograph from scratch.`
+    : '';
+
+  // Bloque de continuidad visual con escena referenciada
+  const continuityBlock = continuityRef
+    ? `VISUAL CONTINUITY WITH PRIOR SCENE:
+- A result from a prior scene is included as a reference image (last reference).
+- Maintain the SAME lighting quality, color temperature, and surface textures.
+- If the same product or object appears in both scenes, it must look identical.
+- This is NOT a copy of that image — it is a new shot in the same visual world.`
+    : '';
+
+  // ── Prompt completo ───────────────────────────────────────────
+  const prompt = `${LOCK_SYSTEM}
+
+${PARADIGM_RULE}
+
+${STORY_MODE_DOMINANCE}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📸 FREE MODE — SCENE ${sceneIndex + 1}
+
+FORMAT: ${aspectInstr}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCENE DIRECTIVE (user prompt — this is the primary instruction):
+${scene.prompt}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${identityBlock}
+
+${continuityBlock}
+
+${hpiBlock}
+
+📱 iPhone UGC REALISM (NON-NEGOTIABLE):
+Natural light, handheld imperfection, real skin texture, no studio polish.
+Organic, imperfect, lived-in. NOT editorial. NOT advertising. NOT staged.
+
+🚫 ONE SINGLE IMAGE:
+Generate ONE photo. No collage. No grid. No side by side.
+Use references ONLY as visual constraints — do NOT paste them.
+
+${NEGATIVE_SHORT}`;
+
+  const hpiNegatives = useHpi ? getHpiNegatives('female').join(', ') : '';
+  const negative = hpiNegatives
+    ? `${NEGATIVE_SHORT}, ${hpiNegatives}`
+    : NEGATIVE_SHORT;
+
+  return imageApiService.generateImage({
+    prompt,
+    negative,
+    referenceImages: prepareRefs(refsToPass),
+    aspectRatio:     getAspectRatio(destino),
+    uid:             sessionParams.uid,
+    sessionId:       sessionParams.sessionId,
+    module:          'photodump',
+    moduleLabel:     'Photodump Mode · Libre',
+    shotIndex:       sceneIndex,
+    totalShots:      1,
+    metadata:        { role: 'FREE_SCENE', sceneIndex, relation: scene.relation },
   });
 }
 
