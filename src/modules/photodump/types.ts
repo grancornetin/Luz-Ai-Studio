@@ -138,10 +138,13 @@ export interface FreeSceneRefs {
 export interface FreeScene {
   id:          number;
   prompt:      string;
-  // 'ninguna' | 'escena-1' | 'escena-2' | ...
-  relation:    string;
-  // Si está activo, esta escena hereda las refs de la escena anterior
+  // Relaciones con escenas previas: array de 'escena-1', 'escena-2', etc.
+  // Reemplaza el campo relation singular — soporta multi-referencia
+  sceneRefs:   string[];
+  // Si está activo, esta escena hereda los slots de la escena anterior (pre-rellena y editable)
   inheritRefs: boolean;
+  // Índice de la escena de la que hereda (por defecto la anterior, pero editable)
+  inheritFrom: number;
   refs:        FreeSceneRefs;
   // URL de la imagen generada para esta escena (null = no generada aún)
   result:      string | null;

@@ -124,7 +124,7 @@ const PhotodumpModule: React.FC = () => {
   });
 
   // ── Estado Paso 2 modo libre ──────────────────────────────
-  const [freeScenes, setFreeScenes] = useState<FreeScene[]>([newFreeScene(0)]);
+  const [freeScenes, setFreeScenes] = useState<FreeScene[]>([{ ...newFreeScene(0), sceneRefs: [], inheritFrom: 0 }]);
   const [generatingFreeIndex, setGeneratingFreeIndex] = useState<number | null>(null);
 
   // ── Wizard ────────────────────────────────────────────────
@@ -228,7 +228,8 @@ const PhotodumpModule: React.FC = () => {
   const addFreeScene = () => {
     setFreeScenes(prev => {
       if (prev.length >= 6) return prev;
-      return [...prev, newFreeScene(prev.length)];
+      const idx = prev.length;
+      return [...prev, { ...newFreeScene(idx), sceneRefs: [], inheritFrom: idx - 1 }];
     });
     setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 100);
   };
@@ -258,29 +259,16 @@ const PhotodumpModule: React.FC = () => {
     try {
       const sessionId = newSessionId();
 
-      // Resolver herencia de refs: si inheritRefs=true, mezclar con la escena anterior
-      let resolvedScene = scene;
-      if (scene.inheritRefs && index > 0) {
-        const prev = freeScenes[index - 1];
-        resolvedScene = {
-          ...scene,
-          refs: {
-            avatar:   scene.refs.avatar?.some(Boolean)   ? scene.refs.avatar   : prev.refs.avatar,
-            outfit:   scene.refs.outfit?.some(Boolean)   ? scene.refs.outfit   : prev.refs.outfit,
-            producto: scene.refs.producto?.some(Boolean) ? scene.refs.producto : prev.refs.producto,
-            escena:   scene.refs.escena?.some(Boolean)   ? scene.refs.escena   : prev.refs.escena,
-          },
-        };
-      }
-
-      // Resultados previos para continuidad visual entre escenas
+      // Los refs ya están pre-rellenados en scene.refs por el editor (herencia real)
+      // priorResults indexado por posición de escena para resolver @tags tipo B
       const priorResults = freeScenes.map(s => s.result);
 
       const imageUrl = await generateFreeModeScene({
-        scene:         resolvedScene,
+        scene:         scene,
         sceneIndex:    index,
         destino,
         priorResults,
+        allScenes:     freeScenes,
         sessionParams: { uid: user?.uid, sessionId },
       });
 

@@ -1274,6 +1274,8 @@ export interface FreeModeSceneParams {
   destino:       PhotodumpDestino;
   // Resultados generados de escenas anteriores, indexados por posición
   priorResults:  (string | null)[];
+  // Todas las escenas del set (para resolver @tags tipo B y @escenaN)
+  allScenes?:    FreeScene[];
   sessionParams: { uid?: string; sessionId?: string };
 }
 
@@ -1300,16 +1302,49 @@ function flattenFreeRefs(refs: FreeSceneRefs): (string | null)[] {
 }
 
 export async function generateFreeModeScene(params: FreeModeSceneParams): Promise<string> {
-  const { scene, sceneIndex, destino, priorResults, sessionParams } = params;
+  const { scene, sceneIndex, destino, priorResults, allScenes, sessionParams } = params;
 
   const aspectInstr = getAspectInstruction(destino);
   const hasAvatar   = (scene.refs.avatar ?? []).some(Boolean);
 
-  // ── Resolver referencias de esta escena ──────────────────────
-  // Si inheritRefs=true, usa los refs de la escena anterior (índice sceneIndex-1)
-  // Nota: la herencia real la resuelve el módulo antes de llamar a esta función,
-  // pasando los refs ya mezclados en scene.refs. Aquí solo usamos lo que llega.
+  // ── Slot tag map: @persona→avatar, @outfit→outfit, etc. ──────
+  const SLOT_TAG_MAP: Record<string, keyof FreeSceneRefs> = {
+    persona:  'avatar',
+    outfit:   'outfit',
+    producto: 'producto',
+    escena:   'escena',
+  };
 
+  // ── Resolver @tags del prompt ─────────────────────────────────
+  // Tipo A: @persona, @outfit, @producto, @escena → slots de esta escena
+  // Tipo B: @escena1, @escena2... → resultados generados de escenas anteriores
+  const promptTags = [...new Set((scene.prompt.match(/@(\w+)/g) ?? []).map(t => t.slice(1)))];
+
+  // Tags tipo A activados en el prompt (para incluir esas refs aunque no estén por defecto)
+  const activeSlotTags = promptTags.filter(t => SLOT_TAG_MAP[t]);
+
+  // Tags tipo B: @escena1, @escena3, etc.
+  const sceneTagRefs: string[] = [];
+  promptTags.forEach(t => {
+    const m = t.match(/^escena(\d+)$/);
+    if (m) {
+      const idx = parseInt(m[1], 10) - 1;
+      const url = priorResults[idx];
+      if (url) sceneTagRefs.push(url);
+    }
+  });
+
+  // También incluir sceneRefs seleccionados manualmente en la UI (sin @tag en el prompt)
+  (scene.sceneRefs ?? []).forEach(tag => {
+    const m = tag.match(/^escena(\d+)$/);
+    if (m) {
+      const idx = parseInt(m[1], 10) - 1;
+      const url = priorResults[idx];
+      if (url && !sceneTagRefs.includes(url)) sceneTagRefs.push(url);
+    }
+  });
+
+  // ── Construir refsToPass priorizando por narrativa ────────────
   const refsToPass: (string | null)[] = [];
 
   // Avatar x3 (identidad dominante) si existe
@@ -1325,18 +1360,10 @@ export async function generateFreeModeScene(params: FreeModeSceneParams): Promis
   // Escena
   (scene.refs.escena ?? []).filter(Boolean).forEach(r => refsToPass.push(r));
 
-  // Relación con escena anterior: adjuntar resultado generado como ref visual
-  let continuityRef: string | null = null;
-  if (scene.relation && scene.relation !== 'ninguna') {
-    const match = scene.relation.match(/escena-(\d+)/);
-    if (match) {
-      const refIndex = parseInt(match[1], 10) - 1;
-      continuityRef = priorResults[refIndex] ?? null;
-    }
-  }
-  if (continuityRef) refsToPass.push(continuityRef);
+  // Refs de escenas previas (tipo B) al final — contexto narrativo
+  sceneTagRefs.forEach(r => refsToPass.push(r));
 
-  // ── HPI — solo si hay avatar y el prompt no describe pose/expresión ──
+  // ── Bloques de contexto para el prompt ───────────────────────
   const useHpi = hasAvatar && !promptDescribesHuman(scene.prompt);
   const hpiBlock = useHpi
     ? buildHpiBlock({
@@ -1348,7 +1375,6 @@ export async function generateFreeModeScene(params: FreeModeSceneParams): Promis
       })
     : '';
 
-  // ── Bloque de identidad ───────────────────────────────────────
   const identityBlock = hasAvatar
     ? `IDENTITY LOCK:
 - Face reference images appear multiple times — this is intentional. They are the ground truth.
@@ -1362,16 +1388,16 @@ export async function generateFreeModeScene(params: FreeModeSceneParams): Promis
 - Generate ONE single seamless photograph from scratch.`
     : '';
 
-  // Bloque de continuidad visual con escena referenciada
-  const continuityBlock = continuityRef
-    ? `VISUAL CONTINUITY WITH PRIOR SCENE:
-- A result from a prior scene is included as a reference image (last reference).
-- Maintain the SAME lighting quality, color temperature, and surface textures.
-- If the same product or object appears in both scenes, it must look identical.
-- This is NOT a copy of that image — it is a new shot in the same visual world.`
+  // Bloque de continuidad multi-escena (resume qué aporta cada ref de escena)
+  const continuityBlock = sceneTagRefs.length > 0
+    ? `VISUAL CONTINUITY WITH PRIOR SCENES (${sceneTagRefs.length} reference${sceneTagRefs.length > 1 ? 's' : ''}):
+- The last ${sceneTagRefs.length} reference image${sceneTagRefs.length > 1 ? 's are' : ' is'} from prior scenes in this story.
+- Use them for NARRATIVE CONTINUITY: same lighting quality, color temperature, and any object/element explicitly mentioned as carried over.
+- Elements NOT mentioned in this scene's directive do NOT need to appear — follow the directive.
+- This is a NEW shot in the same visual world — NOT a copy of any prior scene.`
     : '';
 
-  // ── Prompt completo ───────────────────────────────────────────
+  // ── Prompt final ──────────────────────────────────────────────
   const prompt = `${LOCK_SYSTEM}
 
 ${PARADIGM_RULE}
@@ -1420,7 +1446,7 @@ ${NEGATIVE_SHORT}`;
     moduleLabel:     'Photodump Mode · Libre',
     shotIndex:       sceneIndex,
     totalShots:      1,
-    metadata:        { role: 'FREE_SCENE', sceneIndex, relation: scene.relation },
+    metadata:        { role: 'FREE_SCENE', sceneIndex, sceneRefs: scene.sceneRefs ?? [] },
   });
 }
 
