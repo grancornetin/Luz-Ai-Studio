@@ -303,9 +303,22 @@ function buildStoryDirectives(
   protagonist: PhotodumpProtagonist,
   destino:    PhotodumpDestino,
   narrative:  PhotodumpNarrative,
+  recipe?:    string,
+  refs?:      { avatarRef?: string | null },
 ): PhotodumpShotDirective[] {
 
   const ar = destino === 'feed' ? '4/5' : '9/16';
+
+  // Receta unboxing: arco lineal fijo con pool dedicado
+  if (recipe === 'unboxing') {
+    const hasAvatar = !!refs?.avatarRef;
+    const pool      = buildUnboxingShotPool(hasAvatar);
+    const keys      = distributeUnboxingShots(count, hasAvatar);
+    return keys.map((key, i) => {
+      const shot = pool.find(s => s.key === key) ?? pool[i % pool.length];
+      return { ...shot, arcPosition: i + 1, aspectRatio: ar };
+    });
+  }
 
   const isFaceless = narrative === 'faceless';
 
@@ -687,6 +700,148 @@ function buildProductStoryShots(): Omit<PhotodumpShotDirective, 'arcPosition' | 
   ];
 }
 
+// ── Unboxing story shots ───────────────────────────────────────
+// Arco narrativo lineal: empaque → apertura → detalles → avatar interactuando.
+// El sistema distribuye los shots disponibles según el count pedido.
+
+function buildUnboxingShotPool(hasAvatar: boolean): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
+  const pool: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] = [
+    {
+      key:   'UNBOXING_PACKAGING_CLOSED',
+      beat:  'context',
+      role:  'PACKAGING HERO',
+      purpose: 'El empaque cerrado como primer contacto. La promesa antes de la apertura. Mostrar el packaging en su totalidad — forma, color, materiales. Luz que resalte la calidad y el diseño. Sin persona.',
+      requiredElements: ['packaging_closed_fully_visible', 'real_surface_not_studio', 'light_shows_volume_and_material', 'product_brand_or_design_legible'],
+      forbiddenElements: ['packaging_open', 'product_visible_inside', 'person_visible', 'white_background', 'studio_lighting', 'catalog_composition'],
+      variationSpace: [
+        'empaque sobre superficie de madera o mármol, luz lateral suave que muestra volumen y textura',
+        'overhead del empaque centrado con sombra natural, fondo de superficie texturada',
+        'empaque en ángulo de tres cuartos, luz de ventana, fondo desenfocado del ambiente',
+        'empaque sostenido desde abajo por manos (sin cara), luz desde arriba, ambiente visible',
+      ],
+      framing:     'MEDIUM_OR_CLOSE_UP',
+      composition: 'PACKAGING_FILLS_70_PERCENT',
+      cameraAngle: 'EYE_LEVEL_OR_SLIGHT_OVERHEAD',
+    },
+    {
+      key:   'UNBOXING_OPENING_MOMENT',
+      beat:  'action',
+      role:  'OPENING MOMENT',
+      purpose: 'El momento de apertura — manos interactuando con el empaque. La anticipación en el gesto. Puede ser el avatar o solo manos si no hay avatar. El empaque se abre, el producto asoma.',
+      requiredElements: ['hands_opening_or_interacting_with_packaging', 'packaging_partially_open', 'product_beginning_to_emerge', 'real_surface_visible'],
+      forbiddenElements: ['packaging_fully_closed', 'product_fully_extracted', 'studio_backdrop', 'catalog_composition', 'forced_demonstration'],
+      variationSpace: [
+        'manos levantando la tapa o solapa del empaque, producto asomando dentro, luz natural',
+        'overhead de manos abriendo la caja, primer vistazo del interior con el producto',
+        'close-up de las manos en el momento exacto de la apertura, empaque visible a los costados',
+        hasAvatar
+          ? 'avatar desde ángulo lateral abriendo el empaque, cara parcialmente visible, expresión de anticipación'
+          : 'manos sosteniendo ambos lados del empaque abierto, producto visible, superficie real de fondo',
+      ],
+      framing:     'MEDIUM_OR_CLOSE_UP',
+      composition: 'HANDS_AND_PACKAGING',
+      cameraAngle: 'SLIGHT_OVERHEAD_OR_EYE_LEVEL',
+    },
+    {
+      key:   'UNBOXING_PRODUCT_REVEAL',
+      beat:  'reveal',
+      role:  'PRODUCT REVEAL',
+      purpose: 'El producto completamente visible por primera vez — extraído del empaque o dentro de él con claridad total. El reveal que hace que quien mira quiera el producto. Luz perfecta sobre el producto.',
+      requiredElements: ['product_fully_visible', 'product_condition_pristine', 'packaging_context_still_present', 'reveal_composition'],
+      forbiddenElements: ['product_hidden_or_obscured', 'catalog_white_background', 'studio_lighting', 'forced_symmetry'],
+      variationSpace: [
+        'producto extraído del empaque, ambos visibles sobre la superficie, luz natural que revela materiales',
+        'overhead del empaque abierto con el producto perfectamente visible adentro, momento post-apertura',
+        'producto en mano frente al empaque abierto de fondo, luz lateral que resalta forma y acabado',
+        hasAvatar
+          ? 'avatar sosteniendo el producto recién extraído, expresión genuina de descubrimiento, empaque visible de fondo'
+          : 'producto junto al empaque abierto, ambos sobre superficie real, composición orgánica',
+      ],
+      framing:     'MEDIUM',
+      composition: 'PRODUCT_AND_PACKAGING_TOGETHER',
+      cameraAngle: 'EYE_LEVEL_OR_SLIGHT_OVERHEAD',
+    },
+    {
+      key:   'UNBOXING_PRODUCT_DETAIL',
+      beat:  'detail',
+      role:  'PRODUCT DETAIL',
+      purpose: 'Un close-up íntimo del producto ya extraído. Textura, acabado, materiales, detalles de diseño. El shot que hace que quien mira quiera tocarlo. Sin empaque necesario.',
+      requiredElements: ['product_extreme_close_up', 'texture_or_finish_visible', 'real_light_showing_depth', 'intentional_tight_framing'],
+      forbiddenElements: ['packaging_dominant', 'white_background', 'studio_lighting', 'face_dominant', 'full_body'],
+      variationSpace: [
+        'macro del detalle más distintivo del producto — textura, logo, terminación, material',
+        'close-up del producto sobre superficie de contraste, sombra lateral que muestra volumen',
+        'producto en ángulo extremo bajo, luz rasante que revela textura y profundidad',
+        'detalle del accesorio o componente adicional del producto — cable, estuche, manual',
+      ],
+      framing:     'CLOSE_UP_OR_EXTREME_CLOSE_UP',
+      composition: 'DETAIL_FILL_FRAME',
+      cameraAngle: 'MACRO_OR_LOW_ANGLE',
+    },
+    {
+      key:   'UNBOXING_PRODUCT_IN_USE',
+      beat:  'action',
+      role:  'PRODUCT IN USE',
+      purpose: 'El producto siendo usado de forma natural y real. Si hay avatar, es el momento donde el producto pasa de objeto a parte de su vida. Manos activas, uso genuino, contexto real.',
+      requiredElements: ['product_being_used_naturally', 'hands_or_person_interacting', 'real_context_of_use', 'authentic_not_staged'],
+      forbiddenElements: ['product_static_display', 'forced_demonstration', 'catalog_feel', 'studio_lighting', 'product_floating'],
+      variationSpace: [
+        hasAvatar
+          ? 'avatar usando el producto en su contexto natural — gesto real, no pose para cámara'
+          : 'manos usando el producto activamente, gesto natural, contexto visible',
+        'close-up de manos interactuando con el producto en uso, detalle del gesto',
+        hasAvatar
+          ? 'medium shot del avatar con el producto en uso, ambiente real de fondo, mirada no forzada'
+          : 'producto en su lugar natural de uso, environment real, sin persona',
+        'overhead de manos usando el producto, acción clara, superficie de uso visible',
+      ],
+      framing:     'MEDIUM_OR_CLOSE_UP',
+      composition: 'ACTION_IN_CONTEXT',
+      cameraAngle: 'EYE_LEVEL_OR_SLIGHT_OVERHEAD',
+    },
+    {
+      key:   'UNBOXING_ATMOSPHERE',
+      beat:  'atmosphere',
+      role:  'LIFESTYLE ATMOSPHERE',
+      purpose: 'El producto integrado al mundo del usuario — ya no en la caja, sino viviendo. Flat lay orgánico o producto en su lugar natural con el empaque como elemento de contexto. Mood y lifestyle dominan.',
+      requiredElements: ['product_in_natural_setting', 'lifestyle_context_visible', 'organic_composition_not_staged', 'mood_through_light_and_surface'],
+      forbiddenElements: ['catalog_arrangement', 'forced_symmetry', 'studio_feel', 'product_isolated', 'white_background'],
+      variationSpace: [
+        'flat lay orgánico del producto con su empaque y objetos del día — café, libro, llaves',
+        'producto en su lugar natural de vida — mesa de noche, escritorio, tocador — luz ambiental',
+        'overhead del ambiente completo con el producto como elemento, empaque visible a un costado',
+        hasAvatar
+          ? 'avatar en su ambiente natural con el producto presente pero no forzado, viviendo con él'
+          : 'producto con empaque en ambiente real, luz de ventana, composición lived-in',
+      ],
+      framing:     'WIDE_OR_OVERHEAD',
+      composition: 'ORGANIC_LIFESTYLE',
+      cameraAngle: 'OVERHEAD_OR_EYE_LEVEL',
+    },
+  ];
+  return pool;
+}
+
+// Distribuye los shots de unboxing según el count pedido.
+// El arco tiene 6 beats en orden fijo. Si el usuario pide menos, se comprimen
+// eliminando los menos críticos (atmosphere primero, luego un action).
+function distributeUnboxingShots(count: number, hasAvatar: boolean): string[] {
+  // Orden canónico del arco
+  const fullArc = [
+    'UNBOXING_PACKAGING_CLOSED',
+    'UNBOXING_OPENING_MOMENT',
+    'UNBOXING_PRODUCT_REVEAL',
+    'UNBOXING_PRODUCT_DETAIL',
+    'UNBOXING_PRODUCT_IN_USE',
+    'UNBOXING_ATMOSPHERE',
+  ];
+  if (count >= 6) return fullArc;
+  if (count === 5) return fullArc.filter(k => k !== 'UNBOXING_ATMOSPHERE');
+  if (count === 4) return fullArc.filter(k => !['UNBOXING_ATMOSPHERE', 'UNBOXING_PRODUCT_DETAIL'].includes(k));
+  // 3 shots: esencia mínima — empaque, apertura, reveal/uso
+  return ['UNBOXING_PACKAGING_CLOSED', 'UNBOXING_OPENING_MOMENT', hasAvatar ? 'UNBOXING_PRODUCT_IN_USE' : 'UNBOXING_PRODUCT_REVEAL'];
+}
+
 // ── Generación del plan ───────────────────────────────────────
 
 export async function buildPhotodumpSessionPlan(
@@ -694,9 +849,11 @@ export async function buildPhotodumpSessionPlan(
   protagonist: PhotodumpProtagonist,
   destino:     PhotodumpDestino,
   basePrompt:  string,
+  recipe?:     string,
+  refs?:       PhotodumpRefs,
 ): Promise<PhotodumpSessionPlan> {
   initPhotodumpIntelligence();
-  const shots          = buildStoryDirectives(6, protagonist, destino, narrative);
+  const shots          = buildStoryDirectives(6, protagonist, destino, narrative, recipe, refs);
   const sessionFamilies = selectSessionFamilies();
   const assignedFamilies = [...sessionFamilies.storySupport, ...sessionFamilies.creatorAesthetic];
   return {
@@ -807,34 +964,56 @@ export async function generatePhotodumpREF0(
   destino:     PhotodumpDestino,
   basePrompt:  string,
   sessionParams: { uid?: string; sessionId?: string },
+  recipe?:     string,
 ): Promise<PhotodumpREF0Result> {
 
   const aspectInstr = getAspectInstruction(destino);
   const narrativeCtx = NARRATIVE_META[narrative].label;
+  const isUnboxing = recipe === 'unboxing';
 
   // Referencia principal del protagonista
-  const mainRef = refs.avatarRef ?? refs.productRef ?? refs.outfitRef ?? refs.sceneRef;
+  const mainRef = refs.avatarRef ?? refs.productRef ?? refs.outfitRef ?? refs.sceneRef ?? refs.packagingRef;
   if (!mainRef) throw new Error('Se necesita al menos una referencia para generar el ancla visual.');
 
   const outfitMode = refs.outfitMode ?? 'generate';
 
-  // ── Construir lista de referencias ───────────────────────────
-  // Avatar: cara x3 (identidad dominante) + cuerpo x1 (complexión secundaria)
+  // ── Construir lista de referencias para REF0 ─────────────────
   const refsToPass: (string | null)[] = [];
-  if (refs.avatarRef) {
-    refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
+
+  if (isUnboxing) {
+    // Unboxing REF0: si hay avatar → ancla con persona sosteniendo/interactuando con el producto.
+    // El avatar se pasa x2 (identidad suficiente sin dominar el presupuesto).
+    // Si no hay avatar → product hero puro, empaque + producto son protagonistas.
+    if (refs.avatarRef) {
+      refsToPass.push(refs.avatarRef, refs.avatarRef);
+    }
+    // Empaque principal primero (es el protagonista visual de REF0 en unboxing)
+    if (refs.packagingRef) refsToPass.push(refs.packagingRef);
+    const extraPackaging = (refs.packagingRefs ?? []).filter(Boolean) as string[];
+    extraPackaging.forEach(r => refsToPass.push(r));
+    // Producto
+    if (refs.productRef) refsToPass.push(refs.productRef);
+    const extraProducts = (refs.productRefs ?? []).filter(Boolean) as string[];
+    extraProducts.forEach(r => refsToPass.push(r));
+    // Escena si existe
+    if (refs.sceneRef) refsToPass.push(refs.sceneRef);
+  } else {
+    // Comportamiento original para todas las demás recetas
+    if (refs.avatarRef) {
+      refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
+    }
+    if (refs.bodyRef) {
+      refsToPass.push(refs.bodyRef);
+    }
+    if (outfitMode === 'upload' && refs.outfitRef) refsToPass.push(refs.outfitRef);
+    if (refs.productRef) refsToPass.push(refs.productRef);
+    const extraProducts = (refs.productRefs ?? []).filter(Boolean) as string[];
+    extraProducts.forEach(r => refsToPass.push(r));
+    if (refs.sceneRef) refsToPass.push(refs.sceneRef);
   }
-  if (refs.bodyRef) {
-    refsToPass.push(refs.bodyRef);
-  }
-  // Outfit: solo cuando el usuario cargó uno explícitamente
-  if (outfitMode === 'upload' && refs.outfitRef) refsToPass.push(refs.outfitRef);
-  // Producto: referencia principal + ángulos adicionales
-  if (refs.productRef) refsToPass.push(refs.productRef);
+
   const extraProducts = (refs.productRefs ?? []).filter(Boolean) as string[];
-  extraProducts.forEach(r => refsToPass.push(r));
-  // Escena: siempre la escena principal en REF0
-  if (refs.sceneRef) refsToPass.push(refs.sceneRef);
+  const extraPackaging = (refs.packagingRefs ?? []).filter(Boolean) as string[];
 
   const outfitInstruction = buildOutfitLockBlock(outfitMode, basePrompt, !!refs.outfitRef);
 
@@ -852,29 +1031,58 @@ They all represent the SAME object. Use all angles to understand its exact shape
 Reproduce the product faithfully — same design, same finish, same proportions.`
     : '';
 
+  // Instrucción de empaque
+  const packagingInstruction = refs.packagingRef
+    ? `PACKAGING REFERENCE: The packaging/box images show the exact container the product comes in.
+${extraPackaging.length > 0 ? `Multiple angles are provided — they all show the SAME packaging. ` : ''}Reproduce the packaging faithfully — same shape, color, design, and materials.
+${!refs.packagingRef ? `No packaging reference provided — create a packaging consistent with the product and brief, and maintain it across all shots.` : ''}`
+    : `PACKAGING: No reference provided — create a packaging that feels natural and consistent with the product. Maintain the same invented packaging across all shots.`;
+
   const isFaceless = narrative === 'faceless';
   const modeBlock  = isFaceless ? STORY_MODE_FACELESS : STORY_MODE_DOMINANCE;
 
-  const protagonistLine = isFaceless
-    ? 'PROTAGONIST: NO FACE. Show the product, the workspace, or hands doing something real. No person visible.'
-    : protagonist === 'product'
-      ? 'PROTAGONIST: The PRODUCT is the hero. Show it in its natural context with real, atmospheric lighting.'
-      : protagonist === 'person'
-        ? 'PROTAGONIST: The PERSON is the hero. Natural medium shot, authentic expression, real environment.'
-        : 'PROTAGONIST: The PERSON and PRODUCT together. Natural interaction, real context.';
+  // Unboxing: protagonistLine y anchorShotDesc específicos
+  const protagonistLine = isUnboxing
+    ? refs.avatarRef
+      ? 'PROTAGONIST: The PRODUCT and its PACKAGING are the visual heroes. The PERSON frames the unboxing — present but not dominant. Show their face clearly in REF0 to establish identity for the set.'
+      : 'PROTAGONIST: The PRODUCT and its PACKAGING are the sole visual heroes. No person. Show the packaging in context, pristine condition, real light.'
+    : isFaceless
+      ? 'PROTAGONIST: NO FACE. Show the product, the workspace, or hands doing something real. No person visible.'
+      : protagonist === 'product'
+        ? 'PROTAGONIST: The PRODUCT is the hero. Show it in its natural context with real, atmospheric lighting.'
+        : protagonist === 'person'
+          ? 'PROTAGONIST: The PERSON is the hero. Natural medium shot, authentic expression, real environment.'
+          : 'PROTAGONIST: The PERSON and PRODUCT together. Natural interaction, real context.';
 
-  const anchorShotDesc = isFaceless
-    ? `SHOT: Overhead or medium shot of the workspace/product — no face, no full body.
+  const anchorShotDesc = isUnboxing
+    ? refs.avatarRef
+      ? `SHOT: The person holding or interacting with the CLOSED packaging — face clearly visible, natural expression of anticipation or excitement.
+Medium shot, waist up or 3/4. The packaging is prominent in frame. Real environment, natural light.
+iPhone photo quality — handheld, authentic, lived-in. NOT a catalog shot.
+This establishes: the person's identity, the product's packaging, and the unboxing world.`
+      : `SHOT: The CLOSED packaging as the visual anchor — no person.
+Medium shot or slight overhead. Packaging fills 60-70% of frame. Real surface, natural window light.
+Shows the full packaging design: shape, color, branding. Authentic, not studio.
+This establishes the visual world for the entire unboxing set.`
+    : isFaceless
+      ? `SHOT: Overhead or medium shot of the workspace/product — no face, no full body.
 Hands may be visible if actively doing something. Real surface, natural window light, organic arrangement.
 iPhone photo quality — handheld, imperfect, lived-in. NOT a catalog shot. NOT a styled flat lay.`
-    : `SHOT: Natural medium shot (waist-up or 3/4 body). Authentic, candid, story-opening feel.
+      : `SHOT: Natural medium shot (waist-up or 3/4 body). Authentic, candid, story-opening feel.
 iPhone photo quality — handheld, natural light, real skin texture, no studio polish.
 The person looks like they are living their life — not posing for a photographer.
 Environment is real, light is natural or ambient, mood is aspirational but authentic.`;
 
-  const identityBlock = isFaceless
-    ? `${productInstruction}`
-    : `IDENTITY: Copy the face, hair, skin tone, and physical features EXACTLY from the face reference images.
+  const identityBlock = isUnboxing
+    ? refs.avatarRef
+      ? `IDENTITY: Copy the face, hair, skin tone, and physical features EXACTLY from the face reference images.
+${productInstruction}
+${packagingInstruction}`
+      : `${productInstruction}
+${packagingInstruction}`
+    : isFaceless
+      ? `${productInstruction}`
+      : `IDENTITY: Copy the face, hair, skin tone, and physical features EXACTLY from the face reference images.
 ${bodyInstruction}
 ${outfitInstruction}
 ${productInstruction}`;
@@ -1102,28 +1310,51 @@ export async function generatePhotodumpShot(
   sessionFamilies:  SessionFamilies = { storySupport: [], creatorAesthetic: [] },
   totalShots:       number = 4,
   protagonist:      PhotodumpProtagonist = 'person',
+  recipe?:          string,
 ): Promise<string> {
 
   const aspectInstr = getAspectInstruction(destino);
+  const isUnboxing  = recipe === 'unboxing';
 
   const outfitMode = refs.outfitMode ?? 'generate';
 
   // ── Outfit por shot: cada prenda se asigna a un shot distinto ─
   const { outfitUrl: outfitForThisShot, isFlatLay } = getOutfitForShot(refs, shot.arcPosition - 1);
 
-  // ── Construir lista de referencias por shot ───────────────────
-  // Cara x3 (identidad) + cuerpo x1 + REF0 (ancla visual) + outfit rotado + producto(s) + escena asignada
+  // ── Budget de referencias por shot ───────────────────────────
   const refsToPass: string[] = [];
-  if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
-  if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
-  refsToPass.push(ref0Url);
-  if (outfitForThisShot) refsToPass.push(outfitForThisShot);
-  if (refs.productRef) refsToPass.push(refs.productRef);
+
+  if (isUnboxing) {
+    // Unboxing: producto y empaque son protagonistas, avatar es secundario.
+    // Slots: ref0(1) + avatar x2 si existe(2) + empaque(1-2) + producto(1-2) + escena(1) = máx 9
+    refsToPass.push(ref0Url);
+    if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef);
+    if (refs.packagingRef) refsToPass.push(refs.packagingRef);
+    const extraPackaging = (refs.packagingRefs ?? []).filter(Boolean) as string[];
+    // En shots de detalle de producto, no pasar empaque extra para dar espacio al producto
+    const isProductDetailShot = shot.key === 'UNBOXING_PRODUCT_DETAIL' || shot.key === 'UNBOXING_PRODUCT_IN_USE';
+    if (!isProductDetailShot) extraPackaging.forEach(r => refsToPass.push(r));
+    if (refs.productRef) refsToPass.push(refs.productRef);
+    const extraProducts = (refs.productRefs ?? []).filter(Boolean) as string[];
+    extraProducts.slice(0, isProductDetailShot ? 2 : 1).forEach(r => refsToPass.push(r));
+    const sceneForShot = getSceneRefForShot(refs, shot.arcPosition - 1, totalShots);
+    if (sceneForShot) refsToPass.push(sceneForShot);
+  } else {
+    // Comportamiento original para todas las demás recetas
+    if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
+    if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
+    refsToPass.push(ref0Url);
+    if (outfitForThisShot) refsToPass.push(outfitForThisShot);
+    if (refs.productRef) refsToPass.push(refs.productRef);
+    const extraProducts = (refs.productRefs ?? []).filter(Boolean) as string[];
+    extraProducts.forEach(r => refsToPass.push(r));
+    const sceneForShot = getSceneRefForShot(refs, shot.arcPosition - 1, totalShots);
+    if (sceneForShot) refsToPass.push(sceneForShot);
+  }
+
   const extraProducts = (refs.productRefs ?? []).filter(Boolean) as string[];
-  extraProducts.forEach(r => refsToPass.push(r));
-  // Escena: asignar según posición en el arco (0-indexed)
-  const sceneForShot = getSceneRefForShot(refs, shot.arcPosition - 1, totalShots);
-  if (sceneForShot) refsToPass.push(sceneForShot);
+  const extraPackaging = (refs.packagingRefs ?? []).filter(Boolean) as string[];
+  const sceneForShot  = getSceneRefForShot(refs, shot.arcPosition - 1, totalShots);
 
   const momentLabel = {
     candid:     '📱 CANDID — Captura espontánea sin pose ni artificio.',
@@ -1157,13 +1388,22 @@ This shot showcases the piece itself as part of the haul/outfit story.`
       ? buildOutfitLockBlock(outfitMode, basePrompt, true)
       : buildOutfitLockBlock(outfitMode, basePrompt, false);
 
-  const shotIdentityBlock = isFacelessShot
-    ? `SHOT IDENTITY:
+  const shotIdentityBlock = isUnboxing
+    ? `SHOT IDENTITY — UNBOXING SET:
+- REF0 is the visual anchor — same light, same surface, same color temperature across all shots.
+${refs.avatarRef ? `- Face reference (appears twice): EXACT identity — same bone structure, same hair, same skin tone. The person is a GUIDE in this unboxing, not the star. Keep face authentic, no beautification.` : '- No person in this set — product and packaging are the sole protagonists.'}
+- PRODUCT: Reproduce faithfully — same shape, color, finish, and proportions as the reference.
+${refs.packagingRef ? `- PACKAGING: Reproduce faithfully — same box/container shape, color, design, and materials. Maintain consistent packaging across ALL shots.` : `- PACKAGING: No reference provided — maintain whatever packaging was established in REF0 consistently across all shots.`}
+${extraProducts.length > 0 ? `- Product shown from multiple angles in references — same object. Use all angles to understand it fully.` : ''}
+${extraPackaging.length > 0 ? `- Packaging shown from multiple angles — same container. Maintain design consistency.` : ''}
+NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${shot.role}.`
+    : isFacelessShot
+      ? `SHOT IDENTITY:
 - REF0 establishes the visual world — same surface, same light, same color temperature.
 ${extraProducts.length > 0 ? `PRODUCT MULTI-ANGLE: Multiple product references show the same object from different angles. Use all of them to reproduce it faithfully.` : refs.productRef ? `- Product reference: reproduce it faithfully — same design, finish, and proportions.` : ''}
 ${sceneForShot ? `- Scene reference: same workspace / environment as established in REF0.` : ''}
 🚫 NO FACE. NO HEAD. NO FULL BODY. If hands appear, they must be actively doing something.`
-    : `SHOT IDENTITY:
+      : `SHOT IDENTITY:
 - Face reference (appears multiple times): EXACT identity, same bone structure, same hair, same skin tone.
 ${refs.bodyRef ? '- Body reference: establishes physique (build, proportions). Do NOT make the person heavier or slimmer than shown.' : ''}
 - REF0 (after face/body refs): establishes the visual world — same light, same scene, same color temp.

@@ -20,6 +20,7 @@ export interface RecipeRefConfig {
   avatar:   'required' | 'optional' | 'none';
   outfit:   'required' | 'optional' | 'none';   // prendas (hasta 4)
   producto: 'required' | 'optional' | 'none';
+  empaque:  'required' | 'optional' | 'none';   // packaging (solo receta unboxing)
   escena:   'required' | 'optional' | 'none';
 }
 
@@ -36,7 +37,7 @@ export const RECIPE_META: Record<PhotodumpRecipe, {
     label:       'Unboxing / Producto',
     description: 'El producto y su packaging como protagonistas. Podés agregar tu persona.',
     icon:        'Package',
-    refs:        { avatar: 'optional', outfit: 'none', producto: 'required', escena: 'optional' },
+    refs:        { avatar: 'optional', outfit: 'none', producto: 'required', empaque: 'optional', escena: 'optional' },
     narrative:   'product_hero',
     protagonist: 'product',
   },
@@ -44,7 +45,7 @@ export const RECIPE_META: Record<PhotodumpRecipe, {
     label:       'Outfit / Haul de ropa',
     description: 'Lucís la ropa. Necesitás tu foto y al menos una prenda.',
     icon:        'Shirt',
-    refs:        { avatar: 'required', outfit: 'required', producto: 'none', escena: 'optional' },
+    refs:        { avatar: 'required', outfit: 'required', producto: 'none', empaque: 'none', escena: 'optional' },
     narrative:   'character',
     protagonist: 'person',
   },
@@ -52,7 +53,7 @@ export const RECIPE_META: Record<PhotodumpRecipe, {
     label:       'Un día en mi vida',
     description: 'Vos como protagonista con el producto como compañero del día.',
     icon:        'Sun',
-    refs:        { avatar: 'required', outfit: 'optional', producto: 'optional', escena: 'optional' },
+    refs:        { avatar: 'required', outfit: 'optional', producto: 'optional', empaque: 'none', escena: 'optional' },
     narrative:   'day',
     protagonist: 'both',
   },
@@ -60,7 +61,7 @@ export const RECIPE_META: Record<PhotodumpRecipe, {
     label:       'Lanzamiento de producto',
     description: 'El producto en primer plano. Podés agregar tu persona para una presentación más personal.',
     icon:        'Megaphone',
-    refs:        { avatar: 'optional', outfit: 'none', producto: 'required', escena: 'optional' },
+    refs:        { avatar: 'optional', outfit: 'none', producto: 'required', empaque: 'none', escena: 'optional' },
     narrative:   'product_hero',
     protagonist: 'product',
   },
@@ -68,7 +69,7 @@ export const RECIPE_META: Record<PhotodumpRecipe, {
     label:       'Detrás de escena / Faceless',
     description: 'Sin rostro. El proceso, el espacio, las manos trabajando. Podés subir tu foto para mantener piel/manos consistentes.',
     icon:        'Clapperboard',
-    refs:        { avatar: 'optional', outfit: 'none', producto: 'required', escena: 'optional' },
+    refs:        { avatar: 'optional', outfit: 'none', producto: 'required', empaque: 'none', escena: 'optional' },
     narrative:   'faceless',
     protagonist: 'product',
   },
@@ -76,7 +77,7 @@ export const RECIPE_META: Record<PhotodumpRecipe, {
     label:       'Viaje / Experiencia',
     description: 'Vos en un lugar. La escena del lugar es obligatoria.',
     icon:        'Plane',
-    refs:        { avatar: 'required', outfit: 'optional', producto: 'optional', escena: 'required' },
+    refs:        { avatar: 'required', outfit: 'optional', producto: 'optional', empaque: 'none', escena: 'required' },
     narrative:   'journey',
     protagonist: 'both',
   },
@@ -84,7 +85,7 @@ export const RECIPE_META: Record<PhotodumpRecipe, {
     label:       'Modo libre',
     description: 'Definís el prompt y las referencias de cada imagen por separado.',
     icon:        'Wand2',
-    refs:        { avatar: 'optional', outfit: 'optional', producto: 'optional', escena: 'optional' },
+    refs:        { avatar: 'optional', outfit: 'optional', producto: 'optional', empaque: 'none', escena: 'optional' },
     narrative:   'custom',
     protagonist: 'both',
   },
@@ -114,16 +115,18 @@ export interface PhotodumpImage {
 // ── Referencias modo recetas ───────────────────────────────────
 
 export interface PhotodumpRefs {
-  avatarRef:    string | null;
-  bodyRef?:     string | null;
-  productRef:   string | null;
-  productRefs?: (string | null)[];
-  outfitRef:    string | null;
-  outfitRefs?:  (string | null)[];   // prendas adicionales para receta outfit (hasta 3 extras)
-  sceneRef:     string | null;
-  sceneRefs?:   (string | null)[];
-  sceneText?:   string;
-  outfitMode?:  PhotodumpOutfitMode;
+  avatarRef:      string | null;
+  bodyRef?:       string | null;
+  productRef:     string | null;
+  productRefs?:   (string | null)[];
+  packagingRef?:  string | null;          // empaque principal (receta unboxing)
+  packagingRefs?: (string | null)[];      // ángulos extra del empaque (hasta 2 extras)
+  outfitRef:      string | null;
+  outfitRefs?:    (string | null)[];      // prendas adicionales para receta outfit (hasta 3 extras)
+  sceneRef:       string | null;
+  sceneRefs?:     (string | null)[];
+  sceneText?:     string;
+  outfitMode?:    PhotodumpOutfitMode;
 }
 
 // ── Tipos modo libre ───────────────────────────────────────────
@@ -199,6 +202,7 @@ export function recipeRefsValid(recipe: PhotodumpRecipe, refs: PhotodumpRefs): b
   if (cfg.producto === 'required' && !refs.productRef)  return false;
   if (cfg.escena   === 'required' && !refs.sceneRef)    return false;
   if (cfg.outfit   === 'required' && !(refs.outfitRef || (refs.outfitRefs ?? []).some(Boolean))) return false;
+  // empaque nunca es required — siempre optional o none
   return true;
 }
 

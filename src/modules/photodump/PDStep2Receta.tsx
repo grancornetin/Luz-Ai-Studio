@@ -12,16 +12,18 @@ import {
 
 // Colores por slot
 const SLOT_STYLE = {
-  avatar:   { label: 'text-indigo-600',  border: 'border-indigo-200',  bg: 'bg-indigo-50/40',  dot: 'bg-indigo-500'  },
-  outfit:   { label: 'text-purple-600',  border: 'border-purple-200',  bg: 'bg-purple-50/30',  dot: 'bg-purple-500'  },
-  producto: { label: 'text-emerald-600', border: 'border-emerald-200', bg: 'bg-emerald-50/30', dot: 'bg-emerald-500' },
-  escena:   { label: 'text-blue-600',    border: 'border-blue-200',    bg: 'bg-blue-50/30',    dot: 'bg-blue-500'    },
+  avatar:    { label: 'text-indigo-600',  border: 'border-indigo-200',  bg: 'bg-indigo-50/40',  dot: 'bg-indigo-500'  },
+  outfit:    { label: 'text-purple-600',  border: 'border-purple-200',  bg: 'bg-purple-50/30',  dot: 'bg-purple-500'  },
+  producto:  { label: 'text-emerald-600', border: 'border-emerald-200', bg: 'bg-emerald-50/30', dot: 'bg-emerald-500' },
+  empaque:   { label: 'text-amber-600',   border: 'border-amber-200',   bg: 'bg-amber-50/30',   dot: 'bg-amber-500'   },
+  escena:    { label: 'text-blue-600',    border: 'border-blue-200',    bg: 'bg-blue-50/30',    dot: 'bg-blue-500'    },
 } as const;
 
 const SLOT_ICON = {
   avatar:   <User    size={13} strokeWidth={2} />,
   outfit:   <Shirt   size={13} strokeWidth={2} />,
   producto: <Package size={13} strokeWidth={2} />,
+  empaque:  <Package size={13} strokeWidth={2} />,
   escena:   <Layers  size={13} strokeWidth={2} />,
 } as const;
 
@@ -29,6 +31,7 @@ const SLOT_LABEL: Record<string, string> = {
   avatar:   'Persona',
   outfit:   'Prendas',
   producto: 'Producto',
+  empaque:  'Empaque',
   escena:   'Escena',
 };
 
@@ -74,10 +77,11 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
 
   // Tags disponibles según refs cargadas
   const availableTags: { tag: string; label: string; color: string }[] = [];
-  if (refs.avatarRef)  availableTags.push({ tag: '@persona',  label: 'persona',  color: 'text-indigo-600 bg-indigo-50 border-indigo-200' });
-  if (refs.outfitRef)  availableTags.push({ tag: '@outfit',   label: 'outfit',   color: 'text-purple-600 bg-purple-50 border-purple-200' });
-  if (refs.productRef) availableTags.push({ tag: '@producto', label: 'producto', color: 'text-emerald-600 bg-emerald-50 border-emerald-200' });
-  if (refs.sceneRef)   availableTags.push({ tag: '@escena',   label: 'escena',   color: 'text-blue-600 bg-blue-50 border-blue-200' });
+  if (refs.avatarRef)    availableTags.push({ tag: '@persona',  label: 'persona',  color: 'text-indigo-600 bg-indigo-50 border-indigo-200' });
+  if (refs.outfitRef)    availableTags.push({ tag: '@outfit',   label: 'outfit',   color: 'text-purple-600 bg-purple-50 border-purple-200' });
+  if (refs.productRef)   availableTags.push({ tag: '@producto', label: 'producto', color: 'text-emerald-600 bg-emerald-50 border-emerald-200' });
+  if (refs.packagingRef) availableTags.push({ tag: '@empaque',  label: 'empaque',  color: 'text-amber-600 bg-amber-50 border-amber-200' });
+  if (refs.sceneRef)     availableTags.push({ tag: '@escena',   label: 'escena',   color: 'text-blue-600 bg-blue-50 border-blue-200' });
   // Outfits extra
   (refs.outfitRefs ?? []).forEach((r, i) => {
     if (r) availableTags.push({ tag: `@outfit${i + 2}`, label: `outfit ${i + 2}`, color: 'text-purple-500 bg-purple-50 border-purple-200' });
@@ -92,6 +96,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
     if (key === 'avatar')   return [refs.avatarRef, refs.bodyRef ?? null].filter((_, i) => i === 0 || refs.bodyRef !== undefined) as (string | null)[];
     if (key === 'outfit')   return [refs.outfitRef, ...(refs.outfitRefs ?? [])];
     if (key === 'producto') return [refs.productRef, ...(refs.productRefs ?? [])];
+    if (key === 'empaque')  return [refs.packagingRef ?? null, ...(refs.packagingRefs ?? [])];
     if (key === 'escena')   return [refs.sceneRef, ...(refs.sceneRefs ?? [])];
     return [];
   };
@@ -100,6 +105,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
     if (key === 'avatar')   return 2;
     if (key === 'outfit')   return 4;
     if (key === 'producto') return 3;
+    if (key === 'empaque')  return 3;
     if (key === 'escena')   return 3;
     return 1;
   };
@@ -130,6 +136,16 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
       }
       return;
     }
+    if (key === 'empaque') {
+      if (index === 0) {
+        onRefs({ ...refs, packagingRef: value });
+      } else {
+        const arr = [...(refs.packagingRefs ?? [null, null])];
+        arr[index - 1] = value;
+        onRefs({ ...refs, packagingRefs: arr });
+      }
+      return;
+    }
     if (key === 'escena') {
       if (index === 0) {
         onRefs({ ...refs, sceneRef: value });
@@ -147,7 +163,8 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   const slotSubLabels: Record<string, string[]> = {
     avatar:   ['Cara / identidad', 'Cuerpo (opcional)'],
     outfit:   ['Prenda principal', 'Prenda 2', 'Prenda 3', 'Prenda 4'],
-    producto: ['Principal', 'Ángulo 2', 'Ángulo 3'],
+    producto: ['Producto (dentro)', 'Ángulo 2', 'Ángulo 3'],
+    empaque:  ['Empaque principal', 'Ángulo 2', 'Ángulo 3'],
     escena:   ['Principal', 'Lugar 2', 'Lugar 3'],
   };
 
@@ -227,7 +244,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                 const filled   = getSlotFilled(key);
                 const max      = getSlotMax(key);
                 const subLabels = slotSubLabels[key] ?? [];
-                const slotType = key === 'avatar' ? 'person' : key === 'outfit' ? 'outfit' : key === 'producto' ? 'product' : 'scene';
+                const slotType = key === 'avatar' ? 'person' : key === 'outfit' ? 'outfit' : (key === 'producto' || key === 'empaque') ? 'product' : 'scene';
 
                 return (
                   <div
@@ -300,9 +317,10 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
 
                         {/* Nota de ayuda por slot */}
                         <p className="text-[10px] text-slate-400 leading-snug">
-                            {key === 'avatar'   && (recipe === 'bts' ? 'Opcional: tu foto mantiene tono de piel y manos consistentes aunque no se vea tu cara.' : 'La foto del rostro ancla la identidad facial en todas las imágenes.')}
+                          {key === 'avatar'   && (recipe === 'bts' ? 'Opcional: tu foto mantiene tono de piel y manos consistentes aunque no se vea tu cara.' : recipe === 'unboxing' ? 'Opcional: si subís tu foto aparecerás guiando el unboxing — abriendo la caja, sosteniendo el producto, interactuando con él.' : 'La foto del rostro ancla la identidad facial en todas las imágenes.')}
                           {key === 'outfit'   && 'Subí hasta 4 prendas. Cada imagen del set mostrará una prenda distinta. Si subís menos prendas que imágenes, las sobrantes se generan como flat lay de la prenda.'}
-                          {key === 'producto' && 'Subí hasta 3 ángulos del mismo producto para mayor fidelidad visual.'}
+                          {key === 'producto' && (recipe === 'unboxing' ? 'El producto dentro del empaque: lo que el cliente recibe. Subí hasta 3 ángulos para mayor fidelidad.' : 'Subí hasta 3 ángulos del mismo producto para mayor fidelidad visual.')}
+                          {key === 'empaque'  && 'El empaque, caja o packaging del producto. Si no subís fotos, la IA generará un empaque — la consistencia entre imágenes puede variar.'}
                           {key === 'escena'   && 'La escena principal define la ambientación del set completo.'}
                         </p>
 

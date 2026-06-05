@@ -366,14 +366,14 @@ const PhotodumpModule: React.FC = () => {
       const refsWithMode = { ...refs, outfitMode };
 
       setProgressStepIndex(0);
-      const plan  = await buildPhotodumpSessionPlan(narrative, protagonist, destino, basePrompt);
+      const plan  = await buildPhotodumpSessionPlan(narrative, protagonist, destino, basePrompt, recipe, refsWithMode);
       const shots = plan.shots.slice(0, count);
       setSavedShots(shots);
       setSavedPlan(plan);
 
       setProgressStepIndex(1);
       const { imageUrl: ref0Url, ref0Analysis } = await generatePhotodumpREF0(
-        refsWithMode, narrative, protagonist, destino, basePrompt, sessionParams,
+        refsWithMode, narrative, protagonist, destino, basePrompt, sessionParams, recipe,
       );
       setSavedRef0Url(ref0Url);
       setPartialImages([ref0Url]);
@@ -387,7 +387,7 @@ const PhotodumpModule: React.FC = () => {
             shots[i], refsWithMode, ref0Url, ref0Analysis,
             basePrompt, narrative, destino, sessionParams,
             plan.assignedFamilies, plan.sessionFamilies,
-            shots.length, protagonist,
+            shots.length, protagonist, recipe,
           );
           shotUrls.push(url);
           setPartialImages(prev => [...prev, url]);
@@ -469,7 +469,7 @@ const PhotodumpModule: React.FC = () => {
           savedShots[i], refsWithMode, ref0Url, ref0Analysis,
           basePrompt, narrative, destino, sessionParams,
           savedPlan.assignedFamilies, savedPlan.sessionFamilies,
-          savedShots.length, protagonist,
+          savedShots.length, protagonist, recipe,
         );
         newUrls[i] = url;
         setPartialImages(prev => { const n = [...prev]; n[i + 1] = url; return n; });
