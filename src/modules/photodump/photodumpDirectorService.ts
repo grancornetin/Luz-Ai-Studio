@@ -266,7 +266,9 @@ function extractImageData(img: string | null | undefined): { data: string; mimeT
 }
 
 // Cap máximo de referencias por llamada al modelo — evita error 413
-const MAX_REFS = 6;
+// Con compresión activa (768px / quality 0.72) cada imagen ~60-120KB base64.
+// 10 imágenes ≈ 600KB-1.2MB, bien dentro del límite de 4.5MB de Vercel.
+const MAX_REFS = 10;
 // Parámetros de compresión agresivos para payload mínimo
 const REF_MAX_WIDTH = 768;
 const REF_QUALITY   = 0.72;
