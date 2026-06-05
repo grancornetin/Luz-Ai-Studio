@@ -40,6 +40,7 @@ import { GenerationProgress as GenProgress, type ProgressStep } from '../../comp
 import PDStep1 from './PDStep1';
 import PDStep2Receta from './PDStep2Receta';
 import PDLibreEditor, { newFreeScene } from './PDLibreEditor';
+import { useModelSelection } from '../../hooks/useModelSelection';
 
 // ── Wizard steps ──────────────────────────────────────────────
 // Modo recetas: 1 Tipo · 2 Brief · 3 Generando · 4 Resultado
@@ -106,6 +107,7 @@ const UpgradeWall: React.FC<{ proCredits: number }> = ({ proCredits }) => {
 // ── Componente principal ──────────────────────────────────────
 const PhotodumpModule: React.FC = () => {
   const { user, credits, isAdmin, deductCredits, refreshCredits, proCredits, deductProCredit, refundProCredit } = useAuth();
+  const { modelId, setModelId } = useModelSelection();
 
   // ── Estado Paso 1 ─────────────────────────────────────────
   const [recipe,   setRecipe]   = useState<PhotodumpRecipe>('day_in_life');
@@ -214,10 +216,40 @@ const PhotodumpModule: React.FC = () => {
     setStep(1);
     setBasePrompt(''); setRefs(emptyRefs); setOutfitMode('generate');
     setCount(4); setDestino('feed'); setRecipe('day_in_life');
-    setFreeScenes([newFreeScene(0)]); setGeneratingFreeIndex(null);
+    setFreeScenes([{ ...newFreeScene(0), sceneRefs: [], inheritFrom: 0 }]);
+    setGeneratingFreeIndex(null);
     setCurrentSet(null); setError(null); setProgress(null);
     setProgressStepIndex(0); setIsGenerating(false); setPartialImages([]);
     setFailedIndexes([]); setSavedPlan(null); setSavedShotUrls([]);
+  };
+
+  // Guardar set de modo libre en la biblioteca cuando hay al menos 1 escena generada
+  const saveLibreSet = async (scenes: FreeScene[]) => {
+    const generated = scenes.filter(s => s.result);
+    if (generated.length === 0) return;
+    const set: PhotodumpSet = {
+      id:          Date.now().toString(),
+      createdAt:   Date.now(),
+      basePrompt:  generated.map((s, i) => `E${i + 1}: ${s.prompt}`).join(' | ').slice(0, 120),
+      recipe:      'free',
+      narrative:   'custom',
+      protagonist: 'both',
+      customStory: '',
+      destino,
+      count:       generated.length,
+      refs:        { avatarRef: null, productRef: null, outfitRef: null, sceneRef: null, outfitMode: 'generate' },
+      freeScenes:  scenes,
+      images:      generated.map((s, i) => ({
+        imageUrl: s.result!,
+        moment:   `Escena ${i + 1}`,
+        caption:  s.prompt.slice(0, 100),
+        hashtags: '',
+        prompt:   s.prompt,
+        order:    i + 1,
+      })),
+    };
+    await photodumpStorage.save(set);
+    await loadSets();
   };
 
   // ── Handlers modo libre ───────────────────────────────────
@@ -227,7 +259,6 @@ const PhotodumpModule: React.FC = () => {
 
   const addFreeScene = () => {
     setFreeScenes(prev => {
-      if (prev.length >= 6) return prev;
       const idx = prev.length;
       return [...prev, { ...newFreeScene(idx), sceneRefs: [], inheritFrom: idx - 1 }];
     });
@@ -270,10 +301,14 @@ const PhotodumpModule: React.FC = () => {
         priorResults,
         allScenes:     freeScenes,
         sessionParams: { uid: user?.uid, sessionId },
+        modelId,
       });
 
+      const updatedScenes = freeScenes.map((s, i) => i === index ? { ...s, result: imageUrl } : s);
       updateFreeScene(index, { result: imageUrl });
       await refreshCredits();
+      // Guardar automáticamente en biblioteca tras cada escena generada
+      await saveLibreSet(updatedScenes);
     } catch (err: any) {
       // Reembolsar si falló
       if (!isAdmin) {
@@ -585,10 +620,13 @@ const PhotodumpModule: React.FC = () => {
                   <PDLibreEditor
                     scenes={freeScenes}
                     generatingIndex={generatingFreeIndex}
+                    modelId={modelId}
+                    onModelId={setModelId}
                     onUpdateScene={updateFreeScene}
                     onAddScene={addFreeScene}
                     onRemoveScene={removeFreeScene}
                     onGenerateScene={generateFreeScene}
+                    onResetAll={resetCreator}
                   />
                 </>
               )}

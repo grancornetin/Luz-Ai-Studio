@@ -129,7 +129,7 @@ export interface PhotodumpRefs {
 // ── Tipos modo libre ───────────────────────────────────────────
 
 export interface FreeSceneRefs {
-  avatar:   (string | null)[];   // máx 2
+  personas: (string | null)[];   // hasta 4 personas, 1 foto c/u — @persona, @persona2, @persona3, @persona4
   outfit:   (string | null)[];   // máx 4
   producto: (string | null)[];   // máx 4
   escena:   (string | null)[];   // máx 1

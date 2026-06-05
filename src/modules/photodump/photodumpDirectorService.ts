@@ -10,6 +10,7 @@
 import { ugcApiService } from '../../services/ugcApiService';
 import { imageApiService } from '../../services/imageApiService';
 import { geminiService } from '../../services/geminiService';
+import { compressImageForUpload } from '../../utils/imageUtils';
 import {
   PhotodumpNarrative, PhotodumpProtagonist, PhotodumpDestino,
   PhotodumpRefs, PhotodumpOutfitMode, NARRATIVE_META,
@@ -264,8 +265,27 @@ function extractImageData(img: string | null | undefined): { data: string; mimeT
   return null;
 }
 
-function prepareRefs(refs: (string | null | undefined)[]): Array<{ data: string; mimeType: string }> {
-  return refs.map(r => extractImageData(r)).filter(Boolean) as Array<{ data: string; mimeType: string }>;
+// Cap máximo de referencias por llamada al modelo — evita error 413
+const MAX_REFS = 6;
+// Parámetros de compresión agresivos para payload mínimo
+const REF_MAX_WIDTH = 768;
+const REF_QUALITY   = 0.72;
+
+async function prepareRefs(refs: (string | null | undefined)[]): Promise<Array<{ data: string; mimeType: string }>> {
+  const valid = refs.filter(Boolean) as string[];
+  const capped = valid.slice(0, MAX_REFS);
+  const results: Array<{ data: string; mimeType: string }> = [];
+  for (const r of capped) {
+    try {
+      const compressed = await compressImageForUpload(r, REF_MAX_WIDTH, REF_QUALITY);
+      const extracted  = extractImageData(compressed);
+      if (extracted) results.push(extracted);
+    } catch {
+      const extracted = extractImageData(r);
+      if (extracted) results.push(extracted);
+    }
+  }
+  return results;
 }
 
 function getAspectInstruction(destino: PhotodumpDestino): string {
@@ -864,7 +884,7 @@ ${NEGATIVE_FULL}`;
   const imageUrl = await imageApiService.generateImage({
     prompt,
     negative:        NEGATIVE_FULL,
-    referenceImages: prepareRefs(refsToPass),
+    referenceImages: await prepareRefs(refsToPass),
     aspectRatio:     getAspectRatio(destino),
     uid:             sessionParams.uid,
     sessionId:       sessionParams.sessionId,
@@ -1170,7 +1190,7 @@ ${NEGATIVE_SHORT}`;
   return imageApiService.generateImage({
     prompt,
     negative:        NEGATIVE_SHORT,
-    referenceImages: prepareRefs(refsToPass),
+    referenceImages: await prepareRefs(refsToPass),
     aspectRatio:     getAspectRatio(destino),
     uid:             sessionParams.uid,
     sessionId:       sessionParams.sessionId,
@@ -1272,10 +1292,9 @@ export interface FreeModeSceneParams {
   scene:         FreeScene;
   sceneIndex:    number;
   destino:       PhotodumpDestino;
-  // Resultados generados de escenas anteriores, indexados por posición
   priorResults:  (string | null)[];
-  // Todas las escenas del set (para resolver @tags tipo B y @escenaN)
   allScenes?:    FreeScene[];
+  modelId?:      string;
   sessionParams: { uid?: string; sessionId?: string };
 }
 
@@ -1294,7 +1313,7 @@ function promptDescribesHuman(prompt: string): boolean {
 
 function flattenFreeRefs(refs: FreeSceneRefs): (string | null)[] {
   return [
-    ...(refs.avatar   ?? []),
+    ...(refs.personas ?? []),
     ...(refs.outfit   ?? []),
     ...(refs.producto ?? []),
     ...(refs.escena   ?? []),
@@ -1302,14 +1321,19 @@ function flattenFreeRefs(refs: FreeSceneRefs): (string | null)[] {
 }
 
 export async function generateFreeModeScene(params: FreeModeSceneParams): Promise<string> {
-  const { scene, sceneIndex, destino, priorResults, allScenes, sessionParams } = params;
+  const { scene, sceneIndex, destino, priorResults, allScenes, modelId, sessionParams } = params;
 
-  const aspectInstr = getAspectInstruction(destino);
-  const hasAvatar   = (scene.refs.avatar ?? []).some(Boolean);
+  const aspectInstr  = getAspectInstruction(destino);
+  const hasPersonas  = (scene.refs.personas ?? []).some(Boolean);
+  // compatibilidad: si viejo set usaba avatar
+  const hasAvatar    = hasPersonas || (scene.refs as any).avatar?.some(Boolean);
 
-  // ── Slot tag map: @persona→avatar, @outfit→outfit, etc. ──────
+  // ── Slot tag map: @persona/@persona2..→personas, @outfit→outfit, etc. ──
   const SLOT_TAG_MAP: Record<string, keyof FreeSceneRefs> = {
-    persona:  'avatar',
+    persona:  'personas',
+    persona2: 'personas',
+    persona3: 'personas',
+    persona4: 'personas',
     outfit:   'outfit',
     producto: 'producto',
     escena:   'escena',
@@ -1344,12 +1368,12 @@ export async function generateFreeModeScene(params: FreeModeSceneParams): Promis
     }
   });
 
-  // ── Construir refsToPass priorizando por narrativa ────────────
+  // ── Construir refsToPass (cap 6 total, aplicado en prepareRefs) ──
   const refsToPass: (string | null)[] = [];
 
-  // Avatar x3 (identidad dominante) si existe
-  const avatarImages = (scene.refs.avatar ?? []).filter(Boolean) as string[];
-  avatarImages.forEach(r => refsToPass.push(r, r, r));
+  // Personas: cada una aparece x2 para reforzar identidad (sin triplicar, cap global de 6 controla)
+  const personaImages = (scene.refs.personas ?? (scene.refs as any).avatar ?? []).filter(Boolean) as string[];
+  personaImages.forEach(r => refsToPass.push(r, r));
 
   // Outfit
   (scene.refs.outfit ?? []).filter(Boolean).forEach(r => refsToPass.push(r));
@@ -1360,8 +1384,8 @@ export async function generateFreeModeScene(params: FreeModeSceneParams): Promis
   // Escena
   (scene.refs.escena ?? []).filter(Boolean).forEach(r => refsToPass.push(r));
 
-  // Refs de escenas previas (tipo B) al final — contexto narrativo
-  sceneTagRefs.forEach(r => refsToPass.push(r));
+  // Refs de escenas previas (tipo B) al final — contexto narrativo (máx 2)
+  sceneTagRefs.slice(0, 2).forEach(r => refsToPass.push(r));
 
   // ── Bloques de contexto para el prompt ───────────────────────
   const useHpi = hasAvatar && !promptDescribesHuman(scene.prompt);
@@ -1375,16 +1399,16 @@ export async function generateFreeModeScene(params: FreeModeSceneParams): Promis
       })
     : '';
 
+  const personaCount = personaImages.length;
   const identityBlock = hasAvatar
-    ? `IDENTITY LOCK:
-- Face reference images appear multiple times — this is intentional. They are the ground truth.
-- Same bone structure, same eye shape and color, same nose, same lips, same jaw.
-- Same hair: color, length, texture, pattern.
-- Same skin tone: undertone, warmth, complexion depth.
-- The face reference OVERRIDES every other image.
+    ? `IDENTITY LOCK${personaCount > 1 ? ` (${personaCount} PERSONS)` : ''}:
+- Each person's reference appears twice — intentional. They are the ground truth.
+- Preserve: bone structure, eye shape/color, nose, lips, jaw, hair (color+texture+length), skin tone.
+${personaCount > 1 ? `- There are ${personaCount} DISTINCT people — do NOT merge or blend their faces.` : ''}
+- Reference images OVERRIDE any stylistic drift.
 
 ⚠️ ANTI-COLLAGE RULE:
-- Face references are VISUAL GUIDES for identity ONLY — NOT elements to paste.
+- References are VISUAL GUIDES for identity ONLY — NOT elements to paste.
 - Generate ONE single seamless photograph from scratch.`
     : '';
 
@@ -1438,8 +1462,9 @@ ${NEGATIVE_SHORT}`;
   return imageApiService.generateImage({
     prompt,
     negative,
-    referenceImages: prepareRefs(refsToPass),
+    referenceImages: await prepareRefs(refsToPass),
     aspectRatio:     getAspectRatio(destino),
+    modelId:         modelId as any,
     uid:             sessionParams.uid,
     sessionId:       sessionParams.sessionId,
     module:          'photodump',
