@@ -4,7 +4,7 @@
  * Modo recetas: 2 pasos → generación batch → resultados
  * Modo libre:   2 pasos → generación por escena individual → resultados
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ResultCard } from '../../components/shared/ResultCard';
 import { ResultLibraryGrid } from '../../components/shared/ResultLibraryGrid';
 import {
@@ -109,6 +109,9 @@ const PhotodumpModule: React.FC = () => {
   const { user, credits, isAdmin, deductCredits, refreshCredits, proCredits, deductProCredit, refundProCredit } = useAuth();
   const { modelId, setModelId } = useModelSelection();
 
+  // ID fijo del set de modo libre activo; se crea al generar la 1ª escena y se limpia en reset
+  const libreSetIdRef = useRef<string | null>(null);
+
   // ── Estado Paso 1 ─────────────────────────────────────────
   const [recipe,   setRecipe]   = useState<PhotodumpRecipe>('day_in_life');
   const [count,    setCount]    = useState(4);
@@ -146,6 +149,7 @@ const PhotodumpModule: React.FC = () => {
   const [failedIndexes,     setFailedIndexes]     = useState<number[]>([]);
   const [retryingIndexes,   setRetryingIndexes]   = useState<number[]>([]);
   const [savedPlan,         setSavedPlan]         = useState<any>(null);
+  const [savedRef0Url,      setSavedRef0Url]      = useState<string>('');
   const [savedShotUrls,     setSavedShotUrls]     = useState<string[]>([]);
   const [savedShots,        setSavedShots]        = useState<any[]>([]);
   const [savedCaptions,     setSavedCaptions]     = useState<any[]>([]);
@@ -220,15 +224,18 @@ const PhotodumpModule: React.FC = () => {
     setGeneratingFreeIndex(null);
     setCurrentSet(null); setError(null); setProgress(null);
     setProgressStepIndex(0); setIsGenerating(false); setPartialImages([]);
-    setFailedIndexes([]); setSavedPlan(null); setSavedShotUrls([]);
+    setFailedIndexes([]); setSavedPlan(null); setSavedRef0Url(''); setSavedShotUrls([]);
+    libreSetIdRef.current = null;
   };
 
-  // Guardar set de modo libre en la biblioteca cuando hay al menos 1 escena generada
+  // Guardar set de modo libre en la biblioteca cuando hay al menos 1 escena generada.
+  // Reutiliza el mismo ID para que cada nueva escena actualice el set existente en lugar de crear uno nuevo.
   const saveLibreSet = async (scenes: FreeScene[]) => {
     const generated = scenes.filter(s => s.result);
     if (generated.length === 0) return;
+    if (!libreSetIdRef.current) libreSetIdRef.current = Date.now().toString();
     const set: PhotodumpSet = {
-      id:          Date.now().toString(),
+      id:          libreSetIdRef.current,
       createdAt:   Date.now(),
       basePrompt:  generated.map((s, i) => `E${i + 1}: ${s.prompt}`).join(' | ').slice(0, 120),
       recipe:      'free',
@@ -368,6 +375,7 @@ const PhotodumpModule: React.FC = () => {
       const { imageUrl: ref0Url, ref0Analysis } = await generatePhotodumpREF0(
         refsWithMode, narrative, protagonist, destino, basePrompt, sessionParams,
       );
+      setSavedRef0Url(ref0Url);
       setPartialImages([ref0Url]);
 
       setProgressStepIndex(2);
@@ -414,7 +422,7 @@ const PhotodumpModule: React.FC = () => {
         return;
       }
 
-      await finalizarSet(shotUrls, shots, captions);
+      await finalizarSet(shotUrls, shots, captions, ref0Url);
     } catch (err: any) {
       setError(err?.message || 'Error generando el photodump.');
       if (!isAdmin) {
@@ -489,8 +497,17 @@ const PhotodumpModule: React.FC = () => {
   };
 
   // ── Guardar set y avanzar a resultados ────────────────────
-  const finalizarSet = async (shotUrls: string[], shots: any[], captions: any[]) => {
-    const recipeMeta = RECIPE_META[recipe];
+  const finalizarSet = async (shotUrls: string[], shots: any[], captions: any[], ref0Url?: string) => {
+    const recipeMeta  = RECIPE_META[recipe];
+    const anchorUrl   = ref0Url ?? savedRef0Url;
+    const anchorImage = anchorUrl ? [{
+      imageUrl: anchorUrl,
+      moment:   'Imagen ancla',
+      caption:  '',
+      hashtags: '',
+      prompt:   'Visual anchor — establishes identity, light and color for the set.',
+      order:    0,
+    }] : [];
     const set: PhotodumpSet = {
       id:          Date.now().toString(),
       createdAt:   Date.now(),
@@ -502,14 +519,17 @@ const PhotodumpModule: React.FC = () => {
       customStory: '',
       count,
       refs: { avatarRef: null, productRef: null, outfitRef: null, sceneRef: null, outfitMode },
-      images: shotUrls.map((url, i) => ({
-        imageUrl: url,
-        moment:   captions[i]?.moment   ?? `Momento ${i + 1}`,
-        caption:  captions[i]?.caption  ?? '',
-        hashtags: captions[i]?.hashtags ?? '',
-        prompt:   shots[i]?.purpose     ?? '',
-        order:    i + 1,
-      })).filter(img => img.imageUrl),
+      images: [
+        ...anchorImage,
+        ...shotUrls.map((url, i) => ({
+          imageUrl: url,
+          moment:   captions[i]?.moment   ?? `Momento ${i + 1}`,
+          caption:  captions[i]?.caption  ?? '',
+          hashtags: captions[i]?.hashtags ?? '',
+          prompt:   shots[i]?.purpose     ?? '',
+          order:    i + 1,
+        })).filter(img => img.imageUrl),
+      ],
     };
 
     await photodumpStorage.save(set);
@@ -711,6 +731,29 @@ const PhotodumpModule: React.FC = () => {
                         </div>
                       </div>
                       <div className={`grid gap-3 ${count <= 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3'}`}>
+                        {/* Imagen ancla (REF0) */}
+                        {partialImages[0] && (
+                          <div
+                            style={{ aspectRatio: DESTINO_META[destino].aspectRatio }}
+                            className="relative rounded-2xl overflow-hidden fade-in shadow-md border-2 border-violet-300"
+                          >
+                            <img src={partialImages[0]} alt="Imagen ancla" className="w-full h-full object-cover" />
+                            <div className="absolute top-2 left-2 right-2 flex items-center gap-1 bg-violet-600/90 backdrop-blur-sm px-2 py-1 rounded-full w-fit">
+                              <Sparkles size={8} className="text-violet-200 flex-shrink-0" />
+                              <span className="text-[8px] font-bold text-white uppercase tracking-wider">Ancla</span>
+                            </div>
+                          </div>
+                        )}
+                        {!partialImages[0] && progressStepIndex >= 1 && (
+                          <div
+                            style={{ aspectRatio: DESTINO_META[destino].aspectRatio }}
+                            className="relative rounded-2xl overflow-hidden border-2 border-violet-300 bg-violet-50 animate-pulse"
+                          >
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <div className="bg-white/95 rounded-full px-3 py-1 text-[9px] font-bold text-violet-600 tracking-wide uppercase">Generando ancla...</div>
+                            </div>
+                          </div>
+                        )}
                         {Array.from({ length: count }).map((_, i) => {
                           const shotUrl  = partialImages[i + 1] ?? null;
                           const imgUrl   = shotUrl ?? '';
@@ -774,7 +817,7 @@ const PhotodumpModule: React.FC = () => {
                           <Check size={12} strokeWidth={3} />
                         </div>
                         <span className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.18em]">
-                          Historia lista · {currentSet.images.length} imágenes · {RECIPE_META[currentSet.recipe ?? 'day_in_life']?.label ?? NARRATIVE_META[currentSet.narrative].label}
+                          Historia lista · {currentSet.images.filter(x => x.order > 0).length} imágenes + ancla · {RECIPE_META[currentSet.recipe ?? 'day_in_life']?.label ?? NARRATIVE_META[currentSet.narrative].label}
                         </span>
                       </div>
                       <p className="text-[13px] text-slate-500 italic line-clamp-1">"{currentSet.basePrompt}"</p>
@@ -793,9 +836,11 @@ const PhotodumpModule: React.FC = () => {
 
                   {/* Grid de imágenes */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {currentSet.images.map((img, i) => (
+                    {currentSet.images.map((img, i) => {
+                      const isAnchor = img.order === 0;
+                      return (
                       <div key={i}
-                        className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-brand-200 transition-all cursor-pointer group"
+                        className={`bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group border ${isAnchor ? 'border-violet-200 hover:border-violet-400' : 'border-slate-200 hover:border-brand-200'}`}
                         onClick={() => openLightbox(currentSet.images.map(x => x.imageUrl), i)}
                       >
                         <div
@@ -805,16 +850,25 @@ const PhotodumpModule: React.FC = () => {
                           <img src={img.imageUrl} alt={img.moment}
                             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                           <div className="absolute top-2 left-2 flex gap-1.5">
-                            <div className="bg-white/90 backdrop-blur-sm rounded-full w-6 h-6 flex items-center justify-center">
-                              <span className="text-[10px] font-black text-brand-600">{i + 1}</span>
-                            </div>
-                            <div className="bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-full">
-                              <span className="text-[10px] font-semibold text-white">{img.moment}</span>
-                            </div>
+                            {isAnchor ? (
+                              <div className="bg-violet-600/90 backdrop-blur-sm px-2.5 py-1 rounded-full flex items-center gap-1">
+                                <Sparkles size={9} className="text-violet-200" />
+                                <span className="text-[10px] font-bold text-white">Imagen ancla</span>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="bg-white/90 backdrop-blur-sm rounded-full w-6 h-6 flex items-center justify-center">
+                                  <span className="text-[10px] font-black text-brand-600">{img.order}</span>
+                                </div>
+                                <div className="bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-full">
+                                  <span className="text-[10px] font-semibold text-white">{img.moment}</span>
+                                </div>
+                              </>
+                            )}
                           </div>
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3 gap-2">
                             <button type="button"
-                              onClick={e => { e.stopPropagation(); const a = document.createElement('a'); a.href = img.imageUrl; a.download = `photodump_${i + 1}.png`; a.click(); }}
+                              onClick={e => { e.stopPropagation(); const a = document.createElement('a'); a.href = img.imageUrl; a.download = `photodump_${isAnchor ? 'ancla' : img.order}.png`; a.click(); }}
                               className="flex-1 py-1.5 rounded-xl bg-white/90 text-[11px] font-semibold text-slate-800 text-center hover:bg-white transition-colors flex items-center justify-center gap-1">
                               <Download size={11} /> Descargar
                             </button>
@@ -824,6 +878,13 @@ const PhotodumpModule: React.FC = () => {
                           </div>
                         </div>
 
+                        {isAnchor ? (
+                          <div className="px-3.5 py-2.5">
+                            <p className="text-[10px] text-violet-500 font-semibold leading-snug">
+                              Ancla visual del set — establece identidad, luz y color para todas las imágenes.
+                            </p>
+                          </div>
+                        ) : (
                         <div className="p-3.5 space-y-2.5">
                           <div>
                             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Caption</p>
@@ -847,8 +908,10 @@ const PhotodumpModule: React.FC = () => {
                             </button>
                           </div>
                         </div>
+                        )}
                       </div>
-                    ))}
+                    );
+                    })}
                   </div>
 
                   <div className="flex flex-col md:flex-row md:justify-between md:items-center mt-7 pt-5 border-t border-slate-200 gap-2 md:gap-3.5">

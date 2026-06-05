@@ -776,6 +776,28 @@ function getSceneRefForShot(refs: PhotodumpRefs, shotIndex: number, totalShots: 
   return allScenes[Math.min(tramo, allScenes.length - 1)];
 }
 
+// ── Asignar outfit por posición en el arco narrativo ──────────
+// Cada shot del haul muestra una prenda distinta. Si hay más shots que prendas,
+// los shots sobrantes reciben null → el caller genera flat lay de la prenda.
+export function getOutfitForShot(
+  refs: PhotodumpRefs,
+  shotIndex: number,  // 0-indexed (shot.arcPosition - 1)
+): { outfitUrl: string | null; isFlatLay: boolean } {
+  const outfitMode = refs.outfitMode ?? 'generate';
+  if (outfitMode !== 'upload') return { outfitUrl: null, isFlatLay: false };
+
+  const allOutfits = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
+  if (allOutfits.length === 0) return { outfitUrl: null, isFlatLay: false };
+
+  if (shotIndex < allOutfits.length) {
+    // Shot con prenda asignada
+    return { outfitUrl: allOutfits[shotIndex], isFlatLay: false };
+  }
+  // Shots sobrantes: flat lay — rota cíclicamente sobre las prendas disponibles
+  const cycledIndex = shotIndex % allOutfits.length;
+  return { outfitUrl: allOutfits[cycledIndex], isFlatLay: true };
+}
+
 export async function generatePhotodumpREF0(
   refs:        PhotodumpRefs,
   narrative:   PhotodumpNarrative,
@@ -1084,13 +1106,16 @@ export async function generatePhotodumpShot(
 
   const outfitMode = refs.outfitMode ?? 'generate';
 
+  // ── Outfit por shot: cada prenda se asigna a un shot distinto ─
+  const { outfitUrl: outfitForThisShot, isFlatLay } = getOutfitForShot(refs, shot.arcPosition - 1);
+
   // ── Construir lista de referencias por shot ───────────────────
-  // Cara x2 (identidad) + cuerpo x1 + REF0 (ancla visual) + outfit + producto(s) + escena asignada
+  // Cara x3 (identidad) + cuerpo x1 + REF0 (ancla visual) + outfit rotado + producto(s) + escena asignada
   const refsToPass: string[] = [];
   if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
   if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
   refsToPass.push(ref0Url);
-  if (outfitMode === 'upload' && refs.outfitRef) refsToPass.push(refs.outfitRef);
+  if (outfitForThisShot) refsToPass.push(outfitForThisShot);
   if (refs.productRef) refsToPass.push(refs.productRef);
   const extraProducts = (refs.productRefs ?? []).filter(Boolean) as string[];
   extraProducts.forEach(r => refsToPass.push(r));
@@ -1117,6 +1142,19 @@ export async function generatePhotodumpShot(
   );
   const familyBlock = selectedFamily ? buildFamilyInjectBlock(selectedFamily) : '';
 
+  // Bloque de outfit para este shot específico
+  const outfitLockForShot = isFlatLay && outfitForThisShot
+    ? `OUTFIT FLAT LAY — THIS SHOT:
+This is an overhead or angled flat-lay shot of the garment reference provided.
+Do NOT show a person wearing the outfit. Show the garment laid flat or arranged on a surface
+(bed, floor, chair, or styled surface consistent with the scene).
+Copy the exact garment from the outfit reference — same color, fabric, cut, silhouette.
+Style it naturally — wrinkled, organic, real — NOT a product catalog. Accessories may be added nearby.
+This shot showcases the piece itself as part of the haul/outfit story.`
+    : outfitForThisShot
+      ? buildOutfitLockBlock(outfitMode, basePrompt, true)
+      : buildOutfitLockBlock(outfitMode, basePrompt, false);
+
   const shotIdentityBlock = isFacelessShot
     ? `SHOT IDENTITY:
 - REF0 establishes the visual world — same surface, same light, same color temperature.
@@ -1127,7 +1165,7 @@ ${sceneForShot ? `- Scene reference: same workspace / environment as established
 - Face reference (appears multiple times): EXACT identity, same bone structure, same hair, same skin tone.
 ${refs.bodyRef ? '- Body reference: establishes physique (build, proportions). Do NOT make the person heavier or slimmer than shown.' : ''}
 - REF0 (after face/body refs): establishes the visual world — same light, same scene, same color temp.
-${buildOutfitLockBlock(outfitMode, basePrompt, !!refs.outfitRef)}
+${outfitLockForShot}
 ${extraProducts.length > 0 ? `PRODUCT MULTI-ANGLE: Multiple product references show the same object from different angles. Use all of them to reproduce it faithfully.` : ''}
 ${sceneForShot !== refs.sceneRef ? `SCENE NOTE: This shot uses an alternate scene reference (position ${shot.arcPosition} of ${totalShots} in the story arc). Integrate the person naturally into this new environment — same person, new setting.` : ''}`;
 

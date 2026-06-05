@@ -117,6 +117,12 @@ export interface GrowthTask {
   taskPriority: GrowthTaskPriority;
   ctaTarget: GrowthCtaTarget;
   status: GrowthTaskStatus;
+  blueprintId?: string;
+  campaignAngle?: string;
+  variationReason?: string;
+  needsManualReview?: boolean;
+  validationErrors?: string[];
+  regenerationAttempts?: number;
 }
 
 export interface GrowthRoadmapItem {
@@ -183,4 +189,20 @@ export interface GrowthStrategicPlan {
     fixedErrors: string[];
   };
   validationReportMarkdown: string;
+  plannerEngineVersion?: 'v2-blueprint';
+  planningDepth?: 'guided' | 'advanced';
+  campaignAngle?: string;
+  campaignAngleReason?: string;
+  creativeSeed?: string;
+  noveltyScore?: number;
+  planQualityStatus?: 'ready' | 'needs_review' | 'failed_validation';
+  blueprintsUsed?: string[];
+  previousPlanComparison?: string;
+  finalValidationSummary?: {
+    status: 'ready' | 'needs_review' | 'failed_validation';
+    checks: Record<string, boolean>;
+    criticalErrors: string[];
+    reviewWarnings: string[];
+  };
+  engineV2Metadata?: Record<string, unknown>;
 }

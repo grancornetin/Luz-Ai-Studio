@@ -15,6 +15,34 @@ import type {
   GrowthTaskPriority,
   GrowthTaskStatus,
 } from '../growthPlannerTypes';
+import {
+  brandMemoryId,
+  buildCreativeTaskBatchPrompt,
+  buildEngineV2ValidationReport,
+  buildPlanMemory,
+  compatibleBlueprints,
+  CREATIVE_TASK_BATCH_SCHEMA,
+  detectBusinessArchetype,
+  detectRepeatedBlueprints,
+  detectRepeatedCaptions,
+  generatePlanSkeleton,
+  getBlueprintById,
+  loadPreviousPlanMemory,
+  mergeCreativeFields,
+  normalizeProductsForEngineV2,
+  savePlanMemory,
+  selectCampaignAngle,
+  selectNicheAdapter,
+  selectSalesAggressiveness,
+  validateFinalPlan,
+  validateTaskAgainstBlueprint,
+  type CreativeTaskFields,
+  type EngineV2Metadata,
+  type GeneratedTaskV2,
+  type PlanSkeletonTask,
+  type PlannerEngineV2Input,
+  type TaskBlueprint,
+} from '../growthPlanner/engineV2';
 
 interface GenerateGrowthPlanInput {
   duration: GrowthPlanDuration;
@@ -3230,7 +3258,7 @@ async function pollGrowthPlanJob(jobId: string, token: string): Promise<any> {
   throw new Error('La generacion sigue demorando demasiado. Reintenta con menos imagenes o un plan mas corto.');
 }
 
-export async function generateGrowthPlanWithGemini(
+async function generateGrowthPlanLegacy(
   input: GenerateGrowthPlanInput,
   options: GenerateGrowthPlanOptions = {},
 ): Promise<GrowthStrategicPlan> {
@@ -3300,4 +3328,283 @@ export async function generateGrowthPlanWithGemini(
     },
   };
   return normalizePlan(raw, input);
+}
+
+function engineInputFromStrategy(input: GenerateGrowthPlanInput, strategy: any): PlannerEngineV2Input {
+  return {
+    duration: input.duration,
+    brand: input.brand,
+    products: normalizeProductsForEngineV2(input.products),
+    instagramMetrics: input.instagramMetrics,
+    businessStage: String(strategy?.businessStage || 'Etapa comercial por validar'),
+    mainGoal: String(strategy?.mainGoal || 'Crear contenido que apoye ventas y conversaciones'),
+    commercialFocus: String(strategy?.commercialFocus || input.products.map(product => product.name).join(', ')),
+    planningDepth: 'guided',
+  };
+}
+
+async function requestCreativeTaskBatch(params: {
+  token: string;
+  input: PlannerEngineV2Input;
+  skeletonTasks: PlanSkeletonTask[];
+  blueprints: TaskBlueprint[];
+  nicheAdapter: ReturnType<typeof selectNicheAdapter>;
+  salesAggressiveness: ReturnType<typeof selectSalesAggressiveness>;
+  creativeSeed: string;
+  repairErrors?: Record<string, string[]>;
+}): Promise<CreativeTaskFields[]> {
+  const raw = await startGrowthPlannerJob({
+    token: params.token,
+    prompt: buildCreativeTaskBatchPrompt(params),
+    schema: CREATIVE_TASK_BATCH_SCHEMA,
+    maxOutputTokens: Math.min(16384, Math.max(4096, params.skeletonTasks.length * 1900)),
+    temperature: params.repairErrors ? 0.3 : 0.65,
+  });
+  return asArray<CreativeTaskFields>(raw?.tasks, []);
+}
+
+async function generateV2Tasks(params: {
+  token: string;
+  input: PlannerEngineV2Input;
+  skeletonTasks: PlanSkeletonTask[];
+  nicheAdapter: ReturnType<typeof selectNicheAdapter>;
+  salesAggressiveness: ReturnType<typeof selectSalesAggressiveness>;
+  creativeSeed: string;
+  businessArchetype: ReturnType<typeof detectBusinessArchetype>['businessArchetype'];
+  onProgress?: GenerateGrowthPlanOptions['onProgress'];
+}): Promise<{ tasks: GeneratedTaskV2[]; blueprintsUsed: string[] }> {
+  const completed = new Map<string, GeneratedTaskV2>();
+  const workingSkeletons = new Map(params.skeletonTasks.map(task => [task.id, task]));
+  const weeks = Array.from(new Set(params.skeletonTasks.map(task => task.week))).sort((a, b) => a - b);
+
+  for (const week of weeks) {
+    let pending = params.skeletonTasks.filter(task => task.week === week);
+    params.onProgress?.({ stepId: `week_${week}`, label: `Generando semana ${week} con contratos seguros` });
+
+    for (let attempt = 0; attempt <= 2 && pending.length; attempt++) {
+      const blueprints = pending.map(task => getBlueprintById(task.blueprintId)).filter(Boolean) as TaskBlueprint[];
+      const repairErrors = attempt === 0 ? undefined : Object.fromEntries(
+        pending.map(task => [task.id, completed.get(task.id)?.validationErrors || ['La tarea no pasó su contrato. Regenera el bloque completo.']]),
+      );
+      let creatives: CreativeTaskFields[] = [];
+      try {
+        creatives = await requestCreativeTaskBatch({
+          token: params.token,
+          input: params.input,
+          skeletonTasks: pending,
+          blueprints,
+          nicheAdapter: params.nicheAdapter,
+          salesAggressiveness: params.salesAggressiveness,
+          creativeSeed: params.creativeSeed,
+          repairErrors,
+        });
+      } catch (error) {
+        console.warn(`[GrowthPlanner V2] Week ${week} creative attempt ${attempt + 1} failed.`, error);
+        continue;
+      }
+      const nextPending: PlanSkeletonTask[] = [];
+      pending.forEach(skeleton => {
+        const blueprint = getBlueprintById(skeleton.blueprintId);
+        const creative = creatives.find(item => item.skeletonTaskId === skeleton.id);
+        if (!blueprint || !creative) {
+          nextPending.push(skeleton);
+          return;
+        }
+        const task = mergeCreativeFields(skeleton, blueprint, creative, params.input.instagramMetrics.bestTime || '19:00', attempt);
+        const validation = validateTaskAgainstBlueprint(task, blueprint);
+        const withValidation = { ...task, validationErrors: validation.errors };
+        completed.set(skeleton.id, withValidation);
+        if (!validation.valid) nextPending.push(skeleton);
+      });
+      pending = nextPending;
+    }
+
+    if (pending.length) {
+      const alternativeSkeletons = pending.map(skeleton => {
+        const alternative = compatibleBlueprints({
+          platform: skeleton.platform,
+          funnelRole: skeleton.funnelRole,
+          archetype: params.businessArchetype,
+          campaignAngle: skeleton.campaignAngle,
+        }).find(blueprint => blueprint.id !== skeleton.blueprintId);
+        if (!alternative) return skeleton;
+        const replacement: PlanSkeletonTask = {
+          ...skeleton,
+          blueprintId: alternative.id,
+          platform: alternative.platform,
+          contentType: alternative.contentType,
+          funnelRole: alternative.funnelRole,
+          module: alternative.defaultModule,
+          supportModule: alternative.defaultSupportModule,
+          ctaTarget: alternative.ctaTargets[0],
+          estimatedEffort: alternative.estimatedEffort,
+          taskPriority: alternative.taskPriority,
+          variationReason: `${skeleton.variationReason} Se cambió a ${alternative.id} tras fallar el contrato original.`,
+        };
+        workingSkeletons.set(replacement.id, replacement);
+        return replacement;
+      });
+      const alternatives = alternativeSkeletons.map(task => getBlueprintById(task.blueprintId)).filter(Boolean) as TaskBlueprint[];
+      let creatives: CreativeTaskFields[] = [];
+      try {
+        creatives = await requestCreativeTaskBatch({
+          token: params.token,
+          input: params.input,
+          skeletonTasks: alternativeSkeletons,
+          blueprints: alternatives,
+          nicheAdapter: params.nicheAdapter,
+          salesAggressiveness: params.salesAggressiveness,
+          creativeSeed: `${params.creativeSeed}-alternative`,
+        });
+      } catch (error) {
+        console.warn(`[GrowthPlanner V2] Week ${week} alternative blueprint attempt failed.`, error);
+      }
+      alternativeSkeletons.forEach(skeleton => {
+        const blueprint = getBlueprintById(skeleton.blueprintId);
+        const creative = creatives.find(item => item.skeletonTaskId === skeleton.id);
+        if (!blueprint || !creative) return;
+        const task = mergeCreativeFields(skeleton, blueprint, creative, params.input.instagramMetrics.bestTime || '19:00', 3);
+        const validation = validateTaskAgainstBlueprint(task, blueprint);
+        completed.set(skeleton.id, {
+          ...task,
+          needsManualReview: !validation.valid,
+          validationErrors: validation.errors,
+        });
+      });
+    }
+  }
+
+  const tasks = params.skeletonTasks.map(original => {
+    const skeleton = workingSkeletons.get(original.id) || original;
+    const task = completed.get(original.id);
+    if (task) return task;
+    const blueprint = getBlueprintById(skeleton.blueprintId)!;
+    return {
+      ...mergeCreativeFields(skeleton, blueprint, {
+        skeletonTaskId: skeleton.id,
+        visualConcept: 'Tarea pendiente de revisión manual.',
+        whyItWorks: 'No se recibió una respuesta creativa válida.',
+        caption: 'Revisa esta tarea antes de publicarla.',
+        hashtags: '',
+        prompt: '',
+        slotInstructions: [],
+        requiredAssets: [],
+        executionRecipe: { overview: 'Revisar manualmente.', steps: [{ title: 'Revisar', instruction: 'Completa la tarea antes de publicarla.', ctaLabel: 'Revisar' }] },
+        shotGuide: { duration: 'No aplica', shots: [], onScreenText: [], inspirationSearches: [], whatToAvoid: [] },
+        engagementHook: 'Escríbenos PLAN para recibir orientación.',
+      }, params.input.instagramMetrics.bestTime || '19:00', 3),
+      needsManualReview: true,
+      validationErrors: ['Gemini no devolvió campos creativos válidos tras los intentos permitidos.'],
+    };
+  });
+  return { tasks, blueprintsUsed: tasks.map(task => task.blueprintId) };
+}
+
+async function generateGrowthPlanV2(
+  input: GenerateGrowthPlanInput,
+  options: GenerateGrowthPlanOptions = {},
+): Promise<GrowthStrategicPlan> {
+  const token = await getAuth().currentUser?.getIdToken().catch(() => null);
+  if (!token) throw new Error('Necesitas iniciar sesión para generar el plan.');
+
+  options.onProgress?.({ stepId: 'strategy', label: 'Diseñando estrategia base' });
+  const strategy = await generateStrategyWithRecovery(input, token);
+  const engineInput = engineInputFromStrategy(input, strategy);
+  const brandId = brandMemoryId(engineInput);
+  const previousPlans = loadPreviousPlanMemory(brandId);
+  const archetype = detectBusinessArchetype(engineInput);
+  const nicheAdapter = selectNicheAdapter(engineInput, archetype.businessArchetype);
+  const salesAggressiveness = selectSalesAggressiveness(engineInput, archetype.businessArchetype);
+  const campaign = selectCampaignAngle(engineInput, archetype.businessArchetype, previousPlans);
+  const skeleton = generatePlanSkeleton(engineInput, archetype.businessArchetype, campaign, previousPlans);
+  const generated = await generateV2Tasks({
+    token,
+    input: engineInput,
+    skeletonTasks: skeleton.tasks,
+    nicheAdapter,
+    salesAggressiveness,
+    creativeSeed: campaign.creativeSeed,
+    businessArchetype: archetype.businessArchetype,
+    onProgress: options.onProgress,
+  });
+
+  options.onProgress?.({ stepId: 'validation', label: 'Validando contratos del plan' });
+  const normalized = normalizePlan({
+    ...strategy,
+    roadmap: skeleton.roadmap,
+    tasks: generated.tasks,
+    generationLog: {
+      warnings: [...asArray(strategy?.generationLog?.warnings, []), ...archetype.warnings, 'Insights generados sin búsqueda web/grounding.'],
+      fixedErrors: asArray(strategy?.generationLog?.fixedErrors, []),
+      steps: ['Estrategia base generada', 'Skeleton V2 generado por la app', 'Campos creativos generados por Gemini', 'Contratos V2 validados'],
+    },
+  }, input);
+  normalized.tasks = generated.tasks;
+  normalized.roadmap = skeleton.roadmap;
+
+  const finalValidation = validateFinalPlan(normalized, previousPlans);
+  const repeatedBlueprints = detectRepeatedBlueprints(generated.blueprintsUsed, previousPlans[0]?.previousBlueprintsUsed || []);
+  const repeatedCaptions = detectRepeatedCaptions(generated.tasks.map(task => task.caption), previousPlans[0]?.previousCaptions || []);
+  const blueprintValidation = Object.fromEntries(generated.tasks.map(task => {
+    const blueprint = getBlueprintById(task.blueprintId)!;
+    return [task.id, validateTaskAgainstBlueprint(task, blueprint)];
+  }));
+  const metadata: EngineV2Metadata = {
+    plannerEngineVersion: 'v2-blueprint',
+    planningDepth: 'guided',
+    planQualityStatus: finalValidation.status,
+    campaignAngle: campaign.campaignAngle,
+    campaignAngleReason: campaign.campaignAngleReason,
+    creativeSeed: campaign.creativeSeed,
+    noveltyScore: skeleton.noveltyScore,
+    blueprintsUsed: generated.blueprintsUsed,
+    blueprintValidation,
+    taskRegenerationAttempts: Object.fromEntries(generated.tasks.map(task => [task.id, task.regenerationAttempts])),
+    tasksNeedingManualReview: generated.tasks.filter(task => task.needsManualReview).map(task => task.id),
+    previousPlanComparison: previousPlans.length ? `Comparado con ${previousPlans.length} plan(es) previos de la marca.` : 'Primer plan V2 registrado para la marca.',
+    repeatedBlueprintsDetected: repeatedBlueprints,
+    repeatedCaptionsDetected: repeatedCaptions,
+    variationDecisions: skeleton.variationDecisions,
+    finalValidationSummary: finalValidation,
+    businessArchetype: archetype.businessArchetype,
+    nicheAdapterUsed: nicheAdapter.id,
+    salesAggressiveness,
+    researchMode: 'gemini_without_grounding',
+    researchConfidence: 'medium',
+    researchedInsights: [],
+    inferredInsights: normalized.nicheInsights,
+    fallbackInsights: [],
+  };
+
+  normalized.plannerEngineVersion = metadata.plannerEngineVersion;
+  normalized.planningDepth = metadata.planningDepth;
+  normalized.campaignAngle = metadata.campaignAngle;
+  normalized.campaignAngleReason = metadata.campaignAngleReason;
+  normalized.creativeSeed = metadata.creativeSeed;
+  normalized.noveltyScore = metadata.noveltyScore;
+  normalized.planQualityStatus = metadata.planQualityStatus;
+  normalized.blueprintsUsed = metadata.blueprintsUsed;
+  normalized.previousPlanComparison = metadata.previousPlanComparison;
+  normalized.finalValidationSummary = metadata.finalValidationSummary;
+  normalized.engineV2Metadata = metadata as unknown as Record<string, unknown>;
+  normalized.generationLog.validationChecks = {
+    ...normalized.generationLog.validationChecks,
+    ...finalValidation.checks,
+  };
+  normalized.validationReportMarkdown = buildEngineV2ValidationReport(normalized, metadata);
+
+  savePlanMemory(buildPlanMemory({ input: engineInput, angle: campaign.campaignAngle, tasks: generated.tasks }));
+  return normalized;
+}
+
+export async function generateGrowthPlanWithGemini(
+  input: GenerateGrowthPlanInput,
+  options: GenerateGrowthPlanOptions = {},
+): Promise<GrowthStrategicPlan> {
+  try {
+    return await generateGrowthPlanV2(input, options);
+  } catch (error) {
+    console.warn('[GrowthPlanner] Engine V2 failed, using legacy fallback.', error);
+    return generateGrowthPlanLegacy(input, options);
+  }
 }

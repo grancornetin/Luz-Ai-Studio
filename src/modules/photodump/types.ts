@@ -34,9 +34,9 @@ export const RECIPE_META: Record<PhotodumpRecipe, {
 }> = {
   unboxing: {
     label:       'Unboxing / Producto',
-    description: 'El producto y su packaging como protagonistas. Sin persona necesaria.',
+    description: 'El producto y su packaging como protagonistas. Podés agregar tu persona.',
     icon:        'Package',
-    refs:        { avatar: 'none', outfit: 'none', producto: 'required', escena: 'optional' },
+    refs:        { avatar: 'optional', outfit: 'none', producto: 'required', escena: 'optional' },
     narrative:   'product_hero',
     protagonist: 'product',
   },
@@ -58,17 +58,17 @@ export const RECIPE_META: Record<PhotodumpRecipe, {
   },
   launch: {
     label:       'Lanzamiento de producto',
-    description: 'El producto en primer plano. Una escena que lo contextualice suma mucho.',
+    description: 'El producto en primer plano. Podés agregar tu persona para una presentación más personal.',
     icon:        'Megaphone',
-    refs:        { avatar: 'none', outfit: 'none', producto: 'required', escena: 'optional' },
+    refs:        { avatar: 'optional', outfit: 'none', producto: 'required', escena: 'optional' },
     narrative:   'product_hero',
     protagonist: 'product',
   },
   bts: {
     label:       'Detrás de escena / Faceless',
-    description: 'Sin rostro. El proceso, el espacio, las manos trabajando.',
+    description: 'Sin rostro. El proceso, el espacio, las manos trabajando. Podés subir tu foto para mantener piel/manos consistentes.',
     icon:        'Clapperboard',
-    refs:        { avatar: 'none', outfit: 'none', producto: 'required', escena: 'optional' },
+    refs:        { avatar: 'optional', outfit: 'none', producto: 'required', escena: 'optional' },
     narrative:   'faceless',
     protagonist: 'product',
   },

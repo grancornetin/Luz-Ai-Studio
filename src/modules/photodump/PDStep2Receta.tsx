@@ -2,8 +2,8 @@
  * PDStep2Receta.tsx — Paso 2 modo recetas
  * Brief · Referencias dinámicas según la receta elegida
  */
-import React, { useState } from 'react';
-import { ChevronDown, User, Package, Shirt, Layers, AlertCircle } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { ChevronDown, User, Package, Shirt, Layers, AlertCircle, AtSign } from 'lucide-react';
 import { ImageSlot } from '../../components/shared/ImageSlot';
 import {
   PhotodumpRecipe, PhotodumpRefs, PhotodumpOutfitMode,
@@ -46,11 +46,46 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   recipe, basePrompt, refs, outfitMode, onPrompt, onRefs, onOutfitMode,
 }) => {
   const [openSlot, setOpenSlot] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const toggle = (key: string) => setOpenSlot(p => p === key ? null : key);
+
+  // Insertar @tag en la posición del cursor del textarea
+  const insertTag = (tag: string) => {
+    const el = textareaRef.current;
+    if (!el) { onPrompt(basePrompt + tag + ' '); return; }
+    const start = el.selectionStart ?? basePrompt.length;
+    const end   = el.selectionEnd   ?? basePrompt.length;
+    const before = basePrompt.slice(0, start);
+    const after  = basePrompt.slice(end);
+    const needsSpace = before.length > 0 && !before.endsWith(' ');
+    const newVal = (needsSpace ? before + ' ' : before) + tag + ' ' + after;
+    onPrompt(newVal);
+    // Restaurar foco y cursor
+    setTimeout(() => {
+      el.focus();
+      const pos = (needsSpace ? start + 1 : start) + tag.length + 1;
+      el.setSelectionRange(pos, pos);
+    }, 0);
+  };
 
   const meta    = RECIPE_META[recipe];
   const refKeys = (Object.keys(meta.refs) as (keyof typeof meta.refs)[])
     .filter(k => meta.refs[k] !== 'none');
+
+  // Tags disponibles según refs cargadas
+  const availableTags: { tag: string; label: string; color: string }[] = [];
+  if (refs.avatarRef)  availableTags.push({ tag: '@persona',  label: 'persona',  color: 'text-indigo-600 bg-indigo-50 border-indigo-200' });
+  if (refs.outfitRef)  availableTags.push({ tag: '@outfit',   label: 'outfit',   color: 'text-purple-600 bg-purple-50 border-purple-200' });
+  if (refs.productRef) availableTags.push({ tag: '@producto', label: 'producto', color: 'text-emerald-600 bg-emerald-50 border-emerald-200' });
+  if (refs.sceneRef)   availableTags.push({ tag: '@escena',   label: 'escena',   color: 'text-blue-600 bg-blue-50 border-blue-200' });
+  // Outfits extra
+  (refs.outfitRefs ?? []).forEach((r, i) => {
+    if (r) availableTags.push({ tag: `@outfit${i + 2}`, label: `outfit ${i + 2}`, color: 'text-purple-500 bg-purple-50 border-purple-200' });
+  });
+  // Productos extra
+  (refs.productRefs ?? []).forEach((r, i) => {
+    if (r) availableTags.push({ tag: `@producto${i + 2}`, label: `producto ${i + 2}`, color: 'text-emerald-500 bg-emerald-50 border-emerald-200' });
+  });
 
   // ── Helpers para leer/escribir refs por slot key ─────────────
   const getSlotImages = (key: string): (string | null)[] => {
@@ -139,24 +174,43 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
               Contexto base <span className="text-brand-600">*</span>
             </label>
             <textarea
+              ref={textareaRef}
               value={basePrompt}
               onChange={e => onPrompt(e.target.value)}
               placeholder={
-                recipe === 'outfit'      ? 'Ej: Haul de otoño, jeans wide leg y sweater oversize en Palermo, tarde soleada...' :
-                recipe === 'unboxing'    ? 'Ej: Caja de mi nueva crema de vitamina C, packaging cuidado con papel manteca y tarjeta...' :
-                recipe === 'day_in_life' ? 'Ej: Mañana de domingo tranquila en casa, con mi café y mi set de skincare favorito...' :
-                recipe === 'launch'      ? 'Ej: Primer lanzamiento de mi vela de jazmín, edición limitada, packaging artesanal...' :
-                recipe === 'bts'         ? 'Ej: Preparando los pedidos de la semana, papel de seda rosado y stickers personalizados...' :
-                recipe === 'travel'      ? 'Ej: Fin de semana en Montevideo, el puerto, los cafés y la rambla al atardecer...' :
+                recipe === 'outfit'      ? 'Ej: @persona hace un haul de otoño luciendo @outfit en Palermo...' :
+                recipe === 'unboxing'    ? 'Ej: Caja de mi nueva crema de vitamina C, @persona hace el unboxing de @producto...' :
+                recipe === 'day_in_life' ? 'Ej: @persona en una mañana de domingo tranquila en casa con @producto...' :
+                recipe === 'launch'      ? 'Ej: Primer lanzamiento de @producto, edición limitada, packaging artesanal...' :
+                recipe === 'bts'         ? 'Ej: Preparando los pedidos de la semana con @producto, papel de seda rosado...' :
+                recipe === 'travel'      ? 'Ej: @persona en Montevideo, el puerto, los cafés y la rambla al atardecer...' :
                 'Describí el contexto central del set...'
               }
               rows={4}
               autoComplete="off"
               className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3.5 text-[15px] text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 transition-all resize-none leading-relaxed"
             />
-            <p className="text-[11px] text-slate-400 mt-1.5">
-              Cuanto más detalle des, más específico será el resultado visual.
-            </p>
+            {availableTags.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                <span className="flex items-center gap-1 text-[10px] text-slate-400 font-bold uppercase tracking-wider flex-shrink-0">
+                  <AtSign size={9} /> Insertar
+                </span>
+                {availableTags.map(t => (
+                  <button
+                    key={t.tag}
+                    type="button"
+                    onClick={() => insertTag(t.tag)}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold transition-opacity hover:opacity-80 ${t.color}`}
+                  >
+                    {t.tag}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-slate-400 mt-1.5">
+                Cuanto más detalle des, más específico será el resultado. Subí referencias para usar @tags.
+              </p>
+            )}
           </div>
 
           {/* Referencias dinámicas */}
@@ -246,9 +300,9 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
 
                         {/* Nota de ayuda por slot */}
                         <p className="text-[10px] text-slate-400 leading-snug">
-                          {key === 'avatar'   && 'La foto del rostro ancla la identidad facial en todas las imágenes.'}
-                          {key === 'outfit'   && 'Subí hasta 4 prendas. Cada una se respeta fielmente en el set.'}
-                          {key === 'producto' && 'Subí hasta 3 ángulos del mismo producto para mejor fidelidad.'}
+                            {key === 'avatar'   && (recipe === 'bts' ? 'Opcional: tu foto mantiene tono de piel y manos consistentes aunque no se vea tu cara.' : 'La foto del rostro ancla la identidad facial en todas las imágenes.')}
+                          {key === 'outfit'   && 'Subí hasta 4 prendas. Cada imagen del set mostrará una prenda distinta. Si subís menos prendas que imágenes, las sobrantes se generan como flat lay de la prenda.'}
+                          {key === 'producto' && 'Subí hasta 3 ángulos del mismo producto para mayor fidelidad visual.'}
                           {key === 'escena'   && 'La escena principal define la ambientación del set completo.'}
                         </p>
 
