@@ -232,6 +232,11 @@ async function processEvolinkJob(
   if (modelProvider === 'gptimage') {
     const modules2K = ['product', 'prompt_studio', 'campaign', 'campaign_anchor'];
     evolinkBody.resolution = modules2K.includes(job.module ?? '') ? '2K' : '1K';
+    // Cuando hay referencias visuales (persona, outfit, producto, escena) forzar
+    // alta fidelidad para que GPT Image no reinterprete ni derive los detalles.
+    if (refsToSend.length > 0) {
+      evolinkBody.input_fidelity = 'high';
+    }
   }
 
   // CRÍTICO: no mezclar image_url + image_urls — algunos gateways priorizan
