@@ -205,4 +205,9 @@ export interface EngineV2Metadata {
   researchedInsights: string[];
   inferredInsights: string[];
   fallbackInsights: string[];
+  legacyNormalizersSkipped: string[];
+  v2ValidatorsApplied: string[];
+  contractLockedFields: string[];
+  tasksRegenerated: number;
+  tasksMarkedForReview: number;
 }

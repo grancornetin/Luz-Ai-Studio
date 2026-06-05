@@ -1,12 +1,12 @@
 import type { GrowthStrategicPlan } from '../../growthPlannerTypes';
 import { detectRepeatedBlueprints, detectRepeatedCaptions } from './antiRepetition';
 import { validateTaskAgainstBlueprint } from './blueprintValidator';
-import { findWeakCopyTerms, isActionableHook } from './copyRules';
+import { validateHooksV2, validateWeakPhrasesV2 } from './copyRules';
 import { hasSpanishOrthographyIssues } from './orthography';
 import { dayLabelFromDate } from './planSkeletonGenerator';
 import { validateSensitiveClaims } from './sensitiveGuardrails';
 import { getBlueprintById } from './taskBlueprints';
-import type { FinalValidationSummary, GeneratedTaskV2, PreviousPlanMemory } from './types';
+import type { BusinessArchetype, FinalValidationSummary, GeneratedTaskV2, PreviousPlanMemory } from './types';
 
 const MIN_TASKS = { 7: 5, 14: 12, 30: 25 } as const;
 
@@ -15,14 +15,19 @@ function taskText(task: GeneratedTaskV2): string {
     task.visualConcept, task.whyItWorks, task.caption, task.prompt, task.supportPrompt || '', task.engagementHook,
     task.executionRecipe.overview, ...task.executionRecipe.steps.map(step => step.instruction),
     ...task.shotGuide.shots.map(shot => shot.instruction), ...task.shotGuide.onScreenText,
+    ...task.shotGuide.inspirationSearches, ...task.shotGuide.whatToAvoid,
   ].join(' ');
 }
 
-export function validateFinalPlan(plan: GrowthStrategicPlan, previousPlans: PreviousPlanMemory[]): FinalValidationSummary {
+export function validateFinalPlan(
+  plan: GrowthStrategicPlan,
+  previousPlans: PreviousPlanMemory[],
+  businessArchetype: BusinessArchetype = 'other',
+): FinalValidationSummary {
   const tasks = plan.tasks as GeneratedTaskV2[];
   const blueprintResults = tasks.map(task => {
     const blueprint = getBlueprintById(task.blueprintId);
-    return blueprint ? validateTaskAgainstBlueprint(task, blueprint) : { valid: false, errors: ['Blueprint inexistente.'], warnings: [] };
+    return blueprint ? validateTaskAgainstBlueprint(task, blueprint, { businessArchetype }) : { valid: false, errors: ['Blueprint inexistente.'], warnings: [] };
   });
   const dates = tasks.map(task => new Date(`${task.date}T12:00:00`));
   const today = new Date();
@@ -50,25 +55,32 @@ export function validateFinalPlan(plan: GrowthStrategicPlan, previousPlans: Prev
     roadmapWeeksValid: plan.roadmap.length >= (plan.duration === 30 ? 4 : plan.duration === 14 ? 2 : 1),
     channelDistributionValid: tasks.every(task => activeChannels.includes(task.platform)),
     effortDistributionValid: plan.duration !== 30 || (
+      (efforts.bajo || 0) >= Math.ceil(total * 0.3)
+      && (efforts.medio || 0) >= Math.ceil(total * 0.3)
+      && (efforts.alto || 0) <= Math.floor(total * 0.3)
+      && noThreeHighEffortTasks
+    ),
+    effortDistributionIdeal: plan.duration !== 30 || (
       (efforts.bajo || 0) >= Math.ceil(total * 0.35)
       && (efforts.medio || 0) >= Math.ceil(total * 0.35)
       && (efforts.alto || 0) <= Math.floor(total * 0.3)
-      && noThreeHighEffortTasks
     ),
     priorityDistributionValid: primaryCount / total >= 0.6 && primaryCount / total <= 0.75,
     platformFormatValid: blueprintResults.every(result => !result.errors.some(error => /platform|contentType/.test(error))),
     platformCtaCoherenceValid: blueprintResults.every(result => !result.errors.some(error => /ctaTarget|Menciones incompatibles/.test(error))),
     primaryModuleActionValid: blueprintResults.every(result => !result.errors.some(error => /module/.test(error))),
     blueprintContractsValid: blueprintResults.every(result => result.valid),
-    taskInternalCoherenceValid: blueprintResults.every(result => result.valid),
+    taskInternalCoherenceValid: blueprintResults.every(result => !result.errors.some(error =>
+      /platform|contentType|funnelRole|ctaTarget|Menciones incompatibles|dayLabel/i.test(error),
+    )),
     slotsValid: blueprintResults.every(result => !result.errors.some(error => /slots/.test(error))),
     hashtagsValid: blueprintResults.every(result => !result.errors.some(error => /Hashtags/.test(error))),
     noNullCaptions: tasks.every(task => task.caption.trim() && !/^(null|undefined)$/i.test(task.caption.trim())),
-    captionsNaturalValid: tasks.every(task => task.caption.length <= 600 && !findWeakCopyTerms(task.caption).length),
-    noWeakPhrases: !findWeakCopyTerms(allText).length,
+    captionsNaturalValid: tasks.every(task => task.caption.length <= 600 && !validateWeakPhrasesV2(task.caption).length),
+    noWeakPhrases: !validateWeakPhrasesV2(allText).length,
     spanishOrthographyValid: !hasSpanishOrthographyIssues(allText),
-    actionableHooksValid: tasks.every(task => isActionableHook(task.engagementHook)),
-    sensitiveClaimsValid: validateSensitiveClaims(allText).valid,
+    actionableHooksValid: tasks.every(task => validateHooksV2(task.engagementHook, task.ctaTarget).valid),
+    sensitiveClaimsValid: validateSensitiveClaims(allText, businessArchetype).valid,
     antiRepetitionValid: !previous || repeatedBlueprints.length / total <= 0.6 && repeatedCaptions.length === 0,
     directPlanSalesPresent: plan.duration !== 30 || tasks.some(task => task.funnelRole === 'convertir'),
     productsNormalized: (plan.normalizedProducts || plan.products).length > 0,

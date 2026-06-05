@@ -21,6 +21,7 @@ import {
   buildEngineV2ValidationReport,
   buildPlanMemory,
   compatibleBlueprints,
+  CONTRACT_LOCKED_FIELDS,
   CREATIVE_TASK_BATCH_SCHEMA,
   detectBusinessArchetype,
   detectRepeatedBlueprints,
@@ -35,6 +36,7 @@ import {
   selectNicheAdapter,
   selectSalesAggressiveness,
   validateFinalPlan,
+  validateContractLock,
   validateTaskAgainstBlueprint,
   type CreativeTaskFields,
   type EngineV2Metadata,
@@ -3351,6 +3353,7 @@ async function requestCreativeTaskBatch(params: {
   nicheAdapter: ReturnType<typeof selectNicheAdapter>;
   salesAggressiveness: ReturnType<typeof selectSalesAggressiveness>;
   creativeSeed: string;
+  businessArchetype: ReturnType<typeof detectBusinessArchetype>['businessArchetype'];
   repairErrors?: Record<string, string[]>;
 }): Promise<CreativeTaskFields[]> {
   const raw = await startGrowthPlannerJob({
@@ -3396,6 +3399,7 @@ async function generateV2Tasks(params: {
           nicheAdapter: params.nicheAdapter,
           salesAggressiveness: params.salesAggressiveness,
           creativeSeed: params.creativeSeed,
+          businessArchetype: params.businessArchetype,
           repairErrors,
         });
       } catch (error) {
@@ -3411,10 +3415,11 @@ async function generateV2Tasks(params: {
           return;
         }
         const task = mergeCreativeFields(skeleton, blueprint, creative, params.input.instagramMetrics.bestTime || '19:00', attempt);
-        const validation = validateTaskAgainstBlueprint(task, blueprint);
-        const withValidation = { ...task, validationErrors: validation.errors };
+        const lockErrors = validateContractLock(task, skeleton);
+        const validation = validateTaskAgainstBlueprint(task, blueprint, { businessArchetype: params.businessArchetype });
+        const withValidation = { ...task, validationErrors: [...lockErrors, ...validation.errors] };
         completed.set(skeleton.id, withValidation);
-        if (!validation.valid) nextPending.push(skeleton);
+        if (!validation.valid || lockErrors.length) nextPending.push(skeleton);
       });
       pending = nextPending;
     }
@@ -3455,6 +3460,7 @@ async function generateV2Tasks(params: {
           nicheAdapter: params.nicheAdapter,
           salesAggressiveness: params.salesAggressiveness,
           creativeSeed: `${params.creativeSeed}-alternative`,
+          businessArchetype: params.businessArchetype,
         });
       } catch (error) {
         console.warn(`[GrowthPlanner V2] Week ${week} alternative blueprint attempt failed.`, error);
@@ -3464,11 +3470,12 @@ async function generateV2Tasks(params: {
         const creative = creatives.find(item => item.skeletonTaskId === skeleton.id);
         if (!blueprint || !creative) return;
         const task = mergeCreativeFields(skeleton, blueprint, creative, params.input.instagramMetrics.bestTime || '19:00', 3);
-        const validation = validateTaskAgainstBlueprint(task, blueprint);
+        const lockErrors = validateContractLock(task, skeleton);
+        const validation = validateTaskAgainstBlueprint(task, blueprint, { businessArchetype: params.businessArchetype });
         completed.set(skeleton.id, {
           ...task,
-          needsManualReview: !validation.valid,
-          validationErrors: validation.errors,
+          needsManualReview: !validation.valid || lockErrors.length > 0,
+          validationErrors: [...lockErrors, ...validation.errors],
         });
       });
     }
@@ -3500,6 +3507,91 @@ async function generateV2Tasks(params: {
   return { tasks, blueprintsUsed: tasks.map(task => task.blueprintId) };
 }
 
+function buildV2BasePlan(params: {
+  input: GenerateGrowthPlanInput;
+  engineInput: PlannerEngineV2Input;
+  strategy: any;
+  tasks: GeneratedTaskV2[];
+  roadmap: GrowthStrategicPlan['roadmap'];
+  warnings: string[];
+}): GrowthStrategicPlan {
+  const products = normalizeProductsForEngineV2(params.engineInput.products);
+  return {
+    id: String(params.strategy?.id || `growth_v2_${Date.now()}`),
+    createdAt: String(params.strategy?.createdAt || new Date().toISOString()),
+    duration: params.input.duration,
+    brand: params.input.brand,
+    products,
+    normalizedProducts: products,
+    instagramMetrics: params.input.instagramMetrics,
+    businessStage: params.engineInput.businessStage,
+    mainGoal: params.engineInput.mainGoal,
+    commercialFocus: params.engineInput.commercialFocus,
+    strategyGoal: String(params.strategy?.strategyGoal || params.engineInput.mainGoal),
+    businessDiagnosis: String(params.strategy?.businessDiagnosis || ''),
+    nicheInsights: asArray(params.strategy?.nicheInsights, []),
+    planNarrative: String(params.strategy?.planNarrative || ''),
+    strategicTip: String(params.strategy?.strategicTip || ''),
+    roadmap: params.roadmap,
+    tasks: params.tasks,
+    brandAnalysis: {
+      stageInterpretation: String(params.strategy?.brandAnalysis?.stageInterpretation || params.engineInput.businessStage),
+      targetAnalysis: String(params.strategy?.brandAnalysis?.targetAnalysis || params.input.brand.idealClient),
+      voiceGuide: String(params.strategy?.brandAnalysis?.voiceGuide || params.input.brand.tone),
+    },
+    productAnalysis: {
+      productWarnings: products.flatMap(product => product.warnings || []),
+      confidenceByProduct: products.map(product => ({
+        productId: product.id,
+        level: product.warnings?.length ? 65 : 85,
+        reason: product.warnings?.length ? product.warnings.join(', ') : 'Producto normalizado para Engine V2.',
+      })),
+      categorizationSummary: `${products.length} producto(s), servicio(s) o plan(es) normalizados para Engine V2.`,
+    },
+    socialMetricsAnalysis: {
+      audienceInsights: String(params.strategy?.socialMetricsAnalysis?.audienceInsights || ''),
+      engagementLevel: String(params.strategy?.socialMetricsAnalysis?.engagementLevel || ''),
+      confidenceMapping: String(params.strategy?.socialMetricsAnalysis?.confidenceMapping || 'Media: información declarada por la marca.'),
+    },
+    nicheResearch: {
+      trends: asArray(params.strategy?.nicheResearch?.trends, []),
+      competitorGaps: asArray(params.strategy?.nicheResearch?.competitorGaps, []),
+      researchMode: 'gemini_without_grounding',
+    },
+    generationLog: {
+      timestamp: new Date().toISOString(),
+      steps: ['Estrategia base generada', 'Skeleton V2 generado', 'Creatividad generada por blueprint', 'Contract Lock validado'],
+      hasImages: params.input.productImageRefs.length > 0,
+      hasMetrics: true,
+      researchMode: 'gemini_without_grounding',
+      expectedTasks: taskRange(params.input.duration).min,
+      generatedTasks: params.tasks.length,
+      tasksAddedByFallback: 0,
+      roadmapWeeksGenerated: params.roadmap.length,
+      channelUsage: countByPlatform(params.tasks),
+      warnings: uniqueStrings(params.warnings),
+      validationChecks: {},
+      fixedErrors: [],
+      legacyNormalizersSkipped: [
+        'normalizeCommercialTask', 'normalizePlatformFormatTask', 'normalizeCtaTargetForPlatform',
+        'normalizePrimaryModule', 'normalizePromptSlots', 'normalizeManualSupportPrompt',
+        'rebalanceChannels', 'normalizeTaskPriorities', 'normalizeEffortDistribution',
+        'validateTaskInternalCoherence', 'applyWeakPhraseFilter', 'finalNaturalLanguageScan',
+        'validateHashtags legacy',
+      ],
+      v2ValidatorsApplied: [
+        'Contract Lock', 'normalizeCreativeTextV2', 'validateSlotsV2', 'validateHooksV2',
+        'validateWeakPhrasesV2', 'validateSensitiveClaimsV2', 'validateBlueprintContractV2',
+        'validateFinalPlan',
+      ],
+      contractLockedFields: [...CONTRACT_LOCKED_FIELDS],
+      tasksRegenerated: params.tasks.filter(task => task.regenerationAttempts > 0).length,
+      tasksMarkedForReview: params.tasks.filter(task => task.needsManualReview).length,
+    },
+    validationReportMarkdown: '',
+  };
+}
+
 async function generateGrowthPlanV2(
   input: GenerateGrowthPlanInput,
   options: GenerateGrowthPlanOptions = {},
@@ -3529,25 +3621,21 @@ async function generateGrowthPlanV2(
   });
 
   options.onProgress?.({ stepId: 'validation', label: 'Validando contratos del plan' });
-  const normalized = normalizePlan({
-    ...strategy,
-    roadmap: skeleton.roadmap,
+  const normalized = buildV2BasePlan({
+    input,
+    engineInput,
+    strategy,
     tasks: generated.tasks,
-    generationLog: {
-      warnings: [...asArray(strategy?.generationLog?.warnings, []), ...archetype.warnings, 'Insights generados sin búsqueda web/grounding.'],
-      fixedErrors: asArray(strategy?.generationLog?.fixedErrors, []),
-      steps: ['Estrategia base generada', 'Skeleton V2 generado por la app', 'Campos creativos generados por Gemini', 'Contratos V2 validados'],
-    },
-  }, input);
-  normalized.tasks = generated.tasks;
-  normalized.roadmap = skeleton.roadmap;
+    roadmap: skeleton.roadmap,
+    warnings: [...asArray(strategy?.generationLog?.warnings, []), ...archetype.warnings, 'Insights generados sin búsqueda web/grounding.'],
+  });
 
-  const finalValidation = validateFinalPlan(normalized, previousPlans);
+  const finalValidation = validateFinalPlan(normalized, previousPlans, archetype.businessArchetype);
   const repeatedBlueprints = detectRepeatedBlueprints(generated.blueprintsUsed, previousPlans[0]?.previousBlueprintsUsed || []);
   const repeatedCaptions = detectRepeatedCaptions(generated.tasks.map(task => task.caption), previousPlans[0]?.previousCaptions || []);
   const blueprintValidation = Object.fromEntries(generated.tasks.map(task => {
     const blueprint = getBlueprintById(task.blueprintId)!;
-    return [task.id, validateTaskAgainstBlueprint(task, blueprint)];
+    return [task.id, validateTaskAgainstBlueprint(task, blueprint, { businessArchetype: archetype.businessArchetype })];
   }));
   const metadata: EngineV2Metadata = {
     plannerEngineVersion: 'v2-blueprint',
@@ -3574,6 +3662,11 @@ async function generateGrowthPlanV2(
     researchedInsights: [],
     inferredInsights: normalized.nicheInsights,
     fallbackInsights: [],
+    legacyNormalizersSkipped: normalized.generationLog.legacyNormalizersSkipped || [],
+    v2ValidatorsApplied: normalized.generationLog.v2ValidatorsApplied || [],
+    contractLockedFields: normalized.generationLog.contractLockedFields || [],
+    tasksRegenerated: normalized.generationLog.tasksRegenerated || 0,
+    tasksMarkedForReview: normalized.generationLog.tasksMarkedForReview || 0,
   };
 
   normalized.plannerEngineVersion = metadata.plannerEngineVersion;

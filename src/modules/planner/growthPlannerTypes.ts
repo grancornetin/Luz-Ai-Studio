@@ -187,6 +187,11 @@ export interface GrowthStrategicPlan {
     warnings: string[];
     validationChecks: Record<string, boolean>;
     fixedErrors: string[];
+    legacyNormalizersSkipped?: string[];
+    v2ValidatorsApplied?: string[];
+    contractLockedFields?: string[];
+    tasksRegenerated?: number;
+    tasksMarkedForReview?: number;
   };
   validationReportMarkdown: string;
   plannerEngineVersion?: 'v2-blueprint';

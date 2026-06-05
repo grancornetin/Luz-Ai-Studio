@@ -1,10 +1,9 @@
-import { findWeakCopyTerms, isActionableHook } from './copyRules';
+import { validateHooksV2, validateWeakPhrasesV2 } from './copyRules';
 import { hasSpanishOrthographyIssues } from './orthography';
 import { dayLabelFromDate } from './planSkeletonGenerator';
 import { validateSensitiveClaims } from './sensitiveGuardrails';
-import type { BlueprintValidationResult, GeneratedTaskV2, TaskBlueprint } from './types';
-
-const SLOT_PATTERN = /@[a-zA-Z0-9_]+/g;
+import { validateSlotsV2 } from './slots';
+import type { BlueprintValidationResult, BusinessArchetype, GeneratedTaskV2, TaskBlueprint } from './types';
 const OTHER_PLATFORM_TERMS: Record<GeneratedTaskV2['platform'], string[]> = {
   'Instagram Feed': ['responde esta story', 'sticker de story', 'publicar en facebook'],
   Stories: ['publicar en facebook', 'carrusel de feed', 'comenta en facebook'],
@@ -20,10 +19,16 @@ function taskCreativeText(task: GeneratedTaskV2): string {
     ...task.executionRecipe.steps.map(step => step.instruction),
     ...task.shotGuide.shots.map(shot => shot.instruction),
     ...task.shotGuide.onScreenText,
+    ...task.shotGuide.inspirationSearches,
+    ...task.shotGuide.whatToAvoid,
   ].join(' ');
 }
 
-export function validateTaskAgainstBlueprint(task: GeneratedTaskV2, blueprint: TaskBlueprint): BlueprintValidationResult {
+export function validateTaskAgainstBlueprint(
+  task: GeneratedTaskV2,
+  blueprint: TaskBlueprint,
+  options: { businessArchetype?: BusinessArchetype } = {},
+): BlueprintValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
   const text = taskCreativeText(task);
@@ -52,7 +57,7 @@ export function validateTaskAgainstBlueprint(task: GeneratedTaskV2, blueprint: T
     }
   }
   if (!task.caption.trim() || /^(null|undefined)$/i.test(task.caption.trim())) errors.push('caption vacío o null.');
-  if (!isActionableHook(task.engagementHook)) errors.push('engagementHook no es accionable.');
+  errors.push(...validateHooksV2(task.engagementHook, task.ctaTarget).errors);
 
   const forbidden = blueprint.forbiddenTerms.filter(term => lower.includes(term.toLowerCase()));
   if (forbidden.length) errors.push(`Términos prohibidos: ${forbidden.join(', ')}.`);
@@ -61,16 +66,15 @@ export function validateTaskAgainstBlueprint(task: GeneratedTaskV2, blueprint: T
   const missingRequired = blueprint.requiredTerms.filter(term => !lower.includes(term.toLowerCase()));
   if (missingRequired.length) errors.push(`Términos requeridos ausentes: ${missingRequired.join(', ')}.`);
 
-  const usedSlots = Array.from(new Set(text.match(SLOT_PATTERN) || []));
-  const describedSlots = new Set(task.slotInstructions.map(slot => slot.slot));
-  if (usedSlots.some(slot => !describedSlots.has(slot))) errors.push('Hay slots usados sin instrucciones.');
-  if (blueprint.requiredSlots.some(slot => !usedSlots.includes(slot))) errors.push('Faltan slots requeridos.');
-  if (findWeakCopyTerms(text).length) errors.push('Hay frases débiles.');
+  errors.push(...validateSlotsV2(task, blueprint, options.businessArchetype || 'other'));
+  if (validateWeakPhrasesV2(text).length) errors.push('Hay frases débiles.');
   if (hasSpanishOrthographyIssues(text)) warnings.push('Hay posibles acentos pendientes.');
-  const sensitiveClaims = validateSensitiveClaims(text);
+  const sensitiveClaims = validateSensitiveClaims(text, options.businessArchetype);
   if (!sensitiveClaims.valid) errors.push('Hay claims sensibles o riesgosos.');
   warnings.push(...sensitiveClaims.warnings);
   if (!task.executionRecipe.steps.length) errors.push('La receta no tiene pasos.');
 
   return { valid: errors.length === 0, errors, warnings };
 }
+
+export const validateBlueprintContractV2 = validateTaskAgainstBlueprint;

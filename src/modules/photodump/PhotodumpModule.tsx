@@ -153,6 +153,7 @@ const PhotodumpModule: React.FC = () => {
   const [savedShotUrls,     setSavedShotUrls]     = useState<string[]>([]);
   const [savedShots,        setSavedShots]        = useState<any[]>([]);
   const [savedCaptions,     setSavedCaptions]     = useState<{ caption: string; hashtags: string } | null>(null);
+  const [savedRef0Analysis, setSavedRef0Analysis] = useState<any>(null);
 
   // ── Resultados UI ─────────────────────────────────────────
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -224,7 +225,7 @@ const PhotodumpModule: React.FC = () => {
     setGeneratingFreeIndex(null);
     setCurrentSet(null); setError(null); setProgress(null);
     setProgressStepIndex(0); setIsGenerating(false); setPartialImages([]);
-    setFailedIndexes([]); setSavedPlan(null); setSavedRef0Url(''); setSavedShotUrls([]);
+    setFailedIndexes([]); setSavedPlan(null); setSavedRef0Url(''); setSavedRef0Analysis(null); setSavedShotUrls([]);
     libreSetIdRef.current = null;
   };
 
@@ -376,6 +377,7 @@ const PhotodumpModule: React.FC = () => {
         refsWithMode, narrative, protagonist, destino, basePrompt, sessionParams, recipe,
       );
       setSavedRef0Url(ref0Url);
+      setSavedRef0Analysis(ref0Analysis);
       setPartialImages([ref0Url]);
 
       setProgressStepIndex(2);
@@ -454,14 +456,10 @@ const PhotodumpModule: React.FC = () => {
     const newUrls = [...savedShotUrls];
     const stillFailed: number[] = [];
 
-    const { imageUrl: ref0Url, ref0Analysis } = await (async () => {
-      try {
-        return await generatePhotodumpREF0(refsWithMode, narrative, protagonist, destino, basePrompt, sessionParams);
-      } catch {
-        const fallback = savedShotUrls.find(Boolean) ?? '';
-        return { imageUrl: fallback, ref0Analysis: null };
-      }
-    })();
+    // Reusar el REF0 original para mantener la identidad visual del set.
+    // Regenerar uno nuevo produciría una paleta/luz distinta y el shot retried quedaría fuera del set.
+    const ref0Url      = savedRef0Url;
+    const ref0Analysis = savedRef0Analysis;
 
     for (const i of failedIndexes) {
       try {

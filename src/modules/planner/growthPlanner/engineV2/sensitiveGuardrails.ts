@@ -33,12 +33,19 @@ const RISK_PATTERNS = [
   /\bsin riesgo\b/i,
 ];
 
-export function detectSensitiveNiches(text: string): SensitiveNiche[] {
-  return NICHE_PATTERNS.filter(([, pattern]) => pattern.test(text)).map(([niche]) => niche);
+export function detectSensitiveNiches(text: string, businessArchetype?: string): SensitiveNiche[] {
+  const patterns = businessArchetype === 'saas_subscription'
+    ? NICHE_PATTERNS.map(([niche, pattern]): [SensitiveNiche, RegExp] => {
+      if (niche === 'finance') return [niche, /\bpr[eé]stamo|inversi[oó]n financiera|rentabilidad garantizada|regulaci[oó]n financiera\b/i];
+      if (niche === 'legal') return [niche, /\basesor[ií]a legal|contrato legal|demanda|impuesto|abogado|regulaci[oó]n legal\b/i];
+      return [niche, pattern];
+    })
+    : NICHE_PATTERNS;
+  return patterns.filter(([, pattern]) => pattern.test(text)).map(([niche]) => niche);
 }
 
-export function validateSensitiveClaims(text: string): { valid: boolean; warnings: string[] } {
-  const niches = detectSensitiveNiches(text);
+export function validateSensitiveClaims(text: string, businessArchetype?: string): { valid: boolean; warnings: string[] } {
+  const niches = detectSensitiveNiches(text, businessArchetype);
   const risky = RISK_PATTERNS.filter(pattern => pattern.test(text));
   return {
     valid: risky.length === 0,
@@ -48,3 +55,5 @@ export function validateSensitiveClaims(text: string): { valid: boolean; warning
     ],
   };
 }
+
+export const validateSensitiveClaimsV2 = validateSensitiveClaims;

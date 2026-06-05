@@ -1,6 +1,9 @@
 import { Type } from '@google/genai';
 import { normalizeSpanishText } from './orthography';
+import { normalizeCreativeTextV2 } from './creativeNormalizers';
+import { requiredSlotsForArchetype } from './slots';
 import type {
+  BusinessArchetype,
   GeneratedTaskV2,
   NicheAdapter,
   PlanSkeletonTask,
@@ -118,6 +121,7 @@ export function buildCreativeTaskBatchPrompt(params: {
   salesAggressiveness: SalesAggressiveness;
   creativeSeed: string;
   repairErrors?: Record<string, string[]>;
+  businessArchetype: BusinessArchetype;
 }): string {
   const contracts = params.skeletonTasks.map(task => {
     const blueprint = params.blueprints.find(item => item.id === task.blueprintId);
@@ -132,7 +136,7 @@ export function buildCreativeTaskBatchPrompt(params: {
       ctaTarget: task.ctaTarget,
       date: task.date,
       productId: task.productId || null,
-      requiredSlots: blueprint?.requiredSlots || [],
+      requiredSlots: blueprint ? requiredSlotsForArchetype(blueprint, params.businessArchetype) : [],
       forbiddenTerms: blueprint?.forbiddenTerms || [],
       requiredTerms: blueprint?.requiredTerms || [],
       repairErrors: params.repairErrors?.[task.id] || [],
@@ -170,6 +174,7 @@ REGLAS DURAS:
 - No prometas curas, ingresos ni resultados garantizados.
 - No uses "link en bio" salvo que el CTA target lo indique.
 - Usa los slots requeridos y explica cada slot en slotInstructions.
+- Slots SaaS permitidos: @plan1, @plan2, @plan3, @app_screen1, @resultado1, @comparativa1. @producto1 puede usarse como alias de @plan1.
 - Máximo 3 pasos de ejecución y máximo 3 tomas.
 
 MARCA:
@@ -209,7 +214,7 @@ export function mergeCreativeFields(
   const moduleReason = skeleton.module === 'none'
     ? 'La acción principal es nativa del canal y no requiere generación visual principal.'
     : `El blueprint ${blueprint.id} requiere el módulo ${skeleton.module} como pieza principal.`;
-  return {
+  return normalizeCreativeTextV2({
     id: skeleton.id,
     week: skeleton.week,
     dayLabel: skeleton.dayLabel,
@@ -262,7 +267,7 @@ export function mergeCreativeFields(
     needsManualReview: false,
     validationErrors: [],
     regenerationAttempts,
-  };
+  });
 }
 
 export function emptyCreativeFields(skeletonTaskId: string): CreativeTaskFields {

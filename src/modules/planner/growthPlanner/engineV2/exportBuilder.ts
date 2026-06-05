@@ -25,6 +25,14 @@ export function buildEngineV2ValidationReport(plan: GrowthStrategicPlan, metadat
 - Semanas: ${plan.roadmap.length}
 - Blueprints usados: ${metadata.blueprintsUsed.length}
 - Tareas para revisión manual: ${reviewTasks.length}
+- Campos bloqueados por contrato: ${metadata.contractLockedFields.join(', ')}
+
+## Pipeline V2.1
+- Normalizadores legacy omitidos: ${metadata.legacyNormalizersSkipped.length}
+- Validadores V2 aplicados: ${metadata.v2ValidatorsApplied.join(', ')}
+- Tareas regeneradas: ${metadata.tasksRegenerated}
+- Tareas marcadas para revisión: ${metadata.tasksMarkedForReview}
+- fixedErrors legacy: ${plan.generationLog.fixedErrors.length}
 
 ## Validación final
 ${checkLines}
