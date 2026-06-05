@@ -1393,9 +1393,17 @@ This shot showcases the piece itself as part of the haul/outfit story.`
 - REF0 is the visual anchor — same light, same surface, same color temperature across all shots.
 ${refs.avatarRef ? `- Face reference (appears twice): EXACT identity — same bone structure, same hair, same skin tone. The person is a GUIDE in this unboxing, not the star. Keep face authentic, no beautification.` : '- No person in this set — product and packaging are the sole protagonists.'}
 - PRODUCT: Reproduce faithfully — same shape, color, finish, and proportions as the reference.
-${refs.packagingRef ? `- PACKAGING: Reproduce faithfully — same box/container shape, color, design, and materials. Maintain consistent packaging across ALL shots.` : `- PACKAGING: No reference provided — maintain whatever packaging was established in REF0 consistently across all shots.`}
+${refs.packagingRef ? `- PACKAGING: Reproduce faithfully — same box/container shape, color, design, and materials.` : `- PACKAGING: No reference provided — maintain whatever packaging was established in REF0 consistently.`}
 ${extraProducts.length > 0 ? `- Product shown from multiple angles in references — same object. Use all angles to understand it fully.` : ''}
 ${extraPackaging.length > 0 ? `- Packaging shown from multiple angles — same container. Maintain design consistency.` : ''}
+
+⚠️ REFERENCE ROLE — READ CAREFULLY:
+References are visual constraints for IDENTITY and CONSISTENCY — they are NOT a checklist of elements to include in every frame.
+Each shot tells ONE moment of the story. Show only what belongs to THIS moment.
+A face reference does NOT mean a face must appear. A packaging reference does NOT mean the box must be visible.
+If an element is not part of this shot's narrative role, leave it out — its absence is correct, not a failure.
+ONE person maximum in any frame. Any background figure is a generation error.
+
 NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${shot.role}.`
     : isFacelessShot
       ? `SHOT IDENTITY:
@@ -1483,78 +1491,60 @@ ${NEGATIVE_SHORT}`;
 }
 
 // ── Caption + hashtags por Gemini ─────────────────────────────
+// Un caption único por set + una colección de hashtags para el carrusel completo.
+// El caption va en la primera imagen del set (orden 1). Las demás no llevan caption.
+
+export interface PhotodumpSetCaption {
+  caption:  string;
+  hashtags: string;
+}
 
 export async function generatePhotodumpCaptions(
-  basePrompt:  string,
-  narrative:   PhotodumpNarrative,
-  shots:       PhotodumpShotDirective[],
-): Promise<Array<{ caption: string; hashtags: string; moment: string }>> {
+  basePrompt: string,
+  narrative:  PhotodumpNarrative,
+  shots:      PhotodumpShotDirective[],
+): Promise<PhotodumpSetCaption> {
 
   const storyContext = NARRATIVE_META[narrative].label;
-  const momentDescriptions = shots.map((s, i) =>
-    `Image ${i + 1} [${s.role}]: ${s.purpose.slice(0, 80)}`
-  ).join('\n');
 
   const prompt = `You are a social media copywriter for a Spanish-speaking content creator.
-Generate captions and hashtags for a ${shots.length}-image photodump carousel.
+Write ONE caption for a ${shots.length}-image photodump carousel posted as a single Instagram/TikTok post.
 
 CONTEXT: "${basePrompt}"
 NARRATIVE: ${storyContext}
 
-These images are a visual constellation — organic moments from the same world.
-They are NOT structured as a story arc with a beginning and end.
-Each image is its own moment that happens to belong to the same set.
+This is a single post — one caption covers the whole set. The caption should capture the mood and story of the entire carousel, not describe any single image.
 
-VISUAL MOMENTS IN THIS SET:
-${momentDescriptions}
-
-For each image provide:
-1. "moment": short name of this visual moment in Spanish (3-5 words, NOT "la apertura" or "el cierre")
-2. "caption": engaging caption in Spanish (max 140 chars, conversational, authentic voice, 1-2 emojis — sounds like a REAL person posting to their stories, NOT a brand)
-3. "hashtags": 5-7 hashtags mix Spanish/English as single string
+Write:
+1. "caption": one engaging caption in Spanish (max 180 chars, conversational, authentic voice, 1-2 emojis — sounds like a real person posting, NOT a brand)
+2. "hashtags": 8-12 hashtags mix Spanish/English as a single string
 
 Rules:
-- Captions must sound like someone talking to a friend, not writing an ad
-- No caption should say "first", "last", "opening", "closing" or refer to sequence
-- Each caption stands alone as a moment — they don't need to be read in order
-- Vary the tone: some intimate, some energetic, some playful, some reflective
-- Avoid generic captions like "así empieza" or "hasta la próxima"
+- The caption must work as the opening text of the post — it will be read before swiping
+- Sound like someone talking to a friend or sharing a moment, not writing an ad
+- Do NOT describe images in sequence ("primero", "luego", "al final")
+- The hashtags should be a mix: niche (2-3), topic-specific (3-4), broad reach (2-3)
 
-Output ONLY valid JSON array:
-[{"moment":"...","caption":"...","hashtags":"..."}]`;
+Output ONLY valid JSON object:
+{"caption":"...","hashtags":"..."}`;
 
   try {
     const raw = await geminiService.generateText(prompt);
-    const match = raw.replace(/```json|```/g, '').trim().match(/\[[\s\S]*\]/);
+    const match = raw.replace(/```json|```/g, '').trim().match(/\{[\s\S]*\}/);
     if (match) {
       const parsed = JSON.parse(match[0]);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.slice(0, shots.length).map((c: any, i: number) => ({
-          moment:   c.moment   ?? `Momento ${i + 1}`,
-          caption:  c.caption  ?? '',
-          hashtags: c.hashtags ?? '',
-        }));
+      if (parsed.caption) {
+        return {
+          caption:  parsed.caption  ?? '',
+          hashtags: parsed.hashtags ?? '',
+        };
       }
     }
   } catch (err) {
     console.warn('[photodumpDirector] generateCaptions failed:', err);
   }
 
-  // Fallback
-  const fallbackMoments: Record<string, { moment: string; caption: string }> = {
-    candid:     { moment: 'Un instante real',    caption: 'Sin filtros 📱'            },
-    context:    { moment: 'El lugar',            caption: 'Así se siente estar aquí ✨' },
-    emotion:    { moment: 'La cara lo dice todo', caption: 'Ese momento 💫'            },
-    detail:     { moment: 'El detalle',          caption: 'Las cosas pequeñas 🌿'      },
-    texture:    { moment: 'La textura',          caption: 'Quería que lo vieras 🤍'    },
-    action:     { moment: 'En movimiento',       caption: 'Pasando cosas ⚡'           },
-    atmosphere: { moment: 'El mood',             caption: 'Así estaba la cosa 🌫'      },
-    reveal:     { moment: 'Otro ángulo',         caption: 'Lo que no suelen ver 👁'   },
-  };
-  return shots.map((s, i) => {
-    const fb = fallbackMoments[s.beat] ?? { moment: `Momento ${i + 1}`, caption: 'Momentos así 💫' };
-    return { moment: fb.moment, caption: fb.caption, hashtags: '#lifestyle #organic #ugc #content #moments' };
-  });
+  return { caption: 'Momentos así 💫', hashtags: '#lifestyle #organic #ugc #content #moments' };
 }
 
 // ── Modo libre: generación de escena individual ───────────────

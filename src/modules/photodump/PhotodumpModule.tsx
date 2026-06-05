@@ -152,7 +152,7 @@ const PhotodumpModule: React.FC = () => {
   const [savedRef0Url,      setSavedRef0Url]      = useState<string>('');
   const [savedShotUrls,     setSavedShotUrls]     = useState<string[]>([]);
   const [savedShots,        setSavedShots]        = useState<any[]>([]);
-  const [savedCaptions,     setSavedCaptions]     = useState<any[]>([]);
+  const [savedCaptions,     setSavedCaptions]     = useState<{ caption: string; hashtags: string } | null>(null);
 
   // ── Resultados UI ─────────────────────────────────────────
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -497,7 +497,7 @@ const PhotodumpModule: React.FC = () => {
   };
 
   // ── Guardar set y avanzar a resultados ────────────────────
-  const finalizarSet = async (shotUrls: string[], shots: any[], captions: any[], ref0Url?: string) => {
+  const finalizarSet = async (shotUrls: string[], shots: any[], captions: { caption: string; hashtags: string } | null, ref0Url?: string) => {
     const recipeMeta  = RECIPE_META[recipe];
     const anchorUrl   = ref0Url ?? savedRef0Url;
     const anchorImage = anchorUrl ? [{
@@ -523,10 +523,11 @@ const PhotodumpModule: React.FC = () => {
         ...anchorImage,
         ...shotUrls.map((url, i) => ({
           imageUrl: url,
-          moment:   captions[i]?.moment   ?? `Momento ${i + 1}`,
-          caption:  captions[i]?.caption  ?? '',
-          hashtags: captions[i]?.hashtags ?? '',
-          prompt:   shots[i]?.purpose     ?? '',
+          moment:   `Imagen ${i + 1}`,
+          // El caption y hashtags van solo en la primera imagen del set (orden 1)
+          caption:  i === 0 ? (captions?.caption  ?? '') : '',
+          hashtags: i === 0 ? (captions?.hashtags ?? '') : '',
+          prompt:   shots[i]?.purpose ?? '',
           order:    i + 1,
         })).filter(img => img.imageUrl),
       ],
@@ -834,6 +835,35 @@ const PhotodumpModule: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Caption del set — uno solo para todo el carrusel */}
+                  {(() => {
+                    const firstShot = currentSet.images.find(img => img.order === 1);
+                    if (!firstShot?.caption) return null;
+                    return (
+                      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2.5">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Caption del set</p>
+                        <p className="text-[13px] text-slate-700 leading-relaxed">{firstShot.caption}</p>
+                        {firstShot.hashtags && (
+                          <p className="text-[12px] text-violet-500 leading-relaxed">{firstShot.hashtags}</p>
+                        )}
+                        <div className="flex gap-2 pt-1 border-t border-slate-200">
+                          <button type="button"
+                            onClick={() => copyText(firstShot.caption + '\n\n' + firstShot.hashtags, 'set-full')}
+                            className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-brand-600 transition-colors font-medium">
+                            {copiedKey === 'set-full' ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
+                            {copiedKey === 'set-full' ? 'Copiado' : 'Copiar caption + hashtags'}
+                          </button>
+                          <button type="button"
+                            onClick={() => copyText(firstShot.hashtags, 'set-ht')}
+                            className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-violet-600 transition-colors font-medium">
+                            {copiedKey === 'set-ht' ? <Check size={11} className="text-emerald-500" /> : <Hash size={11} />}
+                            {copiedKey === 'set-ht' ? 'Copiado' : 'Solo hashtags'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* Grid de imágenes */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {currentSet.images.map((img, i) => {
@@ -878,36 +908,12 @@ const PhotodumpModule: React.FC = () => {
                           </div>
                         </div>
 
-                        {isAnchor ? (
+                        {isAnchor && (
                           <div className="px-3.5 py-2.5">
                             <p className="text-[10px] text-violet-500 font-semibold leading-snug">
                               Ancla visual del set — establece identidad, luz y color para todas las imágenes.
                             </p>
                           </div>
-                        ) : (
-                        <div className="p-3.5 space-y-2.5">
-                          <div>
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Caption</p>
-                            <p className="text-[12px] text-slate-700 leading-relaxed line-clamp-3">{img.caption}</p>
-                          </div>
-                          {img.hashtags && (
-                            <p className="text-[11px] text-violet-500 leading-relaxed line-clamp-2">{img.hashtags}</p>
-                          )}
-                          <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                            <button type="button"
-                              onClick={e => { e.stopPropagation(); copyText(img.caption + '\n\n' + img.hashtags, `full-${i}`); }}
-                              className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-brand-600 transition-colors">
-                              {copiedKey === `full-${i}` ? <Check size={9} className="text-emerald-500" /> : <Copy size={9} />}
-                              {copiedKey === `full-${i}` ? 'Copiado' : 'Copiar caption + hashtags'}
-                            </button>
-                            <button type="button"
-                              onClick={e => { e.stopPropagation(); copyText(img.hashtags, `ht-${i}`); }}
-                              className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-violet-600 transition-colors">
-                              {copiedKey === `ht-${i}` ? <Check size={9} className="text-emerald-500" /> : <Hash size={9} />}
-                              {copiedKey === `ht-${i}` ? 'Copiado' : 'Solo hashtags'}
-                            </button>
-                          </div>
-                        </div>
                         )}
                       </div>
                     );

@@ -156,7 +156,11 @@ Todo el código está escrito y compila sin errores TypeScript. Lo que se hizo:
 - Budget de refs adaptativo por tipo de shot (detail/in_use priorizan producto sobre empaque)
 - `PhotodumpModule.tsx` pasa `recipe` a todas las funciones de generación
 
-**Próxima acción:** Probar unboxing en la app con AirPods Pro (empaque + producto + avatar opcional). Brief de prueba:
+**Cambios post-prueba aplicados:**
+- Referencias como identidad, no checklist: el prompt de cada shot ahora le dice explícitamente al modelo que las referencias son constraints de identidad y consistencia, no elementos obligatorios a incluir en frame. Resuelve figura de fondo genérica (shot 3) y packaging flotante (shot 5).
+- Caption único por set: `generatePhotodumpCaptions` ahora devuelve `{ caption, hashtags }` en lugar de un array por imagen. El caption se muestra una vez encima de la grilla de imágenes. Modo libre no genera captions.
+
+**Próxima acción:** Re-probar unboxing con los mismos AirPods Pro para validar los dos fixes. Brief de prueba:
 > "Unboxing de los nuevos AirPods Pro. La caja blanca minimalista de Apple, el momento de apertura, los detalles del producto y sus accesorios, y finalmente usándolos."
 > - Empaque: foto de la caja blanca cerrada (+ ángulos si hay)
 > - Producto: foto de los AirPods y su estuche
