@@ -1025,6 +1025,67 @@ ${negativePrompt}`;
 }
 
 // ===================================================================
+// ADAPTADOR GPT IMAGE 2 — AISLADO DEL FLUJO GEMINI
+// ===================================================================
+// GPT Image 2 (gpt-image-1 via EvoLink) interpreta las referencias de forma
+// diferente a Gemini: no usa ponderación por frecuencia, y los marcadores
+// "REFERENCE IMAGE 1 AND 2" no tienen el mismo peso semántico.
+// Por eso se reutiliza el adaptador semántico de Seedream y se agregan
+// instrucciones específicas al estilo de GPT Image 2.
+function adaptPromptForGPTImage(prompt: string): string {
+  return prompt
+    .replace(/⚠️⚠️⚠️\s*REFERENCE IMAGE 1 AND 2 ARE THE FACE IDENTITY LOCK\..*?⚠️⚠️⚠️/gs,
+      '⚠️⚠️⚠️ FACE IDENTITY LOCK — ABSOLUTE PRIORITY ⚠️⚠️⚠️\nThe FIRST reference image is the face identity. You MUST copy this face exactly:\nbone structure, eye color, eye shape, nose, lips, jaw, chin, hair color, hair texture.\nDo NOT average. Do NOT replace. Do NOT beautify into a different person.\nThis face overrides every other reference for who the person is.')
+    .replace(/⚠️⚠️⚠️\s*IDENTITY LOCK.*?⚠️⚠️⚠️/gs,
+      '⚠️⚠️⚠️ IDENTITY LOCK — ABSOLUTE PRIORITY ⚠️⚠️⚠️\nThe face identity reference is the ONLY person allowed. Reproduce them exactly.')
+    .replace(/\(refs? 1 and 2\)/gi, '(the face identity reference)')
+    .replace(/refs? 1 and 2/gi, 'the face identity reference')
+    .replace(/refs? 2 and 3/gi, 'the face identity reference')
+    .replace(/refs? 2,\s*3,?\s*and 4/gi, 'the face identity reference')
+    .replace(/References? 2,\s*3,?\s*and 4/gi, 'The face identity reference')
+    .replace(/REF0 \(ref \d+\)/gi, 'REF0 / the approved master image')
+    .replace(/FACE REF \(refs [^)]+\)/gi, 'FACE REF / the face identity reference')
+    .replace(/\brefs?\s+\d+(?:\s+and\s+\d+)?\b/gi, 'the corresponding reference image')
+    .trim();
+}
+
+function buildGPTImagePrompt(
+  prompt: string,
+  refs: (string | null)[],
+  systemInstructions: string,
+  negativePrompt: string,
+  isDerivedShot: boolean,
+): string {
+  // Reutiliza el buildSeedreamRefContext porque la política de referencias es idéntica:
+  // ninguno de los dos modelos pondera por frecuencia como Gemini.
+  const refContext = buildSeedreamRefContext(refs, isDerivedShot);
+  const adaptedPrompt = adaptPromptForGPTImage(prompt);
+
+  return `${systemInstructions}
+
+${refContext}
+
+╔═══════════════════════════════════════════════════════════════════╗
+║                  GPT IMAGE 2 EXECUTION RULES                     ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+- Generate ONE single realistic photograph. No collage. No grid. No composite.
+- References are visual constraints — do NOT paste them into the output as layers.
+- The face identity reference defines WHO the person is. Copy their face exactly.
+- If REF0 (master) is provided: preserve its lighting, environment, and color temperature.
+- Outfit, product, and scene references are equally binding as the face reference.
+- Preserve natural iPhone UGC realism: imperfect, handheld, organic, real-life capture.
+- Avoid studio polish, beauty filters, editorial lighting, skin smoothing.
+- The result must feel like a photo taken by a friend or the person themselves, not an ad.
+
+TASK:
+${adaptedPrompt}
+
+NEGATIVE (avoid all of these):
+${negativePrompt}`;
+}
+
+// ===================================================================
 // MOTOR DE GENERACIÓN CON POLLING
 // ===================================================================
 async function generateWithPolling(
@@ -1047,7 +1108,12 @@ async function generateWithPolling(
   const referenceImages = await prepareReferenceImagesCompressed(refs);
   const negativePrompt = isDerivedShot ? NEGATIVE_SHORT : NEGATIVE_FULL;
 
-  const fullPrompt = `${systemInstructions}\n\nTASK:\n${prompt}\n\nNEGATIVE:\n${negativePrompt}`;
+  let fullPrompt: string;
+  if (modelId === 'gptimage') {
+    fullPrompt = buildGPTImagePrompt(prompt, refs, systemInstructions, negativePrompt, isDerivedShot);
+  } else {
+    fullPrompt = `${systemInstructions}\n\nTASK:\n${prompt}\n\nNEGATIVE:\n${negativePrompt}`;
+  }
 
   return ugcApiService.generateImageAsync({
     prompt: fullPrompt,
@@ -1145,8 +1211,9 @@ export const contentStudioService = {
     await this.ensureAccess();
 
     const useProduct = productIsRelevant !== false;
-    // faceRef x2 en posiciones 0 y 1 para identidad; outfit, product, scene al final.
-    const refsToPass: (string | null)[] = [faceRef, faceRef];
+    // Gemini: faceRef x2 — pondera por frecuencia (mayor peso a identidad facial).
+    // GPT Image 2: faceRef x1 — no usa ponderación por frecuencia; duplicar confunde.
+    const refsToPass: (string | null)[] = modelId === 'gptimage' ? [faceRef] : [faceRef, faceRef];
     let promptExtra = '';
 
     let finalOutfitRef = outfitRef;
@@ -1329,8 +1396,10 @@ Keep everything else identical to REF0 and the references.
 Same color temperature as REF0. Same ambient light. Same environment.
 Natural UGC aesthetic. NO beautification. NO studio polish.`;
 
-      // faceRef x2 para identidad, image0 como ancla visual REF0, contextos al final
-      const refs = [faceRef, faceRef, image0];
+      // Gemini: faceRef x2 para identidad; GPT Image 2: faceRef x1.
+      const refs = modelId === 'gptimage'
+        ? [faceRef, image0]
+        : [faceRef, faceRef, image0];
       if (outfitRef) refs.push(outfitRef);
       if (productRef && productIsRelevant !== false) refs.push(productRef);
       if (sceneRef) refs.push(sceneRef);
@@ -1441,9 +1510,11 @@ FINAL CHECKLIST (apply before finalizing):
 ✓ Natural UGC iPhone quality — real skin texture, organic lighting.
 ✓ The shot role is correctly executed (no role mixing).`;
 
-    // Orden de referencias: faceRef x2 (identidad), image0 (ancla visual REF0),
-    // luego contextos del enfoque. Solo 2 copias del rostro — 3 aplastaba el outfit.
-    const refs: (string | null)[] = [faceRef, faceRef, image0];
+    // Gemini: faceRef x2 + image0 — ponderación por frecuencia para bloquear identidad.
+    // GPT Image 2: faceRef x1 + image0 — no pondera por frecuencia; 1 copia es suficiente.
+    const refs: (string | null)[] = modelId === 'gptimage'
+      ? [faceRef, image0]
+      : [faceRef, faceRef, image0];
     if (outfitRef) refs.push(outfitRef);
     if (productRef && productIsRelevant !== false) refs.push(productRef);
     if (sceneRef) refs.push(sceneRef);
