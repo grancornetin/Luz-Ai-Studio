@@ -36,6 +36,31 @@ export interface CreativeTaskFields {
   engagementHook: string;
 }
 
+export interface HookRepairFields {
+  skeletonTaskId: string;
+  caption: string;
+  engagementHook: string;
+}
+
+export const HOOK_REPAIR_BATCH_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    tasks: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          skeletonTaskId: { type: Type.STRING },
+          caption: { type: Type.STRING },
+          engagementHook: { type: Type.STRING },
+        },
+        required: ['skeletonTaskId', 'caption', 'engagementHook'],
+      },
+    },
+  },
+  required: ['tasks'],
+};
+
 export const CREATIVE_TASK_BATCH_SCHEMA = {
   type: Type.OBJECT,
   properties: {
@@ -199,6 +224,40 @@ SEMILLA CREATIVA:
 ${params.creativeSeed}
 
 CONTRATOS FIJOS:
+${JSON.stringify(contracts, null, 2)}
+`;
+}
+
+export function buildHookRepairPrompt(params: {
+  tasks: GeneratedTaskV2[];
+  brandName: string;
+  tone: string;
+}): string {
+  const contracts = params.tasks.map(task => ({
+    skeletonTaskId: task.id,
+    platform: task.platform,
+    contentType: task.contentType,
+    ctaTarget: task.ctaTarget,
+    currentCaption: task.caption,
+    currentEngagementHook: task.engagementHook,
+    validationErrors: task.validationErrors,
+  }));
+  return `Corrige SOLO caption y engagementHook para estas tareas del Growth Planner.
+No devuelvas ni cambies ningún otro campo.
+
+REGLAS:
+- Devuelve JSON estricto.
+- Mantén el sentido comercial de cada tarea.
+- El hook debe tener verbo de acción, coincidir con ctaTarget y dejar claro el destino.
+- Para DM o comentarios, usa una palabra clave corta cuando corresponda.
+- Para Stories, usa "responde esta story".
+- Caption de 2 a 4 frases.
+- No uses frases genéricas ni promesas exageradas.
+- Español LATAM natural y tono ${params.tone}.
+
+MARCA: ${params.brandName}
+
+TAREAS:
 ${JSON.stringify(contracts, null, 2)}
 `;
 }

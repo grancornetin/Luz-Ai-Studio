@@ -8,7 +8,7 @@
 > 5. El objetivo es que otra IA pueda leer este archivo y entender completamente qué hace el módulo, cómo funciona, y en qué estado está, sin necesidad de leer el código.
 > 6. **INSTRUCCIÓN DE CONTINUIDAD:** Al final del documento siempre debe existir la sección "Estado de trabajo actual" con el estado exacto de qué se está haciendo, en qué receta se está, y qué quedó pendiente. Cuando una receta se cierra, moverla a "Recetas cerradas". Esto permite retomar el trabajo en un nuevo chat sin perder contexto.
 
-**Última actualización:** Junio 2026
+**Última actualización:** Junio 2026 (outfit_check, outfit_haul, outfit_week implementadas)
 **Propósito:** Generar series fotográficas con narrativa visual coherente. Un "photodump" es una colección de fotos que cuentan una historia o transmiten un mood, muy popular en Instagram y TikTok.
 
 ---
@@ -143,37 +143,118 @@ Rotan entre tipos de momento: context, detail, emotion, texture, action, atmosph
 - Cuarto: ajustes según lo detectado en la prueba
 - Solo cuando una receta está validada en la app se avanza a la siguiente
 
-**Recetas cerradas (implementadas, pendientes de prueba en app):**
+---
 
-### ✅ Unboxing — Implementado, pendiente de prueba
-Todo el código está escrito y compila sin errores TypeScript. Lo que se hizo:
+## Recetas cerradas ✅
+
+### ✅ Unboxing — VALIDADA Y CERRADA
+
+**Qué se implementó:**
 - `MAX_REFS` subido de 6 a 10
 - Nuevo campo `empaque` en `RecipeRefConfig` (solo unboxing tiene `optional`, el resto `none`)
 - Nuevos campos `packagingRef` y `packagingRefs[]` en `PhotodumpRefs`
 - Slot ámbar de empaque en `PDStep2Receta.tsx` con sublabels y hints específicos
-- Pool lineal de shots en `photodumpDirectorService.ts`: `buildUnboxingShotPool()` + `distributeUnboxingShots()`
+- Pool lineal de shots: `buildUnboxingShotPool()` + `distributeUnboxingShots()` en el director
 - REF0 adaptada: con avatar muestra cara, sin avatar es product hero puro
 - Budget de refs adaptativo por tipo de shot (detail/in_use priorizan producto sobre empaque)
 - `PhotodumpModule.tsx` pasa `recipe` a todas las funciones de generación
 
-**Cambios post-prueba aplicados:**
-- Referencias como identidad, no checklist: el prompt de cada shot ahora le dice explícitamente al modelo que las referencias son constraints de identidad y consistencia, no elementos obligatorios a incluir en frame. Resuelve figura de fondo genérica (shot 3) y packaging flotante (shot 5).
-- Caption único por set: `generatePhotodumpCaptions` ahora devuelve `{ caption, hashtags }` en lugar de un array por imagen. El caption se muestra una vez encima de la grilla de imágenes. Modo libre no genera captions.
+**Fixes post-prueba aplicados:**
+- Referencias como identidad, no checklist: `shotIdentityBlock` en el director tiene un bloque global que le enseña al modelo que las referencias son constraints de identidad/consistencia, no elementos obligatorios en frame. Resolvió figura de fondo genérica (shot 3) y packaging flotante (shot 5).
+- Caption único por set: `generatePhotodumpCaptions` devuelve `{ caption, hashtags }` en lugar de array por imagen. Se muestra una vez encima de la grilla. Modo libre no genera captions.
+- Fix retry de shots fallidos: `handleRetryFailed` en `PhotodumpModule.tsx` ahora reutiliza `savedRef0Url` y `savedRef0Analysis` del primer intento, en vez de generar un REF0 nuevo. Antes el retry generaba un ancla distinta y el shot quedaba fuera del set visualmente.
 
-**Próxima acción:** Re-probar unboxing con los mismos AirPods Pro para validar los dos fixes. Brief de prueba:
-> "Unboxing de los nuevos AirPods Pro. La caja blanca minimalista de Apple, el momento de apertura, los detalles del producto y sus accesorios, y finalmente usándolos."
-> - Empaque: foto de la caja blanca cerrada (+ ángulos si hay)
-> - Producto: foto de los AirPods y su estuche
-> - Avatar (opcional): foto de cara
+---
 
-**Recetas pendientes (en orden):**
-1. `outfit` — Siguiente después de validar unboxing
+## Recetas cerradas — Outfit (tres modos) ✅
+
+### ✅ `outfit_check` — IMPLEMENTADA, pendiente prueba en app
+
+**Historia:** "Elegí este outfit para X ocasión"
+
+**Slots:**
+- `avatar` (requerido): cara/identidad
+- `outfit` (requerido): hasta 4 prendas del mismo look — fotos de prendas SOLAS (no avatar vistiéndolas)
+- `accesorios` (opcional): hasta 3, con checkbox ⭐ de close-up por accesorio → genera shot extra
+- `escena_prueba` (opcional): habitación, espejo, probador — si no se sube, se inventa según brief
+- `escena_destino` (opcional): lugar final (restaurante, evento, calle) — si no se sube, el último shot usa escena_prueba
+
+**Arco lineal:**
+1. `OUTFIT_ARRIVING` — Prendas presentadas como objetos: rack, flat lay, manos sosteniendo. Sin avatar de cuerpo completo caminando.
+2. `OUTFIT_MIRROR_CHECK` — Full body frente al espejo, look completo visible.
+3. `OUTFIT_DETAIL` — Close-up de prenda o accesorio clave.
+4. `OUTFIT_READY` — Selfie o medium shot, cara dominante, mood "lista para salir".
+5. `OUTFIT_DESTINATION` — Full body en escena destino (o segundo ángulo si no hay destino).
+6. `ACCESSORY_CLOSEUP` ×N — Un shot extra por cada accesorio marcado con ⭐.
+
+**REF0:** Full body del avatar con outfit completo en escena de prueba (real o inventada).
+
+---
+
+### ✅ `outfit_haul` — IMPLEMENTADA, pendiente prueba en app
+
+**Historia:** "Me probé todo esto / esta es mi cápsula"
+
+**Slots:**
+- `avatar` (requerido)
+- `outfit` (requerido): hasta 6 prendas — una por slot, una por shot de try-on
+- `accesorios` (opcional): hasta 3, con checkbox ⭐
+- `escena` (opcional): habitación o probador donde ocurre el haul
+
+**Arco semi-lineal:**
+1. `HAUL_INTRO` — Flat lay o rack con todas las prendas. Sin avatar de cuerpo completo.
+2. `HAUL_TRY_ON_N` — Avatar vistiendo cada prenda. El prompt indica cuántas prendas descartadas hay en el fondo (progresión de desorden natural).
+3. `HAUL_WINNER` — Avatar con la prenda ganadora, fondo con el caos acumulado visible.
+4. `ACCESSORY_CLOSEUP` ×N — Shots extra por accesorios marcados.
+
+**Progresión de desorden:** El director indica en el prompt de cada shot cuántas prendas ya están apiladas ("En el fondo hay N prendas descartadas sobre la cama/silla"). El modelo maneja el caos narrativamente sin que el usuario tenga que hacer nada.
+
+**REF0:** Avatar en el espacio del haul rodeada/sosteniendo varias prendas. Ambiente de "esto empieza".
+
+---
+
+### ✅ `outfit_week` — IMPLEMENTADA, pendiente prueba en app
+
+**Historia:** "Estos fueron mis outfits de la semana / del mes / de la ocasión"
+
+**Slots:**
+- `avatar` (requerido)
+- `outfit` (requerido): hasta 7 outfits completos — uno por slot, uno por shot
+- `accesorios` (opcional): hasta 3, con checkbox ⭐
+- `escena` (opcional): ambiente general que contextualiza la semana
+
+**Arco orgánico:**
+- Cada shot = un outfit distinto, full body.
+- Framings rotan (full body frontal → espejo → three-quarters → ligeramente bajo → candid → etc.) para dar sensación de días distintos.
+- No hay arco lineal — el orden de outfits sigue el orden en que se subieron.
+
+**REF0:** Avatar con primer outfit, full body, ambiente establecido para el set.
+
+---
+
+## Estado de trabajo actual
+
+**Próxima acción:** Probar las tres recetas outfit en la app. Validar:
+1. `outfit_check` — arco correcto, REF0 full body con look completo, OUTFIT_ARRIVING sin avatar caminando, OUTFIT_DESTINATION cambia escena correctamente.
+2. `outfit_haul` — progresión de prendas, desorden en fondo, HAUL_WINNER con caos visible.
+3. `outfit_week` — variedad de framings entre shots, outfit distinto por imagen.
+
+**Notas de implementación relevantes para debug:**
+- Las prendas se pasan como fotos SOLAS — el modelo debe "vestir" al avatar. Si el resultado es raro, verificar que el usuario subió prendas sin personas.
+- Los shots de `ACCESSORY_CLOSEUP` se agregan DESPUÉS del arco base y se suman al conteo total.
+- `escena_destino` solo cambia la escena en el shot `OUTFIT_DESTINATION` — todos los demás usan `scenePruebaRef`.
+- En `outfit_haul`, el shot HAUL_INTRO no tiene outfit específico asignado (shotOutfitIndex = -1).
+
+---
+
+## Recetas pendientes (en orden)
+
 2. `day_in_life`
 3. `launch`
-4. `bts` — Nota: el avatar puede aparecer (no es obligatoriamente faceless). Evaluar caso a caso.
+4. `bts` — **IMPORTANTE: el avatar puede aparecer, NO es obligatoriamente faceless. Evaluar caso a caso.**
 5. `travel`
 
-**Notas importantes para no repetir errores:**
-- BTS NO es siempre faceless. El usuario lo aclaró explícitamente. Evaluar en su momento.
+**Notas globales para no repetir errores:**
+- BTS NO es siempre faceless. El usuario lo aclaró explícitamente.
 - No establecer reglas rígidas antes de probar — descubrir a través del testing por receta.
-- La tabla de refs es provisoria. Todo puede ajustarse después de las pruebas.
+- No hacer parches por shot específico — siempre atacar la raíz en la generación de prompts.

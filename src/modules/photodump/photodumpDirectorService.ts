@@ -304,7 +304,7 @@ function buildStoryDirectives(
   destino:    PhotodumpDestino,
   narrative:  PhotodumpNarrative,
   recipe?:    string,
-  refs?:      { avatarRef?: string | null },
+  refs?:      { avatarRef?: string | null; outfitRefs?: (string | null)[]; accesorioRefs?: (string | null)[]; accesorioCloseup?: boolean[]; sceneDestinoRef?: string | null },
 ): PhotodumpShotDirective[] {
 
   const ar = destino === 'feed' ? '4/5' : '9/16';
@@ -318,6 +318,57 @@ function buildStoryDirectives(
       const shot = pool.find(s => s.key === key) ?? pool[i % pool.length];
       return { ...shot, arcPosition: i + 1, aspectRatio: ar };
     });
+  }
+
+  // ── Recetas outfit — arcos específicos por modo ───────────
+
+  if (recipe === 'outfit_check') {
+    const hasDestino = !!refs?.sceneDestinoRef;
+    const pool       = buildOutfitCheckShotPool();
+    const baseKeys   = distributeOutfitCheckShots(count, hasDestino);
+    // Agregar shots de close-up de accesorios (van AL FINAL, después del arco base)
+    const closeupIndexes = (refs?.accesorioCloseup ?? [])
+      .map((v, i) => v ? i : -1).filter(i => i >= 0);
+    const allKeys = [...baseKeys, ...closeupIndexes.map(() => 'ACCESSORY_CLOSEUP')];
+    return allKeys.map((key, i) => {
+      const shot = pool.find(s => s.key === key) ?? pool[pool.length - 1];
+      return { ...shot, arcPosition: i + 1, aspectRatio: ar };
+    });
+  }
+
+  if (recipe === 'outfit_haul') {
+    // outfitCount = cuántas prendas subió el usuario (sin contar accesorios)
+    const allOutfits  = [refs?.avatarRef ? refs : null, ...(refs?.outfitRefs ?? [])].filter(Boolean);
+    const outfitCount = Math.max(1, (refs?.outfitRefs ?? []).filter(Boolean).length + (refs?.avatarRef ? 1 : 0));
+    const haulCount   = Math.max(1, outfitCount);
+    const pool        = buildOutfitHaulShotPool(haulCount);
+    // El arco del haul: INTRO + TRY_ON × N + WINNER = haulCount + 1 shots base
+    // Si count > shots base, rellenamos con shots de detalle de prenda (rotando)
+    const baseShots = pool.slice(0, Math.min(pool.length, count));
+    const closeupIndexes = (refs?.accesorioCloseup ?? [])
+      .map((v, i) => v ? i : -1).filter(i => i >= 0);
+    const allShots = [...baseShots, ...closeupIndexes.map(() => {
+      const accPool = buildOutfitCheckShotPool();
+      return accPool.find(s => s.key === 'ACCESSORY_CLOSEUP')!;
+    })];
+    return allShots.map((shot, i) => ({ ...shot, arcPosition: i + 1, aspectRatio: ar }));
+  }
+
+  if (recipe === 'outfit_week') {
+    const outfitCount = Math.max(1, [refs?.avatarRef, ...(refs?.outfitRefs ?? [])].filter(Boolean).length);
+    // Generar un shot por outfit (o por count si es mayor que outfits)
+    const weekCount   = Math.max(count, outfitCount);
+    const pool        = buildOutfitWeekShotPool(weekCount);
+    const baseShots   = pool.slice(0, count);
+    const closeupIndexes = (refs?.accesorioCloseup ?? [])
+      .map((v, i) => v ? i : -1).filter(i => i >= 0);
+    const accPool = closeupIndexes.length > 0 ? buildOutfitCheckShotPool() : [];
+    const accShot = accPool.find(s => s.key === 'ACCESSORY_CLOSEUP');
+    const allShots = [
+      ...baseShots,
+      ...closeupIndexes.map(() => accShot!),
+    ];
+    return allShots.map((shot, i) => ({ ...shot, arcPosition: i + 1, aspectRatio: ar }));
   }
 
   const isFaceless = narrative === 'faceless';
@@ -842,6 +893,243 @@ function distributeUnboxingShots(count: number, hasAvatar: boolean): string[] {
   return ['UNBOXING_PACKAGING_CLOSED', 'UNBOXING_OPENING_MOMENT', hasAvatar ? 'UNBOXING_PRODUCT_IN_USE' : 'UNBOXING_PRODUCT_REVEAL'];
 }
 
+// ── Outfit Check shots ────────────────────────────────────────
+// Historia: "Elegí este outfit para X ocasión"
+// Arco: presentación de prendas → mirror check → detalle → selfie → destino
+
+function buildOutfitCheckShotPool(): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
+  return [
+    {
+      key:   'OUTFIT_ARRIVING',
+      beat:  'context',
+      role:  'OUTFIT PRESENTATION',
+      purpose: 'Las prendas se presentan antes de ser usadas. Sin avatar de cuerpo completo. Puede ser: rack con las prendas colgadas, manos sosteniendo cada prenda frente a cámara, flat lay sobre cama o silla, o manos extendiendo la prenda hacia el espejo. El outfit es el protagonista — la persona es el gesto.',
+      requiredElements: ['garments_as_subject', 'no_full_body_avatar_walking', 'real_context_visible', 'outfit_clearly_readable'],
+      forbiddenElements: ['avatar_walking_toward_camera', 'catalog_mannequin_pose', 'studio_backdrop', 'white_background', 'ad_composition', 'forced_action_pose'],
+      variationSpace: [
+        'manos sosteniendo la prenda principal extendida frente a cámara, habitación visible de fondo',
+        'flat lay orgánico del outfit completo sobre cama, silla o piso — prendas y accesorios dispuestos naturalmente',
+        'prendas colgadas en rack o perchero, manos parcialmente visibles acomodándolas, ambiente real de fondo',
+        'overhead del outfit extendido sobre superficie — tela, alfombra, madera — con accesorios al costado',
+      ],
+      framing:     'MEDIUM_OR_OVERHEAD',
+      composition: 'GARMENTS_AS_SUBJECT',
+      cameraAngle: 'EYE_LEVEL_OR_OVERHEAD',
+    },
+    {
+      key:   'OUTFIT_MIRROR_CHECK',
+      beat:  'reveal',
+      role:  'MIRROR CHECK',
+      purpose: 'Full body del avatar frente al espejo con el outfit completo puesto. El espejo es el encuadre natural. Actitud, no pose. Puede ser selfie de espejo o alguien lo tomó desde atrás. El look completo es visible de pies a cabeza.',
+      requiredElements: ['full_body_visible', 'mirror_frame_present_or_implied', 'complete_outfit_readable', 'authentic_attitude_not_catalog_stance'],
+      forbiddenElements: ['catalog_symmetrical_pose', 'studio_lighting', 'white_background', 'mannequin_stance', 'beautification', 'phone_visible_in_mirror'],
+      variationSpace: [
+        'selfie de espejo full body, brazo extendido sosteniendo teléfono fuera de frame, actitud natural',
+        'espejo de cuerpo entero con el avatar mirando su reflejo, ángulo lateral que muestra ambiente',
+        'avatar frente al espejo, vista desde atrás mostrando el espejo y el outfit reflejado',
+        'espejo de dormitorio o probador, avatar de frente con actitud relajada, ambiente visible alrededor',
+      ],
+      framing:     'WIDE_FULL_BODY',
+      composition: 'MIRROR_FRAME_NATURAL',
+      cameraAngle: 'EYE_LEVEL',
+    },
+    {
+      key:   'OUTFIT_DETAIL',
+      beat:  'detail',
+      role:  'OUTFIT DETAIL',
+      purpose: 'Close-up de una prenda o accesorio clave del look. Textura, cierre, color, material. Sin cara necesaria. El fragmento cuenta más que el todo. Puede ser la textura de una tela, un detalle de costura, una hebilla, un zapato, una cartera.',
+      requiredElements: ['garment_or_accessory_fills_frame', 'texture_or_material_visible', 'real_light_showing_depth', 'intentional_tight_framing'],
+      forbiddenElements: ['full_body_visible', 'face_dominant', 'catalog_product_shot', 'white_background', 'studio_lighting', 'forced_branding'],
+      variationSpace: [
+        'close-up de la textura de la prenda principal — tela, punto, costuras, terminaciones',
+        'detalle del accesorio más importante: zapato, cartera, joya — luz lateral que muestra profundidad',
+        'manos tocando o acomodando la prenda, detalle del gesto y el tejido',
+        'fragmento del look: cintura con cinturón, hombro de una campera, escote con joya — ángulo íntimo',
+      ],
+      framing:     'CLOSE_UP_OR_EXTREME_CLOSE_UP',
+      composition: 'DETAIL_FILL_FRAME',
+      cameraAngle: 'TOP_DOWN_OR_MACRO_ANGLE',
+    },
+    {
+      key:   'OUTFIT_READY',
+      beat:  'emotion',
+      role:  'READY SELFIE',
+      purpose: 'Selfie o medium shot con el look puesto. Cara dominante, outfit visible parcialmente. El mood es "lista para salir" o "así salí". Expresión natural y con carácter — no pose de catálogo. Puede ser selfie UGC o foto tomada por otra persona.',
+      requiredElements: ['face_dominant_natural', 'outfit_partially_visible', 'authentic_expression_or_mood', 'real_context_visible'],
+      forbiddenElements: ['catalog_stance', 'beautification', 'studio_lighting', 'symmetric_ad_composition', 'mannequin_expression', 'phone_visible'],
+      variationSpace: [
+        'selfie UGC clásica — brazo extendido, cara levemente ladeada, outfit visible en el torso, ambiente de fondo',
+        'medium shot tomado por alguien más, cara con actitud, hombros y parte del outfit visibles',
+        'selfie contrapicada levemente, cielo o puerta de salida de fondo, expresión de "voy"',
+        'close-up de cara con outfit visible en el cuello/hombros, expresión espontánea, ambiente cálido',
+      ],
+      framing:     'MEDIUM_OR_SELFIE',
+      composition: 'FACE_DOMINANT_OUTFIT_VISIBLE',
+      cameraAngle: 'SLIGHT_UPWARD_FROM_HAND_LEVEL',
+    },
+    {
+      key:   'OUTFIT_DESTINATION',
+      beat:  'atmosphere',
+      role:  'DESTINATION SHOT',
+      purpose: 'Avatar en el lugar destino con el outfit puesto. Full body integrado al ambiente final. Si hay escena_destino se usa ese lugar. Si no hay, es un segundo ángulo en la escena de prueba. El outfit y el lugar juntos cuentan el cierre de la historia.',
+      requiredElements: ['full_body_visible', 'destination_environment_clearly_readable', 'complete_outfit_visible', 'person_belongs_in_space'],
+      forbiddenElements: ['catalog_pose', 'studio_backdrop', 'generic_white_wall', 'mannequin_stance', 'beautification', 'ad_feel'],
+      variationSpace: [
+        'full body en el lugar destino — restaurante, calle, evento — outfit completo visible, actitud natural',
+        'avatar apoyada en elemento del ambiente destino, pose con actitud, outfit completo desde la distancia',
+        'medium shot en el lugar destino, ambiente claramente reconocible de fondo, cara y outfit visibles',
+        'caminando o llegando al lugar, outfit en movimiento, ambiente destino de fondo',
+      ],
+      framing:     'WIDE_FULL_BODY',
+      composition: 'PERSON_IN_DESTINATION_CONTEXT',
+      cameraAngle: 'EYE_LEVEL_OR_SLIGHTLY_LOW',
+    },
+    {
+      key:   'ACCESSORY_CLOSEUP',
+      beat:  'texture',
+      role:  'ACCESSORY HERO',
+      purpose: 'Macro o close-up extremo de un accesorio específico marcado por el usuario. El accesorio llena el frame. Luz que muestra su materialidad, textura y diseño. Sin persona necesaria. Este shot existe para destacar ese elemento en particular.',
+      requiredElements: ['accessory_fills_frame', 'material_and_texture_clearly_visible', 'real_light_not_studio', 'intentional_macro_framing'],
+      forbiddenElements: ['full_body_in_frame', 'catalog_white_background', 'studio_lighting', 'forced_branding', 'multiple_accessories_competing'],
+      variationSpace: [
+        'macro del accesorio sobre superficie de contraste, sombra lateral que muestra volumen y profundidad',
+        'accesorio en mano o siendo sostenido, close-up que muestra diseño y material',
+        'accesorio en su lugar de uso natural — puesto, colgando, en el ambiente — close-up',
+        'overhead del accesorio sobre tela o superficie orgánica, luz de ventana, ángulo íntimo',
+      ],
+      framing:     'EXTREME_CLOSE_UP',
+      composition: 'ACCESSORY_FILL_FRAME',
+      cameraAngle: 'MACRO_OR_LOW_ANGLE',
+    },
+  ];
+}
+
+// Distribuye los shots de outfit_check según el count pedido.
+// Los beats obligatorios son: ARRIVING → MIRROR_CHECK → DETAIL → READY → DESTINATION
+// Si count < 5, se eliminan en este orden: DETAIL, READY (el arco mínimo es ARRIVING + MIRROR + DESTINATION)
+// Los shots de ACCESSORY_CLOSEUP se agregan SOBRE el count (no reemplazan).
+function distributeOutfitCheckShots(count: number, hasDestino: boolean): string[] {
+  const fullArc = [
+    'OUTFIT_ARRIVING',
+    'OUTFIT_MIRROR_CHECK',
+    'OUTFIT_DETAIL',
+    'OUTFIT_READY',
+    'OUTFIT_DESTINATION',
+  ];
+  // Si no hay escena_destino, el último shot es un segundo MIRROR_CHECK desde otro ángulo
+  const arc = hasDestino ? fullArc : [...fullArc.slice(0, 4), 'OUTFIT_MIRROR_CHECK'];
+  if (count >= 5) return arc;
+  if (count === 4) return arc.filter(k => k !== 'OUTFIT_READY');
+  if (count === 3) return ['OUTFIT_ARRIVING', 'OUTFIT_MIRROR_CHECK', 'OUTFIT_DESTINATION'];
+  return ['OUTFIT_ARRIVING', 'OUTFIT_MIRROR_CHECK', 'OUTFIT_DESTINATION'];
+}
+
+// ── Outfit Haul shots ────────────────────────────────────────
+// Historia: "Me probé todo esto / esta es mi cápsula"
+// Arco: intro de prendas → try-on progresivo con desorden creciente → prenda ganadora
+
+function buildOutfitHaulShotPool(outfitCount: number): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
+  const pool: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] = [
+    {
+      key:   'HAUL_INTRO',
+      beat:  'context',
+      role:  'HAUL INTRO',
+      purpose: 'Presentación de todas las prendas antes de empezar a probarlas. Flat lay o rack con el conjunto visible. Sin avatar de cuerpo completo. Establece la cantidad y variedad del haul. Comunica "esto es lo que me voy a probar".',
+      requiredElements: ['multiple_garments_visible', 'real_context_not_studio', 'variety_of_pieces_readable', 'organic_arrangement_not_catalog'],
+      forbiddenElements: ['full_body_avatar_posing', 'white_background', 'studio_lighting', 'catalog_product_grid', 'forced_symmetry'],
+      variationSpace: [
+        'flat lay de todas las prendas sobre cama — organizadas pero no perfectas, algunas superpuestas',
+        'prendas colgadas en rack o silla, manos parcialmente visibles acomodando la última pieza',
+        'overhead de las prendas extendidas sobre piso o cama, accesorios dispersos al costado',
+        'manos sosteniendo varias prendas al mismo tiempo, extendiéndolas frente a cámara',
+      ],
+      framing:     'WIDE_OR_OVERHEAD',
+      composition: 'GARMENTS_COLLECTION_VISIBLE',
+      cameraAngle: 'OVERHEAD_OR_EYE_LEVEL',
+    },
+  ];
+
+  // Shot de try-on por cada prenda (índice 0-based de la prenda)
+  for (let i = 0; i < outfitCount; i++) {
+    const isLast     = i === outfitCount - 1;
+    const pilesCount = i; // cuántas prendas ya están apiladas en el fondo
+    const pileDesc   = pilesCount === 0
+      ? 'El espacio está ordenado — es la primera prenda.'
+      : pilesCount === 1
+        ? 'En el fondo hay 1 prenda descartada apilada sobre una superficie (cama, silla o perchero).'
+        : `En el fondo hay ${pilesCount} prendas descartadas apiladas — el caos crece de forma natural.`;
+
+    pool.push({
+      key:   isLast ? 'HAUL_WINNER' : `HAUL_TRY_ON_${i + 1}`,
+      beat:  isLast ? 'emotion' : 'action',
+      role:  isLast ? 'HAUL WINNER' : `TRY-ON ${i + 1} of ${outfitCount}`,
+      purpose: isLast
+        ? `El avatar con la prenda ganadora — la que eligió quedarse. ${pileDesc} Expresión de decisión tomada o satisfacción. Full body o medium shot, outfit completo visible.`
+        : `El avatar vistiéndose la prenda ${i + 1} de ${outfitCount}. ${pileDesc} Actitud natural — se está probando, evaluando, moviéndose. No es una pose de catálogo.`,
+      requiredElements: isLast
+        ? ['full_body_or_medium_avatar', 'winning_outfit_clearly_visible', 'discarded_pile_visible_in_background', 'satisfied_or_decisive_expression']
+        : ['avatar_wearing_garment', 'garment_fully_visible', 'real_environment_visible', 'natural_try_on_attitude'],
+      forbiddenElements: ['catalog_stance', 'studio_backdrop', 'white_background', 'mannequin_pose', 'beautification', 'ad_composition'],
+      variationSpace: isLast
+        ? [
+            'full body del avatar con la prenda ganadora, fondo con ropa apilada visible, expresión resuelta',
+            'medium shot con la prenda ganadora, actitud de "esta es la elegida", ropa descartada parcialmente visible',
+            'selfie en espejo con la prenda ganadora puesta, caos del haul visible en el reflejo',
+            'avatar mirando la prenda que lleva puesta, manos ajustándola, satisfacción genuina',
+          ]
+        : [
+            `full body con la prenda ${i + 1} puesta, actitud de evaluación — dando vuelta, mirándose`,
+            `medium shot con la prenda ${i + 1}, expresión de "¿qué pienso?", ambiente real de fondo`,
+            `avatar ajustándose la prenda ${i + 1}, manos activas, gesto natural de quien se prueba algo`,
+            `full body con la prenda ${i + 1}, mirando hacia abajo evaluando el look, ambiente visible`,
+          ],
+      framing:     isLast ? 'WIDE_FULL_BODY' : 'MEDIUM_OR_WIDE',
+      composition: isLast ? 'WINNER_WITH_CHAOS_BACKGROUND' : 'TRY_ON_IN_CONTEXT',
+      cameraAngle: 'EYE_LEVEL',
+    });
+  }
+
+  return pool;
+}
+
+// ── Outfit Week shots ────────────────────────────────────────
+// Historia: "Estos fueron mis outfits de la semana / del mes / de la ocasión"
+// Cada shot = un outfit completo, full body. Variedad de ángulos y mood entre shots.
+
+function buildOutfitWeekShotPool(outfitCount: number): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
+  // Rotación de framings y ángulos para que ningún shot se sienta idéntico al anterior
+  const framingRotation = [
+    { framing: 'WIDE_FULL_BODY', composition: 'FULL_BODY_NATURAL', angle: 'EYE_LEVEL_OR_SLIGHTLY_LOW' },
+    { framing: 'WIDE_FULL_BODY', composition: 'MIRROR_SELFIE_FULL_BODY', angle: 'EYE_LEVEL' },
+    { framing: 'MEDIUM', composition: 'THREE_QUARTERS_NATURAL', angle: 'EYE_LEVEL' },
+    { framing: 'WIDE_FULL_BODY', composition: 'FULL_BODY_IN_CONTEXT', angle: 'SLIGHTLY_LOW_LOOKING_UP' },
+    { framing: 'MEDIUM', composition: 'CANDID_IN_SPACE', angle: 'EYE_LEVEL' },
+    { framing: 'WIDE_FULL_BODY', composition: 'WALKING_OR_ARRIVING', angle: 'EYE_LEVEL' },
+    { framing: 'MEDIUM', composition: 'LEANING_OR_RESTING', angle: 'EYE_LEVEL_OR_SLIGHTLY_HIGH' },
+  ];
+
+  return Array.from({ length: outfitCount }, (_, i) => {
+    const rot = framingRotation[i % framingRotation.length];
+    return {
+      key:   `WEEK_OUTFIT_${i + 1}`,
+      beat:  'context' as MomentType,
+      role:  `OUTFIT ${i + 1} of ${outfitCount}`,
+      purpose: `El avatar con el outfit ${i + 1} completo. Full body visible. El look debe leerse completamente. Ambiente real — puede ser interior o exterior. La luz y el ángulo varían respecto al shot anterior para dar sensación de días distintos.`,
+      requiredElements: ['full_body_visible', 'complete_outfit_readable_head_to_toe', 'real_environment_not_studio', 'authentic_attitude'],
+      forbiddenElements: ['catalog_mannequin_pose', 'studio_backdrop', 'white_background', 'identical_framing_as_prior_shot', 'beautification', 'ad_feel'],
+      variationSpace: [
+        `full body con outfit ${i + 1}, pose natural apoyada o de pie, ambiente real de fondo`,
+        `selfie de espejo full body con outfit ${i + 1}, actitud casual, ambiente del día visible`,
+        `medium shot con outfit ${i + 1}, tres cuartos, ángulo levemente distinto al anterior`,
+        `full body caminando o llegando a algún lugar con outfit ${i + 1}, movimiento orgánico`,
+      ],
+      framing:     rot.framing,
+      composition: rot.composition,
+      cameraAngle: rot.angle,
+    };
+  });
+}
+
 // ── Generación del plan ───────────────────────────────────────
 
 export async function buildPhotodumpSessionPlan(
@@ -980,6 +1268,8 @@ export async function generatePhotodumpREF0(
   // ── Construir lista de referencias para REF0 ─────────────────
   const refsToPass: (string | null)[] = [];
 
+  const isOutfitRecipe = recipe === 'outfit_check' || recipe === 'outfit_haul' || recipe === 'outfit_week';
+
   if (isUnboxing) {
     // Unboxing REF0: si hay avatar → ancla con persona sosteniendo/interactuando con el producto.
     // El avatar se pasa x2 (identidad suficiente sin dominar el presupuesto).
@@ -997,6 +1287,18 @@ export async function generatePhotodumpREF0(
     extraProducts.forEach(r => refsToPass.push(r));
     // Escena si existe
     if (refs.sceneRef) refsToPass.push(refs.sceneRef);
+  } else if (isOutfitRecipe) {
+    // Outfit REF0: avatar x3 (identidad dominante) + prendas del outfit (hasta 3) + escena de prueba o general
+    if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
+    if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
+    // Prendas: primera prenda + hasta 2 adicionales para que el modelo entienda el look completo
+    const allOutfitRefs = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
+    allOutfitRefs.slice(0, 3).forEach(r => refsToPass.push(r));
+    // Escena: outfit_check usa scenePruebaRef primero, las demás usan sceneRef
+    const sceneForRef0 = recipe === 'outfit_check'
+      ? (refs.scenePruebaRef ?? refs.sceneRef)
+      : refs.sceneRef;
+    if (sceneForRef0) refsToPass.push(sceneForRef0);
   } else {
     // Comportamiento original para todas las demás recetas
     if (refs.avatarRef) {
@@ -1041,18 +1343,35 @@ ${!refs.packagingRef ? `No packaging reference provided — create a packaging c
   const isFaceless = narrative === 'faceless';
   const modeBlock  = isFaceless ? STORY_MODE_FACELESS : STORY_MODE_DOMINANCE;
 
-  // Unboxing: protagonistLine y anchorShotDesc específicos
+  // protagonistLine y anchorShotDesc específicos según receta
   const protagonistLine = isUnboxing
     ? refs.avatarRef
       ? 'PROTAGONIST: The PRODUCT and its PACKAGING are the visual heroes. The PERSON frames the unboxing — present but not dominant. Show their face clearly in REF0 to establish identity for the set.'
       : 'PROTAGONIST: The PRODUCT and its PACKAGING are the sole visual heroes. No person. Show the packaging in context, pristine condition, real light.'
-    : isFaceless
-      ? 'PROTAGONIST: NO FACE. Show the product, the workspace, or hands doing something real. No person visible.'
-      : protagonist === 'product'
-        ? 'PROTAGONIST: The PRODUCT is the hero. Show it in its natural context with real, atmospheric lighting.'
-        : protagonist === 'person'
-          ? 'PROTAGONIST: The PERSON is the hero. Natural medium shot, authentic expression, real environment.'
-          : 'PROTAGONIST: The PERSON and PRODUCT together. Natural interaction, real context.';
+    : isOutfitRecipe
+      ? 'PROTAGONIST: The PERSON is the hero. The OUTFIT defines the visual world. Full body — the look must be readable from head to toe. Natural, lived-in, authentic — NOT a catalog shot.'
+      : isFaceless
+        ? 'PROTAGONIST: NO FACE. Show the product, the workspace, or hands doing something real. No person visible.'
+        : protagonist === 'product'
+          ? 'PROTAGONIST: The PRODUCT is the hero. Show it in its natural context with real, atmospheric lighting.'
+          : protagonist === 'person'
+            ? 'PROTAGONIST: The PERSON is the hero. Natural medium shot, authentic expression, real environment.'
+            : 'PROTAGONIST: The PERSON and PRODUCT together. Natural interaction, real context.';
+
+  const outfitRecipeDesc: Record<string, string> = {
+    outfit_check: `SHOT: Full body of the person with the COMPLETE OUTFIT on, in the try-on space (room, mirror, fitting room).
+Full body visible — the look must be readable from head to toe. Face visible, natural expression.
+Real environment — natural light from a window, real walls, real floor. NOT a studio. NOT a catalog.
+iPhone photo quality. This establishes: the person's identity, the outfit, and the visual world for the set.`,
+    outfit_haul: `SHOT: Full body of the person in the haul space (bedroom, fitting room), holding or wearing the first garment.
+The space should feel lived-in — a bed, a rack, a chair nearby. Natural light.
+Face visible, natural expression. The garments are the stars — the person is the presenter.
+iPhone photo quality. This establishes the identity, the space, and the mood of the haul.`,
+    outfit_week: `SHOT: Full body of the person with the FIRST OUTFIT on, in the general environment for the week set.
+Full body visible — the look must be readable head to toe. Real environment, authentic light.
+This REF0 establishes the visual world: same light quality, same ambient mood, across all the week's outfits.
+iPhone photo quality. NOT a catalog. NOT a studio.`,
+  };
 
   const anchorShotDesc = isUnboxing
     ? refs.avatarRef
@@ -1064,14 +1383,29 @@ This establishes: the person's identity, the product's packaging, and the unboxi
 Medium shot or slight overhead. Packaging fills 60-70% of frame. Real surface, natural window light.
 Shows the full packaging design: shape, color, branding. Authentic, not studio.
 This establishes the visual world for the entire unboxing set.`
-    : isFaceless
-      ? `SHOT: Overhead or medium shot of the workspace/product — no face, no full body.
+    : isOutfitRecipe
+      ? (outfitRecipeDesc[recipe ?? ''] ?? outfitRecipeDesc['outfit_check'])
+      : isFaceless
+        ? `SHOT: Overhead or medium shot of the workspace/product — no face, no full body.
 Hands may be visible if actively doing something. Real surface, natural window light, organic arrangement.
 iPhone photo quality — handheld, imperfect, lived-in. NOT a catalog shot. NOT a styled flat lay.`
-      : `SHOT: Natural medium shot (waist-up or 3/4 body). Authentic, candid, story-opening feel.
+        : `SHOT: Natural medium shot (waist-up or 3/4 body). Authentic, candid, story-opening feel.
 iPhone photo quality — handheld, natural light, real skin texture, no studio polish.
 The person looks like they are living their life — not posing for a photographer.
 Environment is real, light is natural or ambient, mood is aspirational but authentic.`;
+
+  // Instrucción de outfit para las recetas outfit — prendas solas como referencia de identidad
+  const allOutfitRefs = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
+  const outfitRefInstruction = isOutfitRecipe && allOutfitRefs.length > 0
+    ? `OUTFIT REFERENCE (${allOutfitRefs.length} garment${allOutfitRefs.length > 1 ? 's' : ''} provided):
+- The outfit reference image${allOutfitRefs.length > 1 ? 's show' : ' shows'} the exact garment${allOutfitRefs.length > 1 ? 's' : ''} the person wears in this set.
+- Copy the garments EXACTLY: same color, fabric, cut, fit, silhouette, and details.
+- SHOE SPECIFICITY LOCK: Reproduce the exact shoe design — same straps, heel, toe, hardware, material.
+- These are photos of the garments ALONE — the person is NOT wearing them in the reference images.
+- Use these references to understand the garment, then show the person wearing it naturally.
+- Do NOT invent fabric continuation beyond what is visible. Do NOT add or remove garments.
+${allOutfitRefs.length > 1 ? `- Multiple garments provided — in REF0, the person should wear the COMPLETE look (all or most pieces together).` : ''}`
+    : '';
 
   const identityBlock = isUnboxing
     ? refs.avatarRef
@@ -1080,6 +1414,10 @@ ${productInstruction}
 ${packagingInstruction}`
       : `${productInstruction}
 ${packagingInstruction}`
+    : isOutfitRecipe
+      ? `IDENTITY: Copy the face, hair, skin tone, and physical features EXACTLY from the face reference images.
+${refs.bodyRef ? bodyInstruction : ''}
+${outfitRefInstruction}`
     : isFaceless
       ? `${productInstruction}`
       : `IDENTITY: Copy the face, hair, skin tone, and physical features EXACTLY from the face reference images.
@@ -1339,6 +1677,50 @@ export async function generatePhotodumpShot(
     extraProducts.slice(0, isProductDetailShot ? 2 : 1).forEach(r => refsToPass.push(r));
     const sceneForShot = getSceneRefForShot(refs, shot.arcPosition - 1, totalShots);
     if (sceneForShot) refsToPass.push(sceneForShot);
+  } else if (recipe === 'outfit_check' || recipe === 'outfit_haul' || recipe === 'outfit_week') {
+    // Outfit recipes: avatar x3 (identidad dominante) + ref0 + prenda(s) de este shot + escena
+    if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
+    if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
+    refsToPass.push(ref0Url);
+
+    const allOutfits = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
+
+    if (shot.key === 'ACCESSORY_CLOSEUP') {
+      // Shot de close-up de accesorio: pasar el accesorio específico
+      // El índice del accesorio se codifica en el arcPosition relativo a los shots base
+      const allAccesorios = (refs.accesorioRefs ?? []).filter(Boolean) as string[];
+      // Calcular qué accesorio corresponde a este shot de closeup (orden de aparición)
+      const closeupShots  = allAccesorios.length;
+      const accIdx        = (shot.arcPosition - 1) % Math.max(closeupShots, 1);
+      if (allAccesorios[accIdx]) refsToPass.push(allAccesorios[accIdx]);
+    } else if (recipe === 'outfit_haul') {
+      // Haul: cada shot muestra la prenda correspondiente a su posición en el arco
+      // Shot 0 = HAUL_INTRO (no outfit específico), Shot 1..N = prenda i, Shot N+1 = ganadora
+      const shotOutfitIndex = shot.arcPosition - 2; // 0-indexed después del INTRO
+      if (shotOutfitIndex >= 0 && allOutfits[shotOutfitIndex]) {
+        refsToPass.push(allOutfits[shotOutfitIndex]);
+      }
+    } else if (recipe === 'outfit_week') {
+      // Week: cada shot tiene un outfit distinto
+      const weekOutfitIndex = shot.arcPosition - 1; // 0-indexed
+      if (allOutfits[weekOutfitIndex % Math.max(allOutfits.length, 1)]) {
+        refsToPass.push(allOutfits[weekOutfitIndex % allOutfits.length]);
+      }
+    } else {
+      // outfit_check: mismo outfit (look completo) en todos los shots
+      allOutfits.slice(0, 2).forEach(r => refsToPass.push(r));
+    }
+
+    // Escena: outfit_check usa scenePruebaRef hasta el penúltimo shot, sceneDestinoRef en el último
+    if (recipe === 'outfit_check') {
+      const isLastShot = shot.key === 'OUTFIT_DESTINATION';
+      const sceneRef   = isLastShot
+        ? (refs.sceneDestinoRef ?? refs.scenePruebaRef ?? refs.sceneRef)
+        : (refs.scenePruebaRef ?? refs.sceneRef);
+      if (sceneRef) refsToPass.push(sceneRef);
+    } else {
+      if (refs.sceneRef) refsToPass.push(refs.sceneRef);
+    }
   } else {
     // Comportamiento original para todas las demás recetas
     if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
@@ -1388,6 +1770,20 @@ This shot showcases the piece itself as part of the haul/outfit story.`
       ? buildOutfitLockBlock(outfitMode, basePrompt, true)
       : buildOutfitLockBlock(outfitMode, basePrompt, false);
 
+  const isOutfitShot = recipe === 'outfit_check' || recipe === 'outfit_haul' || recipe === 'outfit_week';
+  const allOutfitsForShot = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
+
+  // Instrucción de outfit específica para este shot
+  const shotOutfitInstruction = isOutfitShot
+    ? shot.key === 'HAUL_INTRO' || shot.key === 'OUTFIT_ARRIVING'
+      ? `OUTFIT PRESENTATION: The garment references show the exact pieces to display. Show them as objects — on a rack, laid flat, or held by hands. The garments must be clearly readable. Do NOT show a full-body catalog pose.`
+      : shot.key === 'ACCESSORY_CLOSEUP'
+        ? `ACCESSORY CLOSE-UP: The accessory reference shows the exact piece to feature. Fill the frame with it. Reproduce it faithfully — same color, material, hardware, design. Real light, real surface. No person needed.`
+        : recipe === 'outfit_haul'
+          ? `OUTFIT THIS SHOT: The garment reference for this shot is the SPECIFIC piece the person is wearing in this try-on moment. Copy it EXACTLY — same color, fabric, cut, fit. The person wears it naturally, not for a catalog.`
+          : `OUTFIT LOCK: Copy the garment(s) EXACTLY from the outfit references — same color, fabric, cut, fit, silhouette. SHOE SPECIFICITY LOCK: same straps, heel, toe, hardware. Do NOT invent fabric continuation. Do NOT add or remove pieces.`
+    : '';
+
   const shotIdentityBlock = isUnboxing
     ? `SHOT IDENTITY — UNBOXING SET:
 - REF0 is the visual anchor — same light, same surface, same color temperature across all shots.
@@ -1403,6 +1799,20 @@ Each shot tells ONE moment of the story. Show only what belongs to THIS moment.
 A face reference does NOT mean a face must appear. A packaging reference does NOT mean the box must be visible.
 If an element is not part of this shot's narrative role, leave it out — its absence is correct, not a failure.
 ONE person maximum in any frame. Any background figure is a generation error.
+
+NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${shot.role}.`
+    : isOutfitShot
+      ? `SHOT IDENTITY — OUTFIT SET:
+- Face reference (appears 3 times): EXACT identity — same bone structure, same hair, same skin tone. No beautification.
+${refs.bodyRef ? '- Body reference: establishes physique (build, proportions). Do NOT make the person heavier or slimmer than shown.' : ''}
+- REF0: establishes the visual world — same light, same scene, same color temperature.
+${shotOutfitInstruction}
+
+⚠️ REFERENCE ROLE — READ CAREFULLY:
+Garment references are photos of the GARMENTS ALONE — not a person wearing them. Use them to understand the piece, then show the person wearing it naturally.
+References are IDENTITY constraints, NOT a checklist. Show only what belongs to THIS moment.
+ONE person maximum in any frame. Any background figure is a generation error.
+${recipe === 'outfit_haul' && shot.key !== 'HAUL_INTRO' ? `HAUL PROGRESSION: ${shot.purpose}` : ''}
 
 NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${shot.role}.`
     : isFacelessShot

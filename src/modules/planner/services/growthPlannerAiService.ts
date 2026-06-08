@@ -18,11 +18,13 @@ import type {
 import {
   brandMemoryId,
   buildCreativeTaskBatchPrompt,
+  buildHookRepairPrompt,
   buildEngineV2ValidationReport,
   buildPlanMemory,
   compatibleBlueprints,
   CONTRACT_LOCKED_FIELDS,
   CREATIVE_TASK_BATCH_SCHEMA,
+  HOOK_REPAIR_BATCH_SCHEMA,
   detectBusinessArchetype,
   detectRepeatedBlueprints,
   detectRepeatedCaptions,
@@ -30,6 +32,7 @@ import {
   getBlueprintById,
   loadPreviousPlanMemory,
   mergeCreativeFields,
+  normalizeCreativeTextV2,
   normalizeProductsForEngineV2,
   savePlanMemory,
   selectCampaignAngle,
@@ -41,6 +44,7 @@ import {
   type CreativeTaskFields,
   type EngineV2Metadata,
   type GeneratedTaskV2,
+  type HookRepairFields,
   type PlanSkeletonTask,
   type PlannerEngineV2Input,
   type TaskBlueprint,
@@ -3366,6 +3370,30 @@ async function requestCreativeTaskBatch(params: {
   return asArray<CreativeTaskFields>(raw?.tasks, []);
 }
 
+async function requestHookRepair(params: {
+  token: string;
+  input: PlannerEngineV2Input;
+  tasks: GeneratedTaskV2[];
+}): Promise<HookRepairFields[]> {
+  const raw = await startGrowthPlannerJob({
+    token: params.token,
+    prompt: buildHookRepairPrompt({
+      tasks: params.tasks,
+      brandName: params.input.brand.name,
+      tone: params.input.brand.tone,
+    }),
+    schema: HOOK_REPAIR_BATCH_SCHEMA,
+    maxOutputTokens: Math.min(4096, Math.max(1200, params.tasks.length * 350)),
+    temperature: 0.35,
+  });
+  return asArray<HookRepairFields>(raw?.tasks, []);
+}
+
+function isHookCaptionOnlyFailure(task: GeneratedTaskV2 | undefined): task is GeneratedTaskV2 {
+  return Boolean(task?.validationErrors.length)
+    && task!.validationErrors.every(error => /hook|caption/i.test(error));
+}
+
 async function generateV2Tasks(params: {
   token: string;
   input: PlannerEngineV2Input;
@@ -3382,6 +3410,7 @@ async function generateV2Tasks(params: {
 
   for (const week of weeks) {
     let pending = params.skeletonTasks.filter(task => task.week === week);
+    const hookRepairQueue: PlanSkeletonTask[] = [];
     params.onProgress?.({ stepId: `week_${week}`, label: `Generando semana ${week} con contratos seguros` });
 
     for (let attempt = 0; attempt <= 2 && pending.length; attempt++) {
@@ -3419,9 +3448,53 @@ async function generateV2Tasks(params: {
         const validation = validateTaskAgainstBlueprint(task, blueprint, { businessArchetype: params.businessArchetype });
         const withValidation = { ...task, validationErrors: [...lockErrors, ...validation.errors] };
         completed.set(skeleton.id, withValidation);
-        if (!validation.valid || lockErrors.length) nextPending.push(skeleton);
+        if (!validation.valid || lockErrors.length) {
+          if (!lockErrors.length && isHookCaptionOnlyFailure(withValidation)) hookRepairQueue.push(skeleton);
+          else nextPending.push(skeleton);
+        }
       });
       pending = nextPending;
+    }
+
+    const hookOnlyIds = new Set(hookRepairQueue.map(skeleton => skeleton.id));
+    pending.filter(skeleton => isHookCaptionOnlyFailure(completed.get(skeleton.id))).forEach(skeleton => hookOnlyIds.add(skeleton.id));
+    const hookOnlySkeletons = params.skeletonTasks.filter(skeleton => hookOnlyIds.has(skeleton.id));
+    if (hookOnlySkeletons.length) {
+      try {
+        const hookRepairs = await requestHookRepair({
+          token: params.token,
+          input: params.input,
+          tasks: hookOnlySkeletons.map(skeleton => completed.get(skeleton.id)!),
+        });
+        const repairedIds = new Set<string>();
+        hookOnlySkeletons.forEach(skeleton => {
+          const current = completed.get(skeleton.id);
+          const repair = hookRepairs.find(item => item.skeletonTaskId === skeleton.id);
+          const blueprint = getBlueprintById(skeleton.blueprintId);
+          if (!current || !repair || !blueprint) return;
+          const repaired = normalizeCreativeTextV2({
+            ...current,
+            caption: repair.caption,
+            engagementHook: repair.engagementHook,
+            regenerationAttempts: current.regenerationAttempts + 1,
+          });
+          const lockErrors = validateContractLock(repaired, skeleton);
+          const validation = validateTaskAgainstBlueprint(repaired, blueprint, { businessArchetype: params.businessArchetype });
+          completed.set(skeleton.id, {
+            ...repaired,
+            validationErrors: [...lockErrors, ...validation.errors],
+          });
+          if (validation.valid && !lockErrors.length) repairedIds.add(skeleton.id);
+        });
+        const remaining = [
+          ...pending.filter(skeleton => !repairedIds.has(skeleton.id)),
+          ...hookOnlySkeletons.filter(skeleton => !repairedIds.has(skeleton.id)),
+        ];
+        pending = Array.from(new Map(remaining.map(skeleton => [skeleton.id, skeleton])).values());
+      } catch (error) {
+        console.warn(`[GrowthPlanner V2] Week ${week} isolated hook repair failed.`, error);
+        pending = Array.from(new Map([...pending, ...hookOnlySkeletons].map(skeleton => [skeleton.id, skeleton])).values());
+      }
     }
 
     if (pending.length) {

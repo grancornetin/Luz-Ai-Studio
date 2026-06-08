@@ -73,7 +73,7 @@ export function validateFinalPlan(
     taskInternalCoherenceValid: blueprintResults.every(result => !result.errors.some(error =>
       /platform|contentType|funnelRole|ctaTarget|Menciones incompatibles|dayLabel/i.test(error),
     )),
-    slotsValid: blueprintResults.every(result => !result.errors.some(error => /slots/.test(error))),
+    slotsValid: blueprintResults.every(result => !result.errors.some(error => /slot/i.test(error))),
     hashtagsValid: blueprintResults.every(result => !result.errors.some(error => /Hashtags/.test(error))),
     noNullCaptions: tasks.every(task => task.caption.trim() && !/^(null|undefined)$/i.test(task.caption.trim())),
     captionsNaturalValid: tasks.every(task => task.caption.length <= 600 && !validateWeakPhrasesV2(task.caption).length),

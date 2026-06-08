@@ -3,7 +3,7 @@
  * Brief · Referencias dinámicas según la receta elegida
  */
 import React, { useState, useRef } from 'react';
-import { ChevronDown, User, Package, Shirt, Layers, AlertCircle, AtSign } from 'lucide-react';
+import { ChevronDown, User, Package, Shirt, Layers, AlertCircle, AtSign, Star } from 'lucide-react';
 import { ImageSlot } from '../../components/shared/ImageSlot';
 import {
   PhotodumpRecipe, PhotodumpRefs, PhotodumpOutfitMode,
@@ -12,27 +12,36 @@ import {
 
 // Colores por slot
 const SLOT_STYLE = {
-  avatar:    { label: 'text-indigo-600',  border: 'border-indigo-200',  bg: 'bg-indigo-50/40',  dot: 'bg-indigo-500'  },
-  outfit:    { label: 'text-purple-600',  border: 'border-purple-200',  bg: 'bg-purple-50/30',  dot: 'bg-purple-500'  },
-  producto:  { label: 'text-emerald-600', border: 'border-emerald-200', bg: 'bg-emerald-50/30', dot: 'bg-emerald-500' },
-  empaque:   { label: 'text-amber-600',   border: 'border-amber-200',   bg: 'bg-amber-50/30',   dot: 'bg-amber-500'   },
-  escena:    { label: 'text-blue-600',    border: 'border-blue-200',    bg: 'bg-blue-50/30',    dot: 'bg-blue-500'    },
+  avatar:         { label: 'text-indigo-600',  border: 'border-indigo-200',  bg: 'bg-indigo-50/40',  dot: 'bg-indigo-500'  },
+  outfit:         { label: 'text-purple-600',  border: 'border-purple-200',  bg: 'bg-purple-50/30',  dot: 'bg-purple-500'  },
+  accesorios:     { label: 'text-pink-600',    border: 'border-pink-200',    bg: 'bg-pink-50/30',    dot: 'bg-pink-500'    },
+  producto:       { label: 'text-emerald-600', border: 'border-emerald-200', bg: 'bg-emerald-50/30', dot: 'bg-emerald-500' },
+  empaque:        { label: 'text-amber-600',   border: 'border-amber-200',   bg: 'bg-amber-50/30',   dot: 'bg-amber-500'   },
+  escena:         { label: 'text-blue-600',    border: 'border-blue-200',    bg: 'bg-blue-50/30',    dot: 'bg-blue-500'    },
+  escena_prueba:  { label: 'text-cyan-600',    border: 'border-cyan-200',    bg: 'bg-cyan-50/30',    dot: 'bg-cyan-500'    },
+  escena_destino: { label: 'text-violet-600',  border: 'border-violet-200',  bg: 'bg-violet-50/30',  dot: 'bg-violet-500'  },
 } as const;
 
 const SLOT_ICON = {
-  avatar:   <User    size={13} strokeWidth={2} />,
-  outfit:   <Shirt   size={13} strokeWidth={2} />,
-  producto: <Package size={13} strokeWidth={2} />,
-  empaque:  <Package size={13} strokeWidth={2} />,
-  escena:   <Layers  size={13} strokeWidth={2} />,
+  avatar:         <User    size={13} strokeWidth={2} />,
+  outfit:         <Shirt   size={13} strokeWidth={2} />,
+  accesorios:     <Star    size={13} strokeWidth={2} />,
+  producto:       <Package size={13} strokeWidth={2} />,
+  empaque:        <Package size={13} strokeWidth={2} />,
+  escena:         <Layers  size={13} strokeWidth={2} />,
+  escena_prueba:  <Layers  size={13} strokeWidth={2} />,
+  escena_destino: <Layers  size={13} strokeWidth={2} />,
 } as const;
 
 const SLOT_LABEL: Record<string, string> = {
-  avatar:   'Persona',
-  outfit:   'Prendas',
-  producto: 'Producto',
-  empaque:  'Empaque',
-  escena:   'Escena',
+  avatar:         'Persona',
+  outfit:         'Prendas / Outfit',
+  accesorios:     'Accesorios',
+  producto:       'Producto',
+  empaque:        'Empaque',
+  escena:         'Escena',
+  escena_prueba:  'Escena de prueba',
+  escena_destino: 'Escena destino',
 };
 
 interface PDStep2RecetaProps {
@@ -52,6 +61,8 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const toggle = (key: string) => setOpenSlot(p => p === key ? null : key);
 
+  const isOutfitRecipe = recipe === 'outfit_check' || recipe === 'outfit_haul' || recipe === 'outfit_week';
+
   // Insertar @tag en la posición del cursor del textarea
   const insertTag = (tag: string) => {
     const el = textareaRef.current;
@@ -63,7 +74,6 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
     const needsSpace = before.length > 0 && !before.endsWith(' ');
     const newVal = (needsSpace ? before + ' ' : before) + tag + ' ' + after;
     onPrompt(newVal);
-    // Restaurar foco y cursor
     setTimeout(() => {
       el.focus();
       const pos = (needsSpace ? start + 1 : start) + tag.length + 1;
@@ -82,31 +92,39 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   if (refs.productRef)   availableTags.push({ tag: '@producto', label: 'producto', color: 'text-emerald-600 bg-emerald-50 border-emerald-200' });
   if (refs.packagingRef) availableTags.push({ tag: '@empaque',  label: 'empaque',  color: 'text-amber-600 bg-amber-50 border-amber-200' });
   if (refs.sceneRef)     availableTags.push({ tag: '@escena',   label: 'escena',   color: 'text-blue-600 bg-blue-50 border-blue-200' });
-  // Outfits extra
   (refs.outfitRefs ?? []).forEach((r, i) => {
     if (r) availableTags.push({ tag: `@outfit${i + 2}`, label: `outfit ${i + 2}`, color: 'text-purple-500 bg-purple-50 border-purple-200' });
   });
-  // Productos extra
   (refs.productRefs ?? []).forEach((r, i) => {
     if (r) availableTags.push({ tag: `@producto${i + 2}`, label: `producto ${i + 2}`, color: 'text-emerald-500 bg-emerald-50 border-emerald-200' });
   });
 
   // ── Helpers para leer/escribir refs por slot key ─────────────
   const getSlotImages = (key: string): (string | null)[] => {
-    if (key === 'avatar')   return [refs.avatarRef, refs.bodyRef ?? null].filter((_, i) => i === 0 || refs.bodyRef !== undefined) as (string | null)[];
-    if (key === 'outfit')   return [refs.outfitRef, ...(refs.outfitRefs ?? [])];
-    if (key === 'producto') return [refs.productRef, ...(refs.productRefs ?? [])];
-    if (key === 'empaque')  return [refs.packagingRef ?? null, ...(refs.packagingRefs ?? [])];
-    if (key === 'escena')   return [refs.sceneRef, ...(refs.sceneRefs ?? [])];
+    if (key === 'avatar')         return [refs.avatarRef, refs.bodyRef ?? null].filter((_, i) => i === 0 || refs.bodyRef !== undefined) as (string | null)[];
+    if (key === 'outfit')         return [refs.outfitRef, ...(refs.outfitRefs ?? [])];
+    if (key === 'accesorios')     return [...(refs.accesorioRefs ?? [null, null, null])];
+    if (key === 'producto')       return [refs.productRef, ...(refs.productRefs ?? [])];
+    if (key === 'empaque')        return [refs.packagingRef ?? null, ...(refs.packagingRefs ?? [])];
+    if (key === 'escena')         return [refs.sceneRef, ...(refs.sceneRefs ?? [])];
+    if (key === 'escena_prueba')  return [refs.scenePruebaRef ?? null];
+    if (key === 'escena_destino') return [refs.sceneDestinoRef ?? null];
     return [];
   };
 
   const getSlotMax = (key: string): number => {
-    if (key === 'avatar')   return 2;
-    if (key === 'outfit')   return 4;
-    if (key === 'producto') return 3;
-    if (key === 'empaque')  return 3;
-    if (key === 'escena')   return 3;
+    if (key === 'avatar')         return 2;
+    if (key === 'outfit') {
+      if (recipe === 'outfit_haul') return 6;  // hasta 6 prendas
+      if (recipe === 'outfit_week') return 7;  // hasta 7 outfits
+      return 4;                                // outfit_check: hasta 4 prendas del mismo look
+    }
+    if (key === 'accesorios')     return 3;
+    if (key === 'producto')       return 3;
+    if (key === 'empaque')        return 3;
+    if (key === 'escena')         return 3;
+    if (key === 'escena_prueba')  return 1;
+    if (key === 'escena_destino') return 1;
     return 1;
   };
 
@@ -120,10 +138,20 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
       if (index === 0) {
         onRefs({ ...refs, outfitRef: value, outfitMode: value ? 'upload' : 'generate' });
       } else {
-        const arr = [...(refs.outfitRefs ?? [null, null, null])];
+        const maxExtra = getSlotMax('outfit') - 1;
+        const arr = [...(refs.outfitRefs ?? Array(maxExtra).fill(null))];
         arr[index - 1] = value;
         onRefs({ ...refs, outfitRefs: arr });
       }
+      return;
+    }
+    if (key === 'accesorios') {
+      const arr = [...(refs.accesorioRefs ?? [null, null, null])];
+      arr[index] = value;
+      // Si se borra la imagen, también limpiar el checkbox de closeup
+      const closeups = [...(refs.accesorioCloseup ?? [false, false, false])];
+      if (!value) closeups[index] = false;
+      onRefs({ ...refs, accesorioRefs: arr, accesorioCloseup: closeups });
       return;
     }
     if (key === 'producto') {
@@ -154,18 +182,61 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
         arr[index - 1] = value;
         onRefs({ ...refs, sceneRefs: arr });
       }
+      return;
     }
+    if (key === 'escena_prueba') {
+      onRefs({ ...refs, scenePruebaRef: value });
+      return;
+    }
+    if (key === 'escena_destino') {
+      onRefs({ ...refs, sceneDestinoRef: value });
+    }
+  };
+
+  const handleCloseupToggle = (accIndex: number) => {
+    const closeups = [...(refs.accesorioCloseup ?? [false, false, false])];
+    closeups[accIndex] = !closeups[accIndex];
+    onRefs({ ...refs, accesorioCloseup: closeups });
   };
 
   const getSlotFilled = (key: string): number =>
     getSlotImages(key).filter(Boolean).length;
 
   const slotSubLabels: Record<string, string[]> = {
-    avatar:   ['Cara / identidad', 'Cuerpo (opcional)'],
-    outfit:   ['Prenda principal', 'Prenda 2', 'Prenda 3', 'Prenda 4'],
-    producto: ['Producto (dentro)', 'Ángulo 2', 'Ángulo 3'],
-    empaque:  ['Empaque principal', 'Ángulo 2', 'Ángulo 3'],
-    escena:   ['Principal', 'Lugar 2', 'Lugar 3'],
+    avatar:         ['Cara / identidad', 'Cuerpo (opcional)'],
+    outfit:         recipe === 'outfit_haul'
+      ? ['Prenda 1', 'Prenda 2', 'Prenda 3', 'Prenda 4', 'Prenda 5', 'Prenda 6']
+      : recipe === 'outfit_week'
+        ? ['Outfit 1', 'Outfit 2', 'Outfit 3', 'Outfit 4', 'Outfit 5', 'Outfit 6', 'Outfit 7']
+        : ['Prenda 1', 'Prenda 2', 'Prenda 3', 'Prenda 4'],
+    accesorios:     ['Accesorio 1', 'Accesorio 2', 'Accesorio 3'],
+    producto:       ['Producto (dentro)', 'Ángulo 2', 'Ángulo 3'],
+    empaque:        ['Empaque principal', 'Ángulo 2', 'Ángulo 3'],
+    escena:         ['Principal', 'Lugar 2', 'Lugar 3'],
+    escena_prueba:  ['Dormitorio / espejo / probador'],
+    escena_destino: ['Lugar final (restaurante, evento, calle...)'],
+  };
+
+  // Hint de ayuda por slot y receta
+  const getSlotHint = (key: string): string => {
+    if (key === 'avatar') {
+      if (recipe === 'bts') return 'Opcional: tu foto mantiene tono de piel y manos consistentes aunque no se vea tu cara.';
+      if (recipe === 'unboxing') return 'Opcional: si subís tu foto aparecerás guiando el unboxing — abriendo la caja, sosteniendo el producto.';
+      return 'La foto del rostro ancla la identidad facial en todas las imágenes.';
+    }
+    if (key === 'outfit') {
+      if (recipe === 'outfit_check') return 'Subí las prendas del look por separado — una foto clara de cada pieza sola. Podés usar el módulo Outfit Extractor o Foto de Producto de la app para mejores resultados. ⚠️ Evitá subir fotos con personas vistiéndolas — el modelo puede confundir identidades.';
+      if (recipe === 'outfit_haul') return 'Subí cada prenda que vas a "probarte" — una por slot. El orden que subís es el orden de la historia. Podés usar Outfit Extractor o Foto de Producto. ⚠️ Evitá fotos con personas — podría confundir identidades.';
+      if (recipe === 'outfit_week') return 'Subí una imagen por outfit completo. Podés usar fotos planas o de producto. El orden es el orden de aparición en el set. ⚠️ Evitá fotos con personas — podría confundir identidades.';
+      return 'Subí hasta 4 prendas. Podés usar el módulo Outfit Extractor o Foto de Producto para mejores resultados.';
+    }
+    if (key === 'accesorios') return 'Subí accesorios que quieras destacar. Marcá el ⭐ de cada accesorio que quieras con una toma de close-up dedicada — se generará como imagen extra.';
+    if (key === 'producto') return recipe === 'unboxing' ? 'El producto dentro del empaque: lo que el cliente recibe. Subí hasta 3 ángulos.' : 'Subí hasta 3 ángulos del mismo producto para mayor fidelidad visual.';
+    if (key === 'empaque') return 'El empaque, caja o packaging del producto. Si no subís fotos, la IA generará un empaque — la consistencia puede variar.';
+    if (key === 'escena') return 'La escena principal define la ambientación del set completo.';
+    if (key === 'escena_prueba') return 'El lugar donde te probás el outfit — tu dormitorio, un espejo, un probador. Si no subís foto, se inventa según el brief.';
+    if (key === 'escena_destino') return 'El lugar al que vas con el outfit puesto — restaurante, evento, calle. Opcional: si no subís, el último shot usa la escena de prueba.';
+    return '';
   };
 
   return (
@@ -195,12 +266,15 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
               value={basePrompt}
               onChange={e => onPrompt(e.target.value)}
               placeholder={
-                recipe === 'outfit'      ? 'Ej: @persona hace un haul de otoño luciendo @outfit en Palermo...' :
-                recipe === 'unboxing'    ? 'Ej: Caja de mi nueva crema de vitamina C, @persona hace el unboxing de @producto...' :
-                recipe === 'day_in_life' ? 'Ej: @persona en una mañana de domingo tranquila en casa con @producto...' :
-                recipe === 'launch'      ? 'Ej: Primer lanzamiento de @producto, edición limitada, packaging artesanal...' :
-                recipe === 'bts'         ? 'Ej: Preparando los pedidos de la semana con @producto, papel de seda rosado...' :
-                recipe === 'travel'      ? 'Ej: @persona en Montevideo, el puerto, los cafés y la rambla al atardecer...' :
+                recipe === 'outfit_check' ? 'Ej: @persona hace su outfit check para una cena romántica — look elegante casual en @escena_prueba...' :
+                recipe === 'outfit_haul'  ? 'Ej: @persona se prueba 5 blusas distintas para ver cuál se queda — haul de primavera en su dormitorio...' :
+                recipe === 'outfit_week'  ? 'Ej: Estos fueron los outfits de @persona de la semana: del gym al restaurante, todo en uno...' :
+                recipe === 'outfit'       ? 'Ej: @persona hace un haul de otoño luciendo @outfit en Palermo...' :
+                recipe === 'unboxing'     ? 'Ej: Caja de mi nueva crema de vitamina C, @persona hace el unboxing de @producto...' :
+                recipe === 'day_in_life'  ? 'Ej: @persona en una mañana de domingo tranquila en casa con @producto...' :
+                recipe === 'launch'       ? 'Ej: Primer lanzamiento de @producto, edición limitada, packaging artesanal...' :
+                recipe === 'bts'          ? 'Ej: Preparando los pedidos de la semana con @producto, papel de seda rosado...' :
+                recipe === 'travel'       ? 'Ej: @persona en Montevideo, el puerto, los cafés y la rambla al atardecer...' :
                 'Describí el contexto central del set...'
               }
               rows={4}
@@ -238,13 +312,20 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
 
             <div className="space-y-2">
               {refKeys.map(key => {
-                const required = isRefRequired(recipe, key);
-                const style    = SLOT_STYLE[key as keyof typeof SLOT_STYLE];
-                const isOpen   = openSlot === key;
-                const filled   = getSlotFilled(key);
-                const max      = getSlotMax(key);
+                const required  = isRefRequired(recipe, key);
+                const style     = SLOT_STYLE[key as keyof typeof SLOT_STYLE] ?? SLOT_STYLE.escena;
+                const isOpen    = openSlot === key;
+                const filled    = getSlotFilled(key);
+                const max       = getSlotMax(key);
                 const subLabels = slotSubLabels[key] ?? [];
-                const slotType = key === 'avatar' ? 'person' : key === 'outfit' ? 'outfit' : (key === 'producto' || key === 'empaque') ? 'product' : 'scene';
+                const slotType  = key === 'avatar' ? 'person'
+                  : (key === 'outfit' || key === 'accesorios') ? 'outfit'
+                  : (key === 'producto' || key === 'empaque') ? 'product'
+                  : 'scene';
+
+                const isAccesorios = key === 'accesorios';
+                const images       = getSlotImages(key);
+                const closeups     = refs.accesorioCloseup ?? [false, false, false];
 
                 return (
                   <div
@@ -268,16 +349,17 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                         {SLOT_LABEL[key]}
                       </span>
 
-                      {/* Badge con estado */}
                       {filled > 0 && !isOpen && (
                         <span className={`text-[9px] font-bold ${style.label}`}>
                           {filled} foto{filled > 1 ? 's' : ''}
+                          {isAccesorios && (refs.accesorioCloseup ?? []).filter(Boolean).length > 0 &&
+                            ` · ${(refs.accesorioCloseup ?? []).filter(Boolean).length} close-up`}
                         </span>
                       )}
                       {filled === 0 && !isOpen && (
                         <span className="text-[9px] text-slate-400 flex items-center gap-1">
                           {required && <AlertCircle size={9} className="text-brand-400" />}
-                          {required ? 'Necesario' : 'Recomendado'}
+                          {required ? 'Necesario' : 'Opcional'}
                         </span>
                       )}
 
@@ -290,18 +372,38 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                     {/* Contenido expandido */}
                     {isOpen && (
                       <div className="px-3.5 pb-3.5 space-y-3">
-                        <div className={`grid gap-2 ${max <= 2 ? 'grid-cols-2' : 'grid-cols-3 md:grid-cols-4'}`}>
+                        <div className={`grid gap-2 ${max <= 2 ? 'grid-cols-2' : max <= 3 ? 'grid-cols-3' : 'grid-cols-3 md:grid-cols-4'}`}>
                           {Array.from({ length: max }).map((_, i) => {
-                            const images = getSlotImages(key);
-                            const isFirst   = i === 0;
+                            const isFirst    = i === 0;
                             const isDisabled = i > 0 && !images[0];
+                            const hasImage   = !!images[i];
+                            const isCloseup  = isAccesorios && closeups[i];
+
                             return (
                               <div key={i} className="flex flex-col gap-1">
-                                <p className={`text-[9px] font-bold uppercase tracking-wider ${
-                                  isFirst ? style.label : 'text-slate-400'
-                                }`}>
-                                  {subLabels[i] ?? `Foto ${i + 1}`}
-                                </p>
+                                <div className="flex items-center justify-between">
+                                  <p className={`text-[9px] font-bold uppercase tracking-wider ${
+                                    isFirst ? style.label : 'text-slate-400'
+                                  }`}>
+                                    {subLabels[i] ?? `Foto ${i + 1}`}
+                                  </p>
+                                  {/* Checkbox de close-up para accesorios */}
+                                  {isAccesorios && hasImage && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCloseupToggle(i)}
+                                      title={isCloseup ? 'Quitar close-up dedicado' : 'Agregar close-up dedicado (+1 imagen)'}
+                                      className={`flex items-center gap-0.5 text-[8px] font-bold px-1.5 py-0.5 rounded-full border transition-all ${
+                                        isCloseup
+                                          ? 'bg-pink-500 border-pink-500 text-white'
+                                          : 'bg-white border-slate-300 text-slate-400 hover:border-pink-400 hover:text-pink-500'
+                                      }`}
+                                    >
+                                      <Star size={7} strokeWidth={2.5} />
+                                      CU
+                                    </button>
+                                  )}
+                                </div>
                                 <ImageSlot
                                   value={images[i] ?? null}
                                   onChange={v => handleSlotChange(key, i, v)}
@@ -310,6 +412,11 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                                   disabled={isDisabled}
                                   iconless
                                 />
+                                {isAccesorios && isCloseup && hasImage && (
+                                  <p className="text-[8px] text-pink-500 font-bold text-center">
+                                    ★ Close-up incluido
+                                  </p>
+                                )}
                               </div>
                             );
                           })}
@@ -317,11 +424,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
 
                         {/* Nota de ayuda por slot */}
                         <p className="text-[10px] text-slate-400 leading-snug">
-                          {key === 'avatar'   && (recipe === 'bts' ? 'Opcional: tu foto mantiene tono de piel y manos consistentes aunque no se vea tu cara.' : recipe === 'unboxing' ? 'Opcional: si subís tu foto aparecerás guiando el unboxing — abriendo la caja, sosteniendo el producto, interactuando con él.' : 'La foto del rostro ancla la identidad facial en todas las imágenes.')}
-                          {key === 'outfit'   && 'Subí hasta 4 prendas. Cada imagen del set mostrará una prenda distinta. Si subís menos prendas que imágenes, las sobrantes se generan como flat lay de la prenda.'}
-                          {key === 'producto' && (recipe === 'unboxing' ? 'El producto dentro del empaque: lo que el cliente recibe. Subí hasta 3 ángulos para mayor fidelidad.' : 'Subí hasta 3 ángulos del mismo producto para mayor fidelidad visual.')}
-                          {key === 'empaque'  && 'El empaque, caja o packaging del producto. Si no subís fotos, la IA generará un empaque — la consistencia entre imágenes puede variar.'}
-                          {key === 'escena'   && 'La escena principal define la ambientación del set completo.'}
+                          {getSlotHint(key)}
                         </p>
 
                         <button
@@ -350,7 +453,6 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
             </p>
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 bg-brand-50 rounded-xl flex items-center justify-center text-brand-600">
-                {/* icon inline — lo toma de meta */}
                 <Package size={15} strokeWidth={1.5} />
               </div>
               <div>
@@ -394,6 +496,13 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
               );
             })}
           </div>
+
+          {/* Resumen de close-ups si hay accesorios marcados */}
+          {isOutfitRecipe && (refs.accesorioCloseup ?? []).filter(Boolean).length > 0 && (
+            <div className="bg-pink-50 border border-pink-100 rounded-xl px-3 py-2.5 text-[11px] text-pink-800 leading-[1.55]">
+              <strong>+{(refs.accesorioCloseup ?? []).filter(Boolean).length} imagen{(refs.accesorioCloseup ?? []).filter(Boolean).length > 1 ? 's' : ''} extra</strong> — close-up de accesorio{(refs.accesorioCloseup ?? []).filter(Boolean).length > 1 ? 's' : ''} marcado{(refs.accesorioCloseup ?? []).filter(Boolean).length > 1 ? 's' : ''} con ⭐
+            </div>
+          )}
 
           <div className="bg-violet-50 border border-violet-100 rounded-xl px-3 py-2.5 text-[11px] text-violet-800 leading-[1.55]">
             <strong>Sin referencias</strong> también funciona — el resultado será más genérico pero igualmente válido.

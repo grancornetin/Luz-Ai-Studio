@@ -57,6 +57,7 @@ export function validateTaskAgainstBlueprint(
     }
   }
   if (!task.caption.trim() || /^(null|undefined)$/i.test(task.caption.trim())) errors.push('caption vacío o null.');
+  if (task.caption.length > 600) errors.push('Caption demasiado largo.');
   errors.push(...validateHooksV2(task.engagementHook, task.ctaTarget).errors);
 
   const forbidden = blueprint.forbiddenTerms.filter(term => lower.includes(term.toLowerCase()));
@@ -67,7 +68,15 @@ export function validateTaskAgainstBlueprint(
   if (missingRequired.length) errors.push(`Términos requeridos ausentes: ${missingRequired.join(', ')}.`);
 
   errors.push(...validateSlotsV2(task, blueprint, options.businessArchetype || 'other'));
-  if (validateWeakPhrasesV2(text).length) errors.push('Hay frases débiles.');
+  const weakTerms = validateWeakPhrasesV2(text);
+  if (weakTerms.length) {
+    const hookCaptionWeakTerms = new Set([
+      ...validateWeakPhrasesV2(task.caption),
+      ...validateWeakPhrasesV2(task.engagementHook),
+    ]);
+    const onlyHookCaption = weakTerms.every(term => hookCaptionWeakTerms.has(term));
+    errors.push(onlyHookCaption ? 'Caption o hook contiene frases débiles.' : 'Hay frases débiles fuera de caption/hook.');
+  }
   if (hasSpanishOrthographyIssues(text)) warnings.push('Hay posibles acentos pendientes.');
   const sensitiveClaims = validateSensitiveClaims(text, options.businessArchetype);
   if (!sensitiveClaims.valid) errors.push('Hay claims sensibles o riesgosos.');
