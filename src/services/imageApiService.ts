@@ -90,7 +90,7 @@ export function parseErrorCode(raw: unknown): AppError {
   if (lower.includes('timeout') || lower.includes('timed out')) {
     return { code: ErrorCode.TIMEOUT, message: 'La generación tardó demasiado. Podés reintentar sin costo adicional.' };
   }
-  if (lower.includes('face') || lower.includes('rostro') || lower.includes('no face') || lower.includes('face not detected')) {
+  if (lower.includes('no face') || lower.includes('face not detected') || lower.includes('no se detectó') || lower.includes('rostro no detectado') || lower.includes('face detection failed') || lower.includes('no human face')) {
     return { code: ErrorCode.FACE_NOT_DETECTED, message: 'No se detectó un rostro claro en la foto. Prueba con otra imagen donde el rostro sea visible de frente.' };
   }
   if (lower.includes('content') && (lower.includes('filter') || lower.includes('block') || lower.includes('policy') || lower.includes('safety'))) {
