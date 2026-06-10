@@ -99,9 +99,9 @@ async function resolveProvider(requestedModel: string): Promise<'gemini' | 'seed
   if (requestedModel === 'seedream') {
     preferred = ['seedream', 'gemini'];   // fallback: Gemini
   } else if (requestedModel === 'gptimage') {
-    preferred = ['gptimage'];             // sin fallback: si está caído, falla limpio
+    preferred = ['gptimage'];             // sin fallback
   } else {
-    preferred = ['gemini', 'gptimage'];   // fallback: GPT Image 2 (mejor calidad que Seedream)
+    preferred = ['gemini'];               // sin fallback — Gemini es el único modelo soportado para generación con referencias
   }
   for (const p of preferred) {
     if (!(await isProviderDown(p))) return p as 'gemini' | 'seedream' | 'gptimage';
