@@ -44,6 +44,19 @@ export function buildEngineV2ValidationReport(plan: GrowthStrategicPlan, metadat
 - Hooks construidos por Factory: ${metadata.hookValidationSummary.hooksBuiltByFactory.length}
 - Hooks aceptados de Gemini: ${metadata.hookValidationSummary.hooksAcceptedFromGemini.length}
 - Frases débiles restantes: ${metadata.weakPhraseSummary.remainingWeakPhrases.join(', ') || 'ninguna'}
+- Ubicaciones de frases débiles:
+${metadata.weakPhraseSummary.occurrences?.length
+    ? metadata.weakPhraseSummary.occurrences.map(item => `  - ${item.taskId || 'plan'} / ${item.field}: "${item.phrase}" (${item.snippet})`).join('\n')
+    : '  - ninguna'}
+
+## Release Gate
+- Estado final: ${metadata.releaseGate.planQualityStatus}
+- Puede mostrarse al usuario: ${metadata.releaseGate.canPublishToUser ? 'sí' : 'no'}
+- Hard failures: ${metadata.releaseGate.hardFailures.join(', ') || 'ninguno'}
+- Soft warnings: ${metadata.releaseGate.softWarnings.join(' | ') || 'ninguno'}
+- Razones de bloqueo: ${metadata.releaseGate.blockingReasons.join(', ') || 'ninguna'}
+- Notas: ${metadata.releaseGate.releaseNotes.join(' | ') || 'ninguna'}
+- Contradicciones corregidas: ${metadata.validationConsistency.correctedChecks.join(', ') || 'ninguna'}
 
 ## Validación final
 ${checkLines}

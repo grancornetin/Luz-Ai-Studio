@@ -7,6 +7,7 @@ import { dayLabelFromDate } from './planSkeletonGenerator';
 import { validateSensitiveClaims } from './sensitiveGuardrails';
 import { getBlueprintById } from './taskBlueprints';
 import { hasDeterministicFallback } from './deterministicCompletion';
+import { findVisiblePlaceholderFields, findVisibleWeakPhraseOccurrences } from './visibleOutputValidation';
 import type { BusinessArchetype, FinalValidationSummary, GeneratedTaskV2, PreviousPlanMemory } from './types';
 
 const MIN_TASKS = { 7: 5, 14: 12, 30: 25 } as const;
@@ -18,6 +19,10 @@ function taskText(task: GeneratedTaskV2): string {
     ...task.shotGuide.shots.map(shot => shot.instruction), ...task.shotGuide.onScreenText,
     ...task.shotGuide.inspirationSearches, ...task.shotGuide.whatToAvoid,
   ].join(' ');
+}
+
+function isHardBlueprintContractError(error: string): boolean {
+  return !/Hook |Caption |frases débiles|Hashtags|acentos/i.test(error);
 }
 
 export function validateFinalPlan(
@@ -47,12 +52,20 @@ export function validateFinalPlan(
   }, {});
   const repeatedCurrentCaptions = Object.values(currentCaptionCounts).some(count => count > 1);
   const repeatsPreviousSequence = Boolean(previous?.planSignature && previous.planSignature === buildPlanSignature(tasks));
+  const currentAngle = tasks[0]?.campaignAngle;
+  const normalizedGoal = plan.mainGoal.toLowerCase().replace(/\s+/g, ' ').trim();
+  const repeatsCampaignAngleThreeTimes = Boolean(currentAngle && previousPlans.slice(0, 2).length === 2
+    && previousPlans.slice(0, 2).every(memory =>
+      memory.previousCampaignAngles.includes(currentAngle)
+      && memory.objectiveSignature.toLowerCase().replace(/\s+/g, ' ').trim() === normalizedGoal,
+    ));
   const allText = [
     tasks.map(taskText).join(' '),
     plan.strategyGoal, plan.businessDiagnosis, plan.planNarrative, plan.strategicTip,
     ...plan.nicheInsights,
     ...plan.roadmap.flatMap(item => [item.title, item.objective, item.hint]),
   ].join(' ');
+  const visibleWeakPhrases = findVisibleWeakPhraseOccurrences(plan);
   const efforts = tasks.reduce<Record<string, number>>((acc, task) => {
     acc[task.estimatedEffort] = (acc[task.estimatedEffort] || 0) + 1;
     return acc;
@@ -64,8 +77,7 @@ export function validateFinalPlan(
     && tasks[index - 1].estimatedEffort === 'alto'
     && tasks[index - 2].estimatedEffort === 'alto');
   const total = tasks.length || 1;
-  const placeholderPattern = /tarea pendiente de revisi[oó]n|revisa esta tarea|no se recibi[oó] una respuesta creativa v[aá]lida|completa la tarea antes de publicarla|revisar manualmente/i;
-  const placeholderTasks = tasks.filter(task => placeholderPattern.test(taskText(task)));
+  const placeholderFields = findVisiblePlaceholderFields(plan);
   const manualReviewCount = tasks.filter(task => task.needsManualReview).length;
   const checks: Record<string, boolean> = {
     taskCountValid: tasks.length >= MIN_TASKS[plan.duration],
@@ -90,7 +102,7 @@ export function validateFinalPlan(
     platformFormatValid: blueprintResults.every(result => !result.errors.some(error => /platform|contentType/.test(error))),
     platformCtaCoherenceValid: blueprintResults.every(result => !result.errors.some(error => /ctaTarget|Menciones incompatibles|Hook no coincide/.test(error))),
     primaryModuleActionValid: blueprintResults.every(result => !result.errors.some(error => /module/.test(error))),
-    blueprintContractsValid: blueprintResults.every(result => result.valid),
+    blueprintContractsValid: blueprintResults.every(result => !result.errors.some(isHardBlueprintContractError)),
     taskInternalCoherenceValid: blueprintResults.every(result => !result.errors.some(error =>
       /platform|contentType|funnelRole|ctaTarget|Menciones incompatibles|dayLabel/i.test(error),
     )),
@@ -98,14 +110,15 @@ export function validateFinalPlan(
     hashtagsValid: blueprintResults.every(result => !result.errors.some(error => /Hashtags/.test(error))),
     noNullCaptions: tasks.every(task => task.caption.trim() && !/^(null|undefined)$/i.test(task.caption.trim())),
     captionsNaturalValid: tasks.every(task => task.caption.length <= 600 && !validateWeakPhrasesV2(task.caption).length),
-    noWeakPhrases: !validateWeakPhrasesV2(allText).length,
+    noWeakPhrases: visibleWeakPhrases.length === 0,
     spanishOrthographyValid: !hasSpanishOrthographyIssues(allText),
     actionableHooksValid: tasks.every(task => validateHooksV2(task.engagementHook, task.ctaTarget).valid),
     sensitiveClaimsValid: validateSensitiveClaims(allText, businessArchetype).valid,
     antiRepetitionValid: repeatedTaskSignatures.length === 0
       && !repeatedCurrentCaptions
+      && !repeatsCampaignAngleThreeTimes
       && (!previous || taskNoveltyScore >= 60 && repeatedCaptions.length === 0 && !repeatsPreviousSequence),
-    noPlaceholderTasks: placeholderTasks.length === 0,
+    noPlaceholderTasks: placeholderFields.length === 0,
     manualReviewRatioValid: manualReviewCount <= 2,
     fallbackCompletionValid: tasks.every(task => {
       const blueprint = getBlueprintById(task.blueprintId);

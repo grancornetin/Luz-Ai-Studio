@@ -31,7 +31,7 @@ interface PDStep1Props {
 }
 
 const RECIPES = Object.keys(RECIPE_META) as PhotodumpRecipe[];
-const REGULAR_RECIPES = RECIPES.filter(r => r !== 'free');
+const REGULAR_RECIPES = RECIPES.filter(r => r !== 'free' && r !== 'outfit');
 
 const PDStep1: React.FC<PDStep1Props> = ({
   recipe, destino, onRecipe, onDestino,

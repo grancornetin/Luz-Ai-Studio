@@ -208,6 +208,14 @@ export interface GrowthStrategicPlan {
     checks: Record<string, boolean>;
     criticalErrors: string[];
     reviewWarnings: string[];
+    releaseGate?: {
+      canPublishToUser: boolean;
+      planQualityStatus: 'ready' | 'needs_review' | 'failed_validation';
+      hardFailures: string[];
+      softWarnings: string[];
+      blockingReasons: string[];
+      releaseNotes: string[];
+    };
   };
   engineV2Metadata?: Record<string, unknown>;
 }

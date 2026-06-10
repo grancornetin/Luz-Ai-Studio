@@ -20,7 +20,7 @@ import { newSessionId } from '../../services/imageApiService';
 import { photodumpStorage } from './photodumpStorage';
 import {
   PhotodumpSet, PhotodumpDestino, PhotodumpRefs, PhotodumpOutfitMode,
-  PhotodumpRecipe, FreeScene,
+  PhotodumpRecipe, FreeScene, PhotodumpDebugData, PhotodumpShotDebug,
   NARRATIVE_META, DESTINO_META, RECIPE_META,
   recipeRefsValid,
 } from './types';
@@ -32,6 +32,7 @@ import {
   generateFreeModeScene,
   getRefsAsArray,
   inferAvatarGender,
+  type PhotodumpShotResult,
 } from './photodumpDirectorService';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
@@ -155,6 +156,7 @@ const PhotodumpModule: React.FC = () => {
   const [savedShots,        setSavedShots]        = useState<any[]>([]);
   const [savedCaptions,     setSavedCaptions]     = useState<{ caption: string; hashtags: string } | null>(null);
   const [savedRef0Analysis, setSavedRef0Analysis] = useState<any>(null);
+  const [failureHint,       setFailureHint]       = useState<string | null>(null);
 
   // ── Resultados UI ─────────────────────────────────────────
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -224,7 +226,7 @@ const PhotodumpModule: React.FC = () => {
     setCount(4); setDestino('feed'); setRecipe('day_in_life');
     setFreeScenes([{ ...newFreeScene(0), sceneRefs: [], inheritFrom: 0 }]);
     setGeneratingFreeIndex(null);
-    setCurrentSet(null); setError(null); setProgress(null);
+    setCurrentSet(null); setError(null); setProgress(null); setFailureHint(null);
     setProgressStepIndex(0); setIsGenerating(false); setPartialImages([]);
     setFailedIndexes([]); setSavedPlan(null); setSavedRef0Url(''); setSavedRef0Analysis(null); setSavedShotUrls([]);
     libreSetIdRef.current = null;
@@ -373,39 +375,81 @@ const PhotodumpModule: React.FC = () => {
       const refsWithMode = { ...refs, outfitMode, gender: inferredGender };
 
       setProgressStepIndex(0);
-      const plan  = await buildPhotodumpSessionPlan(narrative, protagonist, destino, basePrompt, recipe, refsWithMode);
+      const plan  = await buildPhotodumpSessionPlan(narrative, protagonist, destino, basePrompt, recipe, refsWithMode, count);
       const shots = plan.shots.slice(0, count);
       setSavedShots(shots);
       setSavedPlan(plan);
 
       setProgressStepIndex(1);
-      const { imageUrl: ref0Url, ref0Analysis } = await generatePhotodumpREF0(
+      const ref0Result = await generatePhotodumpREF0(
         refsWithMode, narrative, protagonist, destino, basePrompt, sessionParams, recipe,
       );
+      const ref0Url      = ref0Result.imageUrl;
+      const ref0Analysis = ref0Result.ref0Analysis;
       setSavedRef0Url(ref0Url);
       setSavedRef0Analysis(ref0Analysis);
       setPartialImages([ref0Url]);
 
+      // Debug: acumular prompts de cada shot (solo para admins)
+      const debugShots: PhotodumpShotDebug[] = isAdmin ? [{
+        shotIndex:  0,
+        role:       'REF0_ANCHOR',
+        prompt:     ref0Result.prompt,
+        refsCount:  ref0Result.refsCount,
+        status:     'ok',
+      }] : [];
+
       setProgressStepIndex(2);
       const shotUrls: string[] = [];
       const failed: number[]   = [];
+      const failedErrors: string[] = [];
       for (let i = 0; i < shots.length; i++) {
         try {
-          const url = await generatePhotodumpShot(
+          const result: PhotodumpShotResult = await generatePhotodumpShot(
             shots[i], refsWithMode, ref0Url, ref0Analysis,
             basePrompt, narrative, destino, sessionParams,
             plan.assignedFamilies, plan.sessionFamilies,
             shots.length, protagonist, recipe,
           );
-          shotUrls.push(url);
-          setPartialImages(prev => [...prev, url]);
-        } catch {
+          shotUrls.push(result.imageUrl);
+          setPartialImages(prev => [...prev, result.imageUrl]);
+          if (isAdmin) debugShots.push({
+            shotIndex:  i + 1,
+            role:       shots[i].role,
+            beat:       shots[i].beat,
+            key:        shots[i].key,
+            prompt:     result.prompt,
+            refsCount:  result.refsCount,
+            status:     'ok',
+          });
+        } catch (shotErr: any) {
           shotUrls.push('');
           failed.push(i);
+          failedErrors.push(shotErr?.message ?? '');
           setPartialImages(prev => [...prev, '']);
+          if (isAdmin) debugShots.push({
+            shotIndex:  i + 1,
+            role:       shots[i].role,
+            beat:       shots[i].beat,
+            key:        shots[i].key,
+            prompt:     '',
+            refsCount:  0,
+            status:     'failed',
+          });
         }
         setProgress({ total: shots.length, completed: i + 1 });
       }
+
+      // Armar debugData completo para admins
+      const debugData: PhotodumpDebugData | undefined = isAdmin ? {
+        generatedAt:    new Date().toISOString(),
+        recipe,
+        basePrompt,
+        inferredGender: inferredGender,
+        count,
+        plan,
+        shots:          debugShots,
+      } : undefined;
 
       setProgressStepIndex(3);
       const captions = await generatePhotodumpCaptions(basePrompt, narrative, shots, refs.gender ?? 'female');
@@ -420,7 +464,19 @@ const PhotodumpModule: React.FC = () => {
           await deductCredits(-imageCreditCost).catch(() => {});
           await refreshCredits().catch(() => {});
         }
-        setError('No se pudo generar ninguna imagen. La API puede estar saturada — intentá de nuevo.');
+        const firstErr = failedErrors[0] ?? '';
+        const hint = firstErr.toLowerCase().includes('content')
+          || firstErr.toLowerCase().includes('filter')
+          || firstErr.toLowerCase().includes('block')
+          || firstErr.toLowerCase().includes('policy')
+          ? '⚠️ La IA bloqueó las imágenes por contenido. Intentá con un brief más neutro o cambiá las referencias.'
+          : firstErr.toLowerCase().includes('timeout') || firstErr.toLowerCase().includes('timed out')
+          ? '⏱ La generación tardó demasiado. Intentá con menos imágenes o volvé a intentar en unos segundos.'
+          : firstErr.toLowerCase().includes('429') || firstErr.toLowerCase().includes('quota') || firstErr.toLowerCase().includes('exhausted')
+          ? '🔄 La API está saturada. Esperá unos segundos e intentá de nuevo.'
+          : `⚠️ No se pudo generar ninguna imagen. ${firstErr ? `Motivo: ${firstErr.slice(0, 120)}` : 'Intentá de nuevo.'}`;
+        setFailureHint(hint);
+        setError(hint);
         setStep(2);
         return;
       }
@@ -430,7 +486,7 @@ const PhotodumpModule: React.FC = () => {
         return;
       }
 
-      await finalizarSet(shotUrls, shots, captions, ref0Url);
+      await finalizarSet(shotUrls, shots, captions, ref0Url, debugData);
     } catch (err: any) {
       setError(err?.message || 'Error generando el photodump.');
       if (!isAdmin) {
@@ -469,14 +525,14 @@ const PhotodumpModule: React.FC = () => {
 
     for (const i of failedIndexes) {
       try {
-        const url = await generatePhotodumpShot(
+        const result = await generatePhotodumpShot(
           savedShots[i], refsWithMode, ref0Url, ref0Analysis,
           basePrompt, narrative, destino, sessionParams,
           savedPlan.assignedFamilies, savedPlan.sessionFamilies,
           savedShots.length, protagonist, recipe,
         );
-        newUrls[i] = url;
-        setPartialImages(prev => { const n = [...prev]; n[i + 1] = url; return n; });
+        newUrls[i] = result.imageUrl;
+        setPartialImages(prev => { const n = [...prev]; n[i + 1] = result.imageUrl; return n; });
       } catch {
         stillFailed.push(i);
       }
@@ -497,11 +553,11 @@ const PhotodumpModule: React.FC = () => {
   };
 
   const handleContinuePartial = async () => {
-    await finalizarSet(savedShotUrls, savedShots, savedCaptions);
+    await finalizarSet(savedShotUrls, savedShots, savedCaptions, undefined, undefined);
   };
 
   // ── Guardar set y avanzar a resultados ────────────────────
-  const finalizarSet = async (shotUrls: string[], shots: any[], captions: { caption: string; hashtags: string } | null, ref0Url?: string) => {
+  const finalizarSet = async (shotUrls: string[], shots: any[], captions: { caption: string; hashtags: string } | null, ref0Url?: string, debugData?: PhotodumpDebugData) => {
     const recipeMeta  = RECIPE_META[recipe];
     const anchorUrl   = ref0Url ?? savedRef0Url;
     const anchorImage = anchorUrl ? [{
@@ -523,6 +579,7 @@ const PhotodumpModule: React.FC = () => {
       customStory: '',
       count,
       refs: { avatarRef: null, productRef: null, outfitRef: null, sceneRef: null, outfitMode },
+      ...(debugData ? { debugData } : {}),
       images: [
         ...anchorImage,
         ...shotUrls.map((url, i) => ({
@@ -618,6 +675,13 @@ const PhotodumpModule: React.FC = () => {
               )}
 
               {/* ── PASO 2: BRIEF + REFS (modo recetas) ─── */}
+              {step === 2 && !isFree && failureHint && (
+                <div className="mx-4 md:mx-8 mt-4 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-[12px] text-rose-700 font-medium flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <span className="leading-snug">{failureHint}</span>
+                  <button onClick={() => setFailureHint(null)} className="ml-auto text-rose-400 hover:text-rose-600 text-lg leading-none flex-shrink-0">×</button>
+                </div>
+              )}
               {step === 2 && !isFree && (
                 <PDStep2Receta
                   recipe={recipe}
@@ -832,6 +896,26 @@ const PhotodumpModule: React.FC = () => {
                         className="flex items-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-700 transition-colors">
                         <Download size={13} /> ZIP
                       </button>
+                      {isAdmin && currentSet.debugData && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const blob = new Blob(
+                              [JSON.stringify(currentSet.debugData, null, 2)],
+                              { type: 'application/json' },
+                            );
+                            const a = document.createElement('a');
+                            a.href = URL.createObjectURL(blob);
+                            a.download = `photodump_debug_${currentSet.id.slice(-8)}.json`;
+                            a.click();
+                            URL.revokeObjectURL(a.href);
+                          }}
+                          className="flex items-center gap-1.5 bg-amber-50 border border-amber-300 hover:border-amber-400 rounded-xl px-3.5 py-2 text-xs font-semibold text-amber-700 transition-colors"
+                          title="Solo visible para admins"
+                        >
+                          <Download size={13} /> Debug JSON
+                        </button>
+                      )}
                       <button type="button" onClick={resetCreator}
                         className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors">
                         <Plus size={13} /> Nuevo set
@@ -934,6 +1018,25 @@ const PhotodumpModule: React.FC = () => {
                         className="flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-3 text-[13px] font-semibold transition-colors">
                         <Plus size={14} /> Nuevo set
                       </button>
+                      {isAdmin && currentSet.debugData && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const blob = new Blob(
+                              [JSON.stringify(currentSet.debugData, null, 2)],
+                              { type: 'application/json' },
+                            );
+                            const a = document.createElement('a');
+                            a.href = URL.createObjectURL(blob);
+                            a.download = `photodump_debug_${currentSet.id.slice(-8)}.json`;
+                            a.click();
+                            URL.revokeObjectURL(a.href);
+                          }}
+                          className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-700 rounded-xl px-4 py-3 text-[13px] font-semibold transition-colors"
+                        >
+                          <Download size={14} /> Debug JSON
+                        </button>
+                      )}
                     </div>
                     <button type="button" onClick={() => setActiveTab('library')}
                       className="flex items-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 text-slate-600 rounded-xl px-4 py-3 text-[13px] font-semibold transition-colors">

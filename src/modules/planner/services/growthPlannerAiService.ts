@@ -29,6 +29,8 @@ import {
   detectBusinessArchetype,
   detectRepeatedBlueprints,
   detectRepeatedCaptions,
+  evaluatePlanReleaseGate,
+  findVisibleWeakPhraseOccurrences,
   generatePlanSkeleton,
   getBlueprintById,
   hasDeterministicFallback,
@@ -44,6 +46,7 @@ import {
   selectNicheAdapter,
   selectSalesAggressiveness,
   validateFinalPlan,
+  validateValidationConsistency,
   validateContractLock,
   validateTaskAgainstBlueprint,
   validateHooksV2,
@@ -3624,7 +3627,7 @@ async function generateGrowthPlanV2(
     warnings: [...asArray(strategy?.generationLog?.warnings, []), ...archetype.warnings, 'Insights generados sin búsqueda web/grounding.'],
   });
 
-  const finalValidation = validateFinalPlan(normalized, previousPlans, archetype.businessArchetype);
+  let finalValidation = validateFinalPlan(normalized, previousPlans, archetype.businessArchetype);
   const repeatedBlueprints = detectRepeatedBlueprints(generated.blueprintsUsed, previousPlans[0]?.previousBlueprintsUsed || []);
   const repeatedCaptions = detectRepeatedCaptions(generated.tasks.map(task => task.caption), previousPlans[0]?.previousCaptions || []);
   const taskNoveltyScore = calculateTaskNoveltyScore(generated.tasks, previousPlans[0]);
@@ -3632,6 +3635,14 @@ async function generateGrowthPlanV2(
     acc[signature] = (acc[signature] || 0) + 1;
     return acc;
   }, {})).filter(([, count]) => count > 3).map(([signature]) => signature);
+  const sameBlueprintSequenceRepeated = Boolean(previousPlans[0]?.previousBlueprintsUsed.length === generated.blueprintsUsed.length
+    && previousPlans[0].previousBlueprintsUsed.every((blueprintId, index) => blueprintId === generated.blueprintsUsed[index]));
+  const normalizedGoal = engineInput.mainGoal.toLowerCase().replace(/\s+/g, ' ').trim();
+  const sameCampaignAngleRepeatedThreeTimes = previousPlans.slice(0, 2).length === 2
+    && previousPlans.slice(0, 2).every(memory =>
+      memory.previousCampaignAngles.includes(campaign.campaignAngle)
+      && memory.objectiveSignature.toLowerCase().replace(/\s+/g, ' ').trim() === normalizedGoal,
+    );
   const blueprintValidation = Object.fromEntries(generated.tasks.map(task => {
     const blueprint = getBlueprintById(task.blueprintId)!;
     return [task.id, validateTaskAgainstBlueprint(task, blueprint, { businessArchetype: archetype.businessArchetype })];
@@ -3684,15 +3695,53 @@ async function generateGrowthPlanV2(
     weakPhraseSummary: {
       inputPhrasesSanitized: sanitizedContext.sanitizedPhrases,
       outputPhrasesRemoved: generated.weakPhraseSummary.outputPhrasesRemoved,
-      remainingWeakPhrases: generated.weakPhraseSummary.remainingWeakPhrases,
+      remainingWeakPhrases: [],
+      occurrences: [],
     },
     antiRepetitionSummary: {
       noveltyScore: taskNoveltyScore,
       repeatedBlueprintsAllowed: repeatedBlueprints,
       repeatedTaskSignaturesRejected: repeatedTaskSignatures,
       captionsIgnoredBecausePlaceholder: [],
+      sameBlueprintSequenceRepeated,
+      sameCampaignAngleRepeatedThreeTimes,
+      similarTaskSignatureRatio: Math.max(0, Math.min(1, (100 - taskNoveltyScore) / 100)),
+    },
+    validationConsistency: {
+      valid: true,
+      contradictions: [],
+      correctedChecks: [],
+    },
+    releaseGate: {
+      canPublishToUser: false,
+      planQualityStatus: finalValidation.status,
+      hardFailures: [],
+      softWarnings: [],
+      blockingReasons: [],
+      releaseNotes: [],
     },
   };
+
+  const visibleWeakPhrases = findVisibleWeakPhraseOccurrences(normalized);
+  metadata.weakPhraseSummary.remainingWeakPhrases = Array.from(new Set(visibleWeakPhrases.map(item => item.phrase)));
+  metadata.weakPhraseSummary.occurrences = visibleWeakPhrases;
+  const consistency = validateValidationConsistency(normalized, finalValidation, metadata);
+  finalValidation = consistency.summary;
+  metadata.validationConsistency = {
+    valid: true,
+    contradictions: consistency.contradictions,
+    correctedChecks: consistency.correctedChecks,
+  };
+  metadata.releaseGate = evaluatePlanReleaseGate(normalized, finalValidation, metadata);
+  finalValidation = {
+    ...finalValidation,
+    status: metadata.releaseGate.planQualityStatus,
+    criticalErrors: metadata.releaseGate.hardFailures,
+    reviewWarnings: metadata.releaseGate.softWarnings,
+    releaseGate: metadata.releaseGate,
+  };
+  metadata.finalValidationSummary = finalValidation;
+  metadata.planQualityStatus = metadata.releaseGate.planQualityStatus;
 
   normalized.plannerEngineVersion = metadata.plannerEngineVersion;
   normalized.planningDepth = metadata.planningDepth;

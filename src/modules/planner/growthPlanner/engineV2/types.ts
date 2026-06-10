@@ -177,11 +177,28 @@ export interface BlueprintValidationResult {
   warnings: string[];
 }
 
+export interface WeakPhraseOccurrence {
+  taskId?: string;
+  field: string;
+  phrase: string;
+  snippet: string;
+}
+
+export interface ReleaseGateResult {
+  canPublishToUser: boolean;
+  planQualityStatus: PlanQualityStatus;
+  hardFailures: string[];
+  softWarnings: string[];
+  blockingReasons: string[];
+  releaseNotes: string[];
+}
+
 export interface FinalValidationSummary {
   status: PlanQualityStatus;
   checks: Record<string, boolean>;
   criticalErrors: string[];
   reviewWarnings: string[];
+  releaseGate?: ReleaseGateResult;
 }
 
 export interface EngineV2Metadata {
@@ -235,11 +252,21 @@ export interface EngineV2Metadata {
     inputPhrasesSanitized: string[];
     outputPhrasesRemoved: string[];
     remainingWeakPhrases: string[];
+    occurrences?: WeakPhraseOccurrence[];
   };
   antiRepetitionSummary: {
     noveltyScore: number;
     repeatedBlueprintsAllowed: string[];
     repeatedTaskSignaturesRejected: string[];
     captionsIgnoredBecausePlaceholder: string[];
+    sameBlueprintSequenceRepeated: boolean;
+    sameCampaignAngleRepeatedThreeTimes: boolean;
+    similarTaskSignatureRatio: number;
   };
+  validationConsistency: {
+    valid: boolean;
+    contradictions: string[];
+    correctedChecks: string[];
+  };
+  releaseGate: ReleaseGateResult;
 }

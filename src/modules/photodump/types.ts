@@ -190,6 +190,27 @@ export interface FreeScene {
 
 // ── Set completo guardado ──────────────────────────────────────
 
+// Debug payload — solo se genera y guarda para admins
+export interface PhotodumpShotDebug {
+  shotIndex:  number;   // 0 = REF0, 1..N = shots narrativos
+  role:       string;
+  beat?:      string;
+  key?:       string;
+  prompt:     string;
+  refsCount:  number;   // cuántas imágenes de referencia se pasaron al modelo
+  status:     'ok' | 'failed';
+}
+
+export interface PhotodumpDebugData {
+  generatedAt:  string;   // ISO timestamp
+  recipe:       string;
+  basePrompt:   string;
+  inferredGender: string;
+  count:        number;
+  plan:         any;      // PhotodumpSessionPlan completo
+  shots:        PhotodumpShotDebug[];
+}
+
 export interface PhotodumpSet {
   id:          string;
   createdAt:   number;
@@ -213,6 +234,9 @@ export interface PhotodumpSet {
 
   // Results
   images:      PhotodumpImage[];
+
+  // Debug — solo presente cuando lo generó un admin
+  debugData?:  PhotodumpDebugData;
 }
 
 // ── Helpers de slot ────────────────────────────────────────────

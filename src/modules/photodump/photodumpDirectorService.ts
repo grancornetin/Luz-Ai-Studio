@@ -66,6 +66,8 @@ export interface PhotodumpSessionPlan {
 export interface PhotodumpREF0Result {
   imageUrl:    string;
   ref0Analysis: any;
+  prompt:      string;
+  refsCount:   number;
 }
 
 // ── Sistema de prompts (copiado y adaptado de UGC Studio) ─────
@@ -114,6 +116,11 @@ composite image, face pasted over body, reference image inserted as collage elem
 extra limbs, duplicated arms, phantom hands, broken joints,
 color drift between shots, different color temperature, filters, stylization,
 phone visible in selfie, camera visible
+
+PERSON COUNT:
+two distinct people in the same frame (unless the scene explicitly calls for it),
+background figures, crowd reflections in mirror, second person appearing in reflection,
+duplicated subject, cloned person
 `;
 
 const NEGATIVE_SHORT = `
@@ -126,7 +133,9 @@ outfit invention, fake fabric, extra clothing, changed shoe design,
 different background, scene redesign, person floating over background,
 ad feel, commercial polish, branded composition, product catalog look,
 composite image, face pasted over body, collage artifact,
-phone visible in selfie, color temperature drift, filter drift
+phone visible in selfie, color temperature drift, filter drift,
+two people in frame, second person in background, crowd in mirror reflection,
+duplicated subject, extra person appearing, background figures
 `;
 
 const LOCK_SYSTEM = `
@@ -156,6 +165,12 @@ const LOCK_SYSTEM = `
 🔒 OUTFIT LOCK:
 - Same clothing. Same fit. Same fabric. Same color. Same pattern.
 - NO invented fabric continuation beyond visible reference.
+
+🔒 PERSON COUNT LOCK:
+- There is exactly ONE protagonist person in this story.
+- NEVER generate a second person in the background, reflected in a mirror, or implied in the scene.
+- A mirror reflection of the protagonist is NOT a second person — it is the same person.
+- Any background figure is a hard generation error.
 
 🔒 SCENE LOCK:
 - Same environment. Same walls, floor, furniture.
@@ -252,6 +267,51 @@ WHAT MAKES GREAT FACELESS CONTENT:
 `;
 
 // ── Helpers ───────────────────────────────────────────────────
+
+// Extrae señales de tiempo, ambiente y mood del brief del usuario para elevarlas
+// como directiva dominante de iluminación/atmósfera. Sin esto, el modelo ignora
+// contexto temporal ("noche de ópera") y genera luz de día por defecto.
+function extractBriefContextBlock(basePrompt: string): string {
+  const lower = basePrompt.toLowerCase();
+
+  const timeSignals: string[] = [];
+  const moodSignals: string[] = [];
+
+  // Tiempo del día / luz
+  if (lower.includes('noche') || lower.includes('night') || lower.includes('nocturno') || lower.includes('nocturna'))
+    timeSignals.push('NIGHT scene — use evening/night lighting: warm artificial light, dim ambiance, no daylight');
+  else if (lower.includes('atardecer') || lower.includes('sunset') || lower.includes('golden hour') || lower.includes('hora dorada'))
+    timeSignals.push('GOLDEN HOUR — warm orange-gold directional light, long shadows, sunset atmosphere');
+  else if (lower.includes('mañana') || lower.includes('morning') || lower.includes('amanecer') || lower.includes('sunrise'))
+    timeSignals.push('MORNING — soft cool-to-warm light, fresh atmosphere, early day feel');
+  else if (lower.includes('mediodía') || lower.includes('midday') || lower.includes('tarde'))
+    timeSignals.push('AFTERNOON/MIDDAY — strong natural light, clear shadows');
+
+  // Venue / ocasión
+  if (lower.includes('ópera') || lower.includes('opera') || lower.includes('teatro') || lower.includes('theatre'))
+    moodSignals.push('VENUE: opera house / theatre — grand interior, chandeliers, velvet, marble, formal elegance');
+  if (lower.includes('cóctel') || lower.includes('cocktail') || lower.includes('fiesta') || lower.includes('gala') || lower.includes('evento'))
+    moodSignals.push('EVENT: formal social event — evening venue, ambient lighting, dressed crowd');
+  if (lower.includes('playa') || lower.includes('beach') || lower.includes('mar') || lower.includes('sea'))
+    moodSignals.push('LOCATION: beach / ocean — natural light, sand, water reflection');
+  if (lower.includes('restaurant') || lower.includes('restaurante') || lower.includes('dinner') || lower.includes('cena'))
+    moodSignals.push('VENUE: restaurant — warm table lighting, intimate evening ambiance');
+  if (lower.includes('viaje') || lower.includes('travel') || lower.includes('trip'))
+    moodSignals.push('CONTEXT: travel / trip — location-specific environment');
+
+  if (timeSignals.length === 0 && moodSignals.length === 0) return '';
+
+  const lines = [
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    '🎯 SCENE CONTEXT DIRECTIVE (OVERRIDES DEFAULT LIGHTING ASSUMPTIONS):',
+    'The user\'s brief contains explicit context clues. These are BINDING directives — not suggestions.',
+    'They override the model\'s default tendency to generate daytime/neutral lighting.',
+  ];
+  if (timeSignals.length > 0) lines.push(...timeSignals.map(s => `  • ${s}`));
+  if (moodSignals.length > 0) lines.push(...moodSignals.map(s => `  • ${s}`));
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  return lines.join('\n');
+}
 
 function getAspectRatio(destino: PhotodumpDestino): '4:5' | '9:16' {
   return destino === 'feed' ? '4:5' : '9:16';
@@ -498,14 +558,14 @@ function buildPersonStoryShots(): Omit<PhotodumpShotDirective, 'arcPosition' | '
       key:   'ATMOSPHERE_SELFIE',
       beat:  'atmosphere',
       role:  'ATMOSPHERE MOMENT',
-      purpose: 'Selfie UGC auténtica o portrait íntimo con mood dominante. El ambiente envuelve a la persona. Luz, color y espacio son tan importantes como la cara. Se siente tomada en un momento real, no producida.',
-      requiredElements: ['arm_extended_implied_pov', 'shoulder_visible_lower_frame', 'face_dominant_natural', 'handheld_organic_framing', 'no_phone_visible'],
-      forbiddenElements: ['phone_visible', 'third_person_portrait_framing', 'professional_lighting', 'symmetric_composition', 'studio_feel', 'beautification'],
+      purpose: 'Selfie UGC auténtica — la persona se saca la foto a sí misma con el teléfono. El brazo extendido está fuera del frame o apenas visible en el borde. La cara es dominante. El ambiente envuelve la escena. DEBE renderizarse como selfie (POV de la propia persona tomándose la foto), NO como retrato de tercera persona.',
+      requiredElements: ['face_dominant_natural', 'selfie_pov_framing', 'handheld_organic_feel', 'no_phone_visible_in_frame', 'background_atmosphere_visible'],
+      forbiddenElements: ['phone_visible_in_frame', 'third_person_portrait_photographer_angle', 'person_with_arm_raised_photographed_by_someone_else', 'professional_lighting', 'symmetric_composition', 'studio_feel', 'beautification', 'person_posing_for_external_camera'],
       variationSpace: [
-        'selfie con fondo de calle o fachada, sonrisa suave y natural',
-        'selfie levemente contrapicada, cielo o exterior suave de fondo, expresión alegre',
-        'selfie interior, fondo bokeh de café o sala, expresión calmada',
-        'selfie con entorno visible parcialmente, expresión espontánea como reacción a algo',
+        'selfie frente a espejo o cámara frontal, cara levemente ladeada, fondo del cuarto o local visible, sonrisa natural',
+        'selfie con fondo de calle, fachada o exterior borroso, cara dominante, expresión espontánea',
+        'selfie interior, cara ligeramente levantada, fondo bokeh de café o ambiente cálido, expresión relajada',
+        'selfie contrapicada suave, cara mirando hacia la cámara, exterior o cielo visible en el fondo',
       ],
       framing:     'SELFIE',
       composition: 'HANDHELD_ASYMMETRIC',
@@ -515,14 +575,14 @@ function buildPersonStoryShots(): Omit<PhotodumpShotDirective, 'arcPosition' | '
       key:   'REVEAL_ANGLE',
       beat:  'reveal',
       role:  'REVEAL MOMENT',
-      purpose: 'Un ángulo que muestra algo diferente del mismo mundo: espalda de la persona, reflejo en espejo, sombra proyectada, vista desde abajo, overhead del espacio. Un punto de vista que sorprende sin ser artificioso.',
-      requiredElements: ['strong_emotional_resonance', 'memorable_composition', 'authentic_mood', 'unexpected_angle_or_perspective'],
-      forbiddenElements: ['neutral_generic_pose', 'catalog_composition', 'ad_cta_feel', 'beautification', 'overly_posed'],
+      purpose: 'Un ángulo que muestra algo diferente del mismo mundo: espalda de la persona, sombra proyectada, vista desde abajo, overhead del espacio. Un punto de vista que sorprende sin ser artificioso. IMPORTANTE: si se usa espejo, solo debe aparecer UNA sola persona en el frame — el reflejo y la persona son el mismo individuo, no dos.',
+      requiredElements: ['strong_emotional_resonance', 'memorable_composition', 'authentic_mood', 'unexpected_angle_or_perspective', 'single_person_only'],
+      forbiddenElements: ['neutral_generic_pose', 'catalog_composition', 'ad_cta_feel', 'beautification', 'overly_posed', 'two_people_in_frame', 'multiple_subjects', 'crowd_or_background_figures'],
       variationSpace: [
-        'espalda parcial mirando hacia algo fuera de frame, luz de hora dorada desde el frente',
-        'reflejo en espejo con la cámara y el ambiente visible detrás',
-        'sombra proyectada de la persona sobre una superficie interesante',
-        'overhead del espacio desde arriba — la persona pequeña en el ambiente',
+        'espalda parcial de la persona mirando hacia algo fuera de frame, ambiente visible de fondo, luz atmosférica desde el frente',
+        'sombra proyectada de la persona sobre una pared o piso — la silueta como protagonista, no la persona',
+        'overhead del espacio desde arriba — la persona pequeña dentro del ambiente, entorno visible a su alrededor',
+        'ángulo rasante desde el suelo mirando hacia arriba, persona de pie, perspectiva inesperada, cielo o techo de fondo',
       ],
       framing:     'CLOSE_UP_OR_WIDE_ATMOSPHERIC',
       composition: 'EMOTIONALLY_DRIVEN',
@@ -920,14 +980,14 @@ function buildOutfitCheckShotPool(): Omit<PhotodumpShotDirective, 'arcPosition' 
       key:   'OUTFIT_MIRROR_CHECK',
       beat:  'reveal',
       role:  'MIRROR CHECK',
-      purpose: 'Full body del avatar frente al espejo con el outfit completo puesto. El espejo es el encuadre natural. Actitud, no pose. Puede ser selfie de espejo o alguien lo tomó desde atrás. El look completo es visible de pies a cabeza.',
-      requiredElements: ['full_body_visible', 'mirror_frame_present_or_implied', 'complete_outfit_readable', 'authentic_attitude_not_catalog_stance'],
-      forbiddenElements: ['catalog_symmetrical_pose', 'studio_lighting', 'white_background', 'mannequin_stance', 'beautification', 'phone_visible_in_mirror'],
+      purpose: 'Full body del avatar frente al espejo con el outfit completo puesto. El espejo es el encuadre natural. Actitud, no pose. REGLA CRÍTICA: hay UNA SOLA persona en el frame — la persona y su reflejo son el mismo individuo. El reflejo no cuenta como segunda persona. NO aparece ninguna otra persona en el fondo ni en el espejo.',
+      requiredElements: ['full_body_visible', 'mirror_frame_present_or_implied', 'complete_outfit_readable', 'authentic_attitude_not_catalog_stance', 'single_person_only_in_entire_frame'],
+      forbiddenElements: ['catalog_symmetrical_pose', 'studio_lighting', 'white_background', 'mannequin_stance', 'beautification', 'phone_visible_in_mirror', 'two_distinct_people_visible', 'second_person_in_background', 'crowd_reflected_in_mirror'],
       variationSpace: [
-        'selfie de espejo full body, brazo extendido sosteniendo teléfono fuera de frame, actitud natural',
-        'espejo de cuerpo entero con el avatar mirando su reflejo, ángulo lateral que muestra ambiente',
-        'avatar frente al espejo, vista desde atrás mostrando el espejo y el outfit reflejado',
-        'espejo de dormitorio o probador, avatar de frente con actitud relajada, ambiente visible alrededor',
+        'selfie de espejo full body — la persona sostiene el teléfono (brazo fuera de frame), mirada directa al espejo, outfit completo visible, habitación real de fondo',
+        'espejo de cuerpo entero, avatar parado frente a él evaluando el look, manos en caderas o relajadas, cuarto visible alrededor del espejo',
+        'espejo en ángulo lateral — se ve al avatar de tres cuartos y su reflejo simultáneamente, outfit completo readable, un solo sujeto',
+        'espejo de dormitorio o probador, avatar mirando hacia abajo evaluando el look o ajustando una prenda, luz de ventana',
       ],
       framing:     'WIDE_FULL_BODY',
       composition: 'MIRROR_FRAME_NATURAL',
@@ -1139,9 +1199,10 @@ export async function buildPhotodumpSessionPlan(
   basePrompt:  string,
   recipe?:     string,
   refs?:       PhotodumpRefs,
+  count:       number = 6,
 ): Promise<PhotodumpSessionPlan> {
   initPhotodumpIntelligence();
-  const shots          = buildStoryDirectives(6, protagonist, destino, narrative, recipe, refs);
+  const shots          = buildStoryDirectives(count, protagonist, destino, narrative, recipe, refs);
   const sessionFamilies = selectSessionFamilies();
   const assignedFamilies = [...sessionFamilies.storySupport, ...sessionFamilies.creatorAesthetic];
   return {
@@ -1439,11 +1500,15 @@ ${bodyInstruction}
 ${outfitInstruction}
 ${productInstruction}`;
 
+  const briefContextBlock = extractBriefContextBlock(basePrompt);
+
   const prompt = `${LOCK_SYSTEM}
 
 ${PARADIGM_RULE}
 
 ${modeBlock}
+
+${briefContextBlock}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🎬 REF0 — VISUAL ANCHOR SHOT
@@ -1465,10 +1530,11 @@ Natural iPhone quality. UGC feel. One photo. Not a collage. Not a grid.
 
 ${NEGATIVE_FULL}`;
 
+  const preparedRefs = await prepareRefs(refsToPass);
   const imageUrl = await imageApiService.generateImage({
     prompt,
     negative:        NEGATIVE_FULL,
-    referenceImages: await prepareRefs(refsToPass),
+    referenceImages: preparedRefs,
     aspectRatio:     getAspectRatio(destino),
     uid:             sessionParams.uid,
     sessionId:       sessionParams.sessionId,
@@ -1490,7 +1556,7 @@ ${NEGATIVE_FULL}`;
     console.warn('[photodumpDirector] REF0 analysis failed, proceeding without:', err);
   }
 
-  return { imageUrl, ref0Analysis };
+  return { imageUrl, ref0Analysis, prompt, refsCount: preparedRefs.length };
 }
 
 // ── Generación de shots narrativos ───────────────────────────
@@ -1649,6 +1715,12 @@ function buildFamilyInjectBlock(family: StorySupportFamily): string {
   return lines.join('\n');
 }
 
+export interface PhotodumpShotResult {
+  imageUrl:  string;
+  prompt:    string;
+  refsCount: number;
+}
+
 export async function generatePhotodumpShot(
   shot:             PhotodumpShotDirective,
   refs:             PhotodumpRefs,
@@ -1663,7 +1735,7 @@ export async function generatePhotodumpShot(
   totalShots:       number = 4,
   protagonist:      PhotodumpProtagonist = 'person',
   recipe?:          string,
-): Promise<string> {
+): Promise<PhotodumpShotResult> {
 
   const aspectInstr = getAspectInstruction(destino);
   const isUnboxing  = recipe === 'unboxing';
@@ -1875,11 +1947,15 @@ Natural light, handheld imperfection, real skin texture, no studio polish.
 The result must look like someone captured this moment on their phone — not a photographer.
 Organic, imperfect, lived-in. NOT editorial. NOT advertising. NOT staged.`;
 
+  const briefContextBlock = extractBriefContextBlock(basePrompt);
+
   const prompt = `${LOCK_SYSTEM}
 
 ${PARADIGM_RULE}
 
 ${shotModeBlock}
+
+${briefContextBlock}
 
 ${injectREF0Analysis(ref0Analysis)}
 
@@ -1921,10 +1997,11 @@ Do NOT paste reference images into the output. Use them only as visual constrain
 
 ${NEGATIVE_SHORT}`;
 
-  return imageApiService.generateImage({
+  const preparedRefs = await prepareRefs(refsToPass);
+  const imageUrl = await imageApiService.generateImage({
     prompt,
     negative:        NEGATIVE_SHORT,
-    referenceImages: await prepareRefs(refsToPass),
+    referenceImages: preparedRefs,
     aspectRatio:     getAspectRatio(destino),
     uid:             sessionParams.uid,
     sessionId:       sessionParams.sessionId,
@@ -1934,6 +2011,7 @@ ${NEGATIVE_SHORT}`;
     totalShots:      6,
     metadata:        { role: shot.role, beat: shot.beat, narrative },
   });
+  return { imageUrl, prompt, refsCount: preparedRefs.length };
 }
 
 // ── Caption + hashtags por Gemini ─────────────────────────────
