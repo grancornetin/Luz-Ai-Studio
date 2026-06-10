@@ -58,6 +58,32 @@ export function calculateNoveltyScore(blueprints: string[], previousBlueprints: 
   return Math.max(0, Math.round((1 - repeated / blueprints.length) * 100));
 }
 
+function signaturePart(value: string): string {
+  return String(value || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().split(/\s+/).slice(0, 10).join('_');
+}
+
+export function buildTaskSignature(task: GeneratedTaskV2): string {
+  return [
+    task.blueprintId,
+    task.campaignAngle,
+    task.ctaTarget,
+    signaturePart(task.visualConcept),
+    task.funnelRole,
+    task.platform,
+  ].join('|');
+}
+
+export function buildPlanSignature(tasks: GeneratedTaskV2[]): string {
+  return tasks.map(buildTaskSignature).join('>');
+}
+
+export function calculateTaskNoveltyScore(tasks: GeneratedTaskV2[], previous?: PreviousPlanMemory): number {
+  if (!tasks.length || !previous?.previousTaskSignatures?.length) return 100;
+  const old = new Set(previous.previousTaskSignatures);
+  const repeated = tasks.map(buildTaskSignature).filter(signature => old.has(signature)).length;
+  return Math.max(0, Math.round((1 - repeated / tasks.length) * 100));
+}
+
 export function buildPlanMemory(params: {
   input: PlannerEngineV2Input;
   angle: CampaignAngle;
@@ -73,6 +99,8 @@ export function buildPlanMemory(params: {
     previousTaskConcepts: params.tasks.map(task => task.visualConcept),
     previousCTAs: params.tasks.map(task => task.engagementHook),
     previousProductsHighlighted: params.input.products.map(product => product.name),
+    previousTaskSignatures: params.tasks.map(buildTaskSignature),
+    planSignature: buildPlanSignature(params.tasks),
     lastGeneratedAt: new Date().toISOString(),
   };
 }

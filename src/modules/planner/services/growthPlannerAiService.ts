@@ -17,34 +17,40 @@ import type {
 } from '../growthPlannerTypes';
 import {
   brandMemoryId,
+  calculateTaskNoveltyScore,
+  buildHookForCtaTarget,
   buildCreativeTaskBatchPrompt,
-  buildHookRepairPrompt,
   buildEngineV2ValidationReport,
   buildPlanMemory,
-  compatibleBlueprints,
+  buildTaskSignature,
+  completeTaskFromBlueprintDeterministic,
   CONTRACT_LOCKED_FIELDS,
   CREATIVE_TASK_BATCH_SCHEMA,
-  HOOK_REPAIR_BATCH_SCHEMA,
   detectBusinessArchetype,
   detectRepeatedBlueprints,
   detectRepeatedCaptions,
   generatePlanSkeleton,
   getBlueprintById,
+  hasDeterministicFallback,
   loadPreviousPlanMemory,
   mergeCreativeFields,
   normalizeCreativeTextV2,
+  normalizeSlotsV2,
   normalizeProductsForEngineV2,
   savePlanMemory,
+  sanitizeBrandInputForPlanner,
+  sanitizePlannerText,
   selectCampaignAngle,
   selectNicheAdapter,
   selectSalesAggressiveness,
   validateFinalPlan,
   validateContractLock,
   validateTaskAgainstBlueprint,
+  validateHooksV2,
+  validateWeakPhrasesV2,
   type CreativeTaskFields,
   type EngineV2Metadata,
   type GeneratedTaskV2,
-  type HookRepairFields,
   type PlanSkeletonTask,
   type PlannerEngineV2Input,
   type TaskBlueprint,
@@ -3370,30 +3376,6 @@ async function requestCreativeTaskBatch(params: {
   return asArray<CreativeTaskFields>(raw?.tasks, []);
 }
 
-async function requestHookRepair(params: {
-  token: string;
-  input: PlannerEngineV2Input;
-  tasks: GeneratedTaskV2[];
-}): Promise<HookRepairFields[]> {
-  const raw = await startGrowthPlannerJob({
-    token: params.token,
-    prompt: buildHookRepairPrompt({
-      tasks: params.tasks,
-      brandName: params.input.brand.name,
-      tone: params.input.brand.tone,
-    }),
-    schema: HOOK_REPAIR_BATCH_SCHEMA,
-    maxOutputTokens: Math.min(4096, Math.max(1200, params.tasks.length * 350)),
-    temperature: 0.35,
-  });
-  return asArray<HookRepairFields>(raw?.tasks, []);
-}
-
-function isHookCaptionOnlyFailure(task: GeneratedTaskV2 | undefined): task is GeneratedTaskV2 {
-  return Boolean(task?.validationErrors.length)
-    && task!.validationErrors.every(error => /hook|caption/i.test(error));
-}
-
 async function generateV2Tasks(params: {
   token: string;
   input: PlannerEngineV2Input;
@@ -3403,14 +3385,42 @@ async function generateV2Tasks(params: {
   creativeSeed: string;
   businessArchetype: ReturnType<typeof detectBusinessArchetype>['businessArchetype'];
   onProgress?: GenerateGrowthPlanOptions['onProgress'];
-}): Promise<{ tasks: GeneratedTaskV2[]; blueprintsUsed: string[] }> {
+}): Promise<{
+  tasks: GeneratedTaskV2[];
+  blueprintsUsed: string[];
+  slotNormalizationSummary: EngineV2Metadata['slotNormalizationSummary'];
+  hookValidationSummary: EngineV2Metadata['hookValidationSummary'];
+  weakPhraseSummary: EngineV2Metadata['weakPhraseSummary'];
+}> {
   const completed = new Map<string, GeneratedTaskV2>();
-  const workingSkeletons = new Map(params.skeletonTasks.map(task => [task.id, task]));
+  const aliasesNormalized = new Set<string>();
+  const missingInstructionsAdded = new Set<string>();
+  const unresolvedSlots = new Set<string>();
+  const hooksBuiltByFactory = new Set<string>();
+  const hooksAcceptedFromGemini = new Set<string>();
+  const hooksRejectedAndRebuilt = new Set<string>();
+  const outputPhrasesRemoved = new Set<string>();
   const weeks = Array.from(new Set(params.skeletonTasks.map(task => task.week))).sort((a, b) => a - b);
+  params.skeletonTasks.forEach(skeleton => {
+    const blueprint = getBlueprintById(skeleton.blueprintId);
+    if (!blueprint) throw new Error(`Blueprint V2 inexistente: ${skeleton.blueprintId}`);
+    const base = completeTaskFromBlueprintDeterministic(skeleton, blueprint, {
+      input: params.input,
+      businessArchetype: params.businessArchetype,
+      suggestedTime: params.input.instagramMetrics.bestTime || '19:00',
+    });
+    const validation = validateTaskAgainstBlueprint(base, blueprint, { businessArchetype: params.businessArchetype });
+    const lockErrors = validateContractLock(base, skeleton);
+    completed.set(skeleton.id, {
+      ...base,
+      needsManualReview: !validation.valid || lockErrors.length > 0,
+      validationErrors: [...lockErrors, ...validation.errors],
+    });
+    hooksBuiltByFactory.add(skeleton.id);
+  });
 
   for (const week of weeks) {
     let pending = params.skeletonTasks.filter(task => task.week === week);
-    const hookRepairQueue: PlanSkeletonTask[] = [];
     params.onProgress?.({ stepId: `week_${week}`, label: `Generando semana ${week} con contratos seguros` });
 
     for (let attempt = 0; attempt <= 2 && pending.length; attempt++) {
@@ -3443,141 +3453,50 @@ async function generateV2Tasks(params: {
           nextPending.push(skeleton);
           return;
         }
-        const task = mergeCreativeFields(skeleton, blueprint, creative, params.input.instagramMetrics.bestTime || '19:00', attempt);
+        let task = mergeCreativeFields(skeleton, blueprint, creative, params.input.instagramMetrics.bestTime || '19:00', attempt + 1);
+        validateWeakPhrasesV2(JSON.stringify(creative)).forEach(value => outputPhrasesRemoved.add(value));
+        if (!validateHooksV2(task.engagementHook, task.ctaTarget).valid) {
+          task = normalizeCreativeTextV2({ ...task, engagementHook: buildHookForCtaTarget(task) });
+          hooksRejectedAndRebuilt.add(skeleton.id);
+        }
+        const slotResult = normalizeSlotsV2(task, params.businessArchetype);
+        task = slotResult.task;
+        slotResult.aliasesNormalized.forEach(value => aliasesNormalized.add(value));
+        slotResult.missingInstructionsAdded.forEach(value => missingInstructionsAdded.add(`${skeleton.id}:${value}`));
+        slotResult.unresolvedSlots.forEach(value => unresolvedSlots.add(`${skeleton.id}:${value}`));
         const lockErrors = validateContractLock(task, skeleton);
         const validation = validateTaskAgainstBlueprint(task, blueprint, { businessArchetype: params.businessArchetype });
         const withValidation = { ...task, validationErrors: [...lockErrors, ...validation.errors] };
-        completed.set(skeleton.id, withValidation);
-        if (!validation.valid || lockErrors.length) {
-          if (!lockErrors.length && isHookCaptionOnlyFailure(withValidation)) hookRepairQueue.push(skeleton);
-          else nextPending.push(skeleton);
-        }
+        if (validation.valid && !lockErrors.length) {
+          completed.set(skeleton.id, { ...withValidation, needsManualReview: false });
+          if (!hooksRejectedAndRebuilt.has(skeleton.id)) hooksAcceptedFromGemini.add(skeleton.id);
+        } else nextPending.push(skeleton);
       });
       pending = nextPending;
     }
 
-    const hookOnlyIds = new Set(hookRepairQueue.map(skeleton => skeleton.id));
-    pending.filter(skeleton => isHookCaptionOnlyFailure(completed.get(skeleton.id))).forEach(skeleton => hookOnlyIds.add(skeleton.id));
-    const hookOnlySkeletons = params.skeletonTasks.filter(skeleton => hookOnlyIds.has(skeleton.id));
-    if (hookOnlySkeletons.length) {
-      try {
-        const hookRepairs = await requestHookRepair({
-          token: params.token,
-          input: params.input,
-          tasks: hookOnlySkeletons.map(skeleton => completed.get(skeleton.id)!),
-        });
-        const repairedIds = new Set<string>();
-        hookOnlySkeletons.forEach(skeleton => {
-          const current = completed.get(skeleton.id);
-          const repair = hookRepairs.find(item => item.skeletonTaskId === skeleton.id);
-          const blueprint = getBlueprintById(skeleton.blueprintId);
-          if (!current || !repair || !blueprint) return;
-          const repaired = normalizeCreativeTextV2({
-            ...current,
-            caption: repair.caption,
-            engagementHook: repair.engagementHook,
-            regenerationAttempts: current.regenerationAttempts + 1,
-          });
-          const lockErrors = validateContractLock(repaired, skeleton);
-          const validation = validateTaskAgainstBlueprint(repaired, blueprint, { businessArchetype: params.businessArchetype });
-          completed.set(skeleton.id, {
-            ...repaired,
-            validationErrors: [...lockErrors, ...validation.errors],
-          });
-          if (validation.valid && !lockErrors.length) repairedIds.add(skeleton.id);
-        });
-        const remaining = [
-          ...pending.filter(skeleton => !repairedIds.has(skeleton.id)),
-          ...hookOnlySkeletons.filter(skeleton => !repairedIds.has(skeleton.id)),
-        ];
-        pending = Array.from(new Map(remaining.map(skeleton => [skeleton.id, skeleton])).values());
-      } catch (error) {
-        console.warn(`[GrowthPlanner V2] Week ${week} isolated hook repair failed.`, error);
-        pending = Array.from(new Map([...pending, ...hookOnlySkeletons].map(skeleton => [skeleton.id, skeleton])).values());
-      }
-    }
-
-    if (pending.length) {
-      const alternativeSkeletons = pending.map(skeleton => {
-        const alternative = compatibleBlueprints({
-          platform: skeleton.platform,
-          funnelRole: skeleton.funnelRole,
-          archetype: params.businessArchetype,
-          campaignAngle: skeleton.campaignAngle,
-        }).find(blueprint => blueprint.id !== skeleton.blueprintId);
-        if (!alternative) return skeleton;
-        const replacement: PlanSkeletonTask = {
-          ...skeleton,
-          blueprintId: alternative.id,
-          platform: alternative.platform,
-          contentType: alternative.contentType,
-          funnelRole: alternative.funnelRole,
-          module: alternative.defaultModule,
-          supportModule: alternative.defaultSupportModule,
-          ctaTarget: alternative.ctaTargets[0],
-          estimatedEffort: alternative.estimatedEffort,
-          taskPriority: alternative.taskPriority,
-          variationReason: `${skeleton.variationReason} Se cambió a ${alternative.id} tras fallar el contrato original.`,
-        };
-        workingSkeletons.set(replacement.id, replacement);
-        return replacement;
-      });
-      const alternatives = alternativeSkeletons.map(task => getBlueprintById(task.blueprintId)).filter(Boolean) as TaskBlueprint[];
-      let creatives: CreativeTaskFields[] = [];
-      try {
-        creatives = await requestCreativeTaskBatch({
-          token: params.token,
-          input: params.input,
-          skeletonTasks: alternativeSkeletons,
-          blueprints: alternatives,
-          nicheAdapter: params.nicheAdapter,
-          salesAggressiveness: params.salesAggressiveness,
-          creativeSeed: `${params.creativeSeed}-alternative`,
-          businessArchetype: params.businessArchetype,
-        });
-      } catch (error) {
-        console.warn(`[GrowthPlanner V2] Week ${week} alternative blueprint attempt failed.`, error);
-      }
-      alternativeSkeletons.forEach(skeleton => {
-        const blueprint = getBlueprintById(skeleton.blueprintId);
-        const creative = creatives.find(item => item.skeletonTaskId === skeleton.id);
-        if (!blueprint || !creative) return;
-        const task = mergeCreativeFields(skeleton, blueprint, creative, params.input.instagramMetrics.bestTime || '19:00', 3);
-        const lockErrors = validateContractLock(task, skeleton);
-        const validation = validateTaskAgainstBlueprint(task, blueprint, { businessArchetype: params.businessArchetype });
-        completed.set(skeleton.id, {
-          ...task,
-          needsManualReview: !validation.valid || lockErrors.length > 0,
-          validationErrors: [...lockErrors, ...validation.errors],
-        });
-      });
-    }
   }
 
-  const tasks = params.skeletonTasks.map(original => {
-    const skeleton = workingSkeletons.get(original.id) || original;
-    const task = completed.get(original.id);
-    if (task) return task;
-    const blueprint = getBlueprintById(skeleton.blueprintId)!;
-    return {
-      ...mergeCreativeFields(skeleton, blueprint, {
-        skeletonTaskId: skeleton.id,
-        visualConcept: 'Tarea pendiente de revisión manual.',
-        whyItWorks: 'No se recibió una respuesta creativa válida.',
-        caption: 'Revisa esta tarea antes de publicarla.',
-        hashtags: '',
-        prompt: '',
-        slotInstructions: [],
-        requiredAssets: [],
-        executionRecipe: { overview: 'Revisar manualmente.', steps: [{ title: 'Revisar', instruction: 'Completa la tarea antes de publicarla.', ctaLabel: 'Revisar' }] },
-        shotGuide: { duration: 'No aplica', shots: [], onScreenText: [], inspirationSearches: [], whatToAvoid: [] },
-        engagementHook: 'Escríbenos PLAN para recibir orientación.',
-      }, params.input.instagramMetrics.bestTime || '19:00', 3),
-      needsManualReview: true,
-      validationErrors: ['Gemini no devolvió campos creativos válidos tras los intentos permitidos.'],
-    };
-  });
-  return { tasks, blueprintsUsed: tasks.map(task => task.blueprintId) };
+  const tasks = params.skeletonTasks.map(task => completed.get(task.id)!);
+  return {
+    tasks,
+    blueprintsUsed: tasks.map(task => task.blueprintId),
+    slotNormalizationSummary: {
+      aliasesNormalized: Array.from(aliasesNormalized),
+      missingInstructionsAdded: Array.from(missingInstructionsAdded),
+      unresolvedSlots: Array.from(unresolvedSlots),
+    },
+    hookValidationSummary: {
+      hooksBuiltByFactory: Array.from(hooksBuiltByFactory),
+      hooksAcceptedFromGemini: Array.from(hooksAcceptedFromGemini),
+      hooksRejectedAndRebuilt: Array.from(hooksRejectedAndRebuilt),
+    },
+    weakPhraseSummary: {
+      inputPhrasesSanitized: [],
+      outputPhrasesRemoved: Array.from(outputPhrasesRemoved),
+      remainingWeakPhrases: validateWeakPhrasesV2(tasks.map(task => JSON.stringify(task)).join(' ')),
+    },
+  };
 }
 
 function buildV2BasePlan(params: {
@@ -3589,6 +3508,7 @@ function buildV2BasePlan(params: {
   warnings: string[];
 }): GrowthStrategicPlan {
   const products = normalizeProductsForEngineV2(params.engineInput.products);
+  const clean = (value: unknown) => sanitizePlannerText(String(value || '')).value;
   return {
     id: String(params.strategy?.id || `growth_v2_${Date.now()}`),
     createdAt: String(params.strategy?.createdAt || new Date().toISOString()),
@@ -3600,17 +3520,17 @@ function buildV2BasePlan(params: {
     businessStage: params.engineInput.businessStage,
     mainGoal: params.engineInput.mainGoal,
     commercialFocus: params.engineInput.commercialFocus,
-    strategyGoal: String(params.strategy?.strategyGoal || params.engineInput.mainGoal),
-    businessDiagnosis: String(params.strategy?.businessDiagnosis || ''),
-    nicheInsights: asArray(params.strategy?.nicheInsights, []),
-    planNarrative: String(params.strategy?.planNarrative || ''),
-    strategicTip: String(params.strategy?.strategicTip || ''),
+    strategyGoal: clean(params.strategy?.strategyGoal || params.engineInput.mainGoal),
+    businessDiagnosis: clean(params.strategy?.businessDiagnosis || ''),
+    nicheInsights: asArray<string>(params.strategy?.nicheInsights, []).map(clean),
+    planNarrative: clean(params.strategy?.planNarrative || ''),
+    strategicTip: clean(params.strategy?.strategicTip || ''),
     roadmap: params.roadmap,
     tasks: params.tasks,
     brandAnalysis: {
-      stageInterpretation: String(params.strategy?.brandAnalysis?.stageInterpretation || params.engineInput.businessStage),
-      targetAnalysis: String(params.strategy?.brandAnalysis?.targetAnalysis || params.input.brand.idealClient),
-      voiceGuide: String(params.strategy?.brandAnalysis?.voiceGuide || params.input.brand.tone),
+      stageInterpretation: clean(params.strategy?.brandAnalysis?.stageInterpretation || params.engineInput.businessStage),
+      targetAnalysis: clean(params.strategy?.brandAnalysis?.targetAnalysis || params.input.brand.idealClient),
+      voiceGuide: clean(params.strategy?.brandAnalysis?.voiceGuide || params.input.brand.tone),
     },
     productAnalysis: {
       productWarnings: products.flatMap(product => product.warnings || []),
@@ -3622,24 +3542,24 @@ function buildV2BasePlan(params: {
       categorizationSummary: `${products.length} producto(s), servicio(s) o plan(es) normalizados para Engine V2.`,
     },
     socialMetricsAnalysis: {
-      audienceInsights: String(params.strategy?.socialMetricsAnalysis?.audienceInsights || ''),
-      engagementLevel: String(params.strategy?.socialMetricsAnalysis?.engagementLevel || ''),
-      confidenceMapping: String(params.strategy?.socialMetricsAnalysis?.confidenceMapping || 'Media: información declarada por la marca.'),
+      audienceInsights: clean(params.strategy?.socialMetricsAnalysis?.audienceInsights || ''),
+      engagementLevel: clean(params.strategy?.socialMetricsAnalysis?.engagementLevel || ''),
+      confidenceMapping: clean(params.strategy?.socialMetricsAnalysis?.confidenceMapping || 'Media: información declarada por la marca.'),
     },
     nicheResearch: {
-      trends: asArray(params.strategy?.nicheResearch?.trends, []),
-      competitorGaps: asArray(params.strategy?.nicheResearch?.competitorGaps, []),
+      trends: asArray<string>(params.strategy?.nicheResearch?.trends, []).map(clean),
+      competitorGaps: asArray<string>(params.strategy?.nicheResearch?.competitorGaps, []).map(clean),
       researchMode: 'gemini_without_grounding',
     },
     generationLog: {
       timestamp: new Date().toISOString(),
-      steps: ['Estrategia base generada', 'Skeleton V2 generado', 'Creatividad generada por blueprint', 'Contract Lock validado'],
+      steps: ['Estrategia base generada', 'Skeleton V2 generado', 'Blueprint completion determinístico', 'Enriquecimiento creativo validado', 'Contract Lock validado'],
       hasImages: params.input.productImageRefs.length > 0,
       hasMetrics: true,
       researchMode: 'gemini_without_grounding',
       expectedTasks: taskRange(params.input.duration).min,
       generatedTasks: params.tasks.length,
-      tasksAddedByFallback: 0,
+      tasksAddedByFallback: params.tasks.filter(task => task.regenerationAttempts === 0).length,
       roadmapWeeksGenerated: params.roadmap.length,
       channelUsage: countByPlatform(params.tasks),
       warnings: uniqueStrings(params.warnings),
@@ -3655,7 +3575,7 @@ function buildV2BasePlan(params: {
       v2ValidatorsApplied: [
         'Contract Lock', 'normalizeCreativeTextV2', 'validateSlotsV2', 'validateHooksV2',
         'validateWeakPhrasesV2', 'validateSensitiveClaimsV2', 'validateBlueprintContractV2',
-        'validateFinalPlan',
+        'validateFinalPlan', 'completeTaskFromBlueprintDeterministic', 'normalizeSlotsV2', 'buildHookForCtaTarget',
       ],
       contractLockedFields: [...CONTRACT_LOCKED_FIELDS],
       tasksRegenerated: params.tasks.filter(task => task.regenerationAttempts > 0).length,
@@ -3674,7 +3594,8 @@ async function generateGrowthPlanV2(
 
   options.onProgress?.({ stepId: 'strategy', label: 'Diseñando estrategia base' });
   const strategy = await generateStrategyWithRecovery(input, token);
-  const engineInput = engineInputFromStrategy(input, strategy);
+  const sanitizedContext = sanitizeBrandInputForPlanner(engineInputFromStrategy(input, strategy));
+  const engineInput = sanitizedContext.input;
   const brandId = brandMemoryId(engineInput);
   const previousPlans = loadPreviousPlanMemory(brandId);
   const archetype = detectBusinessArchetype(engineInput);
@@ -3706,6 +3627,11 @@ async function generateGrowthPlanV2(
   const finalValidation = validateFinalPlan(normalized, previousPlans, archetype.businessArchetype);
   const repeatedBlueprints = detectRepeatedBlueprints(generated.blueprintsUsed, previousPlans[0]?.previousBlueprintsUsed || []);
   const repeatedCaptions = detectRepeatedCaptions(generated.tasks.map(task => task.caption), previousPlans[0]?.previousCaptions || []);
+  const taskNoveltyScore = calculateTaskNoveltyScore(generated.tasks, previousPlans[0]);
+  const repeatedTaskSignatures = Object.entries(generated.tasks.map(buildTaskSignature).reduce<Record<string, number>>((acc, signature) => {
+    acc[signature] = (acc[signature] || 0) + 1;
+    return acc;
+  }, {})).filter(([, count]) => count > 3).map(([signature]) => signature);
   const blueprintValidation = Object.fromEntries(generated.tasks.map(task => {
     const blueprint = getBlueprintById(task.blueprintId)!;
     return [task.id, validateTaskAgainstBlueprint(task, blueprint, { businessArchetype: archetype.businessArchetype })];
@@ -3717,7 +3643,7 @@ async function generateGrowthPlanV2(
     campaignAngle: campaign.campaignAngle,
     campaignAngleReason: campaign.campaignAngleReason,
     creativeSeed: campaign.creativeSeed,
-    noveltyScore: skeleton.noveltyScore,
+    noveltyScore: taskNoveltyScore,
     blueprintsUsed: generated.blueprintsUsed,
     blueprintValidation,
     taskRegenerationAttempts: Object.fromEntries(generated.tasks.map(task => [task.id, task.regenerationAttempts])),
@@ -3740,6 +3666,32 @@ async function generateGrowthPlanV2(
     contractLockedFields: normalized.generationLog.contractLockedFields || [],
     tasksRegenerated: normalized.generationLog.tasksRegenerated || 0,
     tasksMarkedForReview: normalized.generationLog.tasksMarkedForReview || 0,
+    fallbackCompletion: {
+      blueprintsWithFallback: new Set(generated.tasks.filter(task => {
+        const blueprint = getBlueprintById(task.blueprintId);
+        return Boolean(blueprint && hasDeterministicFallback(blueprint));
+      }).map(task => task.blueprintId)).size,
+      blueprintsMissingFallback: Array.from(new Set(generated.tasks.filter(task => {
+        const blueprint = getBlueprintById(task.blueprintId);
+        return !blueprint || !hasDeterministicFallback(blueprint);
+      }).map(task => task.blueprintId))),
+      tasksCompletedByFallback: generated.tasks.filter(task => task.regenerationAttempts === 0).map(task => task.id),
+      tasksCompletedByGemini: generated.tasks.filter(task => task.regenerationAttempts > 0).map(task => task.id),
+      tasksWhereGeminiRejectedButFallbackUsed: generated.tasks.filter(task => task.regenerationAttempts === 0).map(task => task.id),
+    },
+    slotNormalizationSummary: generated.slotNormalizationSummary,
+    hookValidationSummary: generated.hookValidationSummary,
+    weakPhraseSummary: {
+      inputPhrasesSanitized: sanitizedContext.sanitizedPhrases,
+      outputPhrasesRemoved: generated.weakPhraseSummary.outputPhrasesRemoved,
+      remainingWeakPhrases: generated.weakPhraseSummary.remainingWeakPhrases,
+    },
+    antiRepetitionSummary: {
+      noveltyScore: taskNoveltyScore,
+      repeatedBlueprintsAllowed: repeatedBlueprints,
+      repeatedTaskSignaturesRejected: repeatedTaskSignatures,
+      captionsIgnoredBecausePlaceholder: [],
+    },
   };
 
   normalized.plannerEngineVersion = metadata.plannerEngineVersion;
@@ -3759,7 +3711,9 @@ async function generateGrowthPlanV2(
   };
   normalized.validationReportMarkdown = buildEngineV2ValidationReport(normalized, metadata);
 
-  savePlanMemory(buildPlanMemory({ input: engineInput, angle: campaign.campaignAngle, tasks: generated.tasks }));
+  if (finalValidation.status === 'ready') {
+    savePlanMemory(buildPlanMemory({ input: engineInput, angle: campaign.campaignAngle, tasks: generated.tasks }));
+  }
   return normalized;
 }
 

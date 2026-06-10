@@ -31,6 +31,7 @@ import {
   generatePhotodumpCaptions,
   generateFreeModeScene,
   getRefsAsArray,
+  inferAvatarGender,
 } from './photodumpDirectorService';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
@@ -364,7 +365,12 @@ const PhotodumpModule: React.FC = () => {
     try {
       const sessionId = newSessionId();
       const sessionParams = { uid: user?.uid, sessionId };
-      const refsWithMode = { ...refs, outfitMode };
+
+      // Inferir género desde el avatar antes de generar — afecta HPI y captions
+      const inferredGender = refs.avatarRef
+        ? await inferAvatarGender(refs.avatarRef).catch(() => 'female' as const)
+        : (refs.gender ?? 'female');
+      const refsWithMode = { ...refs, outfitMode, gender: inferredGender };
 
       setProgressStepIndex(0);
       const plan  = await buildPhotodumpSessionPlan(narrative, protagonist, destino, basePrompt, recipe, refsWithMode);
@@ -402,7 +408,7 @@ const PhotodumpModule: React.FC = () => {
       }
 
       setProgressStepIndex(3);
-      const captions = await generatePhotodumpCaptions(basePrompt, narrative, shots);
+      const captions = await generatePhotodumpCaptions(basePrompt, narrative, shots, refs.gender ?? 'female');
       setSavedCaptions(captions);
       setSavedShotUrls(shotUrls);
 
@@ -605,10 +611,8 @@ const PhotodumpModule: React.FC = () => {
               {step === 1 && (
                 <PDStep1
                   recipe={recipe}
-                  count={count}
                   destino={destino}
                   onRecipe={r => { setRecipe(r); }}
-                  onCount={setCount}
                   onDestino={setDestino}
                 />
               )}
@@ -617,9 +621,11 @@ const PhotodumpModule: React.FC = () => {
               {step === 2 && !isFree && (
                 <PDStep2Receta
                   recipe={recipe}
+                  count={count}
                   basePrompt={basePrompt}
                   refs={refs}
                   outfitMode={outfitMode}
+                  onCount={setCount}
                   onPrompt={setBasePrompt}
                   onRefs={setRefs}
                   onOutfitMode={m => { setOutfitMode(m); setRefs(r => ({ ...r, outfitMode: m })); }}

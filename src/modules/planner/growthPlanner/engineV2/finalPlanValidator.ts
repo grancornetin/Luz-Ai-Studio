@@ -1,11 +1,12 @@
 import type { GrowthStrategicPlan } from '../../growthPlannerTypes';
-import { detectRepeatedBlueprints, detectRepeatedCaptions } from './antiRepetition';
+import { buildPlanSignature, buildTaskSignature, calculateTaskNoveltyScore, detectRepeatedCaptions } from './antiRepetition';
 import { validateTaskAgainstBlueprint } from './blueprintValidator';
 import { validateHooksV2, validateWeakPhrasesV2 } from './copyRules';
 import { hasSpanishOrthographyIssues } from './orthography';
 import { dayLabelFromDate } from './planSkeletonGenerator';
 import { validateSensitiveClaims } from './sensitiveGuardrails';
 import { getBlueprintById } from './taskBlueprints';
+import { hasDeterministicFallback } from './deterministicCompletion';
 import type { BusinessArchetype, FinalValidationSummary, GeneratedTaskV2, PreviousPlanMemory } from './types';
 
 const MIN_TASKS = { 7: 5, 14: 12, 30: 25 } as const;
@@ -33,9 +34,25 @@ export function validateFinalPlan(
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const previous = previousPlans[0];
-  const repeatedBlueprints = detectRepeatedBlueprints(tasks.map(task => task.blueprintId), previous?.previousBlueprintsUsed || []);
   const repeatedCaptions = detectRepeatedCaptions(tasks.map(task => task.caption), previous?.previousCaptions || []);
-  const allText = tasks.map(taskText).join(' ');
+  const taskNoveltyScore = calculateTaskNoveltyScore(tasks, previous);
+  const signatureCounts = tasks.map(buildTaskSignature).reduce<Record<string, number>>((acc, signature) => {
+    acc[signature] = (acc[signature] || 0) + 1;
+    return acc;
+  }, {});
+  const repeatedTaskSignatures = Object.values(signatureCounts).filter(count => count > 3);
+  const currentCaptionCounts = tasks.map(task => task.caption.toLowerCase().replace(/\s+/g, ' ').trim()).reduce<Record<string, number>>((acc, caption) => {
+    if (caption) acc[caption] = (acc[caption] || 0) + 1;
+    return acc;
+  }, {});
+  const repeatedCurrentCaptions = Object.values(currentCaptionCounts).some(count => count > 1);
+  const repeatsPreviousSequence = Boolean(previous?.planSignature && previous.planSignature === buildPlanSignature(tasks));
+  const allText = [
+    tasks.map(taskText).join(' '),
+    plan.strategyGoal, plan.businessDiagnosis, plan.planNarrative, plan.strategicTip,
+    ...plan.nicheInsights,
+    ...plan.roadmap.flatMap(item => [item.title, item.objective, item.hint]),
+  ].join(' ');
   const efforts = tasks.reduce<Record<string, number>>((acc, task) => {
     acc[task.estimatedEffort] = (acc[task.estimatedEffort] || 0) + 1;
     return acc;
@@ -47,6 +64,9 @@ export function validateFinalPlan(
     && tasks[index - 1].estimatedEffort === 'alto'
     && tasks[index - 2].estimatedEffort === 'alto');
   const total = tasks.length || 1;
+  const placeholderPattern = /tarea pendiente de revisi[oó]n|revisa esta tarea|no se recibi[oó] una respuesta creativa v[aá]lida|completa la tarea antes de publicarla|revisar manualmente/i;
+  const placeholderTasks = tasks.filter(task => placeholderPattern.test(taskText(task)));
+  const manualReviewCount = tasks.filter(task => task.needsManualReview).length;
   const checks: Record<string, boolean> = {
     taskCountValid: tasks.length >= MIN_TASKS[plan.duration],
     datesValid: dates.every(date => !Number.isNaN(date.getTime())),
@@ -65,9 +85,10 @@ export function validateFinalPlan(
       && (efforts.medio || 0) >= Math.ceil(total * 0.35)
       && (efforts.alto || 0) <= Math.floor(total * 0.3)
     ),
-    priorityDistributionValid: primaryCount / total >= 0.6 && primaryCount / total <= 0.75,
+    priorityDistributionValid: primaryCount / total >= 0.6 && primaryCount / total <= 0.8,
+    priorityDistributionIdeal: primaryCount / total >= 0.6 && primaryCount / total <= 0.75,
     platformFormatValid: blueprintResults.every(result => !result.errors.some(error => /platform|contentType/.test(error))),
-    platformCtaCoherenceValid: blueprintResults.every(result => !result.errors.some(error => /ctaTarget|Menciones incompatibles/.test(error))),
+    platformCtaCoherenceValid: blueprintResults.every(result => !result.errors.some(error => /ctaTarget|Menciones incompatibles|Hook no coincide/.test(error))),
     primaryModuleActionValid: blueprintResults.every(result => !result.errors.some(error => /module/.test(error))),
     blueprintContractsValid: blueprintResults.every(result => result.valid),
     taskInternalCoherenceValid: blueprintResults.every(result => !result.errors.some(error =>
@@ -81,12 +102,25 @@ export function validateFinalPlan(
     spanishOrthographyValid: !hasSpanishOrthographyIssues(allText),
     actionableHooksValid: tasks.every(task => validateHooksV2(task.engagementHook, task.ctaTarget).valid),
     sensitiveClaimsValid: validateSensitiveClaims(allText, businessArchetype).valid,
-    antiRepetitionValid: !previous || repeatedBlueprints.length / total <= 0.6 && repeatedCaptions.length === 0,
+    antiRepetitionValid: repeatedTaskSignatures.length === 0
+      && !repeatedCurrentCaptions
+      && (!previous || taskNoveltyScore >= 60 && repeatedCaptions.length === 0 && !repeatsPreviousSequence),
+    noPlaceholderTasks: placeholderTasks.length === 0,
+    manualReviewRatioValid: manualReviewCount <= 2,
+    fallbackCompletionValid: tasks.every(task => {
+      const blueprint = getBlueprintById(task.blueprintId);
+      return Boolean(blueprint && hasDeterministicFallback(blueprint));
+    }),
     directPlanSalesPresent: plan.duration !== 30 || tasks.some(task => task.funnelRole === 'convertir'),
     productsNormalized: (plan.normalizedProducts || plan.products).length > 0,
   };
-  const criticalNames = ['taskCountValid', 'datesValid', 'noPastDates'];
-  const reviewNames = ['dayLabelMatchesDate', 'blueprintContractsValid', 'taskInternalCoherenceValid', 'sensitiveClaimsValid'];
+  const criticalNames = ['taskCountValid', 'datesValid', 'noPastDates', 'noPlaceholderTasks'];
+  if (manualReviewCount > 2) criticalNames.push('manualReviewRatioValid');
+  const reviewNames = [
+    'dayLabelMatchesDate', 'blueprintContractsValid', 'taskInternalCoherenceValid',
+    'sensitiveClaimsValid', 'manualReviewRatioValid', 'slotsValid', 'actionableHooksValid',
+    'platformCtaCoherenceValid', 'noWeakPhrases', 'antiRepetitionValid', 'fallbackCompletionValid',
+  ];
   const criticalErrors = criticalNames.filter(name => !checks[name]);
   const reviewWarnings = reviewNames.filter(name => !checks[name]);
   const status = criticalErrors.length ? 'failed_validation' : reviewWarnings.length ? 'needs_review' : 'ready';

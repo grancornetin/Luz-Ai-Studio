@@ -286,6 +286,25 @@ class UGCApiService {
   }
 
   // ──────────────────────────────────────────────────────────────
+  // inferGender - Inferencia de género desde foto de avatar (rápido)
+  // ──────────────────────────────────────────────────────────────
+  async inferGender(params: {
+    imageData: string;
+    mimeType: string;
+  }): Promise<{ gender: 'female' | 'male' | 'neutral' }> {
+    const response = await fetch(this.baseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
+      body: JSON.stringify({
+        action: 'inferGender',
+        payload: params,
+      }),
+    });
+    if (!response.ok) throw new Error(`inferGender failed: ${response.status}`);
+    return response.json();
+  }
+
+  // ──────────────────────────────────────────────────────────────
   // analyzeREF0 - Análisis de luz/espacio/pose (síncrono, rápido)
   // ──────────────────────────────────────────────────────────────
   async analyzeREF0(params: {

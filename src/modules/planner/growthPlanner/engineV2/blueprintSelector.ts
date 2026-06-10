@@ -1,5 +1,6 @@
 import { calculateNoveltyScore, detectRepeatedBlueprints } from './antiRepetition';
 import { compatibleBlueprints, TASK_BLUEPRINTS } from './taskBlueprints';
+import { conversionSafePackSaas, hasDeterministicFallback } from './deterministicCompletion';
 import type {
   BusinessArchetype,
   CampaignAngle,
@@ -30,14 +31,17 @@ export function selectBlueprintsForPlan(context: BlueprintSelectionContext): {
   const previous = context.previousPlans[0]?.previousBlueprintsUsed || [];
   const usedCounts = new Map<string, number>();
   const blueprints = context.slots.map((slot, index) => {
-    const candidates = compatibleBlueprints({
+    const compatible = compatibleBlueprints({
       platform: slot.platform,
       funnelRole: slot.funnelRole,
       archetype: context.businessArchetype,
       campaignAngle: context.campaignAngle,
-    });
+    }).filter(hasDeterministicFallback);
+    const candidates = context.businessArchetype === 'saas_subscription' && slot.funnelRole === 'convertir'
+      ? compatible.filter(item => (conversionSafePackSaas as readonly string[]).includes(item.id))
+      : compatible;
     const pool = candidates.length ? candidates : TASK_BLUEPRINTS.filter(item =>
-      item.platform === slot.platform && item.funnelRole === slot.funnelRole,
+      item.platform === slot.platform && item.funnelRole === slot.funnelRole && hasDeterministicFallback(item),
     );
     const ranked = [...pool].sort((a, b) => {
       const aPenalty = (usedCounts.get(a.id) || 0) * 5 + (previous[index] === a.id ? 8 : 0) + (previous.includes(a.id) ? 2 : 0);

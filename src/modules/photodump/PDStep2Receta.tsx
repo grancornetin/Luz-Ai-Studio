@@ -46,16 +46,21 @@ const SLOT_LABEL: Record<string, string> = {
 
 interface PDStep2RecetaProps {
   recipe:      PhotodumpRecipe;
+  count:       number;
   basePrompt:  string;
   refs:        PhotodumpRefs;
   outfitMode:  PhotodumpOutfitMode;
+  onCount:     (n: number) => void;
   onPrompt:    (v: string) => void;
   onRefs:      (r: PhotodumpRefs) => void;
   onOutfitMode:(m: PhotodumpOutfitMode) => void;
 }
 
+const MIN_COUNT = 3;
+const MAX_COUNT = 20;
+
 const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
-  recipe, basePrompt, refs, outfitMode, onPrompt, onRefs, onOutfitMode,
+  recipe, count, basePrompt, refs, outfitMode, onCount, onPrompt, onRefs, onOutfitMode,
 }) => {
   const [openSlot, setOpenSlot] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -254,6 +259,36 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
             <p className="text-sm text-slate-500 mt-2 leading-[1.55]">
               Describí el sujeto, el contexto o el momento. Las referencias refuerzan la identidad visual.
             </p>
+          </div>
+
+          {/* Cantidad de imágenes */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-2">
+              Cantidad de imágenes
+            </label>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => onCount(Math.max(MIN_COUNT, count - 1))}
+                disabled={count <= MIN_COUNT}
+                className="w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold text-lg flex items-center justify-center hover:border-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-all"
+              >
+                −
+              </button>
+              <div className="flex flex-col items-center min-w-[48px]">
+                <span className="text-2xl font-black text-slate-900 leading-none">{count}</span>
+                <span className="text-[9px] text-slate-400 font-medium">fotos</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => onCount(Math.min(MAX_COUNT, count + 1))}
+                disabled={count >= MAX_COUNT}
+                className="w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold text-lg flex items-center justify-center hover:border-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-all"
+              >
+                +
+              </button>
+            </div>
+            <p className="text-[9px] text-slate-400 mt-1.5">Mínimo 3 · El género del avatar se detecta automáticamente</p>
           </div>
 
           {/* Brief */}

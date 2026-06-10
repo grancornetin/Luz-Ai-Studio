@@ -21,6 +21,7 @@ export type SalesAggressiveness = 'soft' | 'balanced' | 'direct';
 export type PlanningDepth = 'guided' | 'advanced';
 export type PlanQualityStatus = 'ready' | 'needs_review' | 'failed_validation';
 export type ResearchMode = 'grounded' | 'gemini_without_grounding' | 'fallback' | 'skipped';
+export type PromptPolicy = 'required_primary' | 'optional_primary' | 'required_support' | 'optional_support' | 'none';
 
 export type BusinessArchetype =
   | 'physical_product'
@@ -78,6 +79,7 @@ export interface TaskBlueprint {
   ctaTargets: GrowthCtaTarget[];
   estimatedEffort: EstimatedEffort;
   taskPriority: TaskPriority;
+  promptPolicy: PromptPolicy;
   requiresPrompt: boolean;
   allowsSupportPrompt: boolean;
   requiredSlots: string[];
@@ -133,6 +135,8 @@ export interface PreviousPlanMemory {
   previousTaskConcepts: string[];
   previousCTAs: string[];
   previousProductsHighlighted: string[];
+  previousTaskSignatures?: string[];
+  planSignature?: string;
   lastGeneratedAt: string;
 }
 
@@ -210,4 +214,32 @@ export interface EngineV2Metadata {
   contractLockedFields: string[];
   tasksRegenerated: number;
   tasksMarkedForReview: number;
+  fallbackCompletion: {
+    blueprintsWithFallback: number;
+    blueprintsMissingFallback: string[];
+    tasksCompletedByFallback: string[];
+    tasksCompletedByGemini: string[];
+    tasksWhereGeminiRejectedButFallbackUsed: string[];
+  };
+  slotNormalizationSummary: {
+    aliasesNormalized: string[];
+    missingInstructionsAdded: string[];
+    unresolvedSlots: string[];
+  };
+  hookValidationSummary: {
+    hooksBuiltByFactory: string[];
+    hooksAcceptedFromGemini: string[];
+    hooksRejectedAndRebuilt: string[];
+  };
+  weakPhraseSummary: {
+    inputPhrasesSanitized: string[];
+    outputPhrasesRemoved: string[];
+    remainingWeakPhrases: string[];
+  };
+  antiRepetitionSummary: {
+    noveltyScore: number;
+    repeatedBlueprintsAllowed: string[];
+    repeatedTaskSignaturesRejected: string[];
+    captionsIgnoredBecausePlaceholder: string[];
+  };
 }

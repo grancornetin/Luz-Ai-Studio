@@ -266,6 +266,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(JSON.parse(clean));
     }
 
+    if (action === 'inferGender') {
+      const { imageData, mimeType } = payload;
+      const ai = getGenAIClient('us-central1');
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          { text: 'Look at this photo of a person. Determine their apparent gender presentation for the purpose of generating appropriate HPI (Human Performance Intelligence) pose and expression guidance, and for writing correctly-gendered Spanish captions. Respond ONLY with JSON.' },
+          { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
+          { text: '{"gender": "female" | "male" | "neutral"}' },
+        ],
+        config: { responseMimeType: 'application/json' }
+      });
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      const clean = text.replace(/```json|```/g, '').trim();
+      return res.status(200).json(JSON.parse(clean));
+    }
+
     if (action === 'analyzeAnchor') {
       const { imageData, mimeType } = payload;
       const ai = getGenAIClient('us-central1');

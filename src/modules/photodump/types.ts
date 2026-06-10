@@ -161,6 +161,7 @@ export interface PhotodumpRefs {
   sceneDestinoRef?: string | null;        // outfit_check: escena destino (restaurante, evento, calle)
   sceneText?:     string;
   outfitMode?:    PhotodumpOutfitMode;
+  gender?:        'female' | 'male' | 'neutral';  // género del avatar para HPI y captions
 }
 
 // ── Tipos modo libre ───────────────────────────────────────────

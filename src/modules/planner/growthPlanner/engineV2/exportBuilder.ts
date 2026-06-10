@@ -34,6 +34,17 @@ export function buildEngineV2ValidationReport(plan: GrowthStrategicPlan, metadat
 - Tareas marcadas para revisión: ${metadata.tasksMarkedForReview}
 - fixedErrors legacy: ${plan.generationLog.fixedErrors.length}
 
+## Blueprint completion V2.2
+- Blueprints con fallback: ${metadata.fallbackCompletion.blueprintsWithFallback}
+- Blueprints sin fallback: ${metadata.fallbackCompletion.blueprintsMissingFallback.join(', ') || 'ninguno'}
+- Tareas completadas por fallback: ${metadata.fallbackCompletion.tasksCompletedByFallback.length}
+- Tareas completadas por Gemini: ${metadata.fallbackCompletion.tasksCompletedByGemini.length}
+- Gemini rechazado y fallback conservado: ${metadata.fallbackCompletion.tasksWhereGeminiRejectedButFallbackUsed.length}
+- Slots sin resolver: ${metadata.slotNormalizationSummary.unresolvedSlots.join(', ') || 'ninguno'}
+- Hooks construidos por Factory: ${metadata.hookValidationSummary.hooksBuiltByFactory.length}
+- Hooks aceptados de Gemini: ${metadata.hookValidationSummary.hooksAcceptedFromGemini.length}
+- Frases débiles restantes: ${metadata.weakPhraseSummary.remainingWeakPhrases.join(', ') || 'ninguna'}
+
 ## Validación final
 ${checkLines}
 

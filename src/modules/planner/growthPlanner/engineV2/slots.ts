@@ -1,4 +1,5 @@
 import type { BusinessArchetype, GeneratedTaskV2, TaskBlueprint } from './types';
+import { normalizeSlotsV2 } from './slotRegistry';
 
 const SAAS_SLOT_ALIASES: Record<string, string[]> = {
   '@producto1': ['@producto1', '@plan1'],
@@ -24,6 +25,9 @@ export function validateSlotsV2(
   blueprint: TaskBlueprint,
   archetype: BusinessArchetype,
 ): string[] {
+  const normalized = normalizeSlotsV2(task, archetype);
+  if (normalized.unresolvedSlots.length) return normalized.unresolvedSlots.map(slot => `Slot ${slot} usado sin instrucción equivalente.`);
+  task = normalized.task;
   const text = [
     task.prompt,
     task.supportPrompt || '',

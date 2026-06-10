@@ -44,7 +44,9 @@ export function validateTaskAgainstBlueprint(
   if (!blueprint.ctaTargets.includes(task.ctaTarget)) errors.push('ctaTarget no permitido por blueprint.');
   if (task.dayLabel !== dayLabelFromDate(task.date)) errors.push('dayLabel no coincide con date.');
   if (task.module === 'none' && task.prompt.trim()) errors.push('module none debe tener prompt vacío.');
-  if (blueprint.requiresPrompt && !task.prompt.trim()) errors.push('El blueprint requiere prompt principal.');
+  if (blueprint.promptPolicy === 'required_primary' && !task.prompt.trim()) errors.push('El blueprint requiere prompt principal.');
+  if (blueprint.promptPolicy === 'required_support' && !task.supportPrompt?.trim()) errors.push('El blueprint requiere prompt de apoyo.');
+  if (blueprint.promptPolicy === 'none' && (task.prompt.trim() || task.supportPrompt?.trim())) errors.push('El blueprint no permite prompts.');
   if (task.supportPrompt && !task.supportModule) errors.push('supportPrompt requiere supportModule.');
   if (task.supportModule && blueprint.allowedSupportModules?.length && !blueprint.allowedSupportModules.includes(task.supportModule)) {
     errors.push('supportModule no permitido por blueprint.');

@@ -1,12 +1,13 @@
 import type { GeneratedTaskV2 } from './types';
 import { normalizeSpanishText } from './orthography';
+import { sanitizePlannerText } from './inputSanitizer';
 
 function normalizeList(values: string[]): string[] {
-  return values.map(normalizeSpanishText).map(value => value.trim()).filter(Boolean);
+  return values.map(value => sanitizePlannerText(normalizeSpanishText(value)).value).map(value => value.trim()).filter(Boolean);
 }
 
 export function normalizeCreativeTextV2(task: GeneratedTaskV2): GeneratedTaskV2 {
-  const text = (value: string) => normalizeSpanishText(String(value || '').trim());
+  const text = (value: string) => sanitizePlannerText(normalizeSpanishText(String(value || '').trim())).value;
   const hashtags = task.platform === 'WhatsApp' || task.module === 'none'
     ? ''
     : Array.from(new Set(task.hashtags.split(/\s+/).filter(tag => /^#[\p{L}\p{N}_]+$/u.test(tag) && !/#viral|#fyp|#parati/i.test(tag)))).slice(0, 10).join(' ');

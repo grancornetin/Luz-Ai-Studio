@@ -71,11 +71,14 @@ const SPECS: BlueprintSpec[] = [
   ['IG_POST_STARTER_VS_PRO', 'Starter versus Pro', 'Instagram Feed', 'Post educativo', 'convertir', 'product', 'medio'],
   ['IG_REEL_FINAL_CTA', 'Cierre en Reel', 'Instagram Feed', 'Reel', 'convertir', 'ugc', 'alto'],
   ['IG_POST_DECISION_GUIDE', 'Guía de decisión', 'Instagram Feed', 'Carrusel', 'convertir', 'product', 'medio'],
+  ['IG_CAROUSEL_CREDITS_EXPLAINER', 'Créditos por plan', 'Instagram Feed', 'Carrusel', 'convertir', 'product', 'medio'],
   ['STORY_DM_QUALIFIER', 'Calificador por DM', 'Stories', 'Sticker de pregunta', 'convertir', 'none', 'bajo'],
+  ['STORY_CREDITS_QUESTION', 'Pregunta sobre créditos', 'Stories', 'Q&A', 'convertir', 'none', 'bajo'],
   ['STORY_COUNTDOWN_OR_REMINDER', 'Recordatorio de cierre', 'Stories', 'Recordatorio', 'convertir', 'none', 'bajo'],
   ['STORY_CREDITS_EXPLAINER', 'Créditos en stories', 'Stories', 'Secuencia de stories', 'convertir', 'none', 'bajo'],
   ['FB_PLAN_RECOMMENDATION', 'Recomendación de plan', 'Facebook', 'Caso de uso', 'convertir', 'none', 'medio'],
   ['FB_DIRECT_OFFER_POST', 'Oferta directa', 'Facebook', 'Post largo', 'convertir', 'none', 'medio'],
+  ['FB_OBJECTION_CLOSE_POST', 'Cierre de objeción', 'Facebook', 'Post largo', 'convertir', 'none', 'medio'],
   ['TIKTOK_PLAN_PICKER', 'Selector de plan', 'TikTok', 'Tutorial rápido', 'convertir', 'ugc', 'alto'],
   ['WHATSAPP_CLOSE_CONVERSATION', 'Cierre conversacional', 'WhatsApp', 'Cierre de venta', 'convertir', 'none', 'bajo'],
   ['WHATSAPP_PLAN_RECOMMENDATION', 'Recomendación por WhatsApp', 'WhatsApp', 'Recomendación de plan', 'convertir', 'none', 'bajo'],
@@ -89,6 +92,10 @@ const SPECS: BlueprintSpec[] = [
 function blueprintFromSpec(spec: BlueprintSpec): TaskBlueprint {
   const [id, name, platform, contentType, funnelRole, defaultModule, estimatedEffort] = spec;
   const isManual = defaultModule === 'none';
+  const isSocialProof = /SOCIAL_PROOF|TESTIMONIAL/.test(id);
+  const promptPolicy = isManual
+    ? (/STORY_DM_QUALIFIER|STORY_CREDITS_QUESTION/.test(id) ? 'none' : 'optional_support')
+    : (isSocialProof ? 'optional_primary' : 'required_primary');
   return {
     id,
     name,
@@ -102,9 +109,10 @@ function blueprintFromSpec(spec: BlueprintSpec): TaskBlueprint {
     ctaTargets: CTA_BY_PLATFORM[platform],
     estimatedEffort,
     taskPriority: funnelRole === 'convertir' ? 'primary' : estimatedEffort === 'bajo' ? 'support' : 'primary',
-    requiresPrompt: !isManual,
+    promptPolicy,
+    requiresPrompt: promptPolicy === 'required_primary',
     allowsSupportPrompt: isManual,
-    requiredSlots: !isManual ? ['@producto1'] : [],
+    requiredSlots: isSocialProof ? ['@testimonio1'] : !isManual ? ['@producto1'] : [],
     forbiddenTerms: PLATFORM_FORBIDDEN[platform],
     requiredTerms: platform === 'Stories' ? ['story'] : platform === 'WhatsApp' ? ['mensaje'] : [],
     businessArchetypes: ALL_ARCHETYPES,

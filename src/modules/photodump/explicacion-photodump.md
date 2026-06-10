@@ -8,7 +8,7 @@
 > 5. El objetivo es que otra IA pueda leer este archivo y entender completamente qué hace el módulo, cómo funciona, y en qué estado está, sin necesidad de leer el código.
 > 6. **INSTRUCCIÓN DE CONTINUIDAD:** Al final del documento siempre debe existir la sección "Estado de trabajo actual" con el estado exacto de qué se está haciendo, en qué receta se está, y qué quedó pendiente. Cuando una receta se cierra, moverla a "Recetas cerradas". Esto permite retomar el trabajo en un nuevo chat sin perder contexto.
 
-**Última actualización:** Junio 2026 (outfit_check, outfit_haul, outfit_week implementadas)
+**Última actualización:** Junio 2026 (selector cantidad → paso 2; HPI en shots con avatar; captions con género)
 **Propósito:** Generar series fotográficas con narrativa visual coherente. Un "photodump" es una colección de fotos que cuentan una historia o transmiten un mood, muy popular en Instagram y TikTok.
 
 ---
@@ -234,16 +234,20 @@ Rotan entre tipos de momento: context, detail, emotion, texture, action, atmosph
 
 ## Estado de trabajo actual
 
-**Próxima acción:** Probar las tres recetas outfit en la app. Validar:
-1. `outfit_check` — arco correcto, REF0 full body con look completo, OUTFIT_ARRIVING sin avatar caminando, OUTFIT_DESTINATION cambia escena correctamente.
-2. `outfit_haul` — progresión de prendas, desorden en fondo, HAUL_WINNER con caos visible.
-3. `outfit_week` — variedad de framings entre shots, outfit distinto por imagen.
+**Próxima acción:** Re-probar las recetas outfit con los tres fixes aplicados.
+
+**Fixes aplicados post-prueba (Junio 2026):**
+1. **Selector de cantidad movido al paso 2** — eliminado de PDStep1, ahora es `- N +` en PDStep2Receta con mínimo 3 y máximo 9. Aparece junto al selector de género.
+2. **HPI inyectado en shots con avatar** — `buildHpiBlock()` se llama en `generatePhotodumpShot` para todos los shots donde aparece una persona (excluye HAUL_INTRO, OUTFIT_ARRIVING, ACCESSORY_CLOSEUP, shots de objeto de unboxing). El género se toma de `refs.gender`.
+3. **Captions con género** — `generatePhotodumpCaptions` recibe `gender` y lo inyecta como instrucción explícita en el prompt: masculino → gramática masculina en español, femenino → femenina, neutro → lenguaje neutro.
+4. **Campo `gender` en `PhotodumpRefs`** — selector de 3 opciones (Femenino/Masculino/Neutro) en el paso 2. Default: femenino. Afecta HPI (poses, expresiones) y captions (gramática).
 
 **Notas de implementación relevantes para debug:**
 - Las prendas se pasan como fotos SOLAS — el modelo debe "vestir" al avatar. Si el resultado es raro, verificar que el usuario subió prendas sin personas.
 - Los shots de `ACCESSORY_CLOSEUP` se agregan DESPUÉS del arco base y se suman al conteo total.
 - `escena_destino` solo cambia la escena en el shot `OUTFIT_DESTINATION` — todos los demás usan `scenePruebaRef`.
 - En `outfit_haul`, el shot HAUL_INTRO no tiene outfit específico asignado (shotOutfitIndex = -1).
+- HPI NO se inyecta en shots faceless ni en shots donde no hay avatar (objeto puro, close-ups de accesorio, etc.).
 
 ---
 

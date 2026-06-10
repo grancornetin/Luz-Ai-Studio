@@ -1245,6 +1245,20 @@ export function getOutfitForShot(
   return { outfitUrl: allOutfits[cycledIndex], isFlatLay: true };
 }
 
+// Infiere el género del avatar desde su foto de referencia.
+// Se llama antes de generar para que HPI y captions usen el género correcto.
+// Fallback silencioso: si la llamada falla, devuelve 'female'.
+export async function inferAvatarGender(avatarRef: string): Promise<'female' | 'male' | 'neutral'> {
+  try {
+    const extracted = extractImageData(avatarRef);
+    if (!extracted) return 'female';
+    const result = await ugcApiService.inferGender({ imageData: extracted.data, mimeType: extracted.mimeType });
+    return result.gender ?? 'female';
+  } catch {
+    return 'female';
+  }
+}
+
 export async function generatePhotodumpREF0(
   refs:        PhotodumpRefs,
   narrative:   PhotodumpNarrative,
@@ -1757,6 +1771,26 @@ export async function generatePhotodumpShot(
   );
   const familyBlock = selectedFamily ? buildFamilyInjectBlock(selectedFamily) : '';
 
+  // HPI: inyectar solo en shots con avatar (no faceless, no shots de objeto puro)
+  const hpiEligible = !isFacelessShot
+    && !!refs.avatarRef
+    && shot.key !== 'HAUL_INTRO'
+    && shot.key !== 'OUTFIT_ARRIVING'
+    && shot.key !== 'ACCESSORY_CLOSEUP'
+    && shot.key !== 'UNBOXING_PACKAGING_CLOSED'
+    && shot.key !== 'UNBOXING_PRODUCT_REVEAL'
+    && shot.key !== 'UNBOXING_PRODUCT_DETAIL'
+    && shot.key !== 'UNBOXING_ATMOSPHERE';
+  const hpiBlock = hpiEligible
+    ? buildHpiBlock({
+        enabled:            true,
+        gender:             refs.gender ?? 'female',
+        modoVisual:         'ugc',
+        includeGesture:     true,
+        includePerformance: shot.beat === 'emotion' || shot.beat === 'candid',
+      })
+    : '';
+
   // Bloque de outfit para este shot específico
   const outfitLockForShot = isFlatLay && outfitForThisShot
     ? `OUTFIT FLAT LAY — THIS SHOT:
@@ -1858,6 +1892,8 @@ FORMAT: ${aspectInstr}
 
 ${familyBlock}
 
+${hpiBlock}
+
 SHOT ROLE: ${shot.role}
 SHOT PURPOSE: ${shot.purpose}
 
@@ -1913,12 +1949,20 @@ export async function generatePhotodumpCaptions(
   basePrompt: string,
   narrative:  PhotodumpNarrative,
   shots:      PhotodumpShotDirective[],
+  gender:     'female' | 'male' | 'neutral' = 'female',
 ): Promise<PhotodumpSetCaption> {
 
   const storyContext = NARRATIVE_META[narrative].label;
+  const genderNote = gender === 'male'
+    ? 'The creator/protagonist is MALE. Use masculine grammar and pronouns in Spanish (e.g., "estoy listo", "me puse", "quedé"). Do NOT use feminine forms like "-a", "lista", "puesta".'
+    : gender === 'neutral'
+      ? 'Use gender-neutral language in Spanish where possible. Avoid heavily gendered adjectives.'
+      : 'The creator/protagonist is FEMALE. Use feminine grammar in Spanish.';
 
   const prompt = `You are a social media copywriter for a Spanish-speaking content creator.
 Write ONE caption for a ${shots.length}-image photodump carousel posted as a single Instagram/TikTok post.
+
+CREATOR GENDER: ${genderNote}
 
 CONTEXT: "${basePrompt}"
 NARRATIVE: ${storyContext}

@@ -161,6 +161,7 @@ export function buildCreativeTaskBatchPrompt(params: {
       ctaTarget: task.ctaTarget,
       date: task.date,
       productId: task.productId || null,
+      promptPolicy: blueprint?.promptPolicy || 'none',
       requiredSlots: blueprint ? requiredSlotsForArchetype(blueprint, params.businessArchetype) : [],
       forbiddenTerms: blueprint?.forbiddenTerms || [],
       requiredTerms: blueprint?.requiredTerms || [],

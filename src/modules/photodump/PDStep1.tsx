@@ -10,22 +10,23 @@ import {
   PhotodumpRecipe, PhotodumpDestino, RECIPE_META, DESTINO_META,
 } from './types';
 
-const RECIPE_ICONS: Record<PhotodumpRecipe, React.ReactNode> = {
-  unboxing:    <Package    size={20} strokeWidth={1.5} />,
-  outfit:      <Shirt      size={20} strokeWidth={1.5} />,
-  day_in_life: <Sun        size={20} strokeWidth={1.5} />,
-  launch:      <Megaphone  size={20} strokeWidth={1.5} />,
-  bts:         <Clapperboard size={20} strokeWidth={1.5} />,
-  travel:      <Plane      size={20} strokeWidth={1.5} />,
-  free:        <Wand2      size={20} strokeWidth={1.5} />,
+const RECIPE_ICONS: Partial<Record<PhotodumpRecipe, React.ReactNode>> = {
+  unboxing:     <Package    size={20} strokeWidth={1.5} />,
+  outfit:       <Shirt      size={20} strokeWidth={1.5} />,
+  outfit_check: <Shirt      size={20} strokeWidth={1.5} />,
+  outfit_haul:  <Shirt      size={20} strokeWidth={1.5} />,
+  outfit_week:  <Shirt      size={20} strokeWidth={1.5} />,
+  day_in_life:  <Sun        size={20} strokeWidth={1.5} />,
+  launch:       <Megaphone  size={20} strokeWidth={1.5} />,
+  bts:          <Clapperboard size={20} strokeWidth={1.5} />,
+  travel:       <Plane      size={20} strokeWidth={1.5} />,
+  free:         <Wand2      size={20} strokeWidth={1.5} />,
 };
 
 interface PDStep1Props {
   recipe:    PhotodumpRecipe;
-  count:     number;
   destino:   PhotodumpDestino;
   onRecipe:  (r: PhotodumpRecipe) => void;
-  onCount:   (n: number) => void;
   onDestino: (d: PhotodumpDestino) => void;
 }
 
@@ -33,7 +34,7 @@ const RECIPES = Object.keys(RECIPE_META) as PhotodumpRecipe[];
 const REGULAR_RECIPES = RECIPES.filter(r => r !== 'free');
 
 const PDStep1: React.FC<PDStep1Props> = ({
-  recipe, count, destino, onRecipe, onCount, onDestino,
+  recipe, destino, onRecipe, onDestino,
 }) => {
   const isFree = recipe === 'free';
 
@@ -141,37 +142,6 @@ const PDStep1: React.FC<PDStep1Props> = ({
             </div>
           </div>
 
-          {/* Cantidad — desactivada en modo libre */}
-          <div>
-            <label className={`block text-[11px] font-bold uppercase tracking-[0.12em] mb-3 ${
-              isFree ? 'text-slate-300' : 'text-slate-500'
-            }`}>
-              Cantidad de imágenes
-              {isFree && (
-                <span className="ml-2 text-[10px] font-medium normal-case tracking-normal text-slate-400">
-                  — se define en el editor
-                </span>
-              )}
-            </label>
-            <div className={`grid grid-cols-4 gap-2 ${isFree ? 'opacity-40 pointer-events-none' : ''}`}>
-              {[3, 4, 5, 6].map(n => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => onCount(n)}
-                  disabled={isFree}
-                  className={`py-4 rounded-2xl flex flex-col items-center gap-0.5 transition-all ${
-                    count === n && !isFree
-                      ? 'bg-slate-900 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  <span className="text-lg font-bold">{n}</span>
-                  <span className="text-[9px] opacity-60">imágenes</span>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* ── Columna derecha: Destino ───────────────────────── */}

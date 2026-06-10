@@ -1,29 +1,12 @@
 export const WEAK_COPY_TERMS = [
-  'empoderar',
-  'brillar',
-  'transforma tu negocio',
-  'transformar tu negocio',
-  'imagenes de revista',
-  'imágenes de revista',
-  'exito',
-  'éxito',
-  'infinitas posibilidades',
-  'aliado visual',
-  'solucion definitiva',
-  'solución definitiva',
-  'magia',
-  'vende mas',
-  'vende más',
-  'impulso',
-  'llevar tu negocio al siguiente nivel',
-  'lleva tu negocio al siguiente nivel',
-  'calidad profesional a tu alcance',
-  'resultados increibles',
-  'resultados increíbles',
-  'tu negocio merece',
-  'contenido de valor',
-  'pasion por lo que haces',
-  'pasión por lo que haces',
+  'empoderar', 'empoderamiento', 'brillar', 'brillo', 'transforma tu negocio',
+  'transformar tu negocio', 'imagenes de revista', 'imágenes de revista', 'revista',
+  'exito', 'éxito', 'infinitas posibilidades', 'aliado visual', 'solucion definitiva',
+  'solución definitiva', 'magia', 'vende mas', 'vende más', 'impulso',
+  'llevar tu negocio al siguiente nivel', 'lleva tu negocio al siguiente nivel',
+  'calidad profesional a tu alcance', 'resultados increibles', 'resultados increíbles',
+  'tu negocio merece', 'contenido de valor', 'pasion por lo que haces',
+  'pasión por lo que haces', 'sin esfuerzo',
 ];
 
 export const RISKY_CLAIM_PATTERNS = [
@@ -36,7 +19,7 @@ export const RISKY_CLAIM_PATTERNS = [
 ];
 
 export const ACTIONABLE_HOOK_PATTERN =
-  /\b(comenta|responde|env[ií]anos|escr[ií]benos|guarda|abre|manda|elige|vota|contesta|pregunta|agenda|deja|d[eé]janos)\b/i;
+  /\b(comenta|responde|env[ií]anos|escr[ií]benos|guarda|abre|manda|m[aá]ndanos|elige|vota|contesta|pregunta|agenda|deja|d[eé]janos|revisa)\b/i;
 
 export function findWeakCopyTerms(text: string): string[] {
   const source = text.toLowerCase();
@@ -64,7 +47,8 @@ export function validateHooksV2(text: string, ctaTarget: string): HookValidation
   const source = text || '';
   const lower = source.toLowerCase();
   const hasActionVerb = ACTIONABLE_HOOK_PATTERN.test(source);
-  const needsKeyword = /dm|comentario|facebook comentario|responder story|whatsapp/i.test(ctaTarget);
+  const isConversion = /\b(plan|cr[eé]ditos|starter|pro|studio|explorer|precio)\b/i.test(source);
+  const needsKeyword = isConversion && /dm|comentario|facebook comentario|responder story|whatsapp/i.test(ctaTarget);
   const hasKeywordIfNeeded = !needsKeyword || /\b[A-ZÁÉÍÓÚÑ]{3,}\b/.test(source) || /pregunta|comentarios/i.test(lower);
   const destinationPatterns: Record<string, RegExp> = {
     'Instagram DM': /\bdm|mensaje\b/i,
@@ -74,15 +58,15 @@ export function validateHooksV2(text: string, ctaTarget: string): HookValidation
     WhatsApp: /\bwhatsapp|responde|mensaje\b/i,
     'Responder story': /\bstory|responde\b/i,
     Guardar: /\bguarda\b/i,
-    Link: /\blink\b/i,
-    'Link en bio': /\blink|bio\b/i,
+    Link: /\blink|enlace|ver planes|revisar planes\b/i,
+    'Link en bio': /\blink|enlace|bio\b/i,
   };
   const matchesCtaTarget = destinationPatterns[ctaTarget]?.test(source) ?? hasActionVerb;
-  const hasClearDestination = /\bdm|mensaje|coment|story|whatsapp|guarda|link|bio|pregunta\b/i.test(source);
+  const hasClearDestination = /\bdm|mensaje|coment|story|whatsapp|guarda|link|enlace|bio|pregunta|planes\b/i.test(source);
   const errors = [
     !hasActionVerb ? 'Hook sin verbo de acción.' : '',
     !matchesCtaTarget ? 'Hook no coincide con ctaTarget.' : '',
-    !hasKeywordIfNeeded ? 'Hook conversacional sin palabra clave o pregunta clara.' : '',
+    !hasKeywordIfNeeded ? 'Hook de conversión sin palabra clave o pregunta clara.' : '',
     !hasClearDestination ? 'Hook sin destino claro.' : '',
   ].filter(Boolean);
   return { valid: errors.length === 0, hasActionVerb, matchesCtaTarget, hasKeywordIfNeeded, hasClearDestination, errors };
