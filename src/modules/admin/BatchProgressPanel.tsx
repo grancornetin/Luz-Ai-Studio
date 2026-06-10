@@ -4,6 +4,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../auth/AuthContext';
+import { getAuth } from 'firebase/auth';
 import { Navigate } from 'react-router-dom';
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -70,6 +71,8 @@ const BatchProgressPanel: React.FC = () => {
   const [items, setItems]             = useState<BatchItem[]>([]);
   const [itemFilter, setItemFilter]   = useState<'all' | 'failed' | 'completed'>('all');
   const [loadingBatches, setLoadingBatches] = useState(true);
+  const [circuitResetting, setCircuitResetting] = useState(false);
+  const [circuitMsg, setCircuitMsg]   = useState<string | null>(null);
 
   // Suscripción a batches (últimos 10)
   useEffect(() => {
@@ -117,6 +120,35 @@ const BatchProgressPanel: React.FC = () => {
     return true;
   });
 
+  async function handleResetCircuits() {
+    setCircuitResetting(true);
+    setCircuitMsg(null);
+    try {
+      const token = await getAuth().currentUser?.getIdToken();
+      const res = await fetch('/api/gemini/image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          action: 'resetCircuits',
+          payload: { secret: import.meta.env.VITE_BATCH_ADMIN_SECRET },
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCircuitMsg('Circuits reseteados. Gemini, Seedream y GPT Image 2 vuelven a estar activos.');
+      } else {
+        setCircuitMsg(`Error: ${data.error || res.status}`);
+      }
+    } catch (e: any) {
+      setCircuitMsg(`Error de red: ${e.message}`);
+    } finally {
+      setCircuitResetting(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
 
@@ -138,6 +170,30 @@ const BatchProgressPanel: React.FC = () => {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 md:px-12 py-10 space-y-8">
+
+        {/* Diagnóstico de infraestructura */}
+        <section className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4">
+          <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">
+            Infraestructura — Circuit Breakers
+          </h2>
+          <p className="text-sm text-slate-500">
+            Cuando Gemini o GPT Image 2 falla repetidamente, el sistema los marca como caídos por 2 horas y hace fallback al otro modelo.
+            Si los errores ya se resolvieron, reseteá aquí para volver al modelo primario.
+          </p>
+          <button
+            type="button"
+            onClick={handleResetCircuits}
+            disabled={circuitResetting}
+            className="px-5 py-2.5 rounded-xl bg-rose-600 text-white text-sm font-bold disabled:opacity-50 hover:bg-rose-700 transition-colors"
+          >
+            {circuitResetting ? 'Reseteando...' : 'Resetear todos los circuit breakers'}
+          </button>
+          {circuitMsg && (
+            <p className={`text-sm font-medium ${circuitMsg.startsWith('Error') ? 'text-red-600' : 'text-emerald-600'}`}>
+              {circuitMsg}
+            </p>
+          )}
+        </section>
 
         {/* Lista de batches */}
         <section>

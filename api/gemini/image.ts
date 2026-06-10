@@ -283,7 +283,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ── Resetear circuit breakers (solo admin interno) ────────────────────────
     if (action === 'resetCircuits') {
       const secret = payload?.secret;
-      if (secret !== process.env.ADMIN_SECRET) {
+      const validSecret = process.env.ADMIN_SECRET || process.env.BATCH_ADMIN_SECRET;
+      if (!validSecret || secret !== validSecret) {
         return res.status(403).json({ error: 'Forbidden' });
       }
       await Promise.all([

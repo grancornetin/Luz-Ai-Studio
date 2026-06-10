@@ -164,9 +164,11 @@ async function startJob(params: GenerateImageParams): Promise<{ jobId: string; s
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
+    console.error(`[ImageAPI] startJob HTTP ${res.status}:`, text.slice(0, 500));
     const appErr = parseErrorCode(`${res.status} ${text}`);
     const err = new Error(appErr.message) as any;
     err.code = appErr.code;
+    err.raw = text;
     throw err;
   }
 
@@ -189,7 +191,11 @@ async function pollJob(jobId: string): Promise<{
     }),
   });
 
-  if (!res.ok) throw new Error(`Poll failed: ${res.status}`);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    console.error(`[ImageAPI] pollJob HTTP ${res.status}:`, text.slice(0, 500));
+    throw new Error(`Poll failed: ${res.status}`);
+  }
   return res.json();
 }
 

@@ -218,4 +218,6 @@ export interface GrowthStrategicPlan {
     };
   };
   engineV2Metadata?: Record<string, unknown>;
+  visiblePlanOutput?: import('./growthPlanner/visibleOutput').VisiblePlannerOutput;
+  visibleOutputQualityStatus?: import('./growthPlanner/visibleOutput').VisibleOutputQualityResult['visibleOutputQualityStatus'];
 }

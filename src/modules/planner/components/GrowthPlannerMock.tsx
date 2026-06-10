@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -51,6 +51,18 @@ import {
   GrowthTask,
   GrowthTaskStatus,
 } from '../growthPlannerTypes';
+import {
+  buildVisiblePlannerOutput,
+  clearGenerationSession,
+  evaluateVisibleOutputQuality,
+  loadInterruptedGenerationSession,
+  loadRecentReadyPlanner,
+  markGenerationSessionReady,
+  polishVisibleCopy,
+  startGenerationSession,
+  updateGenerationSession,
+} from '../growthPlanner/visibleOutput';
+import type { VisiblePlannerOutput, VisiblePlannerTask } from '../growthPlanner/visibleOutput';
 
 const STEPS = [
   { id: 'duration', label: 'Duracion' },
@@ -219,6 +231,8 @@ function buildValidationExport(plan: GrowthStrategicPlan) {
       tasks: plan.tasks,
     },
     engineV2Metadata: plan.engineV2Metadata,
+    visibleOutputQualityStatus: plan.visibleOutputQualityStatus,
+    visiblePlanOutput: plan.visiblePlanOutput,
     generationLog: plan.generationLog,
     validationReportMarkdown: plan.validationReportMarkdown,
   };
@@ -254,23 +268,12 @@ const StatusBadge: React.FC<{ status: GrowthTaskStatus }> = ({ status }) => (
   </span>
 );
 
-const ModuleBadge: React.FC<{ module: GrowthContentModule }> = ({ module }) => {
-  const meta = MODULE_META[module];
-  return (
-    <span
-      className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full"
-      style={{ background: meta.bg, color: meta.color }}
-    >
-      {meta.label}
-    </span>
-  );
-};
-
 const TaskCard: React.FC<{
   task: GrowthTask;
+  visibleTask: VisiblePlannerTask;
   onOpen: (task: GrowthTask) => void;
   compact?: boolean;
-}> = ({ task, onOpen, compact }) => (
+}> = ({ task, visibleTask, onOpen, compact }) => (
   <button
     onClick={() => onOpen(task)}
     className="w-full text-left bg-white border border-slate-100 hover:border-rose-200 hover:shadow-md rounded-2xl p-4 transition-all"
@@ -278,17 +281,19 @@ const TaskCard: React.FC<{
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap mb-2">
-          <ModuleBadge module={task.module} />
+          <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-rose-50 text-rose-600">
+            {visibleTask.recommendedModuleLabel}
+          </span>
           <StatusBadge status={task.status} />
         </div>
-        <p className="text-sm font-black uppercase italic tracking-tight text-slate-900">{task.contentType}</p>
-        <p className="text-xs text-slate-500 mt-1 line-clamp-2">{task.visualConcept}</p>
+        <p className="text-sm font-black uppercase italic tracking-tight text-slate-900">{visibleTask.title}</p>
+        <p className="text-xs text-slate-500 mt-1 line-clamp-2">{visibleTask.goal}</p>
       </div>
       <ChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0" />
     </div>
     {!compact && (
       <div className="flex items-center gap-3 mt-3 text-[10px] text-slate-400 font-bold uppercase tracking-widest flex-wrap">
-        <span>{task.dayLabel}</span>
+        <span>{visibleTask.dateLabel}</span>
         <span>{task.platform}</span>
         <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{task.suggestedTime}</span>
       </div>
@@ -310,6 +315,10 @@ const WizardView: React.FC<{
   productImageCount: number;
   imageError: string;
   generationError: string;
+  recoveryMessage: string;
+  canRecoverReadyPlan: boolean;
+  onRecoverReadyPlan: () => void;
+  onDismissRecovery: () => void;
   onProductImagesChange: (files: FileList | null) => void;
   onRemoveProductImage: (index: number) => void;
   selectedBrandProfileId: string;
@@ -336,6 +345,10 @@ const WizardView: React.FC<{
   productImageCount,
   imageError,
   generationError,
+  recoveryMessage,
+  canRecoverReadyPlan,
+  onRecoverReadyPlan,
+  onDismissRecovery,
   onProductImagesChange,
   onRemoveProductImage,
   selectedBrandProfileId,
@@ -376,6 +389,22 @@ const WizardView: React.FC<{
         <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
           <p className="text-xs font-black uppercase tracking-widest text-red-500 mb-1">No se pudo generar el plan</p>
           <p className="text-sm font-bold text-red-700 leading-relaxed">{generationError}</p>
+        </div>
+      )}
+
+      {recoveryMessage && (
+        <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 flex items-center justify-between gap-4 flex-wrap">
+          <p className="text-sm font-bold text-amber-800">{recoveryMessage}</p>
+          <div className="flex items-center gap-2">
+            {canRecoverReadyPlan && (
+              <button onClick={onRecoverReadyPlan} className="px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-black uppercase tracking-widest">
+                Recuperar último plan listo
+              </button>
+            )}
+            <button onClick={onDismissRecovery} className="px-3 py-2 rounded-xl border border-amber-200 text-amber-800 text-xs font-black uppercase tracking-widest">
+              Cerrar
+            </button>
+          </div>
         </div>
       )}
 
@@ -696,7 +725,8 @@ const GeneratingView: React.FC<{
   productImageRefs: { data: string; mimeType: string; label: string }[];
   onComplete: (plan: GrowthStrategicPlan) => void;
   onError: (message: string) => void;
-}> = ({ duration, selectedBrand, products, socialMetrics, productImageRefs, onComplete, onError }) => {
+  onSessionProgress: (stepId: string) => void;
+}> = ({ duration, selectedBrand, products, socialMetrics, productImageRefs, onComplete, onError, onSessionProgress }) => {
   const generationSteps = useMemo(() => generationStepsForDuration(duration), [duration]);
   const generationPromiseRef = useRef<Promise<GrowthStrategicPlan> | null>(null);
   const isMountedRef = useRef(true);
@@ -719,6 +749,7 @@ const GeneratingView: React.FC<{
       }, {
         onProgress: progress => {
           if (!isMountedRef.current) return;
+          onSessionProgress(progress.stepId);
           const nextStep = generationSteps.findIndex(step => step.id === progress.stepId);
           setCurrentStep(current => (nextStep >= 0 ? nextStep : current));
           setCurrentPhaseLabel(progress.label);
@@ -739,7 +770,7 @@ const GeneratingView: React.FC<{
       isMountedRef.current = false;
       window.clearInterval(phraseTimer);
     };
-  }, [duration, generationSteps, onComplete, onError, productImageRefs, products, selectedBrand, socialMetrics]);
+  }, [duration, generationSteps, onComplete, onError, onSessionProgress, productImageRefs, products, selectedBrand, socialMetrics]);
 
   return (
     <div className="max-w-2xl mx-auto py-16 space-y-8">
@@ -761,7 +792,7 @@ const GeneratingView: React.FC<{
   );
 };
 
-const SummaryTab: React.FC<{ plan: GrowthStrategicPlan }> = ({ plan }) => (
+const SummaryTab: React.FC<{ plan: GrowthStrategicPlan; visible: VisiblePlannerOutput }> = ({ plan, visible }) => (
   <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
     <div className="lg:col-span-2 space-y-5">
       <section className="bg-white border border-slate-100 rounded-2xl p-6">
@@ -769,7 +800,7 @@ const SummaryTab: React.FC<{ plan: GrowthStrategicPlan }> = ({ plan }) => (
           <Sparkles className="w-5 h-5 text-rose-500" />
           <h2 className="text-lg font-black uppercase italic tracking-tight text-slate-900">Diagnostico estrategico</h2>
         </div>
-        <p className="text-sm text-slate-600 leading-relaxed">{plan.businessDiagnosis}</p>
+        <p className="text-sm text-slate-600 leading-relaxed">{visible.strategy}</p>
       </section>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <section className="bg-white border border-slate-100 rounded-2xl p-6">
@@ -778,7 +809,7 @@ const SummaryTab: React.FC<{ plan: GrowthStrategicPlan }> = ({ plan }) => (
             {plan.nicheInsights.map((insight, index) => (
               <li key={index} className="flex gap-2 text-sm text-slate-600">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
-                {insight}
+                {polishVisibleCopy(insight)}
               </li>
             ))}
           </ul>
@@ -786,9 +817,9 @@ const SummaryTab: React.FC<{ plan: GrowthStrategicPlan }> = ({ plan }) => (
         <section className="bg-white border border-slate-100 rounded-2xl p-6">
           <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Roadmap</h3>
           <div className="space-y-3">
-            {plan.roadmap.map(item => (
+            {visible.roadmap.map(item => (
               <div key={item.week} className="rounded-xl bg-slate-50 border border-slate-100 p-3">
-                <p className="text-xs font-black text-slate-900">Semana {item.week}: {item.title}</p>
+                <p className="text-xs font-black text-slate-900">Semana {item.week} · {item.stageLabel}: {item.title}</p>
                 <p className="text-[11px] text-slate-500 mt-1">{item.objective}</p>
               </div>
             ))}
@@ -797,15 +828,15 @@ const SummaryTab: React.FC<{ plan: GrowthStrategicPlan }> = ({ plan }) => (
       </div>
       <section className="bg-slate-900 text-white rounded-2xl p-6">
         <p className="text-[10px] font-black uppercase tracking-widest text-rose-300 mb-2">Consejo estrategico</p>
-        <p className="text-sm leading-relaxed">{plan.strategicTip}</p>
+        <p className="text-sm leading-relaxed">{visible.strategicTip}</p>
       </section>
     </div>
     <aside className="space-y-5">
       <section className="bg-white border border-slate-100 rounded-2xl p-5">
         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Marca</p>
-        <h3 className="text-xl font-black uppercase italic text-slate-900">{plan.brand.name}</h3>
-        <p className="text-xs text-slate-500 mt-1">{plan.brand.category}</p>
-        <p className="text-xs text-slate-600 mt-4">{plan.brandAnalysis.voiceGuide}</p>
+        <h3 className="text-xl font-black uppercase italic text-slate-900">{visible.brandName}</h3>
+        <p className="text-xs text-slate-500 mt-1">{visible.brandCategory}</p>
+        <p className="text-xs text-slate-600 mt-4">{visible.brandVoiceGuide}</p>
       </section>
       <section className="bg-white border border-slate-100 rounded-2xl p-5">
         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Foco comercial</p>
@@ -825,8 +856,9 @@ const SummaryTab: React.FC<{ plan: GrowthStrategicPlan }> = ({ plan }) => (
   </div>
 );
 
-const MonthTab: React.FC<{ plan: GrowthStrategicPlan; onOpen: (task: GrowthTask) => void }> = ({ plan, onOpen }) => {
+const MonthTab: React.FC<{ plan: GrowthStrategicPlan; visible: VisiblePlannerOutput; onOpen: (task: GrowthTask) => void }> = ({ plan, visible, onOpen }) => {
   const sorted = [...plan.tasks].sort((a, b) => a.date.localeCompare(b.date));
+  const visibleById = new Map(visible.tasks.map(task => [task.id, task]));
   return (
     <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
       <div className="p-5 border-b border-slate-100 flex items-center justify-between">
@@ -840,7 +872,7 @@ const MonthTab: React.FC<{ plan: GrowthStrategicPlan; onOpen: (task: GrowthTask)
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{task.dayLabel}</span>
               <StatusBadge status={task.status} />
             </div>
-            <p className="text-sm font-black text-slate-900 leading-tight">{task.contentType}</p>
+            <p className="text-sm font-black text-slate-900 leading-tight">{visibleById.get(task.id)?.title || task.contentType}</p>
             <p className="text-[11px] text-slate-500 mt-1">{task.platform} · {task.suggestedTime}</p>
           </button>
         ))}
@@ -849,8 +881,9 @@ const MonthTab: React.FC<{ plan: GrowthStrategicPlan; onOpen: (task: GrowthTask)
   );
 };
 
-const WeekTab: React.FC<{ plan: GrowthStrategicPlan; onOpen: (task: GrowthTask) => void }> = ({ plan, onOpen }) => {
+const WeekTab: React.FC<{ plan: GrowthStrategicPlan; visible: VisiblePlannerOutput; onOpen: (task: GrowthTask) => void }> = ({ plan, visible, onOpen }) => {
   const weeks = groupByWeek(plan.tasks);
+  const visibleById = new Map(visible.tasks.map(task => [task.id, task]));
   return (
     <div className="space-y-5">
       {Object.entries(weeks).map(([week, tasks]) => (
@@ -860,7 +893,7 @@ const WeekTab: React.FC<{ plan: GrowthStrategicPlan; onOpen: (task: GrowthTask) 
             <span className="text-xs text-slate-400 font-bold">{tasks.length} tareas</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {tasks.map(task => <TaskCard key={task.id} task={task} onOpen={onOpen} />)}
+            {tasks.map(task => <TaskCard key={task.id} task={task} visibleTask={visibleById.get(task.id)!} onOpen={onOpen} />)}
           </div>
         </section>
       ))}
@@ -868,37 +901,33 @@ const WeekTab: React.FC<{ plan: GrowthStrategicPlan; onOpen: (task: GrowthTask) 
   );
 };
 
-const TasksTab: React.FC<{ plan: GrowthStrategicPlan; onOpen: (task: GrowthTask) => void }> = ({ plan, onOpen }) => (
+const TasksTab: React.FC<{ plan: GrowthStrategicPlan; visible: VisiblePlannerOutput; onOpen: (task: GrowthTask) => void }> = ({ plan, visible, onOpen }) => (
   <div className="space-y-3">
-    {plan.tasks.map(task => <TaskCard key={task.id} task={task} onOpen={onOpen} />)}
+    {plan.tasks.map((task, index) => <TaskCard key={task.id} task={task} visibleTask={visible.tasks[index]} onOpen={onOpen} />)}
   </div>
 );
 
-const ConfigTab: React.FC<{ plan: GrowthStrategicPlan }> = ({ plan }) => (
+const ConfigTab: React.FC<{ plan: GrowthStrategicPlan; visible: VisiblePlannerOutput }> = ({ plan, visible }) => (
   <div className="bg-white border border-slate-100 rounded-2xl p-6 max-w-3xl space-y-5">
     <h2 className="text-lg font-black uppercase italic tracking-tight text-slate-900">Configuracion</h2>
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-      <MetricCard label="Marca" value={plan.brand.name} icon={<Target className="w-4 h-4" />} />
-      <MetricCard label="Objetivo" value={plan.mainGoal} icon={<TrendingUp className="w-4 h-4" />} />
+      <MetricCard label="Marca" value={visible.brandName} icon={<Target className="w-4 h-4" />} />
+      <MetricCard label="Objetivo" value={visible.mainGoal} icon={<TrendingUp className="w-4 h-4" />} />
       <MetricCard label="Duracion" value={`${plan.duration} dias`} icon={<CalendarDays className="w-4 h-4" />} />
       <MetricCard label="Canal" value={plan.brand.mainSalesChannel} icon={<MessageCircle className="w-4 h-4" />} />
-    </div>
-    <div className="rounded-xl bg-amber-50 border border-amber-100 p-4">
-      <p className="text-xs text-amber-800 font-bold">
-        Este plan fue generado con Gemini 2.5 Flash sin grounding ni generacion automatica de imagenes.
-      </p>
     </div>
   </div>
 );
 
 const TaskDetail: React.FC<{
   task: GrowthTask;
+  visibleTask: VisiblePlannerTask;
   onClose: () => void;
   onStatusChange: (status: GrowthTaskStatus) => void;
-}> = ({ task, onClose, onStatusChange }) => {
+}> = ({ task, visibleTask, onClose, onStatusChange }) => {
   const meta = MODULE_META[task.module];
-  const displayPrompt = task.prompt || task.supportPrompt || '';
-  const promptLabel = task.prompt ? 'Prompt con slots' : 'Prompt de apoyo';
+  const displayPrompt = visibleTask.prompt || visibleTask.optionalSupportPrompt || '';
+  const promptLabel = visibleTask.prompt ? 'Prompt para crear' : 'Recurso visual opcional';
   const copyPrompt = () => {
     if (displayPrompt) navigator.clipboard.writeText(displayPrompt);
   };
@@ -913,13 +942,19 @@ const TaskDetail: React.FC<{
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-1">
-                <ModuleBadge module={task.module} />
+                <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ background: meta.bg, color: meta.color }}>
+                  {visibleTask.recommendedModuleLabel}
+                </span>
                 <StatusBadge status={task.status} />
               </div>
-              <h2 className="text-xl font-black uppercase italic tracking-tight text-slate-900">{task.contentType}</h2>
+              <h2 className="text-xl font-black uppercase italic tracking-tight text-slate-900">{visibleTask.title}</h2>
               <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">
-                {task.dayLabel} · {task.platform} · {task.suggestedTime}
+                {visibleTask.dateLabel} · {task.platform} · {task.suggestedTime}
               </p>
+              <div className="flex items-center gap-2 flex-wrap mt-2">
+                <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-slate-100 text-slate-600">{visibleTask.effortLabel}</span>
+                <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-rose-50 text-rose-600">{visibleTask.priorityLabel}</span>
+              </div>
             </div>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 transition-colors">
@@ -932,16 +967,15 @@ const TaskDetail: React.FC<{
             <main className="lg:col-span-2 space-y-6">
               <section className="bg-white border border-slate-100 rounded-2xl p-5">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Que crear</p>
-                <h3 className="text-base font-black text-slate-900">{task.visualConcept}</h3>
-                <p className="text-sm text-slate-600 mt-3 leading-relaxed">{task.whyItWorks}</p>
+                <h3 className="text-base font-black text-slate-900">{visibleTask.goal}</h3>
+                <p className="text-sm text-slate-600 mt-3 leading-relaxed">{visibleTask.whyThisMatters}</p>
               </section>
 
               <section className="bg-white border border-slate-100 rounded-2xl p-5">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Receta de ejecucion</p>
-                <p className="text-sm text-slate-500 mb-4">{task.executionRecipe.overview}</p>
                 <div className="space-y-3">
-                  {task.executionRecipe.steps.map((step, index) => (
-                    <div key={step.id} className="flex gap-3 rounded-xl bg-slate-50 border border-slate-100 p-3">
+                  {visibleTask.steps.map((step, index) => (
+                    <div key={`${task.id}-visible-step-${index}`} className="flex gap-3 rounded-xl bg-slate-50 border border-slate-100 p-3">
                       <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-black flex-shrink-0" style={{ background: '#F72C5B' }}>
                         {index + 1}
                       </div>
@@ -958,14 +992,14 @@ const TaskDetail: React.FC<{
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Caption</p>
                   <button
-                    onClick={() => navigator.clipboard.writeText(`${task.caption}\n\n${task.hashtags}`)}
+                    onClick={() => navigator.clipboard.writeText(`${visibleTask.caption}\n\n${visibleTask.hashtags}`)}
                     className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-rose-300"
                   >
                     <Copy className="w-3 h-3" /> Copiar
                   </button>
                 </div>
-                <p className="text-sm leading-relaxed text-slate-100">{task.caption}</p>
-                {task.hashtags && <p className="text-xs text-slate-400 mt-3">{task.hashtags}</p>}
+                <p className="text-sm leading-relaxed text-slate-100">{visibleTask.caption}</p>
+                {visibleTask.hashtags && <p className="text-xs text-slate-400 mt-3">{visibleTask.hashtags}</p>}
               </section>
             </main>
 
@@ -973,8 +1007,9 @@ const TaskDetail: React.FC<{
               <section className="bg-white border border-slate-100 rounded-2xl p-5">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Modulo recomendado</p>
                 <div className="rounded-xl p-4" style={{ background: meta.bg }}>
-                  <p className="text-sm font-black" style={{ color: meta.color }}>{meta.label}</p>
-                  <p className="text-xs text-slate-600 mt-2">{task.moduleReason}</p>
+                  <p className="text-sm font-black" style={{ color: meta.color }}>{visibleTask.recommendedModuleLabel}</p>
+                  {visibleTask.supportModuleLabel && <p className="text-xs text-slate-600 mt-2">Módulo opcional de apoyo: {visibleTask.supportModuleLabel}</p>}
+                  <p className="text-xs text-slate-600 mt-2">Necesitas: {visibleTask.requiredAssetsLabel}</p>
                 </div>
               </section>
 
@@ -992,25 +1027,16 @@ const TaskDetail: React.FC<{
                 ) : (
                   <p className="text-xs text-slate-400 italic">Esta tarea es manual y no requiere prompt.</p>
                 )}
-                {task.slotInstructions.length > 0 && (
-                  <div className="mt-4 space-y-2">
-                    {task.slotInstructions.map(slot => (
-                      <div key={slot.slot} className="rounded-lg bg-slate-50 border border-slate-100 p-2 text-xs text-slate-600">
-                        <span className="font-black text-rose-500">{slot.slot}</span>: {slot.instruction}
-                      </div>
-                    ))}
-                  </div>
-                )}
               </section>
 
-              <section className="bg-white border border-slate-100 rounded-2xl p-5">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Guia de tomas</p>
-                {task.shotGuide.shots.length > 0 ? (
+              {visibleTask.shotGuide.length > 0 && (
+                <section className="bg-white border border-slate-100 rounded-2xl p-5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">{visibleTask.shotGuideLabel}</p>
+                {visibleTask.shotGuide.length > 0 ? (
                   <div className="space-y-3">
-                    <p className="text-xs font-black text-slate-500">Duracion: {task.shotGuide.duration}</p>
-                    {task.shotGuide.shots.map(shot => (
-                      <div key={shot.shot} className="border-l-2 border-rose-200 pl-3">
-                        <p className="text-[10px] font-black text-rose-500 uppercase">Toma {shot.shot} · {shot.duration}</p>
+                    {visibleTask.shotGuide.map((shot, index) => (
+                      <div key={`${task.id}-visible-shot-${index}`} className="border-l-2 border-rose-200 pl-3">
+                        <p className="text-[10px] font-black text-rose-500 uppercase">{shot.label}{shot.duration ? ` · ${shot.duration}` : ''}</p>
                         <p className="text-xs text-slate-600 mt-1">{shot.instruction}</p>
                       </div>
                     ))}
@@ -1018,6 +1044,14 @@ const TaskDetail: React.FC<{
                 ) : (
                   <p className="text-xs text-slate-400 italic">No requiere grabacion.</p>
                 )}
+                </section>
+              )}
+
+              <section className="bg-white border border-slate-100 rounded-2xl p-5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">CTA recomendado</p>
+                <p className="text-xs text-slate-600 leading-relaxed">{visibleTask.cta}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-4 mb-2">Consejo práctico</p>
+                <p className="text-xs text-slate-600 leading-relaxed">{visibleTask.practicalTip}</p>
               </section>
 
               <section className="bg-white border border-slate-100 rounded-2xl p-5">
@@ -1049,9 +1083,15 @@ export const GrowthPlannerResults: React.FC<{
   onBack: () => void;
   onUpdateTask: (taskId: string, updates: Partial<GrowthTask>) => void;
 }> = ({ plan, onBack, onUpdateTask }) => {
+  const { isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState<GrowthTab>('summary');
   const [selectedTask, setSelectedTask] = useState<GrowthTask | null>(null);
   const stats = useMemo(() => statusCounts(plan.tasks), [plan.tasks]);
+  const visible = useMemo(
+    () => plan.visiblePlanOutput || buildVisiblePlannerOutput(plan, plan.engineV2Metadata, plan),
+    [plan],
+  );
+  const visibleById = useMemo(() => new Map(visible.tasks.map(task => [task.id, task])), [visible.tasks]);
 
   const handleStatusChange = (status: GrowthTaskStatus) => {
     if (!selectedTask) return;
@@ -1069,18 +1109,20 @@ export const GrowthPlannerResults: React.FC<{
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-rose-500">Planner estrategico</p>
             <h1 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900">
-              Estrategia {plan.duration} dias
+              {visible.headline}
             </h1>
-            <p className="text-sm text-slate-500 mt-1">{plan.planNarrative}</p>
+            <p className="text-sm text-slate-500 mt-1">{visible.summary}</p>
           </div>
         </div>
-        <button
-          onClick={() => downloadValidation(plan)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-black uppercase tracking-widest"
-        >
-          <Download className="w-4 h-4" />
-          Exportar validacion
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => downloadValidation(plan)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-black uppercase tracking-widest"
+          >
+            <Download className="w-4 h-4" />
+            Exportar validación
+          </button>
+        )}
       </header>
 
       <section className="bg-white border border-slate-100 rounded-2xl p-5">
@@ -1113,15 +1155,16 @@ export const GrowthPlannerResults: React.FC<{
         })}
       </nav>
 
-      {activeTab === 'summary' && <SummaryTab plan={plan} />}
-      {activeTab === 'month' && <MonthTab plan={plan} onOpen={setSelectedTask} />}
-      {activeTab === 'week' && <WeekTab plan={plan} onOpen={setSelectedTask} />}
-      {activeTab === 'tasks' && <TasksTab plan={plan} onOpen={setSelectedTask} />}
-      {activeTab === 'config' && <ConfigTab plan={plan} />}
+      {activeTab === 'summary' && <SummaryTab plan={plan} visible={visible} />}
+      {activeTab === 'month' && <MonthTab plan={plan} visible={visible} onOpen={setSelectedTask} />}
+      {activeTab === 'week' && <WeekTab plan={plan} visible={visible} onOpen={setSelectedTask} />}
+      {activeTab === 'tasks' && <TasksTab plan={plan} visible={visible} onOpen={setSelectedTask} />}
+      {activeTab === 'config' && <ConfigTab plan={plan} visible={visible} />}
 
       {selectedTask && (
         <TaskDetail
           task={selectedTask}
+          visibleTask={visibleById.get(selectedTask.id)!}
           onClose={() => setSelectedTask(null)}
           onStatusChange={handleStatusChange}
         />
@@ -1158,6 +1201,13 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
   const [productImages, setProductImages] = useState<{ dataUrl: string; name: string }[]>([]);
   const [imageError, setImageError] = useState('');
   const [generationError, setGenerationError] = useState('');
+  const [recoveryMessage, setRecoveryMessage] = useState(() => {
+    const interrupted = loadInterruptedGenerationSession();
+    return interrupted
+      ? 'La generación anterior se interrumpió. Puedes reintentar o recuperar el último plan listo.'
+      : '';
+  });
+  const [recoverablePlan, setRecoverablePlan] = useState(() => loadRecentReadyPlanner());
 
   useEffect(() => {
     if (selectedBrandProfileId !== 'demo') return;
@@ -1245,6 +1295,7 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
       return;
     }
     plannerChargeRef.current = true;
+    startGenerationSession();
 
     if (user?.uid && selectedBrandProfile) {
       await brandProfileService.updateBrandSocialInsights(user.uid, selectedBrandProfile.id, {
@@ -1266,9 +1317,24 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
   const handleComplete = async (nextPlan: GrowthStrategicPlan) => {
     if (completionHandledRef.current) return;
     completionHandledRef.current = true;
-    setPlan(nextPlan);
-    const project = await createProject(`Plan ${nextPlan.brand.name} ${nextPlan.duration} dias`);
-    await saveGrowthPlan(project.id, nextPlan);
+    const visiblePlanOutput = buildVisiblePlannerOutput(nextPlan, nextPlan.engineV2Metadata, nextPlan);
+    const visibleQuality = evaluateVisibleOutputQuality(visiblePlanOutput);
+    const releaseReady = nextPlan.planQualityStatus === 'ready'
+      && nextPlan.finalValidationSummary?.releaseGate?.canPublishToUser !== false;
+    if (!releaseReady || visibleQuality.visibleOutputQualityStatus !== 'premium_ready') {
+      completionHandledRef.current = false;
+      throw new Error('El plan terminó, pero su presentación necesita una revisión antes de mostrarse. Tus créditos serán devueltos.');
+    }
+    const readyPlan: GrowthStrategicPlan = {
+      ...nextPlan,
+      visiblePlanOutput,
+      visibleOutputQualityStatus: visibleQuality.visibleOutputQualityStatus,
+    };
+    markGenerationSessionReady(readyPlan, visiblePlanOutput);
+    setRecoverablePlan(loadRecentReadyPlanner());
+    setPlan(readyPlan);
+    const project = await createProject(`Plan ${readyPlan.brand.name} ${readyPlan.duration} dias`);
+    await saveGrowthPlan(project.id, readyPlan);
     plannerChargeRef.current = false;
     navigate(`/planner/${project.id}`);
   };
@@ -1281,6 +1347,29 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
     setGenerationError(message);
     setWizardStep(STEPS.length);
     setView('wizard');
+  };
+
+  const handleSessionProgress = useCallback((stepId: string) => {
+    if (stepId === 'strategy') updateGenerationSession('skeleton_created');
+    else if (stepId === 'validation') updateGenerationSession('validated');
+    else if (stepId.startsWith('week_') || stepId === 'completion') updateGenerationSession('tasks_generated');
+  }, []);
+
+  const handleRecoverReadyPlan = () => {
+    const recovered = loadRecentReadyPlanner();
+    if (!recovered) {
+      setRecoveryMessage('El último plan listo ya no está disponible en este navegador.');
+      return;
+    }
+    setPlan(recovered.plan);
+    setRecoveryMessage('');
+    clearGenerationSession();
+    setView('results');
+  };
+
+  const handleDismissRecovery = () => {
+    clearGenerationSession();
+    setRecoveryMessage('');
   };
 
   const handleUpdateTask = (taskId: string, updates: Partial<GrowthTask>) => {
@@ -1300,6 +1389,7 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
         productImageRefs={productImageRefs}
         onComplete={handleComplete}
         onError={handleGenerationError}
+        onSessionProgress={handleSessionProgress}
       />
     );
   }
@@ -1329,6 +1419,10 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
       productImageCount={productImages.length}
       imageError={imageError}
       generationError={generationError}
+      recoveryMessage={recoveryMessage}
+      canRecoverReadyPlan={Boolean(recoverablePlan)}
+      onRecoverReadyPlan={handleRecoverReadyPlan}
+      onDismissRecovery={handleDismissRecovery}
       onProductImagesChange={handleProductImagesChange}
       onRemoveProductImage={handleRemoveProductImage}
       selectedBrandProfileId={selectedBrandProfileId}
