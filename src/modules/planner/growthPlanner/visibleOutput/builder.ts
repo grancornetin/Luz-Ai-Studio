@@ -30,8 +30,6 @@ const TECHNICAL_TERMS = /plannerEngineVersion|blueprintId|creativeSeed|noveltySc
 const BAD_BRAND_PATTERN = /\bLuz\s*Ai\b|\bLuz\s*AI\b|\bLuzIA\b|Luz IA Studio\s+Studio/i;
 const UNACCENTED_PATTERN = /\b(suscripcion|produccion|campanas|interaccion|diagnostico|creditos|imagenes|edicion|publicacion|conversion|friccion|modulo|duracion|metricas)\b/i;
 const BAD_HASHTAG_PATTERN = /#(?:Emprendedoras?Exitosas?|EscalaTuNegocio|FotosProfesionales|ResultadosInstantaneos|TransformacionDigital|ContenidoQueVende|VendeMas|Brilla|Wow)\b/i;
-const COPY_ONLY_CHECKS = new Set(['captionsNaturalValid', 'actionableHooksValid', 'noWeakPhrases', 'spanishOrthographyValid']);
-
 function unique(items: string[]): string[] {
   return Array.from(new Set(items.filter(Boolean)));
 }
@@ -302,8 +300,7 @@ export function isStructurePublishableForVisibleOutput(plan: GrowthStrategicPlan
   if (plan.planQualityStatus === 'failed_validation') return false;
   const releaseGate = plan.finalValidationSummary?.releaseGate;
   if ((releaseGate?.hardFailures?.length || 0) > 0 || (releaseGate?.blockingReasons?.length || 0) > 0) return false;
-  const checks = plan.finalValidationSummary?.checks || plan.generationLog.validationChecks || {};
-  return !Object.entries(checks).some(([name, valid]) => valid === false && !COPY_ONLY_CHECKS.has(name));
+  return true;
 }
 
 export function buildVisiblePlannerOutput(
@@ -340,8 +337,7 @@ export function buildVisiblePlannerOutput(
     canPublishVisibleOutputToUser: false,
   };
   output.quality = evaluateVisibleOutputQuality(output);
-  output.canPublishVisibleOutputToUser = isStructurePublishableForVisibleOutput(planOutput)
-    && output.quality.visibleOutputQualityStatus === 'premium_ready';
+  output.canPublishVisibleOutputToUser = isStructurePublishableForVisibleOutput(planOutput);
   return output;
 }
 

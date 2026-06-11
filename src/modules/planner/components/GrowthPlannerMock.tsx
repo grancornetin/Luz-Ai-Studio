@@ -1320,9 +1320,17 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
     completionHandledRef.current = true;
     const visiblePlanOutput = buildVisiblePlannerOutput(nextPlan, nextPlan.engineV2Metadata, nextPlan);
     const visibleQuality = evaluateVisibleOutputQuality(visiblePlanOutput);
-    if (!visiblePlanOutput.canPublishVisibleOutputToUser || visibleQuality.visibleOutputQualityStatus !== 'premium_ready') {
+    if (!visiblePlanOutput.canPublishVisibleOutputToUser) {
+      console.error('[GrowthPlanner] Plan blocked by structural validation.', {
+        planQualityStatus: nextPlan.planQualityStatus,
+        hardFailures: nextPlan.finalValidationSummary?.releaseGate?.hardFailures || [],
+        blockingReasons: nextPlan.finalValidationSummary?.releaseGate?.blockingReasons || [],
+      });
       completionHandledRef.current = false;
-      throw new Error('El plan terminó, pero su presentación necesita una revisión antes de mostrarse. Tus créditos serán devueltos.');
+      throw new Error('El plan terminó, pero contiene un problema estructural que impide mostrarlo. Tus créditos serán devueltos.');
+    }
+    if (visibleQuality.visibleOutputQualityStatus !== 'premium_ready') {
+      console.warn('[GrowthPlanner] Plan published with non-blocking presentation warnings.', visibleQuality.issues);
     }
     const readyPlan: GrowthStrategicPlan = {
       ...nextPlan,
