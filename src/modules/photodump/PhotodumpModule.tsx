@@ -576,7 +576,8 @@ const PhotodumpModule: React.FC = () => {
     const ref0Analysis = savedRef0Analysis;
 
     for (let ri = 0; ri < failedIndexes.length; ri++) {
-      if (ri > 0) await new Promise(r => setTimeout(r, 1500));
+      // En retry siempre usamos 20s: los shots fallidos ya están en la zona de rate-limit
+      if (ri > 0) await new Promise(r => setTimeout(r, 20000));
       const i = failedIndexes[ri];
       try {
         const result = await generatePhotodumpShot(
