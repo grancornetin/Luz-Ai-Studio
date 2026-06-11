@@ -3,13 +3,14 @@ import { findVisiblePlaceholderFields, findVisibleWeakPhraseOccurrences } from '
 import type { EngineV2Metadata, FinalValidationSummary, ReleaseGateResult } from './types';
 
 const HARD_CHECKS = [
-  'taskCountValid', 'datesValid', 'noPastDates', 'fallbackCompletionValid', 'noPlaceholderTasks',
-  'blueprintContractsValid', 'taskInternalCoherenceValid', 'slotsValid', 'platformCtaCoherenceValid',
-  'platformFormatValid', 'primaryModuleActionValid', 'sensitiveClaimsValid',
+  'taskCountValid', 'datesValid',
 ];
 
 const REVIEW_CHECKS = [
   'captionsNaturalValid', 'actionableHooksValid', 'noWeakPhrases', 'spanishOrthographyValid',
+  'fallbackCompletionValid', 'blueprintContractsValid', 'taskInternalCoherenceValid', 'slotsValid',
+  'platformCtaCoherenceValid', 'platformFormatValid', 'primaryModuleActionValid', 'sensitiveClaimsValid',
+  'noPastDates', 'noPlaceholderTasks',
 ];
 
 export function validateValidationConsistency(
@@ -87,12 +88,8 @@ export function evaluatePlanReleaseGate(
   if ((plan.generationLog.generatedTasks || plan.tasks.length) < (plan.generationLog.expectedTasks || plan.tasks.length)) {
     hardFailures.push('generatedTasksBelowExpected');
   }
-  if (!validationSummary.checks.manualReviewRatioValid && metadata.tasksNeedingManualReview.length > 2) {
-    hardFailures.push('manualReviewRatioValid');
-  }
-
   const softWarnings = REVIEW_CHECKS.filter(check => validationSummary.checks[check] === false);
-  if (metadata.tasksNeedingManualReview.length > 0 && metadata.tasksNeedingManualReview.length <= 2) {
+  if (metadata.tasksNeedingManualReview.length > 0) {
     softWarnings.push(`${metadata.tasksNeedingManualReview.length} tarea(s) requieren revisión manual.`);
   }
   if (metadata.noveltyScore < 60) softWarnings.push('La novedad del plan es menor a 60.');

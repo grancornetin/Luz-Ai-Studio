@@ -413,8 +413,8 @@ const PhotodumpModule: React.FC = () => {
       const failed: number[]   = [];
       const failedErrors: string[] = [];
       for (let i = 0; i < shots.length; i++) {
-        // Pausa entre shots para no saturar la API de Gemini (429 a partir del 6° request rápido)
-        if (i > 0) await new Promise(r => setTimeout(r, 1500));
+        // Delay escalonado: shots 1-4 esperan 5s, shots 5+ esperan 20s (Gemini rate-limit)
+        if (i > 0) await new Promise(r => setTimeout(r, i < 5 ? 5000 : 20000));
         const sh = shots[i];
         try {
           const result: PhotodumpShotResult = await generatePhotodumpShot(
