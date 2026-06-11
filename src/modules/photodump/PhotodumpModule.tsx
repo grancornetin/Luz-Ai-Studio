@@ -33,6 +33,8 @@ import {
   getRefsAsArray,
   inferAvatarGender,
   inferDestinationFromBrief,
+  detectContradictions,
+  parseBriefContext,
   type PhotodumpShotResult,
 } from './photodumpDirectorService';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
@@ -427,13 +429,11 @@ const PhotodumpModule: React.FC = () => {
           shotUrls.push(result.imageUrl);
           setPartialImages(prev => [...prev, result.imageUrl]);
           if (isAdmin) {
-            // Detección de contradicciones para debug
-            const contradictions: string[] = [];
-            if (sh.wearState === 'not_wearing_final_outfit' && sh.requiredElements.includes('complete_outfit_readable_head_to_toe'))
-              contradictions.push('wearState=not_wearing_final_outfit pero requiredElements pide complete_outfit');
-            if (sh.cameraMode === 'mirror_selfie' && sh.forbiddenElements.includes('phone_visible_in_mirror') === false)
-              contradictions.push('mirror_selfie sin bloqueo explícito de teléfono visible');
-            // sceneRole is derived — no field on sh
+            const contradictions = detectContradictions(
+              sh, inferredDest, !!(refsWithMode as any).sceneDestinoRef,
+              parseBriefContext(basePrompt).timeSignal,
+              recipe, shots.map(s => s.key ?? ''),
+            );
 
             debugShots.push({
               shotIndex:    i + 1,
@@ -446,23 +446,32 @@ const PhotodumpModule: React.FC = () => {
               wearState:        sh.wearState,
               cameraMode:       sh.cameraMode,
               subjectPresence:  sh.subjectPresence,
-              sceneRole:        sh.narrativeStage === 'destination' ? 'destination' : sh.narrativeStage === 'prep' ? 'prep_space' : 'neutral',  // derivado de narrativeStage
+              sceneRole:        sh.narrativeStage === 'destination' ? 'destination' : sh.narrativeStage === 'prep' ? 'prep_space' : 'neutral',
               shotIntent:       sh.purpose?.slice(0, 120),
               presentationStyle: plan.presentationStyle,
               mustNotWearFinalOutfit: sh.wearState === 'not_wearing_final_outfit',
               mustWearFinalOutfit:    sh.wearState === 'wearing_full_outfit' || sh.wearState === 'ready_to_leave' || sh.wearState === 'destination_arrived',
-              mustShowMirror:    sh.cameraMode === 'mirror_selfie',
+              mustShowMirror:    sh.cameraMode === 'mirror_selfie' || sh.cameraMode === 'mirror_selfie_phone_hidden' || sh.cameraMode === 'mirror_selfie_phone_visible',
               destinationInferred: inferredDest,
               destinationExplicitRefProvided: !!(refsWithMode as any).sceneDestinoRef,
               promptLayersApplied: [
                 'LOCK_SYSTEM', 'PARADIGM_RULE', 'STORY_MODE', 'BRIEF_CONTEXT',
-                sh.wearState  ? 'WEAR_STATE'   : null,
-                sh.cameraMode ? 'CAMERA_MODE'  : null,
-                sh.hpiAllowed ? 'HPI'          : 'HPI_DISABLED',
+                sh.sceneLockPolicy ? `SCENE_LOCK_${sh.sceneLockPolicy.toUpperCase()}` : null,
+                sh.wearState  ? 'WEAR_STATE'    : null,
+                sh.itemStatePlan ? 'ITEM_STATE_PLAN' : null,
+                sh.cameraMode ? 'CAMERA_MODE'   : null,
+                sh.phonePolicy ? `PHONE_${sh.phonePolicy.toUpperCase()}` : null,
+                sh.hpiAllowed ? 'HPI'           : 'HPI_DISABLED',
                 'REF0_ANALYSIS', 'SHOT_IDENTITY', 'VARIATION_SPACE',
               ].filter(Boolean) as string[],
-              hpiApplied:      !!sh.hpiAllowed,
-              hpiProfileUsed:  sh.hpiScope ?? 'none',
+              hpiApplied:       !!sh.hpiAllowed,
+              hpiProfileUsed:   sh.hpiScope ?? 'none',
+              itemStatePlan:    sh.itemStatePlan,
+              isFinalShot:      sh.isFinalShot,
+              isClosingShot:    sh.isClosingShot,
+              closingStrategy:  sh.closingStrategy,
+              sceneLockPolicy:  sh.sceneLockPolicy,
+              phonePolicy:      sh.phonePolicy,
               possibleContradictions: contradictions.length > 0 ? contradictions : undefined,
               status:       'ok',
             });

@@ -16,6 +16,7 @@ import {
   PhotodumpRefs, PhotodumpOutfitMode, NARRATIVE_META,
   FreeScene, FreeSceneRefs,
   WearState, CameraMode, InferredDestination,
+  OutfitItemPlan, SceneLockPolicy,
 } from './types';
 import {
   getStorySupportFamilies, initPhotodumpIntelligence, StorySupportFamily,
@@ -56,9 +57,17 @@ export interface PhotodumpShotDirective {
   wearState?:       WearState;
   cameraMode?:      CameraMode;
   narrativeStage?:  'prep' | 'transition' | 'styled' | 'destination';
-  hpiAllowed?:      boolean;        // false = HPI desactivado para este shot
-  hpiScope?:        'micro_action_only' | 'gesture_only' | 'full'; // granularidad HPI
-  subjectPresence?: string;         // 'hands_only' | 'full_body' | 'face_dominant' | 'objects_only'
+  hpiAllowed?:      boolean;
+  hpiScope?:        'micro_action_only' | 'gesture_only' | 'full';
+  subjectPresence?: string;
+  // Plan de estado por pieza del outfit
+  itemStatePlan?:   OutfitItemPlan[];
+  // Metadatos de cierre narrativo
+  isFinalShot?:     boolean;
+  isClosingShot?:   boolean;
+  closingStrategy?: 'destination_inferred' | 'destination_uploaded' | 'pre_exit' | 'none';
+  sceneLockPolicy?: SceneLockPolicy;
+  phonePolicy?:     'required_visible' | 'allowed_visible' | 'forbidden' | 'not_applicable';
 }
 
 // Estilo visual de presentación para recetas outfit.
@@ -132,7 +141,7 @@ watermark, text overlay, collage, multiple images, grid, side by side,
 composite image, face pasted over body, reference image inserted as collage element,
 extra limbs, duplicated arms, phantom hands, broken joints,
 color drift between shots, different color temperature, filters, stylization,
-phone visible in selfie, camera visible
+camera visible in frame (unless the shot explicitly calls for a phone in mirror)
 
 PERSON COUNT:
 two distinct people in the same frame (unless the scene explicitly calls for it),
@@ -323,6 +332,8 @@ function parseBriefContext(basePrompt: string): {
   return { timeSignal, venueSignal, isOccasionBrief: venueSignal !== '' };
 }
 
+export { parseBriefContext };
+
 // ── Destination inference ─────────────────────────────────────
 // Lee el brief y deduce si hay un destino final explícito.
 // Esto desacopla "hay un destino implícito" de "el usuario subió una foto de destino".
@@ -452,7 +463,7 @@ export function resolveCameraMode(
     return 'detail_macro';
   }
 
-  if (shotKey === 'OUTFIT_MIRROR_CHECK') return 'mirror_selfie';
+  if (shotKey === 'OUTFIT_MIRROR_CHECK') return 'mirror_selfie_phone_hidden';
   if (shotKey === 'OUTFIT_READY')        return 'selfie_pov';
   if (shotKey === 'OUTFIT_DESTINATION')  return 'full_body_room';
 
@@ -483,12 +494,44 @@ Person may appear partially (arm, torso, back) interacting with the rack — not
 The RACK is the visual subject of this shot.
 FORBIDDEN: garments lying flat, hands-only framing, full-body catalog pose facing camera.`;
 
-    case 'mirror_selfie':
-      return `📷 CAMERA MODE — MIRROR SELFIE / FULL BODY MIRROR:
-The person uses a mirror to see their full body. Two options:
-  A) Mirror selfie: arm extended toward mirror, phone implied outside frame (NEVER show phone in frame).
-  B) Full body without mirror: standing in room, another person or tripod captures them.
+    case 'mirror_selfie_phone_visible':
+      return `📷 CAMERA MODE — MIRROR SELFIE (PHONE VISIBLE):
+The person takes a selfie using the mirror. The phone IS visible in the reflection.
+CRITICAL GEOMETRY: The arm holding the phone must point TOWARD the mirror surface.
+The phone's camera must face the mirror — not sideways, not toward a third-person camera.
+The image captured should look like what the phone would see reflected in the mirror.
+Full body visible in reflection. ONE person only — reflection is the same individual.
+The posture, arm direction, and gaze must all be coherent with holding a phone toward a mirror.
+FORBIDDEN: phone pointing in a direction inconsistent with the mirror, third-person angle that reveals the phone from outside, second distinct person.`;
+
+    case 'mirror_selfie_phone_hidden':
+      return `📷 CAMERA MODE — MIRROR SELFIE (PHONE NOT SHOWN):
+The person checks their full look in the mirror. Phone is either outside the frame or not used.
+This could be captured by a tripod or a third person — the subject is not holding a phone.
 Full body visible head to toe. ONE person only — mirror reflection is NOT a second person.
+Natural, non-catalog posture: adjusting something, turning to see the back, evaluating fit.
+FORBIDDEN: phone visible anywhere in frame, second distinct person, catalog symmetrical stance.`;
+
+    case 'mirror_check_no_phone':
+      return `📷 CAMERA MODE — MIRROR CHECK (NO PHONE):
+The person is checking their look in a mirror without using a phone.
+Captured by a tripod or third person from behind or from the side.
+Focus is on the person evaluating their reflection — the mirror frames the full outfit.
+Natural, intimate, non-posed. The person is absorbed in the act of looking, not performing for a camera.
+FORBIDDEN: any phone in frame, selfie arm angle, catalog stance, second distinct person.`;
+
+    case 'third_person_mirror_capture':
+      return `📷 CAMERA MODE — THIRD PERSON MIRROR CAPTURE:
+An external camera captures both the person AND their reflection in the mirror.
+The person is NOT holding a phone. They are free to pose, move, or look naturally.
+The composition shows: person from behind or side + their face/front visible in the mirror reflection.
+FORBIDDEN: phone in frame, selfie arm, second distinct person.`;
+
+    case 'mirror_selfie':
+      return `📷 CAMERA MODE — MIRROR SELFIE:
+The person checks their full look in the mirror. Phone is outside the frame.
+Full body visible head to toe. ONE person only — mirror reflection is NOT a second person.
+Natural posture: adjusting something, turning to see the back, evaluating fit.
 FORBIDDEN: phone visible in mirror, second distinct person, catalog symmetrical stance.`;
 
     case 'selfie_pov':
@@ -525,6 +568,151 @@ A friend or bystander captures this — the subject may not be fully aware.
 Natural, unstaged. The person is doing something, not posing for the shot.
 FORBIDDEN: direct to camera pose, studio arrangement, obvious staged composition.`;
   }
+}
+
+// ── Item state plan → bloque de prompt ───────────────────────
+// Convierte el plan de estado por pieza en instrucciones para el modelo.
+function buildItemStatePlanBlock(plan: OutfitItemPlan[] | undefined, wearState: WearState): string {
+  if (!plan || plan.length === 0) return '';
+  const lines = ['🔒 OUTFIT ITEM STATE RULES (per-piece — binding):'];
+  for (const p of plan) {
+    const stateDesc: Record<string, string> = {
+      worn: `WORN on the body — must be visibly on the person`,
+      held: `HELD in hand or presented — not worn yet`,
+      hanging: `HANGING on a rack or hanger — garment as object`,
+      flat_lay: `FLAT on a surface — laid out, not worn`,
+      on_floor_before_wearing: `ON THE FLOOR or nearby surface — not yet put on`,
+      not_visible: `NOT in this shot`,
+      detail_focus: `CLOSE-UP DETAIL — fills the frame`,
+    };
+    lines.push(`  • ${p.item.toUpperCase()}: ${stateDesc[p.requiredState] ?? p.requiredState}${p.mustBeVisible ? ' [REQUIRED IN FRAME]' : ' [may be off-frame]'}${p.mayBeDuplicated ? '' : ' — do NOT show both worn AND as separate object simultaneously'}`);
+  }
+  if (wearState === 'wearing_full_outfit' || wearState === 'ready_to_leave' || wearState === 'destination_arrived') {
+    lines.push(`  ⚠️ SHOES: If shoes are part of the outfit, they MUST be WORN on the feet.`);
+    lines.push(`     Do NOT show the shoes both on the person AND also placed on the floor as separate objects.`);
+    lines.push(`     A person wearing full outfit with bare feet is a generation error.`);
+  }
+  return lines.join('\n');
+}
+
+// ── Scene lock policy → bloque de prompt ─────────────────────
+// Genera la instrucción de continuidad de escena correcta según la política del shot.
+function buildSceneLockPolicyBlock(
+  policy: SceneLockPolicy | undefined,
+  destDesc: string,
+  hasUserSceneRef: boolean,
+): string {
+  if (!policy || policy === 'none') return '';
+  switch (policy) {
+    case 'strict_ref0':
+    case 'prep_space':
+      return `📍 SCENE CONTINUITY: Same environment as REF0.
+Same walls, floor, furniture, light direction. This shot happens in the PREP SPACE — do NOT move the person to the event venue.`;
+    case 'prep_space_or_surface':
+      return `📍 SCENE CONTINUITY: Same prep space or compatible surface as REF0.
+For detail shots, the surface/background should be consistent with the REF0 prep space.
+Do NOT introduce a new room or event venue.`;
+    case 'prep_space_or_pre_exit':
+      return `📍 SCENE CONTINUITY: Same prep room OR transition space (hallway, doorway, immediate exterior).
+The person may be on their way out, but the core space still echoes the REF0 prep space.
+Do NOT place the person at the final destination yet.`;
+    case 'destination_allowed':
+      return `📍 SCENE LOCK — DESTINATION:
+This is the CLOSING SHOT. The scene changes to the FINAL DESTINATION of the brief.
+Location: ${destDesc}
+CRITICAL: Do NOT replicate the prep room walls, furniture, or lighting.
+Same person, same outfit, same identity — NEW final destination space.
+The story ends HERE — in the place the brief implied from the start.`;
+  }
+}
+
+// ── HPI outfit_check filter ───────────────────────────────────
+// Lista de frases HPI incompatibles con shots de outfit_check.
+// Si cualquiera aparece en el HPI generado para un shot de outfit_check, se descarta.
+const OUTFIT_CHECK_HPI_BLOCKLIST = [
+  'seated on floor',
+  'kneeling squat',
+  'lat pulldown',
+  'fitness demonstration',
+  'gym bench',
+  'extreme torso twist',
+  'arms extended gripping cable',
+  'athletic stance',
+  'workout pose',
+  'deadlift',
+  'squat position',
+  'performance architecture',
+];
+
+function filterHpiForOutfitCheck(hpiBlock: string, shotKey: string): string {
+  if (!hpiBlock) return '';
+  const incompatibleKeys = ['OUTFIT_ARRIVING', 'OUTFIT_DETAIL', 'ACCESSORY_CLOSEUP'];
+  if (incompatibleKeys.includes(shotKey)) return '';
+  const lower = hpiBlock.toLowerCase();
+  if (OUTFIT_CHECK_HPI_BLOCKLIST.some(phrase => lower.includes(phrase))) {
+    // Fallback micro-acción segura para outfit_check
+    return `🎯 MICRO-ACTION (outfit-compatible only):
+Choose ONE subtle, outfit-compatible micro-action:
+  - hand resting lightly on hip
+  - fingertips touching necklace or collar
+  - slight weight shift to one side
+  - turning head slowly to look over shoulder
+  - adjusting a sleeve or strap subtly
+FORBIDDEN: any athletic pose, floor sitting, gym movement, extreme twist, or full-body performance gesture.`;
+  }
+  return hpiBlock;
+}
+
+// ── Detectar contradicciones antes de generar ─────────────────
+export function detectContradictions(
+  shot:            PhotodumpShotDirective,
+  inferredDest:    InferredDestination,
+  hasDestPhoto:    boolean,
+  timeSignal:      string,
+  recipe:          string | undefined,
+  allShotKeys:     string[],
+): string[] {
+  const contradictions: string[] = [];
+  const isOutfitCheck = recipe === 'outfit_check';
+
+  if (isOutfitCheck) {
+    // Destino inferido pero no hay OUTFIT_DESTINATION en el plan
+    if (inferredDest !== 'none' && !hasDestPhoto && !allShotKeys.includes('OUTFIT_DESTINATION'))
+      contradictions.push('destination inferred from brief but no OUTFIT_DESTINATION shot in plan');
+
+    // Brief de noche pero shot no tiene tiempo nocturno
+    if (timeSignal.includes('NIGHT') && shot.key === 'OUTFIT_ARRIVING')
+      contradictions.push('brief says NIGHT — REF0/prep shots must use warm artificial light, NOT daylight');
+
+    // wearState full outfit pero zapatos no marcados como worn
+    if ((shot.wearState === 'wearing_full_outfit' || shot.wearState === 'destination_arrived') &&
+        shot.itemStatePlan?.some(p => p.item === 'shoes' && p.requiredState !== 'worn' && p.mustBeVisible))
+      contradictions.push('wearState=wearing_full_outfit but itemStatePlan has shoes !== worn');
+
+    // Mirror sin política de teléfono prohibido
+    if ((shot.cameraMode === 'mirror_selfie' || shot.cameraMode === 'mirror_selfie_phone_hidden') &&
+        shot.phonePolicy !== 'forbidden')
+      contradictions.push('cameraMode=mirror_selfie_phone_hidden but phonePolicy is not forbidden');
+
+    // detail_macro pero subjectPresence=full_body
+    if (shot.cameraMode === 'detail_macro' && shot.subjectPresence === 'full_body')
+      contradictions.push('cameraMode=detail_macro but subjectPresence=full_body — should be object_detail or hands_only');
+
+    // HPI en shot de objeto/detalle
+    if (shot.hpiAllowed && ['OUTFIT_ARRIVING', 'OUTFIT_DETAIL', 'ACCESSORY_CLOSEUP'].includes(shot.key ?? ''))
+      contradictions.push('hpiAllowed=true on object/detail shot — HPI must be disabled here');
+
+    // Shot final no marcado como closing
+    if (shot.isFinalShot && !shot.isClosingShot)
+      contradictions.push('final shot is not marked as closing shot');
+
+    // Closing shot bloqueado a prep space con destino disponible
+    if (shot.isClosingShot && shot.sceneLockPolicy !== 'destination_allowed' &&
+        (inferredDest !== 'none' || hasDestPhoto))
+      contradictions.push('closing shot has sceneLockPolicy !== destination_allowed despite inferred/uploaded destination');
+  }
+
+  return contradictions;
 }
 
 // ── Bloque de contexto global del brief — inyectado en REF0 y shots de destino.
@@ -658,15 +846,50 @@ function buildStoryDirectives(
     const hasDestino     = !!refs?.sceneDestinoRef;
     const style          = presentationStyle ?? 'hands_presenter';
     const inferredDest   = inferDestinationFromBrief(basePrompt ?? '');
+    // El arco usa destino si hay destino inferido en brief O si el usuario subió una foto de destino
+    const shouldUseDestinationClosure = hasDestino || (inferredDest !== 'none');
     const pool           = buildOutfitCheckShotPool(style, inferredDest, hasDestino);
-    const baseKeys   = distributeOutfitCheckShots(count, hasDestino);
-    // Agregar shots de close-up de accesorios (van AL FINAL, después del arco base)
+    const baseKeys       = distributeOutfitCheckShots(count, shouldUseDestinationClosure);
+    // Shots de close-up de accesorios van ANTES del último shot (closing shot siempre al final)
     const closeupIndexes = (refs?.accesorioCloseup ?? [])
       .map((v, i) => v ? i : -1).filter(i => i >= 0);
-    const allKeys = [...baseKeys, ...closeupIndexes.map(() => 'ACCESSORY_CLOSEUP')];
+    const closingKey   = baseKeys[baseKeys.length - 1];
+    const middleKeys   = baseKeys.slice(0, -1);
+    const allKeys = [
+      ...middleKeys,
+      ...closeupIndexes.map(() => 'ACCESSORY_CLOSEUP'),
+      closingKey,
+    ];
+    const totalShots = allKeys.length;
     return allKeys.map((key, i) => {
       const shot = pool.find(s => s.key === key) ?? pool[pool.length - 1];
-      return { ...shot, arcPosition: i + 1, aspectRatio: ar };
+      const isFinalShot    = i === totalShots - 1;
+      const isClosingShot  = isFinalShot && (key === 'OUTFIT_DESTINATION' || key === 'OUTFIT_MIRROR_CHECK' || key === 'OUTFIT_READY');
+      const closingStrategy = isFinalShot
+        ? key === 'OUTFIT_DESTINATION'
+          ? hasDestino ? 'destination_uploaded' : 'destination_inferred'
+          : 'pre_exit'
+        : 'none';
+      const sceneLockPolicy: SceneLockPolicy = isFinalShot && key === 'OUTFIT_DESTINATION'
+        ? 'destination_allowed'
+        : key === 'OUTFIT_ARRIVING' || key === 'OUTFIT_DETAIL' || key === 'ACCESSORY_CLOSEUP'
+          ? 'prep_space_or_surface'
+          : key === 'OUTFIT_READY'
+            ? 'prep_space_or_pre_exit'
+            : 'prep_space';
+      const phonePolicy = key === 'OUTFIT_MIRROR_CHECK'
+        ? 'forbidden' as const
+        : 'not_applicable' as const;
+      return {
+        ...shot,
+        arcPosition: i + 1,
+        aspectRatio: ar,
+        isFinalShot,
+        isClosingShot,
+        closingStrategy: closingStrategy as any,
+        sceneLockPolicy,
+        phonePolicy,
+      };
     });
   }
 
@@ -1389,43 +1612,76 @@ function buildOutfitCheckShotPool(
       wearState:       wearArriving,
       cameraMode:      camArriving,
       narrativeStage:  'prep',
-      hpiAllowed:      false,     // shot de objeto — HPI corporal no aplica
+      hpiAllowed:      false,
       subjectPresence: presentationStyle === 'flat_lay' ? 'objects_only'
                      : presentationStyle === 'hands_presenter' ? 'hands_only'
+                     : presentationStyle === 'rack_haul' ? 'objects_with_partial_person'
                      : 'full_body',
+      itemStatePlan:   presentationStyle === 'flat_lay'
+        ? [
+            { item: 'top',    requiredState: 'flat_lay', mustBeVisible: true,  mayBeDuplicated: false },
+            { item: 'bottom', requiredState: 'flat_lay', mustBeVisible: true,  mayBeDuplicated: false },
+            { item: 'dress',  requiredState: 'flat_lay', mustBeVisible: true,  mayBeDuplicated: false },
+            { item: 'shoes',  requiredState: 'flat_lay', mustBeVisible: false, mayBeDuplicated: false },
+          ]
+        : presentationStyle === 'rack_haul'
+          ? [
+              { item: 'top',    requiredState: 'hanging',              mustBeVisible: true,  mayBeDuplicated: false },
+              { item: 'bottom', requiredState: 'hanging',              mustBeVisible: true,  mayBeDuplicated: false },
+              { item: 'shoes',  requiredState: 'on_floor_before_wearing', mustBeVisible: false, mayBeDuplicated: false },
+            ]
+          : [
+              { item: 'top',    requiredState: 'held', mustBeVisible: true,  mayBeDuplicated: false },
+              { item: 'shoes',  requiredState: 'held', mustBeVisible: false, mayBeDuplicated: false },
+            ],
     },
     {
       key:              'OUTFIT_MIRROR_CHECK',
       beat:             'reveal',
       role:             'MIRROR CHECK',
-      purpose: 'Primer momento donde se ve el outfit COMPLETO puesto. El espejo es el encuadre natural pero no es obligatorio — puede ser full body directo también. Actitud real, no pose de catálogo. UNA SOLA persona en el frame — reflejo y persona son el mismo individuo.',
-      requiredElements: ['full_body_visible_with_complete_outfit', 'complete_outfit_readable_head_to_toe', 'authentic_attitude_not_catalog_stance', 'single_person_only_in_entire_frame'],
+      purpose: 'Primer momento donde se ve el outfit COMPLETO puesto. Espejo o full body directo. Actitud real, no pose de catálogo. UNA SOLA persona en el frame. IMPORTANTE: si usa espejo, el teléfono NO es visible — el brazo está fuera de frame o no hay teléfono.',
+      requiredElements: [
+        'full_body_visible_with_complete_outfit',
+        'complete_outfit_readable_head_to_toe',
+        'shoes_worn_on_feet_not_on_floor',
+        'authentic_attitude_not_catalog_stance',
+        'single_person_only_in_entire_frame',
+      ],
       forbiddenElements: [
         'catalog_symmetrical_pose',
         'studio_lighting',
         'white_background',
         'mannequin_stance',
-        'phone_visible_in_mirror',
+        'phone_visible_anywhere_in_frame',
         'two_distinct_people_visible',
         'second_person_in_background',
-        'garments_as_flat_lay',       // outfit está puesto, no en superficie
-        'destination_venue_visible',   // sigue en prep space
+        'garments_as_flat_lay',
+        'shoes_on_floor_while_person_is_wearing_outfit',
+        'destination_venue_visible',
       ],
       variationSpace: [
-        'espejo de cuerpo entero — persona girando levemente el torso para ver la espalda del outfit, mano en la cadera evaluando la caída de la tela, outfit completo visible',
-        'selfie de espejo full body — brazo extendido fuera de frame, leve vuelta de cabeza como revisando el look, expresión auténtica, NO mostrar el teléfono',
-        'full body directo sin espejo — persona parada en el cuarto con el outfit completo puesto, postura natural no de desfile, mirando levemente al costado o hacia abajo',
-        'espejo de dormitorio — persona ajustando un detalle con una mano (tirante, cinturón, falda) mientras mira su reflejo con concentración, outfit completo visible',
+        'espejo de cuerpo entero — persona girando levemente el torso para ver la espalda del outfit, mano en la cadera evaluando la caída de la tela, outfit completo visible incluyendo zapatos puestos',
+        'full body directo sin espejo — persona parada en el cuarto con el outfit completo puesto, zapatos puestos, postura natural no de desfile, mirando levemente al costado o hacia abajo',
+        'espejo de dormitorio — persona ajustando un detalle con una mano (tirante, cinturón, falda) mientras mira su reflejo con concentración, outfit completo visible, NO mostrar teléfono',
+        'full body desde un ángulo tres cuartos, persona con el look completo y calzado puesto, actitud evaluativa, cuarto real de fondo',
       ],
       framing:         'WIDE_FULL_BODY',
       composition:     'MIRROR_FRAME_OR_FULL_BODY_NATURAL',
       cameraAngle:     'EYE_LEVEL',
       wearState:       'wearing_full_outfit',
-      cameraMode:      'mirror_selfie',
+      cameraMode:      'mirror_selfie_phone_hidden',
       narrativeStage:  'styled',
       hpiAllowed:      true,
-      hpiScope:        'micro_action_only',  // ajustar tirante, mano en cintura, girar torso
+      hpiScope:        'micro_action_only',
       subjectPresence: 'full_body',
+      itemStatePlan:   [
+        { item: 'top',       requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
+        { item: 'bottom',    requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
+        { item: 'dress',     requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
+        { item: 'shoes',     requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
+        { item: 'bag',       requiredState: 'worn', mustBeVisible: false, mayBeDuplicated: false },
+      ],
+      phonePolicy:     'forbidden',
     },
     {
       key:              'OUTFIT_DETAIL',
@@ -1448,9 +1704,12 @@ function buildOutfitCheckShotPool(
       wearState:       wearDetail,
       cameraMode:      camDetail,
       narrativeStage:  presentationStyle === 'hands_presenter' ? 'prep' : 'transition',
-      hpiAllowed:      presentationStyle === 'hands_presenter' ? false : true,
+      hpiAllowed:      camDetail === 'detail_macro' ? false : presentationStyle !== 'hands_presenter',
       hpiScope:        'gesture_only',
-      subjectPresence: presentationStyle === 'hands_presenter' ? 'hands_only' : 'full_body',
+      // subjectPresence se deriva del cameraMode real, no del shot genérico
+      subjectPresence: camDetail === 'detail_macro' ? 'object_detail'
+                     : camDetail === 'hands_presenter_closeup' ? 'hands_only'
+                     : 'full_body',
     },
     {
       key:              'OUTFIT_READY',
@@ -1523,6 +1782,14 @@ function buildOutfitCheckShotPool(
       hpiAllowed:      true,
       hpiScope:        'full',
       subjectPresence: 'full_body',
+      itemStatePlan:   [
+        { item: 'top',    requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
+        { item: 'bottom', requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
+        { item: 'dress',  requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
+        { item: 'shoes',  requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
+        { item: 'bag',    requiredState: 'worn', mustBeVisible: false, mayBeDuplicated: false },
+      ],
+      phonePolicy:     'not_applicable',
     },
     {
       key:              'ACCESSORY_CLOSEUP',
@@ -1552,8 +1819,9 @@ function buildOutfitCheckShotPool(
 // Distribuye los shots de outfit_check según el count pedido.
 // Los beats obligatorios son: ARRIVING → MIRROR_CHECK → DETAIL → READY → DESTINATION
 // Si count < 5, se eliminan en este orden: DETAIL, READY (el arco mínimo es ARRIVING + MIRROR + DESTINATION)
-// Los shots de ACCESSORY_CLOSEUP se agregan SOBRE el count (no reemplazan).
-function distributeOutfitCheckShots(count: number, hasDestino: boolean): string[] {
+// Los shots de ACCESSORY_CLOSEUP se insertan ANTES del último shot (no al final).
+// hasDestinationClosure: true si hay destino inferido en brief O si el usuario subió sceneDestinoRef.
+function distributeOutfitCheckShots(count: number, hasDestinationClosure: boolean): string[] {
   const fullArc = [
     'OUTFIT_ARRIVING',
     'OUTFIT_MIRROR_CHECK',
@@ -1561,12 +1829,12 @@ function distributeOutfitCheckShots(count: number, hasDestino: boolean): string[
     'OUTFIT_READY',
     'OUTFIT_DESTINATION',
   ];
-  // Si no hay escena_destino, el último shot es un segundo MIRROR_CHECK desde otro ángulo
-  const arc = hasDestino ? fullArc : [...fullArc.slice(0, 4), 'OUTFIT_MIRROR_CHECK'];
+  // Si no hay destino (ni inferido ni subido), el último shot es un cierre en prep space
+  const arc = hasDestinationClosure ? fullArc : [...fullArc.slice(0, 4), 'OUTFIT_MIRROR_CHECK'];
   if (count >= 5) return arc;
   if (count === 4) return arc.filter(k => k !== 'OUTFIT_READY');
-  if (count === 3) return ['OUTFIT_ARRIVING', 'OUTFIT_MIRROR_CHECK', 'OUTFIT_DESTINATION'];
-  return ['OUTFIT_ARRIVING', 'OUTFIT_MIRROR_CHECK', 'OUTFIT_DESTINATION'];
+  if (count === 3) return ['OUTFIT_ARRIVING', 'OUTFIT_MIRROR_CHECK', hasDestinationClosure ? 'OUTFIT_DESTINATION' : 'OUTFIT_READY'];
+  return ['OUTFIT_ARRIVING', 'OUTFIT_MIRROR_CHECK', hasDestinationClosure ? 'OUTFIT_DESTINATION' : 'OUTFIT_READY'];
 }
 
 // ── Outfit Haul shots ────────────────────────────────────────
@@ -1923,11 +2191,22 @@ ${!refs.packagingRef ? `No packaging reference provided — create a packaging c
             ? 'PROTAGONIST: The PERSON is the hero. Natural medium shot, authentic expression, real environment.'
             : 'PROTAGONIST: The PERSON and PRODUCT together. Natural interaction, real context.';
 
+  const { timeSignal } = parseBriefContext(basePrompt);
+  const ref0LightingNote = timeSignal.includes('NIGHT')
+    ? `Lighting: warm artificial indoor light — bedroom lamp, ceiling light, or vanity light. NO daylight. NO window sunlight. This is an evening/night getting-ready scene.`
+    : timeSignal.includes('GOLDEN')
+      ? `Lighting: warm golden-hour light coming through a window. Soft and directional.`
+      : timeSignal.includes('MORNING')
+        ? `Lighting: soft cool-to-warm natural window light. Fresh morning atmosphere.`
+        : `Lighting: real indoor light from the try-on space — natural window light or ambient room light. Authentic, not studio.`;
+
   const outfitRecipeDesc: Record<string, string> = {
-    outfit_check: `SHOT: Full body of the person with the COMPLETE OUTFIT on, in the try-on space (room, mirror, fitting room).
+    outfit_check: `SHOT: Full body of the person with the COMPLETE OUTFIT on, in the try-on space (room, mirror, fitting room, or dressing area).
 Full body visible — the look must be readable from head to toe. Face visible, natural expression.
-Real environment — natural light from a window, real walls, real floor. NOT a studio. NOT a catalog.
-iPhone photo quality. This establishes: the person's identity, the outfit, and the visual world for the set.`,
+${ref0LightingNote}
+Real walls, real floor. NOT a studio. NOT a catalog. NOT the event venue.
+iPhone photo quality. This establishes: the person's identity, the outfit, and the visual world for the set.
+IMPORTANT: This is the PREPARATION space — not the event destination. Even if the brief mentions opera or gala, this shot is in the getting-ready space.`,
     outfit_haul: `SHOT: Full body of the person in the haul space (bedroom, fitting room), holding or wearing the first garment.
 The space should feel lived-in — a bed, a rack, a chair nearby. Natural light.
 Face visible, natural expression. The garments are the stars — the person is the presenter.
@@ -2074,12 +2353,28 @@ function injectREF0Analysis(ref0Analysis: any, sceneRole?: 'prep' | 'destination
     }
 
     // Prep shots y shots neutros: anclar escena, luz y tono de piel.
+    // Filtrar elementos que son piezas del outfit — no deben congelarse como ambiente.
+    const OUTFIT_ITEM_KEYWORDS = [
+      'heel', 'shoe', 'shoes', 'boot', 'boots', 'sneaker',
+      'bag', 'purse', 'clutch', 'handbag',
+      'jacket', 'blazer', 'coat',
+      'dress', 'skirt', 'pants', 'jeans', 'trousers',
+      'top', 'shirt', 'blouse', 'tshirt',
+      'corset', 'bustier', 'bodysuit',
+      'accessory', 'accessories', 'jewelry', 'necklace', 'bracelet', 'earring',
+      'scarf', 'hat', 'glove',
+    ];
+    const envElements = (s.elements ?? []).filter((el: string) =>
+      !OUTFIT_ITEM_KEYWORDS.some(kw => el.toLowerCase().includes(kw))
+    );
     return `
 🔒 REF0 ANALYSIS LOCK (freeze these — do NOT change):
 - Lighting: ${l.primarySource ?? 'natural'}, ${l.direction ?? 'ambient'}, ${l.colorTemperature ?? 'warm'}, ${l.shadowType ?? 'soft'}
-- Environment: ${(s.elements ?? []).join(', ') || 'real scene'}, ${s.geometry ?? 'interior'}
+- Environment: ${envElements.join(', ') || 'real scene'}, ${s.geometry ?? 'interior'}
 - Color temperature: SAME as REF0 — do NOT shift warm/cool
 - Skin tone rendering: SAME as REF0 — do NOT lighten or darken
+NOTE: Outfit items (shoes, bag, garments) detected in REF0 are NOT fixed environment elements.
+They may move, be worn, or appear differently per shot — that is intentional and correct.
 `;
   } catch { return ''; }
 }
@@ -2423,15 +2718,13 @@ export async function generatePhotodumpShot(
 
   // Determinar qué tipo de microacción HPI es compatible con este shot
   const hpiScope = shot.hpiScope ?? 'full';
-  const hpiBlock = hpiEligible
+  const rawHpiBlock = hpiEligible
     ? buildHpiBlock({
         enabled:            true,
         gender:             refs.gender ?? 'female',
         modoVisual:         'ugc',
-        // micro_action_only: solo gestos corporales sutiles, sin pose de cuerpo completo
-        includeGesture:     hpiScope !== 'full' ? true  : true,
+        includeGesture:     true,
         includePerformance: hpiScope === 'full' && (shot.beat === 'emotion' || shot.beat === 'candid'),
-        // Restricción adicional para shots de detalle
         ...( hpiScope === 'micro_action_only' && {
           _scopeNote: 'MICRO ACTION ONLY: adjusting a strap, hand on hip, slight torso turn, checking shoe — NO full-body dance pose, NO gym move, NO athletic stance',
         } as any ),
@@ -2440,6 +2733,10 @@ export async function generatePhotodumpShot(
         } as any ),
       })
     : '';
+  // Para outfit_check: filtrar HPI incompatible con la narrativa de outfit
+  const hpiBlock = (recipe === 'outfit_check' || recipe === 'outfit_haul')
+    ? filterHpiForOutfitCheck(rawHpiBlock, shot.key ?? '')
+    : rawHpiBlock;
 
   // Bloque HPI de restricción activa cuando el modo NO admite poses corporales
   const hpiBlockOff = !hpiEligible && !!refs.avatarRef && !isFacelessShot
@@ -2449,9 +2746,11 @@ Do NOT inject body poses, athletic gestures, or performance stances.
 If the person appears partially, their posture is incidental — not the subject of the shot.`
     : '';
 
-  // Bloques estructurales de WearState y CameraMode (outfit_check y otros con metadatos)
+  // Bloques estructurales de WearState y CameraMode
   const wearStateBlock  = shot.wearState  ? injectWearStateBlock(shot.wearState)   : '';
   const cameraModeBlock = shot.cameraMode ? injectCameraModeBlock(shot.cameraMode) : '';
+  // Item state plan — instrucciones por pieza
+  const itemStatePlanBlock = buildItemStatePlanBlock(shot.itemStatePlan, shot.wearState ?? 'wearing_full_outfit');
 
   // Bloque de outfit para este shot específico
   const outfitLockForShot = isFlatLay && outfitForThisShot
@@ -2538,11 +2837,14 @@ The result must look like someone captured this moment on their phone — not a 
 Organic, imperfect, lived-in. NOT editorial. NOT advertising. NOT staged.`;
 
   const briefContextBlock   = extractBriefContextBlock(basePrompt);
-  // hasUserSceneRef: el usuario subió un espacio físico real → el lock debe anclar a esa foto.
-  // Si no subió nada, la IA inventó el espacio en REF0 → el lock sigue anclando a REF0 pero sin
-  // referirse a una foto específica del usuario.
   const hasUserSceneRef = !!(refs.scenePruebaRef || refs.sceneRef);
-  const shotLocationOverride = extractShotLocationOverride(basePrompt, shot.key, hasUserSceneRef);
+  const inferredDestForShot = recipe === 'outfit_check' ? inferDestinationFromBrief(basePrompt) : 'none';
+  const destDescForShot     = getDestinationDescription(inferredDestForShot);
+  // Closing shots usan la sceneLockPolicy del shot para determinar libertad de escena.
+  // Prep shots y otros sin sceneLockPolicy definida usan extractShotLocationOverride legado.
+  const shotLocationOverride = shot.sceneLockPolicy
+    ? (buildSceneLockPolicyBlock(shot.sceneLockPolicy, destDescForShot, hasUserSceneRef) ?? '')
+    : extractShotLocationOverride(basePrompt, shot.key, hasUserSceneRef);
   const styleCoherenceBlock  = buildStyleCoherenceBlock(presentationStyle, shot.key);
 
   const prompt = `${LOCK_SYSTEM}
@@ -2558,6 +2860,8 @@ ${shotLocationOverride}
 ${styleCoherenceBlock}
 
 ${wearStateBlock}
+
+${itemStatePlanBlock}
 
 ${cameraModeBlock}
 

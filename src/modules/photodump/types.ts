@@ -198,18 +198,49 @@ export type WearState =
   | 'ready_to_leave'             // lista/listo, mood de salida — READY
   | 'destination_arrived';       // en el destino final — DESTINATION shot
 
+// ── OutfitItemState: estado de cada pieza concreta del outfit ─────────────────
+export type OutfitItemState =
+  | 'worn'                    // puesta en el cuerpo
+  | 'held'                    // sostenida en mano
+  | 'hanging'                 // colgada en perchero/rack
+  | 'flat_lay'                // extendida sobre superficie
+  | 'on_floor_before_wearing' // en el suelo, antes de ponerse
+  | 'not_visible'             // no aparece en este shot
+  | 'detail_focus';           // primer plano del objeto
+
+export interface OutfitItemPlan {
+  item: 'top' | 'bottom' | 'dress' | 'shoes' | 'bag' | 'jewelry' | 'accessory';
+  requiredState: OutfitItemState;
+  mustBeVisible: boolean;
+  mayBeDuplicated: boolean;
+}
+
 // ── CameraMode: perspectiva explícita para evitar mezclas absurdas ─────────────
 export type CameraMode =
-  | 'hands_presenter_closeup'   // manos sosteniendo objeto hacia cámara — sin cuerpo visible
-  | 'object_flatlay'            // overhead o ángulo bajo de objetos sobre superficie
-  | 'mirror_selfie'             // selfie de espejo — brazo extendido visible o fuera de frame
-  | 'selfie_pov'                // selfie directo POV — cara dominante
-  | 'third_person'              // alguien más (o trípode) capturando a la persona
-  | 'tripod_capture'            // trípode/automático — persona sola en frame, cámara estática
-  | 'detail_macro'              // macro de un detalle, sin corpo ni cara
-  | 'rack_wide'                 // shot ancho del rack/perchero como sujeto principal
-  | 'full_body_room'            // full body de persona parada en espacio real
-  | 'candid_third';             // tercero captura sin que la persona "pose" para cámara
+  | 'hands_presenter_closeup'      // manos sosteniendo objeto hacia cámara — sin cuerpo visible
+  | 'object_flatlay'               // overhead o ángulo bajo de objetos sobre superficie
+  | 'mirror_selfie_phone_visible'  // selfie de espejo con teléfono visible — apuntando al espejo
+  | 'mirror_selfie_phone_hidden'   // selfie de espejo sin teléfono — brazo fuera de frame
+  | 'mirror_check_no_phone'        // persona revisa look en espejo, sin teléfono (trípode/tercero)
+  | 'third_person_mirror_capture'  // cámara externa captura persona Y su reflejo
+  | 'selfie_pov'                   // selfie directo POV — cara dominante
+  | 'third_person'                 // alguien más (o trípode) capturando a la persona
+  | 'tripod_capture'               // trípode/automático — persona sola en frame, cámara estática
+  | 'detail_macro'                 // macro de un detalle, sin corpo ni cara
+  | 'rack_wide'                    // shot ancho del rack/perchero como sujeto principal
+  | 'full_body_room'               // full body de persona parada en espacio real
+  | 'candid_third'                 // tercero captura sin que la persona "pose" para cámara
+  // legado — no usar en código nuevo; se mantiene para compatibilidad con sets guardados
+  | 'mirror_selfie';
+
+// ── SceneLockPolicy: controla qué tan anclado está el shot al espacio de REF0 ─
+export type SceneLockPolicy =
+  | 'strict_ref0'          // copia exacta de paredes/piso/muebles de REF0
+  | 'prep_space'           // mismo cuarto/área de prueba que REF0
+  | 'prep_space_or_surface' // superficie compatible con prep space (para detalles)
+  | 'prep_space_or_pre_exit' // cuarto o pasillo de salida inmediata
+  | 'destination_allowed'  // el destino final del brief — NO replicar el prep space
+  | 'none';                // sin lock de escena
 
 // ── Destino inferido desde el brief ───────────────────────────────────────────
 export type InferredDestination =
@@ -232,13 +263,13 @@ export interface PhotodumpShotDebug {
   prompt:       string;
   refsCount:    number;
 
-  // Nuevos campos de auditoría estructural
-  narrativeStage?:          string;   // 'prep' | 'transition' | 'styled' | 'destination'
+  // Auditoría estructural
+  narrativeStage?:          string;
   wearState?:               WearState;
   cameraMode?:              CameraMode;
-  subjectPresence?:         string;   // 'hands_only' | 'full_body' | 'face_dominant' | 'objects_only'
-  sceneRole?:               string;   // 'prep_space' | 'destination' | 'neutral'
-  shotIntent?:              string;   // descripción libre de la intención del shot
+  subjectPresence?:         string;
+  sceneRole?:               string;
+  shotIntent?:              string;
   presentationStyle?:       string;
   requiredItemsVisible?:    string[];
   optionalItemsVisible?:    string[];
@@ -252,7 +283,16 @@ export interface PhotodumpShotDebug {
   promptLayersApplied?:     string[];
   hpiApplied?:              boolean;
   hpiProfileUsed?:          string;
-  possibleContradictions?:  string[];  // contradicciones detectadas antes de generar
+  possibleContradictions?:  string[];
+
+  // Nuevos campos de cierre y política
+  itemStatePlan?:           OutfitItemPlan[];
+  isFinalShot?:             boolean;
+  isClosingShot?:           boolean;
+  closingStrategy?:         'destination_inferred' | 'destination_uploaded' | 'pre_exit' | 'none';
+  sceneLockPolicy?:         SceneLockPolicy;
+  phonePolicy?:             'required_visible' | 'allowed_visible' | 'forbidden' | 'not_applicable';
+
   status:       'ok' | 'failed';
 }
 
