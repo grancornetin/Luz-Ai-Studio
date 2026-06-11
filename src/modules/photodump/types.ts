@@ -188,17 +188,72 @@ export interface FreeScene {
   result:      string | null;
 }
 
+// ── WearState: estado del outfit sobre el cuerpo en cada shot ─────────────────
+// Se calcula por (recipe, shotKey, presentationStyle, arcPosition).
+// El prompt assembly usa este valor para inyectar o bloquear reglas de outfit.
+export type WearState =
+  | 'not_wearing_final_outfit'   // prenda como objeto, no puesta — ARRIVING / flat_lay / hands
+  | 'partially_styled'           // vistiéndose, ajustando — transición
+  | 'wearing_full_outfit'        // look completo puesto y legible
+  | 'ready_to_leave'             // lista/listo, mood de salida — READY
+  | 'destination_arrived';       // en el destino final — DESTINATION shot
+
+// ── CameraMode: perspectiva explícita para evitar mezclas absurdas ─────────────
+export type CameraMode =
+  | 'hands_presenter_closeup'   // manos sosteniendo objeto hacia cámara — sin cuerpo visible
+  | 'object_flatlay'            // overhead o ángulo bajo de objetos sobre superficie
+  | 'mirror_selfie'             // selfie de espejo — brazo extendido visible o fuera de frame
+  | 'selfie_pov'                // selfie directo POV — cara dominante
+  | 'third_person'              // alguien más (o trípode) capturando a la persona
+  | 'tripod_capture'            // trípode/automático — persona sola en frame, cámara estática
+  | 'detail_macro'              // macro de un detalle, sin corpo ni cara
+  | 'rack_wide'                 // shot ancho del rack/perchero como sujeto principal
+  | 'full_body_room'            // full body de persona parada en espacio real
+  | 'candid_third';             // tercero captura sin que la persona "pose" para cámara
+
+// ── Destino inferido desde el brief ───────────────────────────────────────────
+export type InferredDestination =
+  | 'opera_theatre'
+  | 'restaurant_dinner'
+  | 'cocktail_gala'
+  | 'beach_outdoor'
+  | 'travel_transit'
+  | 'generic_outing'     // destino sugerido pero no específico
+  | 'none';              // no hay destino en el brief
+
 // ── Set completo guardado ──────────────────────────────────────
 
-// Debug payload — solo se genera y guarda para admins
+// Debug payload — rico — se genera y guarda para admins
 export interface PhotodumpShotDebug {
-  shotIndex:  number;   // 0 = REF0, 1..N = shots narrativos
-  role:       string;
-  beat?:      string;
-  key?:       string;
-  prompt:     string;
-  refsCount:  number;   // cuántas imágenes de referencia se pasaron al modelo
-  status:     'ok' | 'failed';
+  shotIndex:    number;   // 0 = REF0, 1..N = shots narrativos
+  role:         string;
+  beat?:        string;
+  key?:         string;
+  prompt:       string;
+  refsCount:    number;
+
+  // Nuevos campos de auditoría estructural
+  narrativeStage?:          string;   // 'prep' | 'transition' | 'styled' | 'destination'
+  wearState?:               WearState;
+  cameraMode?:              CameraMode;
+  subjectPresence?:         string;   // 'hands_only' | 'full_body' | 'face_dominant' | 'objects_only'
+  sceneRole?:               string;   // 'prep_space' | 'destination' | 'neutral'
+  shotIntent?:              string;   // descripción libre de la intención del shot
+  presentationStyle?:       string;
+  requiredItemsVisible?:    string[];
+  optionalItemsVisible?:    string[];
+  forbiddenDuplications?:   string[];
+  mustNotWearFinalOutfit?:  boolean;
+  mustWearFinalOutfit?:     boolean;
+  mustIncludePhone?:        boolean;
+  mustShowMirror?:          boolean;
+  destinationInferred?:     InferredDestination;
+  destinationExplicitRefProvided?: boolean;
+  promptLayersApplied?:     string[];
+  hpiApplied?:              boolean;
+  hpiProfileUsed?:          string;
+  possibleContradictions?:  string[];  // contradicciones detectadas antes de generar
+  status:       'ok' | 'failed';
 }
 
 export interface PhotodumpDebugData {
@@ -206,6 +261,7 @@ export interface PhotodumpDebugData {
   recipe:       string;
   basePrompt:   string;
   inferredGender: string;
+  inferredDestination?: InferredDestination;
   count:        number;
   plan:         any;      // PhotodumpSessionPlan completo
   shots:        PhotodumpShotDebug[];

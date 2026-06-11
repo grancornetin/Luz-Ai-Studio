@@ -15,6 +15,7 @@ import {
   PhotodumpNarrative, PhotodumpProtagonist, PhotodumpDestino,
   PhotodumpRefs, PhotodumpOutfitMode, NARRATIVE_META,
   FreeScene, FreeSceneRefs,
+  WearState, CameraMode, InferredDestination,
 } from './types';
 import {
   getStorySupportFamilies, initPhotodumpIntelligence, StorySupportFamily,
@@ -51,6 +52,13 @@ export interface PhotodumpShotDirective {
   cameraAngle:      string;
   arcPosition:      number;
   aspectRatio:      string;
+  // Capas de control estructural
+  wearState?:       WearState;
+  cameraMode?:      CameraMode;
+  narrativeStage?:  'prep' | 'transition' | 'styled' | 'destination';
+  hpiAllowed?:      boolean;        // false = HPI desactivado para este shot
+  hpiScope?:        'micro_action_only' | 'gesture_only' | 'full'; // granularidad HPI
+  subjectPresence?: string;         // 'hands_only' | 'full_body' | 'face_dominant' | 'objects_only'
 }
 
 // Estilo visual de presentación para recetas outfit.
@@ -315,7 +323,211 @@ function parseBriefContext(basePrompt: string): {
   return { timeSignal, venueSignal, isOccasionBrief: venueSignal !== '' };
 }
 
-// Bloque de contexto global del brief — inyectado en REF0 y shots de destino.
+// ── Destination inference ─────────────────────────────────────
+// Lee el brief y deduce si hay un destino final explícito.
+// Esto desacopla "hay un destino implícito" de "el usuario subió una foto de destino".
+export function inferDestinationFromBrief(basePrompt: string): InferredDestination {
+  const lower = basePrompt.toLowerCase();
+  if (lower.includes('ópera') || lower.includes('opera') || lower.includes('teatro') || lower.includes('theatre') || lower.includes('ballet'))
+    return 'opera_theatre';
+  if (lower.includes('cóctel') || lower.includes('cocktail') || lower.includes('gala') || lower.includes('evento formal') || lower.includes('black tie'))
+    return 'cocktail_gala';
+  if (lower.includes('restaurant') || lower.includes('restaurante') || lower.includes('dinner') || lower.includes('cena') || lower.includes('date night'))
+    return 'restaurant_dinner';
+  if (lower.includes('playa') || lower.includes('beach') || lower.includes('mar ') || lower.includes('ocean') || lower.includes('pool'))
+    return 'beach_outdoor';
+  if (lower.includes('viaje') || lower.includes('travel') || lower.includes('trip') || lower.includes('vuelo') || lower.includes('airport'))
+    return 'travel_transit';
+  if (lower.includes('salir') || lower.includes('salida') || lower.includes('noche') || lower.includes('night out') || lower.includes('going out'))
+    return 'generic_outing';
+  return 'none';
+}
+
+// Descripción textual del destino inferido para inyectar en el prompt del DESTINATION shot.
+function getDestinationDescription(dest: InferredDestination): string {
+  switch (dest) {
+    case 'opera_theatre':   return 'opera house or theatre — grand foyer, marble floors, ornate chandeliers, velvet curtains, formal elegance';
+    case 'cocktail_gala':   return 'upscale event venue — elegant space, soft golden lighting, formal gathering atmosphere';
+    case 'restaurant_dinner': return 'elegant restaurant — warm candlelight, intimate ambiance, beautifully set table, evening atmosphere';
+    case 'beach_outdoor':   return 'beach or outdoor setting — natural light, sand or open sky, relaxed and open atmosphere';
+    case 'travel_transit':  return 'airport terminal or travel setting — architectural space, natural light, sense of movement and departure';
+    case 'generic_outing':  return 'urban evening setting — warm city lights, street or venue exterior, nightlife ambiance';
+    default:                return 'lifestyle setting appropriate for the outfit and brief context';
+  }
+}
+
+// ── WearState resolver ────────────────────────────────────────
+// Calcula el estado del outfit en cada shot de forma condicional — no por índice fijo.
+export function resolveWearState(
+  shotKey: string,
+  style:   OutfitPresentationStyle | undefined,
+): WearState {
+  switch (shotKey) {
+    case 'OUTFIT_ARRIVING':
+      // hands_presenter y flat_lay: prenda como objeto — no puesta
+      // person_holding: persona mostrando prenda sin llevarla puesta completa
+      // rack_haul: prendas en rack, tampoco puestas
+      return 'not_wearing_final_outfit';
+
+    case 'OUTFIT_DETAIL':
+      // hands_presenter: otra prenda como objeto (manos sosteniendo accesorio)
+      // El resto: ya en transición — pero el foco es el objeto, no el look puesto
+      if (style === 'hands_presenter') return 'not_wearing_final_outfit';
+      return 'partially_styled';
+
+    case 'OUTFIT_MIRROR_CHECK':
+      return 'wearing_full_outfit';
+
+    case 'OUTFIT_READY':
+      return 'ready_to_leave';
+
+    case 'OUTFIT_DESTINATION':
+      return 'destination_arrived';
+
+    case 'ACCESSORY_CLOSEUP':
+      return 'not_wearing_final_outfit';
+
+    default:
+      return 'wearing_full_outfit';
+  }
+}
+
+// Bloque de texto inyectado en el prompt basado en wearState.
+function injectWearStateBlock(wearState: WearState): string {
+  switch (wearState) {
+    case 'not_wearing_final_outfit':
+      return `⚠️ WEAR STATE — OUTFIT AS OBJECT:
+The person is NOT wearing the complete final outfit in this shot.
+The garment(s) appear as OBJECTS — held, laid flat, hanging on a rack, or presented by hands.
+DO NOT show the person wearing the complete styled look in this shot.
+DO NOT generate a catalog full-body pose with the outfit on.`;
+
+    case 'partially_styled':
+      return `ℹ️ WEAR STATE — IN TRANSITION:
+The person may be in the process of putting on or adjusting the outfit.
+They are not yet in the final complete look. Show the transition — dressing, adjusting, exploring.
+Partial styling is correct here — do NOT force the full final look yet.`;
+
+    case 'wearing_full_outfit':
+      return `✅ WEAR STATE — FULL OUTFIT ON:
+The person IS wearing the complete final outfit. Every piece must be visible and readable:
+top, bottom or dress, shoes, and key accessories. The look should read as complete and intentional.
+This is NOT a getting-ready shot — the person is styled and the outfit is the story.`;
+
+    case 'ready_to_leave':
+      return `✅ WEAR STATE — READY TO LEAVE:
+The person has the complete look on and is ready. The mood is "about to walk out the door" —
+a mix of confidence and anticipation. The outfit is fully styled.
+This is a mood shot — expression and attitude matter as much as the outfit legibility.`;
+
+    case 'destination_arrived':
+      return `✅ WEAR STATE — AT THE DESTINATION:
+The person has arrived at the final location. The outfit is complete and integrated into the scene.
+The environment is the DESTINATION (venue, restaurant, street, event) — NOT the prep space.
+Person and place together tell the closure of this outfit story.`;
+  }
+}
+
+// ── CameraMode resolver ───────────────────────────────────────
+// Determina la perspectiva correcta según shotKey, presentationStyle y wearState.
+export function resolveCameraMode(
+  shotKey:    string,
+  style?:     OutfitPresentationStyle,
+  wearState?: WearState,
+): CameraMode {
+  // Shots de objeto/accesorio puro
+  if (shotKey === 'ACCESSORY_CLOSEUP') return 'detail_macro';
+
+  if (shotKey === 'OUTFIT_ARRIVING') {
+    if (style === 'hands_presenter') return 'hands_presenter_closeup';
+    if (style === 'flat_lay')        return 'object_flatlay';
+    if (style === 'rack_haul')       return 'rack_wide';
+    if (style === 'person_holding')  return 'third_person';
+    return 'hands_presenter_closeup';
+  }
+
+  if (shotKey === 'OUTFIT_DETAIL') {
+    if (style === 'hands_presenter') return 'hands_presenter_closeup';
+    if (style === 'flat_lay')        return 'detail_macro'; // close-up de elemento del flat lay
+    return 'detail_macro';
+  }
+
+  if (shotKey === 'OUTFIT_MIRROR_CHECK') return 'mirror_selfie';
+  if (shotKey === 'OUTFIT_READY')        return 'selfie_pov';
+  if (shotKey === 'OUTFIT_DESTINATION')  return 'full_body_room';
+
+  return 'third_person';
+}
+
+// Bloque de texto que activa reglas específicas del cameraMode.
+function injectCameraModeBlock(mode: CameraMode): string {
+  switch (mode) {
+    case 'hands_presenter_closeup':
+      return `📷 CAMERA MODE — HANDS PRESENTER:
+Frame: hands or forearms fill the frame, presenting the garment/accessory toward the lens.
+No full body visible. No face required (face may appear at edge if natural, not dominant).
+The HAND GESTURE is the shot — not a person posing with clothes.
+FORBIDDEN: full-body catalog stance, mirror reflection, overhead flat lay.`;
+
+    case 'object_flatlay':
+      return `📷 CAMERA MODE — FLAT LAY / OVERHEAD:
+Camera is above the surface looking down, or at a low angle showing garments spread flat.
+No standing person in frame. Hands may appear at edges naturally while arranging.
+The SURFACE COMPOSITION is the shot — garments, light, texture.
+FORBIDDEN: standing or seated person dominating the frame, mirror, selfie angle.`;
+
+    case 'rack_wide':
+      return `📷 CAMERA MODE — RACK / PERCHERO:
+Camera faces the clothing rack at eye level or slight angle. Garments hang visibly.
+Person may appear partially (arm, torso, back) interacting with the rack — not posing for camera.
+The RACK is the visual subject of this shot.
+FORBIDDEN: garments lying flat, hands-only framing, full-body catalog pose facing camera.`;
+
+    case 'mirror_selfie':
+      return `📷 CAMERA MODE — MIRROR SELFIE / FULL BODY MIRROR:
+The person uses a mirror to see their full body. Two options:
+  A) Mirror selfie: arm extended toward mirror, phone implied outside frame (NEVER show phone in frame).
+  B) Full body without mirror: standing in room, another person or tripod captures them.
+Full body visible head to toe. ONE person only — mirror reflection is NOT a second person.
+FORBIDDEN: phone visible in mirror, second distinct person, catalog symmetrical stance.`;
+
+    case 'selfie_pov':
+      return `📷 CAMERA MODE — SELFIE POV:
+The person takes the photo themselves. Camera arm is extended toward lens or implied.
+Face is dominant. Outfit partially visible at neck/shoulders/upper body.
+The angle is slightly upward (from arm level). Background is ambient and real.
+FORBIDDEN: phone visible in frame, third-person photographer angle, studio lighting.`;
+
+    case 'third_person':
+      return `📷 CAMERA MODE — THIRD PERSON CAPTURE:
+Another person (friend, partner) or a tripod captures this shot.
+The protagonist is not holding the camera — they are free to pose, move, or be candid.
+Medium to wide shot. Real environment context visible.
+FORBIDDEN: selfie arm visible, phone in frame, studio composition.`;
+
+    case 'detail_macro':
+      return `📷 CAMERA MODE — DETAIL / MACRO:
+Extreme close-up of a specific element: fabric texture, accessory, shoe detail, jewelry.
+The DETAIL fills the frame. No full body. No face required.
+Real light showing depth and material quality. Background blurred or suggestive.
+FORBIDDEN: full-body shot, selfie framing, generic catalog close-up on white background.`;
+
+    case 'full_body_room':
+      return `📷 CAMERA MODE — FULL BODY IN SPACE:
+Person standing, walking, or posed in the full environment.
+Complete outfit visible head to toe. The SETTING is as important as the person.
+Camera at eye level or slightly low — the person owns their space.
+FORBIDDEN: mirror selfie framing, tight portrait crop, product catalog background.`;
+
+    case 'candid_third':
+      return `📷 CAMERA MODE — CANDID THIRD PERSON:
+A friend or bystander captures this — the subject may not be fully aware.
+Natural, unstaged. The person is doing something, not posing for the shot.
+FORBIDDEN: direct to camera pose, studio arrangement, obvious staged composition.`;
+  }
+}
+
+// ── Bloque de contexto global del brief — inyectado en REF0 y shots de destino.
 // Para shots de preparación (ARRIVING, MIRROR, DETAIL, READY), usar extractShotLocationOverride.
 function extractBriefContextBlock(basePrompt: string): string {
   const { timeSignal, venueSignal } = parseBriefContext(basePrompt);
@@ -424,6 +636,7 @@ function buildStoryDirectives(
   recipe?:    string,
   refs?:      { avatarRef?: string | null; outfitRefs?: (string | null)[]; accesorioRefs?: (string | null)[]; accesorioCloseup?: boolean[]; sceneDestinoRef?: string | null; scenePruebaRef?: string | null; sceneRef?: string | null },
   presentationStyle?: OutfitPresentationStyle,
+  basePrompt?: string,
 ): PhotodumpShotDirective[] {
 
   const ar = destino === 'feed' ? '4/5' : '9/16';
@@ -442,9 +655,10 @@ function buildStoryDirectives(
   // ── Recetas outfit — arcos específicos por modo ───────────
 
   if (recipe === 'outfit_check') {
-    const hasDestino = !!refs?.sceneDestinoRef;
-    const style      = presentationStyle ?? 'hands_presenter';
-    const pool       = buildOutfitCheckShotPool(style);
+    const hasDestino     = !!refs?.sceneDestinoRef;
+    const style          = presentationStyle ?? 'hands_presenter';
+    const inferredDest   = inferDestinationFromBrief(basePrompt ?? '');
+    const pool           = buildOutfitCheckShotPool(style, inferredDest, hasDestino);
     const baseKeys   = distributeOutfitCheckShots(count, hasDestino);
     // Agregar shots de close-up de accesorios (van AL FINAL, después del arco base)
     const closeupIndexes = (refs?.accesorioCloseup ?? [])
@@ -1132,91 +1346,189 @@ function getArrivingVariants(style: OutfitPresentationStyle): {
 
 // ── Outfit Check shots ────────────────────────────────────────
 // Historia: "Elegí este outfit para X ocasión"
-// Arco: presentación de prendas → mirror check → detalle → selfie → destino
+// Arco condicional basado en presentationStyle, wearState y destination inferido.
 
-function buildOutfitCheckShotPool(presentationStyle: OutfitPresentationStyle = 'hands_presenter'): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
+function buildOutfitCheckShotPool(
+  presentationStyle: OutfitPresentationStyle = 'hands_presenter',
+  inferredDest?: InferredDestination,
+  hasDestinoRef?: boolean,
+): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
   const arrivingVariants = getArrivingVariants(presentationStyle);
+  const wearArriving     = resolveWearState('OUTFIT_ARRIVING', presentationStyle);
+  const wearDetail       = resolveWearState('OUTFIT_DETAIL', presentationStyle);
+  const camArriving      = resolveCameraMode('OUTFIT_ARRIVING', presentationStyle);
+  const camDetail        = resolveCameraMode('OUTFIT_DETAIL', presentationStyle);
+
+  // Cierre de destino: si el brief menciona un destino O el usuario subió foto de destino,
+  // la última imagen sintetiza ese lugar. Si no, cierra con un segundo ángulo en la prep space.
+  const hasDestination = hasDestinoRef || (inferredDest && inferredDest !== 'none');
+  const destDesc       = inferredDest && inferredDest !== 'none'
+    ? getDestinationDescription(inferredDest)
+    : 'lifestyle setting — street, entrance, or ambient exterior that matches the outfit mood';
+
   return [
     {
-      key:   'OUTFIT_ARRIVING',
-      beat:  'context',
-      role:  'OUTFIT PRESENTATION',
-      purpose: arrivingVariants.purpose,
+      key:              'OUTFIT_ARRIVING',
+      beat:             'context',
+      role:             'OUTFIT PRESENTATION',
+      purpose:          arrivingVariants.purpose,
       requiredElements: ['garments_clearly_visible_and_readable', 'real_context_not_studio', 'visual_gesture_or_interaction_consistent_with_session_style'],
-      forbiddenElements: ['catalog_mannequin_full_body_walking', 'studio_white_backdrop', 'ad_composition', 'floating_garments_with_no_context', 'mixing_different_presentation_formats'],
-      variationSpace: arrivingVariants.variationSpace,
-      framing:     'MEDIUM_OR_OVERHEAD',
-      composition: 'GARMENTS_AS_SUBJECT',
-      cameraAngle: 'EYE_LEVEL_OR_OVERHEAD',
-    },
-    {
-      key:   'OUTFIT_MIRROR_CHECK',
-      beat:  'reveal',
-      role:  'MIRROR CHECK',
-      purpose: 'Primer momento donde se ve el outfit COMPLETO puesto en la persona. El espejo es el encuadre natural pero no es obligatorio — puede ser full body directo también. Actitud, no pose. REGLA CRÍTICA: hay UNA SOLA persona en el frame — la persona y su reflejo son el mismo individuo. El reflejo no cuenta como segunda persona.',
-      requiredElements: ['full_body_visible_with_complete_outfit', 'complete_outfit_readable_head_to_toe', 'authentic_attitude_not_catalog_stance', 'single_person_only_in_entire_frame'],
-      forbiddenElements: ['catalog_symmetrical_pose', 'studio_lighting', 'white_background', 'mannequin_stance', 'beautification', 'phone_visible_in_mirror', 'two_distinct_people_visible', 'second_person_in_background'],
-      variationSpace: [
-        'espejo de cuerpo entero — persona girando levemente el torso para ver la espalda del outfit, mano en la cadera, evaluando la caída de la tela, outfit completo visible',
-        'selfie de espejo full body — brazo extendido fuera de frame sosteniendo el teléfono, leve vuelta de cabeza hacia el espejo como revisando el look, expresión auténtica',
-        'full body directo sin espejo — persona parada en el cuarto con el outfit completo puesto, postura natural no de desfile, mirando levemente hacia un costado o hacia abajo',
-        'espejo de dormitorio — persona ajustando un detalle del outfit con una mano (tirante, cinturón, falda) mientras mira su reflejo con concentración, outfit completo visible',
+      forbiddenElements: [
+        'catalog_mannequin_full_body_walking',
+        'studio_white_backdrop',
+        'ad_composition',
+        'floating_garments_with_no_context',
+        'mixing_different_presentation_formats',
+        'person_wearing_complete_final_look',    // la prenda es objeto todavía
+        'destination_venue_as_background',       // el destino no aparece aquí
       ],
-      framing:     'WIDE_FULL_BODY',
-      composition: 'MIRROR_FRAME_OR_FULL_BODY_NATURAL',
-      cameraAngle: 'EYE_LEVEL',
+      variationSpace:  arrivingVariants.variationSpace,
+      framing:         'MEDIUM_OR_OVERHEAD',
+      composition:     'GARMENTS_AS_SUBJECT',
+      cameraAngle:     'EYE_LEVEL_OR_OVERHEAD',
+      wearState:       wearArriving,
+      cameraMode:      camArriving,
+      narrativeStage:  'prep',
+      hpiAllowed:      false,     // shot de objeto — HPI corporal no aplica
+      subjectPresence: presentationStyle === 'flat_lay' ? 'objects_only'
+                     : presentationStyle === 'hands_presenter' ? 'hands_only'
+                     : 'full_body',
     },
     {
-      key:   'OUTFIT_DETAIL',
-      beat:  'detail',
-      role:  'OUTFIT DETAIL',
-      purpose: arrivingVariants.detailPurpose,
+      key:              'OUTFIT_MIRROR_CHECK',
+      beat:             'reveal',
+      role:             'MIRROR CHECK',
+      purpose: 'Primer momento donde se ve el outfit COMPLETO puesto. El espejo es el encuadre natural pero no es obligatorio — puede ser full body directo también. Actitud real, no pose de catálogo. UNA SOLA persona en el frame — reflejo y persona son el mismo individuo.',
+      requiredElements: ['full_body_visible_with_complete_outfit', 'complete_outfit_readable_head_to_toe', 'authentic_attitude_not_catalog_stance', 'single_person_only_in_entire_frame'],
+      forbiddenElements: [
+        'catalog_symmetrical_pose',
+        'studio_lighting',
+        'white_background',
+        'mannequin_stance',
+        'phone_visible_in_mirror',
+        'two_distinct_people_visible',
+        'second_person_in_background',
+        'garments_as_flat_lay',       // outfit está puesto, no en superficie
+        'destination_venue_visible',   // sigue en prep space
+      ],
+      variationSpace: [
+        'espejo de cuerpo entero — persona girando levemente el torso para ver la espalda del outfit, mano en la cadera evaluando la caída de la tela, outfit completo visible',
+        'selfie de espejo full body — brazo extendido fuera de frame, leve vuelta de cabeza como revisando el look, expresión auténtica, NO mostrar el teléfono',
+        'full body directo sin espejo — persona parada en el cuarto con el outfit completo puesto, postura natural no de desfile, mirando levemente al costado o hacia abajo',
+        'espejo de dormitorio — persona ajustando un detalle con una mano (tirante, cinturón, falda) mientras mira su reflejo con concentración, outfit completo visible',
+      ],
+      framing:         'WIDE_FULL_BODY',
+      composition:     'MIRROR_FRAME_OR_FULL_BODY_NATURAL',
+      cameraAngle:     'EYE_LEVEL',
+      wearState:       'wearing_full_outfit',
+      cameraMode:      'mirror_selfie',
+      narrativeStage:  'styled',
+      hpiAllowed:      true,
+      hpiScope:        'micro_action_only',  // ajustar tirante, mano en cintura, girar torso
+      subjectPresence: 'full_body',
+    },
+    {
+      key:              'OUTFIT_DETAIL',
+      beat:             'detail',
+      role:             'OUTFIT DETAIL',
+      purpose:          arrivingVariants.detailPurpose,
       requiredElements: ['garment_or_accessory_fills_frame_or_is_dominant', 'real_light_showing_depth', 'consistent_with_session_presentation_style'],
-      forbiddenElements: ['full_body_catalog_pose', 'white_background', 'studio_lighting', 'forced_branding', 'format_that_contradicts_session_style'],
-      variationSpace: arrivingVariants.detailVariationSpace,
-      framing:     'CLOSE_UP_OR_EXTREME_CLOSE_UP',
-      composition: 'DETAIL_FILL_FRAME',
-      cameraAngle: 'TOP_DOWN_OR_MACRO_ANGLE',
+      forbiddenElements: [
+        'full_body_catalog_pose',
+        'white_background',
+        'studio_lighting',
+        'forced_branding',
+        'format_that_contradicts_session_style',
+        'destination_venue_as_background',
+      ],
+      variationSpace:  arrivingVariants.detailVariationSpace,
+      framing:         'CLOSE_UP_OR_EXTREME_CLOSE_UP',
+      composition:     'DETAIL_FILL_FRAME',
+      cameraAngle:     'TOP_DOWN_OR_MACRO_ANGLE',
+      wearState:       wearDetail,
+      cameraMode:      camDetail,
+      narrativeStage:  presentationStyle === 'hands_presenter' ? 'prep' : 'transition',
+      hpiAllowed:      presentationStyle === 'hands_presenter' ? false : true,
+      hpiScope:        'gesture_only',
+      subjectPresence: presentationStyle === 'hands_presenter' ? 'hands_only' : 'full_body',
     },
     {
-      key:   'OUTFIT_READY',
-      beat:  'emotion',
-      role:  'READY SELFIE',
-      purpose: 'La persona lista con el look puesto. Cara dominante, outfit visible parcialmente. El mood es "lista para salir" — expresión con actitud, no pose de catálogo. Puede ser selfie, foto por otra persona, o un medium shot espontáneo.',
-      requiredElements: ['face_dominant_natural', 'outfit_partially_visible', 'authentic_expression_or_mood', 'real_context_visible'],
-      forbiddenElements: ['catalog_stance', 'beautification', 'studio_lighting', 'symmetric_ad_composition', 'mannequin_expression', 'phone_visible'],
+      key:              'OUTFIT_READY',
+      beat:             'emotion',
+      role:             'READY SELFIE',
+      purpose: 'La persona lista con el look completo puesto. Cara dominante, outfit visible parcialmente. Mood "lista para salir" — expresión con actitud, no pose de catálogo. Puede ser selfie, foto de otra persona, o medium shot espontáneo.',
+      requiredElements: ['face_dominant_natural', 'outfit_partially_visible_at_least_shoulders_and_neckline', 'authentic_expression_or_mood', 'real_context_visible'],
+      forbiddenElements: [
+        'catalog_stance',
+        'studio_lighting',
+        'symmetric_ad_composition',
+        'mannequin_expression',
+        'phone_visible_in_frame',
+        'garments_as_flat_lay_or_on_rack',
+      ],
       variationSpace: [
         'selfie POV — brazo extendido hacia la cámara, cara mirando al lente, escote y parte superior del outfit visible, fondo del cuarto o pasillo detrás',
         'foto tomada por otra persona — medium shot de frente, persona con actitud natural "lista para salir", hombros y parte del outfit visibles, ambiente de habitación de fondo',
         'selfie levemente contrapicada — cara mirando al lente con expresión resuelta de "vamos", parte del vestido o escote visible, fondo cálido del ambiente',
         'close-up de cara con el outfit visible en cuello y hombros — expresión espontánea, labios levemente abiertos o sonrisa genuina, ambiente íntimo de pre-salida',
       ],
-      framing:     'MEDIUM_OR_SELFIE',
-      composition: 'FACE_DOMINANT_OUTFIT_VISIBLE',
-      cameraAngle: 'SLIGHT_UPWARD_FROM_HAND_LEVEL',
+      framing:         'MEDIUM_OR_SELFIE',
+      composition:     'FACE_DOMINANT_OUTFIT_VISIBLE',
+      cameraAngle:     'SLIGHT_UPWARD_FROM_HAND_LEVEL',
+      wearState:       'ready_to_leave',
+      cameraMode:      'selfie_pov',
+      narrativeStage:  'styled',
+      hpiAllowed:      true,
+      hpiScope:        'full',
+      subjectPresence: 'face_dominant',
     },
     {
-      key:   'OUTFIT_DESTINATION',
-      beat:  'atmosphere',
-      role:  'DESTINATION SHOT',
-      purpose: 'Avatar en el lugar destino con el outfit puesto. Full body integrado al ambiente final. Si hay escena_destino se usa ese lugar. Si no hay, es un segundo ángulo en la escena de prueba. El outfit y el lugar juntos cuentan el cierre de la historia.',
-      requiredElements: ['full_body_visible', 'destination_environment_clearly_readable', 'complete_outfit_visible', 'person_belongs_in_space'],
-      forbiddenElements: ['catalog_pose', 'studio_backdrop', 'generic_white_wall', 'mannequin_stance', 'beautification', 'ad_feel'],
-      variationSpace: [
-        'full body en el lugar destino — restaurante, calle, evento — outfit completo visible, actitud natural',
-        'avatar apoyada en elemento del ambiente destino, pose con actitud, outfit completo desde la distancia',
-        'medium shot en el lugar destino, ambiente claramente reconocible de fondo, cara y outfit visibles',
-        'caminando o llegando al lugar, outfit en movimiento, ambiente destino de fondo',
+      key:              'OUTFIT_DESTINATION',
+      beat:             'atmosphere',
+      role:             hasDestination ? 'DESTINATION SHOT' : 'FINAL STYLED MOMENT',
+      purpose: hasDestination
+        ? `La persona en el destino final con el outfit completo. El ambiente es: ${destDesc}. Full body integrado al lugar. El outfit y el entorno juntos cierran la historia.`
+        : 'Momento final con el look completo: segundo ángulo en la misma prep space, o exterior de salida justo antes de irse. El outfit se ve completo y la historia cierra con actitud.',
+      requiredElements: hasDestination
+        ? ['full_body_visible', 'destination_environment_clearly_readable', 'complete_outfit_visible', 'person_belongs_in_space']
+        : ['full_body_visible_or_medium_shot', 'complete_outfit_readable', 'confident_closing_attitude', 'real_environment'],
+      forbiddenElements: [
+        'catalog_pose',
+        'studio_backdrop',
+        'generic_white_wall',
+        'mannequin_stance',
+        'ad_feel',
+        'flat_lay_garments',
+        ...(hasDestination ? ['prep_space_bedroom_or_mirror'] : []),
       ],
-      framing:     'WIDE_FULL_BODY',
-      composition: 'PERSON_IN_DESTINATION_CONTEXT',
-      cameraAngle: 'EYE_LEVEL_OR_SLIGHTLY_LOW',
+      variationSpace: hasDestination
+        ? [
+            `full body en ${destDesc} — outfit completo visible, actitud natural, ambiente claramente reconocible`,
+            `avatar apoyada en elemento del ambiente destino (columna, barra, entrada), pose con actitud, outfit completo`,
+            `medium shot en el destino, ambiente de fondo claramente legible, cara y outfit visibles, expresión segura`,
+            `llegando o caminando hacia el lugar, outfit en movimiento, ambiente destino de fondo orgánico`,
+          ]
+        : [
+            'full body en pasillo o entrada del apartamento, actitud de "voy a salir", look completo visible',
+            'medium shot en el mismo cuarto desde otro ángulo, outfit leído desde la cintura hacia arriba, expresión resuelta',
+            'persona apoyada en marco de puerta o pared, look completo, actitud de pre-salida',
+            'selfie de cuerpo entero en pasillo o exterior inmediato, outfit completo visible, mood de cierre',
+          ],
+      framing:         'WIDE_FULL_BODY',
+      composition:     hasDestination ? 'PERSON_IN_DESTINATION_CONTEXT' : 'FULL_BODY_NATURAL_CLOSING',
+      cameraAngle:     'EYE_LEVEL_OR_SLIGHTLY_LOW',
+      wearState:       'destination_arrived',
+      cameraMode:      'full_body_room',
+      narrativeStage:  'destination',
+      hpiAllowed:      true,
+      hpiScope:        'full',
+      subjectPresence: 'full_body',
     },
     {
-      key:   'ACCESSORY_CLOSEUP',
-      beat:  'texture',
-      role:  'ACCESSORY HERO',
-      purpose: 'Macro o close-up extremo de un accesorio específico marcado por el usuario. El accesorio llena el frame. Luz que muestra su materialidad, textura y diseño. Sin persona necesaria. Este shot existe para destacar ese elemento en particular.',
+      key:              'ACCESSORY_CLOSEUP',
+      beat:             'texture',
+      role:             'ACCESSORY HERO',
+      purpose: 'Macro o close-up extremo de un accesorio específico marcado por el usuario. El accesorio llena el frame. Luz que muestra su materialidad, textura y diseño. Sin persona necesaria.',
       requiredElements: ['accessory_fills_frame', 'material_and_texture_clearly_visible', 'real_light_not_studio', 'intentional_macro_framing'],
       forbiddenElements: ['full_body_in_frame', 'catalog_white_background', 'studio_lighting', 'forced_branding', 'multiple_accessories_competing'],
       variationSpace: [
@@ -1225,9 +1537,14 @@ function buildOutfitCheckShotPool(presentationStyle: OutfitPresentationStyle = '
         'accesorio en su lugar de uso natural — puesto, colgando, en el ambiente — close-up',
         'overhead del accesorio sobre tela o superficie orgánica, luz de ventana, ángulo íntimo',
       ],
-      framing:     'EXTREME_CLOSE_UP',
-      composition: 'ACCESSORY_FILL_FRAME',
-      cameraAngle: 'MACRO_OR_LOW_ANGLE',
+      framing:         'EXTREME_CLOSE_UP',
+      composition:     'ACCESSORY_FILL_FRAME',
+      cameraAngle:     'MACRO_OR_LOW_ANGLE',
+      wearState:       'not_wearing_final_outfit',
+      cameraMode:      'detail_macro',
+      narrativeStage:  'prep',
+      hpiAllowed:      false,
+      subjectPresence: 'objects_only',
     },
   ];
 }
@@ -1374,7 +1691,7 @@ export async function buildPhotodumpSessionPlan(
   const presentationStyle = isOutfitRecipe
     ? resolveOutfitPresentationStyle(basePrompt, refs)
     : undefined;
-  const shots           = buildStoryDirectives(count, protagonist, destino, narrative, recipe, refs, presentationStyle);
+  const shots           = buildStoryDirectives(count, protagonist, destino, narrative, recipe, refs, presentationStyle, basePrompt);
   const sessionFamilies = selectSessionFamilies();
   const assignedFamilies = [...sessionFamilies.storySupport, ...sessionFamilies.creatorAesthetic];
   return {
@@ -1735,11 +2052,28 @@ ${NEGATIVE_FULL}`;
 
 // ── Generación de shots narrativos ───────────────────────────
 
-function injectREF0Analysis(ref0Analysis: any): string {
+// Inyecta el análisis de REF0 con control de alcance.
+// sceneRole: 'prep' (anclar escena), 'destination' (anclar solo identidad, no escena/luz),
+//            undefined (comportamiento por defecto — full anchor)
+function injectREF0Analysis(ref0Analysis: any, sceneRole?: 'prep' | 'destination' | string): string {
   if (!ref0Analysis) return '';
   try {
     const l = ref0Analysis.lighting ?? {};
     const s = ref0Analysis.spatial  ?? {};
+
+    if (sceneRole === 'destination') {
+      // En el DESTINATION shot solo anclamos identidad, tono de piel y outfit.
+      // La iluminación y el entorno son del destino — NO del prep space de REF0.
+      return `
+🔒 REF0 IDENTITY LOCK (apply only to person identity — NOT to scene or lighting):
+- Skin tone rendering: SAME as REF0 — do NOT lighten or darken
+- This shot takes place in the DESTINATION environment. The lighting and environment
+  come from the destination, NOT from the prep space established in REF0.
+- Do NOT replicate REF0's room, walls, furniture, or prep lighting in this shot.
+`;
+    }
+
+    // Prep shots y shots neutros: anclar escena, luz y tono de piel.
     return `
 🔒 REF0 ANALYSIS LOCK (freeze these — do NOT change):
 - Lighting: ${l.primarySource ?? 'natural'}, ${l.direction ?? 'ambient'}, ${l.colorTemperature ?? 'warm'}, ${l.shadowType ?? 'soft'}
@@ -2070,8 +2404,10 @@ export async function generatePhotodumpShot(
   );
   const familyBlock = selectedFamily ? buildFamilyInjectBlock(selectedFamily) : '';
 
-  // HPI: inyectar solo en shots con avatar (no faceless, no shots de objeto puro)
-  const hpiEligible = !isFacelessShot
+  // HPI: filtrado por compatibilidad con el shot actual.
+  // Prioridad: shot.hpiAllowed explícito (outfit_check) > reglas globales por shotKey.
+  const shotHpiAllowed  = shot.hpiAllowed;  // undefined = no definido (shots no-outfit)
+  const globalHpiBlock  = !isFacelessShot
     && !!refs.avatarRef
     && shot.key !== 'HAUL_INTRO'
     && shot.key !== 'OUTFIT_ARRIVING'
@@ -2080,15 +2416,42 @@ export async function generatePhotodumpShot(
     && shot.key !== 'UNBOXING_PRODUCT_REVEAL'
     && shot.key !== 'UNBOXING_PRODUCT_DETAIL'
     && shot.key !== 'UNBOXING_ATMOSPHERE';
+
+  const hpiEligible = typeof shotHpiAllowed === 'boolean'
+    ? shotHpiAllowed && !!refs.avatarRef && !isFacelessShot
+    : globalHpiBlock;
+
+  // Determinar qué tipo de microacción HPI es compatible con este shot
+  const hpiScope = shot.hpiScope ?? 'full';
   const hpiBlock = hpiEligible
     ? buildHpiBlock({
         enabled:            true,
         gender:             refs.gender ?? 'female',
         modoVisual:         'ugc',
-        includeGesture:     true,
-        includePerformance: shot.beat === 'emotion' || shot.beat === 'candid',
+        // micro_action_only: solo gestos corporales sutiles, sin pose de cuerpo completo
+        includeGesture:     hpiScope !== 'full' ? true  : true,
+        includePerformance: hpiScope === 'full' && (shot.beat === 'emotion' || shot.beat === 'candid'),
+        // Restricción adicional para shots de detalle
+        ...( hpiScope === 'micro_action_only' && {
+          _scopeNote: 'MICRO ACTION ONLY: adjusting a strap, hand on hip, slight torso turn, checking shoe — NO full-body dance pose, NO gym move, NO athletic stance',
+        } as any ),
+        ...( hpiScope === 'gesture_only' && {
+          _scopeNote: 'GESTURE ONLY: one hand holding an accessory naturally — NO body pose, NO full stance',
+        } as any ),
       })
     : '';
+
+  // Bloque HPI de restricción activa cuando el modo NO admite poses corporales
+  const hpiBlockOff = !hpiEligible && !!refs.avatarRef && !isFacelessShot
+    ? `⚠️ HPI DISABLED FOR THIS SHOT:
+This shot format (${shot.cameraMode ?? shot.key}) does NOT involve a full-body person posing.
+Do NOT inject body poses, athletic gestures, or performance stances.
+If the person appears partially, their posture is incidental — not the subject of the shot.`
+    : '';
+
+  // Bloques estructurales de WearState y CameraMode (outfit_check y otros con metadatos)
+  const wearStateBlock  = shot.wearState  ? injectWearStateBlock(shot.wearState)   : '';
+  const cameraModeBlock = shot.cameraMode ? injectCameraModeBlock(shot.cameraMode) : '';
 
   // Bloque de outfit para este shot específico
   const outfitLockForShot = isFlatLay && outfitForThisShot
@@ -2194,7 +2557,13 @@ ${shotLocationOverride}
 
 ${styleCoherenceBlock}
 
-${injectREF0Analysis(ref0Analysis)}
+${wearStateBlock}
+
+${cameraModeBlock}
+
+${hpiBlockOff}
+
+${injectREF0Analysis(ref0Analysis, shot.narrativeStage)}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📸 IMAGE ${shot.arcPosition} · ${momentLabel}

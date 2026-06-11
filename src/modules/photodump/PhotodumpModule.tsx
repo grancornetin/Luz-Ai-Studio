@@ -32,6 +32,7 @@ import {
   generateFreeModeScene,
   getRefsAsArray,
   inferAvatarGender,
+  inferDestinationFromBrief,
   type PhotodumpShotResult,
 } from './photodumpDirectorService';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
@@ -391,12 +392,19 @@ const PhotodumpModule: React.FC = () => {
       setPartialImages([ref0Url]);
 
       // Debug: acumular prompts de cada shot (solo para admins)
+      const inferredDest = isAdmin ? inferDestinationFromBrief(basePrompt) : 'none' as const;
       const debugShots: PhotodumpShotDebug[] = isAdmin ? [{
-        shotIndex:  0,
-        role:       'REF0_ANCHOR',
-        prompt:     ref0Result.prompt,
-        refsCount:  ref0Result.refsCount,
-        status:     'ok',
+        shotIndex:   0,
+        role:        'REF0_ANCHOR',
+        prompt:      ref0Result.prompt,
+        refsCount:   ref0Result.refsCount,
+        narrativeStage: 'prep',
+        sceneRole:   'prep_space',
+        shotIntent:  'Establece identidad, espacio visual y world para el set completo',
+        promptLayersApplied: ['LOCK_SYSTEM', 'PARADIGM_RULE', 'STORY_MODE', 'BRIEF_CONTEXT', 'IDENTITY', 'REF0_ANCHOR'],
+        destinationInferred: inferredDest,
+        destinationExplicitRefProvided: !!(refsWithMode as any).sceneDestinoRef,
+        status:      'ok',
       }] : [];
 
       setProgressStepIndex(2);
@@ -404,9 +412,10 @@ const PhotodumpModule: React.FC = () => {
       const failed: number[]   = [];
       const failedErrors: string[] = [];
       for (let i = 0; i < shots.length; i++) {
+        const sh = shots[i];
         try {
           const result: PhotodumpShotResult = await generatePhotodumpShot(
-            shots[i], refsWithMode, ref0Url, ref0Analysis,
+            sh, refsWithMode, ref0Url, ref0Analysis,
             basePrompt, narrative, destino, sessionParams,
             plan.assignedFamilies, plan.sessionFamilies,
             shots.length, protagonist, recipe,
@@ -414,15 +423,47 @@ const PhotodumpModule: React.FC = () => {
           );
           shotUrls.push(result.imageUrl);
           setPartialImages(prev => [...prev, result.imageUrl]);
-          if (isAdmin) debugShots.push({
-            shotIndex:  i + 1,
-            role:       shots[i].role,
-            beat:       shots[i].beat,
-            key:        shots[i].key,
-            prompt:     result.prompt,
-            refsCount:  result.refsCount,
-            status:     'ok',
-          });
+          if (isAdmin) {
+            // Detección de contradicciones para debug
+            const contradictions: string[] = [];
+            if (sh.wearState === 'not_wearing_final_outfit' && sh.requiredElements.includes('complete_outfit_readable_head_to_toe'))
+              contradictions.push('wearState=not_wearing_final_outfit pero requiredElements pide complete_outfit');
+            if (sh.cameraMode === 'mirror_selfie' && sh.forbiddenElements.includes('phone_visible_in_mirror') === false)
+              contradictions.push('mirror_selfie sin bloqueo explícito de teléfono visible');
+            // sceneRole is derived — no field on sh
+
+            debugShots.push({
+              shotIndex:    i + 1,
+              role:         sh.role,
+              beat:         sh.beat,
+              key:          sh.key,
+              prompt:       result.prompt,
+              refsCount:    result.refsCount,
+              narrativeStage:   sh.narrativeStage,
+              wearState:        sh.wearState,
+              cameraMode:       sh.cameraMode,
+              subjectPresence:  sh.subjectPresence,
+              sceneRole:        sh.narrativeStage === 'destination' ? 'destination' : sh.narrativeStage === 'prep' ? 'prep_space' : 'neutral',  // derivado de narrativeStage
+              shotIntent:       sh.purpose?.slice(0, 120),
+              presentationStyle: plan.presentationStyle,
+              mustNotWearFinalOutfit: sh.wearState === 'not_wearing_final_outfit',
+              mustWearFinalOutfit:    sh.wearState === 'wearing_full_outfit' || sh.wearState === 'ready_to_leave' || sh.wearState === 'destination_arrived',
+              mustShowMirror:    sh.cameraMode === 'mirror_selfie',
+              destinationInferred: inferredDest,
+              destinationExplicitRefProvided: !!(refsWithMode as any).sceneDestinoRef,
+              promptLayersApplied: [
+                'LOCK_SYSTEM', 'PARADIGM_RULE', 'STORY_MODE', 'BRIEF_CONTEXT',
+                sh.wearState  ? 'WEAR_STATE'   : null,
+                sh.cameraMode ? 'CAMERA_MODE'  : null,
+                sh.hpiAllowed ? 'HPI'          : 'HPI_DISABLED',
+                'REF0_ANALYSIS', 'SHOT_IDENTITY', 'VARIATION_SPACE',
+              ].filter(Boolean) as string[],
+              hpiApplied:      !!sh.hpiAllowed,
+              hpiProfileUsed:  sh.hpiScope ?? 'none',
+              possibleContradictions: contradictions.length > 0 ? contradictions : undefined,
+              status:       'ok',
+            });
+          }
         } catch (shotErr: any) {
           shotUrls.push('');
           failed.push(i);
@@ -430,11 +471,15 @@ const PhotodumpModule: React.FC = () => {
           setPartialImages(prev => [...prev, '']);
           if (isAdmin) debugShots.push({
             shotIndex:  i + 1,
-            role:       shots[i].role,
-            beat:       shots[i].beat,
-            key:        shots[i].key,
+            role:       sh.role,
+            beat:       sh.beat,
+            key:        sh.key,
             prompt:     '',
             refsCount:  0,
+            narrativeStage: sh.narrativeStage,
+            wearState:  sh.wearState,
+            cameraMode: sh.cameraMode,
+            possibleContradictions: [`shot failed: ${shotErr?.message ?? 'unknown'}`],
             status:     'failed',
           });
         }
@@ -443,13 +488,14 @@ const PhotodumpModule: React.FC = () => {
 
       // Armar debugData completo para admins
       const debugData: PhotodumpDebugData | undefined = isAdmin ? {
-        generatedAt:    new Date().toISOString(),
+        generatedAt:         new Date().toISOString(),
         recipe,
         basePrompt,
-        inferredGender: inferredGender,
+        inferredGender:      inferredGender,
+        inferredDestination: inferredDest,
         count,
         plan,
-        shots:          debugShots,
+        shots:               debugShots,
       } : undefined;
 
       setProgressStepIndex(3);
