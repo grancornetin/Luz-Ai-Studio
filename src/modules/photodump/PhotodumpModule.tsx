@@ -157,6 +157,7 @@ const PhotodumpModule: React.FC = () => {
   const [savedShots,        setSavedShots]        = useState<any[]>([]);
   const [savedCaptions,     setSavedCaptions]     = useState<{ caption: string; hashtags: string } | null>(null);
   const [savedRef0Analysis, setSavedRef0Analysis] = useState<any>(null);
+  const [savedDebugData,    setSavedDebugData]    = useState<PhotodumpDebugData | undefined>(undefined);
   const [failureHint,       setFailureHint]       = useState<string | null>(null);
 
   // ── Resultados UI ─────────────────────────────────────────
@@ -229,7 +230,7 @@ const PhotodumpModule: React.FC = () => {
     setGeneratingFreeIndex(null);
     setCurrentSet(null); setError(null); setProgress(null); setFailureHint(null);
     setProgressStepIndex(0); setIsGenerating(false); setPartialImages([]);
-    setFailedIndexes([]); setSavedPlan(null); setSavedRef0Url(''); setSavedRef0Analysis(null); setSavedShotUrls([]);
+    setFailedIndexes([]); setSavedPlan(null); setSavedRef0Url(''); setSavedRef0Analysis(null); setSavedShotUrls([]); setSavedDebugData(undefined);
     libreSetIdRef.current = null;
   };
 
@@ -412,6 +413,8 @@ const PhotodumpModule: React.FC = () => {
       const failed: number[]   = [];
       const failedErrors: string[] = [];
       for (let i = 0; i < shots.length; i++) {
+        // Pausa entre shots para no saturar la API de Gemini (429 a partir del 6° request rápido)
+        if (i > 0) await new Promise(r => setTimeout(r, 1500));
         const sh = shots[i];
         try {
           const result: PhotodumpShotResult = await generatePhotodumpShot(
@@ -498,6 +501,8 @@ const PhotodumpModule: React.FC = () => {
         shots:               debugShots,
       } : undefined;
 
+      setSavedDebugData(debugData);
+
       setProgressStepIndex(3);
       const captions = await generatePhotodumpCaptions(basePrompt, narrative, shots, refs.gender ?? 'female');
       setSavedCaptions(captions);
@@ -570,7 +575,9 @@ const PhotodumpModule: React.FC = () => {
     const ref0Url      = savedRef0Url;
     const ref0Analysis = savedRef0Analysis;
 
-    for (const i of failedIndexes) {
+    for (let ri = 0; ri < failedIndexes.length; ri++) {
+      if (ri > 0) await new Promise(r => setTimeout(r, 1500));
+      const i = failedIndexes[ri];
       try {
         const result = await generatePhotodumpShot(
           savedShots[i], refsWithMode, ref0Url, ref0Analysis,
@@ -596,12 +603,12 @@ const PhotodumpModule: React.FC = () => {
     }
 
     setFailedIndexes([]);
-    await finalizarSet(newUrls, savedShots, savedCaptions);
+    await finalizarSet(newUrls, savedShots, savedCaptions, undefined, savedDebugData);
     setIsGenerating(false);
   };
 
   const handleContinuePartial = async () => {
-    await finalizarSet(savedShotUrls, savedShots, savedCaptions, undefined, undefined);
+    await finalizarSet(savedShotUrls, savedShots, savedCaptions, undefined, savedDebugData);
   };
 
   // ── Guardar set y avanzar a resultados ────────────────────
