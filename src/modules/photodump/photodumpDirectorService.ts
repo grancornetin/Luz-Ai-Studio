@@ -53,14 +53,23 @@ export interface PhotodumpShotDirective {
   aspectRatio:      string;
 }
 
+// Estilo visual de presentación para recetas outfit.
+// La IA lo elige una vez por sesión — todos los shots de prep lo respetan.
+export type OutfitPresentationStyle =
+  | 'hands_presenter'   // manos sosteniendo cada prenda hacia la cámara — sin persona de cuerpo
+  | 'rack_haul'         // prendas colgadas en rack/perchero como apertura — luego persona interactuando
+  | 'flat_lay'          // UNA foto con el outfit extendido — luego la persona ya vistiéndose
+  | 'person_holding';   // persona de cuerpo medio mostrando hangers/prendas, cara visible
+
 export interface PhotodumpSessionPlan {
-  narrative:        PhotodumpNarrative;
-  protagonist:      PhotodumpProtagonist;
-  destino:          PhotodumpDestino;
-  storyTheme:       string;
-  shots:            PhotodumpShotDirective[];
-  assignedFamilies: StorySupportFamily[];   // Lista plana para compatibilidad
-  sessionFamilies:  SessionFamilies;        // Separadas por clase para asignación ordenada
+  narrative:            PhotodumpNarrative;
+  protagonist:          PhotodumpProtagonist;
+  destino:              PhotodumpDestino;
+  storyTheme:           string;
+  shots:                PhotodumpShotDirective[];
+  assignedFamilies:     StorySupportFamily[];   // Lista plana para compatibilidad
+  sessionFamilies:      SessionFamilies;        // Separadas por clase para asignación ordenada
+  presentationStyle?:   OutfitPresentationStyle; // Solo presente en recetas outfit
 }
 
 export interface PhotodumpREF0Result {
@@ -271,35 +280,46 @@ WHAT MAKES GREAT FACELESS CONTENT:
 // Extrae señales de tiempo, ambiente y mood del brief del usuario para elevarlas
 // como directiva dominante de iluminación/atmósfera. Sin esto, el modelo ignora
 // contexto temporal ("noche de ópera") y genera luz de día por defecto.
-function extractBriefContextBlock(basePrompt: string): string {
+// Retorna señales de contexto del brief separadas en tiempo, venue-destino y mood.
+// El venue/ocasión es SIEMPRE el destino final de la historia — NUNCA la locación
+// de cada shot individual. Los shots de preparación ocurren en casa/habitación.
+function parseBriefContext(basePrompt: string): {
+  timeSignal: string;
+  venueSignal: string;       // ocasión/destino final (ópera, restaurante, etc.)
+  isOccasionBrief: boolean;  // true si el brief menciona un destino/evento
+} {
   const lower = basePrompt.toLowerCase();
+  let timeSignal  = '';
+  let venueSignal = '';
 
-  const timeSignals: string[] = [];
-  const moodSignals: string[] = [];
-
-  // Tiempo del día / luz
   if (lower.includes('noche') || lower.includes('night') || lower.includes('nocturno') || lower.includes('nocturna'))
-    timeSignals.push('NIGHT scene — use evening/night lighting: warm artificial light, dim ambiance, no daylight');
+    timeSignal = 'NIGHT — warm artificial light, evening atmosphere, no daylight';
   else if (lower.includes('atardecer') || lower.includes('sunset') || lower.includes('golden hour') || lower.includes('hora dorada'))
-    timeSignals.push('GOLDEN HOUR — warm orange-gold directional light, long shadows, sunset atmosphere');
-  else if (lower.includes('mañana') || lower.includes('morning') || lower.includes('amanecer') || lower.includes('sunrise'))
-    timeSignals.push('MORNING — soft cool-to-warm light, fresh atmosphere, early day feel');
+    timeSignal = 'GOLDEN HOUR — warm orange-gold directional light, long shadows';
+  else if (lower.includes('mañana') || lower.includes('morning') || lower.includes('amanecer'))
+    timeSignal = 'MORNING — soft cool-to-warm natural light, fresh atmosphere';
   else if (lower.includes('mediodía') || lower.includes('midday') || lower.includes('tarde'))
-    timeSignals.push('AFTERNOON/MIDDAY — strong natural light, clear shadows');
+    timeSignal = 'AFTERNOON — strong natural light, clear shadows';
 
-  // Venue / ocasión
   if (lower.includes('ópera') || lower.includes('opera') || lower.includes('teatro') || lower.includes('theatre'))
-    moodSignals.push('VENUE: opera house / theatre — grand interior, chandeliers, velvet, marble, formal elegance');
-  if (lower.includes('cóctel') || lower.includes('cocktail') || lower.includes('fiesta') || lower.includes('gala') || lower.includes('evento'))
-    moodSignals.push('EVENT: formal social event — evening venue, ambient lighting, dressed crowd');
-  if (lower.includes('playa') || lower.includes('beach') || lower.includes('mar') || lower.includes('sea'))
-    moodSignals.push('LOCATION: beach / ocean — natural light, sand, water reflection');
-  if (lower.includes('restaurant') || lower.includes('restaurante') || lower.includes('dinner') || lower.includes('cena'))
-    moodSignals.push('VENUE: restaurant — warm table lighting, intimate evening ambiance');
-  if (lower.includes('viaje') || lower.includes('travel') || lower.includes('trip'))
-    moodSignals.push('CONTEXT: travel / trip — location-specific environment');
+    venueSignal = 'OCCASION: opera / theatre night — formal elegance, chandeliers, velvet, marble. This is the DESTINATION, not the prep location.';
+  else if (lower.includes('cóctel') || lower.includes('cocktail') || lower.includes('gala') || lower.includes('evento'))
+    venueSignal = 'OCCASION: formal social event — evening venue, elegant atmosphere. This is the DESTINATION, not the prep location.';
+  else if (lower.includes('playa') || lower.includes('beach') || lower.includes('mar'))
+    venueSignal = 'DESTINATION: beach / ocean — natural light, sand, water. This is the destination, not every shot\'s location.';
+  else if (lower.includes('restaurant') || lower.includes('restaurante') || lower.includes('dinner') || lower.includes('cena'))
+    venueSignal = 'OCCASION: restaurant / dinner — warm evening ambiance. This is the DESTINATION, not the prep location.';
+  else if (lower.includes('viaje') || lower.includes('travel') || lower.includes('trip'))
+    venueSignal = 'CONTEXT: travel — location-specific environment as destination.';
 
-  if (timeSignals.length === 0 && moodSignals.length === 0) return '';
+  return { timeSignal, venueSignal, isOccasionBrief: venueSignal !== '' };
+}
+
+// Bloque de contexto global del brief — inyectado en REF0 y shots de destino.
+// Para shots de preparación (ARRIVING, MIRROR, DETAIL, READY), usar extractShotLocationOverride.
+function extractBriefContextBlock(basePrompt: string): string {
+  const { timeSignal, venueSignal } = parseBriefContext(basePrompt);
+  if (!timeSignal && !venueSignal) return '';
 
   const lines = [
     '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
@@ -307,10 +327,48 @@ function extractBriefContextBlock(basePrompt: string): string {
     'The user\'s brief contains explicit context clues. These are BINDING directives — not suggestions.',
     'They override the model\'s default tendency to generate daytime/neutral lighting.',
   ];
-  if (timeSignals.length > 0) lines.push(...timeSignals.map(s => `  • ${s}`));
-  if (moodSignals.length > 0) lines.push(...moodSignals.map(s => `  • ${s}`));
+  if (timeSignal) lines.push(`  • ${timeSignal}`);
+  if (venueSignal) lines.push(`  • ${venueSignal}`);
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   return lines.join('\n');
+}
+
+// Para shots de PREPARACIÓN en recetas de outfit: ancla la locación del shot
+// al espacio de REF0 (nunca al venue del brief).
+// La ópera/gala/restaurante es el destino — no donde la persona se prueba el outfit.
+const PREP_SHOT_KEYS = new Set(['OUTFIT_ARRIVING', 'OUTFIT_MIRROR_CHECK', 'OUTFIT_DETAIL', 'OUTFIT_READY']);
+
+function extractShotLocationOverride(
+  basePrompt:       string,
+  shotKey:          string,
+  hasUserSceneRef:  boolean,  // true si el usuario subió scenePruebaRef o sceneRef
+): string {
+  const { isOccasionBrief, timeSignal } = parseBriefContext(basePrompt);
+  if (!isOccasionBrief || !PREP_SHOT_KEYS.has(shotKey)) return '';
+
+  const timeCtx = timeSignal
+    ? `Lighting mood: ${timeSignal.split('—')[1]?.trim() ?? timeSignal} — pre-event getting ready.`
+    : 'Pre-event getting-ready lighting — warm artificial light, intimate indoor atmosphere.';
+
+  // Si el usuario subió una foto de la escena de prueba, el espacio está definido por ella (REF0).
+  // Si no, la IA lo inventó — igual debe respetarlo para mantener coherencia visual entre shots.
+  const sceneAnchor = hasUserSceneRef
+    ? `This shot takes place in the SAME SPACE shown in REF0 — the room the user provided.
+Preserve every visual element: same walls, same floor, same furniture, same light direction.
+Do NOT invent a new room. Do NOT change wall color, floor material, or visible furniture.`
+    : `This shot takes place in the SAME SPACE established in REF0.
+REF0 already defined the visual world — bedroom, hotel room, or dressing area.
+Match it EXACTLY: same surfaces, same ambient light, same mood.
+Do NOT generate a different room. Do NOT change the color scheme or furniture style.
+The brief suggests the occasion's atmosphere — let that influence the MOOD, not the physical space.`;
+
+  return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📍 SHOT LOCATION LOCK (THIS SHOT ONLY):
+${sceneAnchor}
+${timeCtx}
+The venue (opera / gala / restaurant) is the DESTINATION — it appears ONLY in the final DESTINATION shot.
+DO NOT place garment racks, flat lays, or mirror shots inside the opera house or theatre.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 }
 
 function getAspectRatio(destino: PhotodumpDestino): '4:5' | '9:16' {
@@ -364,7 +422,8 @@ function buildStoryDirectives(
   destino:    PhotodumpDestino,
   narrative:  PhotodumpNarrative,
   recipe?:    string,
-  refs?:      { avatarRef?: string | null; outfitRefs?: (string | null)[]; accesorioRefs?: (string | null)[]; accesorioCloseup?: boolean[]; sceneDestinoRef?: string | null },
+  refs?:      { avatarRef?: string | null; outfitRefs?: (string | null)[]; accesorioRefs?: (string | null)[]; accesorioCloseup?: boolean[]; sceneDestinoRef?: string | null; scenePruebaRef?: string | null; sceneRef?: string | null },
+  presentationStyle?: OutfitPresentationStyle,
 ): PhotodumpShotDirective[] {
 
   const ar = destino === 'feed' ? '4/5' : '9/16';
@@ -384,7 +443,8 @@ function buildStoryDirectives(
 
   if (recipe === 'outfit_check') {
     const hasDestino = !!refs?.sceneDestinoRef;
-    const pool       = buildOutfitCheckShotPool();
+    const style      = presentationStyle ?? 'hands_presenter';
+    const pool       = buildOutfitCheckShotPool(style);
     const baseKeys   = distributeOutfitCheckShots(count, hasDestino);
     // Agregar shots de close-up de accesorios (van AL FINAL, después del arco base)
     const closeupIndexes = (refs?.accesorioCloseup ?? [])
@@ -953,25 +1013,138 @@ function distributeUnboxingShots(count: number, hasAvatar: boolean): string[] {
   return ['UNBOXING_PACKAGING_CLOSED', 'UNBOXING_OPENING_MOMENT', hasAvatar ? 'UNBOXING_PRODUCT_IN_USE' : 'UNBOXING_PRODUCT_REVEAL'];
 }
 
+// ── Estilo de presentación de outfit ─────────────────────────
+// La IA elige UNO por sesión. El estilo define cómo se abren los shots de prep
+// y cómo evolucionan hacia el mirror check — cada uno tiene su propia lógica narrativa.
+
+function resolveOutfitPresentationStyle(
+  basePrompt: string,
+  refs?: PhotodumpRefs,
+): OutfitPresentationStyle {
+  const lower = basePrompt.toLowerCase();
+
+  // Si hay foto de rack/perchero subida como escena → rack_haul es lo más coherente
+  // (el usuario ya estableció ese contexto visualmente)
+  if (refs?.scenePruebaRef || refs?.sceneRef) {
+    // Con escena real no sabemos qué hay en ella — elegir por brief
+    // Si el brief sugiere "haul", "llegaron", "compras" → rack o hands
+    if (lower.includes('haul') || lower.includes('llegaron') || lower.includes('compras') || lower.includes('unboxing'))
+      return 'rack_haul';
+  }
+
+  // Señales del brief para cada estilo
+  if (lower.includes('haul') || lower.includes('rack') || lower.includes('perchero') || lower.includes('hanger'))
+    return 'rack_haul';
+  if (lower.includes('flat lay') || lower.includes('flatlay') || lower.includes('extendido') || lower.includes('overhead'))
+    return 'flat_lay';
+  if (lower.includes('mostrando') || lower.includes('sosteniendo') || lower.includes('presenting'))
+    return 'hands_presenter';
+
+  // Sin señales explícitas: rotación aleatoria por sesión — cada generación puede
+  // producir un estilo distinto aunque el brief sea idéntico, dando dinamismo.
+  const styles: OutfitPresentationStyle[] = ['hands_presenter', 'rack_haul', 'flat_lay', 'person_holding'];
+  return styles[Math.floor(Math.random() * styles.length)];
+}
+
+// Devuelve el variationSpace y purpose específicos de OUTFIT_ARRIVING para cada estilo.
+// Cada estilo también define cómo el shot de DETAIL debe complementar sin contradecir.
+function getArrivingVariants(style: OutfitPresentationStyle): {
+  purpose: string;
+  variationSpace: string[];
+  detailPurpose: string;
+  detailVariationSpace: string[];
+} {
+  switch (style) {
+    case 'hands_presenter':
+      return {
+        purpose: 'Manos sosteniendo cada prenda hacia la cámara, una a la vez. Sin persona de cuerpo completo. El gesto de la mano ES el shot — prenda extendida, sostenida, o presentada hacia el lente. El outfit se presenta pieza por pieza con este mismo formato.',
+        variationSpace: [
+          'mano sosteniendo la prenda principal extendida frente a la cámara — prenda bien legible, ambiente real desenfocado de fondo',
+          'dos manos sosteniendo la prenda por los hombros, mostrando el frente completo hacia la cámara — luz natural lateral',
+          'mano sosteniendo el accesorio clave (cartera, zapato, joya) hacia el lente — close-up del gesto y el objeto',
+          'mano extendiendo la prenda hacia adelante con el brazo casi recto — like "toma, mira esto" — ángulo levemente bajo',
+        ],
+        detailPurpose: 'Otra mano sosteniendo una pieza del outfit — el accesorio, los zapatos, o una segunda prenda. Mismo formato hands_presenter del set. Sin cara, sin cuerpo completo.',
+        detailVariationSpace: [
+          'mano sosteniendo los zapatos hacia la cámara — par visible, diseño legible, fondo desenfocado',
+          'mano sosteniendo la cartera o accesorio principal — ángulo que muestra material y diseño',
+          'dos manos mostrando la prenda secundaria (pantalón, falda, campera) extendida hacia la cámara',
+          'mano sosteniendo una joya o accesorio pequeño — close-up íntimo del objeto y el gesto',
+        ],
+      };
+
+    case 'rack_haul':
+      return {
+        purpose: 'Las prendas colgadas en rack o perchero real — apertura del set. Manos acomodando, separando o señalando las prendas. El rack es el protagonista visual. Ambiente real visible de fondo.',
+        variationSpace: [
+          'prendas colgadas en rack, mano separando o señalando la prenda principal — luz natural, ambiente del cuarto visible',
+          'medium shot del rack con todas las prendas colgadas, manos parcialmente visibles acomodando — sin cara',
+          'close-up de las prendas colgadas desde el costado — hangers visibles, telas con volumen, luz que muestra texturas',
+          'persona de pie junto al rack (cara parcialmente visible o de espaldas) revisando las prendas colgadas',
+        ],
+        detailPurpose: 'Close-up de la textura de una prenda colgada o de un accesorio apoyado cerca del rack. Continuidad visual con el formato rack del set.',
+        detailVariationSpace: [
+          'close-up de una prenda colgada en el rack — textura de tela, color y terminaciones bajo luz natural',
+          'accesorio (zapatos, cartera) apoyado debajo del rack o sobre una silla cercana — close-up del objeto',
+          'detalle del hanger y la prenda — el metal del gancho, la caída de la tela, la etiqueta visible',
+          'fragmento del rack con dos prendas colgadas juntas — comparación de texturas o colores',
+        ],
+      };
+
+    case 'flat_lay':
+      return {
+        purpose: 'UNA foto con el outfit completo extendido sobre la cama, el piso o una silla — esta es la apertura del set, el "esto me voy a poner". Overhead o ángulo bajo. Prendas y accesorios dispuestos de forma orgánica, no perfectamente simétrica.',
+        variationSpace: [
+          'overhead del outfit completo extendido sobre la cama: prenda superior, inferior, zapatos y cartera — disposición orgánica, no perfecta',
+          'flat lay sobre el piso o alfombra — outfit completo visto desde arriba, con sombras naturales de ventana',
+          'ángulo bajo desde el borde de la cama — outfit extendido visible con la habitación de fondo',
+          'outfit sobre silla o sillón — prendas colocadas naturalmente como si alguien las pusiera ahí antes de vestirse',
+        ],
+        detailPurpose: 'Close-up de un elemento del flat lay — una prenda, un accesorio, un detalle de textura. El shot se acerca a algo que ya apareció en el flat lay de apertura.',
+        detailVariationSpace: [
+          'close-up de los zapatos del outfit extendidos — diseño y material claramente visibles, superficie real de fondo',
+          'close-up de la prenda principal del flat lay — textura de tela, color, terminaciones bajo luz natural',
+          'detalle de la cartera o accesorio del flat lay — material, cierre, forma — ángulo íntimo',
+          'fragmento del flat lay: cinturón, joya o accesorio pequeño con la superficie debajo visible',
+        ],
+      };
+
+    case 'person_holding':
+    default:
+      return {
+        purpose: 'Persona de cuerpo medio mostrando prendas en hangers o sostenidas frente a sí. Cara visible. El gesto es "te muestro lo que elegí". Formato de haul conversacional — la persona es la presentadora.',
+        variationSpace: [
+          'persona sosteniendo dos hangers con prendas en cada mano, mostrando opciones — medium shot, cara visible, habitación real de fondo',
+          'persona sosteniendo la prenda principal frente a su cuerpo — cara visible por encima, actitud de "¿qué te parece?"',
+          'persona sentada en el borde de la cama sosteniendo la prenda hacia la cámara — ángulo más íntimo, cara y prenda visibles',
+          'persona de pie extendiendo la prenda con el brazo hacia la cámara — gesto de ofrecimiento/presentación, cara visible',
+        ],
+        detailPurpose: 'Persona sosteniendo un accesorio o prenda secundaria hacia la cámara. Mismo formato person_holding del set.',
+        detailVariationSpace: [
+          'persona sosteniendo los zapatos del outfit en una mano hacia la cámara — cara parcialmente visible, gesto casual',
+          'persona sosteniendo la cartera o accesorio principal hacia el lente — medium shot, actitud espontánea',
+          'close-up de manos sosteniendo un accesorio pequeño — cara fuera de frame, fondo del ambiente visible',
+          'persona mostrando la prenda secundaria frente a sí — gesto de "y esto también va" — cara visible',
+        ],
+      };
+  }
+}
+
 // ── Outfit Check shots ────────────────────────────────────────
 // Historia: "Elegí este outfit para X ocasión"
 // Arco: presentación de prendas → mirror check → detalle → selfie → destino
 
-function buildOutfitCheckShotPool(): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
+function buildOutfitCheckShotPool(presentationStyle: OutfitPresentationStyle = 'hands_presenter'): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
+  const arrivingVariants = getArrivingVariants(presentationStyle);
   return [
     {
       key:   'OUTFIT_ARRIVING',
       beat:  'context',
       role:  'OUTFIT PRESENTATION',
-      purpose: 'Las prendas se presentan antes de ser usadas. Sin avatar de cuerpo completo. Puede ser: rack con las prendas colgadas, manos sosteniendo cada prenda frente a cámara, flat lay sobre cama o silla, o manos extendiendo la prenda hacia el espejo. El outfit es el protagonista — la persona es el gesto.',
-      requiredElements: ['garments_as_subject', 'no_full_body_avatar_walking', 'real_context_visible', 'outfit_clearly_readable'],
-      forbiddenElements: ['avatar_walking_toward_camera', 'catalog_mannequin_pose', 'studio_backdrop', 'white_background', 'ad_composition', 'forced_action_pose'],
-      variationSpace: [
-        'manos sosteniendo la prenda principal extendida frente a cámara, habitación visible de fondo',
-        'flat lay orgánico del outfit completo sobre cama, silla o piso — prendas y accesorios dispuestos naturalmente',
-        'prendas colgadas en rack o perchero, manos parcialmente visibles acomodándolas, ambiente real de fondo',
-        'overhead del outfit extendido sobre superficie — tela, alfombra, madera — con accesorios al costado',
-      ],
+      purpose: arrivingVariants.purpose,
+      requiredElements: ['garments_clearly_visible_and_readable', 'real_context_not_studio', 'visual_gesture_or_interaction_consistent_with_session_style'],
+      forbiddenElements: ['catalog_mannequin_full_body_walking', 'studio_white_backdrop', 'ad_composition', 'floating_garments_with_no_context', 'mixing_different_presentation_formats'],
+      variationSpace: arrivingVariants.variationSpace,
       framing:     'MEDIUM_OR_OVERHEAD',
       composition: 'GARMENTS_AS_SUBJECT',
       cameraAngle: 'EYE_LEVEL_OR_OVERHEAD',
@@ -980,32 +1153,27 @@ function buildOutfitCheckShotPool(): Omit<PhotodumpShotDirective, 'arcPosition' 
       key:   'OUTFIT_MIRROR_CHECK',
       beat:  'reveal',
       role:  'MIRROR CHECK',
-      purpose: 'Full body del avatar frente al espejo con el outfit completo puesto. El espejo es el encuadre natural. Actitud, no pose. REGLA CRÍTICA: hay UNA SOLA persona en el frame — la persona y su reflejo son el mismo individuo. El reflejo no cuenta como segunda persona. NO aparece ninguna otra persona en el fondo ni en el espejo.',
-      requiredElements: ['full_body_visible', 'mirror_frame_present_or_implied', 'complete_outfit_readable', 'authentic_attitude_not_catalog_stance', 'single_person_only_in_entire_frame'],
-      forbiddenElements: ['catalog_symmetrical_pose', 'studio_lighting', 'white_background', 'mannequin_stance', 'beautification', 'phone_visible_in_mirror', 'two_distinct_people_visible', 'second_person_in_background', 'crowd_reflected_in_mirror'],
+      purpose: 'Primer momento donde se ve el outfit COMPLETO puesto en la persona. El espejo es el encuadre natural pero no es obligatorio — puede ser full body directo también. Actitud, no pose. REGLA CRÍTICA: hay UNA SOLA persona en el frame — la persona y su reflejo son el mismo individuo. El reflejo no cuenta como segunda persona.',
+      requiredElements: ['full_body_visible_with_complete_outfit', 'complete_outfit_readable_head_to_toe', 'authentic_attitude_not_catalog_stance', 'single_person_only_in_entire_frame'],
+      forbiddenElements: ['catalog_symmetrical_pose', 'studio_lighting', 'white_background', 'mannequin_stance', 'beautification', 'phone_visible_in_mirror', 'two_distinct_people_visible', 'second_person_in_background'],
       variationSpace: [
-        'selfie de espejo full body — la persona sostiene el teléfono (brazo fuera de frame), mirada directa al espejo, outfit completo visible, habitación real de fondo',
-        'espejo de cuerpo entero, avatar parado frente a él evaluando el look, manos en caderas o relajadas, cuarto visible alrededor del espejo',
-        'espejo en ángulo lateral — se ve al avatar de tres cuartos y su reflejo simultáneamente, outfit completo readable, un solo sujeto',
-        'espejo de dormitorio o probador, avatar mirando hacia abajo evaluando el look o ajustando una prenda, luz de ventana',
+        'espejo de cuerpo entero — persona girando levemente el torso para ver la espalda del outfit, mano en la cadera, evaluando la caída de la tela, outfit completo visible',
+        'selfie de espejo full body — brazo extendido fuera de frame sosteniendo el teléfono, leve vuelta de cabeza hacia el espejo como revisando el look, expresión auténtica',
+        'full body directo sin espejo — persona parada en el cuarto con el outfit completo puesto, postura natural no de desfile, mirando levemente hacia un costado o hacia abajo',
+        'espejo de dormitorio — persona ajustando un detalle del outfit con una mano (tirante, cinturón, falda) mientras mira su reflejo con concentración, outfit completo visible',
       ],
       framing:     'WIDE_FULL_BODY',
-      composition: 'MIRROR_FRAME_NATURAL',
+      composition: 'MIRROR_FRAME_OR_FULL_BODY_NATURAL',
       cameraAngle: 'EYE_LEVEL',
     },
     {
       key:   'OUTFIT_DETAIL',
       beat:  'detail',
       role:  'OUTFIT DETAIL',
-      purpose: 'Close-up de una prenda o accesorio clave del look. Textura, cierre, color, material. Sin cara necesaria. El fragmento cuenta más que el todo. Puede ser la textura de una tela, un detalle de costura, una hebilla, un zapato, una cartera.',
-      requiredElements: ['garment_or_accessory_fills_frame', 'texture_or_material_visible', 'real_light_showing_depth', 'intentional_tight_framing'],
-      forbiddenElements: ['full_body_visible', 'face_dominant', 'catalog_product_shot', 'white_background', 'studio_lighting', 'forced_branding'],
-      variationSpace: [
-        'close-up de la textura de la prenda principal — tela, punto, costuras, terminaciones',
-        'detalle del accesorio más importante: zapato, cartera, joya — luz lateral que muestra profundidad',
-        'manos tocando o acomodando la prenda, detalle del gesto y el tejido',
-        'fragmento del look: cintura con cinturón, hombro de una campera, escote con joya — ángulo íntimo',
-      ],
+      purpose: arrivingVariants.detailPurpose,
+      requiredElements: ['garment_or_accessory_fills_frame_or_is_dominant', 'real_light_showing_depth', 'consistent_with_session_presentation_style'],
+      forbiddenElements: ['full_body_catalog_pose', 'white_background', 'studio_lighting', 'forced_branding', 'format_that_contradicts_session_style'],
+      variationSpace: arrivingVariants.detailVariationSpace,
       framing:     'CLOSE_UP_OR_EXTREME_CLOSE_UP',
       composition: 'DETAIL_FILL_FRAME',
       cameraAngle: 'TOP_DOWN_OR_MACRO_ANGLE',
@@ -1014,14 +1182,14 @@ function buildOutfitCheckShotPool(): Omit<PhotodumpShotDirective, 'arcPosition' 
       key:   'OUTFIT_READY',
       beat:  'emotion',
       role:  'READY SELFIE',
-      purpose: 'Selfie o medium shot con el look puesto. Cara dominante, outfit visible parcialmente. El mood es "lista para salir" o "así salí". Expresión natural y con carácter — no pose de catálogo. Puede ser selfie UGC o foto tomada por otra persona.',
+      purpose: 'La persona lista con el look puesto. Cara dominante, outfit visible parcialmente. El mood es "lista para salir" — expresión con actitud, no pose de catálogo. Puede ser selfie, foto por otra persona, o un medium shot espontáneo.',
       requiredElements: ['face_dominant_natural', 'outfit_partially_visible', 'authentic_expression_or_mood', 'real_context_visible'],
       forbiddenElements: ['catalog_stance', 'beautification', 'studio_lighting', 'symmetric_ad_composition', 'mannequin_expression', 'phone_visible'],
       variationSpace: [
-        'selfie UGC clásica — brazo extendido, cara levemente ladeada, outfit visible en el torso, ambiente de fondo',
-        'medium shot tomado por alguien más, cara con actitud, hombros y parte del outfit visibles',
-        'selfie contrapicada levemente, cielo o puerta de salida de fondo, expresión de "voy"',
-        'close-up de cara con outfit visible en el cuello/hombros, expresión espontánea, ambiente cálido',
+        'selfie POV — brazo extendido hacia la cámara, cara mirando al lente, escote y parte superior del outfit visible, fondo del cuarto o pasillo detrás',
+        'foto tomada por otra persona — medium shot de frente, persona con actitud natural "lista para salir", hombros y parte del outfit visibles, ambiente de habitación de fondo',
+        'selfie levemente contrapicada — cara mirando al lente con expresión resuelta de "vamos", parte del vestido o escote visible, fondo cálido del ambiente',
+        'close-up de cara con el outfit visible en cuello y hombros — expresión espontánea, labios levemente abiertos o sonrisa genuina, ambiente íntimo de pre-salida',
       ],
       framing:     'MEDIUM_OR_SELFIE',
       composition: 'FACE_DOMINANT_OUTFIT_VISIBLE',
@@ -1202,7 +1370,11 @@ export async function buildPhotodumpSessionPlan(
   count:       number = 6,
 ): Promise<PhotodumpSessionPlan> {
   initPhotodumpIntelligence();
-  const shots          = buildStoryDirectives(count, protagonist, destino, narrative, recipe, refs);
+  const isOutfitRecipe = recipe === 'outfit_check' || recipe === 'outfit_haul' || recipe === 'outfit_week';
+  const presentationStyle = isOutfitRecipe
+    ? resolveOutfitPresentationStyle(basePrompt, refs)
+    : undefined;
+  const shots           = buildStoryDirectives(count, protagonist, destino, narrative, recipe, refs, presentationStyle);
   const sessionFamilies = selectSessionFamilies();
   const assignedFamilies = [...sessionFamilies.storySupport, ...sessionFamilies.creatorAesthetic];
   return {
@@ -1213,6 +1385,7 @@ export async function buildPhotodumpSessionPlan(
     shots,
     assignedFamilies,
     sessionFamilies,
+    presentationStyle,
   };
 }
 
@@ -1722,20 +1895,73 @@ export interface PhotodumpShotResult {
   refsCount: number;
 }
 
+// Lógica de alcance del estilo por shot:
+//
+// hands_presenter → ARRIVING + DETAIL ambos con formato hands (cada prenda se presenta con manos)
+// rack_haul       → solo ARRIVING con rack; a partir del siguiente shot la persona ya aparece vistiéndose
+// flat_lay        → solo ARRIVING con flat lay; el resto del set la persona ya está vistiendo/posando
+// person_holding  → solo ARRIVING con persona sosteniendo; el resto evoluciona normalmente
+//
+// El bloque se inyecta solo en los shots donde el estilo sigue siendo relevante.
+function buildStyleCoherenceBlock(
+  style:   OutfitPresentationStyle | undefined,
+  shotKey: string,
+): string {
+  if (!style) return '';
+
+  // hands_presenter: aplica a ARRIVING y DETAIL (presenta cada prenda con manos)
+  if (style === 'hands_presenter') {
+    if (shotKey !== 'OUTFIT_ARRIVING' && shotKey !== 'OUTFIT_DETAIL') return '';
+    return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎨 SESSION STYLE LOCK — HANDS PRESENTER:
+This set presents each garment using hands only — no full-body person, no rack, no flat lay.
+For THIS shot: show a hand or hands holding/presenting the garment or accessory toward the camera.
+The garment must be clearly readable. Real ambient background. No studio setup.
+DO NOT generate a rack, flat lay, or full-body person presenting clothes.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+  }
+
+  // rack_haul, flat_lay, person_holding: solo aplican a OUTFIT_ARRIVING
+  // A partir del siguiente shot la persona ya está vistiéndose/posando — no imponer formato
+  if (shotKey !== 'OUTFIT_ARRIVING') return '';
+
+  const arrivingDescriptions: Record<Exclude<OutfitPresentationStyle, 'hands_presenter'>, string> = {
+    rack_haul:
+      'RACK HAUL — THIS OPENING SHOT shows the garments hanging on a rack or clothing rail. ' +
+      'Hands may be arranging or touching the garments. Real room visible in background. ' +
+      'DO NOT generate a flat lay, hands-only shot, or full-body person posing. The rack must be visible.',
+    flat_lay:
+      'FLAT LAY — THIS OPENING SHOT shows the complete outfit spread on a surface (bed, floor, chair). ' +
+      'Overhead or low angle. Garments arranged naturally, not perfectly symmetric. ' +
+      'DO NOT generate a rack, hands-only shot, or standing person. Garments on surface only.',
+    person_holding:
+      'PERSON HOLDING — THIS OPENING SHOT shows the person (mid-body, face visible) holding hangers ' +
+      'or garments toward the camera. Conversational haul energy — "look what I picked". ' +
+      'DO NOT generate a flat lay, rack-only shot, or hands-only shot. Face must be visible.',
+  };
+
+  return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎨 OPENING SHOT STYLE — ${style.toUpperCase()}:
+${arrivingDescriptions[style as Exclude<OutfitPresentationStyle, 'hands_presenter'>]}
+After this opening shot, the person appears wearing the outfit — posing, checking the mirror, etc.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+}
+
 export async function generatePhotodumpShot(
-  shot:             PhotodumpShotDirective,
-  refs:             PhotodumpRefs,
-  ref0Url:          string,
-  ref0Analysis:     any,
-  basePrompt:       string,
-  narrative:        PhotodumpNarrative,
-  destino:          PhotodumpDestino,
-  sessionParams:    { uid?: string; sessionId?: string },
-  assignedFamilies: StorySupportFamily[] = [],
-  sessionFamilies:  SessionFamilies = { storySupport: [], creatorAesthetic: [] },
-  totalShots:       number = 4,
-  protagonist:      PhotodumpProtagonist = 'person',
-  recipe?:          string,
+  shot:               PhotodumpShotDirective,
+  refs:               PhotodumpRefs,
+  ref0Url:            string,
+  ref0Analysis:       any,
+  basePrompt:         string,
+  narrative:          PhotodumpNarrative,
+  destino:            PhotodumpDestino,
+  sessionParams:      { uid?: string; sessionId?: string },
+  assignedFamilies:   StorySupportFamily[] = [],
+  sessionFamilies:    SessionFamilies = { storySupport: [], creatorAesthetic: [] },
+  totalShots:         number = 4,
+  protagonist:        PhotodumpProtagonist = 'person',
+  recipe?:            string,
+  presentationStyle?: OutfitPresentationStyle,
 ): Promise<PhotodumpShotResult> {
 
   const aspectInstr = getAspectInstruction(destino);
@@ -1948,7 +2174,13 @@ Natural light, handheld imperfection, real skin texture, no studio polish.
 The result must look like someone captured this moment on their phone — not a photographer.
 Organic, imperfect, lived-in. NOT editorial. NOT advertising. NOT staged.`;
 
-  const briefContextBlock = extractBriefContextBlock(basePrompt);
+  const briefContextBlock   = extractBriefContextBlock(basePrompt);
+  // hasUserSceneRef: el usuario subió un espacio físico real → el lock debe anclar a esa foto.
+  // Si no subió nada, la IA inventó el espacio en REF0 → el lock sigue anclando a REF0 pero sin
+  // referirse a una foto específica del usuario.
+  const hasUserSceneRef = !!(refs.scenePruebaRef || refs.sceneRef);
+  const shotLocationOverride = extractShotLocationOverride(basePrompt, shot.key, hasUserSceneRef);
+  const styleCoherenceBlock  = buildStyleCoherenceBlock(presentationStyle, shot.key);
 
   const prompt = `${LOCK_SYSTEM}
 
@@ -1957,6 +2189,10 @@ ${PARADIGM_RULE}
 ${shotModeBlock}
 
 ${briefContextBlock}
+
+${shotLocationOverride}
+
+${styleCoherenceBlock}
 
 ${injectREF0Analysis(ref0Analysis)}
 

@@ -410,6 +410,7 @@ const PhotodumpModule: React.FC = () => {
             basePrompt, narrative, destino, sessionParams,
             plan.assignedFamilies, plan.sessionFamilies,
             shots.length, protagonist, recipe,
+            plan.presentationStyle,
           );
           shotUrls.push(result.imageUrl);
           setPartialImages(prev => [...prev, result.imageUrl]);
@@ -530,6 +531,7 @@ const PhotodumpModule: React.FC = () => {
           basePrompt, narrative, destino, sessionParams,
           savedPlan.assignedFamilies, savedPlan.sessionFamilies,
           savedShots.length, protagonist, recipe,
+          savedPlan.presentationStyle,
         );
         newUrls[i] = result.imageUrl;
         setPartialImages(prev => { const n = [...prev]; n[i + 1] = result.imageUrl; return n; });

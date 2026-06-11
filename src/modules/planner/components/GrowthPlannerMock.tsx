@@ -58,7 +58,6 @@ import {
   loadInterruptedGenerationSession,
   loadRecentReadyPlanner,
   markGenerationSessionReady,
-  polishVisibleCopy,
   startGenerationSession,
   updateGenerationSession,
 } from '../growthPlanner/visibleOutput';
@@ -294,8 +293,8 @@ const TaskCard: React.FC<{
     {!compact && (
       <div className="flex items-center gap-3 mt-3 text-[10px] text-slate-400 font-bold uppercase tracking-widest flex-wrap">
         <span>{visibleTask.dateLabel}</span>
-        <span>{task.platform}</span>
-        <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{task.suggestedTime}</span>
+        <span>{visibleTask.platform}</span>
+        <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{visibleTask.suggestedTime}</span>
       </div>
     )}
   </button>
@@ -792,7 +791,7 @@ const GeneratingView: React.FC<{
   );
 };
 
-const SummaryTab: React.FC<{ plan: GrowthStrategicPlan; visible: VisiblePlannerOutput }> = ({ plan, visible }) => (
+const SummaryTab: React.FC<{ visible: VisiblePlannerOutput }> = ({ visible }) => (
   <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
     <div className="lg:col-span-2 space-y-5">
       <section className="bg-white border border-slate-100 rounded-2xl p-6">
@@ -806,10 +805,10 @@ const SummaryTab: React.FC<{ plan: GrowthStrategicPlan; visible: VisiblePlannerO
         <section className="bg-white border border-slate-100 rounded-2xl p-6">
           <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Insights del nicho</h3>
           <ul className="space-y-2">
-            {plan.nicheInsights.map((insight, index) => (
+            {visible.nicheInsights.map((insight, index) => (
               <li key={index} className="flex gap-2 text-sm text-slate-600">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
-                {polishVisibleCopy(insight)}
+                {insight}
               </li>
             ))}
           </ul>
@@ -841,7 +840,7 @@ const SummaryTab: React.FC<{ plan: GrowthStrategicPlan; visible: VisiblePlannerO
       <section className="bg-white border border-slate-100 rounded-2xl p-5">
         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Foco comercial</p>
         <div className="space-y-2">
-          {plan.products.map(product => (
+          {visible.commercialFocus.map(product => (
             <div key={product.id} className="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
               <Package className="w-4 h-4 text-rose-500" />
               <div>
@@ -869,11 +868,11 @@ const MonthTab: React.FC<{ plan: GrowthStrategicPlan; visible: VisiblePlannerOut
         {sorted.map(task => (
           <button key={task.id} onClick={() => onOpen(task)} className="text-left rounded-2xl border border-slate-100 hover:border-rose-200 p-4 bg-slate-50 transition-all">
             <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{task.dayLabel}</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{visibleById.get(task.id)!.dateLabel}</span>
               <StatusBadge status={task.status} />
             </div>
-            <p className="text-sm font-black text-slate-900 leading-tight">{visibleById.get(task.id)?.title || task.contentType}</p>
-            <p className="text-[11px] text-slate-500 mt-1">{task.platform} · {task.suggestedTime}</p>
+            <p className="text-sm font-black text-slate-900 leading-tight">{visibleById.get(task.id)!.title}</p>
+            <p className="text-[11px] text-slate-500 mt-1">{visibleById.get(task.id)!.platform} · {visibleById.get(task.id)!.suggestedTime}</p>
           </button>
         ))}
       </div>
@@ -907,14 +906,14 @@ const TasksTab: React.FC<{ plan: GrowthStrategicPlan; visible: VisiblePlannerOut
   </div>
 );
 
-const ConfigTab: React.FC<{ plan: GrowthStrategicPlan; visible: VisiblePlannerOutput }> = ({ plan, visible }) => (
+const ConfigTab: React.FC<{ visible: VisiblePlannerOutput }> = ({ visible }) => (
   <div className="bg-white border border-slate-100 rounded-2xl p-6 max-w-3xl space-y-5">
     <h2 className="text-lg font-black uppercase italic tracking-tight text-slate-900">Configuracion</h2>
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
       <MetricCard label="Marca" value={visible.brandName} icon={<Target className="w-4 h-4" />} />
       <MetricCard label="Objetivo" value={visible.mainGoal} icon={<TrendingUp className="w-4 h-4" />} />
-      <MetricCard label="Duracion" value={`${plan.duration} dias`} icon={<CalendarDays className="w-4 h-4" />} />
-      <MetricCard label="Canal" value={plan.brand.mainSalesChannel} icon={<MessageCircle className="w-4 h-4" />} />
+      <MetricCard label="Duración" value={`${visible.duration} días`} icon={<CalendarDays className="w-4 h-4" />} />
+      <MetricCard label="Canal" value={visible.channelLabel} icon={<MessageCircle className="w-4 h-4" />} />
     </div>
   </div>
 );
@@ -949,7 +948,7 @@ const TaskDetail: React.FC<{
               </div>
               <h2 className="text-xl font-black uppercase italic tracking-tight text-slate-900">{visibleTask.title}</h2>
               <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">
-                {visibleTask.dateLabel} · {task.platform} · {task.suggestedTime}
+                {visibleTask.dateLabel} · {visibleTask.platform} · {visibleTask.suggestedTime}
               </p>
               <div className="flex items-center gap-2 flex-wrap mt-2">
                 <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-slate-100 text-slate-600">{visibleTask.effortLabel}</span>
@@ -1088,7 +1087,9 @@ export const GrowthPlannerResults: React.FC<{
   const [selectedTask, setSelectedTask] = useState<GrowthTask | null>(null);
   const stats = useMemo(() => statusCounts(plan.tasks), [plan.tasks]);
   const visible = useMemo(
-    () => plan.visiblePlanOutput || buildVisiblePlannerOutput(plan, plan.engineV2Metadata, plan),
+    () => plan.visiblePlanOutput?.quality && typeof plan.visiblePlanOutput.canPublishVisibleOutputToUser === 'boolean'
+      ? plan.visiblePlanOutput
+      : buildVisiblePlannerOutput(plan, plan.engineV2Metadata, plan),
     [plan],
   );
   const visibleById = useMemo(() => new Map(visible.tasks.map(task => [task.id, task])), [visible.tasks]);
@@ -1155,11 +1156,11 @@ export const GrowthPlannerResults: React.FC<{
         })}
       </nav>
 
-      {activeTab === 'summary' && <SummaryTab plan={plan} visible={visible} />}
+      {activeTab === 'summary' && <SummaryTab visible={visible} />}
       {activeTab === 'month' && <MonthTab plan={plan} visible={visible} onOpen={setSelectedTask} />}
       {activeTab === 'week' && <WeekTab plan={plan} visible={visible} onOpen={setSelectedTask} />}
       {activeTab === 'tasks' && <TasksTab plan={plan} visible={visible} onOpen={setSelectedTask} />}
-      {activeTab === 'config' && <ConfigTab plan={plan} visible={visible} />}
+      {activeTab === 'config' && <ConfigTab visible={visible} />}
 
       {selectedTask && (
         <TaskDetail
@@ -1319,9 +1320,7 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
     completionHandledRef.current = true;
     const visiblePlanOutput = buildVisiblePlannerOutput(nextPlan, nextPlan.engineV2Metadata, nextPlan);
     const visibleQuality = evaluateVisibleOutputQuality(visiblePlanOutput);
-    const releaseReady = nextPlan.planQualityStatus === 'ready'
-      && nextPlan.finalValidationSummary?.releaseGate?.canPublishToUser !== false;
-    if (!releaseReady || visibleQuality.visibleOutputQualityStatus !== 'premium_ready') {
+    if (!visiblePlanOutput.canPublishVisibleOutputToUser || visibleQuality.visibleOutputQualityStatus !== 'premium_ready') {
       completionHandledRef.current = false;
       throw new Error('El plan terminó, pero su presentación necesita una revisión antes de mostrarse. Tus créditos serán devueltos.');
     }

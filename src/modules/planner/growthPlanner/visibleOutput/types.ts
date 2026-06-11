@@ -1,10 +1,4 @@
-import type {
-  GrowthContentModule,
-  GrowthEstimatedEffort,
-  GrowthPlatform,
-  GrowthTaskPriority,
-  GrowthTaskStatus,
-} from '../../growthPlannerTypes';
+import type { GrowthPlatform, GrowthTaskStatus } from '../../growthPlannerTypes';
 
 export type VisiblePlanFocus =
   | 'Plan Explorer'
@@ -53,9 +47,6 @@ export interface VisiblePlannerTask {
   shotGuideLabel: string;
   shotGuide: VisibleShotItem[];
   onScreenText: string[];
-  sourceModule: GrowthContentModule;
-  sourceEffort: GrowthEstimatedEffort;
-  sourcePriority: GrowthTaskPriority;
 }
 
 export interface VisibleRoadmapItem {
@@ -63,6 +54,32 @@ export interface VisibleRoadmapItem {
   title: string;
   objective: string;
   stageLabel: string;
+}
+
+export interface VisibleProductItem {
+  id: string;
+  name: string;
+  price: string;
+}
+
+export interface VisibleOutputQualityChecks {
+  brandNameConsistent: boolean;
+  noInflatedMarketingPhrases: boolean;
+  planFocusAlignedWithCta: boolean;
+  captionsPremiumClean: boolean;
+  promptsUseful: boolean;
+  recipesActionable: boolean;
+  userFacingDebugHidden: boolean;
+  platformLanguageNatural: boolean;
+  spanishVisibleCopyClean: boolean;
+  noRawSlotsInVisibleOutput: boolean;
+  visibleHashtagsClean: boolean;
+}
+
+export interface VisibleOutputQualityResult {
+  visibleOutputQualityStatus: 'premium_ready' | 'needs_copy_review';
+  checks: VisibleOutputQualityChecks;
+  issues: string[];
 }
 
 export interface VisiblePlannerOutput {
@@ -74,31 +91,14 @@ export interface VisiblePlannerOutput {
   brandCategory: string;
   brandVoiceGuide: string;
   mainGoal: string;
+  channelLabel: string;
   duration: number;
+  nicheInsights: string[];
+  commercialFocus: VisibleProductItem[];
   roadmap: VisibleRoadmapItem[];
   tasks: VisiblePlannerTask[];
-  warningsForAdminOnly: string[];
-  qualityBadges: string[];
-}
-
-export interface VisibleOutputQualityChecks {
-  brandNameConsistent: boolean;
-  noInflatedMarketingPhrases: boolean;
-  planFocusAlignedWithCta: boolean;
-  captionsClean: boolean;
-  promptsUseful: boolean;
-  recipesActionable: boolean;
-  userFacingDebugHidden: boolean;
-  platformLanguageNatural: boolean;
-  spanishVisibleCopyClean: boolean;
-  noRawSlotsInCaptions: boolean;
-  noTechnicalMetadataVisible: boolean;
-}
-
-export interface VisibleOutputQualityResult {
-  visibleOutputQualityStatus: 'premium_ready' | 'needs_copy_review';
-  checks: VisibleOutputQualityChecks;
-  warnings: string[];
+  quality: VisibleOutputQualityResult;
+  canPublishVisibleOutputToUser: boolean;
 }
 
 export type GenerationSessionStatus =
@@ -107,4 +107,3 @@ export type GenerationSessionStatus =
   | 'tasks_generated'
   | 'validated'
   | 'ready';
-

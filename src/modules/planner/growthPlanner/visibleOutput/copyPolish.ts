@@ -1,37 +1,12 @@
+import type { GrowthProduct, GrowthTask } from '../../growthPlannerTypes';
+import type { VisiblePlanFocus } from './types';
+
 export const BRAND_DISPLAY_NAME = 'Luz IA Studio';
 
-const PHRASE_REWRITES: Array<[RegExp, string]> = [
-  [/\bsoluci[oó]n visual definitiva\b/gi, 'opción práctica para crear contenido visual'],
-  [/\bla calidad visual que tu marca merece\b/gi, 'una presentación visual más clara para tu marca'],
-  [/\btu negocio merece\b/gi, 'tu producto puede mostrar'],
-  [/\bllevar (?:tus fotos|tu negocio|tu marca|tus productos) al siguiente nivel\b/gi, 'mejorar su presentación'],
-  [/\baliado visual\b/gi, 'herramienta de apoyo visual'],
-  [/\bfotos incre[ií]bles\b/gi, 'fotos más claras y cuidadas'],
-  [/\bcontenido visual impactante\b/gi, 'contenido visual claro y atractivo'],
-  [/\btransforma (?:tus productos|tus fotos|tu negocio)\b/gi, 'mejora su presentación'],
-  [/\bresultados profesionales en segundos\b/gi, 'una presentación más cuidada en menos tiempo'],
-  [/\bprofesional al instante\b/gi, 'con una presentación más cuidada en menos tiempo'],
-  [/\b(?:calidad|im[aá]genes?|fotos?) de revista\b/gi, 'imágenes más cuidadas y listas para publicar'],
-  [/\bcontenido que vende\b/gi, 'contenido más claro para mostrar tu producto'],
-  [/\bfotos que venden\b/gi, 'fotos que muestran mejor el producto'],
-  [/\bcaptura m[aá]s clientes\b/gi, 'abre conversaciones con posibles clientes'],
-  [/\baumenta ventas garantizado\b/gi, 'apoya conversaciones comerciales'],
-  [/\bsin esfuerzo\b/gi, 'con menos pasos manuales'],
-  [/\bsoluci[oó]n perfecta\b/gi, 'opción práctica'],
-  [/\bsoluci[oó]n ideal\b/gi, 'opción adecuada'],
-  [/\btodo lo que necesitas\b/gi, 'los recursos principales'],
-  [/\bsin l[ií]mites\b/gi, 'con opciones flexibles'],
-  [/\bfeed impecable\b/gi, 'feed consistente'],
-  [/\bimpulso visual\b/gi, 'apoyo visual'],
-  [/\bempodera(?:r|miento|ndo|ndolas)?\b/gi, 'ayuda'],
-  [/\bmagia\b/gi, 'proceso'],
-  [/\bbrillar\b/gi, 'destacar con claridad'],
-  [/\b[eé]xito\b/gi, 'avance'],
-  [/\bwow\b/gi, 'atractivo'],
-];
+export const RAW_VISIBLE_SLOT_PATTERN = /@[a-záéíóúñ_]+\d+/i;
+export const PREMIUM_WEAK_PHRASE_PATTERN = /\b(transforma(?:r|ci[oó]n)?|soluci[oó]n(?: ideal| definitiva)?|fotos incre[ií]bles|im[aá]genes impactantes|impacto visual|contenido que vende|fotos que venden|vende(?:r)? m[aá]s|[eé]xito|exitosa?s?|escalar|escala tu negocio|llevar al siguiente nivel|profesional(?:es)? (?:en segundos|al instante)|resultados profesionales al instante|negocio merece|marca merece|feed profesional|feed impecable|sin esfuerzo|magia|brillar|wow|revolucionar|aliad[oa] visual|calidad de revista|im[aá]genes de revista|fotos de revista)\b/i;
 
 const ORTHOGRAPHY_REWRITES: Array<[RegExp, string]> = [
-  [/\bsuscripciones\b/gi, 'suscripciones'],
   [/\bsuscripcion\b/gi, 'suscripción'],
   [/\bproduccion\b/gi, 'producción'],
   [/\bcampanas\b/gi, 'campañas'],
@@ -51,15 +26,37 @@ const ORTHOGRAPHY_REWRITES: Array<[RegExp, string]> = [
   [/\bEnvianos\b/g, 'Envíanos'],
 ];
 
-const SLOT_LABELS: Record<string, string> = {
-  '@plan1': 'el plan destacado',
-  '@plan2': 'el segundo plan comparado',
-  '@resultado1': 'el resultado visual',
-  '@app_screen1': 'una captura de la app',
-  '@producto1': 'el producto principal',
-  '@producto2': 'el segundo producto',
-  '@referencia1': 'la imagen de referencia',
-};
+const PREMIUM_REWRITES: Array<[RegExp, string]> = [
+  [/\btransforma(?:r|ci[oó]n)?\b/gi, 'mejora'],
+  [/\bsoluci[oó]n visual definitiva\b/gi, 'herramienta práctica para crear contenido visual'],
+  [/\bsoluci[oó]n definitiva\b/gi, 'opción práctica'],
+  [/\bsoluci[oó]n ideal\b/gi, 'opción adecuada'],
+  [/\bsoluci[oó]n\b/gi, 'opción práctica'],
+  [/\bfotos incre[ií]bles\b/gi, 'imágenes más claras y cuidadas'],
+  [/\bim[aá]genes impactantes\b/gi, 'imágenes claras y atractivas'],
+  [/\bimpacto visual\b/gi, 'claridad visual'],
+  [/\bcontenido que vende\b/gi, 'contenido que muestra mejor el producto'],
+  [/\bfotos que venden\b/gi, 'fotos que muestran mejor el producto'],
+  [/\bvende(?:r)? m[aá]s\b/gi, 'mejorar la claridad de la oferta'],
+  [/\b[eé]xito\b/gi, 'avance'],
+  [/\bexitosa?s?\b/gi, 'activas'],
+  [/\bescala tu negocio\b/gi, 'sostén un calendario de contenido más activo'],
+  [/\bescalar\b/gi, 'sostener un ritmo más activo'],
+  [/\bllevar (?:tus fotos|tu negocio|tu marca|tus productos)? ?al siguiente nivel\b/gi, 'mejorar su presentación'],
+  [/\bresultados profesionales al instante\b/gi, 'una presentación más cuidada en menos tiempo'],
+  [/\bprofesional(?:es)? (?:en segundos|al instante)\b/gi, 'con una presentación más cuidada en menos tiempo'],
+  [/\b(?:tu )?negocio merece\b/gi, 'tu producto puede mostrar'],
+  [/\b(?:tu )?marca merece\b/gi, 'tu marca puede mostrar'],
+  [/\bfeed profesional\b/gi, 'perfil más ordenado y consistente'],
+  [/\bfeed impecable\b/gi, 'perfil más ordenado y consistente'],
+  [/\bsin esfuerzo\b/gi, 'con menos pasos manuales'],
+  [/\bmagia\b/gi, 'proceso'],
+  [/\bbrillar\b/gi, 'destacar con claridad'],
+  [/\bwow\b/gi, 'atractivo'],
+  [/\brevolucionar\b/gi, 'mejorar'],
+  [/\baliad[oa] visual\b/gi, 'herramienta de apoyo visual'],
+  [/\b(?:calidad|im[aá]genes?|fotos?) de revista\b/gi, 'imágenes más cuidadas y listas para publicar'],
+];
 
 function normalizeSpacing(text: string): string {
   return text
@@ -70,25 +67,57 @@ function normalizeSpacing(text: string): string {
 }
 
 export function normalizeBrandName(text: string): string {
+  const hashtagToken = '__LUZ_IA_STUDIO_HASHTAG__';
+  const brandToken = '__LUZ_IA_STUDIO_BRAND__';
   return text
-    .replace(/\bLuz\s*Ai\s*Studio\b/gi, BRAND_DISPLAY_NAME)
-    .replace(/\bLuz\s*AI\s*Studio\b/g, BRAND_DISPLAY_NAME)
-    .replace(/\bLuzIA\s*Studio\b/gi, BRAND_DISPLAY_NAME)
-    .replace(/\bLuzIA\b/gi, 'Luz IA');
+    .replace(/#LuzIAStudio/gi, hashtagToken)
+    .replace(/\bLuz\s*(?:Ai|AI|IA)\s*Studio\b/gi, brandToken)
+    .replace(/\bLuzIA\s*Studio\b/gi, brandToken)
+    .replace(/\bLuz\s*(?:Ai|AI|IA)\b/gi, brandToken)
+    .replace(/\bLuzIA\b/gi, brandToken)
+    .replace(new RegExp(brandToken, 'g'), BRAND_DISPLAY_NAME)
+    .replace(new RegExp(hashtagToken, 'g'), '#LuzIAStudio');
 }
 
-export function replaceRawSlotsForCaption(text: string): string {
-  return Object.entries(SLOT_LABELS).reduce(
-    (result, [slot, label]) => result.replace(new RegExp(slot, 'gi'), label),
-    text,
-  );
+function focusPlanName(focus: VisiblePlanFocus): string {
+  return focus.startsWith('Plan ') ? focus : 'el plan destacado';
 }
 
-export function polishVisibleCopy(text: string, options: { replaceSlots?: boolean } = {}): string {
+export function replaceSlotsForVisibleCopy(
+  text: string,
+  task?: GrowthTask,
+  products: GrowthProduct[] = [],
+  planFocus: VisiblePlanFocus = 'App en general',
+): string {
+  if (!text) return '';
+  const planByIndex = ['Plan Explorer', 'Plan Starter', 'Plan Pro', 'Plan Studio'];
+  const productByIndex = products.map(product => product.name);
+  return text.replace(/@([a-záéíóúñ_]+)(\d+)/gi, (_match, rawName: string, rawIndex: string) => {
+    const name = rawName.toLowerCase();
+    const index = Math.max(0, Number(rawIndex) - 1);
+    if (name === 'plan') return planFocus.startsWith('Plan ') ? focusPlanName(planFocus) : planByIndex[index] || 'el plan destacado';
+    if (name === 'resultado') return 'un ejemplo de imagen final';
+    if (name === 'app_screen') return 'una captura de la app';
+    if (name === 'comparativa') return 'una comparativa de planes';
+    if (name === 'testimonio') return 'un testimonio real';
+    if (name === 'producto') return productByIndex[index] || task?.requiredAssets[index] || 'el producto destacado';
+    if (name === 'referencia') return 'una imagen de referencia';
+    return 'el recurso visual indicado';
+  });
+}
+
+export function polishPremiumVisibleCopy(
+  text: string,
+  options: { task?: GrowthTask; products?: GrowthProduct[]; planFocus?: VisiblePlanFocus; replaceSlots?: boolean } = {},
+): string {
   if (!text) return '';
   let polished = normalizeBrandName(text);
-  for (const [pattern, replacement] of PHRASE_REWRITES) polished = polished.replace(pattern, replacement);
+  if (options.replaceSlots !== false) {
+    polished = replaceSlotsForVisibleCopy(polished, options.task, options.products, options.planFocus);
+  }
+  for (const [pattern, replacement] of PREMIUM_REWRITES) polished = polished.replace(pattern, replacement);
   for (const [pattern, replacement] of ORTHOGRAPHY_REWRITES) polished = polished.replace(pattern, replacement);
-  if (options.replaceSlots) polished = replaceRawSlotsForCaption(polished);
   return normalizeSpacing(polished);
 }
+
+export const polishVisibleCopy = polishPremiumVisibleCopy;
