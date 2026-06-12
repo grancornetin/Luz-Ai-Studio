@@ -7,6 +7,8 @@ export type VisiblePlanFocus =
   | 'Plan Studio'
   | 'Comparativa de planes'
   | 'Créditos en general'
+  | 'Diagnóstico visual'
+  | 'Oferta principal'
   | 'App en general';
 
 export interface VisibleTaskStep {
@@ -74,12 +76,15 @@ export interface VisibleOutputQualityChecks {
   spanishVisibleCopyClean: boolean;
   noRawSlotsInVisibleOutput: boolean;
   visibleHashtagsClean: boolean;
+  visibleCaptionsUnique: boolean;
+  visibleTitlesVaried: boolean;
 }
 
 export interface VisibleOutputQualityResult {
   visibleOutputQualityStatus: 'premium_ready' | 'needs_copy_review';
   checks: VisibleOutputQualityChecks;
   issues: string[];
+  visibleRepeatedCaptionsDetected: string[];
 }
 
 export interface VisiblePlannerOutput {
@@ -98,6 +103,7 @@ export interface VisiblePlannerOutput {
   roadmap: VisibleRoadmapItem[];
   tasks: VisiblePlannerTask[];
   quality: VisibleOutputQualityResult;
+  visibleRepeatedCaptionsDetected: string[];
   canPublishVisibleOutputToUser: boolean;
 }
 

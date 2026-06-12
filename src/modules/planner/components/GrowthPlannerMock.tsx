@@ -54,6 +54,7 @@ import {
 import {
   buildVisiblePlannerOutput,
   clearGenerationSession,
+  discardRecentPlannerMemoryForBrand,
   evaluateVisibleOutputQuality,
   loadInterruptedGenerationSession,
   loadRecentReadyPlanner,
@@ -131,7 +132,9 @@ function platformFromSalesChannels(channels: string[]): GrowthBrand['activeSocia
   if (joined.includes('tiktok')) platforms.push('TikTok');
   if (joined.includes('whatsapp')) platforms.push('WhatsApp');
   if (joined.includes('facebook')) platforms.push('Facebook');
-  return platforms.length ? Array.from(new Set(platforms)) as GrowthBrand['activeSocials'] : GROWTH_DEMO_BRAND.activeSocials;
+  return platforms.length
+    ? Array.from(new Set(platforms)) as GrowthBrand['activeSocials']
+    : ['Instagram Feed', 'Stories'];
 }
 
 function mapBrandProfileToGrowthBrand(profile: BrandProfile): GrowthBrand {
@@ -139,28 +142,29 @@ function mapBrandProfileToGrowthBrand(profile: BrandProfile): GrowthBrand {
   const tone = profile.aiSummary?.voiceGuidelines
     || profile.voice?.toneKeywords?.join(', ')
     || profile.voice?.formality
-    || GROWTH_DEMO_BRAND.tone;
+    || 'Claro, cercano y util';
 
   return {
-    name: profile.brandName || GROWTH_DEMO_BRAND.name,
-    category: profile.mainCategory || profile.shortDescription || GROWTH_DEMO_BRAND.category,
+    name: profile.brandName || 'Mi marca',
+    category: profile.mainCategory || profile.shortDescription || 'Categoria por definir',
     idealClient: profile.aiSummary?.targetCustomerSummary
       || profile.targetCustomer?.freeDescription
-      || GROWTH_DEMO_BRAND.idealClient,
+      || 'Personas interesadas en los productos o servicios de la marca.',
     tone,
-    mainSalesChannel: channels.length ? channels.join(' y ') : GROWTH_DEMO_BRAND.mainSalesChannel,
+    mainSalesChannel: channels.length ? channels.join(' y ') : 'Canal principal por definir',
     activeSocials: platformFromSalesChannels(channels),
   };
 }
 
 function socialFromProfile(profile?: BrandProfile): GrowthInstagramMetrics {
+  if (!profile) return GROWTH_DEMO_METRICS;
   const social = profile?.socialInsights;
   return {
-    followers: social?.followers || GROWTH_DEMO_METRICS.followers,
-    reachDiagnosis: social?.reachDiagnosis || GROWTH_DEMO_METRICS.reachDiagnosis,
-    reelsInsight: social?.reelsInsight || GROWTH_DEMO_METRICS.reelsInsight,
-    carouselInsight: social?.carouselInsight || GROWTH_DEMO_METRICS.carouselInsight,
-    bestTime: social?.bestTime || GROWTH_DEMO_METRICS.bestTime,
+    followers: social?.followers || '',
+    reachDiagnosis: social?.reachDiagnosis || '',
+    reelsInsight: social?.reelsInsight || '',
+    carouselInsight: social?.carouselInsight || '',
+    bestTime: social?.bestTime || '',
   };
 }
 
@@ -172,6 +176,12 @@ function defaultProductsText() {
   return GROWTH_DEMO_PRODUCTS
     .map(product => `${product.name} | ${product.category} | ${product.price} | ${product.benefit}`)
     .join('\n');
+}
+
+function buildPlanProjectName(brandName: string, duration: GrowthPlanDuration): string {
+  const base = `Plan ${duration} dias - ${brandName.trim() || 'Mi marca'}`;
+  if (base.length <= 64) return base;
+  return `${base.slice(0, 61).trimEnd()}...`;
 }
 
 function stripDataUrl(dataUrl: string) {
@@ -232,6 +242,8 @@ function buildValidationExport(plan: GrowthStrategicPlan) {
     engineV2Metadata: plan.engineV2Metadata,
     visibleOutputQualityStatus: plan.visibleOutputQualityStatus,
     visiblePlanOutput: plan.visiblePlanOutput,
+    visibleRepeatedCaptionsDetected: plan.visiblePlanOutput?.visibleRepeatedCaptionsDetected || [],
+    canPublishVisibleOutputToUser: plan.visiblePlanOutput?.canPublishVisibleOutputToUser,
     generationLog: plan.generationLog,
     validationReportMarkdown: plan.validationReportMarkdown,
   };
@@ -1228,7 +1240,11 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
 
   useEffect(() => {
     setSocialMetrics(socialFromProfile(selectedBrandProfile));
-  }, [selectedBrandProfile?.id]);
+    setProductsText(selectedBrandProfileId === 'demo' ? defaultProductsText() : '');
+    setProductImages([]);
+    setImageError('');
+    setGenerationError('');
+  }, [selectedBrandProfileId]);
 
   const products = useMemo(() => parseProducts(productsText), [productsText]);
 
@@ -1321,6 +1337,15 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
     const visiblePlanOutput = buildVisiblePlannerOutput(nextPlan, nextPlan.engineV2Metadata, nextPlan);
     const visibleQuality = evaluateVisibleOutputQuality(visiblePlanOutput);
     if (!visiblePlanOutput.canPublishVisibleOutputToUser) {
+      if (visibleQuality.visibleOutputQualityStatus !== 'premium_ready') {
+        discardRecentPlannerMemoryForBrand(nextPlan.brand.name);
+        console.error('[GrowthPlanner] Visible copy composer needs review.', {
+          issues: visibleQuality.issues,
+          visibleRepeatedCaptionsDetected: visibleQuality.visibleRepeatedCaptionsDetected,
+        });
+        completionHandledRef.current = false;
+        throw new Error('El plan terminó, pero no se pudo preparar una versión clara para mostrar. Tus créditos serán devueltos.');
+      }
       const hardFailures = nextPlan.finalValidationSummary?.releaseGate?.hardFailures || [];
       const failureReason = hardFailures.includes('taskCountValid') || hardFailures.includes('generatedTasksBelowExpected')
         ? 'faltan tareas para completar el plan'
@@ -1346,7 +1371,7 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
     markGenerationSessionReady(readyPlan, visiblePlanOutput);
     setRecoverablePlan(loadRecentReadyPlanner());
     setPlan(readyPlan);
-    const project = await createProject(`Plan ${readyPlan.brand.name} ${readyPlan.duration} dias`);
+    const project = await createProject(buildPlanProjectName(readyPlan.brand.name, readyPlan.duration));
     await saveGrowthPlan(project.id, readyPlan);
     plannerChargeRef.current = false;
     navigate(`/planner/${project.id}`);
@@ -1357,6 +1382,8 @@ const GrowthPlannerMock: React.FC<GrowthPlannerMockProps> = ({ onBack }) => {
     completionHandledRef.current = false;
     generationStartingRef.current = false;
     await refundPlannerCharge();
+    clearGenerationSession();
+    setRecoveryMessage('');
     setGenerationError(message);
     setWizardStep(STEPS.length);
     setView('wizard');
