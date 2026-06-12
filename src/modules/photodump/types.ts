@@ -288,6 +288,46 @@ export type SceneLockPolicy =
   | 'destination_allowed'  // el destino final del brief — NO replicar el prep space
   | 'none';                // sin lock de escena
 
+// ── PoseIntent: intención adaptativa de pose — sin reglas por venue ───────────
+// Describe QUÉ hace el cuerpo, no DÓNDE está.
+export type PoseIntent =
+  | 'supported_standing'       // apoyada en algo — pared, columna, barra, marco
+  | 'seated_social'            // sentada en contexto real — silla, escalón, borde
+  | 'leaning_relaxed'          // inclinada, cuerpo con peso natural
+  | 'half_turn_over_shoulder'  // torso de espaldas o tres cuartos, cara mirando atrás
+  | 'candid_in_motion'         // caminando, girando, llegando — en movimiento capturado
+  | 'mirror_interaction'       // interactuando con un espejo en el destino
+  | 'object_interaction'       // manos activas con algo del entorno — taza, mesa, bolso
+  | 'soft_environmental'       // integrada al espacio sin pose evidente — persona en lugar
+  | 'casual_weight_shift'      // weight shift lateral, asimetría natural, sin pose dura
+  | 'seated_candid'            // sentada pero capturada en momento no forzado
+  | 'full_body_confident';     // full body solo cuando la actitud lo justifica — último recurso
+
+// ── DetailKind: tipo de detalle para ordenar el arco outfit_check ─────────────
+export type DetailKind =
+  | 'pre_wear'   // prenda como objeto — antes de estar puesta (flat lay, held, rack)
+  | 'worn'       // detalle del outfit ya vestido o accesorio integrado al look
+  | 'accessory'; // accesorio en closeup — puede ser pre o post según el set
+
+// ── EnvironmentAffordance: qué ofrece el entorno para una pose orgánica ───────
+export type EnvironmentAffordance =
+  | 'support'         // elemento para apoyarse — pared, columna, barra, árbol
+  | 'seating'         // lugar para sentarse — silla, escalón, banco, borde
+  | 'table_surface'   // superficie de mesa — bar, café, restaurante
+  | 'mirror'          // espejo disponible en el espacio
+  | 'doorway'         // marco de puerta, umbral, entrada
+  | 'corridor'        // pasillo, galería, hall
+  | 'open_space'      // espacio abierto sin elementos dominantes
+  | 'natural_element' // árbol, escalón, pared texturada exterior
+  | 'counter_bar';    // barra de bar, mostrador
+
+// ── SceneContinuityMode: nivel de continuidad del prep space ──────────────────
+export type SceneContinuityMode =
+  | 'ref_locked'      // usuario subió foto de escena — continuidad máxima al REF
+  | 'fingerprinted'   // REF0 inventó el espacio — fingerprint extraída y propagada
+  | 'soft_match'      // solo preservar familia visual y mood, no muebles exactos
+  | 'free';           // sin continuidad activa
+
 // ── Destino inferido desde el brief ───────────────────────────────────────────
 export type InferredDestination =
   | 'opera_theatre'
@@ -342,6 +382,13 @@ export interface PhotodumpShotDebug {
   closingStrategy?:         'destination_inferred' | 'destination_uploaded' | 'pre_exit' | 'none';
   sceneLockPolicy?:         SceneLockPolicy;
   phonePolicy?:             'required_visible' | 'allowed_visible' | 'forbidden' | 'not_applicable';
+
+  // Nuevos campos de auditabilidad — pose, detalle, continuidad
+  poseIntent?:              PoseIntent;
+  detailKind?:              DetailKind;
+  continuityMode?:          SceneContinuityMode;
+  environmentAffordances?:  EnvironmentAffordance[];
+  closureReason?:           string;
 
   status:       'ok' | 'failed';
 }

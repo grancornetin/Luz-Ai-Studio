@@ -18,6 +18,7 @@ import {
   WearState, CameraMode, InferredDestination,
   OutfitItemPlan, SceneLockPolicy,
   OutfitBriefContext, OutfitDestinationClass, PrepEnvironmentClass, OutfitComposition,
+  PoseIntent, DetailKind, EnvironmentAffordance, SceneContinuityMode,
 } from './types';
 import {
   getStorySupportFamilies, initPhotodumpIntelligence, StorySupportFamily,
@@ -69,6 +70,12 @@ export interface PhotodumpShotDirective {
   closingStrategy?: 'destination_inferred' | 'destination_uploaded' | 'pre_exit' | 'none';
   sceneLockPolicy?: SceneLockPolicy;
   phonePolicy?:     'required_visible' | 'allowed_visible' | 'forbidden' | 'not_applicable';
+  // Nuevos — pose adaptativa, tipo de detalle, continuidad
+  poseIntent?:               PoseIntent;
+  detailKind?:               DetailKind;
+  continuityMode?:           SceneContinuityMode;
+  environmentAffordances?:   EnvironmentAffordance[];
+  closureReason?:            string;
 }
 
 // Estilo visual de presentación para recetas outfit.
@@ -605,7 +612,7 @@ function buildItemStatePlanForShot(
     ];
   }
 
-  if (shotKey === 'OUTFIT_MIRROR_CHECK' || shotKey === 'OUTFIT_READY' || shotKey === 'OUTFIT_DESTINATION') {
+  if (shotKey === 'OUTFIT_MIRROR_CHECK' || shotKey === 'OUTFIT_READY' || shotKey === 'OUTFIT_DESTINATION' || shotKey === 'OUTFIT_DETAIL_WORN') {
     // Outfit puesto completo
     if (isDress) return [
       { item: 'dress',  requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
@@ -660,6 +667,10 @@ export function resolveWearState(
       // El resto: ya en transición — pero el foco es el objeto, no el look puesto
       if (style === 'hands_presenter') return 'not_wearing_final_outfit';
       return 'partially_styled';
+
+    case 'OUTFIT_DETAIL_WORN':
+      // Este detalle ocurre DESPUÉS del mirror check — el outfit está puesto
+      return 'wearing_full_outfit';
 
     case 'OUTFIT_MIRROR_CHECK':
       return 'wearing_full_outfit';
@@ -734,13 +745,17 @@ export function resolveCameraMode(
 
   if (shotKey === 'OUTFIT_DETAIL') {
     if (style === 'hands_presenter') return 'hands_presenter_closeup';
-    if (style === 'flat_lay')        return 'detail_macro'; // close-up de elemento del flat lay
+    if (style === 'flat_lay')        return 'detail_macro';
     return 'detail_macro';
   }
 
+  // OUTFIT_DETAIL_WORN: siempre detail_macro — el outfit ya está puesto, solo se muestra un fragmento
+  if (shotKey === 'OUTFIT_DETAIL_WORN') return 'detail_macro';
+
   if (shotKey === 'OUTFIT_MIRROR_CHECK') return 'mirror_selfie_phone_hidden';
   if (shotKey === 'OUTFIT_READY')        return 'selfie_pov';
-  if (shotKey === 'OUTFIT_DESTINATION')  return 'full_body_room';
+  // OUTFIT_DESTINATION: destination_social_pose en vez de full_body_room rígido
+  if (shotKey === 'OUTFIT_DESTINATION')  return 'destination_social_pose';
 
   return 'third_person';
 }
@@ -842,6 +857,17 @@ FORBIDDEN: mirror selfie framing, tight portrait crop, product catalog backgroun
 A friend or bystander captures this — the subject may not be fully aware.
 Natural, unstaged. The person is doing something, not posing for the shot.
 FORBIDDEN: direct to camera pose, studio arrangement, obvious staged composition.`;
+
+    case 'destination_social_pose':
+      return `📷 CAMERA MODE — DESTINATION SOCIAL POSE:
+This is the closing shot at the destination. The person is in the real social space.
+Frame choice: medium, 3/4 body, or environmental portrait — NOT necessarily wide full-body.
+The pose is organic and socially plausible: leaning, seated, half-turned, weight-shifted, or in motion.
+The environment reads clearly behind and around the person.
+FORBIDDEN: mannequin-rigid full-frontal catalog stance, person centered with arms symmetrically at sides,
+catwalk walking pose, wide full-body shot with the person isolated in center of space,
+studio backdrop feel, any pose that looks like a product catalog or advertisement.
+The result must look like a real social photo — the kind someone would post from an actual outing.`;
   }
 }
 
@@ -914,6 +940,317 @@ FORBIDDEN in this shot:
   }
 }
 
+// ── Scene Fingerprint: extrae propiedades estructurales del prep space ────────
+// Se construye a partir del REF0 analysis + señales del brief.
+// No necesita ser perfecta — solo suficientemente específica para propagar continuidad.
+export interface SceneFingerprint {
+  roomType:         string;   // 'bedroom' | 'hotel_room' | 'dressing_room' | 'bathroom' | etc.
+  dominantFurniture: string;  // mueble más grande o dominante
+  lightingFamily:   string;   // 'warm_artificial' | 'cool_daylight' | 'golden_natural' | etc.
+  cleanliness:      'tidy' | 'lived_in' | 'cluttered';
+  hasVisibleMirror: boolean;
+  colorPalette:     string;   // descripción corta del tono dominante
+  keyProps:         string[];  // hasta 3 props identificatorias
+  continuityMode:   SceneContinuityMode;
+}
+
+export function buildSceneFingerprint(
+  ref0Analysis:    any,
+  hasUserSceneRef: boolean,
+  prepMood:        string,  // de OutfitBriefContext.prepMood
+): SceneFingerprint {
+  // Extraer señales del ref0Analysis (es texto libre generado por Gemini)
+  const raw = typeof ref0Analysis === 'string' ? ref0Analysis.toLowerCase()
+    : typeof ref0Analysis?.description === 'string' ? ref0Analysis.description.toLowerCase()
+    : typeof ref0Analysis?.worldLock === 'string' ? ref0Analysis.worldLock.toLowerCase()
+    : '';
+
+  // Room type
+  let roomType = 'bedroom';
+  if (raw.includes('hotel') || raw.includes('suite'))                    roomType = 'hotel_room';
+  else if (raw.includes('dressing room') || raw.includes('vestuario'))   roomType = 'dressing_room';
+  else if (raw.includes('bathroom') || raw.includes('baño') || raw.includes('vanity')) roomType = 'bathroom_vanity';
+  else if (raw.includes('probador') || raw.includes('fitting'))          roomType = 'fitting_room';
+  else if (raw.includes('bedroom') || raw.includes('dormitorio') || raw.includes('cuarto') || raw.includes('habitación')) roomType = 'bedroom';
+  // fallback from prepMood
+  else if (prepMood.includes('hotel')) roomType = 'hotel_room';
+  else if (prepMood.includes('dressing')) roomType = 'dressing_room';
+
+  // Dominant furniture
+  let dominantFurniture = 'bed';
+  if (raw.includes('vanity') || raw.includes('tocador'))     dominantFurniture = 'vanity_dresser';
+  else if (raw.includes('wardrobe') || raw.includes('armario')) dominantFurniture = 'wardrobe';
+  else if (raw.includes('rack') || raw.includes('perchero')) dominantFurniture = 'clothing_rack';
+  else if (raw.includes('sofa') || raw.includes('sofá') || raw.includes('couch')) dominantFurniture = 'sofa';
+  else if (raw.includes('chair') || raw.includes('silla'))   dominantFurniture = 'chair';
+  else if (raw.includes('mirror') || raw.includes('espejo')) dominantFurniture = 'floor_mirror';
+  else if (raw.includes('bed') || raw.includes('cama'))      dominantFurniture = 'bed';
+
+  // Lighting
+  let lightingFamily = 'warm_artificial';
+  if (raw.includes('daylight') || raw.includes('natural light') || raw.includes('window'))
+    lightingFamily = 'cool_natural_window';
+  else if (raw.includes('golden') || raw.includes('dorado') || raw.includes('warm window'))
+    lightingFamily = 'golden_natural';
+  else if (raw.includes('warm') || raw.includes('cálido') || raw.includes('lamp') || raw.includes('lámpara'))
+    lightingFamily = 'warm_artificial';
+  else if (raw.includes('cool') || raw.includes('frío') || raw.includes('white light'))
+    lightingFamily = 'cool_artificial';
+  // fallback de timeSignal / prepMood
+  if (prepMood.includes('evening') || prepMood.includes('vanity light')) lightingFamily = 'warm_artificial';
+  else if (prepMood.includes('airy daylight') || prepMood.includes('daylight')) lightingFamily = 'cool_natural_window';
+
+  // Cleanliness
+  let cleanliness: 'tidy' | 'lived_in' | 'cluttered' = 'lived_in';
+  if (raw.includes('clutter') || raw.includes('messy') || raw.includes('desorden'))    cleanliness = 'cluttered';
+  else if (raw.includes('tidy') || raw.includes('clean') || raw.includes('organized') || raw.includes('orden')) cleanliness = 'tidy';
+  if (prepMood.includes('no clutter') || prepMood.includes('polished'))  cleanliness = 'tidy';
+
+  // Mirror presence
+  const hasVisibleMirror = raw.includes('mirror') || raw.includes('espejo') || roomType === 'bathroom_vanity' || roomType === 'dressing_room';
+
+  // Color palette
+  let colorPalette = 'neutral warm tones';
+  if (raw.includes('white') || raw.includes('blanco'))        colorPalette = 'white and bright neutrals';
+  else if (raw.includes('dark') || raw.includes('oscuro'))    colorPalette = 'dark and moody';
+  else if (raw.includes('beige') || raw.includes('cream'))    colorPalette = 'warm beige and cream';
+  else if (raw.includes('grey') || raw.includes('gray') || raw.includes('gris')) colorPalette = 'cool grey tones';
+
+  // Key props (up to 3 unique identifiers)
+  const keyProps: string[] = [];
+  if (raw.includes('curtain') || raw.includes('cortina')) keyProps.push('curtains visible');
+  if (raw.includes('rug') || raw.includes('alfombra'))    keyProps.push('rug on floor');
+  if (raw.includes('plant') || raw.includes('planta'))    keyProps.push('plant in scene');
+  if (raw.includes('lamp') || raw.includes('lámpara'))    keyProps.push('ambient lamp');
+  if (raw.includes('artwork') || raw.includes('cuadro'))  keyProps.push('wall artwork');
+  if (dominantFurniture !== 'bed')                         keyProps.push(`${dominantFurniture.replace('_', ' ')} visible`);
+
+  const continuityMode: SceneContinuityMode = hasUserSceneRef ? 'ref_locked'
+    : (raw.length > 20) ? 'fingerprinted'
+    : 'soft_match';
+
+  return {
+    roomType, dominantFurniture, lightingFamily, cleanliness,
+    hasVisibleMirror, colorPalette, keyProps: keyProps.slice(0, 3), continuityMode,
+  };
+}
+
+// ── Scene Continuity Block — propaga el fingerprint del prep space ─────────────
+// Inyectado en todos los shots del prep arc que NO son OUTFIT_DESTINATION.
+function buildSceneContinuityBlock(
+  fingerprint:     SceneFingerprint,
+  shotKey:         string,
+  hasUserSceneRef: boolean,
+): string {
+  // No aplica al destination shot ni a shots sin stage de prep
+  const DEST_KEYS = new Set(['OUTFIT_DESTINATION']);
+  if (DEST_KEYS.has(shotKey)) return '';
+
+  const strengthText = hasUserSceneRef
+    ? 'STRICT CONTINUITY — user provided a real room reference. Replicate it faithfully.'
+    : 'VISUAL CONTINUITY — REF0 established this space. Maintain it consistently.';
+
+  const lines = [
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    `🏠 SCENE CONTINUITY — PREP SPACE LOCK:`,
+    strengthText,
+    ``,
+    `SPACE PROFILE (must match across all prep shots):`,
+    `  • Room type: ${fingerprint.roomType.replace('_', ' ')}`,
+    `  • Dominant furniture: ${fingerprint.dominantFurniture.replace('_', ' ')}`,
+    `  • Lighting: ${fingerprint.lightingFamily.replace(/_/g, ' ')}`,
+    `  • Tone / cleanliness: ${fingerprint.cleanliness}`,
+    `  • Color palette: ${fingerprint.colorPalette}`,
+    fingerprint.hasVisibleMirror ? `  • Mirror: present in space` : '',
+    fingerprint.keyProps.length > 0 ? `  • Key identifiers: ${fingerprint.keyProps.join(', ')}` : '',
+    ``,
+    `RULES:`,
+    `  - Do NOT change the wall color or floor material from what REF0 established`,
+    `  - Do NOT swap the dominant furniture for a different piece`,
+    `  - Do NOT invent a new room style or aesthetic — this is the SAME space between shots`,
+    `  - Small differences (angle, position) are acceptable — reinventing the room is NOT`,
+    `  - The brief describes the DESTINATION occasion — it does NOT change the prep space`,
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+  ].filter(Boolean);
+
+  return lines.join('\n');
+}
+
+// ── Pose Intent: elige la intención de pose adaptativa para el cierre ──────────
+// NO usa reglas por venue. Usa señales de affordance del entorno + tono del brief.
+export function resolveClosurePoseIntent(
+  briefCtx:        OutfitBriefContext,
+  outfitComposition: OutfitComposition,
+  hasDestinoRef:   boolean,
+): { poseIntent: PoseIntent; affordances: EnvironmentAffordance[]; reason: string } {
+
+  const dest = briefCtx.destinationClass;
+
+  // Inferir affordances del espacio del destino desde el brief/destinationMood
+  const mood = (briefCtx.destinationMood + ' ' + briefCtx.destinationLabel).toLowerCase();
+  const affordances: EnvironmentAffordance[] = [];
+
+  if (mood.includes('restauran') || mood.includes('café') || mood.includes('café') || mood.includes('table') || mood.includes('bar'))
+    affordances.push('table_surface', 'seating', 'counter_bar');
+  if (mood.includes('hotel') || mood.includes('lobby') || mood.includes('lounge') || mood.includes('corridor') || mood.includes('hall'))
+    affordances.push('seating', 'corridor', 'support');
+  if (mood.includes('theatre') || mood.includes('opera') || mood.includes('foyer') || mood.includes('marble'))
+    affordances.push('support', 'corridor', 'doorway');
+  if (mood.includes('office') || mood.includes('meeting') || mood.includes('building'))
+    affordances.push('support', 'doorway', 'corridor');
+  if (mood.includes('brunch') || mood.includes('club') || mood.includes('garden'))
+    affordances.push('seating', 'natural_element', 'table_surface');
+  if (mood.includes('beach') || mood.includes('outdoor') || mood.includes('park') || mood.includes('street'))
+    affordances.push('natural_element', 'open_space');
+  if (mood.includes('airport') || mood.includes('terminal') || mood.includes('transit'))
+    affordances.push('corridor', 'open_space', 'support');
+  if (mood.includes('urban') || mood.includes('city') || mood.includes('street') || mood.includes('wall'))
+    affordances.push('support', 'doorway', 'open_space');
+
+  // Default — toda escena puede tener apoyo o espacio abierto
+  if (affordances.length === 0) affordances.push('support', 'open_space');
+
+  // Elegir poseIntent según affordances prioritarias — NO por venue
+  let poseIntent: PoseIntent = 'casual_weight_shift'; // fallback universal
+  let reason = 'default — casual weight shift preferred over rigid standing';
+
+  if (affordances.includes('seating') && dest !== 'opera_theatre') {
+    poseIntent = 'seated_social';
+    reason = 'seating affordance detected — seated social preferred over standing';
+  } else if (affordances.includes('table_surface')) {
+    poseIntent = 'object_interaction';
+    reason = 'table surface affordance — hand near surface or cup, natural interaction';
+  } else if (affordances.includes('counter_bar')) {
+    poseIntent = 'supported_standing';
+    reason = 'bar/counter affordance — leaning on bar edge naturally';
+  } else if (affordances.includes('support')) {
+    // Apoyo: peso en un lado, más natural que de pie centrada
+    poseIntent = affordances.includes('corridor') ? 'soft_environmental' : 'supported_standing';
+    reason = 'support affordance — leaning or resting against surface, asymmetric weight';
+  } else if (affordances.includes('doorway')) {
+    poseIntent = 'supported_standing';
+    reason = 'doorway affordance — standing in or near frame, natural asymmetry';
+  } else if (affordances.includes('corridor')) {
+    poseIntent = 'half_turn_over_shoulder';
+    reason = 'corridor affordance — three-quarter turn or over-shoulder favored in hallway contexts';
+  } else if (affordances.includes('natural_element')) {
+    poseIntent = 'leaning_relaxed';
+    reason = 'natural element affordance — leaning on wall, tree, or architectural surface';
+  } else if (affordances.includes('open_space')) {
+    poseIntent = 'casual_weight_shift';
+    reason = 'open space — casual weight shift with asymmetry preferred over centered standing';
+  }
+
+  // Dress override — con vestido largo, seated_social puede ser complicado
+  if (outfitComposition === 'dress' && poseIntent === 'seated_social') {
+    poseIntent = 'soft_environmental';
+    reason = 'dress composition override — soft environmental preferred over seated to maintain outfit legibility';
+  }
+
+  return { poseIntent, affordances, reason };
+}
+
+// ── Adaptive Closure Block — reemplaza el bloque de destino rígido ────────────
+// Genera instrucciones de pose socialmente creíble para el cierre, sin venue rules.
+function buildAdaptiveClosureBlock(
+  poseIntent:   PoseIntent,
+  affordances:  EnvironmentAffordance[],
+  destDesc:     string,
+  reason:       string,
+): string {
+  const poseInstructions: Record<PoseIntent, string> = {
+    supported_standing:
+      `POSE INTENT — SUPPORTED STANDING:
+The person is near a wall, column, doorframe, bar, or architectural element, resting weight against it.
+Body is asymmetric — one shoulder or hip leaning slightly. Not rigid. Not centered.
+Weight is shifted to one side. The element of support is part of the composition.
+FORBIDDEN: standing centered with arms exactly at sides, mannequin-rigid frontality, catalog symmetry.`,
+
+    seated_social:
+      `POSE INTENT — SEATED SOCIAL:
+The person is seated in a real chair, on steps, at a table edge, or on a low surface.
+NOT a formal seated pose — a natural, slightly casual sit. Crossed legs, elbows on knees, or forward lean.
+The outfit is still readable. Face confident or looking naturally off-camera.
+FORBIDDEN: stiff upright sitting, hands folded symmetrically in lap, catalog model seated look.`,
+
+    leaning_relaxed:
+      `POSE INTENT — LEANING RELAXED:
+The person leans against a surface (wall, railing, tree, architectural element) with relaxed weight.
+One hand may touch the surface. Torso slightly angled. Hip slightly pushed out.
+Very natural — like someone pausing between moments, not posing for a photo.
+FORBIDDEN: leaning at an exaggerated angle, forced crossed arms, any catalog stance.`,
+
+    half_turn_over_shoulder:
+      `POSE INTENT — HALF TURN / OVER SHOULDER:
+The person is angled away from camera with their body at 45–90 degrees, face looking back over the shoulder.
+This reveals the back or side of the outfit while keeping the face expressive.
+FORBIDDEN: full frontal catalog stance, walking blur that obscures the outfit, exaggerated over-rotation.`,
+
+    candid_in_motion:
+      `POSE INTENT — CANDID ARRIVAL:
+The person is arriving, turning, or in a light movement — captured mid-action.
+Not a motion blur — a natural moment frozen. Like: stepping through an entrance, turning to say something, pausing to look at the space.
+FORBIDDEN: obvious "walk for camera" catwalking pose, motion blur, full static standing.`,
+
+    mirror_interaction:
+      `POSE INTENT — MIRROR INTERACTION AT DESTINATION:
+The person is near or in front of a mirror at the venue — adjusting something, checking their look briefly.
+A micro-action: fingertips touching hair, glancing at outfit. Candid feel.
+FORBIDDEN: full-body mirror selfie pose, phone in hand, catalog stance reflected in mirror.`,
+
+    object_interaction:
+      `POSE INTENT — OBJECT INTERACTION:
+The person interacts with something in the environment — holding a drink lightly, hand near a table edge, touching a menu or a glass.
+This anchors them to the scene naturally. The interaction is subtle — not a product demo.
+FORBIDDEN: item held toward camera like an advertisement, forced prop usage, anything that looks promotional.`,
+
+    soft_environmental:
+      `POSE INTENT — SOFT ENVIRONMENTAL PORTRAIT:
+The person is in the space, but not obviously "posing". They look like they belong there.
+Medium or 3/4 shot. Looking slightly off-camera or at something in the scene.
+The environment is as important as the person — both are part of the frame.
+FORBIDDEN: direct catalog stare into camera, rigid body, centered symmetric composition.`,
+
+    casual_weight_shift:
+      `POSE INTENT — CASUAL WEIGHT SHIFT:
+The person stands with weight shifted naturally to one side. One hip slightly higher. One knee slightly bent.
+Arms hang naturally — one may hold something lightly, one may touch hip or bag.
+A real human standing stance, not a pose. Asymmetric, relaxed, not military-straight.
+FORBIDDEN: equal weight on both feet, arms rigid at sides, centered perfectly symmetrical stance.`,
+
+    seated_candid:
+      `POSE INTENT — SEATED CANDID:
+The person is seated in a way that feels caught-in-the-moment — slightly slouched, leaning forward, or turned.
+Not a formal seated portrait. The naturalness of the position is the point.
+FORBIDDEN: formal upright seated pose, catalog-symmetrical table shot, rigid back.`,
+
+    full_body_confident:
+      `POSE INTENT — FULL BODY (justified):
+Full body is shown only because the outfit demands complete legibility in this context.
+Even so: weight shift, slight hip asymmetry, face at a natural angle — NOT mannequin.
+One hand may be in motion or on hip. The person owns the space.
+FORBIDDEN: rigid catalog symmetry, centered standing with both feet exactly shoulder-width, arms hanging stiff.`,
+  };
+
+  const affordanceContext = affordances.length > 0
+    ? `\nENVIRONMENT AFFORDANCES detected: ${affordances.map(a => a.replace('_', ' ')).join(', ')}`
+    : '';
+
+  return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 ADAPTIVE CLOSURE — ORGANIC SOCIAL POSE (not catalog):
+DESTINATION: ${destDesc}${affordanceContext}
+POSE RATIONALE: ${reason}
+
+${poseInstructions[poseIntent]}
+
+ANTI-RIGIDITY RULES (apply regardless of pose intent):
+  - NEVER generate: person centered, full frontal, standing symmetrically, arms at sides, expressionless catalog stare
+  - ALWAYS prefer: asymmetry, weight shift, slight turn, natural hand position, engaged expression
+  - Medium or 3/4 shot is PREFERRED over wide full-body unless the outfit specifically needs full-body legibility
+  - If in doubt: choose the most human, organic version of the pose — the one a real person would naturally take
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+}
+
 // ── HPI específico para outfit_check — sin bloques crudos ────────────────────
 // Genera instrucciones de micro-acción específicas por shot, sin usar buildHpiBlock crudo.
 function buildOutfitCompatibleHpiBlock(
@@ -926,8 +1263,9 @@ function buildOutfitCompatibleHpiBlock(
   switch (shotKey) {
     case 'OUTFIT_ARRIVING':
     case 'OUTFIT_DETAIL':
+    case 'OUTFIT_DETAIL_WORN':
     case 'ACCESSORY_CLOSEUP':
-      return '';  // HPI completamente OFF
+      return '';  // HPI completamente OFF — estos shots son de objeto/fragmento
 
     case 'OUTFIT_MIRROR_CHECK':
       return `🎯 MICRO-ACTION (mirror check — outfit-compatible only):
@@ -1030,7 +1368,7 @@ const OUTFIT_CHECK_HPI_BLOCKLIST = [
 
 function filterHpiForOutfitCheck(hpiBlock: string, shotKey: string): string {
   if (!hpiBlock) return '';
-  const incompatibleKeys = ['OUTFIT_ARRIVING', 'OUTFIT_DETAIL', 'ACCESSORY_CLOSEUP'];
+  const incompatibleKeys = ['OUTFIT_ARRIVING', 'OUTFIT_DETAIL', 'OUTFIT_DETAIL_WORN', 'ACCESSORY_CLOSEUP'];
   if (incompatibleKeys.includes(shotKey)) return '';
   const lower = hpiBlock.toLowerCase();
   if (OUTFIT_CHECK_HPI_BLOCKLIST.some(phrase => lower.includes(phrase))) {
@@ -1143,7 +1481,7 @@ function extractBriefContextBlock(basePrompt: string): string {
 // Para shots de PREPARACIÓN en recetas de outfit: ancla la locación del shot
 // al espacio de REF0 (nunca al venue del brief).
 // La ópera/gala/restaurante es el destino — no donde la persona se prueba el outfit.
-const PREP_SHOT_KEYS = new Set(['OUTFIT_ARRIVING', 'OUTFIT_MIRROR_CHECK', 'OUTFIT_DETAIL', 'OUTFIT_READY']);
+const PREP_SHOT_KEYS = new Set(['OUTFIT_ARRIVING', 'OUTFIT_MIRROR_CHECK', 'OUTFIT_DETAIL', 'OUTFIT_DETAIL_WORN', 'OUTFIT_READY']);
 
 function extractShotLocationOverride(
   basePrompt:       string,
@@ -1272,6 +1610,9 @@ function buildStoryDirectives(
       closingKey,
     ];
     const totalShots = allKeys.length;
+    // Resolver pose intent del cierre una sola vez para el set
+    const closurePose = resolveClosurePoseIntent(briefCtx, composition, hasDestino);
+
     return allKeys.map((key, i) => {
       const shot = pool.find(s => s.key === key) ?? pool[pool.length - 1];
       const isFinalShot    = i === totalShots - 1;
@@ -1283,7 +1624,7 @@ function buildStoryDirectives(
         : 'none';
       const sceneLockPolicy: SceneLockPolicy = isFinalShot && key === 'OUTFIT_DESTINATION'
         ? 'destination_allowed'
-        : key === 'OUTFIT_ARRIVING' || key === 'OUTFIT_DETAIL' || key === 'ACCESSORY_CLOSEUP'
+        : key === 'OUTFIT_ARRIVING' || key === 'OUTFIT_DETAIL' || key === 'OUTFIT_DETAIL_WORN' || key === 'ACCESSORY_CLOSEUP'
           ? 'prep_space_or_surface'
           : key === 'OUTFIT_READY'
             ? 'prep_space_or_pre_exit'
@@ -1291,8 +1632,22 @@ function buildStoryDirectives(
       const phonePolicy = key === 'OUTFIT_MIRROR_CHECK'
         ? 'forbidden' as const
         : 'not_applicable' as const;
+      // detailKind: los OUTFIT_DETAIL van antes del mirror (pre_wear), los OUTFIT_DETAIL_WORN después (worn)
+      const detailKind = key === 'OUTFIT_DETAIL' ? 'pre_wear' as const
+        : key === 'OUTFIT_DETAIL_WORN' ? 'worn' as const
+        : key === 'ACCESSORY_CLOSEUP' ? 'accessory' as const
+        : undefined;
+      // continuityMode: todos los shots de prep usan fingerprinted (se resuelve en generatePhotodumpShot)
+      const continuityMode: SceneContinuityMode = key === 'OUTFIT_DESTINATION' ? 'free'
+        : (refs?.scenePruebaRef || refs?.sceneRef) ? 'ref_locked'
+        : 'fingerprinted';
       // itemStatePlan derivado de composición real — no exige dress + top + bottom a la vez
       const itemStatePlanForShot = buildItemStatePlanForShot(key, composition);
+      // Para el shot de destino, aplicar el poseIntent resuelto
+      const poseIntent = key === 'OUTFIT_DESTINATION' ? closurePose.poseIntent : shot.poseIntent;
+      const environmentAffordances = key === 'OUTFIT_DESTINATION' ? closurePose.affordances : undefined;
+      const closureReason = key === 'OUTFIT_DESTINATION' ? closurePose.reason : undefined;
+
       return {
         ...shot,
         arcPosition: i + 1,
@@ -1302,6 +1657,11 @@ function buildStoryDirectives(
         closingStrategy: closingStrategy as any,
         sceneLockPolicy,
         phonePolicy,
+        detailKind,
+        continuityMode,
+        poseIntent,
+        environmentAffordances,
+        closureReason,
         itemStatePlan: itemStatePlanForShot.length > 0 ? itemStatePlanForShot : shot.itemStatePlan,
       };
     });
@@ -2130,10 +2490,41 @@ function buildOutfitCheckShotPool(
       narrativeStage:  presentationStyle === 'hands_presenter' ? 'prep' : 'transition',
       hpiAllowed:      camDetail === 'detail_macro' ? false : presentationStyle !== 'hands_presenter',
       hpiScope:        'gesture_only',
-      // subjectPresence se deriva del cameraMode real, no del shot genérico
       subjectPresence: camDetail === 'detail_macro' ? 'object_detail'
                      : camDetail === 'hands_presenter_closeup' ? 'hands_only'
                      : 'full_body',
+      detailKind:      'pre_wear',  // este detalle ocurre ANTES del mirror check
+    },
+    // OUTFIT_DETAIL_WORN: detalle del outfit ya puesto — ocurre DESPUÉS del mirror check
+    {
+      key:              'OUTFIT_DETAIL_WORN',
+      beat:             'texture',
+      role:             'WORN DETAIL',
+      purpose: 'Close-up íntimo de un elemento del outfit YA PUESTO. La textura de la tela, el detalle de un accesorio integrado al look, los zapatos en el suelo o la silueta del bolso. El outfit está completo — este shot enfoca un fragmento de él.',
+      requiredElements: ['garment_or_accessory_detail_worn_on_person', 'real_light_showing_texture', 'intimate_macro_framing'],
+      forbiddenElements: [
+        'garment_as_object_not_worn',
+        'flat_lay',
+        'full_body_standing_catalog',
+        'white_background',
+        'studio_lighting',
+        'destination_venue_as_background',
+      ],
+      variationSpace: [
+        'close-up de la textura de la tela del outfit ya vestido — detalle del escote, manga o dobladillo',
+        'detalle del accesorio integrado al look — close-up del bolso en mano, la joya en el cuello, la hebilla del cinturón',
+        'fragmento del outfit puesto — la silueta desde la cintura hacia abajo con los zapatos puestos, ángulo lateral',
+        'macro de un detalle bordado, botón, o terminación de la prenda ya puesta — luz que muestra profundidad',
+      ],
+      framing:         'CLOSE_UP_OR_EXTREME_CLOSE_UP',
+      composition:     'WORN_DETAIL_FILL_FRAME',
+      cameraAngle:     'MACRO_OR_LATERAL_CLOSE',
+      wearState:       'wearing_full_outfit',
+      cameraMode:      'detail_macro',
+      narrativeStage:  'styled',
+      hpiAllowed:      false,
+      subjectPresence: 'object_detail',
+      detailKind:      'worn',  // este detalle ocurre DESPUÉS del mirror check
     },
     {
       key:              'OUTFIT_READY',
@@ -2170,45 +2561,48 @@ function buildOutfitCheckShotPool(
       beat:             'atmosphere',
       role:             hasDestination ? 'DESTINATION SHOT' : 'FINAL STYLED MOMENT',
       purpose: hasDestination
-        ? `La persona en el destino final con el outfit completo. El ambiente es: ${destDesc}. Full body integrado al lugar. El outfit y el entorno juntos cierran la historia.`
-        : 'Momento final con el look completo: segundo ángulo en la misma prep space, o exterior de salida justo antes de irse. El outfit se ve completo y la historia cierra con actitud.',
+        ? `La persona en el destino final con el outfit completo. Ambiente: ${destDesc}. La pose debe ser orgánica y socialmente creíble — NO full-body frontal rígido. El outfit y el entorno juntos cierran la historia de forma humana.`
+        : 'Momento final con el look completo: cierre en prep space o exterior de salida. Pose natural — apoyada, medio perfil, selfie — no full-body rígido centrado.',
       requiredElements: hasDestination
-        ? ['full_body_visible', 'destination_environment_clearly_readable', 'complete_outfit_visible', 'person_belongs_in_space']
-        : ['full_body_visible_or_medium_shot', 'complete_outfit_readable', 'confident_closing_attitude', 'real_environment'],
+        ? ['outfit_complete_and_readable', 'destination_environment_clearly_readable', 'person_belongs_in_space', 'organic_non_catalog_pose']
+        : ['outfit_readable_at_least_medium_shot', 'confident_closing_attitude', 'real_environment', 'asymmetric_natural_pose'],
       forbiddenElements: [
-        'catalog_pose',
+        'mannequin_rigid_full_frontal_catalog_stance',
+        'person_centered_symmetric_arms_at_sides',
         'studio_backdrop',
         'generic_white_wall',
-        'mannequin_stance',
         'ad_feel',
         'flat_lay_garments',
-        ...(hasDestination ? ['prep_space_bedroom_or_mirror'] : []),
+        'walking_runway_catwalk',
+        ...(hasDestination ? ['prep_space_bedroom_or_mirror', 'REF0_room_walls_or_furniture'] : []),
       ],
+      // Variaciones que favorecen poses orgánicas, no wide full body centrado
       variationSpace: hasDestination
         ? destShotOptions
         : [
-            'full body en pasillo o entrada del apartamento, actitud de "voy a salir", look completo visible',
-            'medium shot en el mismo cuarto desde otro ángulo, outfit leído desde la cintura hacia arriba, expresión resuelta',
-            'persona apoyada en marco de puerta o pared, look completo, actitud de pre-salida',
-            'selfie de cuerpo entero en pasillo o exterior inmediato, outfit completo visible, mood de cierre',
+            'persona apoyada en marco de puerta o pared lateral, look completo, actitud de pre-salida — peso en un lado',
+            'medium shot de tres cuartos en el mismo cuarto desde otro ángulo, expresión resuelta, asimetría natural',
+            'persona sentada en borde de cama o silla, look completo legible, actitud relajada pero confident',
+            'selfie de medium shot en pasillo o exterior inmediato, outfit visible desde hombros arriba, mood de cierre',
           ],
-      framing:         'WIDE_FULL_BODY',
-      composition:     hasDestination ? 'PERSON_IN_DESTINATION_CONTEXT' : 'FULL_BODY_NATURAL_CLOSING',
+      framing:         'MEDIUM_OR_THREE_QUARTERS',   // ya NO WIDE_FULL_BODY como default
+      composition:     hasDestination ? 'ORGANIC_SOCIAL_POSE_IN_DESTINATION' : 'NATURAL_CLOSING_ASYMMETRIC',
       cameraAngle:     'EYE_LEVEL_OR_SLIGHTLY_LOW',
       wearState:       'destination_arrived',
-      cameraMode:      'full_body_room',
+      cameraMode:      'destination_social_pose',     // ya NO full_body_room como default
       narrativeStage:  'destination',
       hpiAllowed:      true,
       hpiScope:        'full',
-      subjectPresence: 'full_body',
+      subjectPresence: 'medium_or_full_body',
       itemStatePlan:   [
         { item: 'top',    requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
         { item: 'bottom', requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
         { item: 'dress',  requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
-        { item: 'shoes',  requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
+        { item: 'shoes',  requiredState: 'worn', mustBeVisible: false, mayBeDuplicated: false }, // no forzar full body solo para ver zapatos
         { item: 'bag',    requiredState: 'worn', mustBeVisible: false, mayBeDuplicated: false },
       ],
       phonePolicy:     'not_applicable',
+      poseIntent:      'casual_weight_shift',  // se recalcula en buildStoryDirectives
     },
     {
       key:              'ACCESSORY_CLOSEUP',
@@ -2236,24 +2630,39 @@ function buildOutfitCheckShotPool(
 }
 
 // Distribuye los shots de outfit_check según el count pedido.
-// Los beats obligatorios son: ARRIVING → MIRROR_CHECK → DETAIL → READY → DESTINATION
-// Si count < 5, se eliminan en este orden: DETAIL, READY (el arco mínimo es ARRIVING + MIRROR + DESTINATION)
-// Los shots de ACCESSORY_CLOSEUP se insertan ANTES del último shot (no al final).
+//
+// Arco narrativo correcto con detailKind ordering:
+//   ARRIVING (prenda como objeto, pre_wear)
+//   → OUTFIT_DETAIL (detalle pre_wear — antes del reveal)
+//   → MIRROR_CHECK (reveal: outfit completo)
+//   → OUTFIT_DETAIL_WORN (detalle ya puesto — después del reveal)
+//   → READY
+//   → DESTINATION (cierre)
+//
+// Si count < arco completo, se eliminan shots en orden de menor valor narrativo:
+//   Primero: OUTFIT_DETAIL_WORN, luego READY, luego OUTFIT_DETAIL
+//
 // hasDestinationClosure: true si hay destino inferido en brief O si el usuario subió sceneDestinoRef.
 function distributeOutfitCheckShots(count: number, hasDestinationClosure: boolean): string[] {
+  const closingShot = hasDestinationClosure ? 'OUTFIT_DESTINATION' : 'OUTFIT_READY';
+  // Arco completo — 6 shots (máximo antes de accesorios)
   const fullArc = [
-    'OUTFIT_ARRIVING',
-    'OUTFIT_MIRROR_CHECK',
-    'OUTFIT_DETAIL',
-    'OUTFIT_READY',
-    'OUTFIT_DESTINATION',
+    'OUTFIT_ARRIVING',          // prenda como objeto
+    'OUTFIT_DETAIL',            // detalle pre_wear — antes del mirror
+    'OUTFIT_MIRROR_CHECK',      // reveal completo
+    'OUTFIT_DETAIL_WORN',       // detalle ya vestido — después del mirror
+    'OUTFIT_READY',             // selfie de salida
+    closingShot,                // destino o cierre en prep
   ];
-  // Si no hay destino (ni inferido ni subido), el último shot es un cierre en prep space
-  const arc = hasDestinationClosure ? fullArc : [...fullArc.slice(0, 4), 'OUTFIT_MIRROR_CHECK'];
-  if (count >= 5) return arc;
-  if (count === 4) return arc.filter(k => k !== 'OUTFIT_READY');
-  if (count === 3) return ['OUTFIT_ARRIVING', 'OUTFIT_MIRROR_CHECK', hasDestinationClosure ? 'OUTFIT_DESTINATION' : 'OUTFIT_READY'];
-  return ['OUTFIT_ARRIVING', 'OUTFIT_MIRROR_CHECK', hasDestinationClosure ? 'OUTFIT_DESTINATION' : 'OUTFIT_READY'];
+  // Deduplicar si closingShot === OUTFIT_READY ya está en arc
+  const uniqueArc = fullArc.filter((k, i, arr) => arr.indexOf(k) === i);
+
+  if (count >= 6) return uniqueArc;
+  if (count === 5) return uniqueArc.filter(k => k !== 'OUTFIT_DETAIL_WORN');
+  if (count === 4) return uniqueArc.filter(k => k !== 'OUTFIT_DETAIL_WORN' && k !== 'OUTFIT_DETAIL');
+  if (count === 3) return ['OUTFIT_ARRIVING', 'OUTFIT_MIRROR_CHECK', closingShot];
+  // 2 mínimo
+  return ['OUTFIT_ARRIVING', closingShot];
 }
 
 // ── Outfit Haul shots ────────────────────────────────────────
@@ -3142,6 +3551,7 @@ export async function generatePhotodumpShot(
     && !!refs.avatarRef
     && shot.key !== 'HAUL_INTRO'
     && shot.key !== 'OUTFIT_ARRIVING'
+    && shot.key !== 'OUTFIT_DETAIL_WORN'
     && shot.key !== 'ACCESSORY_CLOSEUP'
     && shot.key !== 'UNBOXING_PACKAGING_CLOSED'
     && shot.key !== 'UNBOXING_PRODUCT_REVEAL'
@@ -3291,6 +3701,33 @@ Organic, imperfect, lived-in. NOT editorial. NOT advertising. NOT staged.`;
     : extractShotLocationOverride(basePrompt, shot.key, hasUserSceneRef);
   const styleCoherenceBlock  = buildStyleCoherenceBlock(presentationStyle, shot.key);
 
+  // ── Scene Continuity Block — propaga fingerprint del prep space ───────────────
+  // Solo para recetas outfit_check y solo en shots del prep arc (no destination)
+  const sceneContinuityBlock = (() => {
+    if (!isOutfitCheckRecipe) return '';
+    if (shot.continuityMode === 'free' || shot.narrativeStage === 'destination') return '';
+    if (!ref0Analysis) return '';
+    const fingerprint = buildSceneFingerprint(
+      ref0Analysis,
+      hasUserSceneRef,
+      briefCtxForShot?.prepMood ?? '',
+    );
+    return buildSceneContinuityBlock(fingerprint, shot.key ?? '', hasUserSceneRef);
+  })();
+
+  // ── Adaptive Closure Block — solo para OUTFIT_DESTINATION ─────────────────────
+  const adaptiveClosureBlock = (() => {
+    if (!isOutfitCheckRecipe) return '';
+    if (shot.key !== 'OUTFIT_DESTINATION') return '';
+    if (!shot.poseIntent) return '';
+    return buildAdaptiveClosureBlock(
+      shot.poseIntent,
+      shot.environmentAffordances ?? [],
+      destDescForShot,
+      shot.closureReason ?? 'organic social closure',
+    );
+  })();
+
   const prompt = `${LOCK_SYSTEM}
 
 ${PARADIGM_RULE}
@@ -3300,6 +3737,10 @@ ${shotModeBlock}
 ${briefContextBlock}
 
 ${shotLocationOverride}
+
+${sceneContinuityBlock}
+
+${adaptiveClosureBlock}
 
 ${styleCoherenceBlock}
 
@@ -3366,7 +3807,20 @@ ${NEGATIVE_SHORT}`;
     totalShots:      6,
     metadata:        { role: shot.role, beat: shot.beat, narrative },
   });
-  return { imageUrl, prompt, refsCount: preparedRefs.length };
+  return {
+    imageUrl,
+    prompt,
+    refsCount:      preparedRefs.length,
+    hpiSource,
+    familyBlockMode: familyBlock
+      ? (isOutfitCheckRecipe ? 'abstract_style_hint' : 'literal_prompt_block')
+      : 'disabled',
+    poseIntent:     shot.poseIntent,
+    detailKind:     shot.detailKind,
+    continuityMode: shot.continuityMode,
+    environmentAffordances: shot.environmentAffordances,
+    closureReason:  shot.closureReason,
+  } as any;
 }
 
 // ── Caption + hashtags por Gemini ─────────────────────────────

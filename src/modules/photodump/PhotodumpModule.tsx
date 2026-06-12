@@ -467,6 +467,8 @@ const PhotodumpModule: React.FC = () => {
               promptLayersApplied: [
                 'LOCK_SYSTEM', 'PARADIGM_RULE', 'STORY_MODE', 'BRIEF_CONTEXT',
                 sh.sceneLockPolicy ? `SCENE_LOCK_${sh.sceneLockPolicy.toUpperCase()}` : null,
+                sh.continuityMode && sh.continuityMode !== 'free' ? `SCENE_CONTINUITY_${sh.continuityMode.toUpperCase()}` : null,
+                sh.poseIntent && sh.key === 'OUTFIT_DESTINATION' ? `POSE_INTENT_${sh.poseIntent.toUpperCase()}` : null,
                 sh.wearState  ? 'WEAR_STATE'    : null,
                 sh.itemStatePlan ? 'ITEM_STATE_PLAN' : null,
                 sh.cameraMode ? 'CAMERA_MODE'   : null,
@@ -486,6 +488,11 @@ const PhotodumpModule: React.FC = () => {
               closingStrategy:  sh.closingStrategy,
               sceneLockPolicy:  sh.sceneLockPolicy,
               phonePolicy:      sh.phonePolicy,
+              poseIntent:       sh.poseIntent,
+              detailKind:       sh.detailKind,
+              continuityMode:   sh.continuityMode,
+              environmentAffordances: sh.environmentAffordances,
+              closureReason:    sh.closureReason,
               possibleContradictions: contradictions.length > 0 ? contradictions : undefined,
               status:       'ok',
             });
