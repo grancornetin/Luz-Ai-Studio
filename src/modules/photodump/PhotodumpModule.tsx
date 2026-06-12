@@ -35,6 +35,8 @@ import {
   inferDestinationFromBrief,
   detectContradictions,
   parseBriefContext,
+  parseOutfitBriefContext,
+  inferOutfitComposition,
   type PhotodumpShotResult,
 } from './photodumpDirectorService';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
@@ -379,8 +381,10 @@ const PhotodumpModule: React.FC = () => {
       const refsWithMode = { ...refs, outfitMode, gender: inferredGender };
 
       setProgressStepIndex(0);
+      // Count policy para outfit_check: REF0 ocupa un slot, story shots = count - 1
+      const storyShotCount = recipe === 'outfit_check' ? Math.max(2, count - 1) : count;
       const plan  = await buildPhotodumpSessionPlan(narrative, protagonist, destino, basePrompt, recipe, refsWithMode, count);
-      const shots = plan.shots.slice(0, count);
+      const shots = plan.shots.slice(0, storyShotCount);
       setSavedShots(shots);
       setSavedPlan(plan);
 
@@ -396,6 +400,9 @@ const PhotodumpModule: React.FC = () => {
 
       // Debug: acumular prompts de cada shot (solo para admins)
       const inferredDest = isAdmin ? inferDestinationFromBrief(basePrompt) : 'none' as const;
+      const briefCtxDebug = isAdmin && recipe === 'outfit_check' ? parseOutfitBriefContext(basePrompt) : undefined;
+      const outfitCompositionDebug = isAdmin && recipe === 'outfit_check'
+        ? inferOutfitComposition(refsWithMode, basePrompt) : undefined;
       const debugShots: PhotodumpShotDebug[] = isAdmin ? [{
         shotIndex:   0,
         role:        'REF0_ANCHOR',
@@ -429,10 +436,13 @@ const PhotodumpModule: React.FC = () => {
           shotUrls.push(result.imageUrl);
           setPartialImages(prev => [...prev, result.imageUrl]);
           if (isAdmin) {
+            const hpiSrc    = (result as any).hpiSource as 'disabled' | 'filtered_outfit_hpi' | 'raw_hpi_not_allowed' | undefined;
+            const famMode   = (result as any).familyBlockMode as 'disabled' | 'abstract_style_hint' | 'literal_prompt_block' | undefined;
             const contradictions = detectContradictions(
               sh, inferredDest, !!(refsWithMode as any).sceneDestinoRef,
               parseBriefContext(basePrompt).timeSignal,
               recipe, shots.map(s => s.key ?? ''),
+              briefCtxDebug, outfitCompositionDebug, hpiSrc, famMode,
             );
 
             debugShots.push({
@@ -466,6 +476,10 @@ const PhotodumpModule: React.FC = () => {
               ].filter(Boolean) as string[],
               hpiApplied:       !!sh.hpiAllowed,
               hpiProfileUsed:   sh.hpiScope ?? 'none',
+              hpiSource:        hpiSrc,
+              familyBlockApplied: !!famMode && famMode !== 'disabled',
+              familyBlockMode:  famMode,
+              outfitComposition: outfitCompositionDebug,
               itemStatePlan:    sh.itemStatePlan,
               isFinalShot:      sh.isFinalShot,
               isClosingShot:    sh.isClosingShot,
@@ -506,6 +520,16 @@ const PhotodumpModule: React.FC = () => {
         inferredGender:      inferredGender,
         inferredDestination: inferredDest,
         count,
+        requestedCount:      count,
+        visibleImageCount:   recipe === 'outfit_check' ? count : count + 1,
+        ref0IncludedInCount: recipe === 'outfit_check',
+        storyShotCount:      storyShotCount,
+        generatedImageCount: shotUrls.filter(Boolean).length,
+        failedShotCount:     failed.length,
+        briefContext:        briefCtxDebug,
+        outfitComposition:   outfitCompositionDebug,
+        destinationClass:    briefCtxDebug?.destinationClass,
+        prepEnvironmentClass: briefCtxDebug?.prepEnvironmentClass,
         plan,
         shots:               debugShots,
       } : undefined;

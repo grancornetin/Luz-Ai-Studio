@@ -188,6 +188,51 @@ export interface FreeScene {
   result:      string | null;
 }
 
+// ── Outfit Check: router semántico de brief ───────────────────────────────────
+
+export type OutfitDestinationClass =
+  | 'none'
+  | 'opera_theatre'
+  | 'formal_event'
+  | 'restaurant_dinner'
+  | 'country_club_brunch'
+  | 'office_meeting'
+  | 'business_event'
+  | 'beach_day'
+  | 'travel_airport'
+  | 'urban_social_outing'
+  | 'generic_outing';
+
+export type PrepEnvironmentClass =
+  | 'real_bedroom'
+  | 'tidy_bedroom'
+  | 'refined_bedroom'
+  | 'upscale_dressing_room'
+  | 'hotel_like_room'
+  | 'bathroom_mirror'
+  | 'fitting_room'
+  | 'office_ready_room'
+  | 'user_scene_locked';
+
+export interface OutfitBriefContext {
+  timeSignal:          'morning' | 'day' | 'afternoon' | 'golden_hour' | 'night' | 'unspecified';
+  destinationClass:    OutfitDestinationClass;
+  prepEnvironmentClass: PrepEnvironmentClass;
+  destinationLabel:    string;   // descripción de destino para el prompt
+  prepMood:            string;   // descripción del espacio de prep para el prompt
+  destinationMood:     string;   // descripción de atmósfera del destino
+  isOccasionBrief:     boolean;
+  destinationShotOptions: string[]; // variaciones aceptables para el closing shot
+}
+
+// ── Outfit composition: inferida desde brief + refs ──────────────────────────
+export type OutfitComposition =
+  | 'top_bottom'
+  | 'dress'
+  | 'suit'
+  | 'outerwear_top_bottom'
+  | 'unknown';
+
 // ── WearState: estado del outfit sobre el cuerpo en cada shot ─────────────────
 // Se calcula por (recipe, shotKey, presentationStyle, arcPosition).
 // El prompt assembly usa este valor para inyectar o bloquear reglas de outfit.
@@ -217,21 +262,22 @@ export interface OutfitItemPlan {
 
 // ── CameraMode: perspectiva explícita para evitar mezclas absurdas ─────────────
 export type CameraMode =
-  | 'hands_presenter_closeup'      // manos sosteniendo objeto hacia cámara — sin cuerpo visible
-  | 'object_flatlay'               // overhead o ángulo bajo de objetos sobre superficie
-  | 'mirror_selfie_phone_visible'  // selfie de espejo con teléfono visible — apuntando al espejo
-  | 'mirror_selfie_phone_hidden'   // selfie de espejo sin teléfono — brazo fuera de frame
-  | 'mirror_check_no_phone'        // persona revisa look en espejo, sin teléfono (trípode/tercero)
-  | 'third_person_mirror_capture'  // cámara externa captura persona Y su reflejo
-  | 'selfie_pov'                   // selfie directo POV — cara dominante
-  | 'third_person'                 // alguien más (o trípode) capturando a la persona
-  | 'tripod_capture'               // trípode/automático — persona sola en frame, cámara estática
-  | 'detail_macro'                 // macro de un detalle, sin corpo ni cara
-  | 'rack_wide'                    // shot ancho del rack/perchero como sujeto principal
-  | 'full_body_room'               // full body de persona parada en espacio real
-  | 'candid_third'                 // tercero captura sin que la persona "pose" para cámara
-  // legado — no usar en código nuevo; se mantiene para compatibilidad con sets guardados
-  | 'mirror_selfie';
+  | 'hands_presenter_closeup'      // manos sosteniendo objeto hacia cámara
+  | 'object_flatlay'               // overhead de objetos sobre superficie
+  | 'mirror_selfie_phone_visible'  // selfie de espejo — teléfono visible apuntando al espejo
+  | 'mirror_check_no_phone'        // persona revisa look en espejo, sin teléfono
+  | 'third_person_mirror_capture'  // cámara externa captura persona + reflejo
+  | 'selfie_pov'                   // selfie POV — cara dominante, sin teléfono visible
+  | 'third_person'                 // tercero/trípode capturando a la persona
+  | 'tripod_capture'               // trípode estático
+  | 'detail_macro'                 // macro de detalle — sin cuerpo ni cara
+  | 'rack_wide'                    // shot ancho del rack como sujeto
+  | 'full_body_room'               // full body en espacio real
+  | 'destination_social_pose'      // pose social creíble en destino — no catálogo
+  | 'candid_third'                 // tercero captura sin que la persona "pose"
+  // legado — no usar en código nuevo
+  | 'mirror_selfie'
+  | 'mirror_selfie_phone_hidden';
 
 // ── SceneLockPolicy: controla qué tan anclado está el shot al espacio de REF0 ─
 export type SceneLockPolicy =
@@ -283,9 +329,13 @@ export interface PhotodumpShotDebug {
   promptLayersApplied?:     string[];
   hpiApplied?:              boolean;
   hpiProfileUsed?:          string;
+  hpiSource?:               'disabled' | 'filtered_outfit_hpi' | 'raw_hpi_not_allowed';
+  familyBlockApplied?:      boolean;
+  familyBlockMode?:         'disabled' | 'abstract_style_hint' | 'literal_prompt_block';
   possibleContradictions?:  string[];
 
-  // Nuevos campos de cierre y política
+  // Campos de cierre, política y composición
+  outfitComposition?:       OutfitComposition;
   itemStatePlan?:           OutfitItemPlan[];
   isFinalShot?:             boolean;
   isClosingShot?:           boolean;
@@ -297,13 +347,25 @@ export interface PhotodumpShotDebug {
 }
 
 export interface PhotodumpDebugData {
-  generatedAt:  string;   // ISO timestamp
+  generatedAt:  string;
   recipe:       string;
   basePrompt:   string;
   inferredGender: string;
   inferredDestination?: InferredDestination;
+  // Campos de conteo claros
+  requestedCount:      number;
+  visibleImageCount:   number;
+  ref0IncludedInCount: boolean;
+  storyShotCount:      number;
+  generatedImageCount: number;
+  failedShotCount:     number;
+  // Contexto del brief
+  briefContext?:       OutfitBriefContext;
+  outfitComposition?:  OutfitComposition;
+  destinationClass?:   OutfitDestinationClass;
+  prepEnvironmentClass?: PrepEnvironmentClass;
   count:        number;
-  plan:         any;      // PhotodumpSessionPlan completo
+  plan:         any;
   shots:        PhotodumpShotDebug[];
 }
 

@@ -17,6 +17,7 @@ import {
   FreeScene, FreeSceneRefs,
   WearState, CameraMode, InferredDestination,
   OutfitItemPlan, SceneLockPolicy,
+  OutfitBriefContext, OutfitDestinationClass, PrepEnvironmentClass, OutfitComposition,
 } from './types';
 import {
   getStorySupportFamilies, initPhotodumpIntelligence, StorySupportFamily,
@@ -294,64 +295,338 @@ WHAT MAKES GREAT FACELESS CONTENT:
 
 // ── Helpers ───────────────────────────────────────────────────
 
-// Extrae señales de tiempo, ambiente y mood del brief del usuario para elevarlas
-// como directiva dominante de iluminación/atmósfera. Sin esto, el modelo ignora
-// contexto temporal ("noche de ópera") y genera luz de día por defecto.
-// Retorna señales de contexto del brief separadas en tiempo, venue-destino y mood.
-// El venue/ocasión es SIEMPRE el destino final de la historia — NUNCA la locación
-// de cada shot individual. Los shots de preparación ocurren en casa/habitación.
-function parseBriefContext(basePrompt: string): {
-  timeSignal: string;
-  venueSignal: string;       // ocasión/destino final (ópera, restaurante, etc.)
-  isOccasionBrief: boolean;  // true si el brief menciona un destino/evento
-} {
+// Router semántico completo para outfit_check.
+// Reemplaza parseBriefContext con precisión de destino, prep environment y mood.
+export function parseOutfitBriefContext(basePrompt: string): OutfitBriefContext {
   const lower = basePrompt.toLowerCase();
-  let timeSignal  = '';
-  let venueSignal = '';
 
-  if (lower.includes('noche') || lower.includes('night') || lower.includes('nocturno') || lower.includes('nocturna'))
-    timeSignal = 'NIGHT — warm artificial light, evening atmosphere, no daylight';
+  // ── Time signal ───────────────────────────────────────────────
+  let timeSignal: OutfitBriefContext['timeSignal'] = 'unspecified';
+  if (lower.includes('noche') || lower.includes('night') || lower.includes('nocturno') || lower.includes('nocturna') || lower.includes('evening'))
+    timeSignal = 'night';
   else if (lower.includes('atardecer') || lower.includes('sunset') || lower.includes('golden hour') || lower.includes('hora dorada'))
-    timeSignal = 'GOLDEN HOUR — warm orange-gold directional light, long shadows';
-  else if (lower.includes('mañana') || lower.includes('morning') || lower.includes('amanecer'))
-    timeSignal = 'MORNING — soft cool-to-warm natural light, fresh atmosphere';
-  else if (lower.includes('mediodía') || lower.includes('midday') || lower.includes('tarde'))
-    timeSignal = 'AFTERNOON — strong natural light, clear shadows';
+    timeSignal = 'golden_hour';
+  else if (lower.includes('mañana') || lower.includes('morning') || lower.includes('amanecer') || lower.includes('desayuno') || lower.includes('brunch'))
+    timeSignal = 'morning';
+  else if (lower.includes('mediodía') || lower.includes('midday'))
+    timeSignal = 'day';
+  else if (lower.includes('tarde') || lower.includes('afternoon') || lower.includes('almuerzo'))
+    timeSignal = 'afternoon';
 
-  if (lower.includes('ópera') || lower.includes('opera') || lower.includes('teatro') || lower.includes('theatre'))
-    venueSignal = 'OCCASION: opera / theatre night — formal elegance, chandeliers, velvet, marble. This is the DESTINATION, not the prep location.';
-  else if (lower.includes('cóctel') || lower.includes('cocktail') || lower.includes('gala') || lower.includes('evento'))
-    venueSignal = 'OCCASION: formal social event — evening venue, elegant atmosphere. This is the DESTINATION, not the prep location.';
-  else if (lower.includes('playa') || lower.includes('beach') || lower.includes('mar'))
-    venueSignal = 'DESTINATION: beach / ocean — natural light, sand, water. This is the destination, not every shot\'s location.';
-  else if (lower.includes('restaurant') || lower.includes('restaurante') || lower.includes('dinner') || lower.includes('cena'))
-    venueSignal = 'OCCASION: restaurant / dinner — warm evening ambiance. This is the DESTINATION, not the prep location.';
-  else if (lower.includes('viaje') || lower.includes('travel') || lower.includes('trip'))
-    venueSignal = 'CONTEXT: travel — location-specific environment as destination.';
+  // ── Destination class — orden de prioridad específico→genérico ─
+  let destinationClass: OutfitDestinationClass = 'none';
+  let destinationLabel = '';
+  let destinationMood  = '';
+  let destinationShotOptions: string[] = [];
 
-  return { timeSignal, venueSignal, isOccasionBrief: venueSignal !== '' };
+  if (lower.includes('ópera') || lower.includes('opera') || lower.includes('ballet') ||
+      (lower.includes('teatro') && !lower.includes('reunión') && !lower.includes('oficina'))) {
+    destinationClass = 'opera_theatre';
+    destinationLabel = 'opera house or theatre — grand foyer, marble floors, ornate chandeliers, velvet curtains, formal elegance';
+    destinationMood  = 'formal, opulent, golden light, architectural grandeur';
+    destinationShotOptions = [
+      'relaxed elegant pose in theatre foyer — near column or velvet drape, full body visible, not descending stairs',
+      'mirror selfie in elegant theatre bathroom — warm vanity light, marble countertop, full body or three-quarter',
+      'seated in lobby lounge on velvet sofa or chair — looking at camera or slightly off, outfit fully readable',
+      'standing near ornate architectural detail (column, archway, gilded frame) — pose natural, not catalog',
+    ];
+  } else if (lower.includes('brunch') || lower.includes('club campestre') || lower.includes('country club') ||
+             lower.includes('club house') || lower.includes('terraza club') || lower.includes('almuerzo campestre') ||
+             (lower.includes('club') && (lower.includes('brunch') || lower.includes('almuerzo') || lower.includes('terraza')))) {
+    destinationClass = 'country_club_brunch';
+    destinationLabel = 'country club or upscale brunch venue — garden terrace, clubhouse lounge, elegant outdoor seating with greenery';
+    destinationMood  = 'refined, bright, airy, social, relaxed luxury — morning to afternoon light';
+    destinationShotOptions = [
+      'relaxed pose on clubhouse terrace — greenery or elegant outdoor furniture in background, natural daylight',
+      'seated at brunch table, relaxed and looking at camera — blurred elegant table setting in background',
+      'standing near clubhouse entrance or lounge doorway — bright natural light, outfit full body visible',
+      'mirror selfie in refined clubhouse bathroom — clean, elegant, bright lighting',
+    ];
+  } else if (lower.includes('oficina') || lower.includes('reunión') || lower.includes('meeting') ||
+             lower.includes('trabajo') || lower.includes('work') || lower.includes('corporate') ||
+             lower.includes('business') || lower.includes('cowork') || lower.includes('laboral') ||
+             lower.includes('junta') || lower.includes('presentación') || lower.includes('pitch')) {
+    destinationClass = 'office_meeting';
+    destinationLabel = 'corporate environment — office lobby, building entrance, elevator mirror, coworking premium space, business corridor';
+    destinationMood  = 'professional, clean, daylight or bright interior — polished and composed';
+    destinationShotOptions = [
+      'elevator mirror selfie — natural composition, clean corporate interior visible in reflection',
+      'standing naturally near office lobby wall or column — daylight or bright interior, full body visible',
+      'corporate corridor or building entrance — walking-arriving feel, not rigid, daylight',
+      'cowork lounge — relaxed professional pose, blurred modern interior in background',
+    ];
+  } else if (lower.includes('gala') || lower.includes('black tie') || lower.includes('cocktail') ||
+             lower.includes('cóctel') || lower.includes('evento formal') || lower.includes('evento de gala')) {
+    destinationClass = 'formal_event';
+    destinationLabel = 'upscale formal event — elegant venue lobby, cocktail reception space, refined interior with soft golden lighting';
+    destinationMood  = 'elegant, polished, evening golden light, sophisticated';
+    destinationShotOptions = [
+      'elegant lobby or foyer pose — near architectural detail, full body visible, not walking',
+      'seated lounge moment at event venue — velvet chair or sofa, outfit readable',
+      'mirror selfie in venue bathroom — warm evening light, refined surfaces',
+      'standing near floor-to-ceiling window or elegant wall — soft interior light',
+    ];
+  } else if (lower.includes('restaurant') || lower.includes('restaurante') ||
+             lower.includes('dinner') || lower.includes('cena') || lower.includes('date night')) {
+    destinationClass = 'restaurant_dinner';
+    destinationLabel = 'elegant restaurant — warm candlelight or intimate interior, table setting visible in background, evening atmosphere';
+    destinationMood  = 'intimate, warm, evening, romantic or social';
+    destinationShotOptions = [
+      'restaurant entrance or interior — near host stand or window table, warm light, outfit visible',
+      'seated moment — looking at camera or slightly off, blurred elegant table setting behind',
+      'bathroom mirror selfie at restaurant — warm intimate light, refined interior',
+      'standing at bar or lounge section — relaxed, warm ambient lighting',
+    ];
+  } else if (lower.includes('playa') || lower.includes('beach') || lower.includes('mar ') || lower.includes('ocean') || lower.includes('pool')) {
+    destinationClass = 'beach_day';
+    destinationLabel = 'beach or outdoor setting — sand, ocean or pool, open natural light, relaxed and open atmosphere';
+    destinationMood  = 'sunny, open, natural, relaxed';
+    destinationShotOptions = [
+      'full body at beach or poolside — natural light, sand or water visible',
+      'relaxed pose near beach entrance or shoreline — looking at camera, outfit readable',
+      'standing at outdoor terrace with sea view — natural daylight',
+    ];
+  } else if (lower.includes('viaje') || lower.includes('travel') || lower.includes('trip') ||
+             lower.includes('vuelo') || lower.includes('airport') || lower.includes('aeropuerto')) {
+    destinationClass = 'travel_airport';
+    destinationLabel = 'airport terminal or travel setting — architectural space, natural light, sense of movement';
+    destinationMood  = 'modern, airy, expansive, travel energy';
+    destinationShotOptions = [
+      'airport lounge or gate area — natural or clean interior light, full body visible',
+      'walking moment in terminal — candid stride, outfit in movement',
+      'mirror selfie in airport bathroom — clean modern lighting',
+    ];
+  } else if (lower.includes('salir') || lower.includes('salida') || lower.includes('noche') ||
+             lower.includes('night out') || lower.includes('going out') || lower.includes('fiesta') ||
+             lower.includes('evento') || lower.includes('concierto')) {
+    destinationClass = 'urban_social_outing';
+    destinationLabel = 'urban evening — venue exterior or lobby, warm city ambiance, nightlife energy';
+    destinationMood  = 'urban, evening, social energy, warm city lights';
+    destinationShotOptions = [
+      'venue entrance or outdoor terrace — evening city light, full body visible',
+      'standing near illuminated exterior or glass facade — warm night ambiance',
+      'lobby or reception area — relaxed social pose',
+    ];
+  }
+
+  // Fallback solo si hay señal de salida/evento pero sin clase específica
+  if (destinationClass === 'none' &&
+      (lower.includes('evento') || lower.includes('event') || lower.includes('celebración'))) {
+    destinationClass = 'generic_outing';
+    destinationLabel = 'lifestyle setting — venue entrance or ambient exterior matching the outfit';
+    destinationMood  = 'social, relaxed, casual-elegant';
+    destinationShotOptions = [
+      'pre-exit mirror or doorway — full body visible, confident attitude',
+      'venue entrance or exterior — warm ambient light, outfit readable',
+    ];
+  }
+
+  // ── Prep environment class ────────────────────────────────────
+  let prepEnvironmentClass: PrepEnvironmentClass = 'real_bedroom';
+  let prepMood = 'real bedroom or dressing area — authentic, lived-in, UGC feel';
+
+  if (destinationClass === 'opera_theatre' || destinationClass === 'formal_event') {
+    prepEnvironmentClass = 'upscale_dressing_room';
+    prepMood = 'upscale dressing room or warm-lit bedroom — evening vanity light, no daylight, refined surfaces, no clutter';
+  } else if (destinationClass === 'country_club_brunch') {
+    prepEnvironmentClass = 'refined_bedroom';
+    prepMood = 'refined bright bedroom or hotel-like dressing room — clean surfaces, airy daylight, polished feel, no cables or mess';
+  } else if ((destinationClass as OutfitDestinationClass) === 'office_meeting' || (destinationClass as OutfitDestinationClass) === 'business_event') {
+    prepEnvironmentClass = 'office_ready_room';
+    prepMood = 'clean minimal bedroom or tidy mirror area — morning/daylight, practical and polished, no nightlife mood';
+  } else if (destinationClass === 'beach_day') {
+    prepEnvironmentClass = 'tidy_bedroom';
+    prepMood = 'tidy casual room or bathroom — bright natural light, casual clean feel';
+  } else if (destinationClass === 'restaurant_dinner') {
+    prepEnvironmentClass = 'tidy_bedroom';
+    prepMood = 'tidy bedroom or mirror area — warm evening pre-dinner feel, soft light';
+  } else if (timeSignal === 'night') {
+    prepEnvironmentClass = 'tidy_bedroom';
+    prepMood = 'tidy bedroom or mirror area — warm artificial evening light, no daylight';
+  }
+
+  return {
+    timeSignal,
+    destinationClass,
+    prepEnvironmentClass,
+    destinationLabel,
+    prepMood,
+    destinationMood,
+    isOccasionBrief: destinationClass !== 'none',
+    destinationShotOptions,
+  };
 }
 
-export { parseBriefContext };
+// Compatibilidad legada — otros módulos siguen usando parseBriefContext para timeSignal/venueSignal.
+export function parseBriefContext(basePrompt: string): {
+  timeSignal: string;
+  venueSignal: string;
+  isOccasionBrief: boolean;
+} {
+  const ctx = parseOutfitBriefContext(basePrompt);
+  const timeMap: Record<string, string> = {
+    night:       'NIGHT — warm artificial light, evening atmosphere, no daylight',
+    golden_hour: 'GOLDEN HOUR — warm orange-gold directional light, long shadows',
+    morning:     'MORNING — soft cool-to-warm natural light, fresh atmosphere',
+    day:         'DAY — natural daylight',
+    afternoon:   'AFTERNOON — strong natural light, clear shadows',
+    unspecified: '',
+  };
+  return {
+    timeSignal:      timeMap[ctx.timeSignal] ?? '',
+    venueSignal:     ctx.isOccasionBrief ? ctx.destinationLabel : '',
+    isOccasionBrief: ctx.isOccasionBrief,
+  };
+}
 
-// ── Destination inference ─────────────────────────────────────
-// Lee el brief y deduce si hay un destino final explícito.
-// Esto desacopla "hay un destino implícito" de "el usuario subió una foto de destino".
+// ── Destination inference (legado — delegado al router semántico) ─────────────
 export function inferDestinationFromBrief(basePrompt: string): InferredDestination {
+  const ctx = parseOutfitBriefContext(basePrompt);
+  // Mapear OutfitDestinationClass → InferredDestination legado
+  const map: Partial<Record<OutfitDestinationClass, InferredDestination>> = {
+    opera_theatre:       'opera_theatre',
+    formal_event:        'cocktail_gala',
+    restaurant_dinner:   'restaurant_dinner',
+    country_club_brunch: 'restaurant_dinner',
+    beach_day:           'beach_outdoor',
+    travel_airport:      'travel_transit',
+    office_meeting:      'generic_outing',
+    business_event:      'generic_outing',
+    urban_social_outing: 'generic_outing',
+    generic_outing:      'generic_outing',
+    none:                'none',
+  };
+  return map[ctx.destinationClass] ?? 'none';
+}
+
+// ── Prep environment directive para REF0 outfit_check ────────────────────────
+// Genera la instrucción de espacio de preparación correcta para el brief dado.
+// Si el usuario subió scenePruebaRef, la IA lo respeta — sino, genera el espacio apropiado.
+export function buildPrepEnvironmentDirective(ctx: OutfitBriefContext, hasUserSceneRef: boolean): string {
+  if (hasUserSceneRef) {
+    return `PREP SPACE: The user has provided a real prep space reference. Reproduce it faithfully.
+Same walls, same light, same surfaces. Do NOT improve or idealize it beyond what is shown.`;
+  }
+
+  const envDescriptions: Record<PrepEnvironmentClass, string> = {
+    upscale_dressing_room:
+      'PREP SPACE (generate): An upscale dressing room or warm-lit bedroom. ' +
+      'Think hotel vanity, warm lamp light, clean mirror area, refined surfaces. ' +
+      'Evening mood — NO daylight, NO window sunlight. NO clutter, cables, or messy surfaces. ' +
+      'The space should feel elegantly intimate — not editorial, but tidy and aspirational.',
+    refined_bedroom:
+      'PREP SPACE (generate): A refined, tidy bedroom or hotel-like dressing room. ' +
+      'Airy daylight through a window, clean minimal surfaces, polished feel. ' +
+      'No clutter, no cables, no messy makeup spread. Light walls, clean floor. ' +
+      'The space should feel bright and put-together — real but elevated.',
+    office_ready_room:
+      'PREP SPACE (generate): A clean, minimal bedroom or tidy mirror area. ' +
+      'Morning daylight, practical and polished. No nightlife mood, no evening warmth. ' +
+      'Neutral surfaces, no clutter. Could be a tidy bedroom, a clean bathroom mirror area, or a simple dressing corner.',
+    tidy_bedroom:
+      'PREP SPACE (generate): A tidy, real bedroom or mirror area. ' +
+      'Natural light or warm room light depending on time of day. Clean surfaces, lived-in but not messy. ' +
+      'Authentic UGC feel — not editorial, not messy.',
+    hotel_like_room:
+      'PREP SPACE (generate): A hotel-like room or upscale residential dressing area. ' +
+      'Clean, quiet, refined. Soft light. No personal clutter.',
+    bathroom_mirror:
+      'PREP SPACE (generate): A bathroom mirror area — clean, bright, intimate. ' +
+      'Mirror fills part of the frame. Light is from above or vanity strip.',
+    fitting_room:
+      'PREP SPACE (generate): A fitting room or boutique dressing room. ' +
+      'Clean mirror, neutral walls, soft interior light.',
+    real_bedroom:
+      'PREP SPACE (generate): A real bedroom or dressing area. ' +
+      'Authentic UGC feel — lived-in but clean enough to feel intentional. ' +
+      'Light from window or room lamp. No extreme clutter.',
+    user_scene_locked: '',  // handled by hasUserSceneRef branch above
+  };
+
+  const desc = envDescriptions[ctx.prepEnvironmentClass] || envDescriptions.real_bedroom;
+  return `${desc}
+IMPORTANT: This is the preparation space — NOT the event venue. Even if the brief mentions ${ctx.destinationLabel || 'a destination'}, this shot is in the getting-ready space.
+Do NOT lock accidental clutter. Do NOT replicate random objects, cables, or messy surfaces as required elements.
+Keep the space tidy and believable for the brief occasion.`;
+}
+
+// ── Outfit composition inference ──────────────────────────────
+// Infiere la composición del outfit desde el brief y los refs disponibles.
+export function inferOutfitComposition(refs: Partial<PhotodumpRefs>, basePrompt: string): OutfitComposition {
   const lower = basePrompt.toLowerCase();
-  if (lower.includes('ópera') || lower.includes('opera') || lower.includes('teatro') || lower.includes('theatre') || lower.includes('ballet'))
-    return 'opera_theatre';
-  if (lower.includes('cóctel') || lower.includes('cocktail') || lower.includes('gala') || lower.includes('evento formal') || lower.includes('black tie'))
-    return 'cocktail_gala';
-  if (lower.includes('restaurant') || lower.includes('restaurante') || lower.includes('dinner') || lower.includes('cena') || lower.includes('date night'))
-    return 'restaurant_dinner';
-  if (lower.includes('playa') || lower.includes('beach') || lower.includes('mar ') || lower.includes('ocean') || lower.includes('pool'))
-    return 'beach_outdoor';
-  if (lower.includes('viaje') || lower.includes('travel') || lower.includes('trip') || lower.includes('vuelo') || lower.includes('airport'))
-    return 'travel_transit';
-  if (lower.includes('salir') || lower.includes('salida') || lower.includes('noche') || lower.includes('night out') || lower.includes('going out'))
-    return 'generic_outing';
-  return 'none';
+
+  // Señales explícitas de vestido
+  if (lower.includes('vestido') || lower.includes('dress') || lower.includes('gown') ||
+      lower.includes('maxi dress') || lower.includes('midi dress') || lower.includes('mini dress'))
+    return 'dress';
+
+  // Señales de traje/suit
+  if (lower.includes('traje') || lower.includes('suit') || lower.includes('blazer y') ||
+      lower.includes('blazer con'))
+    return 'suit';
+
+  // Señales de top + bottom
+  const hasTop = lower.includes('camisa') || lower.includes('blusa') || lower.includes('top') ||
+                 lower.includes('camiseta') || lower.includes('corset') || lower.includes('bustier') ||
+                 lower.includes('body') || lower.includes('remera');
+  const hasBottom = lower.includes('pantalón') || lower.includes('jeans') || lower.includes('falda') ||
+                    lower.includes('short') || lower.includes('skirt') || lower.includes('pants') ||
+                    lower.includes('trousers') || lower.includes('leggins');
+  const hasOuterwear = lower.includes('blazer') || lower.includes('saco') || lower.includes('campera') ||
+                       lower.includes('chaqueta') || lower.includes('jacket') || lower.includes('coat');
+
+  if (hasOuterwear && (hasTop || hasBottom)) return 'outerwear_top_bottom';
+  if (hasTop || hasBottom) return 'top_bottom';
+
+  return 'unknown';
+}
+
+// ── Item state plan por composición ──────────────────────────
+// Construye el itemStatePlan correcto según el shotKey y la composición inferida.
+// Evita exigir simultáneamente dress + top + bottom.
+function buildItemStatePlanForShot(
+  shotKey: string,
+  composition: OutfitComposition,
+): OutfitItemPlan[] {
+  const isDress     = composition === 'dress';
+  const isSuit      = composition === 'suit';
+  const isTopBottom = composition === 'top_bottom' || composition === 'outerwear_top_bottom';
+
+  if (shotKey === 'OUTFIT_ARRIVING') {
+    // No puesta todavía
+    if (isDress) return [
+      { item: 'dress',  requiredState: 'held', mustBeVisible: true,  mayBeDuplicated: false },
+      { item: 'shoes',  requiredState: 'on_floor_before_wearing', mustBeVisible: false, mayBeDuplicated: false },
+    ];
+    return [
+      { item: 'top',    requiredState: 'held', mustBeVisible: true,  mayBeDuplicated: false },
+      { item: 'bottom', requiredState: 'held', mustBeVisible: false, mayBeDuplicated: false },
+      { item: 'shoes',  requiredState: 'on_floor_before_wearing', mustBeVisible: false, mayBeDuplicated: false },
+    ];
+  }
+
+  if (shotKey === 'OUTFIT_MIRROR_CHECK' || shotKey === 'OUTFIT_READY' || shotKey === 'OUTFIT_DESTINATION') {
+    // Outfit puesto completo
+    if (isDress) return [
+      { item: 'dress',  requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
+      { item: 'shoes',  requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
+      { item: 'bag',    requiredState: 'worn', mustBeVisible: false, mayBeDuplicated: false },
+    ];
+    if (isSuit) return [
+      { item: 'top',    requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
+      { item: 'bottom', requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
+      { item: 'shoes',  requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
+    ];
+    // top_bottom o unknown
+    return [
+      { item: 'top',    requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
+      { item: 'bottom', requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
+      { item: 'shoes',  requiredState: 'worn', mustBeVisible: true,  mayBeDuplicated: false },
+      { item: 'bag',    requiredState: 'worn', mustBeVisible: false, mayBeDuplicated: false },
+    ];
+  }
+
+  return [];
 }
 
 // Descripción textual del destino inferido para inyectar en el prompt del DESTINATION shot.
@@ -617,13 +892,122 @@ Do NOT introduce a new room or event venue.`;
 The person may be on their way out, but the core space still echoes the REF0 prep space.
 Do NOT place the person at the final destination yet.`;
     case 'destination_allowed':
-      return `📍 SCENE LOCK — DESTINATION:
-This is the CLOSING SHOT. The scene changes to the FINAL DESTINATION of the brief.
+      return `📍 SCENE LOCK — DESTINATION CLOSING SHOT:
+This is the FINAL SHOT of the set. The scene is the DESTINATION — NOT the prep room.
 Location: ${destDesc}
-CRITICAL: Do NOT replicate the prep room walls, furniture, or lighting.
-Same person, same outfit, same identity — NEW final destination space.
-The story ends HERE — in the place the brief implied from the start.`;
+CRITICAL: Do NOT replicate the prep room walls, furniture, or lighting from previous shots.
+Same person, same outfit, same identity — completely new destination space.
+
+ACCEPTABLE POSES for this destination (choose the most natural and socially believable):
+- Relaxed pose near architectural element (column, doorway, wall) — not catalog-stiff
+- Seated in venue lounge or at venue seating
+- Mirror selfie inside venue bathroom
+- Standing naturally at venue entrance or corridor
+
+FORBIDDEN in this shot:
+- descending stairs in motion
+- holding ticket as main visual subject
+- shoes-only floor close-up as closing image
+- rigid full-frontal mannequin stance in center of room
+- prep room walls, mirror, bed, or furniture from REF0
+- any nightlife prop if destination is office or brunch`;
   }
+}
+
+// ── HPI específico para outfit_check — sin bloques crudos ────────────────────
+// Genera instrucciones de micro-acción específicas por shot, sin usar buildHpiBlock crudo.
+function buildOutfitCompatibleHpiBlock(
+  shotKey: string,
+  gender: 'female' | 'male' | 'neutral',
+  destinationClass: OutfitDestinationClass,
+): string {
+  const genderNote = gender === 'male' ? 'masculine' : 'feminine';
+
+  switch (shotKey) {
+    case 'OUTFIT_ARRIVING':
+    case 'OUTFIT_DETAIL':
+    case 'ACCESSORY_CLOSEUP':
+      return '';  // HPI completamente OFF
+
+    case 'OUTFIT_MIRROR_CHECK':
+      return `🎯 MICRO-ACTION (mirror check — outfit-compatible only):
+Choose ONE subtle, realistic action someone does while checking their look in a mirror:
+  - hand resting lightly on hip, evaluating fit
+  - fingertips adjusting collar, neckline, or strap
+  - slight weight shift to one side, natural relaxed posture
+  - turning head slowly to check the back or side of the outfit
+  - one hand smoothing jacket lapel or skirt hem
+  - looking down briefly at shoes or hem, then back up
+FORBIDDEN: any athletic pose, floor sitting, gym movement, extreme torso twist, walking-pose, arms-out gesture, full-body performance.
+The action must be physically coherent with standing in front of a mirror evaluating an outfit.`;
+
+    case 'OUTFIT_READY':
+      return `🎯 MICRO-ACTION (ready selfie — expression and camera only):
+The person is ready and taking a selfie or being photographed.
+  - relaxed, composed ${genderNote} expression — natural smile or confident neutral
+  - slight chin tilt up or head tilt — real selfie angle
+  - one hand near face naturally (adjusting hair, light chin touch)
+  - eyes looking directly at camera
+FORBIDDEN: athletic stance, full-body performance gesture, seated floor pose, product in hand, objects in scene.
+The focus is the FACE and the top of the outfit — this is a mood shot, not a pose.`;
+
+    case 'OUTFIT_DESTINATION':
+      // Micro-acción de pose social creíble según destino
+      const destActions: Record<string, string> = {
+        opera_theatre:       'relaxed elegant posture — hand on hip or arm slightly bent, not rigid, looking slightly off-camera or directly with composed confidence',
+        country_club_brunch: 'relaxed social posture — slight weight shift, natural smile or serene expression, hands loosely in front or one on hip',
+        office_meeting:      'composed, professional posture — standing naturally, subtle hand gesture or arms loosely at sides, direct camera gaze or slight profile',
+        formal_event:        'elegant composed stance — one hand on hip or arms loosely down, slight profile or three-quarter angle, confident',
+        restaurant_dinner:   'relaxed social posture — natural smile, seated or standing, hands loosely together or one on table edge',
+        beach_day:           'relaxed open posture — natural smile, arms loose, wind in hair acceptable',
+        travel_airport:      'confident walking-arriving feel or standing with carry-on nearby',
+        urban_social_outing: 'relaxed urban pose — leaning slightly, natural expression, city energy',
+        business_event:      'composed professional posture — direct gaze, subtle hand gesture',
+        generic_outing:      'natural relaxed posture — confident, not catalog-stiff',
+      };
+      const action = destActions[destinationClass] || destActions.generic_outing;
+      return `🎯 SOCIAL POSE (destination — creíble, no catálogo):
+${action}
+FORBIDDEN: mannequin-rigid full-frontal catalog stance, extreme walking blur, descending stairs in motion, holding ticket/object as hero, shoes-only floor shot, nightlife tropes unless destination is nightlife.
+The pose must look like a real person sharing a social moment at this location.`;
+
+    default:
+      return '';
+  }
+}
+
+// ── Visual Family: hint abstracto para outfit_check ──────────────────────────
+// No inyecta el promptBlock literal (que puede meter laptop, mug, terrace, activewear).
+// Solo usa señales de composición y mood sin objetos/escenas concretas.
+function buildSafeOutfitFamilyStyleHint(
+  family: StorySupportFamily,
+  shotKey: string,
+  cameraMode: CameraMode | undefined,
+): string {
+  // Solo aplicar en shots de objeto/detalle — y solo aspectos de composición
+  const allowedShots = ['OUTFIT_DETAIL', 'OUTFIT_ARRIVING', 'ACCESSORY_CLOSEUP'];
+  if (!allowedShots.includes(shotKey)) return '';
+
+  // Verificar compatibilidad de cameraMode con la familia
+  const incompatibleModes: CameraMode[] = ['full_body_room', 'selfie_pov', 'destination_social_pose'];
+  if (cameraMode && incompatibleModes.includes(cameraMode)) return '';
+
+  const lines: string[] = [
+    '─────────────────────────────────────────────────────',
+    '🎨 STYLE GUIDANCE (abstract — do NOT copy objects or scenes literally):',
+  ];
+
+  if (family.compositionPattern) {
+    const c = family.compositionPattern;
+    if (c.preferredLighting) lines.push(`  Lighting quality: ${c.preferredLighting} — ${c.lightQuality}`);
+    if (c.visualRhythm)      lines.push(`  Visual rhythm: ${c.visualRhythm}`);
+  }
+  if (family.psychologicalMechanisms.length > 0)
+    lines.push(`  Emotional register: ${family.psychologicalMechanisms.slice(0, 2).join(', ')}`);
+
+  lines.push('  NOTE: Apply these qualities to the OUTFIT and CONTEXT of this shot — do NOT import literal objects, props, or scenes from the family reference.');
+  lines.push('─────────────────────────────────────────────────────');
+  return lines.join('\n');
 }
 
 // ── HPI outfit_check filter ───────────────────────────────────
@@ -671,45 +1055,68 @@ export function detectContradictions(
   timeSignal:      string,
   recipe:          string | undefined,
   allShotKeys:     string[],
+  briefCtx?:       OutfitBriefContext,
+  outfitComposition?: OutfitComposition,
+  hpiSource?:      string,
+  familyBlockMode?: string,
 ): string[] {
   const contradictions: string[] = [];
   const isOutfitCheck = recipe === 'outfit_check';
 
   if (isOutfitCheck) {
-    // Destino inferido pero no hay OUTFIT_DESTINATION en el plan
-    if (inferredDest !== 'none' && !hasDestPhoto && !allShotKeys.includes('OUTFIT_DESTINATION'))
-      contradictions.push('destination inferred from brief but no OUTFIT_DESTINATION shot in plan');
+    // Destino claro en brief pero sin OUTFIT_DESTINATION en el plan
+    if (briefCtx && briefCtx.destinationClass !== 'none' && briefCtx.destinationClass !== 'generic_outing' &&
+        !allShotKeys.includes('OUTFIT_DESTINATION'))
+      contradictions.push(`destinationClass=${briefCtx.destinationClass} in brief but no OUTFIT_DESTINATION shot in plan`);
 
-    // Brief de noche pero shot no tiene tiempo nocturno
-    if (timeSignal.includes('NIGHT') && shot.key === 'OUTFIT_ARRIVING')
-      contradictions.push('brief says NIGHT — REF0/prep shots must use warm artificial light, NOT daylight');
+    // generic_outing usado para destino que debería ser específico
+    if (briefCtx && briefCtx.destinationClass === 'generic_outing') {
+      const lower = (shot as any).__basePrompt?.toLowerCase() ?? '';
+      if (lower.includes('oficina') || lower.includes('reunión') || lower.includes('club'))
+        contradictions.push('destinationClass=generic_outing but brief clearly implies office_meeting or country_club_brunch');
+    }
 
-    // wearState full outfit pero zapatos no marcados como worn
+    // Brief de noche en shot de prep
+    if ((timeSignal.includes('NIGHT') || timeSignal === 'night') && shot.key === 'OUTFIT_ARRIVING')
+      contradictions.push('brief says NIGHT — prep shots must use warm artificial light, NOT daylight');
+
+    // wearState full outfit pero zapatos no worn
     if ((shot.wearState === 'wearing_full_outfit' || shot.wearState === 'destination_arrived') &&
         shot.itemStatePlan?.some(p => p.item === 'shoes' && p.requiredState !== 'worn' && p.mustBeVisible))
       contradictions.push('wearState=wearing_full_outfit but itemStatePlan has shoes !== worn');
 
-    // Mirror sin política de teléfono prohibido
-    if ((shot.cameraMode === 'mirror_selfie' || shot.cameraMode === 'mirror_selfie_phone_hidden') &&
-        shot.phonePolicy !== 'forbidden')
-      contradictions.push('cameraMode=mirror_selfie_phone_hidden but phonePolicy is not forbidden');
+    // itemStatePlan exige dress + top + bottom a la vez
+    if (outfitComposition && outfitComposition !== 'unknown' &&
+        shot.itemStatePlan?.some(p => p.item === 'dress') &&
+        shot.itemStatePlan?.some(p => p.item === 'top') &&
+        shot.itemStatePlan?.some(p => p.item === 'bottom'))
+      contradictions.push('itemStatePlan requires dress AND top AND bottom simultaneously — composition conflict');
 
-    // detail_macro pero subjectPresence=full_body
+    // Mirror check sin teléfono prohibido
+    if ((shot.cameraMode === 'mirror_selfie' || shot.cameraMode === 'mirror_selfie_phone_hidden' ||
+         shot.cameraMode === 'mirror_check_no_phone') && shot.phonePolicy !== 'forbidden')
+      contradictions.push('mirror cameraMode but phonePolicy is not forbidden');
+
+    // detail_macro con full_body
     if (shot.cameraMode === 'detail_macro' && shot.subjectPresence === 'full_body')
       contradictions.push('cameraMode=detail_macro but subjectPresence=full_body — should be object_detail or hands_only');
 
-    // HPI en shot de objeto/detalle
-    if (shot.hpiAllowed && ['OUTFIT_ARRIVING', 'OUTFIT_DETAIL', 'ACCESSORY_CLOSEUP'].includes(shot.key ?? ''))
-      contradictions.push('hpiAllowed=true on object/detail shot — HPI must be disabled here');
-
-    // Shot final no marcado como closing
+    // Shot final sin closing marking
     if (shot.isFinalShot && !shot.isClosingShot)
       contradictions.push('final shot is not marked as closing shot');
 
-    // Closing shot bloqueado a prep space con destino disponible
+    // Closing shot con destino disponible pero sceneLockPolicy no es destination_allowed
     if (shot.isClosingShot && shot.sceneLockPolicy !== 'destination_allowed' &&
         (inferredDest !== 'none' || hasDestPhoto))
-      contradictions.push('closing shot has sceneLockPolicy !== destination_allowed despite inferred/uploaded destination');
+      contradictions.push('closing shot not using destination_allowed policy despite available destination');
+
+    // HPI crudo aplicado en outfit_check
+    if (hpiSource === 'raw_hpi_not_allowed')
+      contradictions.push('raw_hpi_not_allowed should never be hpiSource in outfit_check');
+
+    // familyBlock literal aplicado en outfit_check
+    if (familyBlockMode === 'literal_prompt_block')
+      contradictions.push('literal_prompt_block familyBlock applied in outfit_check — should be abstract_style_hint or disabled');
   }
 
   return contradictions;
@@ -845,12 +1252,16 @@ function buildStoryDirectives(
   if (recipe === 'outfit_check') {
     const hasDestino     = !!refs?.sceneDestinoRef;
     const style          = presentationStyle ?? 'hands_presenter';
+    const briefCtx       = parseOutfitBriefContext(basePrompt ?? '');
     const inferredDest   = inferDestinationFromBrief(basePrompt ?? '');
-    // El arco usa destino si hay destino inferido en brief O si el usuario subió una foto de destino
-    const shouldUseDestinationClosure = hasDestino || (inferredDest !== 'none');
-    const pool           = buildOutfitCheckShotPool(style, inferredDest, hasDestino);
+    const composition    = inferOutfitComposition(refs ?? {} as PhotodumpRefs, basePrompt ?? '');
+    // Destino sólido: subido por usuario O inferido del brief (no generic_outing ni none)
+    const shouldUseDestinationClosure =
+      hasDestino ||
+      (briefCtx.destinationClass !== 'none' && briefCtx.destinationClass !== 'generic_outing');
+    const pool           = buildOutfitCheckShotPool(style, inferredDest, hasDestino, briefCtx);
     const baseKeys       = distributeOutfitCheckShots(count, shouldUseDestinationClosure);
-    // Shots de close-up de accesorios van ANTES del último shot (closing shot siempre al final)
+    // Accesorios antes del closing shot
     const closeupIndexes = (refs?.accesorioCloseup ?? [])
       .map((v, i) => v ? i : -1).filter(i => i >= 0);
     const closingKey   = baseKeys[baseKeys.length - 1];
@@ -880,6 +1291,8 @@ function buildStoryDirectives(
       const phonePolicy = key === 'OUTFIT_MIRROR_CHECK'
         ? 'forbidden' as const
         : 'not_applicable' as const;
+      // itemStatePlan derivado de composición real — no exige dress + top + bottom a la vez
+      const itemStatePlanForShot = buildItemStatePlanForShot(key, composition);
       return {
         ...shot,
         arcPosition: i + 1,
@@ -889,6 +1302,7 @@ function buildStoryDirectives(
         closingStrategy: closingStrategy as any,
         sceneLockPolicy,
         phonePolicy,
+        itemStatePlan: itemStatePlanForShot.length > 0 ? itemStatePlanForShot : shot.itemStatePlan,
       };
     });
   }
@@ -1575,6 +1989,7 @@ function buildOutfitCheckShotPool(
   presentationStyle: OutfitPresentationStyle = 'hands_presenter',
   inferredDest?: InferredDestination,
   hasDestinoRef?: boolean,
+  briefCtx?: OutfitBriefContext,
 ): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
   const arrivingVariants = getArrivingVariants(presentationStyle);
   const wearArriving     = resolveWearState('OUTFIT_ARRIVING', presentationStyle);
@@ -1582,12 +1997,21 @@ function buildOutfitCheckShotPool(
   const camArriving      = resolveCameraMode('OUTFIT_ARRIVING', presentationStyle);
   const camDetail        = resolveCameraMode('OUTFIT_DETAIL', presentationStyle);
 
-  // Cierre de destino: si el brief menciona un destino O el usuario subió foto de destino,
-  // la última imagen sintetiza ese lugar. Si no, cierra con un segundo ángulo en la prep space.
+  // Cierre de destino usando briefCtx si está disponible, con fallback a InferredDestination legado
   const hasDestination = hasDestinoRef || (inferredDest && inferredDest !== 'none');
-  const destDesc       = inferredDest && inferredDest !== 'none'
-    ? getDestinationDescription(inferredDest)
-    : 'lifestyle setting — street, entrance, or ambient exterior that matches the outfit mood';
+  const destDesc = briefCtx?.destinationLabel ||
+    (inferredDest && inferredDest !== 'none'
+      ? getDestinationDescription(inferredDest)
+      : 'lifestyle setting — street, entrance, or ambient exterior that matches the outfit mood');
+  // Variaciones de destino específicas según el brief (si existen)
+  const destShotOptions = briefCtx?.destinationShotOptions?.length
+    ? briefCtx.destinationShotOptions
+    : [
+        `full body en ${destDesc} — outfit completo visible, actitud natural, ambiente claramente reconocible`,
+        `avatar apoyada en elemento del ambiente destino (columna, barra, entrada), pose con actitud, outfit completo`,
+        `medium shot en el destino, ambiente de fondo claramente legible, cara y outfit visibles, expresión segura`,
+        `llegando al lugar, outfit completo visible, ambiente destino de fondo orgánico`,
+      ];
 
   return [
     {
@@ -1761,12 +2185,7 @@ function buildOutfitCheckShotPool(
         ...(hasDestination ? ['prep_space_bedroom_or_mirror'] : []),
       ],
       variationSpace: hasDestination
-        ? [
-            `full body en ${destDesc} — outfit completo visible, actitud natural, ambiente claramente reconocible`,
-            `avatar apoyada en elemento del ambiente destino (columna, barra, entrada), pose con actitud, outfit completo`,
-            `medium shot en el destino, ambiente de fondo claramente legible, cara y outfit visibles, expresión segura`,
-            `llegando o caminando hacia el lugar, outfit en movimiento, ambiente destino de fondo orgánico`,
-          ]
+        ? destShotOptions
         : [
             'full body en pasillo o entrada del apartamento, actitud de "voy a salir", look completo visible',
             'medium shot en el mismo cuarto desde otro ángulo, outfit leído desde la cintura hacia arriba, expresión resuelta',
@@ -2191,22 +2610,23 @@ ${!refs.packagingRef ? `No packaging reference provided — create a packaging c
             ? 'PROTAGONIST: The PERSON is the hero. Natural medium shot, authentic expression, real environment.'
             : 'PROTAGONIST: The PERSON and PRODUCT together. Natural interaction, real context.';
 
-  const { timeSignal } = parseBriefContext(basePrompt);
-  const ref0LightingNote = timeSignal.includes('NIGHT')
-    ? `Lighting: warm artificial indoor light — bedroom lamp, ceiling light, or vanity light. NO daylight. NO window sunlight. This is an evening/night getting-ready scene.`
-    : timeSignal.includes('GOLDEN')
-      ? `Lighting: warm golden-hour light coming through a window. Soft and directional.`
-      : timeSignal.includes('MORNING')
-        ? `Lighting: soft cool-to-warm natural window light. Fresh morning atmosphere.`
-        : `Lighting: real indoor light from the try-on space — natural window light or ambient room light. Authentic, not studio.`;
+  const briefCtxForRef0 = parseOutfitBriefContext(basePrompt);
+  const hasUserSceneForRef0 = !!(refs.scenePruebaRef || refs.sceneRef);
+  const prepEnvDirective = buildPrepEnvironmentDirective(briefCtxForRef0, hasUserSceneForRef0);
+  const timeLabel = briefCtxForRef0.timeSignal === 'night' ? 'NIGHT — warm artificial light, no daylight'
+    : briefCtxForRef0.timeSignal === 'golden_hour' ? 'GOLDEN HOUR — warm directional window light'
+    : briefCtxForRef0.timeSignal === 'morning' ? 'MORNING — soft natural daylight'
+    : briefCtxForRef0.timeSignal === 'afternoon' ? 'AFTERNOON — natural daylight'
+    : 'AMBIENT — match the context of the prep space';
 
   const outfitRecipeDesc: Record<string, string> = {
-    outfit_check: `SHOT: Full body of the person with the COMPLETE OUTFIT on, in the try-on space (room, mirror, fitting room, or dressing area).
+    outfit_check: `SHOT: Full body of the person with the COMPLETE OUTFIT on, in the getting-ready space.
 Full body visible — the look must be readable from head to toe. Face visible, natural expression.
-${ref0LightingNote}
-Real walls, real floor. NOT a studio. NOT a catalog. NOT the event venue.
-iPhone photo quality. This establishes: the person's identity, the outfit, and the visual world for the set.
-IMPORTANT: This is the PREPARATION space — not the event destination. Even if the brief mentions opera or gala, this shot is in the getting-ready space.`,
+Time of day: ${timeLabel}
+
+${prepEnvDirective}
+
+iPhone photo quality. This establishes: the person's identity, the outfit, and the visual world for the set.`,
     outfit_haul: `SHOT: Full body of the person in the haul space (bedroom, fitting room), holding or wearing the first garment.
 The space should feel lived-in — a bed, a rack, a chair nearby. Natural light.
 Face visible, natural expression. The garments are the stars — the person is the presenter.
@@ -2352,9 +2772,9 @@ function injectREF0Analysis(ref0Analysis: any, sceneRole?: 'prep' | 'destination
 `;
     }
 
-    // Prep shots y shots neutros: anclar escena, luz y tono de piel.
-    // Filtrar elementos que son piezas del outfit — no deben congelarse como ambiente.
-    const OUTFIT_ITEM_KEYWORDS = [
+    // Prep shots y shots neutros: anclar world style + luz, NO clutter específico.
+    // Separar elementos en tres categorías: outfit items, clutter/movable, y arquitectura real.
+    const OUTFIT_KEYWORDS = [
       'heel', 'shoe', 'shoes', 'boot', 'boots', 'sneaker',
       'bag', 'purse', 'clutch', 'handbag',
       'jacket', 'blazer', 'coat',
@@ -2364,17 +2784,29 @@ function injectREF0Analysis(ref0Analysis: any, sceneRole?: 'prep' | 'destination
       'accessory', 'accessories', 'jewelry', 'necklace', 'bracelet', 'earring',
       'scarf', 'hat', 'glove',
     ];
-    const envElements = (s.elements ?? []).filter((el: string) =>
-      !OUTFIT_ITEM_KEYWORDS.some(kw => el.toLowerCase().includes(kw))
-    );
+    const CLUTTER_KEYWORDS = [
+      'cable', 'charger', 'laptop', 'phone', 'device',
+      'makeup', 'cosmetic', 'bottle', 'cup', 'mug', 'glass',
+      'random', 'loose', 'clutter', 'scattered', 'pile',
+      'tissue', 'product container', 'skincare',
+    ];
+    const envElements = (s.elements ?? []).filter((el: string) => {
+      const lower = el.toLowerCase();
+      return !OUTFIT_KEYWORDS.some(kw => lower.includes(kw)) &&
+             !CLUTTER_KEYWORDS.some(kw => lower.includes(kw));
+    });
     return `
-🔒 REF0 ANALYSIS LOCK (freeze these — do NOT change):
-- Lighting: ${l.primarySource ?? 'natural'}, ${l.direction ?? 'ambient'}, ${l.colorTemperature ?? 'warm'}, ${l.shadowType ?? 'soft'}
-- Environment: ${envElements.join(', ') || 'real scene'}, ${s.geometry ?? 'interior'}
-- Color temperature: SAME as REF0 — do NOT shift warm/cool
+🔒 REF0 ANALYSIS LOCK — WORLD STYLE (not clutter):
+- Lighting family: ${l.primarySource ?? 'natural'}, direction ${l.direction ?? 'ambient'}, temperature ${l.colorTemperature ?? 'warm'}, ${l.shadowType ?? 'soft'} shadows
+- Space style: ${envElements.join(', ') || 'real interior'} — ${s.geometry ?? 'interior'}
+- Color temperature: SAME as REF0 — do NOT shift warm/cool between shots
 - Skin tone rendering: SAME as REF0 — do NOT lighten or darken
-NOTE: Outfit items (shoes, bag, garments) detected in REF0 are NOT fixed environment elements.
-They may move, be worn, or appear differently per shot — that is intentional and correct.
+
+IMPORTANT: Lock the WORLD STYLE, not the exact arrangement.
+- Same wall color, floor material, light family, and general room mood.
+- Do NOT replicate exact object positions, clutter, or random items from REF0.
+- Outfit items (shoes, bag, garments) are NOT fixed environment elements — they move per shot.
+- Keep the space tidy and believable for the occasion — real UGC does not mean messy.
 `;
   } catch { return ''; }
 }
@@ -2697,7 +3129,11 @@ export async function generatePhotodumpShot(
   const selectedFamily = pickFamilyForShot(
     shot.beat, shot.key, shot.arcPosition - 1, sessionFamilies, protagonist,
   );
-  const familyBlock = selectedFamily ? buildFamilyInjectBlock(selectedFamily) : '';
+  // Para outfit_check: no inyectar promptBlock literal — solo hint abstracto de estilo
+  const isOutfitCheckRecipe = recipe === 'outfit_check' || recipe === 'outfit_haul';
+  const familyBlock = isOutfitCheckRecipe
+    ? (selectedFamily ? buildSafeOutfitFamilyStyleHint(selectedFamily, shot.key ?? '', shot.cameraMode) : '')
+    : (selectedFamily ? buildFamilyInjectBlock(selectedFamily) : '');
 
   // HPI: filtrado por compatibilidad con el shot actual.
   // Prioridad: shot.hpiAllowed explícito (outfit_check) > reglas globales por shotKey.
@@ -2716,27 +3152,36 @@ export async function generatePhotodumpShot(
     ? shotHpiAllowed && !!refs.avatarRef && !isFacelessShot
     : globalHpiBlock;
 
-  // Determinar qué tipo de microacción HPI es compatible con este shot
+  // HPI: para outfit_check usar el bloque específico sin buildHpiBlock crudo.
+  // Para otras recetas: usar buildHpiBlock normal con filtros.
   const hpiScope = shot.hpiScope ?? 'full';
-  const rawHpiBlock = hpiEligible
-    ? buildHpiBlock({
-        enabled:            true,
-        gender:             refs.gender ?? 'female',
-        modoVisual:         'ugc',
-        includeGesture:     true,
-        includePerformance: hpiScope === 'full' && (shot.beat === 'emotion' || shot.beat === 'candid'),
-        ...( hpiScope === 'micro_action_only' && {
-          _scopeNote: 'MICRO ACTION ONLY: adjusting a strap, hand on hip, slight torso turn, checking shoe — NO full-body dance pose, NO gym move, NO athletic stance',
-        } as any ),
-        ...( hpiScope === 'gesture_only' && {
-          _scopeNote: 'GESTURE ONLY: one hand holding an accessory naturally — NO body pose, NO full stance',
-        } as any ),
-      })
-    : '';
-  // Para outfit_check: filtrar HPI incompatible con la narrativa de outfit
-  const hpiBlock = (recipe === 'outfit_check' || recipe === 'outfit_haul')
-    ? filterHpiForOutfitCheck(rawHpiBlock, shot.key ?? '')
-    : rawHpiBlock;
+  let hpiBlock = '';
+  let hpiSource: 'disabled' | 'filtered_outfit_hpi' | 'raw_hpi_not_allowed' = 'disabled';
+
+  if (isOutfitCheckRecipe) {
+    if (hpiEligible) {
+      const briefCtxForHpi = parseOutfitBriefContext(basePrompt);
+      hpiBlock  = buildOutfitCompatibleHpiBlock(shot.key ?? '', refs.gender ?? 'female', briefCtxForHpi.destinationClass);
+      hpiSource = hpiBlock ? 'filtered_outfit_hpi' : 'disabled';
+    } else {
+      hpiSource = 'disabled';
+    }
+  } else {
+    const rawHpiBlock = hpiEligible
+      ? buildHpiBlock({
+          enabled:            true,
+          gender:             refs.gender ?? 'female',
+          modoVisual:         'ugc',
+          includeGesture:     true,
+          includePerformance: hpiScope === 'full' && (shot.beat === 'emotion' || shot.beat === 'candid'),
+          ...( hpiScope === 'micro_action_only' && {
+            _scopeNote: 'MICRO ACTION ONLY: adjusting a strap, hand on hip, slight torso turn — NO gym move, NO athletic stance',
+          } as any ),
+        })
+      : '';
+    hpiBlock  = rawHpiBlock;
+    hpiSource = hpiBlock ? 'filtered_outfit_hpi' : 'disabled';
+  }
 
   // Bloque HPI de restricción activa cuando el modo NO admite poses corporales
   const hpiBlockOff = !hpiEligible && !!refs.avatarRef && !isFacelessShot
@@ -2838,10 +3283,9 @@ Organic, imperfect, lived-in. NOT editorial. NOT advertising. NOT staged.`;
 
   const briefContextBlock   = extractBriefContextBlock(basePrompt);
   const hasUserSceneRef = !!(refs.scenePruebaRef || refs.sceneRef);
-  const inferredDestForShot = recipe === 'outfit_check' ? inferDestinationFromBrief(basePrompt) : 'none';
-  const destDescForShot     = getDestinationDescription(inferredDestForShot);
-  // Closing shots usan la sceneLockPolicy del shot para determinar libertad de escena.
-  // Prep shots y otros sin sceneLockPolicy definida usan extractShotLocationOverride legado.
+  // Para outfit_check usar el router semántico completo; para otros usar legado
+  const briefCtxForShot = isOutfitCheckRecipe ? parseOutfitBriefContext(basePrompt) : null;
+  const destDescForShot = briefCtxForShot?.destinationLabel || getDestinationDescription(inferDestinationFromBrief(basePrompt));
   const shotLocationOverride = shot.sceneLockPolicy
     ? (buildSceneLockPolicyBlock(shot.sceneLockPolicy, destDescForShot, hasUserSceneRef) ?? '')
     : extractShotLocationOverride(basePrompt, shot.key, hasUserSceneRef);

@@ -239,8 +239,8 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
     if (key === 'producto') return recipe === 'unboxing' ? 'El producto dentro del empaque: lo que el cliente recibe. Subí hasta 3 ángulos.' : 'Subí hasta 3 ángulos del mismo producto para mayor fidelidad visual.';
     if (key === 'empaque') return 'El empaque, caja o packaging del producto. Si no subís fotos, la IA generará un empaque — la consistencia puede variar.';
     if (key === 'escena') return 'La escena principal define la ambientación del set completo.';
-    if (key === 'escena_prueba') return 'El lugar donde te probás el outfit — tu dormitorio, un espejo, un probador. Si no subís foto, se inventa según el brief.';
-    if (key === 'escena_destino') return 'El lugar al que vas con el outfit puesto — restaurante, evento, calle. Opcional: si no subís, el último shot usa la escena de prueba.';
+    if (key === 'escena_prueba') return 'Escena de prueba: lugar donde te preparás o revisás el look. Opcional. Si no subís foto, se genera un espacio coherente con el contexto del brief.';
+    if (key === 'escena_destino') return 'Escena destino: lugar al que vas con el outfit puesto. Opcional. Si no subís foto, Luz IA intenta inferir el destino desde el brief.';
     return '';
   };
 
