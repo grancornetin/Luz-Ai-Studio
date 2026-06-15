@@ -19,7 +19,7 @@ import {
   OutfitItemPlan, SceneLockPolicy,
   OutfitBriefContext, OutfitDestinationClass, PrepEnvironmentClass, OutfitComposition,
   PoseIntent, DetailKind, EnvironmentAffordance, SceneContinuityMode,
-  HaulItem, HaulManifest, HaulItemKind, HaulPileState,
+  HaulItem, HaulManifest, HaulItemKind, HaulPileState, HaulCoveragePlan,
 } from './types';
 import {
   getStorySupportFamilies, initPhotodumpIntelligence, StorySupportFamily,
@@ -1459,32 +1459,41 @@ FORBIDDEN: catalog stance, athletic pose, arms raised, gym movement, looking dir
 The action must feel like someone genuinely trying on a piece — not performing for a camera.`;
   }
 
-  if (shotKey.startsWith('HAUL_TRY_ON_') || shotKey === 'HAUL_WINNER') {
+  if (shotKey.startsWith('HAUL_TRY_ON_') || shotKey === 'HAUL_SELECTION') {
     if (scope === 'micro_action_only') {
       return `🎯 MICRO-ACTION (try-on — body and expression only):
 One subtle action: slight weight shift, hand on hip evaluating fit, looking down at hemline, half-turn to see the side.
-FORBIDDEN: catalog stance, athletic pose, gym movement, objects in hand, destination venue framing.`;
+FORBIDDEN: catalog stance, athletic pose, gym movement, objects in hand, destination venue framing.
+
+⛔ SAFE LANGUAGE — DO NOT USE THESE TERMS IN YOUR INTERPRETATION:
+sexy, sheer body, lingerie, revealing, tight body, sensual, seductive, bodycon, skin-tight bodysuit.
+USE INSTEAD: fashion garment, try-on, natural fit check, modest framing, clothing evaluation.`;
     }
     return `🎯 BODY LANGUAGE (try-on — natural ${genderNote} evaluation pose):
-The person is trying on a garment. Choose ONE natural try-on posture:
-  - weight on one foot, hip slightly out, hand resting on hip — evaluating
-  - arms slightly away from body, looking down at the garment fit
-  - slight half-turn showing the side profile of the look
-  - natural standing posture, one hand adjusting a detail
-  - relaxed face: evaluating, curious, not smiling for camera
-FORBIDDEN: catalog mannequin stance, arms symmetrically at sides, rigid frontality, athletic pose, walking blur, looking directly at camera with a full posed smile.
-The person should look like they are genuinely trying something on — not posing for an ad.`;
+The person is trying on a garment and evaluating how it fits. Choose ONE real try-on posture:
+  - weight on one foot, hip slightly out, one hand on hip — genuinely evaluating
+  - arms slightly away from body, looking down at the garment — checking the fit
+  - slight half-turn showing the side profile — natural, not posed
+  - natural standing posture, one hand adjusting a sleeve or hem
+  - relaxed face: thoughtful, curious, not performing for camera
+
+FORBIDDEN: catalog mannequin stance, arms symmetrically at sides, rigid frontality, athletic pose, walking blur, full-on smiled pose directly at camera.
+The person looks like they are genuinely trying something on in their room — NOT posing for an ad.
+
+⛔ SAFE LANGUAGE — DO NOT USE THESE TERMS:
+sexy, sheer body, lingerie, revealing, tight body, sensual, seductive, bodycon catsuit.
+USE INSTEAD: fashion garment, try-on, natural fit check, modest real-life pose.`;
   }
 
   if (shotKey === 'HAUL_RECAP') {
     return `🎯 BODY LANGUAGE (haul recap — relaxed ${genderNote} energy):
-The person has finished or is winding down the haul. Choose ONE natural relaxed posture:
-  - sitting or perching on bed or chair edge, relaxed
-  - standing with one hand on hip, slight smile, satisfied
-  - holding a favorite piece, looking at it warmly
+The person has finished or is winding down the haul. Choose ONE natural end-of-session posture:
+  - sitting or perching on bed or chair edge, relaxed and genuine
+  - standing with one hand on hip, slight satisfied expression
+  - holding a favorite piece, looking at it naturally
   - natural weight shift, arms loosely at sides
-FORBIDDEN: catalog pose, formal catalog smile, athletic stance, gym move, objects not from the haul.
-The mood is end-of-session: relaxed, satisfied, authentic.`;
+FORBIDDEN: catalog pose, formal catalog smile, athletic stance, forced "winner" energy.
+The mood is end-of-session: relaxed, authentic, low-key.`;
   }
 
   return '';
@@ -1856,7 +1865,7 @@ function buildStoryDirectives(
     // El arco del haul se basa en los ítems subidos, no en un arco fijo.
     // storyShotCount = min(count, 20) — forzado en el caller (PhotodumpModule).
     // buildHaulManifest y buildHaulShotPlan generan exactamente ese número de shots.
-    const manifest  = buildHaulManifest(refs ?? {} as PhotodumpRefs, count);
+    const manifest  = buildHaulManifest((refs ?? {}) as PhotodumpRefs, count);
     const haulShots = buildHaulShotPlan(manifest);
     // Asegurar que no excedemos el count pedido (ya garantizado por el plan, pero por seguridad)
     const finalShots = haulShots.slice(0, manifest.maxStoryShots);
@@ -2919,51 +2928,103 @@ function distributeOutfitCheckShots(count: number, hasDestinationClosure: boolea
 // outfitRefs = prendas/outfits (slot outfit del wizard)
 // accesorioRefs + accesorioCloseup = accesorios
 
+// Heurística de clasificación por etiqueta/slot de PDStep2Receta.
+// El slot 'outfit' puede contener prendas o calzado suelto.
+// La clasificación es heurística — sin IA externa, basada en posición y metadatos del slot.
+function inferHaulItemKind(slotLabel: string, index: number): HaulItemKind {
+  const label = slotLabel.toLowerCase();
+  // Accesorios siempre vienen del slot 'accesorios' — se clasifican aparte en buildHaulManifest
+  // Para el slot 'outfit': heurística por label
+  if (label.includes('calzado') || label.includes('zapato') || label.includes('botín') || label.includes('botin') ||
+      label.includes('sandalia') || label.includes('zapatilla') || label.includes('footwear') ||
+      label.includes('shoe') || label.includes('boot') || label.includes('sneaker') || label.includes('heel')) {
+    return 'footwear';
+  }
+  return 'garment'; // default: prenda individual (se puede ser outfit_set pero sin más info asumimos garment)
+}
+
 export function buildHaulManifest(refs: PhotodumpRefs, requestedCount: number): HaulManifest {
   const maxStoryShots = Math.min(requestedCount, 20);
 
-  // Outfits/prendas: outfitRef (slot 0) + outfitRefs[] (slots 1-N)
+  // REGLA DURA: avatarRef y bodyRef NUNCA entran en haulItems.
+  // outfitRef (slot 0) + outfitRefs[] (slots 1-N) son los ítems del haul.
+  // La ropa visible en avatarRef/bodyRef es identidad base, no un ítem del haul.
   const rawOutfits = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
-  const outfitItems: HaulItem[] = rawOutfits.map((url, i) => ({
-    id:               `outfit_${i}`,
-    sourceIndex:      i,
-    refUrl:           url,
-    kind:             'garment' as HaulItemKind,
-    label:            `Prenda ${i + 1}`,
-    closeupRequested: false,
-    tryOnEligible:    true,
-    detailEligible:   true,
-    priority:         'required' as const,
-  }));
+
+  const outfitItems:  HaulItem[] = [];
+  const footwearItems: HaulItem[] = [];
+
+  rawOutfits.forEach((url, i) => {
+    // Heurística: sin metadata de slot label, asumimos garment salvo que la URL tenga indicios.
+    // En el futuro se puede pasar metadata de PDStep2Receta para clasificar mejor.
+    const kind = inferHaulItemKind(`Prenda ${i + 1}`, i);
+    const item: HaulItem = {
+      id:                        `outfit_${i}`,
+      sourceIndex:               i,
+      refUrl:                    url,
+      kind,
+      label:                     `Prenda ${i + 1}`,
+      closeupRequested:          false,
+      tryOnEligible:             kind !== 'footwear',
+      footwearTryOnEligible:     kind === 'footwear',
+      detailEligible:            true,
+      canBeIntegratedIntoOutfit: kind === 'footwear' || kind === 'accessory',
+      priority:                  'required' as const,
+    };
+    if (kind === 'footwear') {
+      footwearItems.push(item);
+    } else {
+      outfitItems.push(item);
+    }
+  });
 
   // Accesorios: accesorioRefs[] + closeup flags
   const rawAccs    = (refs.accesorioRefs ?? []).filter(Boolean) as string[];
   const closeupArr = refs.accesorioCloseup ?? [];
   const accessoryItems: HaulItem[] = rawAccs.map((url, i) => ({
-    id:               `acc_${i}`,
-    sourceIndex:      i,
-    refUrl:           url,
-    kind:             'accessory' as HaulItemKind,
-    label:            `Accesorio ${i + 1}`,
-    closeupRequested: !!closeupArr[i],
-    tryOnEligible:    false,
-    detailEligible:   true,
-    priority:         closeupArr[i] ? 'required' as const : 'normal' as const,
+    id:                        `acc_${i}`,
+    sourceIndex:               i,
+    refUrl:                    url,
+    kind:                      'accessory' as HaulItemKind,
+    label:                     `Accesorio ${i + 1}`,
+    closeupRequested:          !!closeupArr[i],
+    tryOnEligible:             false,
+    footwearTryOnEligible:     false,
+    detailEligible:            true,
+    canBeIntegratedIntoOutfit: true,
+    priority:                  closeupArr[i] ? ('required' as const) : ('normal' as const),
   }));
 
-  const allItems       = [...outfitItems, ...accessoryItems];
-  const closeupItems   = allItems.filter(it => it.closeupRequested);
-  const tryOnItems     = allItems.filter(it => it.tryOnEligible);
+  const allItems     = [...outfitItems, ...footwearItems, ...accessoryItems];
+  const closeupItems = [...footwearItems.filter(it => it.closeupRequested), ...accessoryItems.filter(it => it.closeupRequested)];
+  const tryOnItems   = outfitItems.filter(it => it.tryOnEligible);
+
+  // ── CoveragePlan ───────────────────────────────────────────────
+  const requiredTryOnItemIds   = outfitItems.map(it => it.id);
+  const requiredCloseupItemIds = closeupItems.map(it => it.id);
+  const requiredDetailItemIds  = footwearItems.map(it => it.id); // calzado siempre merece un detail
+  const optionalItemIds        = accessoryItems.filter(it => !it.closeupRequested).map(it => it.id);
+
+  const coveragePlan: HaulCoveragePlan = {
+    requiredTryOnItemIds,
+    requiredCloseupItemIds,
+    requiredDetailItemIds,
+    optionalItemIds,
+    plannedCoverage: Object.fromEntries(allItems.map(it => [it.id, 0])),
+    missingCoverage: [],
+  };
 
   return {
     totalItems:     allItems.length,
     outfitItems,
+    footwearItems,
     accessoryItems,
     closeupItems,
     tryOnItems,
     allItems,
     requestedCount,
     maxStoryShots,
+    coveragePlan,
   };
 }
 
@@ -2982,68 +3043,96 @@ export function buildHaulShotPlan(
   const total = manifest.maxStoryShots;
   const shots: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] = [];
 
-  // ── Pila de ítems pendientes (mutable para el planificador) ─
-  const tryOnQueue   = [...manifest.tryOnItems];
-  const closeupQueue = [...manifest.closeupItems];
+  // ── Queues mutables del planner ────────────────────────────
+  const tryOnQueue    = [...manifest.tryOnItems];
+  const closeupQueue  = [...manifest.closeupItems];
+  const footwearQueue = [...manifest.footwearItems];
 
-  // ── Reservar close-ups obligatorios: se colocan al final ───
-  // Se agregan como slots reservados — el fill los coloca en posición correcta.
+  // ── 1. Reservar close-ups obligatorios (accesorios/calzado marcados con ⭐) ─
   const reservedCloseups = closeupQueue.map((item, ci) =>
     buildHaulAccessoryCloseupShot(item, ci),
   );
 
-  // Espacio real para shots narrativos (overview + try-ons + detalles)
-  const narrativeBudget = total - reservedCloseups.length;
+  // ── 2. Reservar detail shots para calzado suelto ──────────
+  // Footwear no marcado con closeup va como HAUL_FOOTWEAR_DETAIL
+  const footwearWithoutCloseup = footwearQueue.filter(it => !it.closeupRequested);
+  const reservedFootwear = footwearWithoutCloseup.map((item, fi) =>
+    buildHaulFootwearShot(item, fi),
+  );
 
-  // ── Shot 1: HAUL_OVERVIEW (siempre presente si hay espacio) ─
+  // Espacio real para shots narrativos
+  const obligatoryCount  = reservedCloseups.length + reservedFootwear.length;
+  const narrativeBudget  = Math.max(0, total - obligatoryCount);
+
+  // ── 3. HAUL_OVERVIEW (apertura) ─────────────────────────────
   if (narrativeBudget >= 1) {
     shots.push(buildHaulOverviewShot(manifest));
   }
 
-  // ── Try-ons: fill del espacio restante ─────────────────────
-  // Dejamos 1 slot para HAUL_RECAP si hay ≥ 3 outfits y espacio suficiente.
-  const tryOnBudgetRaw = narrativeBudget - 1; // -1 por el overview
-  const wantRecap      = tryOnQueue.length >= 2 && tryOnBudgetRaw >= 3;
+  // ── 4. Try-ons con ratio try-on:adjusting 2:1 ──────────────
+  // Reservamos 1 slot para HAUL_RECAP si hay ≥ 2 outfits y hay espacio.
+  const tryOnBudgetRaw = narrativeBudget - 1; // -1 por overview
+  const wantRecap      = (tryOnQueue.length + footwearQueue.length) >= 2 && tryOnBudgetRaw >= 3;
   const tryOnBudget    = wantRecap ? tryOnBudgetRaw - 1 : tryOnBudgetRaw;
 
-  // Intercalar try-on + adjusting con proporción 2:1
+  // Cobertura mínima: asegurar que cada outfit_set/garment tenga al menos 1 try-on
+  // Si hay más prendas que budget, priorizamos cobertura sobre variety (sin adjusting)
+  const mustCoverCount = Math.min(tryOnQueue.length, tryOnBudget);
+  const hasAdjustingRoom = tryOnBudget > mustCoverCount + 1;
+
   let tryOnIndex = 0;
   let slotsUsed  = 0;
 
   while (slotsUsed < tryOnBudget && tryOnQueue.length > 0) {
-    const isLastTryOn = tryOnQueue.length === 1 && slotsUsed === tryOnBudget - 1;
-    const item = tryOnQueue.shift()!;
-    const pileState = derivePileState(tryOnIndex, manifest.outfitItems.length);
+    const remaining     = tryOnQueue.length;
+    const slotsLeft     = tryOnBudget - slotsUsed;
+    // Es el último try-on si: solo queda 1 ítem o solo 1 slot
+    const isLastTryOn   = remaining === 1 || slotsLeft === 1;
+    const item          = tryOnQueue.shift()!;
+    const pileState     = derivePileState(tryOnIndex, manifest.outfitItems.length);
 
     shots.push(buildHaulTryOnShot(item, tryOnIndex, manifest.outfitItems.length, isLastTryOn, pileState));
     slotsUsed++;
     tryOnIndex++;
 
-    // Cada 2 try-ons agregar 1 adjusting si hay espacio y más ítems
-    if (slotsUsed % 2 === 0 && slotsUsed < tryOnBudget && tryOnQueue.length > 0) {
+    // Intercalar 1 adjusting cada 2 try-ons, solo si:
+    //   - hay espacio sobrante tras cubrir todos los outfits restantes
+    //   - hay budget suficiente
+    const outfitsStillPending = tryOnQueue.length;
+    const slotsNeededForCoverage = outfitsStillPending;
+    const adjustingAllowed = hasAdjustingRoom &&
+      slotsUsed % 2 === 0 &&
+      slotsUsed < tryOnBudget &&
+      (tryOnBudget - slotsUsed) > slotsNeededForCoverage;
+
+    if (adjustingAllowed) {
       shots.push(buildHaulAdjustingShot(item, tryOnIndex - 1, pileState));
       slotsUsed++;
     }
   }
 
-  // Si sobraron try-ons y hay espacio, agregar detalles de prenda
-  while (slotsUsed < tryOnBudget && tryOnQueue.length > 0) {
-    const item = tryOnQueue.shift()!;
-    const pileState = derivePileState(tryOnIndex, manifest.outfitItems.length);
-    shots.push(buildHaulDetailGarmentShot(item, tryOnIndex));
+  // Si sobraron slots, agregar detail shots de prendas ya cubiertas
+  const coveredItems = [...manifest.outfitItems].slice(0, tryOnIndex);
+  let detailIdx = 0;
+  while (slotsUsed < tryOnBudget && detailIdx < coveredItems.length) {
+    shots.push(buildHaulDetailGarmentShot(coveredItems[detailIdx], detailIdx));
     slotsUsed++;
-    tryOnIndex++;
+    detailIdx++;
   }
 
-  // ── HAUL_RECAP: cierre si quedó espacio ────────────────────
-  if (wantRecap && slotsUsed < tryOnBudgetRaw) {
+  // ── 5. HAUL_RECAP (cierre flexible) ─────────────────────────
+  if (wantRecap && slotsUsed <= tryOnBudgetRaw) {
     shots.push(buildHaulRecapShot(manifest));
   }
 
-  // ── Agregar close-ups obligatorios ─────────────────────────
+  // ── 6. Insertar footwear + close-ups obligatorios ──────────
+  // Footwear se intercala antes del recap cuando es posible;
+  // aquí simplemente se concatena ordenado: footwear → close-ups.
+  shots.push(...reservedFootwear);
   shots.push(...reservedCloseups);
 
-  return shots;
+  // ── 7. Truncar a maxStoryShots (safety net) ────────────────
+  return shots.slice(0, total);
 }
 
 // ── Helpers de estado de pila ─────────────────────────────────
@@ -3106,20 +3195,20 @@ function buildHaulTryOnShot(
 
   if (isLast) {
     return {
-      key:    'HAUL_WINNER',
+      key:    'HAUL_SELECTION',
       beat:   'emotion',
-      role:   `HAUL WINNER — ${item.label}`,
-      purpose: `The person wearing the winning piece — the one they decided to keep. ${pileNote} Expression of satisfaction or decision made. Full body or medium shot. The outfit reads clearly. NOT a catalog pose.`,
-      requiredElements:  ['avatar_wearing_winning_item', 'garment_clearly_readable', 'satisfied_or_decisive_expression'],
-      forbiddenElements: ['catalog_stance', 'studio_backdrop', 'white_background', 'mannequin_pose', 'beautification', 'ad_composition', 'editorial_lighting'],
+      role:   `HAUL SELECTION — ${item.label}`,
+      purpose: `The person wearing one of their favorite pieces from the haul. ${pileNote} Natural expression — not "winning" necessarily, just genuinely wearing it. The haul energy is winding down. Full body or medium shot. The garment reads clearly. NOT a catalog pose. NOT forced "winner" energy.`,
+      requiredElements:  ['avatar_wearing_item', 'garment_clearly_readable', 'natural_relaxed_expression'],
+      forbiddenElements: ['catalog_stance', 'studio_backdrop', 'white_background', 'mannequin_pose', 'beautification', 'ad_composition', 'editorial_lighting', 'forced_winner_pose'],
       variationSpace: [
-        `full body wearing ${item.label}, discarded pile visible in background, resolved natural expression`,
-        `medium shot wearing ${item.label}, attitude of "this is the one", background haul pile partially visible`,
-        `mirror selfie wearing ${item.label}, haul chaos reflected behind`,
-        `person adjusting ${item.label} they're wearing, hands active, genuine satisfaction`,
+        `full body wearing ${item.label}, haul pile visible in background, relaxed natural posture`,
+        `medium shot wearing ${item.label}, genuine expression, background shows haul context`,
+        `mirror selfie wearing ${item.label}, haul space reflected behind`,
+        `person holding or adjusting ${item.label}, candid haul moment`,
       ],
       framing:     'WIDE_FULL_BODY',
-      composition: 'WINNER_WITH_HAUL_BACKGROUND',
+      composition: 'SELECTION_WITH_HAUL_BACKGROUND',
       cameraAngle: 'EYE_LEVEL',
       hpiAllowed:  true,
       hpiScope:    'full',
@@ -3225,6 +3314,32 @@ function buildHaulAccessoryCloseupShot(
     framing:     'CLOSE_UP_OR_MACRO',
     composition: 'ACCESSORY_DETAIL',
     cameraAngle: 'STRAIGHT_ON_OR_SLIGHT_ANGLE',
+    hpiAllowed:  false,
+    wearState:   'not_wearing_final_outfit',
+    cameraMode:  'detail_macro',
+  };
+}
+
+function buildHaulFootwearShot(
+  item:       HaulItem,
+  footwearIdx: number,
+): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
+  return {
+    key:    `HAUL_FOOTWEAR_${footwearIdx + 1}`,
+    beat:   'detail',
+    role:   `FOOTWEAR — ${item.label}`,
+    purpose: `${item.label} is a footwear item — a standalone shoe, boot, or sandal. Do NOT generate a full outfit from this reference alone. Show it as: a shoe/boot detail close to the camera, held by hand near waist level, placed on a bed or floor next to the haul pile, or being tried on at foot level. The footwear is the protagonist of this shot. Real light, real surface, intimate framing. NOT a catalog product shot.`,
+    requiredElements:  ['footwear_clearly_visible', 'real_light_and_texture', 'intimate_or_detail_framing'],
+    forbiddenElements: ['full_body_outfit_invented_from_shoe', 'studio_backdrop', 'catalog_product_shot', 'white_background', 'editorial_lighting', 'invented_complete_look'],
+    variationSpace: [
+      `${item.label} held between both hands near the camera, real room in background`,
+      `${item.label} placed on bed or haul pile — detail and texture readable, natural light`,
+      `foot-level shot: ${item.label} being put on or worn, floor and room visible`,
+      `close-up of ${item.label} resting on a real surface — design, texture, hardware readable`,
+    ],
+    framing:     'CLOSE_UP_OR_MEDIUM',
+    composition: 'FOOTWEAR_DETAIL',
+    cameraAngle: 'EYE_LEVEL_OR_SLIGHT_ANGLE',
     hpiAllowed:  false,
     wearState:   'not_wearing_final_outfit',
     cameraMode:  'detail_macro',
@@ -4016,18 +4131,19 @@ export async function generatePhotodumpShot(
       allAccesorios.slice(0, 2).forEach(r => refsToPass.push(r));
       if (refs.sceneRef) refsToPass.push(refs.sceneRef);
 
-    } else if (shotKey.startsWith('HAUL_TRY_ON_') || shotKey === 'HAUL_WINNER') {
-      // try-on/winner: avatar x2 + prenda específica (solo esa)
+    } else if (shotKey.startsWith('HAUL_TRY_ON_') || shotKey === 'HAUL_SELECTION') {
+      // try-on/selection: avatar x2 + prenda específica (solo esa — no dump de todos los outfits)
       if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef);
       if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
       let itemIdx = 0;
       if (shotKey.startsWith('HAUL_TRY_ON_')) {
         itemIdx = parseInt(shotKey.replace('HAUL_TRY_ON_', ''), 10) - 1;
       } else {
+        // HAUL_SELECTION: último outfit en la lista
         itemIdx = Math.max(0, allOutfits.length - 1);
       }
       if (allOutfits[itemIdx]) refsToPass.push(allOutfits[itemIdx]);
-      if (refs.sceneRef) refsToPass.push(refs.sceneRef);
+      // NO pasamos sceneRef extra — REF0 ya ancla el espacio
 
     } else if (shotKey.startsWith('HAUL_ADJUSTING_')) {
       // adjusting: avatar x2 + misma prenda del try-on correspondiente
@@ -4035,7 +4151,6 @@ export async function generatePhotodumpShot(
       if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef);
       if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
       if (allOutfits[itemIdx]) refsToPass.push(allOutfits[itemIdx]);
-      if (refs.sceneRef) refsToPass.push(refs.sceneRef);
 
     } else if (shotKey.startsWith('HAUL_DETAIL_')) {
       // detalle de prenda: solo la prenda + avatar mínimo (manos)
@@ -4043,12 +4158,20 @@ export async function generatePhotodumpShot(
       if (refs.avatarRef) refsToPass.push(refs.avatarRef);
       if (allOutfits[itemIdx]) refsToPass.push(allOutfits[itemIdx]);
 
+    } else if (shotKey.startsWith('HAUL_FOOTWEAR_')) {
+      // footwear detail: solo el calzado + avatar mínimo (manos/pie)
+      const footwearIdx = Math.max(0, parseInt(shotKey.replace('HAUL_FOOTWEAR_', ''), 10) - 1);
+      if (refs.avatarRef) refsToPass.push(refs.avatarRef);
+      // Calzado vive en outfitItems pero con kind=footwear
+      const buildManifestForRouting = buildHaulManifest(refs, 20);
+      const footwearRef = buildManifestForRouting.footwearItems[footwearIdx]?.refUrl;
+      if (footwearRef) refsToPass.push(footwearRef);
+
     } else {
       // HAUL_RECAP y cualquier otro shot: avatar x2 + subset de 3 prendas
       if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef);
       if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
       allOutfits.slice(0, 3).forEach(r => refsToPass.push(r));
-      if (refs.sceneRef) refsToPass.push(refs.sceneRef);
     }
 
   } else if (recipe === 'outfit_check' || recipe === 'outfit_week') {
@@ -4145,6 +4268,7 @@ export async function generatePhotodumpShot(
     && shot.key !== 'ACCESSORY_CLOSEUP'
     && !(shot.key ?? '').startsWith('HAUL_ACCESSORY_CLOSEUP_')
     && !(shot.key ?? '').startsWith('HAUL_DETAIL_')
+    && !(shot.key ?? '').startsWith('HAUL_FOOTWEAR_')
     && shot.key !== 'UNBOXING_PACKAGING_CLOSED'
     && shot.key !== 'UNBOXING_PRODUCT_REVEAL'
     && shot.key !== 'UNBOXING_PRODUCT_DETAIL'
@@ -4228,11 +4352,19 @@ This shot showcases the piece itself as part of the haul/outfit story.`
           : shotKey_ === 'ACCESSORY_CLOSEUP'
             ? `ACCESSORY CLOSE-UP: The accessory reference shows the exact piece to feature. Fill the frame with it. Reproduce it faithfully — same color, material, hardware, design. Real light, real surface. No person needed.`
             : recipe === 'outfit_haul'
-              ? `HAUL GARMENT — THIS SHOT: The garment reference provided is the SPECIFIC piece the person is wearing right now. Copy it EXACTLY — same color, fabric, cut, fit, silhouette. The person wears it naturally, evaluating how it looks. NOT a catalog pose. NOT a styled editorial look.
+              ? shotKey_.startsWith('HAUL_FOOTWEAR_')
+                ? `FOOTWEAR ITEM — THIS SHOT: The reference provided is a STANDALONE FOOTWEAR ITEM (shoe, boot, sandal, sneaker).
+Do NOT generate a full outfit from this shoe reference alone.
+Show the footwear as: a close-up detail, held by hand, placed on a surface, or being tried on at foot level.
+Do NOT invent a complete look. The shoe IS the subject.`
+                : `HAUL GARMENT — THIS SHOT: The garment reference provided is the SPECIFIC piece the person is wearing or showing right now.
+Copy it EXACTLY — same color, fabric, cut, fit, silhouette.
+The person wears it naturally, evaluating how it looks. NOT a catalog pose. NOT a styled editorial look.
 
-AVATAR CLOTHING IS NOT A HAUL ITEM:
-The clothing visible in the avatar or body reference is a base identity reference only.
-Do NOT recreate or feature it as a haul garment. Only show the haul garment provided as the outfit reference for this shot.`
+⛔ AVATAR BASE CLOTHING IS NOT A HAUL ITEM:
+The clothing visible in the avatar or body reference is identity reference ONLY.
+Do NOT recreate, feature, or transform avatar base clothing into a haul piece.
+The only haul garment for this shot is the GARMENT REFERENCE attached to this prompt.`
               : `OUTFIT LOCK: Copy the garment(s) EXACTLY from the outfit references — same color, fabric, cut, fit, silhouette. SHOE SPECIFICITY LOCK: same straps, heel, toe, hardware. Do NOT invent fabric continuation. Do NOT add or remove pieces.`
     : '';
 
@@ -4255,16 +4387,28 @@ ONE person maximum in any frame. Any background figure is a generation error.
 NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${shot.role}.`
     : recipe === 'outfit_haul'
       ? `SHOT IDENTITY — HAUL SESSION:
-- Face reference: EXACT identity — same bone structure, same hair, same skin tone. No beautification.
-${refs.bodyRef ? '- Body reference: establishes physique and proportions. Do NOT alter them.' : ''}
-- REF0: establishes the haul space — same room, same light, same real environment. This is not a studio.
+- Face reference (appears TWICE): EXACT identity — same bone structure, same hair, same skin tone. No beautification.
+${refs.bodyRef ? '- Body reference: establishes physique and proportions ONLY. Do NOT alter them.' : ''}
+- REF0: establishes the haul space — same room, same light, same real environment. NOT a studio.
+
+⛔ AVATAR/BODY CLOTHING IS NOT A HAUL ITEM — CRITICAL RULE:
+The clothing visible in the avatar or body reference photos is IDENTITY INFORMATION ONLY.
+It is the person's base outfit for identification — it is NOT one of the haul garments.
+Do NOT recreate, feature, transform, or recolor avatar base clothing as a haul piece.
+Do NOT use the avatar's black catsuit/bodysuit/shirt/pants as a haul outfit.
+Only the GARMENT REFERENCE provided for THIS SPECIFIC SHOT is the haul item.
+
+⛔ DO NOT CLONE REF0:
+REF0 is a world anchor — use it for room, light, and environment.
+Do NOT recreate the same pose, same camera distance, same crop, or same arrangement as REF0.
+This shot MUST have a different action, framing, or focus than REF0.
 ${shotOutfitInstruction}
 
 ⚠️ REFERENCE ROLE — HAUL RULES:
 Garment references are photos of the SPECIFIC GARMENT for this shot — not a person wearing it.
 Use the reference to understand the piece exactly, then show the person wearing it naturally.
-References in this set serve different roles per shot — avatar refs = identity, garment ref = THIS shot's piece.
-ONE person maximum. Any background figure is a generation error.
+One garment ref = one shot's piece. Do not mix garment refs across shots.
+ONE person maximum in any frame. Any background figure is a generation error.
 HAUL CONTEXT: ${shot.purpose}
 
 NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${shot.role}.`

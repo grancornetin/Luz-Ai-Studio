@@ -473,10 +473,10 @@ const PhotodumpModule: React.FC = () => {
             // Validadores haul
             if (recipe === 'outfit_haul') {
               const shotKey = sh.key ?? '';
-              // Try-on sin ref asignada
-              if (shotKey.startsWith('HAUL_TRY_ON') || shotKey.startsWith('HAUL_ADJUSTING')) {
+              // Try-on / selection sin ref asignada
+              if (shotKey.startsWith('HAUL_TRY_ON') || shotKey.startsWith('HAUL_ADJUSTING') || shotKey === 'HAUL_SELECTION') {
                 if ((result.refsCount ?? 0) < 2) {
-                  contradictions.push(`${shotKey}: try-on/adjusting shot with only ${result.refsCount} refs (expected ≥2: avatar + item)`);
+                  contradictions.push(`${shotKey}: try-on/adjusting/selection shot with only ${result.refsCount} refs (expected ≥2: avatar + item)`);
                 }
               }
               // Closeup sin ref de accesorio
@@ -484,6 +484,10 @@ const PhotodumpModule: React.FC = () => {
                 if ((result.refsCount ?? 0) < 1) {
                   contradictions.push(`${shotKey}: closeup shot with 0 refs — accessory ref missing`);
                 }
+              }
+              // Footwear sin ref
+              if (shotKey.startsWith('HAUL_FOOTWEAR_') && (result.refsCount ?? 0) < 1) {
+                contradictions.push(`${shotKey}: footwear shot with 0 refs — footwear ref missing`);
               }
               // Recap sin refs
               if (shotKey === 'HAUL_RECAP' && (result.refsCount ?? 0) < 1) {
@@ -548,23 +552,70 @@ const PhotodumpModule: React.FC = () => {
             });
           }
         } catch (shotErr: any) {
-          shotUrls.push('');
-          failed.push(i);
-          failedErrors.push(shotErr?.message ?? '');
-          setPartialImages(prev => [...prev, '']);
-          if (isAdmin) debugShots.push({
-            shotIndex:  i + 1,
-            role:       sh.role,
-            beat:       sh.beat,
-            key:        sh.key,
-            prompt:     '',
-            refsCount:  0,
-            narrativeStage: sh.narrativeStage,
-            wearState:  sh.wearState,
-            cameraMode: sh.cameraMode,
-            possibleContradictions: [`shot failed: ${shotErr?.message ?? 'unknown'}`],
-            status:     'failed',
-          });
+          const errMsg = shotErr?.message ?? '';
+          const isContentPolicy = errMsg.toLowerCase().includes('content') ||
+            errMsg.toLowerCase().includes('filter') ||
+            errMsg.toLowerCase().includes('block') ||
+            errMsg.toLowerCase().includes('policy') ||
+            errMsg.toLowerCase().includes('prohibited');
+
+          // Retry automático para haul con content-policy failure
+          let retryResult: PhotodumpShotResult | null = null;
+          if (recipe === 'outfit_haul' && isContentPolicy) {
+            try {
+              await new Promise(r => setTimeout(r, 3000));
+              // Shot neutral: reemplazamos purpose con instrucción conservadora
+              const neutralShot = {
+                ...sh,
+                purpose: `Generate a modest, natural clothing try-on photo in a real bedroom haul context. The garment should be visible as a fashion item. Use a casual, neutral try-on pose such as adjusting the garment or checking the fit. Avoid any sexualized posing, revealing framing, or body-focused language.`,
+              };
+              retryResult = await generatePhotodumpShot(
+                neutralShot, refsWithMode, ref0Url, ref0Analysis,
+                basePrompt, narrative, destino, sessionParams,
+                plan.assignedFamilies, plan.sessionFamilies,
+                shots.length, protagonist, recipe,
+                plan.presentationStyle,
+              );
+            } catch {
+              // segundo intento también falló — se trata como fallo definitivo
+            }
+          }
+
+          if (retryResult) {
+            shotUrls.push(retryResult.imageUrl);
+            setPartialImages(prev => [...prev, retryResult!.imageUrl]);
+            if (isAdmin) debugShots.push({
+              shotIndex:  i + 1,
+              role:       sh.role,
+              beat:       sh.beat,
+              key:        sh.key,
+              prompt:     retryResult.prompt,
+              refsCount:  retryResult.refsCount,
+              narrativeStage: sh.narrativeStage,
+              wearState:  sh.wearState,
+              cameraMode: sh.cameraMode,
+              possibleContradictions: [`content-policy retry: original failed (${errMsg.slice(0, 80)}), retry succeeded`],
+              status:     'ok',
+            });
+          } else {
+            shotUrls.push('');
+            failed.push(i);
+            failedErrors.push(errMsg);
+            setPartialImages(prev => [...prev, '']);
+            if (isAdmin) debugShots.push({
+              shotIndex:  i + 1,
+              role:       sh.role,
+              beat:       sh.beat,
+              key:        sh.key,
+              prompt:     '',
+              refsCount:  0,
+              narrativeStage: sh.narrativeStage,
+              wearState:  sh.wearState,
+              cameraMode: sh.cameraMode,
+              possibleContradictions: [`shot failed: ${errMsg}`],
+              status:     'failed',
+            });
+          }
         }
         setProgress({ total: shots.length, completed: i + 1 });
       }

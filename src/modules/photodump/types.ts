@@ -5,8 +5,8 @@
 export type HaulItemKind =
   | 'outfit_set'   // look completo (top + bottom + calzado subido como imagen única)
   | 'garment'      // prenda individual (blusa, pantalón, vestido, etc.)
-  | 'accessory'    // accesorio genérico (cartera, cinturón, sombrero, etc.)
-  | 'shoes'        // calzado
+  | 'footwear'     // calzado suelto (botín, sandalia, zapatilla, zapato)
+  | 'accessory'    // accesorio genérico (cinturón, sombrero, etc.)
   | 'bag'          // cartera / bolso
   | 'jewelry'      // joyería (aros, collar, pulsera, anillo)
   | 'mixed'        // imagen que combina varios tipos
@@ -15,26 +15,39 @@ export type HaulItemKind =
 export type HaulPileState = 'clean' | 'light_pile' | 'medium_pile' | 'messy_but_believable';
 
 export interface HaulItem {
-  id:                 string;       // 'outfit_0', 'outfit_1', 'acc_0', etc.
-  sourceIndex:        number;       // índice original en el array de refs
-  refUrl:             string;       // URL de la referencia
-  kind:               HaulItemKind;
-  label:              string;       // 'Prenda 1', 'Accesorio 2', etc.
-  closeupRequested:   boolean;      // el usuario marcó ⭐ de close-up
-  tryOnEligible:      boolean;      // este ítem puede mostrarse puesto en el cuerpo
-  detailEligible:     boolean;      // este ítem puede aparecer como detalle/macro
-  priority:           'required' | 'normal' | 'optional';
+  id:                          string;       // 'outfit_0', 'outfit_1', 'acc_0', etc.
+  sourceIndex:                 number;       // índice original en el array de refs
+  refUrl:                      string;       // URL de la referencia
+  kind:                        HaulItemKind;
+  label:                       string;       // 'Prenda 1', 'Accesorio 2', etc.
+  closeupRequested:            boolean;      // el usuario marcó ⭐ de close-up
+  tryOnEligible:               boolean;      // puede mostrarse puesto en el cuerpo (full outfit)
+  footwearTryOnEligible:       boolean;      // zapatos: se pueden mostrar al nivel del pie
+  detailEligible:              boolean;      // puede aparecer como detalle/macro
+  canBeIntegratedIntoOutfit:   boolean;      // puede combinarse con otro outfit como complemento
+  priority:                    'required' | 'normal' | 'optional';
+}
+
+export interface HaulCoveragePlan {
+  requiredTryOnItemIds:    string[];  // outfit_sets y garments principales
+  requiredCloseupItemIds:  string[];  // accesorios/calzado con closeupRequested
+  requiredDetailItemIds:   string[];  // ítems que merecen un detail macro
+  optionalItemIds:         string[];  // ítems que entran si hay espacio
+  plannedCoverage:         Record<string, number>;  // itemId → shots planificados
+  missingCoverage:         string[];  // ids de ítems sin cobertura planificada
 }
 
 export interface HaulManifest {
   totalItems:          number;
-  outfitItems:         HaulItem[];  // garments + outfit_sets
-  accessoryItems:      HaulItem[];  // accessories + shoes + bags + jewelry
+  outfitItems:         HaulItem[];  // garments + outfit_sets (tryOnEligible)
+  footwearItems:       HaulItem[];  // calzado suelto
+  accessoryItems:      HaulItem[];  // accessories + bags + jewelry
   closeupItems:        HaulItem[];  // los que tienen closeupRequested = true
-  tryOnItems:          HaulItem[];  // todos los tryOnEligible
-  allItems:            HaulItem[];  // lista plana completa
+  tryOnItems:          HaulItem[];  // todos los tryOnEligible (outfitItems)
+  allItems:            HaulItem[];  // lista plana completa (excluye avatarRef/bodyRef)
   requestedCount:      number;      // shots de historia pedidos por el usuario
   maxStoryShots:       number;      // min(requestedCount, 20)
+  coveragePlan:        HaulCoveragePlan;
 }
 
 export interface HaulProgressState {
