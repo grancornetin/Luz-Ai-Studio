@@ -8,7 +8,8 @@ import { validateSensitiveClaims } from './sensitiveGuardrails';
 import { getBlueprintById } from './taskBlueprints';
 import { hasDeterministicFallback } from './deterministicCompletion';
 import { findVisiblePlaceholderFields, findVisibleWeakPhraseOccurrences } from './visibleOutputValidation';
-import type { BusinessArchetype, FinalValidationSummary, GeneratedTaskV2, PreviousPlanMemory } from './types';
+import { getBusinessAdapter, isBlueprintAllowedForAdapter, validateAdapterVocabulary } from './businessAdapters';
+import type { BusinessArchetype, FinalValidationSummary, GeneratedTaskV2, NicheAdapter, PreviousPlanMemory } from './types';
 
 const MIN_TASKS = { 7: 5, 14: 12, 30: 25 } as const;
 
@@ -29,11 +30,12 @@ export function validateFinalPlan(
   plan: GrowthStrategicPlan,
   previousPlans: PreviousPlanMemory[],
   businessArchetype: BusinessArchetype = 'other',
+  nicheAdapter: NicheAdapter = getBusinessAdapter(businessArchetype),
 ): FinalValidationSummary {
   const tasks = plan.tasks as GeneratedTaskV2[];
   const blueprintResults = tasks.map(task => {
     const blueprint = getBlueprintById(task.blueprintId);
-    return blueprint ? validateTaskAgainstBlueprint(task, blueprint, { businessArchetype }) : { valid: false, errors: ['Blueprint inexistente.'], warnings: [] };
+    return blueprint ? validateTaskAgainstBlueprint(task, blueprint, { businessArchetype, nicheAdapter }) : { valid: false, errors: ['Blueprint inexistente.'], warnings: [] };
   });
   const dates = tasks.map(task => new Date(`${task.date}T12:00:00`));
   const today = new Date();
@@ -79,6 +81,9 @@ export function validateFinalPlan(
   const total = tasks.length || 1;
   const placeholderFields = findVisiblePlaceholderFields(plan);
   const manualReviewCount = tasks.filter(task => task.needsManualReview).length;
+  const forbiddenBlueprints = tasks.filter(task => !isBlueprintAllowedForAdapter(task.blueprintId, nicheAdapter));
+  const forbiddenVocabulary = validateAdapterVocabulary(allText, nicheAdapter);
+  const rawPlanSlotsForPhysicalProducts = businessArchetype !== 'saas_subscription' && /@plan[1-4]|@app_screen1/i.test(allText);
   const checks: Record<string, boolean> = {
     taskCountValid: tasks.length >= MIN_TASKS[plan.duration],
     datesValid: dates.every(date => !Number.isNaN(date.getTime())),
@@ -126,6 +131,13 @@ export function validateFinalPlan(
     }),
     directPlanSalesPresent: plan.duration !== 30 || tasks.some(task => task.funnelRole === 'convertir'),
     productsNormalized: (plan.normalizedProducts || plan.products).length > 0,
+    correctBusinessArchetype: businessArchetype !== 'fashion_accessories' || nicheAdapter.id === 'fashion_accessories_adapter',
+    correctAdapter: nicheAdapter.archetypes.includes(businessArchetype),
+    noForbiddenAdapterVocabulary: forbiddenVocabulary.length === 0,
+    noForbiddenBlueprints: forbiddenBlueprints.length === 0,
+    noSaasLeakage: businessArchetype === 'saas_subscription' || forbiddenVocabulary.length === 0,
+    noRawPlanSlotsForPhysicalProducts: !rawPlanSlotsForPhysicalProducts,
+    adapterIsolationValid: forbiddenBlueprints.length === 0 && forbiddenVocabulary.length === 0 && !rawPlanSlotsForPhysicalProducts,
   };
   const criticalNames = ['taskCountValid', 'datesValid', 'noPastDates', 'noPlaceholderTasks'];
   if (manualReviewCount > 2) criticalNames.push('manualReviewRatioValid');
@@ -133,6 +145,8 @@ export function validateFinalPlan(
     'dayLabelMatchesDate', 'blueprintContractsValid', 'taskInternalCoherenceValid',
     'sensitiveClaimsValid', 'manualReviewRatioValid', 'slotsValid', 'actionableHooksValid',
     'platformCtaCoherenceValid', 'noWeakPhrases', 'antiRepetitionValid', 'fallbackCompletionValid',
+    'correctBusinessArchetype', 'correctAdapter', 'noForbiddenAdapterVocabulary', 'noForbiddenBlueprints',
+    'noSaasLeakage', 'noRawPlanSlotsForPhysicalProducts', 'adapterIsolationValid',
   ];
   const criticalErrors = criticalNames.filter(name => !checks[name]);
   const reviewWarnings = reviewNames.filter(name => !checks[name]);

@@ -51,6 +51,7 @@ import {
   validateTaskAgainstBlueprint,
   validateHooksV2,
   validateWeakPhrasesV2,
+  validateAdapterVocabulary,
   type CreativeTaskFields,
   type EngineV2Metadata,
   type GeneratedTaskV2,
@@ -3412,7 +3413,7 @@ async function generateV2Tasks(params: {
       businessArchetype: params.businessArchetype,
       suggestedTime: params.input.instagramMetrics.bestTime || '19:00',
     });
-    const validation = validateTaskAgainstBlueprint(base, blueprint, { businessArchetype: params.businessArchetype });
+    const validation = validateTaskAgainstBlueprint(base, blueprint, { businessArchetype: params.businessArchetype, nicheAdapter: params.nicheAdapter });
     const lockErrors = validateContractLock(base, skeleton);
     completed.set(skeleton.id, {
       ...base,
@@ -3468,7 +3469,7 @@ async function generateV2Tasks(params: {
         slotResult.missingInstructionsAdded.forEach(value => missingInstructionsAdded.add(`${skeleton.id}:${value}`));
         slotResult.unresolvedSlots.forEach(value => unresolvedSlots.add(`${skeleton.id}:${value}`));
         const lockErrors = validateContractLock(task, skeleton);
-        const validation = validateTaskAgainstBlueprint(task, blueprint, { businessArchetype: params.businessArchetype });
+        const validation = validateTaskAgainstBlueprint(task, blueprint, { businessArchetype: params.businessArchetype, nicheAdapter: params.nicheAdapter });
         const withValidation = { ...task, validationErrors: [...lockErrors, ...validation.errors] };
         if (validation.valid && !lockErrors.length) {
           completed.set(skeleton.id, { ...withValidation, needsManualReview: false });
@@ -3597,15 +3598,16 @@ async function generateGrowthPlanV2(
 
   options.onProgress?.({ stepId: 'strategy', label: 'Diseñando estrategia base' });
   const strategy = await generateStrategyWithRecovery(input, token);
-  const sanitizedContext = sanitizeBrandInputForPlanner(engineInputFromStrategy(input, strategy));
+  const rawArchetype = detectBusinessArchetype(engineInputFromStrategy(input, {}));
+  const sanitizedContext = sanitizeBrandInputForPlanner(engineInputFromStrategy(input, strategy), rawArchetype.businessArchetype);
   const engineInput = sanitizedContext.input;
-  const brandId = brandMemoryId(engineInput);
+  const archetype = rawArchetype;
+  const brandId = brandMemoryId(engineInput, archetype.businessArchetype);
   const previousPlans = loadPreviousPlanMemory(brandId);
-  const archetype = detectBusinessArchetype(engineInput);
   const nicheAdapter = selectNicheAdapter(engineInput, archetype.businessArchetype);
   const salesAggressiveness = selectSalesAggressiveness(engineInput, archetype.businessArchetype);
   const campaign = selectCampaignAngle(engineInput, archetype.businessArchetype, previousPlans);
-  const skeleton = generatePlanSkeleton(engineInput, archetype.businessArchetype, campaign, previousPlans);
+  const skeleton = generatePlanSkeleton(engineInput, archetype.businessArchetype, campaign, previousPlans, nicheAdapter);
   const generated = await generateV2Tasks({
     token,
     input: engineInput,
@@ -3627,7 +3629,7 @@ async function generateGrowthPlanV2(
     warnings: [...asArray(strategy?.generationLog?.warnings, []), ...archetype.warnings, 'Insights generados sin búsqueda web/grounding.'],
   });
 
-  let finalValidation = validateFinalPlan(normalized, previousPlans, archetype.businessArchetype);
+  let finalValidation = validateFinalPlan(normalized, previousPlans, archetype.businessArchetype, nicheAdapter);
   const repeatedBlueprints = detectRepeatedBlueprints(generated.blueprintsUsed, previousPlans[0]?.previousBlueprintsUsed || []);
   const repeatedCaptions = detectRepeatedCaptions(generated.tasks.map(task => task.caption), previousPlans[0]?.previousCaptions || []);
   const taskNoveltyScore = calculateTaskNoveltyScore(generated.tasks, previousPlans[0]);
@@ -3645,7 +3647,7 @@ async function generateGrowthPlanV2(
     );
   const blueprintValidation = Object.fromEntries(generated.tasks.map(task => {
     const blueprint = getBlueprintById(task.blueprintId)!;
-    return [task.id, validateTaskAgainstBlueprint(task, blueprint, { businessArchetype: archetype.businessArchetype })];
+    return [task.id, validateTaskAgainstBlueprint(task, blueprint, { businessArchetype: archetype.businessArchetype, nicheAdapter })];
   }));
   const metadata: EngineV2Metadata = {
     plannerEngineVersion: 'v2-blueprint',
@@ -3666,6 +3668,16 @@ async function generateGrowthPlanV2(
     finalValidationSummary: finalValidation,
     businessArchetype: archetype.businessArchetype,
     nicheAdapterUsed: nicheAdapter.id,
+    previousAdapter: previousPlans[0]?.adapterId || null,
+    adapterLeakageDetected: !finalValidation.checks.adapterIsolationValid,
+    adapterIsolation: {
+      valid: finalValidation.checks.adapterIsolationValid,
+      forbiddenBlueprintsDetected: generated.blueprintsUsed.filter(id => nicheAdapter.forbiddenBlueprints.includes(id)),
+      forbiddenVocabularyDetected: validateAdapterVocabulary(JSON.stringify(generated.tasks), nicheAdapter),
+      forbiddenSlotsDetected: archetype.businessArchetype === 'saas_subscription'
+        ? []
+        : generated.slotNormalizationSummary.unresolvedSlots.filter(slot => /^@plan|@app_screen/i.test(slot)),
+    },
     salesAggressiveness,
     researchMode: 'gemini_without_grounding',
     researchConfidence: 'medium',
@@ -3761,7 +3773,13 @@ async function generateGrowthPlanV2(
   normalized.validationReportMarkdown = buildEngineV2ValidationReport(normalized, metadata);
 
   if (finalValidation.status === 'ready') {
-    savePlanMemory(buildPlanMemory({ input: engineInput, angle: campaign.campaignAngle, tasks: generated.tasks }));
+    savePlanMemory(buildPlanMemory({
+      input: engineInput,
+      angle: campaign.campaignAngle,
+      tasks: generated.tasks,
+      businessArchetype: archetype.businessArchetype,
+      adapterId: nicheAdapter.id,
+    }));
   }
   return normalized;
 }

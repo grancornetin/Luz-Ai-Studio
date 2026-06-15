@@ -11,6 +11,8 @@ const REVIEW_CHECKS = [
   'fallbackCompletionValid', 'blueprintContractsValid', 'taskInternalCoherenceValid', 'slotsValid',
   'platformCtaCoherenceValid', 'platformFormatValid', 'primaryModuleActionValid', 'sensitiveClaimsValid',
   'noPastDates', 'noPlaceholderTasks',
+  'correctBusinessArchetype', 'correctAdapter', 'noForbiddenAdapterVocabulary', 'noForbiddenBlueprints',
+  'noSaasLeakage', 'noRawPlanSlotsForPhysicalProducts', 'adapterIsolationValid',
 ];
 
 export function validateValidationConsistency(

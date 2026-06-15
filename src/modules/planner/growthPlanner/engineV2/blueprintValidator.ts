@@ -3,7 +3,8 @@ import { hasSpanishOrthographyIssues } from './orthography';
 import { dayLabelFromDate } from './planSkeletonGenerator';
 import { validateSensitiveClaims } from './sensitiveGuardrails';
 import { validateSlotsV2 } from './slots';
-import type { BlueprintValidationResult, BusinessArchetype, GeneratedTaskV2, TaskBlueprint } from './types';
+import { isBlueprintAllowedForAdapter, validateAdapterVocabulary } from './businessAdapters';
+import type { BlueprintValidationResult, BusinessArchetype, GeneratedTaskV2, NicheAdapter, TaskBlueprint } from './types';
 const OTHER_PLATFORM_TERMS: Record<GeneratedTaskV2['platform'], string[]> = {
   'Instagram Feed': ['responde esta story', 'sticker de story', 'publicar en facebook'],
   Stories: ['publicar en facebook', 'carrusel de feed', 'comenta en facebook'],
@@ -27,12 +28,20 @@ function taskCreativeText(task: GeneratedTaskV2): string {
 export function validateTaskAgainstBlueprint(
   task: GeneratedTaskV2,
   blueprint: TaskBlueprint,
-  options: { businessArchetype?: BusinessArchetype } = {},
+  options: { businessArchetype?: BusinessArchetype; nicheAdapter?: NicheAdapter } = {},
 ): BlueprintValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
   const text = taskCreativeText(task);
   const lower = text.toLowerCase();
+  if (options.nicheAdapter && !isBlueprintAllowedForAdapter(blueprint.id, options.nicheAdapter)) {
+    errors.push(`Blueprint no permitido por adapter: ${blueprint.id}.`);
+  }
+  const adapterVocabulary = options.nicheAdapter ? validateAdapterVocabulary(text, options.nicheAdapter) : [];
+  if (adapterVocabulary.length) errors.push(`Vocabulario no permitido por adapter: ${adapterVocabulary.join(', ')}.`);
+  if (options.businessArchetype === 'fashion_accessories' && task.module === 'prompt') {
+    errors.push('El adapter de accesorios no permite prompt como modulo principal.');
+  }
 
   if (task.blueprintId !== blueprint.id) errors.push('blueprintId no coincide.');
   if (task.platform !== blueprint.platform) errors.push('platform no coincide con blueprint.');

@@ -8,6 +8,7 @@ import type {
   PlannerEngineV2Input,
   PreviousPlanMemory,
   SkeletonResult,
+  NicheAdapter,
 } from './types';
 
 const MIN_TASKS = { 7: 5, 14: 12, 30: 25 } as const;
@@ -61,6 +62,7 @@ export function generatePlanSkeleton(
   businessArchetype: BusinessArchetype,
   campaign: CampaignAngleSelection,
   previousPlans: PreviousPlanMemory[],
+  nicheAdapter: NicheAdapter,
 ): SkeletonResult {
   const total = MIN_TASKS[input.duration];
   const slots = channelSlots(input, total);
@@ -70,6 +72,7 @@ export function generatePlanSkeleton(
     businessArchetype,
     previousPlans,
     creativeSeed: campaign.creativeSeed,
+    nicheAdapter,
   });
   const start = new Date();
   start.setHours(12, 0, 0, 0);

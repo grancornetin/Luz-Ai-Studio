@@ -1,4 +1,4 @@
-import type { GeneratedTaskV2, PreviousPlanMemory, PlannerEngineV2Input, CampaignAngle } from './types';
+import type { GeneratedTaskV2, PreviousPlanMemory, PlannerEngineV2Input, CampaignAngle, BusinessArchetype } from './types';
 
 const STORAGE_KEY = 'luz_growth_planner_v2_memory';
 const MAX_MEMORIES = 12;
@@ -11,8 +11,9 @@ function safeStorage(): Storage | null {
   }
 }
 
-export function brandMemoryId(input: Pick<PlannerEngineV2Input, 'brand'>): string {
-  return input.brand.name.trim().toLowerCase().replace(/\s+/g, '_') || 'unknown_brand';
+export function brandMemoryId(input: Pick<PlannerEngineV2Input, 'brand'>, archetype?: BusinessArchetype): string {
+  const brand = input.brand.name.trim().toLowerCase().replace(/\s+/g, '_') || 'unknown_brand';
+  return archetype ? `${brand}::${archetype}` : brand;
 }
 
 export function loadPreviousPlanMemory(brandId?: string): PreviousPlanMemory[] {
@@ -88,9 +89,14 @@ export function buildPlanMemory(params: {
   input: PlannerEngineV2Input;
   angle: CampaignAngle;
   tasks: GeneratedTaskV2[];
+  businessArchetype?: BusinessArchetype;
+  adapterId?: string;
 }): PreviousPlanMemory {
   return {
-    brandId: brandMemoryId(params.input),
+    brandId: brandMemoryId(params.input, params.businessArchetype),
+    brandName: params.input.brand.name,
+    businessArchetype: params.businessArchetype,
+    adapterId: params.adapterId,
     objectiveSignature: params.input.mainGoal.toLowerCase().trim(),
     productSignature: params.input.products.map(product => product.name.toLowerCase()).sort().join('|'),
     previousCampaignAngles: [params.angle],

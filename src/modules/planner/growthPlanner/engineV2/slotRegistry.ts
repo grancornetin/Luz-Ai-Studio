@@ -6,6 +6,12 @@ export const SLOT_REGISTRY_V2: Record<string, string> = {
   '@producto1': 'Imagen principal del producto o servicio destacado.',
   '@producto2': 'Imagen secundaria de otro producto o servicio destacado.',
   '@producto3': 'Imagen de apoyo de un tercer producto o servicio.',
+  '@modelo1': 'Persona o modelo usando el producto.',
+  '@look1': 'Look completo compatible con el producto.',
+  '@escena1': 'Escena lifestyle donde se presenta el producto.',
+  '@packaging1': 'Packaging real del producto.',
+  '@detalle1': 'Detalle cercano del material, terminacion o color.',
+  '@outfit1': 'Outfit de referencia para combinar con el producto.',
   '@plan1': 'Información visual del primer plan o suscripción.',
   '@plan2': 'Información visual del segundo plan o suscripción.',
   '@plan3': 'Información visual del tercer plan o suscripción.',
@@ -27,6 +33,16 @@ const SAAS_ALIASES: Record<string, string> = {
   '@plan_studio': '@plan4',
 };
 
+const PRODUCT_ALIASES: Record<string, string> = {
+  '@plan1': '@producto1',
+  '@plan2': '@producto2',
+  '@plan3': '@producto3',
+  '@plan4': '@producto3',
+  '@resultado1': '@producto1',
+  '@app_screen1': '@escena1',
+  '@comparativa1': '@producto2',
+};
+
 export interface SlotNormalizationResult {
   task: GeneratedTaskV2;
   aliasesNormalized: string[];
@@ -35,7 +51,9 @@ export interface SlotNormalizationResult {
 }
 
 function canonicalSlot(slot: string, archetype: BusinessArchetype): string {
-  return archetype === 'saas_subscription' ? SAAS_ALIASES[slot.toLowerCase()] || slot : slot;
+  return archetype === 'saas_subscription'
+    ? SAAS_ALIASES[slot.toLowerCase()] || slot
+    : PRODUCT_ALIASES[slot.toLowerCase()] || slot;
 }
 
 function replaceSlots(value: string, archetype: BusinessArchetype, aliases: string[]): string {

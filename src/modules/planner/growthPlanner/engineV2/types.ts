@@ -24,6 +24,17 @@ export type ResearchMode = 'grounded' | 'gemini_without_grounding' | 'fallback' 
 export type PromptPolicy = 'required_primary' | 'optional_primary' | 'required_support' | 'optional_support' | 'none';
 
 export type BusinessArchetype =
+  | 'ecommerce_product'
+  | 'fashion_accessories'
+  | 'fashion_clothing'
+  | 'beauty_cosmetics'
+  | 'food_beverage'
+  | 'service_business'
+  | 'local_retail'
+  | 'education_course'
+  | 'events_experiences'
+  | 'handmade_crafts'
+  | 'generic_business'
   | 'physical_product'
   | 'digital_product'
   | 'local_service'
@@ -39,6 +50,17 @@ export type BusinessArchetype =
   | 'other';
 
 export type CampaignAngle =
+  | 'estilo_diario'
+  | 'versatilidad_producto'
+  | 'regalo_detalle'
+  | 'antes_despues_outfit'
+  | 'prueba_social_producto'
+  | 'guia_de_estilo'
+  | 'producto_destacado'
+  | 'temporada_ocasion'
+  | 'comparativa_productos'
+  | 'confianza_compra'
+  | 'impulso_whatsapp'
   | 'dolor_visual'
   | 'ahorro_tiempo'
   | 'comparacion_planes'
@@ -127,6 +149,9 @@ export interface GeneratedTaskV2 extends GrowthTask {
 
 export interface PreviousPlanMemory {
   brandId: string;
+  brandName?: string;
+  businessArchetype?: BusinessArchetype;
+  adapterId?: string;
   objectiveSignature: string;
   productSignature: string;
   previousCampaignAngles: CampaignAngle[];
@@ -161,6 +186,18 @@ export interface NicheAdapter {
   usefulProof: string[];
   visualStyle: string[];
   suggestedAssets: string[];
+  allowedBlueprints: string[];
+  forbiddenBlueprints: string[];
+  allowedCampaignAngles: CampaignAngle[];
+  forbiddenCampaignAngles: CampaignAngle[];
+  allowedVocabulary: string[];
+  forbiddenVocabulary: string[];
+  slotRegistry: string[];
+  ctaRules: string[];
+  formatRules: string[];
+  moduleRules: string[];
+  captionRules: string[];
+  weakPhraseRules: string[];
 }
 
 export interface SkeletonResult {
@@ -220,6 +257,14 @@ export interface EngineV2Metadata {
   finalValidationSummary: FinalValidationSummary;
   businessArchetype: BusinessArchetype;
   nicheAdapterUsed: string;
+  previousAdapter?: string | null;
+  adapterLeakageDetected?: boolean;
+  adapterIsolation?: {
+    valid: boolean;
+    forbiddenBlueprintsDetected: string[];
+    forbiddenVocabularyDetected: string[];
+    forbiddenSlotsDetected: string[];
+  };
   salesAggressiveness: SalesAggressiveness;
   researchMode: ResearchMode;
   researchConfidence: 'high' | 'medium' | 'low';

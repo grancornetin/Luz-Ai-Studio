@@ -40,6 +40,13 @@ export interface VisiblePlannerTask {
   requiredAssetsLabel: string;
   steps: VisibleTaskStep[];
   caption: string;
+  captionForPost: string;
+  instructionsForUser: string[];
+  whatsappMessage: string;
+  storyText: string;
+  platformLabel: string;
+  outputSurface: 'Feed' | 'Stories' | 'WhatsApp' | 'Facebook' | 'TikTok';
+  contentFormat: string;
   hashtags: string;
   prompt: string;
   optionalSupportPrompt?: string;
@@ -78,6 +85,16 @@ export interface VisibleOutputQualityChecks {
   visibleHashtagsClean: boolean;
   visibleCaptionsUnique: boolean;
   visibleTitlesVaried: boolean;
+  correctBusinessArchetype: boolean;
+  correctAdapter: boolean;
+  noForbiddenAdapterVocabulary: boolean;
+  noForbiddenBlueprints: boolean;
+  channelFormatConsistent: boolean;
+  captionInstructionSeparated: boolean;
+  productCtaValid: boolean;
+  noSaasLeakage: boolean;
+  noRawPlanSlotsForPhysicalProducts: boolean;
+  adapterIsolationValid: boolean;
 }
 
 export interface VisibleOutputQualityResult {

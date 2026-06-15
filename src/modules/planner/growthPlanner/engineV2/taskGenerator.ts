@@ -200,7 +200,10 @@ REGLAS DURAS:
 - No prometas curas, ingresos ni resultados garantizados.
 - No uses "link en bio" salvo que el CTA target lo indique.
 - Usa los slots requeridos y explica cada slot en slotInstructions.
-- Slots SaaS permitidos: @plan1, @plan2, @plan3, @app_screen1, @resultado1, @comparativa1. @producto1 puede usarse como alias de @plan1.
+- Usa unicamente estos slots para el negocio activo: ${params.nicheAdapter.slotRegistry.join(', ')}.
+- Nunca uses blueprints, vocabulario ni CTAs prohibidos por el adaptador activo.
+- Vocabulario prohibido: ${params.nicheAdapter.forbiddenVocabulary.join(', ') || 'ninguno'}.
+- El caption debe ser texto listo para publicar; las instrucciones de ejecucion van solo en executionRecipe.
 - Máximo 3 pasos de ejecución y máximo 3 tomas.
 
 MARCA:

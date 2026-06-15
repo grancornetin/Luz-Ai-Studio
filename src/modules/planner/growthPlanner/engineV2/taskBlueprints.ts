@@ -8,12 +8,18 @@ import type {
 } from './types';
 
 const ALL_ARCHETYPES: BusinessArchetype[] = [
+  'ecommerce_product', 'fashion_accessories', 'fashion_clothing', 'beauty_cosmetics',
+  'food_beverage', 'service_business', 'local_retail', 'education_course',
+  'events_experiences', 'handmade_crafts', 'generic_business',
   'physical_product', 'digital_product', 'local_service', 'professional_service', 'saas_subscription',
   'personal_brand', 'food_business', 'event_experience', 'marketplace_catalog', 'prelaunch',
   'stock_clearance', 'course_education', 'other',
 ];
 
 const ALL_ANGLES: CampaignAngle[] = [
+  'estilo_diario', 'versatilidad_producto', 'regalo_detalle', 'antes_despues_outfit',
+  'prueba_social_producto', 'guia_de_estilo', 'producto_destacado', 'temporada_ocasion',
+  'comparativa_productos', 'confianza_compra', 'impulso_whatsapp',
   'dolor_visual', 'ahorro_tiempo', 'comparacion_planes', 'prueba_social', 'educacion_creditos',
   'objeciones_compra', 'lanzamiento_producto', 'reactivacion_audiencia', 'decision_plan_correcto',
   'producto_en_uso', 'antes_despues', 'autoridad', 'comunidad', 'temporada', 'stock_limitado',

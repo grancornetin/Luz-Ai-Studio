@@ -90,6 +90,70 @@ interface HumanComposerContext {
   sequence: number;
   brandName: string;
   isLuzIaOffer: boolean;
+  businessArchetype: string;
+}
+
+const SAAS_LEAK_PATTERN = /\b(?:cr[eé]ditos?|plan\s+(?:starter|pro|explorer|studio)|starter|explorer|saas|suscripci[oó]n|app|software|mrr|onboarding|demo de app|revisa los planes|ritmo de publicaci[oó]n)\b|@plan[1-4]|@app_screen1/i;
+const INSTRUCTION_CAPTION_PATTERN = /\b(?:al inicio del plan|cuando la audiencia ya reconoce|esta publicaci[oó]n|esta pieza|el objetivo es|crea una pieza|publica y|haz un|prepara una)\b/i;
+
+function productKeyword(product?: GrowthProduct): string {
+  return (product?.name || 'PRODUCTO').normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/\s+/).at(-1)?.replace(/[^\p{L}\p{N}]/gu, '').toUpperCase() || 'PRODUCTO';
+}
+
+export function buildProductCta(task: GrowthTask, product?: GrowthProduct): string {
+  const keyword = productKeyword(product);
+  if (task.platform === 'Stories') return `Responde esta story con ${keyword} y te enviamos más fotos.`;
+  if (task.platform === 'WhatsApp') return `Respóndenos ${keyword} y te enviamos disponibilidad y fotos en uso.`;
+  if (task.ctaTarget === 'Link' || task.ctaTarget === 'Link en bio') return 'Revisa el enlace de la bio para ver disponibilidad.';
+  if (/Comentario/.test(task.ctaTarget)) return `Comenta ${keyword} y te mostramos más detalles.`;
+  return `Escríbenos ${keyword} por DM y te enviamos fotos disponibles.`;
+}
+
+function accessoryTitle(task: GrowthTask, product?: GrowthProduct): string {
+  const name = product?.name || 'el accesorio destacado';
+  if (task.platform === 'Stories') return `Pregunta cómo combinar ${name}`;
+  if (task.platform === 'WhatsApp') return `Comparte disponibilidad de ${name}`;
+  if (/SOCIAL_PROOF|TESTIMONIAL/.test(task.blueprintId || '')) return `Muestra cómo se ve ${name} en un look real`;
+  if (/OBJECTION|FAQ/.test(task.blueprintId || '')) return `Responde dudas sobre ${name}`;
+  if (/BEFORE_AFTER|PRODUCT_IN_USE|PROCESS/.test(task.blueprintId || '')) return `Muestra cómo ${name} cambia un outfit`;
+  if (/CAROUSEL|COMPARISON|BENEFITS/.test(task.blueprintId || '')) return `Enseña tres formas de usar ${name}`;
+  return `Destaca los detalles de ${name}`;
+}
+
+function variedTitle(base: string, titleCounts: Map<string, number>): string {
+  const count = titleCounts.get(base) || 0;
+  titleCounts.set(base, count + 1);
+  if (count < 2) return shortenTitle(base);
+  const variants = ['Guía práctica', 'Ejemplo real', 'Detalle clave', 'Idea para combinar', 'Respuesta rápida', 'Opción destacada'];
+  return shortenTitle(`${variants[(count - 2) % variants.length]}: ${base.toLowerCase()}`);
+}
+
+function accessoryCaption(task: GrowthTask, product: GrowthProduct | undefined, cta: string): string {
+  const name = product?.name || 'este accesorio';
+  const benefit = product?.benefit && !INSTRUCTION_CAPTION_PATTERN.test(product.benefit)
+    ? product.benefit
+    : 'suma un detalle delicado que combina con looks de día y de noche';
+  if (task.platform === 'Stories') return `¿Con qué look usarías ${name}? Vota o responde esta story y te mostramos cómo se ve puesto. ${cta}`;
+  if (task.platform === 'WhatsApp') return `Hola, te compartimos ${name}. ${benefit}. ${cta}`;
+  return `${name} puede cambiar la intención de todo un look. ${benefit}. ${cta}`;
+}
+
+export function normalizeVisibleFormat(task: GrowthTask): {
+  contentFormat: string;
+  outputSurface: VisiblePlannerTask['outputSurface'];
+  platformLabel: string;
+} {
+  const text = `${task.contentType} ${task.visualConcept} ${task.executionRecipe.overview} ${task.executionRecipe.steps.map(step => step.instruction).join(' ')}`;
+  const asksVideo = /\breel|video|graba|tomas?|transici[oó]n|audio|clips?\b/i.test(text);
+  const contentFormat = task.platform === 'Stories' ? task.contentType
+    : task.platform === 'WhatsApp' ? 'Mensaje'
+      : asksVideo ? 'Reel' : task.contentType;
+  const outputSurface = task.platform === 'Instagram Feed' ? 'Feed' : task.platform;
+  return {
+    contentFormat,
+    outputSurface,
+    platformLabel: task.platform === 'Instagram Feed' ? `Instagram Feed · ${contentFormat}` : `${task.platform} · ${contentFormat}`,
+  };
 }
 
 function unique(items: string[]): string[] {
@@ -128,7 +192,7 @@ function isLuzIaCommercialOffer(brandName: string, brandCategory: string, produc
 
 function safePlannerText(text: string, fallback: string, isLuzIaOffer: boolean): string {
   const polished = polishPremiumVisibleCopy(text);
-  return !isLuzIaOffer && LUZ_IA_OFFER_PATTERN.test(polished) ? fallback : polished;
+  return !isLuzIaOffer && (LUZ_IA_OFFER_PATTERN.test(polished) || SAAS_LEAK_PATTERN.test(polished)) ? fallback : polished;
 }
 
 function coreTaskText(task: GrowthTask): string {
@@ -466,12 +530,37 @@ function roadmapStage(index: number, total: number): string {
 }
 
 export function composeHumanVisibleTask(task: GrowthTask, plannerContext: HumanComposerContext): VisiblePlannerTask {
-  const { products, titleCounts, sequence, brandName, isLuzIaOffer } = plannerContext;
+  const { products, titleCounts, sequence, brandName, isLuzIaOffer, businessArchetype } = plannerContext;
+  const product = products[sequence % Math.max(products.length, 1)];
   const planFocus = detectTaskPlanFocus(task, isLuzIaOffer);
-  const title = buildHumanTaskTitle(task, titleCounts, isLuzIaOffer);
-  const cta = composeVisibleCTA(task, planFocus, isLuzIaOffer);
+  const title = businessArchetype === 'fashion_accessories'
+    ? variedTitle(accessoryTitle(task, product), titleCounts)
+    : buildHumanTaskTitle(task, titleCounts, isLuzIaOffer);
+  const isPhysicalProduct = businessArchetype !== 'saas_subscription' && products.length > 0;
+  const cta = isPhysicalProduct ? buildProductCta(task, product) : composeVisibleCTA(task, planFocus, isLuzIaOffer);
   const shotGuide = buildShotGuide(task, products, planFocus, isLuzIaOffer);
-  const goal = safeVisibleText(task.visualConcept, task, products, planFocus, title, isLuzIaOffer);
+  const visibleFormat = normalizeVisibleFormat(task);
+  const humanCaption = businessArchetype === 'fashion_accessories'
+    ? accessoryCaption(task, product, cta)
+    : composeHumanCaption(task, planFocus, { title, sequence, isLuzIaOffer });
+  const captionForPost = task.platform === 'Instagram Feed'
+    ? humanCaption.replace(INSTRUCTION_CAPTION_PATTERN, '').trim()
+    : '';
+  const storyText = task.platform === 'Stories' ? (businessArchetype === 'fashion_accessories' ? humanCaption : `${title}. ${cta}`) : '';
+  const whatsappMessage = task.platform === 'WhatsApp'
+    ? (businessArchetype === 'fashion_accessories' ? humanCaption : `Hola, te compartimos ${product?.name || 'esta opción'}. ${product?.benefit || 'Puede ser una buena alternativa para lo que buscas.'} ${cta}`)
+    : '';
+  const steps = businessArchetype === 'fashion_accessories' && task.platform === 'WhatsApp'
+    ? [
+      { title: 'Personaliza el saludo', instruction: `Menciona ${product?.name || 'el producto'} y confirma que las fotos y el precio estén actualizados.` },
+      { title: 'Envía las fotos correctas', instruction: 'Comparte una foto de detalle y otra donde el accesorio se vea puesto.' },
+      { title: 'Confirma disponibilidad', instruction: 'Indica colores, unidades disponibles y forma de entrega.' },
+      { title: 'Continúa la conversación', instruction: cta },
+    ]
+    : composeActionableSteps(task, cta);
+  const goal = businessArchetype === 'fashion_accessories'
+    ? `${title}. Muestra el producto con detalle y ayuda a imaginar cómo combinarlo.`
+    : safeVisibleText(task.visualConcept, task, products, planFocus, title, isLuzIaOffer);
   return {
     id: task.id,
     week: task.week,
@@ -480,27 +569,38 @@ export function composeHumanVisibleTask(task: GrowthTask, plannerContext: HumanC
     dateLabel: polishPremiumVisibleCopy(task.dayLabel),
     suggestedTime: task.suggestedTime,
     platform: task.platform,
-    contentType: polishPremiumVisibleCopy(task.contentType),
+    contentType: polishPremiumVisibleCopy(visibleFormat.contentFormat),
+    contentFormat: polishPremiumVisibleCopy(visibleFormat.contentFormat),
+    outputSurface: visibleFormat.outputSurface,
+    platformLabel: visibleFormat.platformLabel,
     effortLabel: EFFORT_LABELS[task.estimatedEffort],
     priorityLabel: PRIORITY_LABELS[task.taskPriority],
     goal,
-    whyThisMatters: safeVisibleText(
+    whyThisMatters: businessArchetype === 'fashion_accessories'
+      ? `Una referencia clara de ${product?.name || 'este accesorio'} reduce dudas sobre tamaño, color y estilo antes de comprar.`
+      : safeVisibleText(
       task.whyItWorks,
       task,
       products,
       planFocus,
       humanValue(task, planFocus, title, isLuzIaOffer),
       isLuzIaOffer,
-    ),
+      ),
     recommendedModuleLabel: MODULE_LABELS[task.module],
     supportModuleLabel: task.supportModule ? MODULE_LABELS[task.supportModule] : undefined,
     requiredAssetsLabel: task.requiredAssets.length
       ? task.requiredAssets.map(asset => safeVisibleText(asset, task, products, planFocus, 'Recurso visual indicado', isLuzIaOffer)).join(', ')
       : 'No necesitas recursos adicionales',
-    steps: composeActionableSteps(task, cta),
-    caption: composeHumanCaption(task, planFocus, { title, sequence, isLuzIaOffer }),
+    steps,
+    instructionsForUser: steps.map(step => step.instruction),
+    caption: captionForPost || storyText || whatsappMessage,
+    captionForPost,
+    storyText,
+    whatsappMessage,
     hashtags: polishVisibleHashtags(task, planFocus, { brandName, isLuzIaOffer }),
-    prompt: buildVisiblePrompt(task, products, planFocus, title, isLuzIaOffer),
+    prompt: businessArchetype === 'fashion_accessories' && task.module !== 'none'
+      ? `Crea una imagen de ${product?.name || 'el accesorio'} con detalle nítido, color fiel y una composición compatible con ${visibleFormat.contentFormat}.`
+      : buildVisiblePrompt(task, products, planFocus, title, isLuzIaOffer),
     optionalSupportPrompt: task.supportPrompt
       ? safeVisibleText(
         task.supportPrompt,
@@ -529,7 +629,8 @@ function visibleStrings(output: VisiblePlannerOutput): string[] {
     ...output.roadmap.flatMap(item => [item.title, item.objective, item.stageLabel]),
     ...output.tasks.flatMap(task => [
       task.title, task.dateLabel, task.platform, task.contentType, task.effortLabel, task.priorityLabel,
-      task.goal, task.whyThisMatters, task.caption, task.hashtags, task.prompt, task.optionalSupportPrompt || '',
+      task.goal, task.whyThisMatters, task.caption, task.captionForPost, task.storyText, task.whatsappMessage,
+      task.platformLabel, task.contentFormat, task.hashtags, task.prompt, task.optionalSupportPrompt || '',
       task.cta, task.practicalTip, task.requiredAssetsLabel, task.recommendedModuleLabel, task.supportModuleLabel || '',
       ...task.steps.flatMap(step => [step.title, step.instruction]),
       ...task.shotGuide.flatMap(item => [item.label, item.duration, item.instruction]),
@@ -562,7 +663,7 @@ function visibleHashtagsClean(task: VisiblePlannerTask): boolean {
   return tags.length >= 5 && tags.length <= 8 && !BAD_HASHTAG_PATTERN.test(task.hashtags);
 }
 
-export function evaluateVisibleOutputQuality(output: VisiblePlannerOutput): VisibleOutputQualityResult {
+export function evaluateVisibleOutputQuality(output: VisiblePlannerOutput, engineMetadata: Record<string, unknown> = {}): VisibleOutputQualityResult {
   const strings = visibleStrings(output);
   const allText = strings.join('\n');
   const visibleRepeatedCaptionsDetected = findVisibleRepeatedCaptions(output.tasks);
@@ -570,6 +671,12 @@ export function evaluateVisibleOutputQuality(output: VisiblePlannerOutput): Visi
     acc[task.title] = (acc[task.title] || 0) + 1;
     return acc;
   }, {});
+  const businessArchetype = String(engineMetadata.businessArchetype || '');
+  const nicheAdapterUsed = String(engineMetadata.nicheAdapterUsed || '');
+  const forbiddenBlueprints = ((engineMetadata.adapterIsolation as { forbiddenBlueprintsDetected?: string[] } | undefined)?.forbiddenBlueprintsDetected || []);
+  const nonSaas = businessArchetype !== 'saas_subscription';
+  const adapterIsolationValid = businessArchetype !== 'fashion_accessories'
+    || (nicheAdapterUsed === 'fashion_accessories_adapter' && !SAAS_LEAK_PATTERN.test(allText) && forbiddenBlueprints.length === 0);
   const checks = {
     brandNameConsistent: !BAD_BRAND_PATTERN.test(allText.replace(/#LuzIAStudio/g, '')),
     noInflatedMarketingPhrases: !PREMIUM_WEAK_PHRASE_PATTERN.test(allText) && !MECHANICAL_COPY_PATTERN.test(allText),
@@ -598,6 +705,16 @@ export function evaluateVisibleOutputQuality(output: VisiblePlannerOutput): Visi
     visibleHashtagsClean: output.tasks.every(visibleHashtagsClean),
     visibleCaptionsUnique: visibleRepeatedCaptionsDetected.length === 0,
     visibleTitlesVaried: Object.values(titleCounts).every(count => count <= 2),
+    correctBusinessArchetype: businessArchetype !== 'fashion_accessories' || /accesor|aro|joyer|bisuter|collar|pulsera/i.test(output.brandCategory),
+    correctAdapter: businessArchetype !== 'fashion_accessories' || nicheAdapterUsed === 'fashion_accessories_adapter',
+    noForbiddenAdapterVocabulary: !nonSaas || !SAAS_LEAK_PATTERN.test(allText),
+    noForbiddenBlueprints: forbiddenBlueprints.length === 0,
+    channelFormatConsistent: output.tasks.every(task => task.platform !== 'Instagram Feed' || task.contentType !== 'Post con imagen' || !/\bgraba|video|reel|toma\b/i.test(`${task.goal} ${task.instructionsForUser.join(' ')}`)),
+    captionInstructionSeparated: output.tasks.every(task => !task.captionForPost || !INSTRUCTION_CAPTION_PATTERN.test(task.captionForPost)),
+    productCtaValid: businessArchetype !== 'fashion_accessories' || output.tasks.every(task => !/\bSTARTER|PRO|PLAN|CR[EÉ]DITOS\b/.test(task.cta)),
+    noSaasLeakage: !nonSaas || !SAAS_LEAK_PATTERN.test(allText),
+    noRawPlanSlotsForPhysicalProducts: !nonSaas || !/@plan[1-4]|@app_screen1/i.test(allText),
+    adapterIsolationValid,
   };
   const issues = Object.entries(checks).filter(([, valid]) => !valid).map(([name]) => name);
   return {
@@ -614,7 +731,7 @@ export function isStructurePublishableForVisibleOutput(plan: GrowthStrategicPlan
 
 export function buildVisiblePlannerOutput(
   planOutput: GrowthStrategicPlan,
-  _engineMetadata: Record<string, unknown> = {},
+  engineMetadata: Record<string, unknown> = {},
   plannerInput?: Partial<GrowthStrategicPlan>,
 ): VisiblePlannerOutput {
   const products = plannerInput?.products || planOutput.normalizedProducts || planOutput.products;
@@ -665,12 +782,13 @@ export function buildVisiblePlannerOutput(
       sequence,
       brandName: planOutput.brand.name,
       isLuzIaOffer,
+      businessArchetype: String(engineMetadata.businessArchetype || (isLuzIaOffer ? 'saas_subscription' : 'generic_business')),
     })),
     quality: null as unknown as VisibleOutputQualityResult,
     visibleRepeatedCaptionsDetected: [],
     canPublishVisibleOutputToUser: false,
   };
-  output.quality = evaluateVisibleOutputQuality(output);
+  output.quality = evaluateVisibleOutputQuality(output, engineMetadata);
   output.visibleRepeatedCaptionsDetected = output.quality.visibleRepeatedCaptionsDetected;
   output.canPublishVisibleOutputToUser = output.quality.visibleOutputQualityStatus === 'premium_ready'
     && output.quality.checks.noRawSlotsInVisibleOutput
@@ -680,6 +798,8 @@ export function buildVisiblePlannerOutput(
     && output.quality.checks.recipesActionable
     && output.quality.visibleRepeatedCaptionsDetected.length === 0
     && output.quality.checks.visibleHashtagsClean;
+  output.canPublishVisibleOutputToUser = output.canPublishVisibleOutputToUser
+    && output.quality.checks.adapterIsolationValid;
   return output;
 }
 

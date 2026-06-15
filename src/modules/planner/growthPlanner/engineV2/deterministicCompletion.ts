@@ -120,7 +120,11 @@ export function completeTaskFromBlueprintDeterministic(
     visualConcept: platform.visualConcept,
     whyItWorks: `Presenta ${subject} con información concreta y facilita una acción compatible con ${skeleton.platform}.`,
     caption,
-    hashtags: skeleton.platform === 'WhatsApp' || skeleton.module === 'none' ? '' : '#ContenidoVisual #PlanDeContenido #LuzIAStudio',
+    hashtags: skeleton.platform === 'WhatsApp' || skeleton.module === 'none'
+      ? ''
+      : context.businessArchetype === 'saas_subscription'
+        ? '#ContenidoVisual #PlanDeContenido #LuzIAStudio'
+        : '#ContenidoVisual #Producto #TiendaOnline',
     prompt: primaryPrompt,
     supportPrompt,
     slotInstructions: slots.map(slot => ({ slot, instruction: SLOT_REGISTRY_V2[slot] || `Recurso necesario para explicar ${subject}.` })),

@@ -1,4 +1,4 @@
-import type { PlannerEngineV2Input } from './types';
+import type { BusinessArchetype, PlannerEngineV2Input } from './types';
 
 const WEAK_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\bim[aá]genes de revista\b/gi, 'imágenes más claras, cuidadas y listas para publicar'],
@@ -22,24 +22,37 @@ const WEAK_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\bwow\b/gi, ''],
 ];
 
-export function sanitizePlannerText(text: string): { value: string; removed: string[] } {
+export function polishByArchetype(text: string, archetype: BusinessArchetype = 'generic_business'): string {
+  if (archetype === 'fashion_accessories') {
+    return String(text || '')
+      .replace(/\bhaz brillar tu negocio\b/gi, 'realza la presentacion de tus productos')
+      .replace(/\bsin esfuerzo\b/gi, 'de forma simple')
+      .replace(/\bverse con claridad sutil\b/gi, 'brillo sutil');
+  }
+  return String(text || '');
+}
+
+export function sanitizePlannerText(text: string, archetype: BusinessArchetype = 'generic_business'): { value: string; removed: string[] } {
   const removed: string[] = [];
-  const value = WEAK_REPLACEMENTS.reduce((current, [pattern, replacement]) => {
+  const replacements = archetype === 'fashion_accessories'
+    ? WEAK_REPLACEMENTS.filter(([pattern]) => !/brill/.test(pattern.source) && !/sin esfuerzo/.test(pattern.source))
+    : WEAK_REPLACEMENTS;
+  const value = polishByArchetype(replacements.reduce((current, [pattern, replacement]) => {
     pattern.lastIndex = 0;
     if (pattern.test(current)) removed.push(pattern.source);
     pattern.lastIndex = 0;
     return current.replace(pattern, replacement);
-  }, String(text || '')).replace(/\s{2,}/g, ' ').trim();
+  }, String(text || '')), archetype).replace(/\s{2,}/g, ' ').trim();
   return { value, removed };
 }
 
-export function sanitizeBrandInputForPlanner(input: PlannerEngineV2Input): {
+export function sanitizeBrandInputForPlanner(input: PlannerEngineV2Input, archetype: BusinessArchetype = 'generic_business'): {
   input: PlannerEngineV2Input;
   sanitizedPhrases: string[];
 } {
   const sanitizedPhrases: string[] = [];
   const clean = (value: string) => {
-    const result = sanitizePlannerText(value);
+    const result = sanitizePlannerText(value, archetype);
     sanitizedPhrases.push(...result.removed);
     return result.value;
   };
