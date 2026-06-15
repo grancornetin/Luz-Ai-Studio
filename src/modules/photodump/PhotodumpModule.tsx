@@ -381,9 +381,10 @@ const PhotodumpModule: React.FC = () => {
       const refsWithMode = { ...refs, outfitMode, gender: inferredGender };
 
       setProgressStepIndex(0);
-      // Count policy para outfit_check: REF0 ocupa un slot, story shots = count - 1
-      const storyShotCount = recipe === 'outfit_check' ? Math.max(2, count - 1) : count;
-      const plan  = await buildPhotodumpSessionPlan(narrative, protagonist, destino, basePrompt, recipe, refsWithMode, count);
+      // Count policy para outfit_check: máximo 8 visibles, REF0 ocupa 1 slot
+      const visibleCount   = recipe === 'outfit_check' ? Math.min(count, 8) : count;
+      const storyShotCount = recipe === 'outfit_check' ? Math.max(2, visibleCount - 1) : count;
+      const plan  = await buildPhotodumpSessionPlan(narrative, protagonist, destino, basePrompt, recipe, refsWithMode, storyShotCount);
       const shots = plan.shots.slice(0, storyShotCount);
       setSavedShots(shots);
       setSavedPlan(plan);
@@ -444,6 +445,18 @@ const PhotodumpModule: React.FC = () => {
               recipe, shots.map(s => s.key ?? ''),
               briefCtxDebug, outfitCompositionDebug, hpiSrc, famMode,
             );
+            // Validador: términos visuales del destino en prompts de preparación
+            if (recipe === 'outfit_check' && sh.narrativeStage !== 'destination') {
+              const destTerms = ['opera house','theatre','grand foyer','marble floor','chandelier','velvet curtain','restaurant interior','lobby','office corridor','coworking','club house','palace hallway','street exterior','hotel lobby'];
+              const promptLower = (result.prompt ?? '').toLowerCase();
+              const found = destTerms.filter(t => promptLower.includes(t));
+              if (found.length > 0)
+                contradictions.push(`Prep/styled shot contains destination visual terms: ${found.join(', ')}`);
+            }
+            // Validador: count mismatch (solo en el último shot)
+            if (recipe === 'outfit_check' && i === shots.length - 1 && visibleCount !== count) {
+              contradictions.push(`requestedCount=${count} capped to visibleCount=${visibleCount} (outfit_check max 8)`);
+            }
 
             debugShots.push({
               shotIndex:    i + 1,
@@ -528,7 +541,7 @@ const PhotodumpModule: React.FC = () => {
         inferredDestination: inferredDest,
         count,
         requestedCount:      count,
-        visibleImageCount:   recipe === 'outfit_check' ? count : count + 1,
+        visibleImageCount:   recipe === 'outfit_check' ? visibleCount : count + 1,
         ref0IncludedInCount: recipe === 'outfit_check',
         storyShotCount:      storyShotCount,
         generatedImageCount: shotUrls.filter(Boolean).length,

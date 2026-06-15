@@ -58,6 +58,7 @@ interface PDStep2RecetaProps {
 
 const MIN_COUNT = 3;
 const MAX_COUNT = 20;
+const OUTFIT_CHECK_MAX_COUNT = 8;
 
 const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   recipe, count, basePrompt, refs, outfitMode, onCount, onPrompt, onRefs, onOutfitMode,
@@ -67,6 +68,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   const toggle = (key: string) => setOpenSlot(p => p === key ? null : key);
 
   const isOutfitRecipe = recipe === 'outfit_check' || recipe === 'outfit_haul' || recipe === 'outfit_week';
+  const maxCount = recipe === 'outfit_check' ? OUTFIT_CHECK_MAX_COUNT : MAX_COUNT;
 
   // Insertar @tag en la posición del cursor del textarea
   const insertTag = (tag: string) => {
@@ -281,14 +283,18 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => onCount(Math.min(MAX_COUNT, count + 1))}
-                disabled={count >= MAX_COUNT}
+                onClick={() => onCount(Math.min(maxCount, count + 1))}
+                disabled={count >= maxCount}
                 className="w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold text-lg flex items-center justify-center hover:border-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-all"
               >
                 +
               </button>
             </div>
-            <p className="text-[9px] text-slate-400 mt-1.5">Mínimo 3 · El género del avatar se detecta automáticamente</p>
+            <p className="text-[9px] text-slate-400 mt-1.5">
+              {recipe === 'outfit_check'
+                ? 'Outfit check permite hasta 8 imágenes para mantener coherencia de look y escena.'
+                : 'Mínimo 3 · El género del avatar se detecta automáticamente'}
+            </p>
           </div>
 
           {/* Brief */}

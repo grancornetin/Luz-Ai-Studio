@@ -246,7 +246,10 @@ IDENTITY: This is a real person's Instagram photodump / carousel.
 Think "my day", "something I wanted to share", "a moment that happened".
 The set is a constellation of visual moments — each image stands on its own
 and connects to the others through mood, light, and world, not through narrative sequence.
-There is no "first act" or "last act". Every image belongs to the same world.
+
+OUTFIT CHECK EXCEPTION: When this set follows an outfit_check arc, the images DO have a soft
+natural sequence — prep → details → full look → ready moment → optional destination closure.
+The sequence feels organic and social, NOT cinematic or structured. Each image still stands alone.
 
 CRITICAL RULES:
 - NO commercial feel. NO ad composition. NO product placement vibe.
@@ -265,7 +268,6 @@ ANTI-AD RULES (NON-NEGOTIABLE):
 WHAT MAKES A GREAT PHOTODUMP:
 - Each image could stand alone as a real moment — not as "image 1 of 4".
 - Together they feel like scrolling through someone's camera roll.
-- No single image announces itself as the "opener" or the "closer".
 - The emotional impact comes from variety and authenticity, not from sequence.
 `;
 
@@ -557,6 +559,108 @@ Do NOT lock accidental clutter. Do NOT replicate random objects, cables, or mess
 Keep the space tidy and believable for the brief occasion.`;
 }
 
+// ── Prep context directive — SOLO ocasión abstracta, sin términos visuales del destino ──
+// Para shots de preparación: menciona la ocasión pero NUNCA el visual del destino.
+// Evita que palabras como "opera house", "marble", "chandeliers" aparezcan en prep shots.
+export function buildPrepContextOnlyBlock(ctx: OutfitBriefContext, shotKey: string): string {
+  if (!ctx.isOccasionBrief || ctx.destinationClass === 'none') return '';
+  // Solo para shots de preparación — NUNCA para OUTFIT_DESTINATION
+  if (!PREP_SHOT_KEYS.has(shotKey)) return '';
+
+  const occasionLabels: Record<OutfitDestinationClass, string> = {
+    opera_theatre:       'opera / theatre date',
+    formal_event:        'formal event / gala',
+    restaurant_dinner:   'restaurant dinner',
+    country_club_brunch: 'upscale brunch / country club',
+    office_meeting:      'office meeting / work',
+    business_event:      'business event',
+    beach_day:           'beach day',
+    travel_airport:      'travel / airport',
+    urban_social_outing: 'evening out / social event',
+    generic_outing:      'outing / event',
+    none:                '',
+  };
+
+  const occasionText = occasionLabels[ctx.destinationClass] || 'special occasion';
+  const timeContext = ctx.timeSignal !== 'unspecified'
+    ? `Lighting: ${ctx.timeSignal === 'night' ? 'warm artificial evening light — pre-event getting ready'
+        : ctx.timeSignal === 'golden_hour' ? 'golden afternoon light — getting ready'
+        : ctx.timeSignal === 'morning' ? 'soft morning light — early prep'
+        : ctx.timeSignal === 'afternoon' ? 'natural afternoon light — getting ready'
+        : 'ambient interior light — getting ready'}.`
+    : 'Pre-event getting-ready lighting — warm indoor atmosphere.';
+
+  return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 OCCASION CONTEXT (prep shot — destination FORBIDDEN here):
+Occasion: ${occasionText}
+This shot happens BEFORE leaving — the person is still in the prep/getting-ready space.
+${timeContext}
+
+⛔ CRITICAL — DO NOT SHOW THE DESTINATION IN THIS SHOT:
+The destination scene appears ONLY in the final OUTFIT_DESTINATION shot.
+FORBIDDEN visual terms in THIS shot: opera house, theatre, grand foyer, marble floors,
+ornate chandeliers, velvet curtains, restaurant interior, lobby, office corridor,
+coworking space, club house, palace hallway, street exterior, hotel lobby.
+Even if the brief mentions these places, this shot stays in the PREP ROOM.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+}
+
+// ── REF0 Hard Lock — bloque duro para preservar el espacio de preparación ────────
+// Más fuerte que buildSceneContinuityBlock — regla explícita de "mismo cuarto físico".
+// Aplica a todos los shots con sceneLockPolicy prep_space / prep_space_or_surface / prep_space_or_pre_exit.
+function buildREF0HardLockBlock(
+  sceneLockPolicy: SceneLockPolicy | undefined,
+  hasUserSceneRef: boolean,
+  fingerprint?: SceneFingerprint,
+): string {
+  if (!sceneLockPolicy) return '';
+  if (sceneLockPolicy === 'none' || sceneLockPolicy === 'destination_allowed') return '';
+  if (!['prep_space', 'prep_space_or_surface', 'prep_space_or_pre_exit', 'strict_ref0'].includes(sceneLockPolicy)) return '';
+
+  const strengthNote = hasUserSceneRef
+    ? 'The user provided a real room photo — reproduce it faithfully.'
+    : 'REF0 established this space — maintain it exactly across all prep shots.';
+
+  const prexitNote = sceneLockPolicy === 'prep_space_or_pre_exit'
+    ? `\nALLOWED TRANSITION: The person may be at the doorway, in the immediate hallway of the SAME space, or near the exit of the prep room. The prep room must still be recognizable.`
+    : '';
+
+  const fingerprintNote = fingerprint
+    ? `\nSPACE IDENTIFIERS from REF0 (must match):
+  • Room type: ${fingerprint.roomType.replace(/_/g, ' ')}
+  • Dominant furniture: ${fingerprint.dominantFurniture.replace(/_/g, ' ')}
+  • Lighting: ${fingerprint.lightingFamily.replace(/_/g, ' ')}
+  • Color palette: ${fingerprint.colorPalette}${fingerprint.hasVisibleMirror ? '\n  • Mirror: visible in the space' : ''}${fingerprint.keyProps.length > 0 ? `\n  • Key props: ${fingerprint.keyProps.join(', ')}` : ''}`
+    : '';
+
+  return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔒 REF0 BACKGROUND HARD LOCK — PREP SPACE:
+${strengthNote}
+${fingerprintNote}${prexitNote}
+
+RULE: This shot happens in the EXACT SAME preparation room as REF0.
+Preserve the same physical room: same walls, same floor material, same dominant furniture,
+same mirror (if present), same bed/vanity/dresser, same lamp/light sources,
+same spatial layout, same cleanliness level, same color palette.
+
+ALLOWED CHANGES between shots (camera only):
+  ✅ Camera angle (closer, farther, different corner)
+  ✅ Crop and framing
+  ✅ Focal length and depth of field
+  ✅ Subject position within the room
+  ✅ Minor object movement related to the outfit (garment moved, bag placed differently)
+
+FORBIDDEN CHANGES (hard failure):
+  ❌ New room or different bedroom
+  ❌ Hotel lobby, palace hallway, theatre foyer, restaurant, office corridor
+  ❌ Different wall color or different floor material
+  ❌ Different furniture arrangement or swap of dominant furniture
+  ❌ Chandeliers or velvet curtains unless they already exist in REF0
+  ❌ New decorative style not present in REF0
+  ❌ Any element from the destination venue (opera, theatre, club, restaurant, cowork, etc.)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+}
+
 // ── Outfit composition inference ──────────────────────────────
 // Infiere la composición del outfit desde el brief y los refs disponibles.
 export function inferOutfitComposition(refs: Partial<PhotodumpRefs>, basePrompt: string): OutfitComposition {
@@ -676,6 +780,7 @@ export function resolveWearState(
       return 'wearing_full_outfit';
 
     case 'OUTFIT_READY':
+    case 'OUTFIT_SECOND_ANGLE':
       return 'ready_to_leave';
 
     case 'OUTFIT_DESTINATION':
@@ -1279,6 +1384,16 @@ Choose ONE subtle, realistic action someone does while checking their look in a 
 FORBIDDEN: any athletic pose, floor sitting, gym movement, extreme torso twist, walking-pose, arms-out gesture, full-body performance.
 The action must be physically coherent with standing in front of a mirror evaluating an outfit.`;
 
+    case 'OUTFIT_SECOND_ANGLE':
+      return `🎯 MICRO-ACTION (second angle — body and posture only, no scene change):
+The person is in the same prep room showing the outfit from a different angle.
+  - slight weight shift to the other side from the mirror check
+  - half-turn showing the back or side of the outfit
+  - hand adjusting a detail (cuff, collar, belt)
+  - natural relaxed posture — not a new catalog pose
+FORBIDDEN: changing the room, adding destination venue elements, athletic pose, floor sitting.
+The focus is a different angle of the same look in the same space.`;
+
     case 'OUTFIT_READY':
       return `🎯 MICRO-ACTION (ready selfie — expression and camera only):
 The person is ready and taking a selfie or being photographed.
@@ -1452,9 +1567,18 @@ export function detectContradictions(
     if (hpiSource === 'raw_hpi_not_allowed')
       contradictions.push('raw_hpi_not_allowed should never be hpiSource in outfit_check');
 
-    // familyBlock literal aplicado en outfit_check
-    if (familyBlockMode === 'literal_prompt_block')
-      contradictions.push('literal_prompt_block familyBlock applied in outfit_check — should be abstract_style_hint or disabled');
+    // familyBlock aplicado en outfit_check (debe estar disabled)
+    if (familyBlockMode && familyBlockMode !== 'disabled')
+      contradictions.push(`familyBlock mode=${familyBlockMode} in outfit_check — should be disabled for MVP`);
+
+    // OUTFIT_SECOND_ANGLE debe estar en prep space, no en destino
+    if (shot.key === 'OUTFIT_SECOND_ANGLE' && shot.narrativeStage === 'destination')
+      contradictions.push('OUTFIT_SECOND_ANGLE should have narrativeStage=styled, not destination');
+
+    // Validador de destino en brief pero arco sin OUTFIT_DESTINATION (con destino claro)
+    if (briefCtx && briefCtx.destinationClass !== 'none' && briefCtx.destinationClass !== 'generic_outing' &&
+        shot.isFinalShot && shot.key !== 'OUTFIT_DESTINATION')
+      contradictions.push(`final shot is ${shot.key} but destinationClass=${briefCtx.destinationClass} — may be missing OUTFIT_DESTINATION`);
   }
 
   return contradictions;
@@ -1481,7 +1605,7 @@ function extractBriefContextBlock(basePrompt: string): string {
 // Para shots de PREPARACIÓN en recetas de outfit: ancla la locación del shot
 // al espacio de REF0 (nunca al venue del brief).
 // La ópera/gala/restaurante es el destino — no donde la persona se prueba el outfit.
-const PREP_SHOT_KEYS = new Set(['OUTFIT_ARRIVING', 'OUTFIT_MIRROR_CHECK', 'OUTFIT_DETAIL', 'OUTFIT_DETAIL_WORN', 'OUTFIT_READY']);
+const PREP_SHOT_KEYS = new Set(['OUTFIT_ARRIVING', 'OUTFIT_MIRROR_CHECK', 'OUTFIT_DETAIL', 'OUTFIT_DETAIL_WORN', 'OUTFIT_READY', 'OUTFIT_SECOND_ANGLE']);
 
 function extractShotLocationOverride(
   basePrompt:       string,
@@ -1626,7 +1750,7 @@ function buildStoryDirectives(
         ? 'destination_allowed'
         : key === 'OUTFIT_ARRIVING' || key === 'OUTFIT_DETAIL' || key === 'OUTFIT_DETAIL_WORN' || key === 'ACCESSORY_CLOSEUP'
           ? 'prep_space_or_surface'
-          : key === 'OUTFIT_READY'
+          : key === 'OUTFIT_READY' || key === 'OUTFIT_SECOND_ANGLE'
             ? 'prep_space_or_pre_exit'
             : 'prep_space';
       const phonePolicy = key === 'OUTFIT_MIRROR_CHECK'
@@ -2605,6 +2729,40 @@ function buildOutfitCheckShotPool(
       poseIntent:      'casual_weight_shift',  // se recalcula en buildStoryDirectives
     },
     {
+      key:              'OUTFIT_SECOND_ANGLE',
+      beat:             'reveal',
+      role:             'SECOND ANGLE',
+      purpose: 'Ángulo adicional del look completo — distinto al mirror check. Puede ser tres cuartos, espalda, lateral, o un encuadre diferente del mismo espacio de prep. El outfit sigue puesto. No es el destino todavía — sigue siendo el prep space.',
+      requiredElements: [
+        'outfit_complete_readable',
+        'different_framing_from_mirror_check',
+        'same_prep_space_as_previous_shots',
+        'natural_non_catalog_pose',
+      ],
+      forbiddenElements: [
+        'destination_venue',
+        'catalog_mannequin_stance',
+        'identical_framing_to_mirror_check',
+        'studio_lighting',
+        'white_background',
+      ],
+      variationSpace: [
+        'tres cuartos desde la derecha — outfit completo, ángulo de 45° diferente al mirror check, mismo cuarto de fondo',
+        'detalle lateral de la silueta completa del look — desde cintura hacia arriba, ángulo diferente al reveal principal',
+        'espalda del outfit — muestra el back del look, mismo espacio, actitud natural no de pasarela',
+        'medium shot desde ángulo distinto del cuarto — otra esquina, otra perspectiva del mismo espacio prep',
+      ],
+      framing:         'MEDIUM_OR_THREE_QUARTERS',
+      composition:     'DIFFERENT_ANGLE_SAME_SPACE',
+      cameraAngle:     'THREE_QUARTERS_OR_LATERAL',
+      wearState:       'ready_to_leave',
+      cameraMode:      'third_person',
+      narrativeStage:  'styled',
+      hpiAllowed:      true,
+      hpiScope:        'micro_action_only',
+      subjectPresence: 'medium_or_full_body',
+    },
+    {
       key:              'ACCESSORY_CLOSEUP',
       beat:             'texture',
       role:             'ACCESSORY HERO',
@@ -2645,23 +2803,60 @@ function buildOutfitCheckShotPool(
 // hasDestinationClosure: true si hay destino inferido en brief O si el usuario subió sceneDestinoRef.
 function distributeOutfitCheckShots(count: number, hasDestinationClosure: boolean): string[] {
   const closingShot = hasDestinationClosure ? 'OUTFIT_DESTINATION' : 'OUTFIT_READY';
-  // Arco completo — 6 shots (máximo antes de accesorios)
-  const fullArc = [
-    'OUTFIT_ARRIVING',          // prenda como objeto
-    'OUTFIT_DETAIL',            // detalle pre_wear — antes del mirror
-    'OUTFIT_MIRROR_CHECK',      // reveal completo
-    'OUTFIT_DETAIL_WORN',       // detalle ya vestido — después del mirror
-    'OUTFIT_READY',             // selfie de salida
-    closingShot,                // destino o cierre en prep
-  ];
-  // Deduplicar si closingShot === OUTFIT_READY ya está en arc
-  const uniqueArc = fullArc.filter((k, i, arr) => arr.indexOf(k) === i);
 
-  if (count >= 6) return uniqueArc;
-  if (count === 5) return uniqueArc.filter(k => k !== 'OUTFIT_DETAIL_WORN');
-  if (count === 4) return uniqueArc.filter(k => k !== 'OUTFIT_DETAIL_WORN' && k !== 'OUTFIT_DETAIL');
+  // Arcos por cantidad de story shots (REF0 ya está contado por separado)
+  // count = storyShotCount = visibleCount - 1
+
+  // 7 story shots (8 visibles): agrega OUTFIT_SECOND_ANGLE antes del destination
+  if (count >= 7) {
+    return [
+      'OUTFIT_ARRIVING',
+      'OUTFIT_DETAIL',
+      'OUTFIT_MIRROR_CHECK',
+      'OUTFIT_DETAIL_WORN',
+      'OUTFIT_READY',
+      'OUTFIT_SECOND_ANGLE',
+      closingShot,
+    ].filter((k, i, arr) => arr.indexOf(k) === i);
+  }
+
+  // 6 story shots (7 visibles): arco completo sin second angle
+  if (count >= 6) {
+    return [
+      'OUTFIT_ARRIVING',
+      'OUTFIT_DETAIL',
+      'OUTFIT_MIRROR_CHECK',
+      'OUTFIT_DETAIL_WORN',
+      'OUTFIT_READY',
+      closingShot,
+    ].filter((k, i, arr) => arr.indexOf(k) === i);
+  }
+
+  // 5 story shots (6 visibles): sin detail_worn
+  if (count === 5) {
+    return [
+      'OUTFIT_ARRIVING',
+      'OUTFIT_DETAIL',
+      'OUTFIT_MIRROR_CHECK',
+      'OUTFIT_READY',
+      closingShot,
+    ].filter((k, i, arr) => arr.indexOf(k) === i);
+  }
+
+  // 4 story shots (5 visibles): sin detail ni detail_worn
+  if (count === 4) {
+    return [
+      'OUTFIT_ARRIVING',
+      'OUTFIT_MIRROR_CHECK',
+      'OUTFIT_READY',
+      closingShot,
+    ].filter((k, i, arr) => arr.indexOf(k) === i);
+  }
+
+  // 3 story shots (4 visibles)
   if (count === 3) return ['OUTFIT_ARRIVING', 'OUTFIT_MIRROR_CHECK', closingShot];
-  // 2 mínimo
+
+  // 2 mínimo (3 visibles)
   return ['OUTFIT_ARRIVING', closingShot];
 }
 
@@ -3538,11 +3733,14 @@ export async function generatePhotodumpShot(
   const selectedFamily = pickFamilyForShot(
     shot.beat, shot.key, shot.arcPosition - 1, sessionFamilies, protagonist,
   );
-  // Para outfit_check: no inyectar promptBlock literal — solo hint abstracto de estilo
+  // Para outfit_check: UGC family blocks desactivados completamente para MVP
+  // abstract_style_hint puede meter lighting hints incompatibles (soft_daylight en noche/ópera)
   const isOutfitCheckRecipe = recipe === 'outfit_check' || recipe === 'outfit_haul';
-  const familyBlock = isOutfitCheckRecipe
-    ? (selectedFamily ? buildSafeOutfitFamilyStyleHint(selectedFamily, shot.key ?? '', shot.cameraMode) : '')
-    : (selectedFamily ? buildFamilyInjectBlock(selectedFamily) : '');
+  const familyBlock = recipe === 'outfit_check'
+    ? ''  // disabled_for_outfit_check_mvp
+    : isOutfitCheckRecipe
+      ? (selectedFamily ? buildSafeOutfitFamilyStyleHint(selectedFamily, shot.key ?? '', shot.cameraMode) : '')
+      : (selectedFamily ? buildFamilyInjectBlock(selectedFamily) : '');
 
   // HPI: filtrado por compatibilidad con el shot actual.
   // Prioridad: shot.hpiAllowed explícito (outfit_check) > reglas globales por shotKey.
@@ -3551,6 +3749,7 @@ export async function generatePhotodumpShot(
     && !!refs.avatarRef
     && shot.key !== 'HAUL_INTRO'
     && shot.key !== 'OUTFIT_ARRIVING'
+    && shot.key !== 'OUTFIT_DETAIL'
     && shot.key !== 'OUTFIT_DETAIL_WORN'
     && shot.key !== 'ACCESSORY_CLOSEUP'
     && shot.key !== 'UNBOXING_PACKAGING_CLOSED'
@@ -3701,12 +3900,34 @@ Organic, imperfect, lived-in. NOT editorial. NOT advertising. NOT staged.`;
     : extractShotLocationOverride(basePrompt, shot.key, hasUserSceneRef);
   const styleCoherenceBlock  = buildStyleCoherenceBlock(presentationStyle, shot.key);
 
+  // ── Prep context block — solo ocasión abstracta, sin visual del destino ────────
+  // Solo para outfit_check en shots de prep. Reemplaza el venueSignal genérico.
+  const prepContextBlock = recipe === 'outfit_check' && briefCtxForShot
+    ? buildPrepContextOnlyBlock(briefCtxForShot, shot.key ?? '')
+    : '';
+
+  // ── REF0 Hard Lock — regla dura para mantener el prep space ──────────────────
+  // Para outfit_check en shots de prep — más fuerte que el sceneContinuityBlock.
+  const ref0HardLock = (() => {
+    if (recipe !== 'outfit_check') return '';
+    if (shot.narrativeStage === 'destination') return '';
+    if (!ref0Analysis) return '';
+    const fingerprint = buildSceneFingerprint(
+      ref0Analysis,
+      hasUserSceneRef,
+      briefCtxForShot?.prepMood ?? '',
+    );
+    return buildREF0HardLockBlock(shot.sceneLockPolicy, hasUserSceneRef, fingerprint);
+  })();
+
   // ── Scene Continuity Block — propaga fingerprint del prep space ───────────────
   // Solo para recetas outfit_check y solo en shots del prep arc (no destination)
+  // Complementa el hard lock con información específica del fingerprint
   const sceneContinuityBlock = (() => {
     if (!isOutfitCheckRecipe) return '';
     if (shot.continuityMode === 'free' || shot.narrativeStage === 'destination') return '';
     if (!ref0Analysis) return '';
+    if (ref0HardLock) return '';  // el hard lock ya cubre esto para outfit_check
     const fingerprint = buildSceneFingerprint(
       ref0Analysis,
       hasUserSceneRef,
@@ -3736,7 +3957,11 @@ ${shotModeBlock}
 
 ${briefContextBlock}
 
+${prepContextBlock}
+
 ${shotLocationOverride}
+
+${ref0HardLock}
 
 ${sceneContinuityBlock}
 
@@ -3812,9 +4037,11 @@ ${NEGATIVE_SHORT}`;
     prompt,
     refsCount:      preparedRefs.length,
     hpiSource,
-    familyBlockMode: familyBlock
-      ? (isOutfitCheckRecipe ? 'abstract_style_hint' : 'literal_prompt_block')
-      : 'disabled',
+    familyBlockMode: recipe === 'outfit_check'
+      ? 'disabled'
+      : familyBlock
+        ? (isOutfitCheckRecipe ? 'abstract_style_hint' : 'literal_prompt_block')
+        : 'disabled',
     poseIntent:     shot.poseIntent,
     detailKind:     shot.detailKind,
     continuityMode: shot.continuityMode,
