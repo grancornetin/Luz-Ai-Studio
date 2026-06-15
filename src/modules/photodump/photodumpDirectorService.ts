@@ -19,6 +19,7 @@ import {
   OutfitItemPlan, SceneLockPolicy,
   OutfitBriefContext, OutfitDestinationClass, PrepEnvironmentClass, OutfitComposition,
   PoseIntent, DetailKind, EnvironmentAffordance, SceneContinuityMode,
+  HaulItem, HaulManifest, HaulItemKind, HaulPileState,
 } from './types';
 import {
   getStorySupportFamilies, initPhotodumpIntelligence, StorySupportFamily,
@@ -1429,6 +1430,66 @@ The pose must look like a real person sharing a social moment at this location.`
   }
 }
 
+// ── HPI seguro para outfit_haul ────────────────────────────────────────────
+// Solo lenguaje corporal y expresión. Sin locaciones, props, objetos ni accesorios.
+// NUNCA mete: restaurante, café, deporte, activewear, laptop, taza, lentes, gimnasio.
+function buildHaulSafeHpiBlock(
+  shotKey: string,
+  scope:   string,
+  gender:  'female' | 'male' | 'neutral',
+): string {
+  const genderNote = gender === 'male' ? 'masculine' : 'feminine';
+
+  // Shots sin cuerpo: off
+  if (
+    shotKey === 'HAUL_OVERVIEW' ||
+    shotKey.startsWith('HAUL_ACCESSORY_CLOSEUP_') ||
+    shotKey.startsWith('HAUL_DETAIL_')
+  ) return '';
+
+  if (shotKey.startsWith('HAUL_ADJUSTING_')) {
+    return `🎯 MICRO-ACTION (haul adjusting — hands and micro-gesture only):
+Choose ONE subtle real action someone does while adjusting a garment they just put on:
+  - both hands smoothing fabric at the waist or hip
+  - fingertips pulling a collar or neckline into place
+  - one hand tugging a hem or sleeve to the right length
+  - slight weight shift while checking fit by looking down
+  - hands briefly at side seams, feeling the fit
+FORBIDDEN: catalog stance, athletic pose, arms raised, gym movement, looking directly at camera in a posed way, any object in hand.
+The action must feel like someone genuinely trying on a piece — not performing for a camera.`;
+  }
+
+  if (shotKey.startsWith('HAUL_TRY_ON_') || shotKey === 'HAUL_WINNER') {
+    if (scope === 'micro_action_only') {
+      return `🎯 MICRO-ACTION (try-on — body and expression only):
+One subtle action: slight weight shift, hand on hip evaluating fit, looking down at hemline, half-turn to see the side.
+FORBIDDEN: catalog stance, athletic pose, gym movement, objects in hand, destination venue framing.`;
+    }
+    return `🎯 BODY LANGUAGE (try-on — natural ${genderNote} evaluation pose):
+The person is trying on a garment. Choose ONE natural try-on posture:
+  - weight on one foot, hip slightly out, hand resting on hip — evaluating
+  - arms slightly away from body, looking down at the garment fit
+  - slight half-turn showing the side profile of the look
+  - natural standing posture, one hand adjusting a detail
+  - relaxed face: evaluating, curious, not smiling for camera
+FORBIDDEN: catalog mannequin stance, arms symmetrically at sides, rigid frontality, athletic pose, walking blur, looking directly at camera with a full posed smile.
+The person should look like they are genuinely trying something on — not posing for an ad.`;
+  }
+
+  if (shotKey === 'HAUL_RECAP') {
+    return `🎯 BODY LANGUAGE (haul recap — relaxed ${genderNote} energy):
+The person has finished or is winding down the haul. Choose ONE natural relaxed posture:
+  - sitting or perching on bed or chair edge, relaxed
+  - standing with one hand on hip, slight smile, satisfied
+  - holding a favorite piece, looking at it warmly
+  - natural weight shift, arms loosely at sides
+FORBIDDEN: catalog pose, formal catalog smile, athletic stance, gym move, objects not from the haul.
+The mood is end-of-session: relaxed, satisfied, authentic.`;
+  }
+
+  return '';
+}
+
 // ── Visual Family: hint abstracto para outfit_check ──────────────────────────
 // No inyecta el promptBlock literal (que puede meter laptop, mug, terrace, activewear).
 // Solo usa señales de composición y mood sin objetos/escenas concretas.
@@ -1792,21 +1853,14 @@ function buildStoryDirectives(
   }
 
   if (recipe === 'outfit_haul') {
-    // outfitCount = cuántas prendas subió el usuario (sin contar accesorios)
-    const allOutfits  = [refs?.avatarRef ? refs : null, ...(refs?.outfitRefs ?? [])].filter(Boolean);
-    const outfitCount = Math.max(1, (refs?.outfitRefs ?? []).filter(Boolean).length + (refs?.avatarRef ? 1 : 0));
-    const haulCount   = Math.max(1, outfitCount);
-    const pool        = buildOutfitHaulShotPool(haulCount);
-    // El arco del haul: INTRO + TRY_ON × N + WINNER = haulCount + 1 shots base
-    // Si count > shots base, rellenamos con shots de detalle de prenda (rotando)
-    const baseShots = pool.slice(0, Math.min(pool.length, count));
-    const closeupIndexes = (refs?.accesorioCloseup ?? [])
-      .map((v, i) => v ? i : -1).filter(i => i >= 0);
-    const allShots = [...baseShots, ...closeupIndexes.map(() => {
-      const accPool = buildOutfitCheckShotPool();
-      return accPool.find(s => s.key === 'ACCESSORY_CLOSEUP')!;
-    })];
-    return allShots.map((shot, i) => ({ ...shot, arcPosition: i + 1, aspectRatio: ar }));
+    // El arco del haul se basa en los ítems subidos, no en un arco fijo.
+    // storyShotCount = min(count, 20) — forzado en el caller (PhotodumpModule).
+    // buildHaulManifest y buildHaulShotPlan generan exactamente ese número de shots.
+    const manifest  = buildHaulManifest(refs ?? {} as PhotodumpRefs, count);
+    const haulShots = buildHaulShotPlan(manifest);
+    // Asegurar que no excedemos el count pedido (ya garantizado por el plan, pero por seguridad)
+    const finalShots = haulShots.slice(0, manifest.maxStoryShots);
+    return finalShots.map((shot, i) => ({ ...shot, arcPosition: i + 1, aspectRatio: ar }));
   }
 
   if (recipe === 'outfit_week') {
@@ -2860,72 +2914,347 @@ function distributeOutfitCheckShots(count: number, hasDestinationClosure: boolea
   return ['OUTFIT_ARRIVING', closingShot];
 }
 
-// ── Outfit Haul shots ────────────────────────────────────────
-// Historia: "Me probé todo esto / esta es mi cápsula"
-// Arco: intro de prendas → try-on progresivo con desorden creciente → prenda ganadora
+// ── Outfit Haul — Manifest builder ──────────────────────────
+// Construye la lista canónica de ítems del haul desde los refs del usuario.
+// outfitRefs = prendas/outfits (slot outfit del wizard)
+// accesorioRefs + accesorioCloseup = accesorios
 
-function buildOutfitHaulShotPool(outfitCount: number): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
-  const pool: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] = [
-    {
-      key:   'HAUL_INTRO',
-      beat:  'context',
-      role:  'HAUL INTRO',
-      purpose: 'Presentación de todas las prendas antes de empezar a probarlas. Flat lay o rack con el conjunto visible. Sin avatar de cuerpo completo. Establece la cantidad y variedad del haul. Comunica "esto es lo que me voy a probar".',
-      requiredElements: ['multiple_garments_visible', 'real_context_not_studio', 'variety_of_pieces_readable', 'organic_arrangement_not_catalog'],
-      forbiddenElements: ['full_body_avatar_posing', 'white_background', 'studio_lighting', 'catalog_product_grid', 'forced_symmetry'],
-      variationSpace: [
-        'flat lay de todas las prendas sobre cama — organizadas pero no perfectas, algunas superpuestas',
-        'prendas colgadas en rack o silla, manos parcialmente visibles acomodando la última pieza',
-        'overhead de las prendas extendidas sobre piso o cama, accesorios dispersos al costado',
-        'manos sosteniendo varias prendas al mismo tiempo, extendiéndolas frente a cámara',
-      ],
-      framing:     'WIDE_OR_OVERHEAD',
-      composition: 'GARMENTS_COLLECTION_VISIBLE',
-      cameraAngle: 'OVERHEAD_OR_EYE_LEVEL',
-    },
-  ];
+export function buildHaulManifest(refs: PhotodumpRefs, requestedCount: number): HaulManifest {
+  const maxStoryShots = Math.min(requestedCount, 20);
 
-  // Shot de try-on por cada prenda (índice 0-based de la prenda)
-  for (let i = 0; i < outfitCount; i++) {
-    const isLast     = i === outfitCount - 1;
-    const pilesCount = i; // cuántas prendas ya están apiladas en el fondo
-    const pileDesc   = pilesCount === 0
-      ? 'El espacio está ordenado — es la primera prenda.'
-      : pilesCount === 1
-        ? 'En el fondo hay 1 prenda descartada apilada sobre una superficie (cama, silla o perchero).'
-        : `En el fondo hay ${pilesCount} prendas descartadas apiladas — el caos crece de forma natural.`;
+  // Outfits/prendas: outfitRef (slot 0) + outfitRefs[] (slots 1-N)
+  const rawOutfits = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
+  const outfitItems: HaulItem[] = rawOutfits.map((url, i) => ({
+    id:               `outfit_${i}`,
+    sourceIndex:      i,
+    refUrl:           url,
+    kind:             'garment' as HaulItemKind,
+    label:            `Prenda ${i + 1}`,
+    closeupRequested: false,
+    tryOnEligible:    true,
+    detailEligible:   true,
+    priority:         'required' as const,
+  }));
 
-    pool.push({
-      key:   isLast ? 'HAUL_WINNER' : `HAUL_TRY_ON_${i + 1}`,
-      beat:  isLast ? 'emotion' : 'action',
-      role:  isLast ? 'HAUL WINNER' : `TRY-ON ${i + 1} of ${outfitCount}`,
-      purpose: isLast
-        ? `El avatar con la prenda ganadora — la que eligió quedarse. ${pileDesc} Expresión de decisión tomada o satisfacción. Full body o medium shot, outfit completo visible.`
-        : `El avatar vistiéndose la prenda ${i + 1} de ${outfitCount}. ${pileDesc} Actitud natural — se está probando, evaluando, moviéndose. No es una pose de catálogo.`,
-      requiredElements: isLast
-        ? ['full_body_or_medium_avatar', 'winning_outfit_clearly_visible', 'discarded_pile_visible_in_background', 'satisfied_or_decisive_expression']
-        : ['avatar_wearing_garment', 'garment_fully_visible', 'real_environment_visible', 'natural_try_on_attitude'],
-      forbiddenElements: ['catalog_stance', 'studio_backdrop', 'white_background', 'mannequin_pose', 'beautification', 'ad_composition'],
-      variationSpace: isLast
-        ? [
-            'full body del avatar con la prenda ganadora, fondo con ropa apilada visible, expresión resuelta',
-            'medium shot con la prenda ganadora, actitud de "esta es la elegida", ropa descartada parcialmente visible',
-            'selfie en espejo con la prenda ganadora puesta, caos del haul visible en el reflejo',
-            'avatar mirando la prenda que lleva puesta, manos ajustándola, satisfacción genuina',
-          ]
-        : [
-            `full body con la prenda ${i + 1} puesta, actitud de evaluación — dando vuelta, mirándose`,
-            `medium shot con la prenda ${i + 1}, expresión de "¿qué pienso?", ambiente real de fondo`,
-            `avatar ajustándose la prenda ${i + 1}, manos activas, gesto natural de quien se prueba algo`,
-            `full body con la prenda ${i + 1}, mirando hacia abajo evaluando el look, ambiente visible`,
-          ],
-      framing:     isLast ? 'WIDE_FULL_BODY' : 'MEDIUM_OR_WIDE',
-      composition: isLast ? 'WINNER_WITH_CHAOS_BACKGROUND' : 'TRY_ON_IN_CONTEXT',
-      cameraAngle: 'EYE_LEVEL',
-    });
+  // Accesorios: accesorioRefs[] + closeup flags
+  const rawAccs    = (refs.accesorioRefs ?? []).filter(Boolean) as string[];
+  const closeupArr = refs.accesorioCloseup ?? [];
+  const accessoryItems: HaulItem[] = rawAccs.map((url, i) => ({
+    id:               `acc_${i}`,
+    sourceIndex:      i,
+    refUrl:           url,
+    kind:             'accessory' as HaulItemKind,
+    label:            `Accesorio ${i + 1}`,
+    closeupRequested: !!closeupArr[i],
+    tryOnEligible:    false,
+    detailEligible:   true,
+    priority:         closeupArr[i] ? 'required' as const : 'normal' as const,
+  }));
+
+  const allItems       = [...outfitItems, ...accessoryItems];
+  const closeupItems   = allItems.filter(it => it.closeupRequested);
+  const tryOnItems     = allItems.filter(it => it.tryOnEligible);
+
+  return {
+    totalItems:     allItems.length,
+    outfitItems,
+    accessoryItems,
+    closeupItems,
+    tryOnItems,
+    allItems,
+    requestedCount,
+    maxStoryShots,
+  };
+}
+
+// ── Outfit Haul — Shot planner ────────────────────────────────
+// Genera exactamente `manifest.maxStoryShots` story shots con cobertura inteligente.
+// Orden de reserva:
+//   1. close-ups obligatorios (accesorios marcados)
+//   2. un HAUL_OVERVIEW de apertura
+//   3. try-ons de outfits/prendas
+//   4. detalles / adjusting para variedad
+//   5. HAUL_RECAP de cierre si hay espacio
+
+export function buildHaulShotPlan(
+  manifest: HaulManifest,
+): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
+  const total = manifest.maxStoryShots;
+  const shots: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] = [];
+
+  // ── Pila de ítems pendientes (mutable para el planificador) ─
+  const tryOnQueue   = [...manifest.tryOnItems];
+  const closeupQueue = [...manifest.closeupItems];
+
+  // ── Reservar close-ups obligatorios: se colocan al final ───
+  // Se agregan como slots reservados — el fill los coloca en posición correcta.
+  const reservedCloseups = closeupQueue.map((item, ci) =>
+    buildHaulAccessoryCloseupShot(item, ci),
+  );
+
+  // Espacio real para shots narrativos (overview + try-ons + detalles)
+  const narrativeBudget = total - reservedCloseups.length;
+
+  // ── Shot 1: HAUL_OVERVIEW (siempre presente si hay espacio) ─
+  if (narrativeBudget >= 1) {
+    shots.push(buildHaulOverviewShot(manifest));
   }
 
-  return pool;
+  // ── Try-ons: fill del espacio restante ─────────────────────
+  // Dejamos 1 slot para HAUL_RECAP si hay ≥ 3 outfits y espacio suficiente.
+  const tryOnBudgetRaw = narrativeBudget - 1; // -1 por el overview
+  const wantRecap      = tryOnQueue.length >= 2 && tryOnBudgetRaw >= 3;
+  const tryOnBudget    = wantRecap ? tryOnBudgetRaw - 1 : tryOnBudgetRaw;
+
+  // Intercalar try-on + adjusting con proporción 2:1
+  let tryOnIndex = 0;
+  let slotsUsed  = 0;
+
+  while (slotsUsed < tryOnBudget && tryOnQueue.length > 0) {
+    const isLastTryOn = tryOnQueue.length === 1 && slotsUsed === tryOnBudget - 1;
+    const item = tryOnQueue.shift()!;
+    const pileState = derivePileState(tryOnIndex, manifest.outfitItems.length);
+
+    shots.push(buildHaulTryOnShot(item, tryOnIndex, manifest.outfitItems.length, isLastTryOn, pileState));
+    slotsUsed++;
+    tryOnIndex++;
+
+    // Cada 2 try-ons agregar 1 adjusting si hay espacio y más ítems
+    if (slotsUsed % 2 === 0 && slotsUsed < tryOnBudget && tryOnQueue.length > 0) {
+      shots.push(buildHaulAdjustingShot(item, tryOnIndex - 1, pileState));
+      slotsUsed++;
+    }
+  }
+
+  // Si sobraron try-ons y hay espacio, agregar detalles de prenda
+  while (slotsUsed < tryOnBudget && tryOnQueue.length > 0) {
+    const item = tryOnQueue.shift()!;
+    const pileState = derivePileState(tryOnIndex, manifest.outfitItems.length);
+    shots.push(buildHaulDetailGarmentShot(item, tryOnIndex));
+    slotsUsed++;
+    tryOnIndex++;
+  }
+
+  // ── HAUL_RECAP: cierre si quedó espacio ────────────────────
+  if (wantRecap && slotsUsed < tryOnBudgetRaw) {
+    shots.push(buildHaulRecapShot(manifest));
+  }
+
+  // ── Agregar close-ups obligatorios ─────────────────────────
+  shots.push(...reservedCloseups);
+
+  return shots;
+}
+
+// ── Helpers de estado de pila ─────────────────────────────────
+
+function derivePileState(tryOnIndex: number, totalOutfits: number): HaulPileState {
+  if (totalOutfits <= 1 || tryOnIndex === 0) return 'clean';
+  const ratio = tryOnIndex / totalOutfits;
+  if (ratio < 0.35) return 'light_pile';
+  if (ratio < 0.70) return 'medium_pile';
+  return 'messy_but_believable';
+}
+
+function pileStateDesc(state: HaulPileState, count: number): string {
+  if (state === 'clean')                  return 'The space is tidy — this is the first try-on.';
+  if (state === 'light_pile' && count === 1) return 'One discarded piece sits on the bed or chair in the background — just starting.';
+  if (state === 'medium_pile')            return `${count} pieces are loosely piled in the background — the haul is in full swing.`;
+  if (state === 'messy_but_believable')   return `${count} items are scattered in the background — organized chaos, believable and real.`;
+  return `${count} discarded pieces visible in background.`;
+}
+
+// ── Shot builders ─────────────────────────────────────────────
+
+function buildHaulOverviewShot(
+  manifest: HaulManifest,
+): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
+  const itemCount = manifest.outfitItems.length;
+  const hasAccs   = manifest.accessoryItems.length > 0;
+  return {
+    key:    'HAUL_OVERVIEW',
+    beat:   'context',
+    role:   'HAUL OVERVIEW',
+    purpose: `Opening shot: all (or most) haul items visible as a collection — on a bed, rack, chair, floor, bags, or boxes. ${itemCount} garments${hasAccs ? ' + accessories' : ''} visible. The person may be partially visible arranging pieces or selecting something. Communicates "this is everything I got." NOT a studio catalog.`,
+    requiredElements:  ['haul_items_visible_as_collection', 'real_room_context', 'organic_not_catalog_arrangement'],
+    forbiddenElements: ['white_background', 'studio_lighting', 'catalog_grid', 'full_body_catalog_pose', 'forced_symmetry', 'editorial_polish'],
+    variationSpace: [
+      `flat lay of all ${itemCount} garments on bed — imperfect arrangement, slightly overlapping, real sheets visible`,
+      `pieces hanging on rack or draped over chair, hands partially visible adjusting the last piece`,
+      `overhead shot of garments spread on floor or bed, accessories scattered nearby`,
+      `person holding several pieces up toward camera, multiple items visible, natural haul energy`,
+    ],
+    framing:     'WIDE_OR_OVERHEAD',
+    composition: 'HAUL_COLLECTION_VISIBLE',
+    cameraAngle: 'OVERHEAD_OR_EYE_LEVEL',
+    hpiAllowed:  false,
+    wearState:   'not_wearing_final_outfit',
+    cameraMode:  'object_flatlay',
+  };
+}
+
+function buildHaulTryOnShot(
+  item:          HaulItem,
+  tryOnIndex:    number,
+  totalOutfits:  number,
+  isLast:        boolean,
+  pileState:     HaulPileState,
+): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
+  const pileCount = tryOnIndex;
+  const pileNote  = pileStateDesc(pileState, pileCount);
+  const shotNum   = tryOnIndex + 1;
+
+  if (isLast) {
+    return {
+      key:    'HAUL_WINNER',
+      beat:   'emotion',
+      role:   `HAUL WINNER — ${item.label}`,
+      purpose: `The person wearing the winning piece — the one they decided to keep. ${pileNote} Expression of satisfaction or decision made. Full body or medium shot. The outfit reads clearly. NOT a catalog pose.`,
+      requiredElements:  ['avatar_wearing_winning_item', 'garment_clearly_readable', 'satisfied_or_decisive_expression'],
+      forbiddenElements: ['catalog_stance', 'studio_backdrop', 'white_background', 'mannequin_pose', 'beautification', 'ad_composition', 'editorial_lighting'],
+      variationSpace: [
+        `full body wearing ${item.label}, discarded pile visible in background, resolved natural expression`,
+        `medium shot wearing ${item.label}, attitude of "this is the one", background haul pile partially visible`,
+        `mirror selfie wearing ${item.label}, haul chaos reflected behind`,
+        `person adjusting ${item.label} they're wearing, hands active, genuine satisfaction`,
+      ],
+      framing:     'WIDE_FULL_BODY',
+      composition: 'WINNER_WITH_HAUL_BACKGROUND',
+      cameraAngle: 'EYE_LEVEL',
+      hpiAllowed:  true,
+      hpiScope:    'full',
+      wearState:   'wearing_full_outfit',
+      cameraMode:  'third_person',
+    };
+  }
+
+  return {
+    key:    `HAUL_TRY_ON_${shotNum}`,
+    beat:   'action',
+    role:   `TRY-ON ${shotNum}/${totalOutfits} — ${item.label}`,
+    purpose: `The person wearing ${item.label} (garment ${shotNum} of ${totalOutfits}). ${pileNote} Natural attitude — trying it on, evaluating, moving. NOT a catalog pose. Real room visible. iPhone UGC feel.`,
+    requiredElements:  ['avatar_wearing_item', 'garment_clearly_visible_and_readable', 'real_environment_visible', 'natural_try_on_attitude', 'no_catalog_pose'],
+    forbiddenElements: ['catalog_stance', 'studio_backdrop', 'white_background', 'mannequin_pose', 'beautification', 'ad_composition', 'editorial_lighting', 'high_fashion_look'],
+    variationSpace: [
+      `full body wearing ${item.label}, evaluating — turning, looking down, checking the fit`,
+      `medium shot wearing ${item.label}, expression of "what do I think?", real room behind`,
+      `person adjusting ${item.label}, hands active, natural try-on gesture`,
+      `full body wearing ${item.label}, candid — not posing, just wearing it naturally`,
+    ],
+    framing:     'MEDIUM_OR_WIDE',
+    composition: 'TRY_ON_IN_REAL_CONTEXT',
+    cameraAngle: 'EYE_LEVEL',
+    hpiAllowed:  true,
+    hpiScope:    'full',
+    wearState:   'wearing_full_outfit',
+    cameraMode:  'third_person',
+  };
+}
+
+function buildHaulAdjustingShot(
+  item:       HaulItem,
+  itemIndex:  number,
+  pileState:  HaulPileState,
+): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
+  return {
+    key:    `HAUL_ADJUSTING_${itemIndex + 1}`,
+    beat:   'action',
+    role:   `ADJUSTING — ${item.label}`,
+    purpose: `Micro-moment: the person adjusting, fiddling with, or evaluating ${item.label} — straightening a collar, pulling a hem, checking a sleeve. Very UGC, very real. Hands active. NOT a full-body catalog pose.`,
+    requiredElements:  ['hands_active_on_garment', 'natural_micro_gesture', 'real_room_context'],
+    forbiddenElements: ['full_body_catalog_stance', 'studio_backdrop', 'posed_looking_at_camera', 'editorial_lighting'],
+    variationSpace: [
+      `close-up of hands adjusting collar or neckline of ${item.label}`,
+      `medium shot pulling hem or checking sleeve length, candid`,
+      `person checking the fit in a surface — turning slightly, hands on waist`,
+      `hands smoothing fabric of ${item.label}, texture visible, real light`,
+    ],
+    framing:     'MEDIUM_OR_CLOSE',
+    composition: 'HANDS_ACTIVE_ON_GARMENT',
+    cameraAngle: 'EYE_LEVEL_OR_SLIGHTLY_HIGH',
+    hpiAllowed:  true,
+    hpiScope:    'micro_action_only',
+    wearState:   'wearing_full_outfit',
+    cameraMode:  'third_person',
+  };
+}
+
+function buildHaulDetailGarmentShot(
+  item:      HaulItem,
+  itemIndex: number,
+): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
+  return {
+    key:    `HAUL_DETAIL_${itemIndex + 1}`,
+    beat:   'detail',
+    role:   `DETAIL — ${item.label}`,
+    purpose: `Close-up detail of ${item.label} — fabric texture, label, stitching, cut, tag, or pattern. The garment fills most of the frame. Real room light. The person may hold it or it may be laid out. NOT a catalog product shot.`,
+    requiredElements:  ['garment_detail_visible', 'real_light_and_texture', 'intimate_close_up_framing'],
+    forbiddenElements: ['white_background', 'studio_lighting', 'catalog_product_shot', 'person_posing_full_body'],
+    variationSpace: [
+      `macro of fabric texture of ${item.label} — weave, pattern or material detail visible`,
+      `close-up of label or tag of ${item.label} held between fingers`,
+      `detail of seam, hem or cut of ${item.label} on a real surface`,
+      `${item.label} laid on bed or draped over chair, close-up of distinctive feature`,
+    ],
+    framing:     'CLOSE_UP',
+    composition: 'DETAIL_MACRO',
+    cameraAngle: 'OVERHEAD_OR_SLIGHT_ANGLE',
+    hpiAllowed:  false,
+    wearState:   'not_wearing_final_outfit',
+    cameraMode:  'detail_macro',
+  };
+}
+
+function buildHaulAccessoryCloseupShot(
+  item:       HaulItem,
+  closeupIdx: number,
+): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
+  return {
+    key:    `HAUL_ACCESSORY_CLOSEUP_${closeupIdx + 1}`,
+    beat:   'detail',
+    role:   `ACCESSORY CLOSEUP — ${item.label}`,
+    purpose: `Dedicated close-up of ${item.label}. Reproduce the accessory faithfully: same shape, color, material, hardware, design. Real light, real surface or body context. Do NOT fuse this accessory with other pieces. Do NOT change it into a different accessory type.`,
+    requiredElements:  ['accessory_fills_frame', 'faithful_reproduction_of_design', 'real_light_and_texture'],
+    forbiddenElements: ['white_studio_background', 'catalog_product_shot', 'fused_accessories', 'different_accessory_design', 'editorial_lighting'],
+    variationSpace: [
+      `macro of ${item.label} on a fabric surface — texture and detail clear, natural light`,
+      `${item.label} held between fingers close to camera — real skin, real light`,
+      `${item.label} being worn or put on — ear, wrist, neck or hand visible contextually`,
+      `${item.label} resting on bed, bag or haul pile — design fully readable, real environment`,
+    ],
+    framing:     'CLOSE_UP_OR_MACRO',
+    composition: 'ACCESSORY_DETAIL',
+    cameraAngle: 'STRAIGHT_ON_OR_SLIGHT_ANGLE',
+    hpiAllowed:  false,
+    wearState:   'not_wearing_final_outfit',
+    cameraMode:  'detail_macro',
+  };
+}
+
+function buildHaulRecapShot(
+  manifest: HaulManifest,
+): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
+  return {
+    key:    'HAUL_RECAP',
+    beat:   'atmosphere',
+    role:   'HAUL RECAP',
+    purpose: `Closing shot of the haul. The person is surrounded by their haul items — some tried, some still on the rack or bed. Relaxed, natural mood. Communicates "that was everything." The haul space is visible with items at various stages. iPhone UGC energy, not editorial.`,
+    requiredElements:  ['person_in_haul_space', 'haul_items_visible_in_background', 'natural_relaxed_mood'],
+    forbiddenElements: ['catalog_pose', 'studio_backdrop', 'editorial_lighting', 'forced_symmetry', 'ad_feel'],
+    variationSpace: [
+      `person sitting or standing surrounded by haul items — items on bed/rack visible, relaxed smile`,
+      `medium shot of person holding favorite piece(s), background shows the haul in progress`,
+      `overhead view of person seated among haul items — camera above, everything visible around them`,
+      `person looking at haul items spread out — evaluating, candid, end-of-session energy`,
+    ],
+    framing:     'WIDE_OR_MEDIUM',
+    composition: 'PERSON_IN_HAUL_CONTEXT',
+    cameraAngle: 'EYE_LEVEL_OR_OVERHEAD',
+    hpiAllowed:  true,
+    hpiScope:    'full',
+    wearState:   'wearing_full_outfit',
+    cameraMode:  'third_person',
+  };
 }
 
 // ── Outfit Week shots ────────────────────────────────────────
@@ -3231,10 +3560,19 @@ Time of day: ${timeLabel}
 ${prepEnvDirective}
 
 iPhone photo quality. This establishes: the person's identity, the outfit, and the visual world for the set.`,
-    outfit_haul: `SHOT: Full body of the person in the haul space (bedroom, fitting room), holding or wearing the first garment.
-The space should feel lived-in — a bed, a rack, a chair nearby. Natural light.
-Face visible, natural expression. The garments are the stars — the person is the presenter.
-iPhone photo quality. This establishes the identity, the space, and the mood of the haul.`,
+    outfit_haul: `SHOT: This is the anchor image for a clothing haul session.
+The person is in a real bedroom, dressing room, or fitting space. Several haul items are visible nearby — on a bed, chair, rack, boxes, or bags.
+The image communicates: "I am about to try all of these pieces."
+The person may hold one item but should NOT be styled as a final outfit check. The haul items are present as a collection, not a catalog grid.
+Face visible, natural and relaxed expression — casual haul energy, not editorial.
+
+AVATAR CLOTHING IS NOT A HAUL ITEM:
+The clothing visible in the avatar or body reference is a base identity reference only.
+Do not treat it as one of the haul garments unless it was explicitly uploaded as a haul item.
+
+iPhone UGC realism: natural window light, slight handheld imperfection, real room texture, real skin.
+No beauty filter. No editorial grade. No fashion campaign lighting. No studio polish.
+This establishes: the person's identity, the real haul space, the iPhone UGC aesthetic, and the mood of the session.`,
     outfit_week: `SHOT: Full body of the person with the FIRST OUTFIT on, in the general environment for the week set.
 Full body visible — the look must be readable head to toe. Real environment, authentic light.
 This REF0 establishes the visual world: same light quality, same ambient mood, across all the week's outfits.
@@ -3655,8 +3993,66 @@ export async function generatePhotodumpShot(
     extraProducts.slice(0, isProductDetailShot ? 2 : 1).forEach(r => refsToPass.push(r));
     const sceneForShot = getSceneRefForShot(refs, shot.arcPosition - 1, totalShots);
     if (sceneForShot) refsToPass.push(sceneForShot);
-  } else if (recipe === 'outfit_check' || recipe === 'outfit_haul' || recipe === 'outfit_week') {
-    // Outfit recipes: avatar x3 (identidad dominante) + ref0 + prenda(s) de este shot + escena
+  } else if (recipe === 'outfit_haul') {
+    // ── Haul: routing de referencias por tipo de shot ─────────
+    // Cada shot recibe SOLO lo que necesita — no un dump de todas las refs.
+    // REF0 siempre primero como ancla de mundo visual.
+    const allOutfits    = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
+    const allAccesorios = (refs.accesorioRefs ?? []).filter(Boolean) as string[];
+    const shotKey       = shot.key ?? '';
+
+    refsToPass.push(ref0Url);  // REF0 siempre presente
+
+    if (shotKey.startsWith('HAUL_ACCESSORY_CLOSEUP_')) {
+      // close-up: accesorio específico + avatar mínimo para contexto corporal
+      const accIdx = parseInt(shotKey.replace('HAUL_ACCESSORY_CLOSEUP_', ''), 10) - 1;
+      if (refs.avatarRef) refsToPass.push(refs.avatarRef);
+      if (allAccesorios[accIdx]) refsToPass.push(allAccesorios[accIdx]);
+
+    } else if (shotKey === 'HAUL_OVERVIEW') {
+      // overview: avatar + subset de prendas (máx 4) + accesorios (máx 2)
+      if (refs.avatarRef) refsToPass.push(refs.avatarRef);
+      allOutfits.slice(0, 4).forEach(r => refsToPass.push(r));
+      allAccesorios.slice(0, 2).forEach(r => refsToPass.push(r));
+      if (refs.sceneRef) refsToPass.push(refs.sceneRef);
+
+    } else if (shotKey.startsWith('HAUL_TRY_ON_') || shotKey === 'HAUL_WINNER') {
+      // try-on/winner: avatar x2 + prenda específica (solo esa)
+      if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef);
+      if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
+      let itemIdx = 0;
+      if (shotKey.startsWith('HAUL_TRY_ON_')) {
+        itemIdx = parseInt(shotKey.replace('HAUL_TRY_ON_', ''), 10) - 1;
+      } else {
+        itemIdx = Math.max(0, allOutfits.length - 1);
+      }
+      if (allOutfits[itemIdx]) refsToPass.push(allOutfits[itemIdx]);
+      if (refs.sceneRef) refsToPass.push(refs.sceneRef);
+
+    } else if (shotKey.startsWith('HAUL_ADJUSTING_')) {
+      // adjusting: avatar x2 + misma prenda del try-on correspondiente
+      const itemIdx = Math.max(0, parseInt(shotKey.replace('HAUL_ADJUSTING_', ''), 10) - 1);
+      if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef);
+      if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
+      if (allOutfits[itemIdx]) refsToPass.push(allOutfits[itemIdx]);
+      if (refs.sceneRef) refsToPass.push(refs.sceneRef);
+
+    } else if (shotKey.startsWith('HAUL_DETAIL_')) {
+      // detalle de prenda: solo la prenda + avatar mínimo (manos)
+      const itemIdx = Math.max(0, parseInt(shotKey.replace('HAUL_DETAIL_', ''), 10) - 1);
+      if (refs.avatarRef) refsToPass.push(refs.avatarRef);
+      if (allOutfits[itemIdx]) refsToPass.push(allOutfits[itemIdx]);
+
+    } else {
+      // HAUL_RECAP y cualquier otro shot: avatar x2 + subset de 3 prendas
+      if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef);
+      if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
+      allOutfits.slice(0, 3).forEach(r => refsToPass.push(r));
+      if (refs.sceneRef) refsToPass.push(refs.sceneRef);
+    }
+
+  } else if (recipe === 'outfit_check' || recipe === 'outfit_week') {
+    // outfit_check / outfit_week: avatar x3 + ref0 + prenda(s) + escena
     if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
     if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
     refsToPass.push(ref0Url);
@@ -3664,32 +4060,21 @@ export async function generatePhotodumpShot(
     const allOutfits = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
 
     if (shot.key === 'ACCESSORY_CLOSEUP') {
-      // Shot de close-up de accesorio: pasar el accesorio específico
-      // El índice del accesorio se codifica en el arcPosition relativo a los shots base
       const allAccesorios = (refs.accesorioRefs ?? []).filter(Boolean) as string[];
-      // Calcular qué accesorio corresponde a este shot de closeup (orden de aparición)
       const closeupShots  = allAccesorios.length;
       const accIdx        = (shot.arcPosition - 1) % Math.max(closeupShots, 1);
       if (allAccesorios[accIdx]) refsToPass.push(allAccesorios[accIdx]);
-    } else if (recipe === 'outfit_haul') {
-      // Haul: cada shot muestra la prenda correspondiente a su posición en el arco
-      // Shot 0 = HAUL_INTRO (no outfit específico), Shot 1..N = prenda i, Shot N+1 = ganadora
-      const shotOutfitIndex = shot.arcPosition - 2; // 0-indexed después del INTRO
-      if (shotOutfitIndex >= 0 && allOutfits[shotOutfitIndex]) {
-        refsToPass.push(allOutfits[shotOutfitIndex]);
-      }
     } else if (recipe === 'outfit_week') {
-      // Week: cada shot tiene un outfit distinto
-      const weekOutfitIndex = shot.arcPosition - 1; // 0-indexed
+      const weekOutfitIndex = shot.arcPosition - 1;
       if (allOutfits[weekOutfitIndex % Math.max(allOutfits.length, 1)]) {
         refsToPass.push(allOutfits[weekOutfitIndex % allOutfits.length]);
       }
     } else {
-      // outfit_check: mismo outfit (look completo) en todos los shots
+      // outfit_check: mismo outfit en todos los shots
       allOutfits.slice(0, 2).forEach(r => refsToPass.push(r));
     }
 
-    // Escena: outfit_check usa scenePruebaRef hasta el penúltimo shot, sceneDestinoRef en el último
+    // Escena: outfit_check usa scenePrueba/Destino según el shot
     if (recipe === 'outfit_check') {
       const isLastShot = shot.key === 'OUTFIT_DESTINATION';
       const sceneRef   = isLastShot
@@ -3733,25 +4118,33 @@ export async function generatePhotodumpShot(
   const selectedFamily = pickFamilyForShot(
     shot.beat, shot.key, shot.arcPosition - 1, sessionFamilies, protagonist,
   );
-  // Para outfit_check: UGC family blocks desactivados completamente para MVP
-  // abstract_style_hint puede meter lighting hints incompatibles (soft_daylight en noche/ópera)
+  // Family blocks:
+  //   outfit_check: desactivados completamente (lighting hints incompatibles)
+  //   outfit_haul:  desactivados para MVP — family blocks pueden meter props/locaciones no pedidas
+  //   outfit_week:  safe hint filtrado
+  //   otras:        block completo
   const isOutfitCheckRecipe = recipe === 'outfit_check' || recipe === 'outfit_haul';
-  const familyBlock = recipe === 'outfit_check'
-    ? ''  // disabled_for_outfit_check_mvp
-    : isOutfitCheckRecipe
+  const familyBlock = (recipe === 'outfit_check' || recipe === 'outfit_haul')
+    ? ''  // disabled_for_outfit_check_and_haul_mvp
+    : recipe === 'outfit_week'
       ? (selectedFamily ? buildSafeOutfitFamilyStyleHint(selectedFamily, shot.key ?? '', shot.cameraMode) : '')
       : (selectedFamily ? buildFamilyInjectBlock(selectedFamily) : '');
 
-  // HPI: filtrado por compatibilidad con el shot actual.
-  // Prioridad: shot.hpiAllowed explícito (outfit_check) > reglas globales por shotKey.
-  const shotHpiAllowed  = shot.hpiAllowed;  // undefined = no definido (shots no-outfit)
-  const globalHpiBlock  = !isFacelessShot
+  // HPI:
+  //   outfit_haul:  usa buildHaulSafeHpiBlock — solo lenguaje corporal y expresión
+  //   outfit_check: usa buildOutfitCompatibleHpiBlock — filtrado por shot y destino
+  //   otras:        buildHpiBlock estándar con filtros globales
+  const shotHpiAllowed = shot.hpiAllowed;
+  const globalHpiBlock = !isFacelessShot
     && !!refs.avatarRef
+    && shot.key !== 'HAUL_OVERVIEW'
     && shot.key !== 'HAUL_INTRO'
     && shot.key !== 'OUTFIT_ARRIVING'
     && shot.key !== 'OUTFIT_DETAIL'
     && shot.key !== 'OUTFIT_DETAIL_WORN'
     && shot.key !== 'ACCESSORY_CLOSEUP'
+    && !(shot.key ?? '').startsWith('HAUL_ACCESSORY_CLOSEUP_')
+    && !(shot.key ?? '').startsWith('HAUL_DETAIL_')
     && shot.key !== 'UNBOXING_PACKAGING_CLOSED'
     && shot.key !== 'UNBOXING_PRODUCT_REVEAL'
     && shot.key !== 'UNBOXING_PRODUCT_DETAIL'
@@ -3761,19 +4154,20 @@ export async function generatePhotodumpShot(
     ? shotHpiAllowed && !!refs.avatarRef && !isFacelessShot
     : globalHpiBlock;
 
-  // HPI: para outfit_check usar el bloque específico sin buildHpiBlock crudo.
-  // Para otras recetas: usar buildHpiBlock normal con filtros.
   const hpiScope = shot.hpiScope ?? 'full';
   let hpiBlock = '';
   let hpiSource: 'disabled' | 'filtered_outfit_hpi' | 'raw_hpi_not_allowed' = 'disabled';
 
-  if (isOutfitCheckRecipe) {
+  if (recipe === 'outfit_haul') {
+    if (hpiEligible) {
+      hpiBlock  = buildHaulSafeHpiBlock(shot.key ?? '', shot.hpiScope ?? 'full', refs.gender ?? 'female');
+      hpiSource = hpiBlock ? 'filtered_outfit_hpi' : 'disabled';
+    }
+  } else if (recipe === 'outfit_check') {
     if (hpiEligible) {
       const briefCtxForHpi = parseOutfitBriefContext(basePrompt);
       hpiBlock  = buildOutfitCompatibleHpiBlock(shot.key ?? '', refs.gender ?? 'female', briefCtxForHpi.destinationClass);
       hpiSource = hpiBlock ? 'filtered_outfit_hpi' : 'disabled';
-    } else {
-      hpiSource = 'disabled';
     }
   } else {
     const rawHpiBlock = hpiEligible
@@ -3823,14 +4217,23 @@ This shot showcases the piece itself as part of the haul/outfit story.`
   const allOutfitsForShot = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
 
   // Instrucción de outfit específica para este shot
+  const shotKey_ = shot.key ?? '';
   const shotOutfitInstruction = isOutfitShot
-    ? shot.key === 'HAUL_INTRO' || shot.key === 'OUTFIT_ARRIVING'
-      ? `OUTFIT PRESENTATION: The garment references show the exact pieces to display. Show them as objects — on a rack, laid flat, or held by hands. The garments must be clearly readable. Do NOT show a full-body catalog pose.`
-      : shot.key === 'ACCESSORY_CLOSEUP'
-        ? `ACCESSORY CLOSE-UP: The accessory reference shows the exact piece to feature. Fill the frame with it. Reproduce it faithfully — same color, material, hardware, design. Real light, real surface. No person needed.`
-        : recipe === 'outfit_haul'
-          ? `OUTFIT THIS SHOT: The garment reference for this shot is the SPECIFIC piece the person is wearing in this try-on moment. Copy it EXACTLY — same color, fabric, cut, fit. The person wears it naturally, not for a catalog.`
-          : `OUTFIT LOCK: Copy the garment(s) EXACTLY from the outfit references — same color, fabric, cut, fit, silhouette. SHOE SPECIFICITY LOCK: same straps, heel, toe, hardware. Do NOT invent fabric continuation. Do NOT add or remove pieces.`
+    ? shotKey_ === 'HAUL_OVERVIEW'
+      ? `HAUL COLLECTION: The garment references show a subset of the haul items. Show them as a collection — on a bed, rack, surface, or held — NOT worn as a complete look. They should feel like items waiting to be tried on. Real arrangement, not a catalog grid.`
+      : shotKey_.startsWith('HAUL_ACCESSORY_CLOSEUP_')
+        ? `ACCESSORY CLOSE-UP: The accessory reference shows the EXACT piece to feature. Reproduce it faithfully — same shape, color, material, hardware, design. Do NOT fuse it with other accessories. Do NOT change it into a different accessory type.`
+        : shotKey_ === 'HAUL_INTRO' || shotKey_ === 'OUTFIT_ARRIVING'
+          ? `OUTFIT PRESENTATION: The garment references show the exact pieces to display. Show them as objects — on a rack, laid flat, or held by hands. The garments must be clearly readable. Do NOT show a full-body catalog pose.`
+          : shotKey_ === 'ACCESSORY_CLOSEUP'
+            ? `ACCESSORY CLOSE-UP: The accessory reference shows the exact piece to feature. Fill the frame with it. Reproduce it faithfully — same color, material, hardware, design. Real light, real surface. No person needed.`
+            : recipe === 'outfit_haul'
+              ? `HAUL GARMENT — THIS SHOT: The garment reference provided is the SPECIFIC piece the person is wearing right now. Copy it EXACTLY — same color, fabric, cut, fit, silhouette. The person wears it naturally, evaluating how it looks. NOT a catalog pose. NOT a styled editorial look.
+
+AVATAR CLOTHING IS NOT A HAUL ITEM:
+The clothing visible in the avatar or body reference is a base identity reference only.
+Do NOT recreate or feature it as a haul garment. Only show the haul garment provided as the outfit reference for this shot.`
+              : `OUTFIT LOCK: Copy the garment(s) EXACTLY from the outfit references — same color, fabric, cut, fit, silhouette. SHOE SPECIFICITY LOCK: same straps, heel, toe, hardware. Do NOT invent fabric continuation. Do NOT add or remove pieces.`
     : '';
 
   const shotIdentityBlock = isUnboxing
@@ -3850,7 +4253,22 @@ If an element is not part of this shot's narrative role, leave it out — its ab
 ONE person maximum in any frame. Any background figure is a generation error.
 
 NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${shot.role}.`
-    : isOutfitShot
+    : recipe === 'outfit_haul'
+      ? `SHOT IDENTITY — HAUL SESSION:
+- Face reference: EXACT identity — same bone structure, same hair, same skin tone. No beautification.
+${refs.bodyRef ? '- Body reference: establishes physique and proportions. Do NOT alter them.' : ''}
+- REF0: establishes the haul space — same room, same light, same real environment. This is not a studio.
+${shotOutfitInstruction}
+
+⚠️ REFERENCE ROLE — HAUL RULES:
+Garment references are photos of the SPECIFIC GARMENT for this shot — not a person wearing it.
+Use the reference to understand the piece exactly, then show the person wearing it naturally.
+References in this set serve different roles per shot — avatar refs = identity, garment ref = THIS shot's piece.
+ONE person maximum. Any background figure is a generation error.
+HAUL CONTEXT: ${shot.purpose}
+
+NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${shot.role}.`
+      : isOutfitShot
       ? `SHOT IDENTITY — OUTFIT SET:
 - Face reference (appears 3 times): EXACT identity — same bone structure, same hair, same skin tone. No beautification.
 ${refs.bodyRef ? '- Body reference: establishes physique (build, proportions). Do NOT make the person heavier or slimmer than shown.' : ''}
@@ -3861,7 +4279,6 @@ ${shotOutfitInstruction}
 Garment references are photos of the GARMENTS ALONE — not a person wearing them. Use them to understand the piece, then show the person wearing it naturally.
 References are IDENTITY constraints, NOT a checklist. Show only what belongs to THIS moment.
 ONE person maximum in any frame. Any background figure is a generation error.
-${recipe === 'outfit_haul' && shot.key !== 'HAUL_INTRO' ? `HAUL PROGRESSION: ${shot.purpose}` : ''}
 
 NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${shot.role}.`
     : isFacelessShot
@@ -3884,7 +4301,26 @@ You are taking a new iPhone-style photo inside the same workspace/process as REF
 Natural window light, handheld imperfection, real surface texture — no studio polish.
 The result must look like a creator documenting their process on their phone.
 Organic, imperfect, lived-in. NOT editorial. NOT advertising. NOT staged. NO FACE.`
-    : `📱 iPhone UGC REALISM (NON-NEGOTIABLE):
+    : recipe === 'outfit_haul'
+      ? `📱 iPhone HAUL REALISM (NON-NEGOTIABLE):
+You are capturing a real clothing haul session on an iPhone.
+REQUIRED: natural window light, slight handheld imperfection, real room texture (sheets, wood, carpet), real skin.
+REQUIRED: the room feels lived-in — a real bedroom, dressing room, or fitting space, not a stage.
+
+FORBIDDEN:
+- editorial fashion shoot look
+- high fashion campaign lighting
+- beauty filter or skin retouching
+- studio softbox or artificial setups
+- glossy magazine aesthetic
+- perfectly symmetric catalog composition
+- overly composed flat lay with props
+- fashion week runway energy
+- any ad or commercial feel
+
+This is a real person trying on clothes in their real space and sharing it on social media.
+The image should feel like it came directly from someone's camera roll.`
+      : `📱 iPhone UGC REALISM (NON-NEGOTIABLE):
 You are taking a new iPhone-style photo inside the same existing moment as REF0.
 Natural light, handheld imperfection, real skin texture, no studio polish.
 The result must look like someone captured this moment on their phone — not a photographer.

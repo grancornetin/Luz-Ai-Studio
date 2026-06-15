@@ -37,6 +37,7 @@ import {
   parseBriefContext,
   parseOutfitBriefContext,
   inferOutfitComposition,
+  buildHaulManifest,
   type PhotodumpShotResult,
 } from './photodumpDirectorService';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
@@ -381,9 +382,18 @@ const PhotodumpModule: React.FC = () => {
       const refsWithMode = { ...refs, outfitMode, gender: inferredGender };
 
       setProgressStepIndex(0);
-      // Count policy para outfit_check: máximo 8 visibles, REF0 ocupa 1 slot
-      const visibleCount   = recipe === 'outfit_check' ? Math.min(count, 8) : count;
-      const storyShotCount = recipe === 'outfit_check' ? Math.max(2, visibleCount - 1) : count;
+      // Count policy:
+      //   outfit_check : máximo 8 visibles, REF0 ocupa 1 slot
+      //   outfit_haul  : hasta 20 story shots, REF0 siempre aparte (no ocupa slot)
+      //   otras recetas: count directo
+      const visibleCount = recipe === 'outfit_check'
+        ? Math.min(count, 8)
+        : count;
+      const storyShotCount = recipe === 'outfit_check'
+        ? Math.max(2, visibleCount - 1)
+        : recipe === 'outfit_haul'
+          ? Math.min(count, 20)
+          : count;
       const plan  = await buildPhotodumpSessionPlan(narrative, protagonist, destino, basePrompt, recipe, refsWithMode, storyShotCount);
       const shots = plan.shots.slice(0, storyShotCount);
       setSavedShots(shots);
@@ -401,6 +411,9 @@ const PhotodumpModule: React.FC = () => {
 
       // Debug: acumular prompts de cada shot (solo para admins)
       const inferredDest = isAdmin ? inferDestinationFromBrief(basePrompt) : 'none' as const;
+      const haulManifestDebug = isAdmin && recipe === 'outfit_haul'
+        ? buildHaulManifest(refsWithMode, storyShotCount)
+        : undefined;
       const briefCtxDebug = isAdmin && recipe === 'outfit_check' ? parseOutfitBriefContext(basePrompt) : undefined;
       const outfitCompositionDebug = isAdmin && recipe === 'outfit_check'
         ? inferOutfitComposition(refsWithMode, basePrompt) : undefined;
@@ -456,6 +469,30 @@ const PhotodumpModule: React.FC = () => {
             // Validador: count mismatch (solo en el último shot)
             if (recipe === 'outfit_check' && i === shots.length - 1 && visibleCount !== count) {
               contradictions.push(`requestedCount=${count} capped to visibleCount=${visibleCount} (outfit_check max 8)`);
+            }
+            // Validadores haul
+            if (recipe === 'outfit_haul') {
+              const shotKey = sh.key ?? '';
+              // Try-on sin ref asignada
+              if (shotKey.startsWith('HAUL_TRY_ON') || shotKey.startsWith('HAUL_ADJUSTING')) {
+                if ((result.refsCount ?? 0) < 2) {
+                  contradictions.push(`${shotKey}: try-on/adjusting shot with only ${result.refsCount} refs (expected ≥2: avatar + item)`);
+                }
+              }
+              // Closeup sin ref de accesorio
+              if (shotKey.startsWith('HAUL_ACCESSORY_CLOSEUP')) {
+                if ((result.refsCount ?? 0) < 1) {
+                  contradictions.push(`${shotKey}: closeup shot with 0 refs — accessory ref missing`);
+                }
+              }
+              // Recap sin refs
+              if (shotKey === 'HAUL_RECAP' && (result.refsCount ?? 0) < 1) {
+                contradictions.push(`HAUL_RECAP: recap shot with 0 refs`);
+              }
+              // Shot sin key haul
+              if (shotKey && !shotKey.startsWith('HAUL_') && !shotKey.startsWith('REF0')) {
+                contradictions.push(`Non-haul key in haul recipe: ${shotKey}`);
+              }
             }
 
             debugShots.push({
@@ -541,7 +578,7 @@ const PhotodumpModule: React.FC = () => {
         inferredDestination: inferredDest,
         count,
         requestedCount:      count,
-        visibleImageCount:   recipe === 'outfit_check' ? visibleCount : count + 1,
+        visibleImageCount:   recipe === 'outfit_check' ? visibleCount : storyShotCount + 1,
         ref0IncludedInCount: recipe === 'outfit_check',
         storyShotCount:      storyShotCount,
         generatedImageCount: shotUrls.filter(Boolean).length,
@@ -550,6 +587,7 @@ const PhotodumpModule: React.FC = () => {
         outfitComposition:   outfitCompositionDebug,
         destinationClass:    briefCtxDebug?.destinationClass,
         prepEnvironmentClass: briefCtxDebug?.prepEnvironmentClass,
+        haulManifest:        haulManifestDebug,
         plan,
         shots:               debugShots,
       } : undefined;

@@ -8,7 +8,7 @@
 > 5. El objetivo es que otra IA pueda leer este archivo y entender completamente qué hace el módulo, cómo funciona, y en qué estado está, sin necesidad de leer el código.
 > 6. **INSTRUCCIÓN DE CONTINUIDAD:** Al final del documento siempre debe existir la sección "Estado de trabajo actual" con el estado exacto de qué se está haciendo, en qué receta se está, y qué quedó pendiente. Cuando una receta se cierra, moverla a "Recetas cerradas". Esto permite retomar el trabajo en un nuevo chat sin perder contexto.
 
-**Última actualización:** Junio 2026 (selector cantidad → paso 2; HPI en shots con avatar; captions con género)
+**Última actualización:** Junio 2026 (outfit_check cerrada; outfit_haul implementada, pendiente prueba de aceptación)
 **Propósito:** Generar series fotográficas con narrativa visual coherente. Un "photodump" es una colección de fotos que cuentan una historia o transmiten un mood, muy popular en Instagram y TikTok.
 
 ---
@@ -168,7 +168,7 @@ Rotan entre tipos de momento: context, detail, emotion, texture, action, atmosph
 
 ## Recetas cerradas — Outfit (tres modos) ✅
 
-### ✅ `outfit_check` — IMPLEMENTADA, pendiente prueba en app
+### ✅ `outfit_check` — VALIDADA Y CERRADA (Junio 2026)
 
 **Historia:** "Elegí este outfit para X ocasión"
 
@@ -179,41 +179,75 @@ Rotan entre tipos de momento: context, detail, emotion, texture, action, atmosph
 - `escena_prueba` (opcional): habitación, espejo, probador — si no se sube, se inventa según brief
 - `escena_destino` (opcional): lugar final (restaurante, evento, calle) — si no se sube, el último shot usa escena_prueba
 
-**Arco lineal:**
-1. `OUTFIT_ARRIVING` — Prendas presentadas como objetos: rack, flat lay, manos sosteniendo. Sin avatar de cuerpo completo caminando.
-2. `OUTFIT_MIRROR_CHECK` — Full body frente al espejo, look completo visible.
-3. `OUTFIT_DETAIL` — Close-up de prenda o accesorio clave.
-4. `OUTFIT_READY` — Selfie o medium shot, cara dominante, mood "lista para salir".
-5. `OUTFIT_DESTINATION` — Full body en escena destino (o segundo ángulo si no hay destino).
-6. `ACCESSORY_CLOSEUP` ×N — Un shot extra por cada accesorio marcado con ⭐.
+**Arco lineal (por cantidad):**
+- 3 visibles (2 story): ARRIVING → DESTINATION/READY
+- 4 visibles (3 story): ARRIVING → MIRROR_CHECK → DESTINATION/READY
+- 5 visibles (4 story): ARRIVING → MIRROR_CHECK → READY → DESTINATION
+- 6 visibles (5 story): ARRIVING → DETAIL → MIRROR_CHECK → READY → DESTINATION
+- 7 visibles (6 story): ARRIVING → DETAIL → MIRROR_CHECK → DETAIL_WORN → READY → DESTINATION
+- 8 visibles (7 story): ARRIVING → DETAIL → MIRROR_CHECK → DETAIL_WORN → READY → SECOND_ANGLE → DESTINATION
+
+**Máximo: 8 imágenes.** UI bloqueada en 8 para outfit_check.
+
+**Shots del pool:**
+1. `OUTFIT_ARRIVING` — Prendas como objetos: rack, flat lay, manos sosteniendo. Sin cuerpo completo.
+2. `OUTFIT_DETAIL` — Close-up de prenda/accesorio sin avatar vestido.
+3. `OUTFIT_MIRROR_CHECK` — Full body frente al espejo, look completo.
+4. `OUTFIT_DETAIL_WORN` — Detalle de prenda YA puesta: cuello, bolsillo, textura, zapato.
+5. `OUTFIT_READY` — Selfie o medium shot, cara dominante, mood "lista para salir".
+6. `OUTFIT_SECOND_ANGLE` — Mismo prep room, ángulo distinto al mirror check.
+7. `OUTFIT_DESTINATION` — Full body en escena destino.
+8. `ACCESSORY_CLOSEUP` ×N — Shot extra por accesorio marcado con ⭐.
 
 **REF0:** Full body del avatar con outfit completo en escena de prueba (real o inventada).
 
+**Decisiones de arquitectura implementadas:**
+- `visibleCount = min(requestedCount, 8)` / `storyShotCount = visibleCount - 1`
+- `buildPrepContextOnlyBlock()`: shots de prep reciben ocasión abstracta ("opera date") con lista FORBIDDEN de términos visuales del destino (opera house, marble, chandeliers, foyer, lobby, etc.)
+- `buildREF0HardLockBlock()`: regla dura "mismo cuarto físico que REF0" para todos los shots con sceneLockPolicy prep_*. Romper = destino aparece antes de OUTFIT_DESTINATION.
+- UGC family blocks completamente desactivados para outfit_check (incluso abstract_style_hint metía lighting hints incompatibles)
+- HPI mantenido como anti-rigidez corporal/facial únicamente — sin locaciones, props ni escenas
+- `PREP_SHOT_KEYS`: set que determina qué shots reciben hard lock (excluye OUTFIT_DESTINATION)
+- `detectContradictions` valida en debug: destination terms en prep, count mismatch, family block activo
+
 ---
 
-### ✅ `outfit_haul` — IMPLEMENTADA, pendiente prueba en app
+### ✅ `outfit_haul` — IMPLEMENTADA (pendiente prueba final en app)
 
-**Historia:** "Me probé todo esto / esta es mi cápsula"
+**Historia:** "Me probé todo esto / estas son las prendas que me quedé"
 
 **Slots:**
-- `avatar` (requerido)
-- `outfit` (requerido): hasta 6 prendas — una por slot, una por shot de try-on
-- `accesorios` (opcional): hasta 3, con checkbox ⭐
-- `escena` (opcional): habitación o probador donde ocurre el haul
+- `avatar` (requerido): cara/identidad
+- `outfit` (requerido): hasta 10 prendas — una por slot, una por shot de try-on
+- `accesorios` (opcional): hasta 5, con checkbox ⭐ (close-up obligatorio por cada marcado)
+- `escena` (opcional): no usada en haul MVP (el espacio se establece en REF0)
 
-**Arco semi-lineal:**
-1. `HAUL_INTRO` — Flat lay o rack con todas las prendas. Sin avatar de cuerpo completo.
-2. `HAUL_TRY_ON_N` — Avatar vistiendo cada prenda. El prompt indica cuántas prendas descartadas hay en el fondo (progresión de desorden natural).
-3. `HAUL_WINNER` — Avatar con la prenda ganadora, fondo con el caos acumulado visible.
-4. `ACCESSORY_CLOSEUP` ×N — Shots extra por accesorios marcados.
+**Count policy:** `storyShotCount = min(requestedCount, 20)`. REF0 siempre es extra (+1). Total visible = storyShotCount + 1.
 
-**Progresión de desorden:** El director indica en el prompt de cada shot cuántas prendas ya están apiladas ("En el fondo hay N prendas descartadas sobre la cama/silla"). El modelo maneja el caos narrativamente sin que el usuario tenga que hacer nada.
+**HaulManifest:** Se construye antes de planificar — clasifica prendas vs. accesorios, identifica close-ups obligatorios, determina cuántos try-ons y details caben en el budget.
 
-**REF0:** Avatar en el espacio del haul rodeada/sosteniendo varias prendas. Ambiente de "esto empieza".
+**Arco (buildHaulShotPlan):**
+1. `HAUL_OVERVIEW` — Contexto inicial: colección a vista, sin catálogo
+2. `HAUL_TRY_ON_N` — Avatar vistiendo cada prenda (2:1 try-on vs. adjusting ratio)
+3. `HAUL_ADJUSTING_N` — Micro-gesto: ajuste de cuello, manga, cintura
+4. `HAUL_DETAIL_GARMENT_N` — Macro de tejido/textura/detalle de la prenda
+5. `HAUL_ACCESSORY_CLOSEUP_N` — Close-up obligatorio para cada accesorio marcado ⭐
+6. `HAUL_WINNER` — Último try-on: la prenda ganadora (si hay budget)
+7. `HAUL_RECAP` — Cierre: todo el haul vista general
+
+**Progresión de desorden (HaulPileState):** `clean → light_pile → medium_pile → messy_but_believable`. Derivada del ratio tryOnIndex/totalOutfits, inyectada como texto en el prompt de cada shot.
+
+**REF0:** Establece el espacio del haul (dormitorio, probador) con iPhone UGC realismo. No es un look final. La ropa del avatar NO es un ítem del haul.
+
+**HPI:** Safe para haul — solo body/expression. Desactivado en overview, closeup y detail. Micro-acción en adjusting. Evaluación de postura en try-on/winner. Sin props/locations de intelligence.
+
+**Family blocks:** Desactivados (igual que outfit_check MVP).
+
+**Regla clave:** "AVATAR CLOTHING IS NOT A HAUL ITEM" — inyectada en shotIdentityBlock, shotOutfitInstruction y REF0.
 
 ---
 
-### ✅ `outfit_week` — IMPLEMENTADA, pendiente prueba en app
+### ⏳ `outfit_week` — IMPLEMENTADA, pendiente prueba en app
 
 **Historia:** "Estos fueron mis outfits de la semana / del mes / de la ocasión"
 
@@ -234,29 +268,37 @@ Rotan entre tipos de momento: context, detail, emotion, texture, action, atmosph
 
 ## Estado de trabajo actual
 
-**Próxima acción:** Re-probar las recetas outfit con los tres fixes aplicados.
+**Receta activa: `outfit_haul` — implementación completa, pendiente prueba de aceptación en app**
 
-**Fixes aplicados post-prueba (Junio 2026):**
-1. **Selector de cantidad movido al paso 2** — eliminado de PDStep1, ahora es `- N +` en PDStep2Receta con mínimo 3 y máximo 9. Aparece junto al selector de género.
-2. **HPI inyectado en shots con avatar** — `buildHpiBlock()` se llama en `generatePhotodumpShot` para todos los shots donde aparece una persona (excluye HAUL_INTRO, OUTFIT_ARRIVING, ACCESSORY_CLOSEUP, shots de objeto de unboxing). El género se toma de `refs.gender`.
-3. **Captions con género** — `generatePhotodumpCaptions` recibe `gender` y lo inyecta como instrucción explícita en el prompt: masculino → gramática masculina en español, femenino → femenina, neutro → lenguaje neutro.
-4. **Campo `gender` en `PhotodumpRefs`** — selector de 3 opciones (Femenino/Masculino/Neutro) en el paso 2. Default: femenino. Afecta HPI (poses, expresiones) y captions (gramática).
+**Qué se hizo:** Rediseño completo del sistema haul. Se reemplazó `buildHaulShotPool` + `distributeHaulShots` por una arquitectura nueva con `buildHaulManifest` + `buildHaulShotPlan`. Se separó el reference routing de haul del bloque outfit_check/week. Se agregó HPI seguro para haul, family blocks desactivados, anti-editorial iPhone UGC por shot, y regla "avatar clothing is not a haul item".
 
-**Notas de implementación relevantes para debug:**
-- Las prendas se pasan como fotos SOLAS — el modelo debe "vestir" al avatar. Si el resultado es raro, verificar que el usuario subió prendas sin personas.
-- Los shots de `ACCESSORY_CLOSEUP` se agregan DESPUÉS del arco base y se suman al conteo total.
-- `escena_destino` solo cambia la escena en el shot `OUTFIT_DESTINATION` — todos los demás usan `scenePruebaRef`.
-- En `outfit_haul`, el shot HAUL_INTRO no tiene outfit específico asignado (shotOutfitIndex = -1).
-- HPI NO se inyecta en shots faceless ni en shots donde no hay avatar (objeto puro, close-ups de accesorio, etc.).
+**Archivos modificados:**
+- `photodumpDirectorService.ts` — HaulManifest, shot planner, builders por tipo, HPI seguro, routing, REF0
+- `PhotodumpModule.tsx` — count policy, visibleImageCount, haulManifestDebug, validadores de contradicciones haul
+- `PDStep2Receta.tsx` — slots outfit hasta 10, accesorios hasta 5, sublabels dinámicos
+- `types.ts` — HaulItem, HaulManifest, HaulProgressState, campos debug haul
+
+**Prueba de aceptación pendiente:**
+- Prompt: "Haul de mis 6 outfits nuevos"
+- 6 outfits subidos, 3 accesorios, 2 con close-up marcado
+- 12 imágenes solicitadas
+- Verificar: 12 story shots + 1 REF0 = 13 imágenes totales
+- Verificar: close-ups aparecen en el arco
+- Verificar: sin mezcla de outfits entre shots
+- Verificar: progresión de desorden visible en prompts del debug
+
+**Próxima acción:** Probar en app y ajustar según resultado.
 
 ---
 
 ## Recetas pendientes (en orden)
 
-2. `day_in_life`
-3. `launch`
-4. `bts` — **IMPORTANTE: el avatar puede aparecer, NO es obligatoriamente faceless. Evaluar caso a caso.**
-5. `travel`
+1. `outfit_haul` — **prueba de aceptación en app** (implementación lista)
+2. `outfit_week` — implementada, falta validar en app
+3. `day_in_life`
+4. `launch`
+5. `bts` — **IMPORTANTE: el avatar puede aparecer, NO es obligatoriamente faceless. Evaluar caso a caso.**
+6. `travel`
 
 **Notas globales para no repetir errores:**
 - BTS NO es siempre faceless. El usuario lo aclaró explícitamente.

@@ -110,7 +110,10 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   const getSlotImages = (key: string): (string | null)[] => {
     if (key === 'avatar')         return [refs.avatarRef, refs.bodyRef ?? null].filter((_, i) => i === 0 || refs.bodyRef !== undefined) as (string | null)[];
     if (key === 'outfit')         return [refs.outfitRef, ...(refs.outfitRefs ?? [])];
-    if (key === 'accesorios')     return [...(refs.accesorioRefs ?? [null, null, null])];
+    if (key === 'accesorios') {
+      const slots = recipe === 'outfit_haul' ? 5 : 3;
+      return [...(refs.accesorioRefs ?? Array(slots).fill(null))];
+    }
     if (key === 'producto')       return [refs.productRef, ...(refs.productRefs ?? [])];
     if (key === 'empaque')        return [refs.packagingRef ?? null, ...(refs.packagingRefs ?? [])];
     if (key === 'escena')         return [refs.sceneRef, ...(refs.sceneRefs ?? [])];
@@ -122,11 +125,11 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   const getSlotMax = (key: string): number => {
     if (key === 'avatar')         return 2;
     if (key === 'outfit') {
-      if (recipe === 'outfit_haul') return 6;  // hasta 6 prendas
+      if (recipe === 'outfit_haul') return 10; // hasta 10 prendas (MAX_REFS - avatar slots)
       if (recipe === 'outfit_week') return 7;  // hasta 7 outfits
       return 4;                                // outfit_check: hasta 4 prendas del mismo look
     }
-    if (key === 'accesorios')     return 3;
+    if (key === 'accesorios')     return recipe === 'outfit_haul' ? 5 : 3;
     if (key === 'producto')       return 3;
     if (key === 'empaque')        return 3;
     if (key === 'escena')         return 3;
@@ -153,10 +156,11 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
       return;
     }
     if (key === 'accesorios') {
-      const arr = [...(refs.accesorioRefs ?? [null, null, null])];
+      const slots = recipe === 'outfit_haul' ? 5 : 3;
+      const arr = [...(refs.accesorioRefs ?? Array(slots).fill(null))];
       arr[index] = value;
       // Si se borra la imagen, también limpiar el checkbox de closeup
-      const closeups = [...(refs.accesorioCloseup ?? [false, false, false])];
+      const closeups = [...(refs.accesorioCloseup ?? Array(slots).fill(false))];
       if (!value) closeups[index] = false;
       onRefs({ ...refs, accesorioRefs: arr, accesorioCloseup: closeups });
       return;
@@ -201,7 +205,8 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   };
 
   const handleCloseupToggle = (accIndex: number) => {
-    const closeups = [...(refs.accesorioCloseup ?? [false, false, false])];
+    const slots = recipe === 'outfit_haul' ? 5 : 3;
+    const closeups = [...(refs.accesorioCloseup ?? Array(slots).fill(false))];
     closeups[accIndex] = !closeups[accIndex];
     onRefs({ ...refs, accesorioCloseup: closeups });
   };
@@ -212,11 +217,13 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   const slotSubLabels: Record<string, string[]> = {
     avatar:         ['Cara / identidad', 'Cuerpo (opcional)'],
     outfit:         recipe === 'outfit_haul'
-      ? ['Prenda 1', 'Prenda 2', 'Prenda 3', 'Prenda 4', 'Prenda 5', 'Prenda 6']
+      ? ['Prenda 1', 'Prenda 2', 'Prenda 3', 'Prenda 4', 'Prenda 5', 'Prenda 6', 'Prenda 7', 'Prenda 8', 'Prenda 9', 'Prenda 10']
       : recipe === 'outfit_week'
         ? ['Outfit 1', 'Outfit 2', 'Outfit 3', 'Outfit 4', 'Outfit 5', 'Outfit 6', 'Outfit 7']
         : ['Prenda 1', 'Prenda 2', 'Prenda 3', 'Prenda 4'],
-    accesorios:     ['Accesorio 1', 'Accesorio 2', 'Accesorio 3'],
+    accesorios:     recipe === 'outfit_haul'
+      ? ['Accesorio 1', 'Accesorio 2', 'Accesorio 3', 'Accesorio 4', 'Accesorio 5']
+      : ['Accesorio 1', 'Accesorio 2', 'Accesorio 3'],
     producto:       ['Producto (dentro)', 'Ángulo 2', 'Ángulo 3'],
     empaque:        ['Empaque principal', 'Ángulo 2', 'Ángulo 3'],
     escena:         ['Principal', 'Lugar 2', 'Lugar 3'],
@@ -366,7 +373,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
 
                 const isAccesorios = key === 'accesorios';
                 const images       = getSlotImages(key);
-                const closeups     = refs.accesorioCloseup ?? [false, false, false];
+                const closeups     = refs.accesorioCloseup ?? Array(recipe === 'outfit_haul' ? 5 : 3).fill(false);
 
                 return (
                   <div

@@ -1,5 +1,51 @@
 // ── Photodump Module Types ────────────────────────────────────
 
+// ── Haul Types ────────────────────────────────────────────────
+
+export type HaulItemKind =
+  | 'outfit_set'   // look completo (top + bottom + calzado subido como imagen única)
+  | 'garment'      // prenda individual (blusa, pantalón, vestido, etc.)
+  | 'accessory'    // accesorio genérico (cartera, cinturón, sombrero, etc.)
+  | 'shoes'        // calzado
+  | 'bag'          // cartera / bolso
+  | 'jewelry'      // joyería (aros, collar, pulsera, anillo)
+  | 'mixed'        // imagen que combina varios tipos
+  | 'unknown';     // no se pudo inferir
+
+export type HaulPileState = 'clean' | 'light_pile' | 'medium_pile' | 'messy_but_believable';
+
+export interface HaulItem {
+  id:                 string;       // 'outfit_0', 'outfit_1', 'acc_0', etc.
+  sourceIndex:        number;       // índice original en el array de refs
+  refUrl:             string;       // URL de la referencia
+  kind:               HaulItemKind;
+  label:              string;       // 'Prenda 1', 'Accesorio 2', etc.
+  closeupRequested:   boolean;      // el usuario marcó ⭐ de close-up
+  tryOnEligible:      boolean;      // este ítem puede mostrarse puesto en el cuerpo
+  detailEligible:     boolean;      // este ítem puede aparecer como detalle/macro
+  priority:           'required' | 'normal' | 'optional';
+}
+
+export interface HaulManifest {
+  totalItems:          number;
+  outfitItems:         HaulItem[];  // garments + outfit_sets
+  accessoryItems:      HaulItem[];  // accessories + shoes + bags + jewelry
+  closeupItems:        HaulItem[];  // los que tienen closeupRequested = true
+  tryOnItems:          HaulItem[];  // todos los tryOnEligible
+  allItems:            HaulItem[];  // lista plana completa
+  requestedCount:      number;      // shots de historia pedidos por el usuario
+  maxStoryShots:       number;      // min(requestedCount, 20)
+}
+
+export interface HaulProgressState {
+  currentItemId?:       string;
+  triedItemIds:         string[];
+  remainingItemIds:     string[];
+  pileState:            HaulPileState;
+  triedCount:           number;
+  remainingCount:       number;
+}
+
 export type PhotodumpDestino   = 'feed' | 'stories' | 'tiktok';
 export type PhotodumpNarrative = 'day' | 'journey' | 'brand' | 'character' | 'product_hero' | 'faceless' | 'custom';
 export type PhotodumpProtagonist = 'person' | 'product' | 'both';
@@ -390,6 +436,27 @@ export interface PhotodumpShotDebug {
   environmentAffordances?:  EnvironmentAffordance[];
   closureReason?:           string;
 
+  // Haul-specific debug
+  haulItemIds?:             string[];
+  haulItemKinds?:           string[];
+  primaryItemId?:           string;
+  accessoryCloseupRequested?: boolean;
+  referenceRouting?: {
+    avatarRefs:         number;
+    ref0Used:           boolean;
+    garmentRefs:        number;
+    accessoryRefs:      number;
+    backgroundItemRefs: number;
+  };
+  haulProgressState?: {
+    currentItem?:   string;
+    triedCount:     number;
+    remainingCount: number;
+    pileState:      HaulPileState;
+  };
+  retryCount?:              number;
+  failureReason?:           string;
+
   status:       'ok' | 'failed';
 }
 
@@ -411,6 +478,8 @@ export interface PhotodumpDebugData {
   outfitComposition?:  OutfitComposition;
   destinationClass?:   OutfitDestinationClass;
   prepEnvironmentClass?: PrepEnvironmentClass;
+  // Haul manifest (solo outfit_haul)
+  haulManifest?:       HaulManifest;
   count:        number;
   plan:         any;
   shots:        PhotodumpShotDebug[];
