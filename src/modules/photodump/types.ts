@@ -2,6 +2,23 @@
 
 // ── Haul Types ────────────────────────────────────────────────
 
+// HaulRefKind — valor elegido manualmente por el usuario en el selector de tipo de referencia.
+// Tiene más granularidad que HaulItemKind porque el usuario lo ve directamente.
+export type HaulRefKind =
+  | 'look_completo'     // La imagen muestra un outfit armado para usarse junto
+  | 'varios_items'      // La imagen contiene múltiples productos que no forman un solo look
+  | 'top'               // Prenda superior individual
+  | 'bottom'            // Prenda inferior individual
+  | 'vestido'           // Vestido completo
+  | 'enterizo'          // Enterizo / jumpsuit / bodysuit / mameluco
+  | 'chaqueta'          // Chaqueta / blazer / abrigo / outerwear
+  | 'calzado'           // Calzado suelto (zapato, botín, sandalia, zapatilla)
+  | 'pantys'            // Pantys / medias / leggings
+  | 'bolso'             // Bolso / cartera / tote
+  | 'joyeria'           // Joyería (aros, collar, anillo, pulsera)
+  | 'accesorio'         // Accesorio genérico (cinturón, sombrero, gafas, etc.)
+  | 'auto';             // Sin selección manual — usar heurística automática
+
 export type HaulItemKind =
   | 'outfit_set'   // look completo (top + bottom + calzado subido como imagen única)
   | 'garment'      // prenda individual (blusa, pantalón, vestido, etc.)
@@ -19,6 +36,7 @@ export interface HaulItem {
   sourceIndex:                 number;       // índice original en el array de refs
   refUrl:                      string;       // URL de la referencia
   kind:                        HaulItemKind;
+  manualKind:                  HaulRefKind;  // valor elegido por el usuario ('auto' = no eligió)
   label:                       string;       // 'Prenda 1', 'Accesorio 2', etc.
   closeupRequested:            boolean;      // el usuario marcó ⭐ de close-up
   tryOnEligible:               boolean;      // puede mostrarse puesto en el cuerpo (full outfit)
@@ -221,6 +239,11 @@ export interface PhotodumpRefs {
   sceneText?:     string;
   outfitMode?:    PhotodumpOutfitMode;
   gender?:        'female' | 'male' | 'neutral';  // género del avatar para HPI y captions
+  // Haul: tipo de referencia elegido manualmente por el usuario por cada slot de outfit/accesorio
+  // Índice 0..N corresponde a [outfitRef, outfitRefs[0], outfitRefs[1], ...]
+  // Para accesorios: índice 0..M corresponde a accesorioRefs[]
+  haulOutfitKinds?:    HaulRefKind[];   // kinds para slots de outfit en haul
+  haulAccKinds?:       HaulRefKind[];   // kinds para slots de accesorio en haul
 }
 
 // ── Tipos modo libre ───────────────────────────────────────────

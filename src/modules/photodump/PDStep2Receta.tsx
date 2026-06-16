@@ -6,9 +6,10 @@ import React, { useState, useRef } from 'react';
 import { ChevronDown, User, Package, Shirt, Layers, AlertCircle, AtSign, Star } from 'lucide-react';
 import { ImageSlot } from '../../components/shared/ImageSlot';
 import {
-  PhotodumpRecipe, PhotodumpRefs, PhotodumpOutfitMode,
+  PhotodumpRecipe, PhotodumpRefs, PhotodumpOutfitMode, HaulRefKind,
   RECIPE_META, isRefRequired,
 } from './types';
+import HaulReferenceTypeSelector from './HaulReferenceTypeSelector';
 
 // Colores por slot
 const SLOT_STYLE = {
@@ -211,6 +212,27 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
     onRefs({ ...refs, accesorioCloseup: closeups });
   };
 
+  // ── Handlers de tipo de referencia Haul ───────────────────────
+  const handleOutfitKindChange = (slotIndex: number, kind: HaulRefKind) => {
+    const max = getSlotMax('outfit');
+    const arr = [...(refs.haulOutfitKinds ?? Array(max).fill('auto' as HaulRefKind))];
+    arr[slotIndex] = kind;
+    onRefs({ ...refs, haulOutfitKinds: arr });
+  };
+
+  const handleAccKindChange = (accIndex: number, kind: HaulRefKind) => {
+    const max = recipe === 'outfit_haul' ? 5 : 3;
+    const arr = [...(refs.haulAccKinds ?? Array(max).fill('auto' as HaulRefKind))];
+    arr[accIndex] = kind;
+    onRefs({ ...refs, haulAccKinds: arr });
+  };
+
+  const getOutfitKind = (i: number): HaulRefKind =>
+    (refs.haulOutfitKinds ?? [])[i] ?? 'auto';
+
+  const getAccKind = (i: number): HaulRefKind =>
+    (refs.haulAccKinds ?? [])[i] ?? 'auto';
+
   const getSlotFilled = (key: string): number =>
     getSlotImages(key).filter(Boolean).length;
 
@@ -240,11 +262,14 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
     }
     if (key === 'outfit') {
       if (recipe === 'outfit_check') return 'Subí las prendas del look por separado — una foto clara de cada pieza sola. Podés usar el módulo Outfit Extractor o Foto de Producto de la app para mejores resultados. ⚠️ Evitá subir fotos con personas vistiéndolas — el modelo puede confundir identidades.';
-      if (recipe === 'outfit_haul') return 'Subí cada prenda que vas a "probarte" — una por slot. El orden que subís es el orden de la historia. Podés usar Outfit Extractor o Foto de Producto. ⚠️ Evitá fotos con personas — podría confundir identidades.';
+      if (recipe === 'outfit_haul') return 'Subí cada ítem del haul — una imagen por slot. Podés subir prendas, calzado, bolsos, joyería o accesorios. Usá el selector debajo de cada imagen para indicar qué tipo de ítem es: eso mejora mucho la planificación de shots. ⚠️ Evitá fotos con personas — podría confundir identidades.';
       if (recipe === 'outfit_week') return 'Subí una imagen por outfit completo. Podés usar fotos planas o de producto. El orden es el orden de aparición en el set. ⚠️ Evitá fotos con personas — podría confundir identidades.';
       return 'Subí hasta 4 prendas. Podés usar el módulo Outfit Extractor o Foto de Producto para mejores resultados.';
     }
-    if (key === 'accesorios') return 'Subí accesorios que quieras destacar. Marcá el ⭐ de cada accesorio que quieras con una toma de close-up dedicada — se generará como imagen extra.';
+    if (key === 'accesorios') {
+      if (recipe === 'outfit_haul') return 'Accesorios adicionales del haul: bolsos, joyería, cinturones, gorras. Marcá ⭐ para close-up dedicado. Usá el selector de tipo para que el sistema sepa cómo fotografiar cada pieza.';
+      return 'Subí accesorios que quieras destacar. Marcá el ⭐ de cada accesorio que quieras con una toma de close-up dedicada — se generará como imagen extra.';
+    }
     if (key === 'producto') return recipe === 'unboxing' ? 'El producto dentro del empaque: lo que el cliente recibe. Subí hasta 3 ángulos.' : 'Subí hasta 3 ángulos del mismo producto para mayor fidelidad visual.';
     if (key === 'empaque') return 'El empaque, caja o packaging del producto. Si no subís fotos, la IA generará un empaque — la consistencia puede variar.';
     if (key === 'escena') return 'La escena principal define la ambientación del set completo.';
@@ -460,6 +485,19 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                                   disabled={isDisabled}
                                   iconless
                                 />
+                                {/* Selector de tipo — solo haul, solo cuando hay imagen */}
+                                {recipe === 'outfit_haul' && hasImage && key === 'outfit' && (
+                                  <HaulReferenceTypeSelector
+                                    value={getOutfitKind(i)}
+                                    onChange={kind => handleOutfitKindChange(i, kind)}
+                                  />
+                                )}
+                                {recipe === 'outfit_haul' && hasImage && isAccesorios && (
+                                  <HaulReferenceTypeSelector
+                                    value={getAccKind(i)}
+                                    onChange={kind => handleAccKindChange(i, kind)}
+                                  />
+                                )}
                                 {isAccesorios && isCloseup && hasImage && (
                                   <p className="text-[8px] text-pink-500 font-bold text-center">
                                     ★ Close-up incluido

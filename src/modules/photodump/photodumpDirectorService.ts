@@ -19,7 +19,7 @@ import {
   OutfitItemPlan, SceneLockPolicy,
   OutfitBriefContext, OutfitDestinationClass, PrepEnvironmentClass, OutfitComposition,
   PoseIntent, DetailKind, EnvironmentAffordance, SceneContinuityMode,
-  HaulItem, HaulManifest, HaulItemKind, HaulPileState, HaulCoveragePlan,
+  HaulItem, HaulManifest, HaulItemKind, HaulPileState, HaulCoveragePlan, HaulRefKind,
 } from './types';
 import {
   getStorySupportFamilies, initPhotodumpIntelligence, StorySupportFamily,
@@ -1440,12 +1440,40 @@ function buildHaulSafeHpiBlock(
 ): string {
   const genderNote = gender === 'male' ? 'masculine' : 'feminine';
 
-  // Shots sin cuerpo: off
+  // Shots sin cuerpo completo: off
   if (
     shotKey === 'HAUL_OVERVIEW' ||
     shotKey.startsWith('HAUL_ACCESSORY_CLOSEUP_') ||
-    shotKey.startsWith('HAUL_DETAIL_')
+    shotKey.startsWith('HAUL_DETAIL_') ||
+    shotKey.startsWith('HAUL_FOOTWEAR_') ||
+    shotKey.startsWith('HAUL_BAG_') ||
+    shotKey.startsWith('HAUL_JEWELRY_')
   ) return '';
+
+  if (shotKey.startsWith('HAUL_SETUP_')) {
+    return `🎯 MICRO-ACTION (setup — hands and natural movement only):
+The person is going through haul items — choosing, organizing, holding up to preview.
+  - hands holding an item up to look at it, head tilted evaluating
+  - seated on bed edge with items around, leaning forward selecting a piece
+  - standing at rack touching garments, casual haul energy
+  - candid mid-movement, natural and unstaged
+FORBIDDEN: catalog pose, full-body fashion stance, direct camera gaze as if posing, editorial lighting vibe.`;
+  }
+
+  if (shotKey.startsWith('HAUL_STYLED_')) {
+    return `🎯 BODY LANGUAGE (styled result — natural ${genderNote} reveal pose):
+The person just finished putting on the garment and this is the reveal angle.
+  - seated on bed edge with the look on, relaxed genuine expression
+  - half-turn showing the side of the look, natural
+  - mirror interaction — looking at own reflection, not at camera
+  - leaning lightly against wall, weight shifted, candid
+FORBIDDEN: catalog mannequin stance, forced smile directly at camera, editorial frontality.
+This is a genuine reveal, not a brand shoot.
+
+⛔ SAFE LANGUAGE — DO NOT USE THESE TERMS:
+sexy, sheer body, lingerie, revealing, tight body, sensual, seductive, bodycon catsuit.
+USE INSTEAD: fashion garment, try-on, natural fit, clothing evaluation.`;
+  }
 
   if (shotKey.startsWith('HAUL_ADJUSTING_')) {
     return `🎯 MICRO-ACTION (haul adjusting — hands and micro-gesture only):
@@ -2928,19 +2956,53 @@ function distributeOutfitCheckShots(count: number, hasDestinationClosure: boolea
 // outfitRefs = prendas/outfits (slot outfit del wizard)
 // accesorioRefs + accesorioCloseup = accesorios
 
-// Heurística de clasificación por etiqueta/slot de PDStep2Receta.
-// El slot 'outfit' puede contener prendas o calzado suelto.
-// La clasificación es heurística — sin IA externa, basada en posición y metadatos del slot.
-function inferHaulItemKind(slotLabel: string, index: number): HaulItemKind {
+// Mapea HaulRefKind (valor de UI) → HaulItemKind (interno del planner).
+// El valor de UI tiene más granularidad, lo colapsamos para el planner.
+function haulRefKindToItemKind(refKind: HaulRefKind): HaulItemKind {
+  switch (refKind) {
+    case 'look_completo':  return 'outfit_set';
+    case 'varios_items':   return 'mixed';
+    case 'top':
+    case 'bottom':
+    case 'vestido':
+    case 'enterizo':
+    case 'chaqueta':
+    case 'pantys':         return 'garment';
+    case 'calzado':        return 'footwear';
+    case 'bolso':          return 'bag';
+    case 'joyeria':        return 'jewelry';
+    case 'accesorio':      return 'accessory';
+    case 'auto':
+    default:               return 'garment'; // fallback — será sobreescrito por heurística si es 'auto'
+  }
+}
+
+// Heurística de clasificación por etiqueta/slot.
+// Solo se usa cuando el usuario no seleccionó un tipo (refKind === 'auto').
+function inferHaulItemKindByLabel(slotLabel: string): HaulItemKind {
   const label = slotLabel.toLowerCase();
-  // Accesorios siempre vienen del slot 'accesorios' — se clasifican aparte en buildHaulManifest
-  // Para el slot 'outfit': heurística por label
   if (label.includes('calzado') || label.includes('zapato') || label.includes('botín') || label.includes('botin') ||
       label.includes('sandalia') || label.includes('zapatilla') || label.includes('footwear') ||
-      label.includes('shoe') || label.includes('boot') || label.includes('sneaker') || label.includes('heel')) {
+      label.includes('shoe') || label.includes('boot') || label.includes('sneaker') || label.includes('heel') ||
+      label.includes('taco') || label.includes('stiletto') || label.includes('mule')) {
     return 'footwear';
   }
-  return 'garment'; // default: prenda individual (se puede ser outfit_set pero sin más info asumimos garment)
+  if (label.includes('bolso') || label.includes('cartera') || label.includes('tote') || label.includes('clutch') || label.includes('bag')) {
+    return 'bag';
+  }
+  if (label.includes('collar') || label.includes('aros') || label.includes('anillo') || label.includes('pulsera') ||
+      label.includes('joya') || label.includes('jewel') || label.includes('necklace') || label.includes('ring')) {
+    return 'jewelry';
+  }
+  return 'garment';
+}
+
+// Punto de entrada unificado. Si el usuario eligió tipo manual, lo usa con prioridad total.
+function inferHaulItemKind(slotLabel: string, index: number, manualKind?: HaulRefKind): HaulItemKind {
+  if (manualKind && manualKind !== 'auto') {
+    return haulRefKindToItemKind(manualKind);
+  }
+  return inferHaulItemKindByLabel(slotLabel);
 }
 
 export function buildHaulManifest(refs: PhotodumpRefs, requestedCount: number): HaulManifest {
@@ -2949,60 +3011,104 @@ export function buildHaulManifest(refs: PhotodumpRefs, requestedCount: number): 
   // REGLA DURA: avatarRef y bodyRef NUNCA entran en haulItems.
   // outfitRef (slot 0) + outfitRefs[] (slots 1-N) son los ítems del haul.
   // La ropa visible en avatarRef/bodyRef es identidad base, no un ítem del haul.
-  const rawOutfits = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
+  const rawOutfits      = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
+  const outfitManualKinds = refs.haulOutfitKinds ?? [];
 
-  const outfitItems:  HaulItem[] = [];
+  const outfitItems:   HaulItem[] = [];
   const footwearItems: HaulItem[] = [];
+  const bagItems:      HaulItem[] = [];
+  const jewelryItems:  HaulItem[] = [];
 
   rawOutfits.forEach((url, i) => {
-    // Heurística: sin metadata de slot label, asumimos garment salvo que la URL tenga indicios.
-    // En el futuro se puede pasar metadata de PDStep2Receta para clasificar mejor.
-    const kind = inferHaulItemKind(`Prenda ${i + 1}`, i);
+    const manualKind: HaulRefKind = outfitManualKinds[i] ?? 'auto';
+    const kind = inferHaulItemKind(`Prenda ${i + 1}`, i, manualKind);
+
+    // Etiqueta descriptiva según el tipo elegido
+    const kindLabel: Record<HaulItemKind, string> = {
+      outfit_set: 'Look completo',
+      garment:    'Prenda',
+      footwear:   'Calzado',
+      accessory:  'Accesorio',
+      bag:        'Bolso',
+      jewelry:    'Joyería',
+      mixed:      'Set de ítems',
+      unknown:    'Ítem',
+    };
+    const label = `${kindLabel[kind] ?? 'Ítem'} ${i + 1}`;
+
+    const isTryOnEligible = kind !== 'footwear' && kind !== 'bag' && kind !== 'jewelry' && kind !== 'accessory';
     const item: HaulItem = {
       id:                        `outfit_${i}`,
       sourceIndex:               i,
       refUrl:                    url,
       kind,
-      label:                     `Prenda ${i + 1}`,
+      manualKind,
+      label,
       closeupRequested:          false,
-      tryOnEligible:             kind !== 'footwear',
+      tryOnEligible:             isTryOnEligible,
       footwearTryOnEligible:     kind === 'footwear',
       detailEligible:            true,
-      canBeIntegratedIntoOutfit: kind === 'footwear' || kind === 'accessory',
+      canBeIntegratedIntoOutfit: kind === 'footwear' || kind === 'accessory' || kind === 'bag' || kind === 'jewelry',
       priority:                  'required' as const,
     };
+
     if (kind === 'footwear') {
       footwearItems.push(item);
+    } else if (kind === 'bag') {
+      bagItems.push(item);
+    } else if (kind === 'jewelry') {
+      jewelryItems.push(item);
     } else {
       outfitItems.push(item);
     }
   });
 
-  // Accesorios: accesorioRefs[] + closeup flags
-  const rawAccs    = (refs.accesorioRefs ?? []).filter(Boolean) as string[];
-  const closeupArr = refs.accesorioCloseup ?? [];
-  const accessoryItems: HaulItem[] = rawAccs.map((url, i) => ({
-    id:                        `acc_${i}`,
-    sourceIndex:               i,
-    refUrl:                    url,
-    kind:                      'accessory' as HaulItemKind,
-    label:                     `Accesorio ${i + 1}`,
-    closeupRequested:          !!closeupArr[i],
-    tryOnEligible:             false,
-    footwearTryOnEligible:     false,
-    detailEligible:            true,
-    canBeIntegratedIntoOutfit: true,
-    priority:                  closeupArr[i] ? ('required' as const) : ('normal' as const),
-  }));
+  // Accesorios: accesorioRefs[] + closeup flags + manual kinds
+  const rawAccs        = (refs.accesorioRefs ?? []).filter(Boolean) as string[];
+  const closeupArr     = refs.accesorioCloseup ?? [];
+  const accManualKinds = refs.haulAccKinds ?? [];
 
-  const allItems     = [...outfitItems, ...footwearItems, ...accessoryItems];
-  const closeupItems = [...footwearItems.filter(it => it.closeupRequested), ...accessoryItems.filter(it => it.closeupRequested)];
+  const accessoryItems: HaulItem[] = rawAccs.map((url, i) => {
+    const manualKind: HaulRefKind = accManualKinds[i] ?? 'auto';
+    // Para accesorios, el kind derivado es más granular
+    const accKind: HaulItemKind =
+      manualKind === 'bolso'   ? 'bag'
+      : manualKind === 'joyeria' ? 'jewelry'
+      : manualKind === 'calzado' ? 'footwear'
+      : 'accessory';
+    return {
+      id:                        `acc_${i}`,
+      sourceIndex:               i,
+      refUrl:                    url,
+      kind:                      accKind,
+      manualKind,
+      label:                     `Accesorio ${i + 1}`,
+      closeupRequested:          !!closeupArr[i],
+      tryOnEligible:             false,
+      footwearTryOnEligible:     accKind === 'footwear',
+      detailEligible:            true,
+      canBeIntegratedIntoOutfit: true,
+      priority:                  closeupArr[i] ? ('required' as const) : ('normal' as const),
+    };
+  });
+
+  const allItems     = [...outfitItems, ...footwearItems, ...bagItems, ...jewelryItems, ...accessoryItems];
+  const closeupItems = [
+    ...footwearItems.filter(it => it.closeupRequested),
+    ...bagItems.filter(it => it.closeupRequested),
+    ...jewelryItems.filter(it => it.closeupRequested),
+    ...accessoryItems.filter(it => it.closeupRequested),
+  ];
   const tryOnItems   = outfitItems.filter(it => it.tryOnEligible);
 
   // ── CoveragePlan ───────────────────────────────────────────────
   const requiredTryOnItemIds   = outfitItems.map(it => it.id);
   const requiredCloseupItemIds = closeupItems.map(it => it.id);
-  const requiredDetailItemIds  = footwearItems.map(it => it.id); // calzado siempre merece un detail
+  // calzado y bolsos sin closeup marcado igual merecen al menos un detail shot
+  const requiredDetailItemIds  = [
+    ...footwearItems.filter(it => !it.closeupRequested).map(it => it.id),
+    ...bagItems.filter(it => !it.closeupRequested).map(it => it.id),
+  ];
   const optionalItemIds        = accessoryItems.filter(it => !it.closeupRequested).map(it => it.id);
 
   const coveragePlan: HaulCoveragePlan = {
@@ -3018,7 +3124,7 @@ export function buildHaulManifest(refs: PhotodumpRefs, requestedCount: number): 
     totalItems:     allItems.length,
     outfitItems,
     footwearItems,
-    accessoryItems,
+    accessoryItems: [...bagItems, ...jewelryItems, ...accessoryItems],
     closeupItems,
     tryOnItems,
     allItems,
@@ -3046,67 +3152,91 @@ export function buildHaulShotPlan(
   // ── Queues mutables del planner ────────────────────────────
   const tryOnQueue    = [...manifest.tryOnItems];
   const closeupQueue  = [...manifest.closeupItems];
+  // Footwear y bolsos sin closeup marcado → shots de detalle
   const footwearQueue = [...manifest.footwearItems];
+  const bagQueue      = manifest.accessoryItems.filter(it => it.kind === 'bag' && !it.closeupRequested);
+  const jewelryQueue  = manifest.accessoryItems.filter(it => it.kind === 'jewelry' && !it.closeupRequested);
 
-  // ── 1. Reservar close-ups obligatorios (accesorios/calzado marcados con ⭐) ─
+  // ── 1. Reservar close-ups obligatorios (ítems marcados con ⭐) ─
   const reservedCloseups = closeupQueue.map((item, ci) =>
     buildHaulAccessoryCloseupShot(item, ci),
   );
 
-  // ── 2. Reservar detail shots para calzado suelto ──────────
-  // Footwear no marcado con closeup va como HAUL_FOOTWEAR_DETAIL
+  // ── 2. Reservar detail shots para calzado suelto sin closeup ──
   const footwearWithoutCloseup = footwearQueue.filter(it => !it.closeupRequested);
   const reservedFootwear = footwearWithoutCloseup.map((item, fi) =>
     buildHaulFootwearShot(item, fi),
   );
 
+  // ── 3. Reservar detail shots para bolsos sin closeup ──────────
+  const reservedBags = bagQueue.map((item, bi) =>
+    buildHaulBagShot(item, bi),
+  );
+
+  // ── 4. Reservar detail shots para joyería sin closeup ─────────
+  const reservedJewelry = jewelryQueue.map((item, ji) =>
+    buildHaulJewelryShot(item, ji),
+  );
+
   // Espacio real para shots narrativos
-  const obligatoryCount  = reservedCloseups.length + reservedFootwear.length;
+  const obligatoryCount  = reservedCloseups.length + reservedFootwear.length + reservedBags.length + reservedJewelry.length;
   const narrativeBudget  = Math.max(0, total - obligatoryCount);
 
-  // ── 3. HAUL_OVERVIEW (apertura) ─────────────────────────────
+  // ── 5. HAUL_OVERVIEW (apertura — setup del espacio) ──────────
   if (narrativeBudget >= 1) {
     shots.push(buildHaulOverviewShot(manifest));
   }
 
-  // ── 4. Try-ons con ratio try-on:adjusting 2:1 ──────────────
-  // Reservamos 1 slot para HAUL_RECAP si hay ≥ 2 outfits y hay espacio.
+  // ── 6. Try-ons + variedad de setup/styled/adjusting ──────────
+  // Reservamos 1 slot para HAUL_RECAP si hay ≥ 2 ítems wearables y hay espacio.
   const tryOnBudgetRaw = narrativeBudget - 1; // -1 por overview
-  const wantRecap      = (tryOnQueue.length + footwearQueue.length) >= 2 && tryOnBudgetRaw >= 3;
+  const wantRecap      = (tryOnQueue.length) >= 2 && tryOnBudgetRaw >= 3;
   const tryOnBudget    = wantRecap ? tryOnBudgetRaw - 1 : tryOnBudgetRaw;
 
-  // Cobertura mínima: asegurar que cada outfit_set/garment tenga al menos 1 try-on
-  // Si hay más prendas que budget, priorizamos cobertura sobre variety (sin adjusting)
-  const mustCoverCount = Math.min(tryOnQueue.length, tryOnBudget);
-  const hasAdjustingRoom = tryOnBudget > mustCoverCount + 1;
+  // Cobertura mínima: cada outfit_set/garment tiene al menos 1 try-on
+  const hasAdjustingRoom = tryOnBudget > tryOnQueue.length + 1;
 
   let tryOnIndex = 0;
   let slotsUsed  = 0;
+  let setupIdx   = 0;
 
   while (slotsUsed < tryOnBudget && tryOnQueue.length > 0) {
-    const remaining     = tryOnQueue.length;
-    const slotsLeft     = tryOnBudget - slotsUsed;
-    // Es el último try-on si: solo queda 1 ítem o solo 1 slot
-    const isLastTryOn   = remaining === 1 || slotsLeft === 1;
-    const item          = tryOnQueue.shift()!;
-    const pileState     = derivePileState(tryOnIndex, manifest.outfitItems.length);
+    const remaining   = tryOnQueue.length;
+    const slotsLeft   = tryOnBudget - slotsUsed;
+    const isLastTryOn = remaining === 1 || slotsLeft === 1;
+    const item        = tryOnQueue.shift()!;
+    const pileState   = derivePileState(tryOnIndex, manifest.outfitItems.length);
+
+    // Intercalar 1 setup shot cada 3 try-ons para variedad — solo si hay espacio
+    const canSetup = hasAdjustingRoom &&
+      setupIdx < 2 &&
+      tryOnIndex > 0 &&
+      tryOnIndex % 3 === 0 &&
+      (tryOnBudget - slotsUsed) > (tryOnQueue.length + 1);
+    if (canSetup) {
+      shots.push(buildHaulSetupShot(item, setupIdx));
+      slotsUsed++;
+      setupIdx++;
+    }
 
     shots.push(buildHaulTryOnShot(item, tryOnIndex, manifest.outfitItems.length, isLastTryOn, pileState));
     slotsUsed++;
     tryOnIndex++;
 
-    // Intercalar 1 adjusting cada 2 try-ons, solo si:
-    //   - hay espacio sobrante tras cubrir todos los outfits restantes
-    //   - hay budget suficiente
-    const outfitsStillPending = tryOnQueue.length;
-    const slotsNeededForCoverage = outfitsStillPending;
+    // Intercalar 1 adjusting/styled cada 2 try-ons — solo si hay budget sobrante
+    const outfitsPending = tryOnQueue.length;
     const adjustingAllowed = hasAdjustingRoom &&
       slotsUsed % 2 === 0 &&
       slotsUsed < tryOnBudget &&
-      (tryOnBudget - slotsUsed) > slotsNeededForCoverage;
+      (tryOnBudget - slotsUsed) > outfitsPending;
 
     if (adjustingAllowed) {
-      shots.push(buildHaulAdjustingShot(item, tryOnIndex - 1, pileState));
+      // Alternar entre adjusting y styled-result para variedad
+      if (tryOnIndex % 2 === 0) {
+        shots.push(buildHaulAdjustingShot(item, tryOnIndex - 1, pileState));
+      } else {
+        shots.push(buildHaulStyledResultShot(item, tryOnIndex - 1, pileState));
+      }
       slotsUsed++;
     }
   }
@@ -3120,18 +3250,18 @@ export function buildHaulShotPlan(
     detailIdx++;
   }
 
-  // ── 5. HAUL_RECAP (cierre flexible) ─────────────────────────
+  // ── 7. HAUL_RECAP (cierre flexible) ─────────────────────────
   if (wantRecap && slotsUsed <= tryOnBudgetRaw) {
     shots.push(buildHaulRecapShot(manifest));
   }
 
-  // ── 6. Insertar footwear + close-ups obligatorios ──────────
-  // Footwear se intercala antes del recap cuando es posible;
-  // aquí simplemente se concatena ordenado: footwear → close-ups.
+  // ── 8. Insertar footwear → bolsos → joyería → close-ups ───────
   shots.push(...reservedFootwear);
+  shots.push(...reservedBags);
+  shots.push(...reservedJewelry);
   shots.push(...reservedCloseups);
 
-  // ── 7. Truncar a maxStoryShots (safety net) ────────────────
+  // ── 9. Truncar a maxStoryShots (safety net) ────────────────
   return shots.slice(0, total);
 }
 
@@ -3217,6 +3347,71 @@ function buildHaulTryOnShot(
     };
   }
 
+  // Variaciones por tipo de prenda
+  const kindVariations: Record<string, string[]> = {
+    outfit_set: [
+      `full body wearing the complete ${item.label} look — natural standing posture, real room behind, outfit reads clearly`,
+      `medium shot wearing ${item.label} — expression of "what do I think?", weight slightly to one side, real room`,
+      `half-turn showing the side or back of the ${item.label} outfit — candid, not posed`,
+      `mirror selfie in ${item.label} — natural composition, haul space reflected, phone held naturally`,
+    ],
+    garment: [
+      `full body wearing ${item.label}, candid — checking fit, looking down at hem or sleeve, real room behind`,
+      `medium shot wearing ${item.label}, one hand adjusting waist or sleeve, expression curious-evaluating`,
+      `half-turn or side profile wearing ${item.label} — showing drape or silhouette, natural light`,
+      `close-medium: upper body wearing ${item.label}, slight chin tilt, genuine expression, not performing for camera`,
+    ],
+    vestido: [
+      `full body wearing the ${item.label} — natural posture, hem line visible, real room behind`,
+      `spinning or mid-turn in ${item.label} — fabric movement, candid energy`,
+      `medium shot in ${item.label}, hand lightly on hip or touching hem, expression genuine`,
+      `mirror selfie in ${item.label} — full body visible in reflection, haul context behind`,
+    ],
+    chaqueta: [
+      `putting on ${item.label} — jacket mid-shrug, shoulders being settled, hands at lapels`,
+      `wearing ${item.label} open over another piece — relaxed, hands in pockets or by side`,
+      `close-up of lapel or collar of ${item.label} — fabric detail, fingers adjusting it`,
+      `full body in ${item.label}, evaluating — slight weight shift, real room behind`,
+    ],
+    enterizo: [
+      `full body in ${item.label} — natural standing posture, real room behind, seam and fit visible`,
+      `medium shot in ${item.label} — hand adjusting neckline or strap, candid expression`,
+      `half-turn showing the back of ${item.label} — detail of closure or cut`,
+      `sitting on bed edge in ${item.label} — relaxed, genuine expression, haul context around`,
+    ],
+    top: [
+      `medium-close shot wearing ${item.label} — front detail readable, slight hand on hip or tucking into pants`,
+      `full body with ${item.label} tucked or paired naturally — showing top in context`,
+      `close: hands adjusting hem or neckline of ${item.label}, candid`,
+      `medium shot — slight profile showing the cut of ${item.label}, natural light from window`,
+    ],
+    bottom: [
+      `full body wearing ${item.label} — silhouette and length readable, natural posture, real room behind`,
+      `medium-low shot emphasizing ${item.label} — top of body cropped or blurred, pants/skirt as focus`,
+      `hands adjusting waist or hem of ${item.label} — evaluating fit, candid`,
+      `half-turn showing the back and fall of ${item.label}, candid`,
+    ],
+    pantys: [
+      `${item.label} worn as styling layer — full body visible, rest of outfit in context`,
+      `leg-level or low-medium shot highlighting ${item.label} — real skin, real light`,
+      `close of hand pulling up or adjusting ${item.label} — honest styling moment`,
+      `seated on bed showing ${item.label} detail at leg level — real room background`,
+    ],
+  };
+
+  const kindKey = item.manualKind !== 'auto' ? item.manualKind : item.kind;
+  const kindVariationKey =
+    kindKey === 'look_completo' ? 'outfit_set'
+    : kindKey === 'vestido'  ? 'vestido'
+    : kindKey === 'chaqueta' ? 'chaqueta'
+    : kindKey === 'enterizo' ? 'enterizo'
+    : kindKey === 'top'      ? 'top'
+    : kindKey === 'bottom'   ? 'bottom'
+    : kindKey === 'pantys'   ? 'pantys'
+    : 'garment';
+
+  const variations = kindVariations[kindVariationKey] ?? kindVariations.garment;
+
   return {
     key:    `HAUL_TRY_ON_${shotNum}`,
     beat:   'action',
@@ -3224,12 +3419,7 @@ function buildHaulTryOnShot(
     purpose: `The person wearing ${item.label} (garment ${shotNum} of ${totalOutfits}). ${pileNote} Natural attitude — trying it on, evaluating, moving. NOT a catalog pose. Real room visible. iPhone UGC feel.`,
     requiredElements:  ['avatar_wearing_item', 'garment_clearly_visible_and_readable', 'real_environment_visible', 'natural_try_on_attitude', 'no_catalog_pose'],
     forbiddenElements: ['catalog_stance', 'studio_backdrop', 'white_background', 'mannequin_pose', 'beautification', 'ad_composition', 'editorial_lighting', 'high_fashion_look'],
-    variationSpace: [
-      `full body wearing ${item.label}, evaluating — turning, looking down, checking the fit`,
-      `medium shot wearing ${item.label}, expression of "what do I think?", real room behind`,
-      `person adjusting ${item.label}, hands active, natural try-on gesture`,
-      `full body wearing ${item.label}, candid — not posing, just wearing it naturally`,
-    ],
+    variationSpace:    variations,
     framing:     'MEDIUM_OR_WIDE',
     composition: 'TRY_ON_IN_REAL_CONTEXT',
     cameraAngle: 'EYE_LEVEL',
@@ -3369,6 +3559,122 @@ function buildHaulRecapShot(
     hpiScope:    'full',
     wearState:   'wearing_full_outfit',
     cameraMode:  'third_person',
+  };
+}
+
+// ── Haul: Setup shot (selección / organización de prendas) ───
+
+function buildHaulSetupShot(
+  item:     HaulItem,
+  setupIdx: number,
+): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
+  const shotVariations = [
+    `organizing haul items on the bed — hands active, comparing ${item.label} with another piece, casual bedroom light`,
+    `taking ${item.label} out of a bag or box — discovery moment, hands visible, natural haul energy`,
+    `holding ${item.label} up in front of body to preview without wearing it — candid evaluating pose`,
+    `looking at ${item.label} while seated on bed edge — natural selection moment, items around her`,
+  ];
+  return {
+    key:    `HAUL_SETUP_${setupIdx + 1}`,
+    beat:   'action',
+    role:   `HAUL SETUP — ${item.label}`,
+    purpose: `Selection/setup moment before trying on ${item.label}. The person is organizing or evaluating haul items — not yet wearing them. Hands active. Real bedroom context. UGC energy. NOT a catalog flatlay — this is a real person going through their haul.`,
+    requiredElements:  ['hands_active', 'real_room_context', 'garment_visible_as_object', 'natural_organic_moment'],
+    forbiddenElements: ['catalog_grid', 'studio_backdrop', 'white_background', 'editorial_lighting', 'forced_symmetry', 'full_body_catalog_pose'],
+    variationSpace:    shotVariations,
+    framing:     'MEDIUM_OR_CLOSE',
+    composition: 'HANDS_ACTIVE_WITH_GARMENT',
+    cameraAngle: 'EYE_LEVEL_OR_SLIGHT_HIGH',
+    hpiAllowed:  false,
+    wearState:   'not_wearing_final_outfit',
+    cameraMode:  'third_person',
+  };
+}
+
+// ── Haul: Styled result shot (look final puesto — variedad) ──
+
+function buildHaulStyledResultShot(
+  item:      HaulItem,
+  itemIndex: number,
+  pileState: HaulPileState,
+): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
+  const pileNote = pileStateDesc(pileState, itemIndex);
+  return {
+    key:    `HAUL_STYLED_${itemIndex + 1}`,
+    beat:   'reveal',
+    role:   `STYLED RESULT — ${item.label}`,
+    purpose: `The person is wearing ${item.label} and has finished styling it. ${pileNote} This is the "reveal" moment — full look readable. Different framing than the try-on shot for the same piece. Can be: mirror shot, seated on bed, leaning against wall, or medium frame showing the styled result from a different angle than the preceding try-on.`,
+    requiredElements:  ['avatar_wearing_item', 'garment_clearly_readable', 'different_framing_than_try_on'],
+    forbiddenElements: ['same_framing_as_try_on', 'catalog_stance', 'editorial_lighting', 'mannequin_pose', 'beautification'],
+    variationSpace: [
+      `mirror selfie showing ${item.label} fully — natural posture, haul space reflected behind`,
+      `seated on bed edge wearing ${item.label} — relaxed, looking at camera or slightly off`,
+      `medium shot leaning against wall — natural weight shift, ${item.label} clearly readable`,
+      `half-turn showing the back or side of ${item.label} — candid, real lighting`,
+    ],
+    framing:     'MEDIUM_OR_WIDE',
+    composition: 'STYLED_RESULT_REVEAL',
+    cameraAngle: 'EYE_LEVEL',
+    hpiAllowed:  true,
+    hpiScope:    'full',
+    wearState:   'wearing_full_outfit',
+    cameraMode:  'mirror_selfie_phone_hidden',
+  };
+}
+
+// ── Haul: Bag/bolso shot ──────────────────────────────────────
+
+function buildHaulBagShot(
+  item:  HaulItem,
+  bagIdx: number,
+): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
+  return {
+    key:    `HAUL_BAG_${bagIdx + 1}`,
+    beat:   'detail',
+    role:   `BAG / BOLSO — ${item.label}`,
+    purpose: `${item.label} is a bag or purse. Show it as a product with character — not a catalog shot. Options: held casually over shoulder or in hand, resting on bed near haul pile, detail of hardware or stitching, being opened or adjusted. Real room light. The bag is the protagonist. Do NOT invent a full outfit around it.`,
+    requiredElements:  ['bag_clearly_visible', 'real_light_and_texture', 'intimate_or_contextual_framing'],
+    forbiddenElements: ['white_studio_background', 'catalog_product_shot', 'editorial_lighting', 'forced_symmetry', 'invented_full_outfit_for_context'],
+    variationSpace: [
+      `${item.label} held casually over shoulder or in hand — natural posture, room visible behind`,
+      `${item.label} resting on bed or haul pile — design and texture readable, real light`,
+      `close-up of ${item.label} hardware, stitching, or clasp — macro real texture`,
+      `person opening or adjusting ${item.label} — hands active, candid interaction`,
+    ],
+    framing:     'MEDIUM_OR_CLOSE',
+    composition: 'BAG_AS_PROTAGONIST',
+    cameraAngle: 'EYE_LEVEL_OR_SLIGHT_ANGLE',
+    hpiAllowed:  false,
+    wearState:   'not_wearing_final_outfit',
+    cameraMode:  'third_person',
+  };
+}
+
+// ── Haul: Jewelry shot ────────────────────────────────────────
+
+function buildHaulJewelryShot(
+  item:       HaulItem,
+  jewelryIdx: number,
+): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
+  return {
+    key:    `HAUL_JEWELRY_${jewelryIdx + 1}`,
+    beat:   'detail',
+    role:   `JEWELRY — ${item.label}`,
+    purpose: `${item.label} is a jewelry piece. Show it intimately — not a catalog shot. Options: worn on the body (ear, wrist, neck, finger) with natural light, held between fingers close to camera, resting on fabric or a real surface. Macro or semi-macro framing. Real skin texture if worn. Do NOT invent other garments around it.`,
+    requiredElements:  ['jewelry_clearly_visible', 'real_light', 'intimate_macro_framing'],
+    forbiddenElements: ['white_studio_background', 'catalog_product_shot', 'editorial_lighting', 'full_body_outfit_invented'],
+    variationSpace: [
+      `${item.label} worn on body — ear, wrist, or neck visible, natural light, real skin texture`,
+      `${item.label} held between fingers — macro framing, design and detail readable`,
+      `${item.label} resting on fabric surface (bed, clothes) — real environment, intimate`,
+      `person putting on or adjusting ${item.label} — candid gesture, hands and jewelry in frame`,
+    ],
+    framing:     'CLOSE_UP_OR_MACRO',
+    composition: 'JEWELRY_INTIMATE_DETAIL',
+    cameraAngle: 'SLIGHT_ANGLE_OR_STRAIGHT',
+    hpiAllowed:  false,
+    wearState:   'not_wearing_final_outfit',
+    cameraMode:  'detail_macro',
   };
 }
 
@@ -4162,10 +4468,41 @@ export async function generatePhotodumpShot(
       // footwear detail: solo el calzado + avatar mínimo (manos/pie)
       const footwearIdx = Math.max(0, parseInt(shotKey.replace('HAUL_FOOTWEAR_', ''), 10) - 1);
       if (refs.avatarRef) refsToPass.push(refs.avatarRef);
-      // Calzado vive en outfitItems pero con kind=footwear
-      const buildManifestForRouting = buildHaulManifest(refs, 20);
-      const footwearRef = buildManifestForRouting.footwearItems[footwearIdx]?.refUrl;
+      const manifestForRouting = buildHaulManifest(refs, 20);
+      const footwearRef = manifestForRouting.footwearItems[footwearIdx]?.refUrl;
       if (footwearRef) refsToPass.push(footwearRef);
+
+    } else if (shotKey.startsWith('HAUL_BAG_')) {
+      // bolso detail: solo el bolso + avatar mínimo
+      const bagIdx = Math.max(0, parseInt(shotKey.replace('HAUL_BAG_', ''), 10) - 1);
+      if (refs.avatarRef) refsToPass.push(refs.avatarRef);
+      const manifestForBag = buildHaulManifest(refs, 20);
+      const bagItems = manifestForBag.accessoryItems.filter(it => it.kind === 'bag');
+      const bagRef = bagItems[bagIdx]?.refUrl;
+      if (bagRef) refsToPass.push(bagRef);
+
+    } else if (shotKey.startsWith('HAUL_JEWELRY_')) {
+      // joyería detail: solo la joya + avatar mínimo
+      const jewIdx = Math.max(0, parseInt(shotKey.replace('HAUL_JEWELRY_', ''), 10) - 1);
+      if (refs.avatarRef) refsToPass.push(refs.avatarRef);
+      const manifestForJew = buildHaulManifest(refs, 20);
+      const jewItems = manifestForJew.accessoryItems.filter(it => it.kind === 'jewelry');
+      const jewRef = jewItems[jewIdx]?.refUrl;
+      if (jewRef) refsToPass.push(jewRef);
+
+    } else if (shotKey.startsWith('HAUL_SETUP_')) {
+      // setup shot: avatar + la prenda correspondiente como objeto
+      const setupIdx = Math.max(0, parseInt(shotKey.replace('HAUL_SETUP_', ''), 10) - 1);
+      if (refs.avatarRef) refsToPass.push(refs.avatarRef);
+      // El ítem del setup corresponde a tryOnIndex en ese momento — usamos subset de 3 como fallback
+      allOutfits.slice(0, 3).forEach(r => refsToPass.push(r));
+
+    } else if (shotKey.startsWith('HAUL_STYLED_')) {
+      // styled result: avatar x2 + misma prenda del try-on correspondiente
+      const styledIdx = Math.max(0, parseInt(shotKey.replace('HAUL_STYLED_', ''), 10) - 1);
+      if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef);
+      if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
+      if (allOutfits[styledIdx]) refsToPass.push(allOutfits[styledIdx]);
 
     } else {
       // HAUL_RECAP y cualquier otro shot: avatar x2 + subset de 3 prendas
@@ -4269,6 +4606,9 @@ export async function generatePhotodumpShot(
     && !(shot.key ?? '').startsWith('HAUL_ACCESSORY_CLOSEUP_')
     && !(shot.key ?? '').startsWith('HAUL_DETAIL_')
     && !(shot.key ?? '').startsWith('HAUL_FOOTWEAR_')
+    && !(shot.key ?? '').startsWith('HAUL_BAG_')
+    && !(shot.key ?? '').startsWith('HAUL_JEWELRY_')
+    && !(shot.key ?? '').startsWith('HAUL_SETUP_')
     && shot.key !== 'UNBOXING_PACKAGING_CLOSED'
     && shot.key !== 'UNBOXING_PRODUCT_REVEAL'
     && shot.key !== 'UNBOXING_PRODUCT_DETAIL'
@@ -4357,6 +4697,26 @@ This shot showcases the piece itself as part of the haul/outfit story.`
 Do NOT generate a full outfit from this shoe reference alone.
 Show the footwear as: a close-up detail, held by hand, placed on a surface, or being tried on at foot level.
 Do NOT invent a complete look. The shoe IS the subject.`
+                : shotKey_.startsWith('HAUL_BAG_')
+                ? `BAG / BOLSO — THIS SHOT: The reference provided is a STANDALONE BAG or PURSE.
+Do NOT generate a full outfit around it. Show the bag as protagonist — held, worn over shoulder, resting on bed, or detail of hardware/stitching.
+Real room context. Natural light. The bag IS the subject of this shot.`
+                : shotKey_.startsWith('HAUL_JEWELRY_')
+                ? `JEWELRY ITEM — THIS SHOT: The reference provided is a JEWELRY PIECE.
+Do NOT generate a full outfit for context. Show the jewelry intimately — worn on body (ear, neck, wrist, finger), held between fingers, or resting on fabric.
+Macro or semi-macro framing. Real skin texture if worn. The jewelry IS the subject.`
+                : shotKey_.startsWith('HAUL_SETUP_')
+                ? `HAUL SETUP MOMENT — THIS SHOT: Show the person interacting with haul items as OBJECTS (not yet worn).
+Hands active — organizing, selecting, holding up to preview. Real room context. UGC energy.
+Do NOT show a full-body catalog pose. This is a natural selection/organizing moment.`
+                : shotKey_.startsWith('HAUL_STYLED_')
+                ? `STYLED RESULT — THIS SHOT: The person IS wearing the garment reference. Reveal moment — different framing than the preceding try-on.
+Copy the garment EXACTLY. Natural posture — not a catalog stance. Real room visible.
+
+⛔ AVATAR BASE CLOTHING IS NOT A HAUL ITEM:
+The clothing visible in the avatar or body reference is identity reference ONLY.
+Do NOT recreate, feature, or transform avatar base clothing into a haul piece.
+The only haul garment for this shot is the GARMENT REFERENCE attached to this prompt.`
                 : `HAUL GARMENT — THIS SHOT: The garment reference provided is the SPECIFIC piece the person is wearing or showing right now.
 Copy it EXACTLY — same color, fabric, cut, fit, silhouette.
 The person wears it naturally, evaluating how it looks. NOT a catalog pose. NOT a styled editorial look.
@@ -4403,6 +4763,29 @@ REF0 is a world anchor — use it for room, light, and environment.
 Do NOT recreate the same pose, same camera distance, same crop, or same arrangement as REF0.
 This shot MUST have a different action, framing, or focus than REF0.
 ${shotOutfitInstruction}
+
+🔒 ENVIRONMENTAL CONTINUITY — HAUL SPACE (HARD LOCK):
+REF0 defines the physical world of this haul. Every shot in this set exists inside that SAME REAL ROOM.
+MANDATORY to preserve across ALL shots:
+  • Same bedroom / dressing area — same walls, same floor material, same dominant furniture
+  • Same bed (size, headboard, sheets color/pattern)
+  • Same rack, chair, dresser, or mirror if visible in REF0
+  • Same window position and natural light direction
+  • Same color temperature — warm/cool balance must not shift between shots
+  • Same spatial layout — do NOT rearrange furniture between shots
+  • Haul items (clothes, bags, boxes) may shift naturally as the session progresses — this is expected
+ALLOWED CHANGES between shots (camera only):
+  ✅ Camera angle (closer, farther, different corner of the room)
+  ✅ Framing and crop
+  ✅ Subject position within the room
+  ✅ Haul pile size growing naturally as more items are tried
+FORBIDDEN CHANGES (hard failure — invalidates the shot):
+  ❌ Different bedroom or different room
+  ❌ Different wall color or floor material
+  ❌ Different bed or furniture arrangement
+  ❌ Hotel lobby, photo studio, white backdrop, or any non-bedroom environment
+  ❌ Changing light source direction or color temperature
+  ❌ Adding decorative elements not present in REF0
 
 ⚠️ REFERENCE ROLE — HAUL RULES:
 Garment references are photos of the SPECIFIC GARMENT for this shot — not a person wearing it.

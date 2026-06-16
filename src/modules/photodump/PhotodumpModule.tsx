@@ -485,9 +485,13 @@ const PhotodumpModule: React.FC = () => {
                   contradictions.push(`${shotKey}: closeup shot with 0 refs — accessory ref missing`);
                 }
               }
-              // Footwear sin ref
-              if (shotKey.startsWith('HAUL_FOOTWEAR_') && (result.refsCount ?? 0) < 1) {
-                contradictions.push(`${shotKey}: footwear shot with 0 refs — footwear ref missing`);
+              // Footwear / bag / jewelry sin ref
+              if ((shotKey.startsWith('HAUL_FOOTWEAR_') || shotKey.startsWith('HAUL_BAG_') || shotKey.startsWith('HAUL_JEWELRY_')) && (result.refsCount ?? 0) < 1) {
+                contradictions.push(`${shotKey}: product detail shot with 0 refs — item ref missing`);
+              }
+              // Styled result sin ref
+              if (shotKey.startsWith('HAUL_STYLED_') && (result.refsCount ?? 0) < 2) {
+                contradictions.push(`${shotKey}: styled result shot with only ${result.refsCount} refs (expected ≥2: avatar + item)`);
               }
               // Recap sin refs
               if (shotKey === 'HAUL_RECAP' && (result.refsCount ?? 0) < 1) {
