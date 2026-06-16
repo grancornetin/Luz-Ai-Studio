@@ -20,6 +20,7 @@ import {
   OutfitBriefContext, OutfitDestinationClass, PrepEnvironmentClass, OutfitComposition,
   PoseIntent, DetailKind, EnvironmentAffordance, SceneContinuityMode,
   HaulItem, HaulManifest, HaulItemKind, HaulPileState, HaulCoveragePlan, HaulRefKind,
+  HaulResolvedKind, HaulCoverageRole, HaulCoverageLedgerItem,
 } from './types';
 import {
   getStorySupportFamilies, initPhotodumpIntelligence, StorySupportFamily,
@@ -2958,6 +2959,81 @@ function distributeOutfitCheckShots(count: number, hasDestinationClosure: boolea
 
 // Mapea HaulRefKind (valor de UI) → HaulItemKind (interno del planner).
 // El valor de UI tiene más granularidad, lo colapsamos para el planner.
+// Normaliza HaulRefKind → HaulResolvedKind (más específico que HaulItemKind)
+function resolveHaulKind(manualKind: HaulRefKind, heuristicKind?: HaulItemKind): HaulResolvedKind {
+  switch (manualKind) {
+    case 'look_completo':  return 'full_outfit';
+    case 'varios_items':   return 'mixed_set';
+    case 'top':            return 'top';
+    case 'bottom':         return 'bottom';
+    case 'vestido':        return 'dress';
+    case 'enterizo':       return 'onepiece';
+    case 'chaqueta':       return 'outerwear';
+    case 'calzado':        return 'footwear';
+    case 'pantys':         return 'hosiery';
+    case 'bolso':          return 'bag';
+    case 'joyeria':        return 'jewelry';
+    case 'accesorio':      return 'accessory';
+    case 'auto':
+    default:
+      // fallback a heurística si existe
+      if (heuristicKind === 'footwear') return 'footwear';
+      if (heuristicKind === 'bag')      return 'bag';
+      if (heuristicKind === 'jewelry')  return 'jewelry';
+      if (heuristicKind === 'accessory') return 'accessory';
+      if (heuristicKind === 'outfit_set') return 'full_outfit';
+      if (heuristicKind === 'mixed')    return 'mixed_set';
+      return 'unknown_visual_item';
+  }
+}
+
+// Etiqueta en inglés para prompt — governa cómo el modelo interpreta el ítem
+function resolvedKindToPromptLabel(rk: HaulResolvedKind): string {
+  const labels: Record<HaulResolvedKind, string> = {
+    full_outfit:         'COORDINATED FULL LOOK (pieces intended to be worn together)',
+    mixed_set:           'MULTI-ITEM PRODUCT SET (several products, not necessarily one outfit)',
+    top:                 'INDIVIDUAL TOP (blouse, shirt, t-shirt, corset, or camisole)',
+    bottom:              'INDIVIDUAL BOTTOM (pants, skirt, shorts, or jeans)',
+    dress:               'DRESS OR MAXI-DRESS (one-piece main garment, shoulder to hem)',
+    onepiece:            'ONE-PIECE / JUMPSUIT / BODYSUIT (coverall garment, head to toe or similar)',
+    outerwear:           'OUTERWEAR / JACKET / BLAZER / COAT (outer layer worn on top)',
+    footwear:            'STANDALONE FOOTWEAR (shoe, boot, sandal, sneaker — NOT a full outfit)',
+    hosiery:             'HOSIERY / PANTYHOSE / LEGGINGS / BASE LAYER (styling layer, not main garment)',
+    bag:                 'STANDALONE BAG / PURSE (handbag, tote, clutch, crossbody — NOT a full outfit)',
+    jewelry:             'JEWELRY PIECE (earrings, necklace, ring, bracelet — intimate framing required)',
+    accessory:           'GENERIC ACCESSORY (belt, hat, cap, glasses, scarf — worn or displayed as detail)',
+    unknown_visual_item: 'VISUAL ITEM (type auto-detected — inspect reference carefully)',
+  };
+  return labels[rk] ?? 'VISUAL ITEM';
+}
+
+// Genera el bloque de interpretación del ítem para el prompt final
+function buildHaulItemTypeBlock(item: HaulItem): string {
+  const isManual = item.manualKind !== 'auto';
+  const tagSource = isManual ? 'MANUAL USER TAG' : 'AUTO-DETECTED';
+  return `REFERENCE ITEM INTERPRETATION — ${item.label}:
+${tagSource}: ${item.manualKind.toUpperCase()}
+RESOLVED KIND: ${item.resolvedKind.toUpperCase()}
+PROMPT GUIDANCE: ${item.promptKindLabel}
+
+${item.resolvedKind === 'full_outfit' ? `→ Treat as a COORDINATED OUTFIT/LOOK. The pieces shown together are intended to be worn as a set.
+   Preserve the combination logic and styling relationship between visible pieces.
+   Do NOT reduce it to one isolated garment. If a neutral base is needed for missing pieces, use the simplest neutral possible — it must NOT become the hero.` : ''}${item.resolvedKind === 'mixed_set' ? `→ Treat as a PRODUCT GROUP — multiple items in one image, not necessarily one complete outfit.
+   Do NOT assume every piece goes together unless the reference clearly shows it.
+   Show the person interacting with one or more items naturally.` : ''}${item.resolvedKind === 'dress' ? `→ Treat as a DRESS or ONE-PIECE. It is the main garment — top to hem.
+   Do NOT treat it as a generic garment. Ensure the full silhouette reads clearly.` : ''}${item.resolvedKind === 'onepiece' ? `→ Treat as a JUMPSUIT / BODYSUIT / ONEPIECE. It covers the body as a single piece.
+   Show the full silhouette. Do NOT show it as two separate pieces.` : ''}${item.resolvedKind === 'outerwear' ? `→ Treat as OUTERWEAR. It is a jacket, blazer, or coat worn as an outer layer.
+   It may be worn open over another piece, or shown being put on. Do NOT invent what is underneath unless visible.` : ''}${item.resolvedKind === 'footwear' ? `→ Treat as STANDALONE FOOTWEAR. Do NOT invent a complete outfit around the shoe.
+   Show it: held, placed on surface, at foot level, or as a close-up detail. The shoe IS the subject.` : ''}${item.resolvedKind === 'bag' ? `→ Treat as a STANDALONE BAG. Do NOT build a full outfit around it.
+   Show it: held, worn on shoulder, resting on bed, or with hardware/texture close-up. The bag IS the subject.` : ''}${item.resolvedKind === 'jewelry' ? `→ Treat as a JEWELRY PIECE. Use intimate/macro framing: worn on body, held between fingers, or resting on fabric.
+   Do NOT generate a full outfit for context. The jewelry IS the subject.` : ''}${item.resolvedKind === 'hosiery' ? `→ Treat as a HOSIERY / STYLING LAYER. It is NOT a standalone outfit.
+   Show it as a layering piece. A supporting garment for context is allowed but must not become the hero.` : ''}${item.resolvedKind === 'top' ? `→ Treat as an INDIVIDUAL TOP. Show it worn with a neutral bottom (pants/skirt) for context.
+   The top must be the clear visual focus. Do NOT let the bottom piece dominate.` : ''}${item.resolvedKind === 'bottom' ? `→ Treat as an INDIVIDUAL BOTTOM. Show it with a simple neutral top for context.
+   The bottom piece must be the clear visual focus — length, silhouette, fit.` : ''}${item.resolvedKind === 'accessory' ? `→ Treat as a GENERIC ACCESSORY. Show it worn, held, or displayed as a detail.
+   Do NOT treat it as the centerpiece of a full outfit if it is a small piece.` : ''}
+CRITICAL: The manualKind tag overrides any visual inference. Trust the user's classification.`;
+}
+
 function haulRefKindToItemKind(refKind: HaulRefKind): HaulItemKind {
   switch (refKind) {
     case 'look_completo':  return 'outfit_set';
@@ -3022,6 +3098,8 @@ export function buildHaulManifest(refs: PhotodumpRefs, requestedCount: number): 
   rawOutfits.forEach((url, i) => {
     const manualKind: HaulRefKind = outfitManualKinds[i] ?? 'auto';
     const kind = inferHaulItemKind(`Prenda ${i + 1}`, i, manualKind);
+    const resolvedKind = resolveHaulKind(manualKind, kind);
+    const promptKindLabel = resolvedKindToPromptLabel(resolvedKind);
 
     // Etiqueta descriptiva según el tipo elegido
     const kindLabel: Record<HaulItemKind, string> = {
@@ -3043,6 +3121,8 @@ export function buildHaulManifest(refs: PhotodumpRefs, requestedCount: number): 
       refUrl:                    url,
       kind,
       manualKind,
+      resolvedKind,
+      promptKindLabel,
       label,
       closeupRequested:          false,
       tryOnEligible:             isTryOnEligible,
@@ -3070,18 +3150,21 @@ export function buildHaulManifest(refs: PhotodumpRefs, requestedCount: number): 
 
   const accessoryItems: HaulItem[] = rawAccs.map((url, i) => {
     const manualKind: HaulRefKind = accManualKinds[i] ?? 'auto';
-    // Para accesorios, el kind derivado es más granular
     const accKind: HaulItemKind =
       manualKind === 'bolso'   ? 'bag'
       : manualKind === 'joyeria' ? 'jewelry'
       : manualKind === 'calzado' ? 'footwear'
       : 'accessory';
+    const resolvedKind = resolveHaulKind(manualKind, accKind);
+    const promptKindLabel = resolvedKindToPromptLabel(resolvedKind);
     return {
       id:                        `acc_${i}`,
       sourceIndex:               i,
       refUrl:                    url,
       kind:                      accKind,
       manualKind,
+      resolvedKind,
+      promptKindLabel,
       label:                     `Accesorio ${i + 1}`,
       closeupRequested:          !!closeupArr[i],
       tryOnEligible:             false,
@@ -3111,6 +3194,21 @@ export function buildHaulManifest(refs: PhotodumpRefs, requestedCount: number): 
   ];
   const optionalItemIds        = accessoryItems.filter(it => !it.closeupRequested).map(it => it.id);
 
+  // Construir ledger real — plannedHeroShots se rellena en buildHaulShotPlan
+  const ledger: HaulCoverageLedgerItem[] = allItems.map(it => ({
+    itemId:                     it.id,
+    manualKind:                 it.manualKind,
+    resolvedKind:               it.resolvedKind,
+    label:                      it.label,
+    required:                   it.priority === 'required',
+    plannedHeroShots:           0,
+    plannedSupportShots:        0,
+    actualPromptedHeroShots:    0,
+    actualPromptedSupportShots: 0,
+    coverageStatus:             'uncovered' as const,
+    shotIds:                    [],
+  }));
+
   const coveragePlan: HaulCoveragePlan = {
     requiredTryOnItemIds,
     requiredCloseupItemIds,
@@ -3118,6 +3216,11 @@ export function buildHaulManifest(refs: PhotodumpRefs, requestedCount: number): 
     optionalItemIds,
     plannedCoverage: Object.fromEntries(allItems.map(it => [it.id, 0])),
     missingCoverage: [],
+    ledger,
+    uncoveredRequiredItems: [],
+    supportOnlyItems:       [],
+    overexposedItems:       [],
+    coverageWarnings:       [],
   };
 
   return {
@@ -3146,106 +3249,157 @@ export function buildHaulManifest(refs: PhotodumpRefs, requestedCount: number): 
 export function buildHaulShotPlan(
   manifest: HaulManifest,
 ): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
-  const total = manifest.maxStoryShots;
+  const total  = manifest.maxStoryShots;
   const shots: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] = [];
+
+  // ── Ledger tracking (mutable durante el planning) ──────────
+  const ledgerMap = new Map<string, HaulCoverageLedgerItem>(
+    manifest.coveragePlan.ledger.map(l => [l.itemId, { ...l }]),
+  );
+  const addHeroShot   = (itemId: string, shotKey: string) => {
+    const l = ledgerMap.get(itemId);
+    if (l) { l.plannedHeroShots++; l.shotIds.push(shotKey); }
+  };
+  const addSupportShot = (itemId: string, shotKey: string) => {
+    const l = ledgerMap.get(itemId);
+    if (l) { l.plannedSupportShots++; l.shotIds.push(shotKey); }
+  };
 
   // ── Queues mutables del planner ────────────────────────────
   const tryOnQueue    = [...manifest.tryOnItems];
   const closeupQueue  = [...manifest.closeupItems];
-  // Footwear y bolsos sin closeup marcado → shots de detalle
   const footwearQueue = [...manifest.footwearItems];
   const bagQueue      = manifest.accessoryItems.filter(it => it.kind === 'bag' && !it.closeupRequested);
   const jewelryQueue  = manifest.accessoryItems.filter(it => it.kind === 'jewelry' && !it.closeupRequested);
 
   // ── 1. Reservar close-ups obligatorios (ítems marcados con ⭐) ─
-  const reservedCloseups = closeupQueue.map((item, ci) =>
-    buildHaulAccessoryCloseupShot(item, ci),
-  );
+  const reservedCloseups = closeupQueue.map((item, ci) => {
+    const shot = buildHaulAccessoryCloseupShot(item, ci);
+    addHeroShot(item.id, shot.key);
+    return shot;
+  });
 
   // ── 2. Reservar detail shots para calzado suelto sin closeup ──
   const footwearWithoutCloseup = footwearQueue.filter(it => !it.closeupRequested);
-  const reservedFootwear = footwearWithoutCloseup.map((item, fi) =>
-    buildHaulFootwearShot(item, fi),
-  );
+  const reservedFootwear = footwearWithoutCloseup.map((item, fi) => {
+    const shot = buildHaulFootwearShot(item, fi);
+    addHeroShot(item.id, shot.key);
+    return shot;
+  });
 
   // ── 3. Reservar detail shots para bolsos sin closeup ──────────
-  const reservedBags = bagQueue.map((item, bi) =>
-    buildHaulBagShot(item, bi),
-  );
+  const reservedBags = bagQueue.map((item, bi) => {
+    const shot = buildHaulBagShot(item, bi);
+    addHeroShot(item.id, shot.key);
+    return shot;
+  });
 
   // ── 4. Reservar detail shots para joyería sin closeup ─────────
-  const reservedJewelry = jewelryQueue.map((item, ji) =>
-    buildHaulJewelryShot(item, ji),
-  );
+  const reservedJewelry = jewelryQueue.map((item, ji) => {
+    const shot = buildHaulJewelryShot(item, ji);
+    addHeroShot(item.id, shot.key);
+    return shot;
+  });
 
   // Espacio real para shots narrativos
-  const obligatoryCount  = reservedCloseups.length + reservedFootwear.length + reservedBags.length + reservedJewelry.length;
-  const narrativeBudget  = Math.max(0, total - obligatoryCount);
+  const obligatoryCount = reservedCloseups.length + reservedFootwear.length + reservedBags.length + reservedJewelry.length;
+  const narrativeBudget = Math.max(0, total - obligatoryCount);
 
   // ── 5. HAUL_OVERVIEW (apertura — setup del espacio) ──────────
   if (narrativeBudget >= 1) {
-    shots.push(buildHaulOverviewShot(manifest));
+    const overview = buildHaulOverviewShot(manifest);
+    shots.push(overview);
+    // El overview es un support shot para todos los ítems wearables
+    manifest.outfitItems.forEach(it => addSupportShot(it.id, overview.key));
   }
 
-  // ── 6. Try-ons + variedad de setup/styled/adjusting ──────────
-  // Reservamos 1 slot para HAUL_RECAP si hay ≥ 2 ítems wearables y hay espacio.
+  // ── 6. Try-ons con BALANCE ENFORCEMENT ───────────────────────
+  // REGLA CRÍTICA: todos los ítems wearables deben tener ≥ 1 hero shot
+  // ANTES de que cualquier ítem reciba un segundo hero shot (adjusting/styled).
   const tryOnBudgetRaw = narrativeBudget - 1; // -1 por overview
-  const wantRecap      = (tryOnQueue.length) >= 2 && tryOnBudgetRaw >= 3;
+  const wantRecap      = tryOnQueue.length >= 2 && tryOnBudgetRaw >= 3;
   const tryOnBudget    = wantRecap ? tryOnBudgetRaw - 1 : tryOnBudgetRaw;
 
-  // Cobertura mínima: cada outfit_set/garment tiene al menos 1 try-on
-  const hasAdjustingRoom = tryOnBudget > tryOnQueue.length + 1;
+  // Primera pasada: garantizar 1 try-on por cada ítem wearable
+  const pendingTryOns   = [...tryOnQueue]; // copia para primera pasada
+  const coveredByFirst  = new Set<string>(); // ids con al menos 1 hero shot
 
   let tryOnIndex = 0;
   let slotsUsed  = 0;
   let setupIdx   = 0;
 
-  while (slotsUsed < tryOnBudget && tryOnQueue.length > 0) {
-    const remaining   = tryOnQueue.length;
-    const slotsLeft   = tryOnBudget - slotsUsed;
-    const isLastTryOn = remaining === 1 || slotsLeft === 1;
-    const item        = tryOnQueue.shift()!;
-    const pileState   = derivePileState(tryOnIndex, manifest.outfitItems.length);
+  // Primera pasada — 1 shot por ítem, en orden
+  while (slotsUsed < tryOnBudget && pendingTryOns.length > 0) {
+    const item      = pendingTryOns.shift()!;
+    const remaining = pendingTryOns.length;
+    const slotsLeft = tryOnBudget - slotsUsed;
+    const isLast    = remaining === 0 || slotsLeft === 1;
+    const pileState = derivePileState(tryOnIndex, manifest.outfitItems.length);
 
-    // Intercalar 1 setup shot cada 3 try-ons para variedad — solo si hay espacio
-    const canSetup = hasAdjustingRoom &&
+    // Setup intercalado cada 3 try-ons, solo si hay espacio después de cubrir todos
+    const allWillBeCovered = (tryOnBudget - slotsUsed - 1) >= pendingTryOns.length;
+    const canSetup = allWillBeCovered &&
       setupIdx < 2 &&
       tryOnIndex > 0 &&
       tryOnIndex % 3 === 0 &&
-      (tryOnBudget - slotsUsed) > (tryOnQueue.length + 1);
+      slotsLeft > pendingTryOns.length + 1;
     if (canSetup) {
-      shots.push(buildHaulSetupShot(item, setupIdx));
+      const setupShot = buildHaulSetupShot(item, setupIdx);
+      shots.push(setupShot);
+      addSupportShot(item.id, setupShot.key);
       slotsUsed++;
       setupIdx++;
     }
 
-    shots.push(buildHaulTryOnShot(item, tryOnIndex, manifest.outfitItems.length, isLastTryOn, pileState));
+    if (slotsUsed >= tryOnBudget) break;
+
+    const tryOnShot = buildHaulTryOnShot(item, tryOnIndex, manifest.outfitItems.length, isLast, pileState);
+    shots.push(tryOnShot);
+    addHeroShot(item.id, tryOnShot.key);
+    coveredByFirst.add(item.id);
     slotsUsed++;
     tryOnIndex++;
+  }
 
-    // Intercalar 1 adjusting/styled cada 2 try-ons — solo si hay budget sobrante
-    const outfitsPending = tryOnQueue.length;
-    const adjustingAllowed = hasAdjustingRoom &&
-      slotsUsed % 2 === 0 &&
-      slotsUsed < tryOnBudget &&
-      (tryOnBudget - slotsUsed) > outfitsPending;
+  // Segunda pasada — shots de variedad (adjusting/styled) solo para ítems ya cubiertos
+  // y solo si quedó budget sobrante DESPUÉS de que todos tienen al menos 1 hero shot
+  const allRequiredCovered = manifest.tryOnItems.every(it => coveredByFirst.has(it.id));
+  if (allRequiredCovered) {
+    // Iterar de nuevo por los ítems para dar segundos shots en orden — no siempre al mismo
+    const varietyCandidates = [...manifest.tryOnItems];
+    let varietyIdx = 0;
+    while (slotsUsed < tryOnBudget && varietyCandidates.length > 0) {
+      const item      = varietyCandidates[varietyIdx % varietyCandidates.length];
+      const pileState = derivePileState(manifest.tryOnItems.indexOf(item), manifest.outfitItems.length);
+      const heroCount = ledgerMap.get(item.id)?.plannedHeroShots ?? 0;
 
-    if (adjustingAllowed) {
-      // Alternar entre adjusting y styled-result para variedad
-      if (tryOnIndex % 2 === 0) {
-        shots.push(buildHaulAdjustingShot(item, tryOnIndex - 1, pileState));
-      } else {
-        shots.push(buildHaulStyledResultShot(item, tryOnIndex - 1, pileState));
+      // No dar más de 2 hero shots a ningún ítem (cap de sobreexposición)
+      if (heroCount < 2) {
+        if (tryOnIndex % 2 === 0) {
+          const adj = buildHaulAdjustingShot(item, manifest.tryOnItems.indexOf(item), pileState);
+          shots.push(adj);
+          addHeroShot(item.id, adj.key);
+        } else {
+          const stl = buildHaulStyledResultShot(item, manifest.tryOnItems.indexOf(item), pileState);
+          shots.push(stl);
+          addHeroShot(item.id, stl.key);
+        }
+        slotsUsed++;
+        tryOnIndex++;
       }
-      slotsUsed++;
+      varietyIdx++;
+      // salir si dimos vuelta completa sin poder añadir nada
+      if (varietyIdx >= varietyCandidates.length * 2) break;
     }
   }
 
-  // Si sobraron slots, agregar detail shots de prendas ya cubiertas
-  const coveredItems = [...manifest.outfitItems].slice(0, tryOnIndex);
+  // Slots sobrantes → detail shots (ya cubiertos, solo textura/macro)
+  const coveredItemsList = manifest.outfitItems.filter(it => coveredByFirst.has(it.id));
   let detailIdx = 0;
-  while (slotsUsed < tryOnBudget && detailIdx < coveredItems.length) {
-    shots.push(buildHaulDetailGarmentShot(coveredItems[detailIdx], detailIdx));
+  while (slotsUsed < tryOnBudget && detailIdx < coveredItemsList.length) {
+    const shot = buildHaulDetailGarmentShot(coveredItemsList[detailIdx], detailIdx);
+    shots.push(shot);
+    addSupportShot(coveredItemsList[detailIdx].id, shot.key);
     slotsUsed++;
     detailIdx++;
   }
@@ -3261,7 +3415,43 @@ export function buildHaulShotPlan(
   shots.push(...reservedJewelry);
   shots.push(...reservedCloseups);
 
-  // ── 9. Truncar a maxStoryShots (safety net) ────────────────
+  // ── 9. Actualizar ledger con status final ─────────────────────
+  ledgerMap.forEach((entry, itemId) => {
+    if (entry.plannedHeroShots === 0 && entry.plannedSupportShots === 0) {
+      entry.coverageStatus = 'uncovered';
+    } else if (entry.plannedHeroShots === 0) {
+      entry.coverageStatus = 'support_only';
+    } else if (entry.required && entry.plannedHeroShots >= 3) {
+      entry.coverageStatus = 'overexposed';
+    } else {
+      entry.coverageStatus = 'covered';
+    }
+    // Escribir de vuelta en el manifest para que esté disponible en debug
+    const idx = manifest.coveragePlan.ledger.findIndex(l => l.itemId === itemId);
+    if (idx >= 0) manifest.coveragePlan.ledger[idx] = entry;
+    manifest.coveragePlan.plannedCoverage[itemId] = entry.plannedHeroShots + entry.plannedSupportShots;
+  });
+
+  // Calcular listas de warnings
+  const requiredIds = manifest.allItems.filter(it => it.priority === 'required').map(it => it.id);
+  manifest.coveragePlan.uncoveredRequiredItems = requiredIds.filter(id => {
+    const l = ledgerMap.get(id);
+    return !l || l.coverageStatus === 'uncovered';
+  });
+  manifest.coveragePlan.supportOnlyItems = requiredIds.filter(id => {
+    const l = ledgerMap.get(id);
+    return l?.coverageStatus === 'support_only';
+  });
+  manifest.coveragePlan.overexposedItems = Array.from(ledgerMap.values())
+    .filter(l => l.coverageStatus === 'overexposed').map(l => l.itemId);
+  manifest.coveragePlan.missingCoverage = manifest.coveragePlan.uncoveredRequiredItems;
+  manifest.coveragePlan.coverageWarnings = [
+    ...manifest.coveragePlan.uncoveredRequiredItems.map(id => `UNCOVERED: ${ledgerMap.get(id)?.label ?? id}`),
+    ...manifest.coveragePlan.supportOnlyItems.map(id => `SUPPORT_ONLY: ${ledgerMap.get(id)?.label ?? id}`),
+    ...manifest.coveragePlan.overexposedItems.map(id => `OVEREXPOSED: ${ledgerMap.get(id)?.label ?? id}`),
+  ];
+
+  // ── 10. Truncar a maxStoryShots (safety net) ────────────────
   return shots.slice(0, total);
 }
 
@@ -4680,8 +4870,42 @@ This shot showcases the piece itself as part of the haul/outfit story.`
   const isOutfitShot = recipe === 'outfit_check' || recipe === 'outfit_haul' || recipe === 'outfit_week';
   const allOutfitsForShot = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
 
-  // Instrucción de outfit específica para este shot
+  // Para haul: resolver el HaulItem activo de este shot (para inyectar manualKind en prompt)
   const shotKey_ = shot.key ?? '';
+  let haulActiveItem: HaulItem | undefined;
+  if (recipe === 'outfit_haul') {
+    const haulManifestForShot = buildHaulManifest(refs, 20);
+    if (shotKey_.startsWith('HAUL_TRY_ON_')) {
+      const idx = parseInt(shotKey_.replace('HAUL_TRY_ON_', ''), 10) - 1;
+      haulActiveItem = haulManifestForShot.outfitItems[idx] ?? haulManifestForShot.tryOnItems[idx];
+    } else if (shotKey_ === 'HAUL_SELECTION') {
+      haulActiveItem = haulManifestForShot.outfitItems[haulManifestForShot.outfitItems.length - 1];
+    } else if (shotKey_.startsWith('HAUL_ADJUSTING_')) {
+      const idx = parseInt(shotKey_.replace('HAUL_ADJUSTING_', ''), 10) - 1;
+      haulActiveItem = haulManifestForShot.outfitItems[idx] ?? haulManifestForShot.tryOnItems[idx];
+    } else if (shotKey_.startsWith('HAUL_STYLED_')) {
+      const idx = parseInt(shotKey_.replace('HAUL_STYLED_', ''), 10) - 1;
+      haulActiveItem = haulManifestForShot.outfitItems[idx] ?? haulManifestForShot.tryOnItems[idx];
+    } else if (shotKey_.startsWith('HAUL_FOOTWEAR_')) {
+      const idx = parseInt(shotKey_.replace('HAUL_FOOTWEAR_', ''), 10) - 1;
+      haulActiveItem = haulManifestForShot.footwearItems[idx];
+    } else if (shotKey_.startsWith('HAUL_BAG_')) {
+      const idx = parseInt(shotKey_.replace('HAUL_BAG_', ''), 10) - 1;
+      haulActiveItem = haulManifestForShot.accessoryItems.filter(it => it.kind === 'bag')[idx];
+    } else if (shotKey_.startsWith('HAUL_JEWELRY_')) {
+      const idx = parseInt(shotKey_.replace('HAUL_JEWELRY_', ''), 10) - 1;
+      haulActiveItem = haulManifestForShot.accessoryItems.filter(it => it.kind === 'jewelry')[idx];
+    } else if (shotKey_.startsWith('HAUL_ACCESSORY_CLOSEUP_')) {
+      const idx = parseInt(shotKey_.replace('HAUL_ACCESSORY_CLOSEUP_', ''), 10) - 1;
+      haulActiveItem = haulManifestForShot.closeupItems[idx];
+    } else if (shotKey_.startsWith('HAUL_SETUP_')) {
+      const idx = parseInt(shotKey_.replace('HAUL_SETUP_', ''), 10) - 1;
+      haulActiveItem = haulManifestForShot.outfitItems[idx] ?? haulManifestForShot.tryOnItems[idx];
+    }
+  }
+  const haulItemTypeBlock = haulActiveItem ? buildHaulItemTypeBlock(haulActiveItem) : '';
+
+  // Instrucción de outfit específica para este shot
   const shotOutfitInstruction = isOutfitShot
     ? shotKey_ === 'HAUL_OVERVIEW'
       ? `HAUL COLLECTION: The garment references show a subset of the haul items. Show them as a collection — on a bed, rack, surface, or held — NOT worn as a complete look. They should feel like items waiting to be tried on. Real arrangement, not a catalog grid.`
@@ -4696,35 +4920,47 @@ This shot showcases the piece itself as part of the haul/outfit story.`
                 ? `FOOTWEAR ITEM — THIS SHOT: The reference provided is a STANDALONE FOOTWEAR ITEM (shoe, boot, sandal, sneaker).
 Do NOT generate a full outfit from this shoe reference alone.
 Show the footwear as: a close-up detail, held by hand, placed on a surface, or being tried on at foot level.
-Do NOT invent a complete look. The shoe IS the subject.`
+Do NOT invent a complete look. The shoe IS the subject.
+${haulItemTypeBlock}`
                 : shotKey_.startsWith('HAUL_BAG_')
                 ? `BAG / BOLSO — THIS SHOT: The reference provided is a STANDALONE BAG or PURSE.
 Do NOT generate a full outfit around it. Show the bag as protagonist — held, worn over shoulder, resting on bed, or detail of hardware/stitching.
-Real room context. Natural light. The bag IS the subject of this shot.`
+Real room context. Natural light. The bag IS the subject of this shot.
+${haulItemTypeBlock}`
                 : shotKey_.startsWith('HAUL_JEWELRY_')
                 ? `JEWELRY ITEM — THIS SHOT: The reference provided is a JEWELRY PIECE.
 Do NOT generate a full outfit for context. Show the jewelry intimately — worn on body (ear, neck, wrist, finger), held between fingers, or resting on fabric.
-Macro or semi-macro framing. Real skin texture if worn. The jewelry IS the subject.`
+Macro or semi-macro framing. Real skin texture if worn. The jewelry IS the subject.
+${haulItemTypeBlock}`
                 : shotKey_.startsWith('HAUL_SETUP_')
                 ? `HAUL SETUP MOMENT — THIS SHOT: Show the person interacting with haul items as OBJECTS (not yet worn).
 Hands active — organizing, selecting, holding up to preview. Real room context. UGC energy.
-Do NOT show a full-body catalog pose. This is a natural selection/organizing moment.`
+Do NOT show a full-body catalog pose. This is a natural selection/organizing moment.
+${haulItemTypeBlock}`
                 : shotKey_.startsWith('HAUL_STYLED_')
                 ? `STYLED RESULT — THIS SHOT: The person IS wearing the garment reference. Reveal moment — different framing than the preceding try-on.
 Copy the garment EXACTLY. Natural posture — not a catalog stance. Real room visible.
 
-⛔ AVATAR BASE CLOTHING IS NOT A HAUL ITEM:
-The clothing visible in the avatar or body reference is identity reference ONLY.
-Do NOT recreate, feature, or transform avatar base clothing into a haul piece.
-The only haul garment for this shot is the GARMENT REFERENCE attached to this prompt.`
+${haulItemTypeBlock}
+
+⛔ AVATAR BASE LOOK RULE:
+The avatar/body reference may show the person wearing a base outfit.
+This base outfit is allowed as their starting state — it is NOT a haul item.
+Do NOT merge avatar base clothing with the referenced haul item.
+Do NOT transform avatar base clothing into a new haul garment.
+The referenced haul item must visually dominate this shot.`
                 : `HAUL GARMENT — THIS SHOT: The garment reference provided is the SPECIFIC piece the person is wearing or showing right now.
 Copy it EXACTLY — same color, fabric, cut, fit, silhouette.
 The person wears it naturally, evaluating how it looks. NOT a catalog pose. NOT a styled editorial look.
 
-⛔ AVATAR BASE CLOTHING IS NOT A HAUL ITEM:
-The clothing visible in the avatar or body reference is identity reference ONLY.
-Do NOT recreate, feature, or transform avatar base clothing into a haul piece.
-The only haul garment for this shot is the GARMENT REFERENCE attached to this prompt.`
+${haulItemTypeBlock}
+
+⛔ AVATAR BASE LOOK RULE:
+The avatar/body reference may show the person wearing a base outfit.
+This base outfit is allowed as their starting state — it is NOT a haul item and must NOT count as product coverage.
+Do NOT merge avatar base clothing with the referenced haul item.
+Do NOT transform avatar base clothing into a new haul garment.
+When the referenced haul item is the hero, it must visually dominate.`
               : `OUTFIT LOCK: Copy the garment(s) EXACTLY from the outfit references — same color, fabric, cut, fit, silhouette. SHOE SPECIFICITY LOCK: same straps, heel, toe, hardware. Do NOT invent fabric continuation. Do NOT add or remove pieces.`
     : '';
 
@@ -4764,28 +5000,31 @@ Do NOT recreate the same pose, same camera distance, same crop, or same arrangem
 This shot MUST have a different action, framing, or focus than REF0.
 ${shotOutfitInstruction}
 
-🔒 ENVIRONMENTAL CONTINUITY — HAUL SPACE (HARD LOCK):
-REF0 defines the physical world of this haul. Every shot in this set exists inside that SAME REAL ROOM.
+🔒 SCENE FINGERPRINT LOCK — HAUL SPACE (HARD LOCK):
+REF0 defines the physical world of this haul. Every shot in this set must feel captured in that SAME REAL ROOM.
 MANDATORY to preserve across ALL shots:
-  • Same bedroom / dressing area — same walls, same floor material, same dominant furniture
-  • Same bed (size, headboard, sheets color/pattern)
-  • Same rack, chair, dresser, or mirror if visible in REF0
-  • Same window position and natural light direction
-  • Same color temperature — warm/cool balance must not shift between shots
+  • Same bedroom / dressing area — exact same walls, same floor material, same dominant furniture
+  • Same bed (size, headboard style, sheets color/pattern) — do NOT replace with different bed
+  • Same rack, chair, dresser, or mirror if visible in REF0 — do NOT remove or replace them
+  • Same window position and natural light direction — same warm/cool balance, same source angle
   • Same spatial layout — do NOT rearrange furniture between shots
-  • Haul items (clothes, bags, boxes) may shift naturally as the session progresses — this is expected
-ALLOWED CHANGES between shots (camera only):
-  ✅ Camera angle (closer, farther, different corner of the room)
-  ✅ Framing and crop
-  ✅ Subject position within the room
-  ✅ Haul pile size growing naturally as more items are tried
-FORBIDDEN CHANGES (hard failure — invalidates the shot):
-  ❌ Different bedroom or different room
-  ❌ Different wall color or floor material
-  ❌ Different bed or furniture arrangement
-  ❌ Hotel lobby, photo studio, white backdrop, or any non-bedroom environment
-  ❌ Changing light source direction or color temperature
-  ❌ Adding decorative elements not present in REF0
+  • Same shopping bags, boxes, and haul clutter family established in REF0
+
+PROGRESSIVE CLUTTER CONTINUITY:
+The haul session has a natural arc — the room evolves as items are tried on.
+Shot ${shot.arcPosition} of ${totalShots}:
+${shot.arcPosition <= Math.ceil(totalShots * 0.33)
+  ? '  EARLY STAGE: Bags and boxes still mostly closed or freshly opened. A few items laid out. Tidy with excitement energy.'
+  : shot.arcPosition <= Math.ceil(totalShots * 0.66)
+  ? '  MIDDLE STAGE: Some items tried and discarded on bed or chair. Current item being featured. Natural mess starting.'
+  : '  LATE STAGE: Tried items folded or draped around the room. Organized chaos. Favorites may be visible. Real haul energy.'}
+ALLOWED logical changes: clothes move naturally, boxes open, selected items shift. These are expected.
+FORBIDDEN changes: new room, different walls, different bed, different furniture layout, studio backdrop, added props not in REF0, different light direction or color temperature.
+
+⚠️ SAFE HAUL FALLBACK (only if try-on fails):
+If wearing this garment causes a content policy issue, do NOT redesign the garment.
+Instead generate: the person holding the item toward the camera, arranging it on the bed, or showing it as a detail close-up.
+Preserve the garment's exact shape, color, material, and design. The garment must still be the hero.
 
 ⚠️ REFERENCE ROLE — HAUL RULES:
 Garment references are photos of the SPECIFIC GARMENT for this shot — not a person wearing it.

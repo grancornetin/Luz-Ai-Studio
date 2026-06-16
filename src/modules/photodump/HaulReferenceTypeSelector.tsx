@@ -188,7 +188,7 @@ const HaulReferenceTypeSelector: React.FC<HaulReferenceTypeSelectorProps> = ({
 
       {/* ── Dropdown ─────────────────────────────────── */}
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 w-48 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
+        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 min-w-[11rem] w-max max-h-56 bg-white border border-slate-200 rounded-xl shadow-xl overflow-y-auto overscroll-contain">
           <div className="py-1">
             {HAUL_REF_OPTIONS.map(opt => {
               const isSelected = opt.value === value;

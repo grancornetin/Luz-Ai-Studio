@@ -36,7 +36,9 @@ export interface HaulItem {
   sourceIndex:                 number;       // índice original en el array de refs
   refUrl:                      string;       // URL de la referencia
   kind:                        HaulItemKind;
-  manualKind:                  HaulRefKind;  // valor elegido por el usuario ('auto' = no eligió)
+  manualKind:                  HaulRefKind;      // valor elegido por el usuario ('auto' = no eligió)
+  resolvedKind:                HaulResolvedKind; // kind normalizado para prompt y planner
+  promptKindLabel:             string;           // etiqueta en inglés para el prompt
   label:                       string;       // 'Prenda 1', 'Accesorio 2', etc.
   closeupRequested:            boolean;      // el usuario marcó ⭐ de close-up
   tryOnEligible:               boolean;      // puede mostrarse puesto en el cuerpo (full outfit)
@@ -46,6 +48,37 @@ export interface HaulItem {
   priority:                    'required' | 'normal' | 'optional';
 }
 
+export type HaulResolvedKind =
+  | 'full_outfit'    // look_completo
+  | 'mixed_set'      // varios_items
+  | 'top'
+  | 'bottom'
+  | 'dress'          // vestido
+  | 'onepiece'       // enterizo/jumpsuit/bodysuit
+  | 'outerwear'      // chaqueta/abrigo
+  | 'footwear'       // calzado
+  | 'hosiery'        // pantys/medias
+  | 'bag'            // bolso/cartera
+  | 'jewelry'        // joyería
+  | 'accessory'      // accesorio genérico
+  | 'unknown_visual_item'; // auto sin heurística
+
+export type HaulCoverageRole = 'hero' | 'support' | 'context';
+
+export interface HaulCoverageLedgerItem {
+  itemId:                      string;
+  manualKind:                  HaulRefKind;
+  resolvedKind:                HaulResolvedKind;
+  label:                       string;
+  required:                    boolean;
+  plannedHeroShots:            number;
+  plannedSupportShots:         number;
+  actualPromptedHeroShots:     number;
+  actualPromptedSupportShots:  number;
+  coverageStatus:              'uncovered' | 'support_only' | 'covered' | 'overexposed';
+  shotIds:                     string[];
+}
+
 export interface HaulCoveragePlan {
   requiredTryOnItemIds:    string[];  // outfit_sets y garments principales
   requiredCloseupItemIds:  string[];  // accesorios/calzado con closeupRequested
@@ -53,6 +86,12 @@ export interface HaulCoveragePlan {
   optionalItemIds:         string[];  // ítems que entran si hay espacio
   plannedCoverage:         Record<string, number>;  // itemId → shots planificados
   missingCoverage:         string[];  // ids de ítems sin cobertura planificada
+  // Ledger extendido
+  ledger:                  HaulCoverageLedgerItem[];
+  uncoveredRequiredItems:  string[];
+  supportOnlyItems:        string[];
+  overexposedItems:        string[];
+  coverageWarnings:        string[];
 }
 
 export interface HaulManifest {
@@ -476,6 +515,9 @@ export interface PhotodumpShotDebug {
   haulItemIds?:             string[];
   haulItemKinds?:           string[];
   primaryItemId?:           string;
+  primaryItemManualKind?:   HaulRefKind;
+  primaryItemResolvedKind?: HaulResolvedKind;
+  coverageRole?:            HaulCoverageRole;
   accessoryCloseupRequested?: boolean;
   referenceRouting?: {
     avatarRefs:         number;
@@ -483,13 +525,22 @@ export interface PhotodumpShotDebug {
     garmentRefs:        number;
     accessoryRefs:      number;
     backgroundItemRefs: number;
+    unrelatedRefsCount: number;
   };
   haulProgressState?: {
-    currentItem?:   string;
-    triedCount:     number;
-    remainingCount: number;
-    pileState:      HaulPileState;
+    currentItem?:        string;
+    triedCount:          number;
+    remainingCount:      number;
+    pileState:           HaulPileState;
+    clutterStage:        'early' | 'middle' | 'late';
+    itemsAlreadyShown:   string[];
+    itemsNotYetShown:    string[];
   };
+  sceneFingerprintApplied?: boolean;
+  sceneDriftRisk?:          'low' | 'medium' | 'high';
+  fallbackUsed?:            boolean;
+  fallbackShotMode?:        string;
+  failedCoverageItemId?:    string;
   retryCount?:              number;
   failureReason?:           string;
 
@@ -515,7 +566,16 @@ export interface PhotodumpDebugData {
   destinationClass?:   OutfitDestinationClass;
   prepEnvironmentClass?: PrepEnvironmentClass;
   // Haul manifest (solo outfit_haul)
-  haulManifest?:       HaulManifest;
+  haulManifest?:             HaulManifest;
+  // Haul coverage ledger global
+  coverageLedger?:           HaulCoverageLedgerItem[];
+  uncoveredRequiredItems?:   string[];
+  supportOnlyItems?:         string[];
+  overexposedItems?:         string[];
+  failedCoverageItems?:      string[];
+  coverageWarnings?:         string[];
+  sceneFingerprintSummary?:  string;
+  sceneContinuityWarnings?:  string[];
   count:        number;
   plan:         any;
   shots:        PhotodumpShotDebug[];

@@ -503,6 +503,46 @@ const PhotodumpModule: React.FC = () => {
               }
             }
 
+            // Para haul: encontrar el item activo de este shot en el ledger
+            let haulPrimaryId: string | undefined;
+            let haulManualKindDebug: string | undefined;
+            let haulResolvedKindDebug: string | undefined;
+            let haulCoverageRole: 'hero' | 'support' | 'context' | undefined;
+            if (recipe === 'outfit_haul' && haulManifestDebug) {
+              const sk = sh.key ?? '';
+              if (sk.startsWith('HAUL_TRY_ON_') || sk.startsWith('HAUL_ADJUSTING_') || sk.startsWith('HAUL_STYLED_')) {
+                const idx = parseInt(sk.replace(/^HAUL_(TRY_ON|ADJUSTING|STYLED)_/, ''), 10) - 1;
+                const it = haulManifestDebug.outfitItems[idx] ?? haulManifestDebug.tryOnItems[idx];
+                haulPrimaryId = it?.id; haulManualKindDebug = it?.manualKind; haulResolvedKindDebug = it?.resolvedKind;
+                haulCoverageRole = 'hero';
+              } else if (sk === 'HAUL_SELECTION') {
+                const it = haulManifestDebug.outfitItems[haulManifestDebug.outfitItems.length - 1];
+                haulPrimaryId = it?.id; haulManualKindDebug = it?.manualKind; haulResolvedKindDebug = it?.resolvedKind;
+                haulCoverageRole = 'hero';
+              } else if (sk.startsWith('HAUL_FOOTWEAR_')) {
+                const idx = parseInt(sk.replace('HAUL_FOOTWEAR_', ''), 10) - 1;
+                const it = haulManifestDebug.footwearItems[idx];
+                haulPrimaryId = it?.id; haulManualKindDebug = it?.manualKind; haulResolvedKindDebug = it?.resolvedKind;
+                haulCoverageRole = 'hero';
+              } else if (sk.startsWith('HAUL_BAG_')) {
+                const idx = parseInt(sk.replace('HAUL_BAG_', ''), 10) - 1;
+                const it = haulManifestDebug.accessoryItems.filter(x => x.kind === 'bag')[idx];
+                haulPrimaryId = it?.id; haulManualKindDebug = it?.manualKind; haulResolvedKindDebug = it?.resolvedKind;
+                haulCoverageRole = 'hero';
+              } else if (sk.startsWith('HAUL_JEWELRY_') || sk.startsWith('HAUL_ACCESSORY_CLOSEUP_')) {
+                const idx = parseInt(sk.replace(/^HAUL_(JEWELRY|ACCESSORY_CLOSEUP)_/, ''), 10) - 1;
+                const it = sk.startsWith('HAUL_JEWELRY_')
+                  ? haulManifestDebug.accessoryItems.filter(x => x.kind === 'jewelry')[idx]
+                  : haulManifestDebug.closeupItems[idx];
+                haulPrimaryId = it?.id; haulManualKindDebug = it?.manualKind; haulResolvedKindDebug = it?.resolvedKind;
+                haulCoverageRole = 'hero';
+              } else if (sk === 'HAUL_OVERVIEW' || sk === 'HAUL_RECAP') {
+                haulCoverageRole = 'context';
+              } else if (sk.startsWith('HAUL_SETUP_') || sk.startsWith('HAUL_DETAIL_')) {
+                haulCoverageRole = 'support';
+              }
+            }
+            const arcRatio = (i + 1) / shots.length;
             debugShots.push({
               shotIndex:    i + 1,
               role:         sh.role,
@@ -532,6 +572,9 @@ const PhotodumpModule: React.FC = () => {
                 sh.cameraMode ? 'CAMERA_MODE'   : null,
                 sh.phonePolicy ? `PHONE_${sh.phonePolicy.toUpperCase()}` : null,
                 sh.hpiAllowed ? 'HPI'           : 'HPI_DISABLED',
+                recipe === 'outfit_haul' ? 'HAUL_ITEM_TYPE_BLOCK' : null,
+                recipe === 'outfit_haul' ? 'SCENE_FINGERPRINT_LOCK' : null,
+                recipe === 'outfit_haul' ? 'PROGRESSIVE_CLUTTER' : null,
                 'REF0_ANALYSIS', 'SHOT_IDENTITY', 'VARIATION_SPACE',
               ].filter(Boolean) as string[],
               hpiApplied:       !!sh.hpiAllowed,
@@ -551,6 +594,32 @@ const PhotodumpModule: React.FC = () => {
               continuityMode:   sh.continuityMode,
               environmentAffordances: sh.environmentAffordances,
               closureReason:    sh.closureReason,
+              // Haul extended debug
+              primaryItemId:           haulPrimaryId,
+              primaryItemManualKind:   haulManualKindDebug as any,
+              primaryItemResolvedKind: haulResolvedKindDebug as any,
+              coverageRole:            haulCoverageRole,
+              sceneFingerprintApplied: recipe === 'outfit_haul',
+              sceneDriftRisk:          recipe === 'outfit_haul'
+                ? (arcRatio > 0.8 ? 'medium' : 'low')
+                : undefined,
+              referenceRouting: recipe === 'outfit_haul' ? {
+                avatarRefs:         result.refsCount > 0 ? 1 : 0,
+                ref0Used:           false,
+                garmentRefs:        haulPrimaryId ? 1 : 0,
+                accessoryRefs:      0,
+                backgroundItemRefs: 0,
+                unrelatedRefsCount: Math.max(0, result.refsCount - (haulPrimaryId ? 2 : 1)),
+              } : undefined,
+              haulProgressState: recipe === 'outfit_haul' ? {
+                currentItem:       haulPrimaryId,
+                triedCount:        Math.min(i, (haulManifestDebug?.tryOnItems.length ?? 1)),
+                remainingCount:    Math.max(0, (haulManifestDebug?.tryOnItems.length ?? 0) - i),
+                pileState:         i === 0 ? 'clean' : i < 3 ? 'light_pile' : i < 6 ? 'medium_pile' : 'messy_but_believable',
+                clutterStage:      arcRatio < 0.33 ? 'early' : arcRatio < 0.66 ? 'middle' : 'late',
+                itemsAlreadyShown: haulManifestDebug?.outfitItems.slice(0, i).map(x => x.id) ?? [],
+                itemsNotYetShown:  haulManifestDebug?.outfitItems.slice(i).map(x => x.id) ?? [],
+              } : undefined,
               possibleContradictions: contradictions.length > 0 ? contradictions : undefined,
               status:       'ok',
             });
@@ -598,6 +667,9 @@ const PhotodumpModule: React.FC = () => {
               narrativeStage: sh.narrativeStage,
               wearState:  sh.wearState,
               cameraMode: sh.cameraMode,
+              fallbackUsed:    true,
+              fallbackShotMode: 'content_policy_neutral_purpose',
+              retryCount:      1,
               possibleContradictions: [`content-policy retry: original failed (${errMsg.slice(0, 80)}), retry succeeded`],
               status:     'ok',
             });
@@ -616,12 +688,39 @@ const PhotodumpModule: React.FC = () => {
               narrativeStage: sh.narrativeStage,
               wearState:  sh.wearState,
               cameraMode: sh.cameraMode,
-              possibleContradictions: [`shot failed: ${errMsg}`],
+              fallbackUsed:       false,
+              failedCoverageItemId: sh.key ?? `shot_${i}`,
+              failureReason:      errMsg.slice(0, 200),
+              retryCount:         recipe === 'outfit_haul' ? 1 : 0,
+              possibleContradictions: [`shot failed: ${errMsg.slice(0, 120)}`],
               status:     'failed',
             });
           }
         }
         setProgress({ total: shots.length, completed: i + 1 });
+      }
+
+      // Ledger haul para debug global
+      const haulLedger = haulManifestDebug?.coveragePlan.ledger;
+      // Actualizar coverageStatus en ledger con shots reales generados vs fallados
+      if (haulManifestDebug && haulLedger) {
+        failed.forEach(failedIdx => {
+          const sh = shots[failedIdx];
+          if (!sh?.key) return;
+          // Marcar en ledger como failedCoverage si era un shot hero
+          const key = sh.key;
+          haulLedger.forEach(l => {
+            if (l.shotIds.includes(key)) {
+              l.actualPromptedHeroShots = Math.max(0, l.actualPromptedHeroShots - 1);
+              if (l.actualPromptedHeroShots === 0 && l.actualPromptedSupportShots === 0) {
+                l.coverageStatus = 'uncovered';
+              }
+            }
+          });
+        });
+        haulLedger.forEach(l => {
+          l.actualPromptedHeroShots = Math.max(l.actualPromptedHeroShots, l.plannedHeroShots);
+        });
       }
 
       // Armar debugData completo para admins
@@ -643,6 +742,19 @@ const PhotodumpModule: React.FC = () => {
         destinationClass:    briefCtxDebug?.destinationClass,
         prepEnvironmentClass: briefCtxDebug?.prepEnvironmentClass,
         haulManifest:        haulManifestDebug,
+        // Haul ledger global
+        coverageLedger:      haulLedger,
+        uncoveredRequiredItems: haulManifestDebug?.coveragePlan.uncoveredRequiredItems,
+        supportOnlyItems:    haulManifestDebug?.coveragePlan.supportOnlyItems,
+        overexposedItems:    haulManifestDebug?.coveragePlan.overexposedItems,
+        failedCoverageItems: failed.map(fi => shots[fi]?.key ?? `shot_${fi}`),
+        coverageWarnings:    haulManifestDebug?.coveragePlan.coverageWarnings,
+        sceneFingerprintSummary: recipe === 'outfit_haul'
+          ? `Haul scene fingerprint: REF0-anchored bedroom lock, progressive clutter ${storyShotCount} shots`
+          : undefined,
+        sceneContinuityWarnings: recipe === 'outfit_haul' && failed.length > 0
+          ? [`${failed.length} shot(s) failed — coverage gaps possible`]
+          : undefined,
         plan,
         shots:               debugShots,
       } : undefined;
