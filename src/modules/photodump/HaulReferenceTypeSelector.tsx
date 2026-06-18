@@ -188,7 +188,7 @@ const HaulReferenceTypeSelector: React.FC<HaulReferenceTypeSelectorProps> = ({
 
       {/* ── Dropdown ─────────────────────────────────── */}
       {open && (
-        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 min-w-[11rem] w-max max-h-56 bg-white border border-slate-200 rounded-xl shadow-xl overflow-y-auto overscroll-contain">
+        <div className="absolute top-full left-0 mt-1 z-[200] w-48 max-h-60 bg-white border border-slate-200 rounded-xl shadow-2xl overflow-y-auto overscroll-contain">
           <div className="py-1">
             {HAUL_REF_OPTIONS.map(opt => {
               const isSelected = opt.value === value;
@@ -198,26 +198,19 @@ const HaulReferenceTypeSelector: React.FC<HaulReferenceTypeSelectorProps> = ({
                   type="button"
                   onClick={() => { onChange(opt.value); setOpen(false); }}
                   className={`
-                    w-full flex items-start gap-2 px-3 py-1.5 text-left
+                    w-full flex items-center gap-2 px-3 py-1.5 text-left
                     transition-colors hover:bg-purple-50
                     ${isSelected ? 'bg-purple-50' : ''}
                   `}
                 >
-                  <span className="text-[12px] leading-none mt-0.5 flex-shrink-0">{opt.emoji}</span>
-                  <div className="min-w-0">
-                    <p className={`text-[10px] font-bold leading-tight ${isSelected ? 'text-purple-700' : 'text-slate-700'}`}>
-                      {opt.label}
-                    </p>
-                    <p className="text-[9px] text-slate-400 leading-tight mt-0.5 line-clamp-2">
-                      {opt.description}
-                    </p>
-                  </div>
+                  <span className="text-[12px] leading-none flex-shrink-0">{opt.emoji}</span>
+                  <span className={`text-[10px] font-semibold leading-tight flex-1 min-w-0 truncate ${isSelected ? 'text-purple-700' : 'text-slate-700'}`}>
+                    {opt.label}
+                  </span>
                   {isSelected && (
-                    <span className="ml-auto flex-shrink-0 mt-0.5">
-                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-purple-600">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    </span>
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-purple-600 flex-shrink-0">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
                   )}
                 </button>
               );
