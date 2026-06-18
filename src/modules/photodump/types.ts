@@ -590,6 +590,11 @@ export interface PhotodumpDebugData {
   overexposedItems?:         string[];
   failedCoverageItems?:      string[];
   coverageWarnings?:         string[];
+  // Run completeness verdict
+  isComplete?:               boolean;
+  blockingIssues?:           string[];
+  missingRequiredOutfits?:   string[];
+  failedShotIds?:            string[];
   sceneFingerprintSummary?:  string;
   sceneContinuityWarnings?:  string[];
   count:        number;

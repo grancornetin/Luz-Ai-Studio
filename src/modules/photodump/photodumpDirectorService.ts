@@ -3067,7 +3067,29 @@ PROMPT GUIDANCE: ${item.promptKindLabel}
 
 ${item.resolvedKind === 'full_outfit' ? `→ Treat as a COORDINATED OUTFIT/LOOK. The pieces shown together are intended to be worn as a set.
    Preserve the combination logic and styling relationship between visible pieces.
-   Do NOT reduce it to one isolated garment. If a neutral base is needed for missing pieces, use the simplest neutral possible — it must NOT become the hero.` : ''}${item.resolvedKind === 'mixed_set' ? `→ Treat as a PRODUCT GROUP — multiple items in one image, not necessarily one complete outfit.
+   Do NOT reduce it to one isolated garment. If a neutral base is needed for missing pieces, use the simplest neutral possible — it must NOT become the hero.
+
+⚠️ TALL FOOTWEAR INTEGRATION — SYMMETRY CONSTRAINT (HARD RULE):
+If this outfit includes any legwear (jeans, pants, leggings, tights, skirt, or dress hem)
+AND any tall footwear that covers a significant portion of the leg
+(knee-high boots, over-the-knee boots, tall shaft boots, or similar):
+
+  STEP 1 — Choose ONE coherent integration style based on the outfit and reference:
+    — tucked in: legwear goes inside the boot shaft
+    — over the boot: legwear rests on top of or drapes over the shaft
+    — under the boot: shaft covers the outside of the legwear
+    — any other visually logical resolution consistent with the garments shown
+
+  STEP 2 — Apply that SAME resolution identically on BOTH legs.
+
+  FORBIDDEN — these are generation errors:
+    ✗ One leg tucked in, the other not
+    ✗ One boot shaft under the fabric, the other outside it
+    ✗ Shaft/hem intersection that creates broken geometry, partial penetration, or clipping on one side
+    ✗ One leg anatomically correct, the other floating or disconnected
+    ✗ Asymmetric layering where both legs are styled differently without any reference basis
+
+  The model picks the styling. The rule is: both sides must match.` : ''}${item.resolvedKind === 'mixed_set' ? `→ Treat as a PRODUCT GROUP — multiple items in one image, not necessarily one complete outfit.
    Do NOT assume every piece goes together unless the reference clearly shows it.
    Show the person interacting with one or more items naturally.` : ''}${item.resolvedKind === 'dress' ? `→ Treat as a DRESS or ONE-PIECE. It is the main garment — top to hem.
    Do NOT treat it as a generic garment. Ensure the full silhouette reads clearly.` : ''}${item.resolvedKind === 'onepiece' ? `→ Treat as a JUMPSUIT / BODYSUIT / ONEPIECE. It covers the body as a single piece.
@@ -3393,7 +3415,7 @@ export function buildHaulShotPlan(
       tryOnIndex % 3 === 0 &&
       slotsLeft > pendingTryOns.length + 1;
     if (canSetup) {
-      const setupShot = buildHaulSetupShot(item, setupIdx);
+      const setupShot = buildHaulSetupShot(item, setupIdx, tryOnIndex);
       shots.push(setupShot);
       addSupportShot(item.id, setupShot.key);
       slotsUsed++;
@@ -3482,14 +3504,23 @@ export function buildHaulShotPlan(
   });
 
   // Calcular listas de warnings
+  // REGLA: para full_outfit items required, support_only = uncovered (necesitan hero try-on propio)
   const requiredIds = manifest.allItems.filter(it => it.priority === 'required').map(it => it.id);
   manifest.coveragePlan.uncoveredRequiredItems = requiredIds.filter(id => {
     const l = ledgerMap.get(id);
-    return !l || l.coverageStatus === 'uncovered';
+    if (!l || l.coverageStatus === 'uncovered') return true;
+    // full_outfit items MUST have at least 1 dedicated hero try-on — support shots do not count
+    const item = manifest.allItems.find(it => it.id === id);
+    if (item && item.resolvedKind === 'full_outfit' && l.coverageStatus === 'support_only') return true;
+    return false;
   });
   manifest.coveragePlan.supportOnlyItems = requiredIds.filter(id => {
     const l = ledgerMap.get(id);
-    return l?.coverageStatus === 'support_only';
+    if (l?.coverageStatus !== 'support_only') return false;
+    // full_outfit support_only items already escalated to uncoveredRequiredItems
+    const item = manifest.allItems.find(it => it.id === id);
+    if (item?.resolvedKind === 'full_outfit') return false;
+    return true;
   });
   manifest.coveragePlan.overexposedItems = Array.from(ledgerMap.values())
     .filter(l => l.coverageStatus === 'overexposed').map(l => l.itemId);
@@ -3804,8 +3835,9 @@ function buildHaulRecapShot(
 // ── Haul: Setup shot (selección / organización de prendas) ───
 
 function buildHaulSetupShot(
-  item:     HaulItem,
-  setupIdx: number,
+  item:      HaulItem,
+  setupIdx:  number,
+  itemIndex: number,
 ): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
   const shotVariations = [
     `organizing haul items on the bed — hands active, comparing ${item.label} with another piece, casual bedroom light`,
@@ -3813,8 +3845,10 @@ function buildHaulSetupShot(
     `holding ${item.label} up in front of body to preview without wearing it — candid evaluating pose`,
     `looking at ${item.label} while seated on bed edge — natural selection moment, items around her`,
   ];
+  // Key encodes the outfit item index (1-based) so the resolver in generatePhotodumpShot
+  // can always recover the correct HaulItem without relying on setup insertion order.
   return {
-    key:    `HAUL_SETUP_${setupIdx + 1}`,
+    key:    `HAUL_SETUP_${itemIndex + 1}`,
     beat:   'action',
     role:   `HAUL SETUP — ${item.label}`,
     purpose: `Selection/setup moment before trying on ${item.label}. The person is organizing or evaluating haul items — not yet wearing them. Hands active. Real bedroom context. UGC energy. NOT a catalog flatlay — this is a real person going through their haul.`,
@@ -5036,12 +5070,22 @@ NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${shot.rol
 ${refs.bodyRef ? '- Body reference: establishes physique and proportions ONLY. Do NOT alter them.' : ''}
 - REF0: establishes the haul space — same room, same light, same real environment. NOT a studio.
 
-⛔ AVATAR/BODY CLOTHING IS NOT A HAUL ITEM — CRITICAL RULE:
-The clothing visible in the avatar or body reference photos is IDENTITY INFORMATION ONLY.
-It is the person's base outfit for identification — it is NOT one of the haul garments.
-Do NOT recreate, feature, transform, or recolor avatar base clothing as a haul piece.
-Do NOT use the avatar's black catsuit/bodysuit/shirt/pants as a haul outfit.
-Only the GARMENT REFERENCE provided for THIS SPECIFIC SHOT is the haul item.
+⛔ AVATAR CLOTHING FORBIDDEN POLICY — HARD RULE — NO EXCEPTIONS:
+The avatar/body reference photos exist ONLY to establish face identity and body proportions.
+ANY clothing visible on the avatar or body reference is FORBIDDEN as haul wardrobe.
+  • The avatar's black catsuit, bodysuit, base shirt, pants, or any default clothing is NOT a haul item.
+  • Do NOT use avatar base clothing as a fallback when the garment reference is ambiguous.
+  • Do NOT transform, recolor, or restyle avatar base clothing into a haul piece.
+  • Do NOT let avatar base clothing appear as the dominant garment in any shot.
+Only the GARMENT REFERENCE image provided for THIS SPECIFIC SHOT defines what the person wears.
+If the garment reference is insufficient, show the person holding/arranging the item — do NOT fall back to avatar clothing.
+
+⛔ SUPPORT SHOT WEAR POLICY — BINDING:
+For non-try-on haul shots (setup, overview, recap, adjusting), the person must be in EXACTLY ONE of:
+  A) Wearing one of the already-established haul looks from a previous try-on.
+  B) Wearing a neutral non-product base: simple fitted tee/tank + simple jeans/shorts/leggings.
+     This neutral base must be INVENTED BY THE SYSTEM — NOT derived from anything visible in the avatar reference.
+Never leave the wear state unconstrained. Never fall back to avatar reference clothing.
 
 ⛔ DO NOT CLONE REF0:
 REF0 is a world anchor — use it for room, light, and environment.
@@ -5059,15 +5103,28 @@ MANDATORY to preserve across ALL shots:
   • Same spatial layout — do NOT rearrange furniture between shots
   • Same shopping bags, boxes, and haul clutter family established in REF0
 
-🪞 SCENE PROP CONSISTENCY — ONLY USE WHAT REF0 ESTABLISHED:
-Major props are locked to what appears in REF0. Do NOT invent new furniture or props.
-  • If REF0 has NO mirror → do NOT add a mirror in this shot
-  • If REF0 has NO clothing rack → do NOT add a rack in this shot
-  • If REF0 has NO desk or office furniture → do NOT introduce a desk, office chair, or corporate decor
-  • If REF0 has NO reception counter or lobby furniture → do NOT generate those elements
-  • Allowed: clothes naturally moved, bags opened/shifted, boxes partially rearranged
-  • Forbidden: new large furniture, new architectural elements, new room style
-The room's architecture and major props are FROZEN from REF0. Only organic haul clutter may evolve.
+🪞 SCENE PROP ALLOWLIST — STRICT LOCK TO REF0:
+Only props CLEARLY VISIBLE in REF0 are allowed. Everything else is FORBIDDEN, even if plausible.
+
+ALWAYS ALLOWED (organic haul clutter that evolves naturally):
+  ✓ Shopping bags (opened or closed)
+  ✓ Cardboard boxes (opened or closed)
+  ✓ Clothing pieces lying on bed, chair, or floor
+  ✓ Items from the haul draped or folded in background
+  ✓ Any specific furniture already shown in REF0
+
+FORBIDDEN UNLESS EXPLICITLY IN REF0:
+  ✗ Clothing rack or garment rack — do NOT add if not in REF0
+  ✗ Full-length mirror or wall mirror — do NOT add if not in REF0
+  ✗ Desk, writing table, or office-style furniture
+  ✗ Office chair or ergonomic chair
+  ✗ Lamp, floor lamp, or desk lamp not in REF0
+  ✗ Dresser or wardrobe not in REF0
+  ✗ New shelving or storage units
+  ✗ Extra seating not in REF0
+  ✗ Any large decor object not established in REF0
+  ✗ Architectural changes (different walls, ceiling, floor material)
+Do NOT invent plausible props. If REF0 does not show it, it does not exist in this haul space.
 
 PROGRESSIVE CLUTTER CONTINUITY:
 The haul session has a natural arc — the room evolves as items are tried on.

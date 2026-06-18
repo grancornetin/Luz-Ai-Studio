@@ -544,7 +544,16 @@ const PhotodumpModule: React.FC = () => {
                 haulCoverageRole = 'hero';
               } else if (sk === 'HAUL_OVERVIEW' || sk === 'HAUL_RECAP') {
                 haulCoverageRole = 'context';
-              } else if (sk.startsWith('HAUL_SETUP_') || sk.startsWith('HAUL_DETAIL_')) {
+              } else if (sk.startsWith('HAUL_SETUP_')) {
+                // Key encodes outfit item index — resolve to correct item for debug display
+                const idx = parseInt(sk.replace('HAUL_SETUP_', ''), 10) - 1;
+                const it = haulManifestDebug.outfitItems[idx] ?? haulManifestDebug.tryOnItems[idx];
+                haulPrimaryId = it?.id;
+                // Show actual manualKind — never show 'auto' if it was manually tagged
+                haulManualKindDebug = (it?.manualKind && it.manualKind !== 'auto') ? it.manualKind : (it?.manualKind ?? undefined);
+                haulResolvedKindDebug = it?.resolvedKind;
+                haulCoverageRole = 'support';
+              } else if (sk.startsWith('HAUL_DETAIL_')) {
                 haulCoverageRole = 'support';
               }
             }
@@ -783,6 +792,21 @@ const PhotodumpModule: React.FC = () => {
         overexposedItems:    haulManifestDebug?.coveragePlan.overexposedItems,
         failedCoverageItems: failed.map(fi => shots[fi]?.key ?? `shot_${fi}`),
         coverageWarnings:    haulManifestDebug?.coveragePlan.coverageWarnings,
+        // Run completeness verdict
+        failedShotIds: failed.map(fi => shots[fi]?.key ?? `shot_${fi}`),
+        missingRequiredOutfits: haulManifestDebug?.coveragePlan.uncoveredRequiredItems,
+        blockingIssues: (() => {
+          if (recipe !== 'outfit_haul') return undefined;
+          const issues: string[] = [];
+          if (failed.length > 0) issues.push(`${failed.length} shot(s) failed`);
+          const uncovered = haulManifestDebug?.coveragePlan.uncoveredRequiredItems ?? [];
+          if (uncovered.length > 0) issues.push(`${uncovered.length} required outfit(s) missing hero try-on: ${uncovered.join(', ')}`);
+          return issues;
+        })(),
+        isComplete: recipe === 'outfit_haul' ? (() => {
+          const uncovered = haulManifestDebug?.coveragePlan.uncoveredRequiredItems ?? [];
+          return failed.length === 0 && uncovered.length === 0;
+        })() : undefined,
         sceneFingerprintSummary: recipe === 'outfit_haul'
           ? `Haul scene fingerprint: REF0-anchored bedroom lock, progressive clutter ${storyShotCount} shots`
           : undefined,
