@@ -366,6 +366,7 @@ export function parseOutfitBriefContext(basePrompt: string): OutfitBriefContext 
       'corporate corridor or building entrance — walking-arriving feel, not rigid, daylight',
       'cowork lounge — relaxed professional pose, blurred modern interior in background',
     ];
+    // (la distinción wearingContextOnly se calcula abajo junto al return)
   } else if (lower.includes('gala') || lower.includes('black tie') || lower.includes('cocktail') ||
              lower.includes('cóctel') || lower.includes('evento formal') || lower.includes('evento de gala')) {
     destinationClass = 'formal_event';
@@ -456,6 +457,38 @@ export function parseOutfitBriefContext(basePrompt: string): OutfitBriefContext 
     prepMood = 'tidy bedroom or mirror area — warm artificial evening light, no daylight';
   }
 
+  // ── wearingContextOnly: distingue "para X" (uso del outfit) de "en X" (locación de captura) ──
+  // Aplica solo a office_meeting por ahora — es el caso que más se presta a confusión.
+  // "para la oficina / para el trabajo / para trabajar / para ir a la oficina" → ropa de trabajo, haul en casa
+  // "en la oficina / en mi oficina / grabado en / fondo de oficina / filmado en" → puede ser locación real
+  let wearingContextOnly: boolean | undefined;
+  let wearingContextStyleLabel: string | undefined;
+  if (destinationClass === 'office_meeting') {
+    const hasForUsage =
+      /para (la |el |mi |ir a )?ofic/i.test(basePrompt) ||
+      /para (el |mi )?trabajo/i.test(basePrompt) ||
+      /para trabajar/i.test(basePrompt) ||
+      /para (la |una )?reunión/i.test(basePrompt) ||
+      /ropa (de|para) (la |el )?ofic/i.test(basePrompt) ||
+      /outfits? (de|para) (la |el )?ofic/i.test(basePrompt) ||
+      /looks? (de|para) (la |el )?ofic/i.test(basePrompt) ||
+      /prendas? (de|para) (la |el )?ofic/i.test(basePrompt);
+    const hasAtLocation =
+      /en (la |mi |una )?ofic/i.test(basePrompt) ||
+      /grabad[ao] en/i.test(basePrompt) ||
+      /filmad[ao] en/i.test(basePrompt) ||
+      /fondo (de )?ofic/i.test(basePrompt) ||
+      /haz.*en (la |mi )?ofic/i.test(basePrompt) ||
+      /haul en (la |mi |una )?ofic/i.test(basePrompt);
+    // Si hay señal de "para uso" pero NO hay señal de "en locación" → wearingContextOnly
+    if (hasForUsage && !hasAtLocation) {
+      wearingContextOnly = true;
+      wearingContextStyleLabel = 'office / workwear inspired';
+    } else if (hasAtLocation) {
+      wearingContextOnly = false;
+    }
+  }
+
   return {
     timeSignal,
     destinationClass,
@@ -465,6 +498,8 @@ export function parseOutfitBriefContext(basePrompt: string): OutfitBriefContext 
     destinationMood,
     isOccasionBrief: destinationClass !== 'none',
     destinationShotOptions,
+    wearingContextOnly,
+    wearingContextStyleLabel,
   };
 }
 
@@ -1685,9 +1720,23 @@ export function detectContradictions(
 
 // ── Bloque de contexto global del brief — inyectado en REF0 y shots de destino.
 // Para shots de preparación (ARRIVING, MIRROR, DETAIL, READY), usar extractShotLocationOverride.
-function extractBriefContextBlock(basePrompt: string): string {
+// Para outfit_haul: si wearingContextOnly=true, NO inyectar venueSignal (evita contaminar la locación).
+function extractBriefContextBlock(basePrompt: string, recipe?: string): string {
   const { timeSignal, venueSignal } = parseBriefContext(basePrompt);
-  if (!timeSignal && !venueSignal) return '';
+
+  // Para haul: detectar si la mención de destino es solo contexto de uso (no locación de captura)
+  let effectiveVenueSignal = venueSignal;
+  if (recipe === 'outfit_haul' && venueSignal) {
+    const ctx = parseOutfitBriefContext(basePrompt);
+    if (ctx.wearingContextOnly === true) {
+      // Suprimir venueSignal de locación — reemplazar por nota de estilo solamente
+      effectiveVenueSignal = ctx.wearingContextStyleLabel
+        ? `OUTFIT STYLE CONTEXT: ${ctx.wearingContextStyleLabel} (the clothes suit this occasion, but the haul takes place at home)`
+        : '';
+    }
+  }
+
+  if (!timeSignal && !effectiveVenueSignal) return '';
 
   const lines = [
     '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
@@ -1696,7 +1745,7 @@ function extractBriefContextBlock(basePrompt: string): string {
     'They override the model\'s default tendency to generate daytime/neutral lighting.',
   ];
   if (timeSignal) lines.push(`  • ${timeSignal}`);
-  if (venueSignal) lines.push(`  • ${venueSignal}`);
+  if (effectiveVenueSignal) lines.push(`  • ${effectiveVenueSignal}`);
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   return lines.join('\n');
 }
@@ -4242,7 +4291,7 @@ ${bodyInstruction}
 ${outfitInstruction}
 ${productInstruction}`;
 
-  const briefContextBlock = extractBriefContextBlock(basePrompt);
+  const briefContextBlock = extractBriefContextBlock(basePrompt, recipe);
 
   const prompt = `${LOCK_SYSTEM}
 
@@ -5010,6 +5059,16 @@ MANDATORY to preserve across ALL shots:
   • Same spatial layout — do NOT rearrange furniture between shots
   • Same shopping bags, boxes, and haul clutter family established in REF0
 
+🪞 SCENE PROP CONSISTENCY — ONLY USE WHAT REF0 ESTABLISHED:
+Major props are locked to what appears in REF0. Do NOT invent new furniture or props.
+  • If REF0 has NO mirror → do NOT add a mirror in this shot
+  • If REF0 has NO clothing rack → do NOT add a rack in this shot
+  • If REF0 has NO desk or office furniture → do NOT introduce a desk, office chair, or corporate decor
+  • If REF0 has NO reception counter or lobby furniture → do NOT generate those elements
+  • Allowed: clothes naturally moved, bags opened/shifted, boxes partially rearranged
+  • Forbidden: new large furniture, new architectural elements, new room style
+The room's architecture and major props are FROZEN from REF0. Only organic haul clutter may evolve.
+
 PROGRESSIVE CLUTTER CONTINUITY:
 The haul session has a natural arc — the room evolves as items are tried on.
 Shot ${shot.arcPosition} of ${totalShots}:
@@ -5092,7 +5151,7 @@ Natural light, handheld imperfection, real skin texture, no studio polish.
 The result must look like someone captured this moment on their phone — not a photographer.
 Organic, imperfect, lived-in. NOT editorial. NOT advertising. NOT staged.`;
 
-  const briefContextBlock   = extractBriefContextBlock(basePrompt);
+  const briefContextBlock   = extractBriefContextBlock(basePrompt, recipe);
   const hasUserSceneRef = !!(refs.scenePruebaRef || refs.sceneRef);
   // Para outfit_check usar el router semántico completo; para otros usar legado
   const briefCtxForShot = isOutfitCheckRecipe ? parseOutfitBriefContext(basePrompt) : null;
@@ -5151,6 +5210,41 @@ Organic, imperfect, lived-in. NOT editorial. NOT advertising. NOT staged.`;
     );
   })();
 
+  // ── HAUL LOCATION SEMANTICS — solo para outfit_haul ──────────────────────────
+  // Evita que términos de ocasión ("para la oficina") contaminen el fondo de captura.
+  const haulLocationSemanticsBlock = (() => {
+    if (recipe !== 'outfit_haul') return '';
+    const ctx = parseOutfitBriefContext(basePrompt);
+    const isWearingOnly = ctx.wearingContextOnly === true;
+    // Siempre inyectar el bloque de semántica de locación en haul.
+    // Si wearingContextOnly=true, añadir advertencia explícita + forbidden list.
+    // Si wearingContextOnly=false/undefined, solo el recordatorio base.
+    const wearingOnlyWarning = isWearingOnly
+      ? `
+⚠️ CRITICAL — OCCASION ≠ LOCATION:
+The brief says "${ctx.wearingContextStyleLabel ?? 'this occasion'}". This describes what the CLOTHES are for — NOT where the haul is filmed.
+The user is doing a haul at HOME and these clothes happen to be workwear / occasion-appropriate.
+DO NOT move the haul into an office, coworking space, corporate corridor, or workplace.
+DO NOT generate: office lobby, building entrance, elevator, meeting room, coworking lounge, business corridor, reception desk, corporate interior.
+The clothes may look polished and professional — the ROOM is still a bedroom / dressing room / home space.`
+      : '';
+    return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏠 HAUL LOCATION SEMANTICS (BINDING — DO NOT IGNORE):
+A clothing haul is filmed in a HOME PREPARATION SPACE: bedroom, dressing room, closet room, or personal room.
+The brief may mention an occasion (office, church, dinner, travel) — this describes WHERE THE CLOTHES WILL BE WORN, not where the haul is filmed.
+${wearingOnlyWarning}
+FORBIDDEN HAUL BACKGROUNDS (unless user explicitly requests them):
+❌ office lobby or reception area
+❌ coworking space or open-plan office
+❌ corporate corridor or business hallway
+❌ meeting room or boardroom
+❌ building entrance or elevator lobby
+❌ commercial showroom or retail space
+❌ workplace lounge or office pantry
+The haul ALWAYS stays in a home / personal / dressing environment unless the user says "film it in my office" or "at the office" explicitly.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+  })();
+
   const prompt = `${LOCK_SYSTEM}
 
 ${PARADIGM_RULE}
@@ -5168,6 +5262,8 @@ ${ref0HardLock}
 ${sceneContinuityBlock}
 
 ${adaptiveClosureBlock}
+
+${haulLocationSemanticsBlock}
 
 ${styleCoherenceBlock}
 

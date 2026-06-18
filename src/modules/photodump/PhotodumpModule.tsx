@@ -38,6 +38,7 @@ import {
   parseOutfitBriefContext,
   inferOutfitComposition,
   buildHaulManifest,
+  buildHaulShotPlan,
   type PhotodumpShotResult,
 } from './photodumpDirectorService';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
@@ -411,9 +412,14 @@ const PhotodumpModule: React.FC = () => {
 
       // Debug: acumular prompts de cada shot (solo para admins)
       const inferredDest = isAdmin ? inferDestinationFromBrief(basePrompt) : 'none' as const;
-      const haulManifestDebug = isAdmin && recipe === 'outfit_haul'
-        ? buildHaulManifest(refsWithMode, storyShotCount)
-        : undefined;
+      // buildHaulShotPlan popula el ledger (plannedHeroShots, coverageStatus, etc.).
+      // Sin llamarlo el ledger queda en cero — es necesario para debug real.
+      const haulManifestDebug = (() => {
+        if (!isAdmin || recipe !== 'outfit_haul') return undefined;
+        const m = buildHaulManifest(refsWithMode, storyShotCount);
+        buildHaulShotPlan(m); // side-effect: escribe ledger y warnings en m.coveragePlan
+        return m;
+      })();
       const briefCtxDebug = isAdmin && recipe === 'outfit_check' ? parseOutfitBriefContext(basePrompt) : undefined;
       const outfitCompositionDebug = isAdmin && recipe === 'outfit_check'
         ? inferOutfitComposition(refsWithMode, basePrompt) : undefined;
@@ -742,6 +748,34 @@ const PhotodumpModule: React.FC = () => {
         destinationClass:    briefCtxDebug?.destinationClass,
         prepEnvironmentClass: briefCtxDebug?.prepEnvironmentClass,
         haulManifest:        haulManifestDebug,
+        // Detectar si el selector manual se perdió en el pipeline
+        // Si refs.haulOutfitKinds tiene valores no-auto pero el manifest los tiene como 'auto' → warning
+        manualKindLostWarning: (() => {
+          if (recipe !== 'outfit_haul' || !haulManifestDebug) return undefined;
+          const uiKinds = (refsWithMode as any).haulOutfitKinds as string[] | undefined;
+          if (!uiKinds || uiKinds.length === 0) return undefined;
+          const lostItems = haulManifestDebug.outfitItems.filter((it, idx) => {
+            const uiVal = uiKinds[idx];
+            return uiVal && uiVal !== 'auto' && it.manualKind === 'auto';
+          });
+          return lostItems.length > 0
+            ? { detected: true, lostCount: lostItems.length, lostItemIds: lostItems.map(it => it.id) }
+            : { detected: false };
+        })(),
+        // Contexto de uso del outfit (separado de locación de captura)
+        haulWearingContext: recipe === 'outfit_haul' ? (() => {
+          const ctx = parseOutfitBriefContext(basePrompt);
+          return {
+            destinationClass:       ctx.destinationClass,
+            wearingContextOnly:     ctx.wearingContextOnly,
+            wearingContextStyleLabel: ctx.wearingContextStyleLabel,
+            captureEnvironment:     ctx.wearingContextOnly === true
+              ? 'auto_home_haul_space'
+              : ctx.wearingContextOnly === false
+              ? ctx.destinationClass
+              : 'auto_home_haul_space',
+          };
+        })() : undefined,
         // Haul ledger global
         coverageLedger:      haulLedger,
         uncoveredRequiredItems: haulManifestDebug?.coveragePlan.uncoveredRequiredItems,

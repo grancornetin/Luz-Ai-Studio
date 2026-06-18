@@ -344,6 +344,13 @@ export interface OutfitBriefContext {
   destinationMood:     string;   // descripción de atmósfera del destino
   isOccasionBrief:     boolean;
   destinationShotOptions: string[]; // variaciones aceptables para el closing shot
+  // Para haul: true cuando la ocasión describe a QUÉ ocasión va la ropa (no dónde se filma el haul).
+  // "para la oficina" → wearingContextOnly=true (no contamina locación de captura)
+  // "en la oficina" / "grabado en la oficina" → wearingContextOnly=false (puede ser locación real)
+  wearingContextOnly?: boolean;
+  // Etiqueta corta del contexto de uso — solo estilo, sin referencias de locación física.
+  // Ejemplo: "office / workwear inspired" para inyectar en haul sin traer "lobby/cowork"
+  wearingContextStyleLabel?: string;
 }
 
 // ── Outfit composition: inferida desde brief + refs ──────────────────────────
@@ -567,6 +574,15 @@ export interface PhotodumpDebugData {
   prepEnvironmentClass?: PrepEnvironmentClass;
   // Haul manifest (solo outfit_haul)
   haulManifest?:             HaulManifest;
+  // Detección de pérdida del selector manual en el pipeline
+  manualKindLostWarning?:    { detected: boolean; lostCount?: number; lostItemIds?: string[] };
+  // Separación de contexto de uso del outfit vs locación de captura
+  haulWearingContext?:       {
+    destinationClass:         string;
+    wearingContextOnly?:      boolean;
+    wearingContextStyleLabel?: string;
+    captureEnvironment:       string;
+  };
   // Haul coverage ledger global
   coverageLedger?:           HaulCoverageLedgerItem[];
   uncoveredRequiredItems?:   string[];
