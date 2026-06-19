@@ -3242,7 +3242,8 @@ export function buildHaulManifest(refs: PhotodumpRefs, requestedCount: number): 
       footwearTryOnEligible:     accKind === 'footwear',
       detailEligible:            true,
       canBeIntegratedIntoOutfit: true,
-      priority:                  closeupArr[i] ? ('required' as const) : ('normal' as const),
+      // Every uploaded accessory is required — the closeupRequested flag only affects shot style
+      priority:                  'required' as const,
     };
   });
 
@@ -3320,14 +3321,13 @@ export function buildHaulManifest(refs: PhotodumpRefs, requestedCount: number): 
 export function buildHaulShotPlan(
   manifest: HaulManifest,
 ): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
-  const total  = manifest.maxStoryShots;
-  const shots: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] = [];
+  const total = manifest.maxStoryShots;
 
-  // ── Ledger tracking (mutable durante el planning) ──────────
+  // ── Ledger tracking ─────────────────────────────────────────
   const ledgerMap = new Map<string, HaulCoverageLedgerItem>(
     manifest.coveragePlan.ledger.map(l => [l.itemId, { ...l }]),
   );
-  const addHeroShot   = (itemId: string, shotKey: string) => {
+  const addHeroShot = (itemId: string, shotKey: string) => {
     const l = ledgerMap.get(itemId);
     if (l) { l.plannedHeroShots++; l.shotIds.push(shotKey); }
   };
@@ -3336,157 +3336,223 @@ export function buildHaulShotPlan(
     if (l) { l.plannedSupportShots++; l.shotIds.push(shotKey); }
   };
 
-  // ── Queues mutables del planner ────────────────────────────
-  const tryOnQueue    = [...manifest.tryOnItems];
-  const closeupQueue  = [...manifest.closeupItems];
-  const footwearQueue = [...manifest.footwearItems];
-  const bagQueue      = manifest.accessoryItems.filter(it => it.kind === 'bag' && !it.closeupRequested);
-  const jewelryQueue  = manifest.accessoryItems.filter(it => it.kind === 'jewelry' && !it.closeupRequested);
+  // ═══════════════════════════════════════════════════════════
+  // PHASE 1 — OBLIGATORY COVERAGE SLOTS
+  // Every item the user uploaded gets a dedicated hero slot.
+  // These slots are guaranteed BEFORE any narrative variety.
+  // Items are sorted by category so the final sequence feels
+  // natural: wearables → footwear → accessories → closeups.
+  // ═══════════════════════════════════════════════════════════
 
-  // ── 1. Reservar close-ups obligatorios (ítems marcados con ⭐) ─
-  const reservedCloseups = closeupQueue.map((item, ci) => {
-    const shot = buildHaulAccessoryCloseupShot(item, ci);
+  type PlannedShot = Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>;
+
+  // Wearables: each gets exactly 1 hero try-on slot
+  const tryOnQueue  = [...manifest.tryOnItems];
+  const obligatoryTryOns: PlannedShot[] = [];
+  tryOnQueue.forEach((item, idx) => {
+    const isLast    = idx === tryOnQueue.length - 1;
+    const pileState = derivePileState(idx, manifest.outfitItems.length);
+    const shot = buildHaulTryOnShot(item, idx, manifest.outfitItems.length, isLast, pileState);
+    obligatoryTryOns.push(shot);
     addHeroShot(item.id, shot.key);
-    return shot;
   });
+  const coveredByFirst = new Set(tryOnQueue.map(it => it.id));
 
-  // ── 2. Reservar detail shots para calzado suelto sin closeup ──
-  const footwearWithoutCloseup = footwearQueue.filter(it => !it.closeupRequested);
-  const reservedFootwear = footwearWithoutCloseup.map((item, fi) => {
+  // Non-wearable items from the outfit slots (footwear/bag/jewelry uploaded in outfit slots)
+  const footwearFromOutfits = manifest.footwearItems;
+  const obligatoryFootwear: PlannedShot[] = footwearFromOutfits.map((item, fi) => {
     const shot = buildHaulFootwearShot(item, fi);
     addHeroShot(item.id, shot.key);
     return shot;
   });
 
-  // ── 3. Reservar detail shots para bolsos sin closeup ──────────
-  const reservedBags = bagQueue.map((item, bi) => {
+  // Accessories (from accesorioRefs slot): bags, jewelry, generic accessories
+  const accessoryBags    = manifest.accessoryItems.filter(it => it.kind === 'bag');
+  const accessoryJewelry = manifest.accessoryItems.filter(it => it.kind === 'jewelry');
+  const accessoryGeneric = manifest.accessoryItems.filter(it => it.kind !== 'bag' && it.kind !== 'jewelry');
+  const accessoryFootwear = manifest.accessoryItems.filter(it => it.kind === 'footwear');
+
+  const obligatoryBags: PlannedShot[] = accessoryBags.map((item, bi) => {
     const shot = buildHaulBagShot(item, bi);
     addHeroShot(item.id, shot.key);
     return shot;
   });
 
-  // ── 4. Reservar detail shots para joyería sin closeup ─────────
-  const reservedJewelry = jewelryQueue.map((item, ji) => {
+  const obligatoryJewelry: PlannedShot[] = accessoryJewelry.map((item, ji) => {
     const shot = buildHaulJewelryShot(item, ji);
     addHeroShot(item.id, shot.key);
     return shot;
   });
 
-  // Espacio real para shots narrativos
-  const obligatoryCount = reservedCloseups.length + reservedFootwear.length + reservedBags.length + reservedJewelry.length;
+  const obligatoryAccFootwear: PlannedShot[] = accessoryFootwear.map((item, fi) => {
+    const shot = buildHaulFootwearShot(item, footwearFromOutfits.length + fi);
+    addHeroShot(item.id, shot.key);
+    return shot;
+  });
+
+  const obligatoryGenericAcc: PlannedShot[] = accessoryGeneric.map((item, ai) => {
+    // Generic accessories get an accessory closeup shot regardless of closeupRequested flag
+    const shot = buildHaulAccessoryCloseupShot(item, ai);
+    addHeroShot(item.id, shot.key);
+    return shot;
+  });
+
+  // Total obligatory slots (guaranteed in final plan)
+  const obligatorySlots: PlannedShot[] = [
+    ...obligatoryTryOns,
+    ...obligatoryFootwear,
+    ...obligatoryAccFootwear,
+    ...obligatoryBags,
+    ...obligatoryJewelry,
+    ...obligatoryGenericAcc,
+  ];
+  const obligatoryCount = obligatorySlots.length;
+
+  // ═══════════════════════════════════════════════════════════
+  // PHASE 2 — NARRATIVE BUDGET
+  // Remaining slots after obligatory coverage are distributed
+  // between: overview (1), variety (adjusting/styled), recap (1).
+  // Budget degrades gracefully: recap first to drop, then variety.
+  // ═══════════════════════════════════════════════════════════
   const narrativeBudget = Math.max(0, total - obligatoryCount);
 
-  // ── 5. HAUL_OVERVIEW (apertura — setup del espacio) ──────────
+  const narrativeShots: PlannedShot[] = [];
+
+  // Overview — always first if we have any budget
   if (narrativeBudget >= 1) {
     const overview = buildHaulOverviewShot(manifest);
-    shots.push(overview);
-    // El overview es un support shot para todos los ítems wearables
+    narrativeShots.push(overview);
+    // overview is support-only — not hero coverage for any item
     manifest.outfitItems.forEach(it => addSupportShot(it.id, overview.key));
   }
 
-  // ── 6. Try-ons con BALANCE ENFORCEMENT ───────────────────────
-  // REGLA CRÍTICA: todos los ítems wearables deben tener ≥ 1 hero shot
-  // ANTES de que cualquier ítem reciba un segundo hero shot (adjusting/styled).
-  const tryOnBudgetRaw = narrativeBudget - 1; // -1 por overview
-  const wantRecap      = tryOnQueue.length >= 2 && tryOnBudgetRaw >= 3;
-  const tryOnBudget    = wantRecap ? tryOnBudgetRaw - 1 : tryOnBudgetRaw;
+  // Variety slots: adjusting / styled (only after all items have 1 hero shot)
+  const varietyBudgetRaw = narrativeBudget - 1; // -1 for overview
+  const wantRecap = tryOnQueue.length >= 2 && varietyBudgetRaw >= 2;
+  const varietyBudget = wantRecap ? Math.max(0, varietyBudgetRaw - 1) : varietyBudgetRaw;
 
-  // Primera pasada: garantizar 1 try-on por cada ítem wearable
-  const pendingTryOns   = [...tryOnQueue]; // copia para primera pasada
-  const coveredByFirst  = new Set<string>(); // ids con al menos 1 hero shot
-
-  let tryOnIndex = 0;
-  let slotsUsed  = 0;
-  let setupIdx   = 0;
-
-  // Primera pasada — 1 shot por ítem, en orden
-  while (slotsUsed < tryOnBudget && pendingTryOns.length > 0) {
-    const item      = pendingTryOns.shift()!;
-    const remaining = pendingTryOns.length;
-    const slotsLeft = tryOnBudget - slotsUsed;
-    const isLast    = remaining === 0 || slotsLeft === 1;
-    const pileState = derivePileState(tryOnIndex, manifest.outfitItems.length);
-
-    // Setup intercalado cada 3 try-ons, solo si hay espacio después de cubrir todos
-    const allWillBeCovered = (tryOnBudget - slotsUsed - 1) >= pendingTryOns.length;
-    const canSetup = allWillBeCovered &&
-      setupIdx < 2 &&
-      tryOnIndex > 0 &&
-      tryOnIndex % 3 === 0 &&
-      slotsLeft > pendingTryOns.length + 1;
-    if (canSetup) {
-      const setupShot = buildHaulSetupShot(item, setupIdx, tryOnIndex);
-      shots.push(setupShot);
-      addSupportShot(item.id, setupShot.key);
-      slotsUsed++;
-      setupIdx++;
-    }
-
-    if (slotsUsed >= tryOnBudget) break;
-
-    const tryOnShot = buildHaulTryOnShot(item, tryOnIndex, manifest.outfitItems.length, isLast, pileState);
-    shots.push(tryOnShot);
-    addHeroShot(item.id, tryOnShot.key);
-    coveredByFirst.add(item.id);
-    slotsUsed++;
-    tryOnIndex++;
-  }
-
-  // Segunda pasada — shots de variedad (adjusting/styled) solo para ítems ya cubiertos
-  // y solo si quedó budget sobrante DESPUÉS de que todos tienen al menos 1 hero shot
-  const allRequiredCovered = manifest.tryOnItems.every(it => coveredByFirst.has(it.id));
-  if (allRequiredCovered) {
-    // Iterar de nuevo por los ítems para dar segundos shots en orden — no siempre al mismo
+  if (coveredByFirst.size === tryOnQueue.length && varietyBudget > 0) {
     const varietyCandidates = [...manifest.tryOnItems];
     let varietyIdx = 0;
-    while (slotsUsed < tryOnBudget && varietyCandidates.length > 0) {
+    let varietySlotsUsed = 0;
+    let tryOnIndexForVariety = obligatoryTryOns.length;
+
+    while (varietySlotsUsed < varietyBudget && varietyCandidates.length > 0) {
       const item      = varietyCandidates[varietyIdx % varietyCandidates.length];
       const pileState = derivePileState(manifest.tryOnItems.indexOf(item), manifest.outfitItems.length);
       const heroCount = ledgerMap.get(item.id)?.plannedHeroShots ?? 0;
 
-      // No dar más de 2 hero shots a ningún ítem (cap de sobreexposición)
       if (heroCount < 2) {
-        if (tryOnIndex % 2 === 0) {
-          const adj = buildHaulAdjustingShot(item, manifest.tryOnItems.indexOf(item), pileState);
-          shots.push(adj);
-          addHeroShot(item.id, adj.key);
-        } else {
-          const stl = buildHaulStyledResultShot(item, manifest.tryOnItems.indexOf(item), pileState);
-          shots.push(stl);
-          addHeroShot(item.id, stl.key);
-        }
-        slotsUsed++;
-        tryOnIndex++;
+        const useAdjusting = tryOnIndexForVariety % 2 === 0;
+        const varShot = useAdjusting
+          ? buildHaulAdjustingShot(item, manifest.tryOnItems.indexOf(item), pileState)
+          : buildHaulStyledResultShot(item, manifest.tryOnItems.indexOf(item), pileState);
+        narrativeShots.push(varShot);
+        addHeroShot(item.id, varShot.key);
+        varietySlotsUsed++;
+        tryOnIndexForVariety++;
       }
       varietyIdx++;
-      // salir si dimos vuelta completa sin poder añadir nada
       if (varietyIdx >= varietyCandidates.length * 2) break;
     }
   }
 
-  // Slots sobrantes → detail shots (ya cubiertos, solo textura/macro)
-  const coveredItemsList = manifest.outfitItems.filter(it => coveredByFirst.has(it.id));
-  let detailIdx = 0;
-  while (slotsUsed < tryOnBudget && detailIdx < coveredItemsList.length) {
-    const shot = buildHaulDetailGarmentShot(coveredItemsList[detailIdx], detailIdx);
-    shots.push(shot);
-    addSupportShot(coveredItemsList[detailIdx].id, shot.key);
-    slotsUsed++;
-    detailIdx++;
+  // Recap — only if budget remains and there are multiple outfits
+  if (wantRecap) {
+    narrativeShots.push(buildHaulRecapShot(manifest));
   }
 
-  // ── 7. HAUL_RECAP (cierre flexible) ─────────────────────────
-  if (wantRecap && slotsUsed <= tryOnBudgetRaw) {
-    shots.push(buildHaulRecapShot(manifest));
+  // ═══════════════════════════════════════════════════════════
+  // PHASE 3 — INTERLEAVE INTO FINAL SEQUENCE
+  // Order: overview → [try-on, optional variety, optional accessory] × N → recap
+  // Non-wearable items are spread evenly through the middle, not appended at the end.
+  // This guarantees all items appear even if the plan exceeds total (we truncate fairly).
+  // ═══════════════════════════════════════════════════════════
+
+  const nonWearableObligatory = [
+    ...obligatoryFootwear,
+    ...obligatoryAccFootwear,
+    ...obligatoryBags,
+    ...obligatoryJewelry,
+    ...obligatoryGenericAcc,
+  ];
+
+  const finalShots: PlannedShot[] = [];
+
+  // 1. Overview first
+  const overviewShot = narrativeShots.find(s => s.key === 'HAUL_OVERVIEW');
+  if (overviewShot) finalShots.push(overviewShot);
+
+  // 2. Interleave try-ons + variety with non-wearable items spread across the middle
+  const tryOnBlock = narrativeShots.filter(s =>
+    s.key !== 'HAUL_OVERVIEW' && s.key !== 'HAUL_RECAP',
+  );
+  // Include all obligatory try-on shots
+  const allTryOnLike = [...obligatoryTryOns, ...tryOnBlock];
+
+  // Spread non-wearables evenly across try-on positions
+  const spreadInterval = nonWearableObligatory.length > 0
+    ? Math.max(1, Math.floor(allTryOnLike.length / (nonWearableObligatory.length + 1)))
+    : Infinity;
+
+  let nwIdx = 0;
+  allTryOnLike.forEach((s, i) => {
+    finalShots.push(s);
+    // Insert a non-wearable every spreadInterval positions
+    if (nwIdx < nonWearableObligatory.length && (i + 1) % spreadInterval === 0) {
+      finalShots.push(nonWearableObligatory[nwIdx++]);
+    }
+  });
+  // Any remaining non-wearables that weren't interleaved yet
+  while (nwIdx < nonWearableObligatory.length) {
+    finalShots.push(nonWearableObligatory[nwIdx++]);
   }
 
-  // ── 8. Insertar footwear → bolsos → joyería → close-ups ───────
-  shots.push(...reservedFootwear);
-  shots.push(...reservedBags);
-  shots.push(...reservedJewelry);
-  shots.push(...reservedCloseups);
+  // 3. Recap last
+  const recapShot = narrativeShots.find(s => s.key === 'HAUL_RECAP');
+  if (recapShot) finalShots.push(recapShot);
 
-  // ── 9. Actualizar ledger con status final ─────────────────────
+  // ═══════════════════════════════════════════════════════════
+  // PHASE 4 — TRUNCATION (only if strictly necessary)
+  // If obligatory shots alone exceed the budget, drop narrative
+  // variety first (adjusting, styled, recap, overview), never
+  // drop obligatory hero shots for user-uploaded items.
+  // ═══════════════════════════════════════════════════════════
+  let result: PlannedShot[];
+
+  if (finalShots.length <= total) {
+    result = finalShots;
+  } else {
+    // More obligatory than budget — keep as many obligatory as possible,
+    // prioritizing wearable try-ons, then non-wearables in order.
+    // Drop narrative variety (non-obligatory) first.
+    const obligatoryKeys = new Set(obligatorySlots.map(s => s.key));
+    const mandatory  = finalShots.filter(s => obligatoryKeys.has(s.key));
+    const narrative  = finalShots.filter(s => !obligatoryKeys.has(s.key));
+
+    if (mandatory.length <= total) {
+      // Fit as many narrative shots as possible
+      result = [...mandatory, ...narrative].slice(0, total);
+    } else {
+      // Even mandatory exceeds budget — take try-ons first, then accessories
+      const tryOnKeys = new Set(obligatoryTryOns.map(s => s.key));
+      const tryOnOnly = mandatory.filter(s => tryOnKeys.has(s.key));
+      const accOnly   = mandatory.filter(s => !tryOnKeys.has(s.key));
+      result = [...tryOnOnly, ...accOnly].slice(0, total);
+
+      // Mark overflow in ledger for debug honesty
+      const droppedKeys = new Set(
+        [...tryOnOnly, ...accOnly].slice(total).map(s => s.key),
+      );
+      ledgerMap.forEach((entry) => {
+        if (entry.shotIds.some(k => droppedKeys.has(k))) {
+          entry.plannedHeroShots = Math.max(0, entry.plannedHeroShots - 1);
+        }
+      });
+    }
+  }
+
+  // ── Actualizar ledger con status final ─────────────────────
   ledgerMap.forEach((entry, itemId) => {
     if (entry.plannedHeroShots === 0 && entry.plannedSupportShots === 0) {
       entry.coverageStatus = 'uncovered';
@@ -3497,42 +3563,46 @@ export function buildHaulShotPlan(
     } else {
       entry.coverageStatus = 'covered';
     }
-    // Escribir de vuelta en el manifest para que esté disponible en debug
     const idx = manifest.coveragePlan.ledger.findIndex(l => l.itemId === itemId);
     if (idx >= 0) manifest.coveragePlan.ledger[idx] = entry;
     manifest.coveragePlan.plannedCoverage[itemId] = entry.plannedHeroShots + entry.plannedSupportShots;
   });
 
-  // Calcular listas de warnings
-  // REGLA: para full_outfit items required, support_only = uncovered (necesitan hero try-on propio)
+  // Calcular warnings — support_only escalated to uncovered for wearables (need body hero shot)
   const requiredIds = manifest.allItems.filter(it => it.priority === 'required').map(it => it.id);
   manifest.coveragePlan.uncoveredRequiredItems = requiredIds.filter(id => {
     const l = ledgerMap.get(id);
     if (!l || l.coverageStatus === 'uncovered') return true;
-    // full_outfit items MUST have at least 1 dedicated hero try-on — support shots do not count
+    // Wearable items (full_outfit, top, bottom, dress, onepiece, outerwear, hosiery)
+    // must have a dedicated on-body hero shot — overview/support shots don't count
     const item = manifest.allItems.find(it => it.id === id);
-    if (item && item.resolvedKind === 'full_outfit' && l.coverageStatus === 'support_only') return true;
+    const wearableKinds: HaulResolvedKind[] = ['full_outfit', 'top', 'bottom', 'dress', 'onepiece', 'outerwear', 'hosiery', 'mixed_set'];
+    if (item && wearableKinds.includes(item.resolvedKind) && l.coverageStatus === 'support_only') return true;
     return false;
   });
   manifest.coveragePlan.supportOnlyItems = requiredIds.filter(id => {
     const l = ledgerMap.get(id);
     if (l?.coverageStatus !== 'support_only') return false;
-    // full_outfit support_only items already escalated to uncoveredRequiredItems
     const item = manifest.allItems.find(it => it.id === id);
-    if (item?.resolvedKind === 'full_outfit') return false;
+    const wearableKinds: HaulResolvedKind[] = ['full_outfit', 'top', 'bottom', 'dress', 'onepiece', 'outerwear', 'hosiery', 'mixed_set'];
+    if (item && wearableKinds.includes(item.resolvedKind)) return false; // escalated above
     return true;
   });
   manifest.coveragePlan.overexposedItems = Array.from(ledgerMap.values())
     .filter(l => l.coverageStatus === 'overexposed').map(l => l.itemId);
   manifest.coveragePlan.missingCoverage = manifest.coveragePlan.uncoveredRequiredItems;
+
+  const overflowWarning = obligatoryCount > total
+    ? [`BUDGET_OVERFLOW: ${manifest.allItems.length} items uploaded but only ${total} shots requested — some items may share slots or have reduced coverage. Increase shot count for full coverage.`]
+    : [];
   manifest.coveragePlan.coverageWarnings = [
+    ...overflowWarning,
     ...manifest.coveragePlan.uncoveredRequiredItems.map(id => `UNCOVERED: ${ledgerMap.get(id)?.label ?? id}`),
     ...manifest.coveragePlan.supportOnlyItems.map(id => `SUPPORT_ONLY: ${ledgerMap.get(id)?.label ?? id}`),
     ...manifest.coveragePlan.overexposedItems.map(id => `OVEREXPOSED: ${ledgerMap.get(id)?.label ?? id}`),
   ];
 
-  // ── 10. Truncar a maxStoryShots (safety net) ────────────────
-  return shots.slice(0, total);
+  return result;
 }
 
 // ── Helpers de estado de pila ─────────────────────────────────
@@ -3813,8 +3883,8 @@ function buildHaulRecapShot(
     key:    'HAUL_RECAP',
     beat:   'atmosphere',
     role:   'HAUL RECAP',
-    purpose: `Closing shot of the haul. The person is surrounded by their haul items — some tried, some still on the rack or bed. Relaxed, natural mood. Communicates "that was everything." The haul space is visible with items at various stages. iPhone UGC energy, not editorial.`,
-    requiredElements:  ['person_in_haul_space', 'haul_items_visible_in_background', 'natural_relaxed_mood'],
+    purpose: `Closing shot of the haul. The person is wearing one of the haul looks already shown — NOT a new outfit, NOT avatar base clothing. They are surrounded by the haul items they uploaded (on bed, chair, or floor). Relaxed, natural mood. Communicates "that was everything." iPhone UGC energy, not editorial.`,
+    requiredElements:  ['person_wearing_one_of_the_haul_looks_already_shown', 'haul_items_visible_in_background', 'natural_relaxed_mood'],
     forbiddenElements: ['catalog_pose', 'studio_backdrop', 'editorial_lighting', 'forced_symmetry', 'ad_feel'],
     variationSpace: [
       `person sitting or standing surrounded by haul items — items on bed/rack visible, relaxed smile`,
@@ -5126,16 +5196,47 @@ FORBIDDEN UNLESS EXPLICITLY IN REF0:
   ✗ Architectural changes (different walls, ceiling, floor material)
 Do NOT invent plausible props. If REF0 does not show it, it does not exist in this haul space.
 
-PROGRESSIVE CLUTTER CONTINUITY:
+⛔ NO EXTERNAL BRANDING — HARD RULE:
+Do NOT generate bags, boxes, or packaging with visible brand names or logos.
+Do NOT invent retail store branding: ZARA, H&M, Shein, Zara, Forever21, Topshop, or any other brand name.
+Do NOT show price tags, hang tags with external brand logos, or retail chain shopping bags with visible text.
+If packaging or shopping bags appear: they must be PLAIN, UNBRANDED, GENERIC (solid color, no logo).
+Exception: only if the user explicitly uploaded a branded asset as a reference — reproduce that faithfully.
+
+🛍️ CONTROLLED HAUL CLUTTER — WHAT IS AND IS NOT ALLOWED IN SCENE:
+Allowed background elements (organic haul mess from the user's actual items):
+  ✓ Clothing pieces that ARE part of the uploaded haul — lying on bed, chair, or floor
+  ✓ Plain shopping bags (no logos) or plain cardboard boxes
+  ✓ The specific accessories from the haul references (bags, shoes, jewelry)
+  ✓ Natural fabric movement, open zippers, hangers from actual haul pieces
+
+Forbidden clutter — DO NOT invent these:
+  ✗ Generic clothing not matching any uploaded reference
+  ✗ Extra garments on bed/floor that were not uploaded by the user
+  ✗ Multiple bags with retail branding
+  ✗ Unrelated props, food, drink, phone (unless REF0 established it)
+  ✗ Overloaded surfaces with many random items
+The scene should feel like a real person's room with THEIR actual haul — not a set with invented props.
+
+📦 PROGRESSIVE CLUTTER CONTINUITY:
 The haul session has a natural arc — the room evolves as items are tried on.
 Shot ${shot.arcPosition} of ${totalShots}:
 ${shot.arcPosition <= Math.ceil(totalShots * 0.33)
-  ? '  EARLY STAGE: Bags and boxes still mostly closed or freshly opened. A few items laid out. Tidy with excitement energy.'
+  ? '  EARLY STAGE: Items still mostly in bags. A few pieces from the haul laid out. Tidy with fresh excitement.'
   : shot.arcPosition <= Math.ceil(totalShots * 0.66)
-  ? '  MIDDLE STAGE: Some items tried and discarded on bed or chair. Current item being featured. Natural mess starting.'
-  : '  LATE STAGE: Tried items folded or draped around the room. Organized chaos. Favorites may be visible. Real haul energy.'}
-ALLOWED logical changes: clothes move naturally, boxes open, selected items shift. These are expected.
-FORBIDDEN changes: new room, different walls, different bed, different furniture layout, studio backdrop, added props not in REF0, different light direction or color temperature.
+  ? '  MIDDLE STAGE: Some haul items tried and set aside on bed or chair. Natural but not overwhelming.'
+  : '  LATE STAGE: Haul items spread around the room — tried, folded, or draped. Organized chaos from the real haul only.'}
+ALLOWED: actual haul clothes move and shift naturally. Boxes open. Tried items get set aside.
+FORBIDDEN: invented clothes, branded packaging, new props not in REF0, furniture changes, different room, different light direction.
+
+⚠️ TALL FOOTWEAR + LEGWEAR INTEGRATION (GLOBAL RULE — ALL HAUL SHOTS):
+If the person's look in this shot combines any legwear (pants, jeans, skirt, dress hem, leggings, tights)
+with tall footwear that covers a significant portion of the leg (knee-high boots, over-knee boots, tall shaft):
+  • Choose ONE coherent integration: tucked in, over-boot, under-boot, or draped — based on the look.
+  • Apply that SAME resolution IDENTICALLY on BOTH legs — no asymmetry.
+  • FORBIDDEN: left leg tucked, right leg not. One shaft clipping through fabric. One boot floating.
+  • FORBIDDEN: broken geometry, partial penetration, or contradictory layering on either side.
+  The styling choice is free. The rule is: both legs must match.
 
 ⚠️ SAFE HAUL FALLBACK (only if try-on fails):
 If wearing this garment causes a content policy issue, do NOT redesign the garment.
