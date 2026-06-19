@@ -3605,6 +3605,153 @@ export function buildHaulShotPlan(
   return result;
 }
 
+// ── Coverage post-generación ──────────────────────────────────
+// Calcula coverage REAL basado en qué shots fueron generados con status 'ok'.
+// Un ítem solo está cubierto si tiene al menos 1 shot hero generado con status ok.
+// Llama esto DESPUÉS de que todos los shots terminen — no antes.
+export function computeFinalHaulCoverageFromShots(
+  manifest: HaulManifest,
+  plannedShots: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[],
+  debugShots: { key?: string; status: 'ok' | 'failed'; coverageRole?: HaulCoverageRole; primaryItemId?: string }[],
+): {
+  ledger:                 HaulCoverageLedgerItem[];
+  uncoveredRequiredItems: string[];
+  failedCoverageItems:    string[];
+  supportOnlyItems:       string[];
+  overexposedItems:       string[];
+  coverageWarnings:       string[];
+  isComplete:             boolean;
+  blockingIssues:         string[];
+  requiredItemCount:      number;
+  coveredRequiredItemCount: number;
+  failedRequiredItemCount:  number;
+} {
+  // Build a map: shotKey → debug result
+  const shotResultByKey = new Map<string, 'ok' | 'failed'>();
+  debugShots.forEach(ds => {
+    if (ds.key) shotResultByKey.set(ds.key, ds.status);
+  });
+
+  // Hero shots by item: shotKey → itemId mapping from planned shots
+  // We use the same shot key naming conventions as the planner
+  const heroShotToItem = new Map<string, string>();
+  manifest.allItems.forEach(item => {
+    const ledgerEntry = manifest.coveragePlan.ledger.find(l => l.itemId === item.id);
+    if (ledgerEntry) {
+      ledgerEntry.shotIds.forEach(shotKey => {
+        heroShotToItem.set(shotKey, item.id);
+      });
+    }
+  });
+
+  // Recalculate ledger from actual generated results
+  const finalLedger: HaulCoverageLedgerItem[] = manifest.coveragePlan.ledger.map(l => {
+    const heroShotIds = l.shotIds;
+    const actualOkHero = heroShotIds.filter(sk => shotResultByKey.get(sk) === 'ok').length;
+    const actualFailedHero = heroShotIds.filter(sk => shotResultByKey.get(sk) === 'failed').length;
+
+    let coverageStatus: HaulCoverageLedgerItem['coverageStatus'];
+    if (actualOkHero === 0 && l.plannedSupportShots > 0) {
+      // Check if this is a wearable — support-only doesn't count for wearables
+      const item = manifest.allItems.find(it => it.id === l.itemId);
+      const wearableKinds: HaulResolvedKind[] = ['full_outfit', 'top', 'bottom', 'dress', 'onepiece', 'outerwear', 'hosiery', 'mixed_set'];
+      coverageStatus = (item && wearableKinds.includes(item.resolvedKind)) ? 'uncovered' : 'support_only';
+    } else if (actualOkHero === 0) {
+      coverageStatus = 'uncovered';
+    } else if (l.required && actualOkHero >= 3) {
+      coverageStatus = 'overexposed';
+    } else {
+      coverageStatus = 'covered';
+    }
+
+    return {
+      ...l,
+      actualPromptedHeroShots:    actualOkHero,
+      actualPromptedSupportShots: l.actualPromptedSupportShots,
+      coverageStatus,
+    };
+  });
+
+  const requiredItems = manifest.allItems.filter(it => it.priority === 'required');
+  const wearableKinds: HaulResolvedKind[] = ['full_outfit', 'top', 'bottom', 'dress', 'onepiece', 'outerwear', 'hosiery', 'mixed_set'];
+
+  const uncoveredRequiredItems = requiredItems
+    .filter(it => {
+      const l = finalLedger.find(x => x.itemId === it.id);
+      if (!l) return true;
+      if (l.coverageStatus === 'uncovered') return true;
+      if (wearableKinds.includes(it.resolvedKind) && l.coverageStatus === 'support_only') return true;
+      return false;
+    })
+    .map(it => it.id);
+
+  const failedCoverageItems = requiredItems
+    .filter(it => {
+      const l = finalLedger.find(x => x.itemId === it.id);
+      if (!l) return false;
+      // Item has planned hero shots but ALL of them failed
+      return l.plannedHeroShots > 0 && l.actualPromptedHeroShots === 0;
+    })
+    .map(it => it.id);
+
+  const supportOnlyItems = finalLedger
+    .filter(l => l.coverageStatus === 'support_only' && l.required)
+    .filter(l => {
+      const item = manifest.allItems.find(it => it.id === l.itemId);
+      return item && !wearableKinds.includes(item.resolvedKind);
+    })
+    .map(l => l.itemId);
+
+  const overexposedItems = finalLedger
+    .filter(l => l.coverageStatus === 'overexposed')
+    .map(l => l.itemId);
+
+  // Build blockingIssues from failed coverage
+  const blockingIssues: string[] = [];
+  failedCoverageItems.forEach(itemId => {
+    const item = manifest.allItems.find(it => it.id === itemId);
+    const l = finalLedger.find(x => x.itemId === itemId);
+    const failedShots = (l?.shotIds ?? []).filter(sk => shotResultByKey.get(sk) === 'failed');
+    if (failedShots.length > 0) {
+      blockingIssues.push(
+        `required item ${itemId} (${item?.label ?? itemId}) failed visual coverage because ${failedShots.join(', ')} failed`,
+      );
+    }
+  });
+  uncoveredRequiredItems
+    .filter(id => !failedCoverageItems.includes(id))
+    .forEach(id => {
+      const item = manifest.allItems.find(it => it.id === id);
+      blockingIssues.push(`required item ${id} (${item?.label ?? id}) has no planned hero shot`);
+    });
+
+  const coverageWarnings: string[] = [
+    ...uncoveredRequiredItems.map(id => `UNCOVERED: ${finalLedger.find(l => l.itemId === id)?.label ?? id}`),
+    ...failedCoverageItems.map(id => `FAILED_HERO: ${finalLedger.find(l => l.itemId === id)?.label ?? id}`),
+    ...supportOnlyItems.map(id => `SUPPORT_ONLY: ${finalLedger.find(l => l.itemId === id)?.label ?? id}`),
+    ...overexposedItems.map(id => `OVEREXPOSED: ${finalLedger.find(l => l.itemId === id)?.label ?? id}`),
+  ];
+
+  const coveredRequiredItemCount = requiredItems.filter(it => {
+    const l = finalLedger.find(x => x.itemId === it.id);
+    return l?.coverageStatus === 'covered' || l?.coverageStatus === 'overexposed';
+  }).length;
+
+  return {
+    ledger:                   finalLedger,
+    uncoveredRequiredItems,
+    failedCoverageItems,
+    supportOnlyItems,
+    overexposedItems,
+    coverageWarnings,
+    isComplete:               uncoveredRequiredItems.length === 0 && failedCoverageItems.length === 0,
+    blockingIssues,
+    requiredItemCount:        requiredItems.length,
+    coveredRequiredItemCount,
+    failedRequiredItemCount:  failedCoverageItems.length,
+  };
+}
+
 // ── Helpers de estado de pila ─────────────────────────────────
 
 function derivePileState(tryOnIndex: number, totalOutfits: number): HaulPileState {
@@ -3616,11 +3763,11 @@ function derivePileState(tryOnIndex: number, totalOutfits: number): HaulPileStat
 }
 
 function pileStateDesc(state: HaulPileState, count: number): string {
-  if (state === 'clean')                  return 'The space is tidy — this is the first try-on.';
-  if (state === 'light_pile' && count === 1) return 'One discarded piece sits on the bed or chair in the background — just starting.';
-  if (state === 'medium_pile')            return `${count} pieces are loosely piled in the background — the haul is in full swing.`;
-  if (state === 'messy_but_believable')   return `${count} items are scattered in the background — organized chaos, believable and real.`;
-  return `${count} discarded pieces visible in background.`;
+  if (state === 'clean') return 'SCENE STATE — EARLY: Space is tidy. This is the first try-on. Maximum 1 plain bag or closed box visible. No clothing piles.';
+  if (state === 'light_pile') return `SCENE STATE — LIGHTLY USED: ${count === 1 ? 'One' : String(count)} haul item(s) from the uploaded set are set aside on the bed or chair. Plain packaging only — no logos. Room is still organized.`;
+  if (state === 'medium_pile') return `SCENE STATE — ORGANIZED HAUL: ${count} haul pieces from the uploaded set are naturally arranged in background — tried items on bed or draped on chair. Plain boxes/bags if any. Still tidy enough to feel intentional. Maximum 2 plain unbranded bags or boxes visible.`;
+  // messy_but_believable: keep controlled — NEVER invent extra clothing or branded packaging
+  return `SCENE STATE — ACTIVE HAUL: Several haul items from the uploaded set are visible in background — tried, folded, draped. Room feels used but not chaotic. STRICT: only items from this actual haul appear in background. Maximum 2 plain unbranded bags or boxes. No invented clothing. No branded packaging.`;
 }
 
 // ── Shot builders ─────────────────────────────────────────────
@@ -4325,18 +4472,41 @@ ${prepEnvDirective}
 
 iPhone photo quality. This establishes: the person's identity, the outfit, and the visual world for the set.`,
     outfit_haul: `SHOT: This is the anchor image for a clothing haul session.
-The person is in a real bedroom, dressing room, or fitting space. Several haul items are visible nearby — on a bed, chair, rack, boxes, or bags.
+The person is in a real bedroom, dressing room, or home fitting space — NOT a studio, NOT an office, NOT a retail store.
+Several haul items are visible nearby as a natural collection — on a bed, chair, boxes, or bags. Not a catalog grid.
 The image communicates: "I am about to try all of these pieces."
-The person may hold one item but should NOT be styled as a final outfit check. The haul items are present as a collection, not a catalog grid.
-Face visible, natural and relaxed expression — casual haul energy, not editorial.
+The person is NOT fully styled in a final look yet — this is pre-try-on energy.
+Face visible, relaxed expression — casual haul opening, not editorial.
 
-AVATAR CLOTHING IS NOT A HAUL ITEM:
-The clothing visible in the avatar or body reference is a base identity reference only.
-Do not treat it as one of the haul garments unless it was explicitly uploaded as a haul item.
+⛔ AVATAR/BODY CLOTHING FORBIDDEN IN REF0 — HARD RULE:
+The avatar reference and body reference photos exist ONLY to establish face identity and body proportions.
+ANY clothing visible on the avatar or body reference is IDENTITY DATA — it is NOT a haul item.
+  • Do NOT show the person wearing the avatar's catsuit, bodysuit, base shirt, pants, or any garment from the avatar/body ref.
+  • Do NOT interpret the avatar's base outfit as a haul garment to display or wear in REF0.
+  • Do NOT let the avatar reference clothing become the visible outfit of the person in REF0.
+In REF0, dress the person in NEUTRAL PREPARATION CLOTHING — completely separate from the avatar reference and the haul items:
+  ALLOWED neutral prep looks (choose one):
+    ✓ simple fitted white or grey tee + jeans
+    ✓ casual knit top + leggings or joggers
+    ✓ simple tank top + relaxed trousers
+    ✓ comfortable lounge outfit — plain, no logo, no brand
+  FORBIDDEN for REF0:
+    ✗ Any outfit that appears to be one of the uploaded haul references
+    ✗ Any clothing that matches the avatar/body reference clothing
+    ✗ Black catsuit, bodysuit, sleek base outfit from the avatar ref
+    ✗ Any editorial, branded, or catalog-style outfit
+The neutral prep clothing must look visually secondary — it is the "before" state, not the main event.
+It must NOT be mistaken for a haul product or reappear as a haul item in story shots.
+
+⛔ PACKAGING AND SCENE — HARD RULES FOR REF0:
+  • All shopping bags and boxes must be PLAIN, BLANK, UNBRANDED — solid color, no text, no logos.
+  • Do NOT invent retail branding: ZARA, H&M, Shein, Forever21, or any store name.
+  • Maximum 1-2 bags or boxes visible in REF0 — do NOT overload the scene.
+  • Props: ONLY what would naturally be in the person's real room. No mirror, rack, or desk unless clearly present in a scene reference.
 
 iPhone UGC realism: natural window light, slight handheld imperfection, real room texture, real skin.
 No beauty filter. No editorial grade. No fashion campaign lighting. No studio polish.
-This establishes: the person's identity, the real haul space, the iPhone UGC aesthetic, and the mood of the session.`,
+This REF0 establishes: the person's identity, the real haul space, the iPhone UGC aesthetic, and the mood of the session.`,
     outfit_week: `SHOT: Full body of the person with the FIRST OUTFIT on, in the general environment for the week set.
 Full body visible — the look must be readable head to toe. Real environment, authentic light.
 This REF0 establishes the visual world: same light quality, same ambient mood, across all the week's outfits.
@@ -5218,16 +5388,21 @@ Forbidden clutter — DO NOT invent these:
   ✗ Overloaded surfaces with many random items
 The scene should feel like a real person's room with THEIR actual haul — not a set with invented props.
 
-📦 PROGRESSIVE CLUTTER CONTINUITY:
-The haul session has a natural arc — the room evolves as items are tried on.
+📦 CONTROLLED ITEM MOVEMENT — HAUL SESSION ARC:
+The haul space evolves naturally as items are tried on — but it stays CONTROLLED at every stage.
 Shot ${shot.arcPosition} of ${totalShots}:
 ${shot.arcPosition <= Math.ceil(totalShots * 0.33)
-  ? '  EARLY STAGE: Items still mostly in bags. A few pieces from the haul laid out. Tidy with fresh excitement.'
+  ? '  EARLY (controlled_tidy): Space is fresh. 1–2 haul items visible nearby. Maximum 1 plain unbranded bag or closed box. No clothing piles yet.'
   : shot.arcPosition <= Math.ceil(totalShots * 0.66)
-  ? '  MIDDLE STAGE: Some haul items tried and set aside on bed or chair. Natural but not overwhelming.'
-  : '  LATE STAGE: Haul items spread around the room — tried, folded, or draped. Organized chaos from the real haul only.'}
-ALLOWED: actual haul clothes move and shift naturally. Boxes open. Tried items get set aside.
-FORBIDDEN: invented clothes, branded packaging, new props not in REF0, furniture changes, different room, different light direction.
+  ? '  MIDDLE (lightly_used): 2–4 items from the uploaded haul set aside on bed or chair. Room is naturally used but not chaotic. Maximum 2 plain unbranded packages visible.'
+  : '  LATE (organized_haul): Tried haul items draped/folded in background. Room feels actively used. STILL tidy enough to see clearly. Maximum 2 plain unbranded packages. No random clothing piles.'}
+ALLOWED: haul clothes from the uploaded set move and shift naturally. Opened boxes. Tried items set aside.
+STRICTLY FORBIDDEN — DO NOT GENERATE:
+  ✗ Generic clothing piles not matching any uploaded haul reference
+  ✗ Branded packaging (ZARA, H&M, Shein, any retail brand)
+  ✗ More than 2 bags or boxes visible at once
+  ✗ New props, new mirrors, new furniture not in REF0
+  ✗ Room redesign between shots — same room, same light direction
 
 ⚠️ TALL FOOTWEAR + LEGWEAR INTEGRATION (GLOBAL RULE — ALL HAUL SHOTS):
 If the person's look in this shot combines any legwear (pants, jeans, skirt, dress hem, leggings, tights)

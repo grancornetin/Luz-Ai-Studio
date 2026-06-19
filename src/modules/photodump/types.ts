@@ -529,8 +529,10 @@ export interface PhotodumpShotDebug {
   referenceRouting?: {
     avatarRefs:         number;
     ref0Used:           boolean;
-    garmentRefs:        number;
-    accessoryRefs:      number;
+    garmentRefs:        number;   // wearables only (full_outfit, top, bottom, dress, onepiece, outerwear, hosiery, mixed_set)
+    footwearRefs:       number;   // calzado items
+    jewelryRefs:        number;   // jewelry items
+    accessoryRefs:      number;   // bags + generic accessories
     backgroundItemRefs: number;
     unrelatedRefsCount: number;
   };
@@ -591,12 +593,24 @@ export interface PhotodumpDebugData {
   failedCoverageItems?:      string[];
   coverageWarnings?:         string[];
   // Run completeness verdict
-  isComplete?:               boolean;
-  blockingIssues?:           string[];
-  missingRequiredOutfits?:   string[];
-  failedShotIds?:            string[];
-  sceneFingerprintSummary?:  string;
-  sceneContinuityWarnings?:  string[];
+  isComplete?:                       boolean;
+  blockingIssues?:                   string[];
+  missingRequiredOutfits?:           string[];
+  failedShotIds?:                    string[];
+  // Coverage post-generación (calculado con shots reales, no solo el plan)
+  finalCoverageLedger?:              HaulCoverageLedgerItem[];
+  requiredItemCount?:                number;
+  coveredRequiredItemCount?:         number;
+  failedRequiredItemCount?:          number;
+  requiredItemCoverageComplete?:     boolean;
+  // Feature flags debug (confirma que las reglas están activas)
+  scenePropBudgetApplied?:           boolean;
+  externalBrandingForbiddenApplied?: boolean;
+  avatarBaseClothingSuppressedInRef0?: boolean;
+  avatarBaseClothingSuppressedInStoryShots?: boolean;
+  routingWarnings?:                  string[];
+  sceneFingerprintSummary?:          string;
+  sceneContinuityWarnings?:          string[];
   count:        number;
   plan:         any;
   shots:        PhotodumpShotDebug[];

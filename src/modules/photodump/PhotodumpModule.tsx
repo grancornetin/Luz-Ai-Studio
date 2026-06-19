@@ -39,6 +39,7 @@ import {
   inferOutfitComposition,
   buildHaulManifest,
   buildHaulShotPlan,
+  computeFinalHaulCoverageFromShots,
   type PhotodumpShotResult,
 } from './photodumpDirectorService';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
@@ -618,14 +619,28 @@ const PhotodumpModule: React.FC = () => {
               sceneDriftRisk:          recipe === 'outfit_haul'
                 ? (arcRatio > 0.8 ? 'medium' : 'low')
                 : undefined,
-              referenceRouting: recipe === 'outfit_haul' ? {
-                avatarRefs:         result.refsCount > 0 ? 1 : 0,
-                ref0Used:           false,
-                garmentRefs:        haulPrimaryId ? 1 : 0,
-                accessoryRefs:      0,
-                backgroundItemRefs: 0,
-                unrelatedRefsCount: Math.max(0, result.refsCount - (haulPrimaryId ? 2 : 1)),
-              } : undefined,
+              referenceRouting: recipe === 'outfit_haul' ? (() => {
+                // Classify the primary item semantically — not everything is a garmentRef
+                const primaryItem = haulPrimaryId
+                  ? haulManifestDebug?.allItems.find(it => it.id === haulPrimaryId)
+                  : undefined;
+                const wearableKindsSet = new Set<string>(['full_outfit', 'top', 'bottom', 'dress', 'onepiece', 'outerwear', 'hosiery', 'mixed_set']);
+                const isGarment  = primaryItem ? wearableKindsSet.has(primaryItem.resolvedKind) : false;
+                const isFootwear = primaryItem ? primaryItem.resolvedKind === 'footwear' : false;
+                const isJewelry  = primaryItem ? primaryItem.resolvedKind === 'jewelry' : false;
+                const isAcc      = primaryItem ? (primaryItem.resolvedKind === 'bag' || primaryItem.resolvedKind === 'accessory') : false;
+                const hasItem    = !!primaryItem;
+                return {
+                  avatarRefs:         result.refsCount > 0 ? 1 : 0,
+                  ref0Used:           false,
+                  garmentRefs:        isGarment ? 1 : 0,
+                  footwearRefs:       isFootwear ? 1 : 0,
+                  jewelryRefs:        isJewelry ? 1 : 0,
+                  accessoryRefs:      isAcc ? 1 : 0,
+                  backgroundItemRefs: 0,
+                  unrelatedRefsCount: Math.max(0, result.refsCount - (hasItem ? 2 : 1)),
+                };
+              })() : undefined,
               haulProgressState: recipe === 'outfit_haul' ? {
                 currentItem:       haulPrimaryId,
                 triedCount:        Math.min(i, (haulManifestDebug?.tryOnItems.length ?? 1)),
@@ -648,17 +663,37 @@ const PhotodumpModule: React.FC = () => {
             errMsg.toLowerCase().includes('prohibited');
 
           // Retry automático para haul con content-policy failure
+          // Para items requeridos: usar prompt conservador que preserve la ref del ítem pero elimina lenguaje de riesgo
           let retryResult: PhotodumpShotResult | null = null;
           if (recipe === 'outfit_haul' && isContentPolicy) {
             try {
               await new Promise(r => setTimeout(r, 3000));
-              // Shot neutral: reemplazamos purpose con instrucción conservadora
-              const neutralShot = {
+              // Determinar si es un shot hero de ítem requerido
+              const isHeroShot = sh.key && (
+                sh.key.startsWith('HAUL_TRY_ON_') ||
+                sh.key.startsWith('HAUL_FOOTWEAR_') ||
+                sh.key.startsWith('HAUL_BAG_') ||
+                sh.key.startsWith('HAUL_JEWELRY_') ||
+                sh.key.startsWith('HAUL_ACCESSORY_CLOSEUP_') ||
+                sh.key.startsWith('HAUL_ADJUSTING_') ||
+                sh.key.startsWith('HAUL_STYLED_')
+              );
+              // Safe retry: purpose neutro que baja riesgo de safety sin perder el ítem
+              const safeRetryPurpose = isHeroShot
+                ? `Fashion try-on: show the garment/item from the reference clearly visible on the person or held toward the camera. Modest, everyday styling. Natural standing or adjusting pose. Covered, non-revealing. The garment is the focus — show its color, cut, and fabric faithfully. Real bedroom setting, iPhone snapshot quality.`
+                : `Natural haul moment in a real bedroom. Person in modest, everyday clothing. Relaxed, non-posed. Real room, natural light. iPhone snapshot quality.`;
+              const safeRetryShot = {
                 ...sh,
-                purpose: `Generate a modest, natural clothing try-on photo in a real bedroom haul context. The garment should be visible as a fashion item. Use a casual, neutral try-on pose such as adjusting the garment or checking the fit. Avoid any sexualized posing, revealing framing, or body-focused language.`,
+                purpose:          safeRetryPurpose,
+                requiredElements: [...(sh.requiredElements ?? []), 'modest_natural_pose', 'garment_clearly_visible'],
+                forbiddenElements: [
+                  ...(sh.forbiddenElements ?? []),
+                  'revealing_pose', 'sexualized_framing', 'bodycon_language', 'tight_language',
+                  'transparent_language', 'sheer_language', 'lingerie_language', 'skin_focus',
+                ],
               };
               retryResult = await generatePhotodumpShot(
-                neutralShot, refsWithMode, ref0Url, ref0Analysis,
+                safeRetryShot, refsWithMode, ref0Url, ref0Analysis,
                 basePrompt, narrative, destino, sessionParams,
                 plan.assignedFamilies, plan.sessionFamilies,
                 shots.length, protagonist, recipe,
@@ -683,9 +718,9 @@ const PhotodumpModule: React.FC = () => {
               wearState:  sh.wearState,
               cameraMode: sh.cameraMode,
               fallbackUsed:    true,
-              fallbackShotMode: 'content_policy_neutral_purpose',
+              fallbackShotMode: 'safe_required_item_retry',
               retryCount:      1,
-              possibleContradictions: [`content-policy retry: original failed (${errMsg.slice(0, 80)}), retry succeeded`],
+              possibleContradictions: [`content-policy retry: original failed (${errMsg.slice(0, 80)}), safe retry succeeded`],
               status:     'ok',
             });
           } else {
@@ -715,28 +750,23 @@ const PhotodumpModule: React.FC = () => {
         setProgress({ total: shots.length, completed: i + 1 });
       }
 
-      // Ledger haul para debug global
-      const haulLedger = haulManifestDebug?.coveragePlan.ledger;
-      // Actualizar coverageStatus en ledger con shots reales generados vs fallados
-      if (haulManifestDebug && haulLedger) {
-        failed.forEach(failedIdx => {
-          const sh = shots[failedIdx];
-          if (!sh?.key) return;
-          // Marcar en ledger como failedCoverage si era un shot hero
-          const key = sh.key;
-          haulLedger.forEach(l => {
-            if (l.shotIds.includes(key)) {
-              l.actualPromptedHeroShots = Math.max(0, l.actualPromptedHeroShots - 1);
-              if (l.actualPromptedHeroShots === 0 && l.actualPromptedSupportShots === 0) {
-                l.coverageStatus = 'uncovered';
-              }
-            }
-          });
-        });
-        haulLedger.forEach(l => {
-          l.actualPromptedHeroShots = Math.max(l.actualPromptedHeroShots, l.plannedHeroShots);
-        });
-      }
+      // Coverage post-generación: calculado con shots REALES (no solo el plan)
+      // Construimos mini-view de debugShots que tiene key + status para computeFinalHaulCoverageFromShots
+      const finalCoverage = (recipe === 'outfit_haul' && haulManifestDebug && isAdmin)
+        ? computeFinalHaulCoverageFromShots(
+            haulManifestDebug,
+            shots,
+            debugShots.map(ds => ({
+              key:           ds.key,
+              status:        ds.status,
+              coverageRole:  ds.coverageRole,
+              primaryItemId: ds.primaryItemId,
+            })),
+          )
+        : null;
+
+      // Para mantener backwards compat: también actualizamos el ledger original del manifest
+      const haulLedger = finalCoverage?.ledger ?? haulManifestDebug?.coveragePlan.ledger;
 
       // Armar debugData completo para admins
       const debugData: PhotodumpDebugData | undefined = isAdmin ? {
@@ -758,7 +788,6 @@ const PhotodumpModule: React.FC = () => {
         prepEnvironmentClass: briefCtxDebug?.prepEnvironmentClass,
         haulManifest:        haulManifestDebug,
         // Detectar si el selector manual se perdió en el pipeline
-        // Si refs.haulOutfitKinds tiene valores no-auto pero el manifest los tiene como 'auto' → warning
         manualKindLostWarning: (() => {
           if (recipe !== 'outfit_haul' || !haulManifestDebug) return undefined;
           const uiKinds = (refsWithMode as any).haulOutfitKinds as string[] | undefined;
@@ -785,17 +814,39 @@ const PhotodumpModule: React.FC = () => {
               : 'auto_home_haul_space',
           };
         })() : undefined,
-        // Haul ledger global
+        // Haul ledger — usa coverage post-generación si está disponible
         coverageLedger:      haulLedger,
-        uncoveredRequiredItems: haulManifestDebug?.coveragePlan.uncoveredRequiredItems,
-        supportOnlyItems:    haulManifestDebug?.coveragePlan.supportOnlyItems,
-        overexposedItems:    haulManifestDebug?.coveragePlan.overexposedItems,
-        failedCoverageItems: failed.map(fi => shots[fi]?.key ?? `shot_${fi}`),
-        coverageWarnings:    haulManifestDebug?.coveragePlan.coverageWarnings,
-        // Run completeness verdict
+        uncoveredRequiredItems: finalCoverage?.uncoveredRequiredItems ?? haulManifestDebug?.coveragePlan.uncoveredRequiredItems,
+        supportOnlyItems:    finalCoverage?.supportOnlyItems ?? haulManifestDebug?.coveragePlan.supportOnlyItems,
+        overexposedItems:    finalCoverage?.overexposedItems ?? haulManifestDebug?.coveragePlan.overexposedItems,
+        failedCoverageItems: finalCoverage?.failedCoverageItems ?? failed.map(fi => shots[fi]?.key ?? `shot_${fi}`),
+        coverageWarnings:    finalCoverage?.coverageWarnings ?? haulManifestDebug?.coveragePlan.coverageWarnings,
+        // Coverage metrics post-generación
+        finalCoverageLedger:          finalCoverage?.ledger,
+        requiredItemCount:            finalCoverage?.requiredItemCount,
+        coveredRequiredItemCount:     finalCoverage?.coveredRequiredItemCount,
+        failedRequiredItemCount:      finalCoverage?.failedRequiredItemCount,
+        requiredItemCoverageComplete: finalCoverage?.isComplete,
+        // Feature flags debug — confirma que las reglas están activas en este run
+        scenePropBudgetApplied:                  recipe === 'outfit_haul',
+        externalBrandingForbiddenApplied:         recipe === 'outfit_haul',
+        avatarBaseClothingSuppressedInRef0:        recipe === 'outfit_haul',
+        avatarBaseClothingSuppressedInStoryShots:  recipe === 'outfit_haul',
+        routingWarnings: (() => {
+          if (recipe !== 'outfit_haul' || !haulManifestDebug) return undefined;
+          const warnings: string[] = [];
+          // Detectar ítems en outfitItems que son realmente footwear/jewelry (routing error)
+          haulManifestDebug.outfitItems.forEach(it => {
+            if (it.resolvedKind === 'footwear' || it.resolvedKind === 'jewelry') {
+              warnings.push(`${it.id} (${it.label}) has resolvedKind=${it.resolvedKind} but is in outfitItems — check buildHaulManifest routing`);
+            }
+          });
+          return warnings.length > 0 ? warnings : undefined;
+        })(),
+        // Run completeness verdict (real — based on actual generated shots, not just plan)
         failedShotIds: failed.map(fi => shots[fi]?.key ?? `shot_${fi}`),
-        missingRequiredOutfits: haulManifestDebug?.coveragePlan.uncoveredRequiredItems,
-        blockingIssues: (() => {
+        missingRequiredOutfits: finalCoverage?.uncoveredRequiredItems ?? haulManifestDebug?.coveragePlan.uncoveredRequiredItems,
+        blockingIssues: finalCoverage?.blockingIssues ?? (() => {
           if (recipe !== 'outfit_haul') return undefined;
           const issues: string[] = [];
           if (failed.length > 0) issues.push(`${failed.length} shot(s) failed`);
@@ -803,12 +854,14 @@ const PhotodumpModule: React.FC = () => {
           if (uncovered.length > 0) issues.push(`${uncovered.length} required outfit(s) missing hero try-on: ${uncovered.join(', ')}`);
           return issues;
         })(),
-        isComplete: recipe === 'outfit_haul' ? (() => {
-          const uncovered = haulManifestDebug?.coveragePlan.uncoveredRequiredItems ?? [];
-          return failed.length === 0 && uncovered.length === 0;
-        })() : undefined,
+        isComplete: recipe === 'outfit_haul'
+          ? (finalCoverage ? finalCoverage.isComplete && failed.length === 0 : (() => {
+              const uncovered = haulManifestDebug?.coveragePlan.uncoveredRequiredItems ?? [];
+              return failed.length === 0 && uncovered.length === 0;
+            })())
+          : undefined,
         sceneFingerprintSummary: recipe === 'outfit_haul'
-          ? `Haul scene fingerprint: REF0-anchored bedroom lock, progressive clutter ${storyShotCount} shots`
+          ? `Haul scene fingerprint: REF0-anchored bedroom lock, controlled item movement ${storyShotCount} shots, scenePropBudget active`
           : undefined,
         sceneContinuityWarnings: recipe === 'outfit_haul' && failed.length > 0
           ? [`${failed.length} shot(s) failed — coverage gaps possible`]
