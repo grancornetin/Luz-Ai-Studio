@@ -122,13 +122,14 @@ Define todos los tipos TypeScript del módulo.
 
 | Qué | Costo |
 |-----|-------|
-| 1 sesión Campaign | 1 pro-credit |
-| 2 propuestas de estilo (ancla) | 4 créditos |
-| Cada imagen de campaña | 2 créditos |
+| 1 sesión Campaign (CAMPAIGN_SESSION) | 1 pro-credit |
+| 2 propuestas de estilo ancla (2 imgs × 2 cr) | 4 créditos |
+| Cada imagen de campaña (CAMPAIGN_PER_IMAGE) | 2 créditos |
+| Con Seedream | 1 crédito/imagen (mitad) |
 | Regenerar el ancla | 4 créditos extra |
 | Descargar ZIP / PDF / HTML | Gratis |
 
-**Ejemplo:** Campaña de 4 imágenes = 1 pro-credit + 4 cr (ancla) + 8 cr (imágenes) = 1 pro-credit + 12 créditos
+**Ejemplo:** Campaña de 4 imágenes (Gemini) = 1 pro-credit + 4 cr (ancla) + 8 cr (imágenes) = **1 pro-credit + 12 créditos**
 
 ---
 

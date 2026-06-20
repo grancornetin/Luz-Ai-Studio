@@ -73,9 +73,11 @@ Cada paso del wizard como componente independiente. Facilita el mantenimiento y 
 
 | Qué | Costo |
 |-----|-------|
-| Cada imagen generada | 2 créditos |
-| Pack de 4 imágenes | 8 créditos |
-| Grid automático | variable según cantidad |
+| Cada imagen generada — Gemini (PRODUCT_GENERATION) | 2 créditos |
+| Cada imagen generada — Seedream | 1 crédito |
+| Pack de 4 imágenes (Gemini) | 8 créditos |
+| Grid automático | variable según cantidad y modelo |
+| Análisis del producto (PRODUCT_ANALYSIS) | 0 créditos — texto gratis |
 | No usa pro-credits | — |
 
 Hay reembolso automático si una imagen falla.

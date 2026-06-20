@@ -7,8 +7,11 @@
 > 4. No borrar secciones — si algo fue eliminado, marcarlo como "Eliminado en [fecha]" y explicar por qué.
 > 5. El objetivo es que otra IA pueda leer este archivo y entender completamente qué hace el módulo, cómo funciona, y en qué estado está, sin necesidad de leer el código.
 
-**Última actualización:** Mayo 2026 (creación inicial)  
-**Propósito:** Planificador de contenido social para emprendedoras LATAM. Responde al problema: "Ya tengo las fotos — ¿qué hago con ellas? ¿cuándo publico? ¿qué escribo? ¿por qué nadie interactúa?"
+**Última actualización:** Junio 2026 — **MÓDULO REEMPLAZADO**  
+**Estado:** Este módulo fue reemplazado por el **Planner** (`src/modules/planner/`). Las rutas `/publicar` y `/projects` redirigen a `/planner`. El código sigue existiendo pero no se monta en ninguna ruta activa.  
+**Propósito original:** Planificador de contenido social para emprendedoras LATAM. Responde al problema: "Ya tengo las fotos — ¿qué hago con ellas? ¿cuándo publico? ¿qué escribo? ¿por qué nadie interactúa?"
+
+**Para ver la documentación del módulo activo ver:** `src/modules/planner/explicacion-planner.md`
 
 ---
 

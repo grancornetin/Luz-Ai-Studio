@@ -97,48 +97,58 @@ GRADIENT_BRAND: linear-gradient(135deg, #7c3aed, #ec4899)
 - **Verbo activo en titulares:** "Cuéntanos qué vamos a fotografiar" no "Información del producto"
 - **Sin jerga IA:** evitar "prompt", "generación", "modelo" — preferir "lo que vamos a fotografiar", "creando", "estilo"
 
-## Módulos completados
+## Módulos en producción (Junio 2026)
 
-### ✅ Módulo Producto (Foto de producto)
+### ✅ Product Studio — `/productos`
+Wizard 6 pasos. Genera fotos de catálogo, lifestyle, detalle y mockup.
+Archivos: `src/modules/productGenerator/`
 
-**Archivo:** `modulo-producto/Modulo Producto.html` (desktop) + `Modulo Producto Mobile.html` (mobile en frame iOS)
+### ✅ UGC Studio (Content Studio Pro) — `/studio-pro`
+Genera series de 6 shots tipo "iPhone real" con identidad consistente (AVATAR/OUTFIT/PRODUCT/SCENE).
+Archivos: `src/modules/contentStudioPro/`
 
-**Flow:** wizard de 6 pasos
-1. **Producto** — 4 slots de fotos (frontal grande + 2 medianos + 1 ancho) + título + descripción
-2. **Objetivo** — 4 cards (Catálogo / Redes / Detalles / Mockups)
-3. **Estilo** — split: dropzone Pinterest a la izquierda + 5 estilos rápidos a la derecha (si subís referencia, los estilos se desactivan)
-4. **Tipo + cantidad** — Pack vs Grid manual, con panel oscuro sticky de costo en vivo
-5. **Generando** — timeline narrado de 5 etapas + grid en vivo
-6. **Resultados** — grid asimétrico con selección múltiple para crear "grids manuales", lightbox compacto con zoom
+### ✅ Model DNA — `/crear/clonar`
+Crea avatar digital desde 1-3 fotos reales (Body Master + vistas técnicas + Face Master).
+Archivos: `src/modules/modelDNA/`
 
-**Componentes shared del codebase a reutilizar (ya existen):** `ImageSlot`, `ImageLightbox`, `FloatingActionBar`, `GenerationProgress`, `GenerateButton`, `UploadDisclaimer`, `ModuleTutorial`, `NoCreditsModal`, `useCreditGuard`, `useAuth`, `geminiService`, `imageApiService`, `generationHistoryService`, `readAndCompressFile`, `downloadAsZip`.
+### ✅ Manual Creator — `/crear/manual`
+Crea avatar desde cero con parámetros visuales (género, edad, build, etnia, pelo, etc).
+Archivos: `src/modules/manualCreator/`
 
-**Handoff package generado:** `design_handoff_modulo_producto/` (zip descargable) con README detallado para Claude Code.
+### ✅ Scene Clone — `/clonar`
+Replica la composición y ambiente de una foto de referencia con el modelo propio. Solo un sujeto.
+Archivos: `src/modules/sceneClone/`
 
-### ✅ Pantallas v3 originales (5 pantallas favoritas)
+### ✅ Outfit Extractor — `/outfit-extractor`
+Detecta prendas en una foto y genera renders individuales de catálogo.
+Archivos: `src/modules/outfitExtractor/`
 
-Antes del módulo Producto se diseñaron 5 pantallas core de Luz IA en `v3/`:
-- Dashboard (con onboarding intuitivo para principiantes)
-- Prompt Gallery (estilo Pinterest)
-- AI Generator (prompts libres)
-- (otras 2 que vivirán en `prototype/` y `prototype-desktop/`)
+### ✅ Prompt Studio + Galería — `/prompt-studio`, `/prompt-gallery`
+Generador libre con referencias visuales + galería pública de prompts curados.
+Archivos: `src/modules/promptLibrary/`
 
-**Archivos:**
-- `v3/` — versiones originales
-- `prototype/` — prototipo navegable mobile conectando las 5
-- `prototype-desktop/` — prototipo navegable desktop
+### ✅ Campaign Generator — `/campaign`
+Kit de campaña completo: plan estratégico + imágenes consistentes + copy + calendario 7 días + PDF/HTML.
+Archivos: `src/modules/campaign/`
 
-## Próximos módulos a diseñar (pendientes)
+### ✅ Photodump — `/photodump`
+Series narrativas de 3-8 imágenes. Recetas: unboxing, outfit_check, outfit_haul (v1.8), outfit_week.
+Archivos: `src/modules/photodump/`
 
-(Listar acá cuando se acuerden) — usar siempre el sistema v3 como base. Posibles candidatos:
+### ✅ Planner — `/planner`
+Asistente semanal de contenido. Onboarding 4 preguntas → plan completo con captions/prompts listos.
+Burbuja flotante que acompaña la ejecución. Reemplazó Projects y Publicar Studio.
+Archivos: `src/modules/planner/`
 
-- [ ] Generador de Modelos / Personas
-- [ ] Generador de Mockups
-- [ ] Editor de imágenes generadas
-- [ ] Catálogo / Library (vista unificada de todas las generaciones)
-- [ ] Onboarding inicial (primer login)
-- [ ] Configuración / Perfil
-- [ ] Plan & Créditos
+### ✅ Mis Marcas — `/mis-marcas`
+CRUD de perfiles de marca con paleta editable, assets de Storage, status y reporte descargable.
+Archivos: `src/modules/brandProfiles/`
+
+## Pendientes / mejoras futuras conocidas
+
+- Pre-llenar parámetros en Product Studio y UGC via URL params (hoy solo Prompt Studio)
+- Integración Perfil de Marca → Planner y Campaign (hoy la usuaria describe su negocio manualmente)
+- Photodump recetas pendientes: day_in_life, launch, bts, travel
 
 ## Decisiones de diseño tomadas (no revisitar sin razón)
 

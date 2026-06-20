@@ -1,5 +1,5 @@
 # LUZ IA Studio — Documento Base Comercial
-**Versión 1.0 · Mayo 2026 · Confidencial**
+**Versión 1.1 · Junio 2026 · Confidencial**
 
 ---
 
@@ -308,38 +308,102 @@ Usuarios que ya tienen experiencia con la plataforma y quieren más libertad cre
 
 ---
 
+### MÓDULO 8: Campaign Generator
+**"Una campaña de 7 días lista para publicar"**
+
+**Para qué sirve:**
+Genera un kit publicitario completo: concepto creativo, tagline, imágenes con consistencia visual garantizada, copy por pieza, hashtags y calendario. Descargable como ZIP, PDF o HTML interactivo con checkboxes.
+
+**Para quién:**
+Emprendedores que quieren lanzar un producto nuevo o mantener una presencia constante sin tener que pensar en qué publicar cada día.
+
+**El resultado:**
+- Plan estratégico con concepto, promesa y tagline
+- 4–8 imágenes con el mismo estilo visual (definido por imagen ancla elegida por la usuaria)
+- Copy completo por pieza, calendario de 7 días, banco de hashtags
+
+---
+
+### MÓDULO 9: Photodump
+**"Series de fotos que cuentan una historia"**
+
+**Para qué sirve:**
+Genera 3–8 imágenes que tienen un hilo narrativo visual entre ellas, como los "photodumps" que se publican en Instagram y TikTok. Disponible en varias recetas: unboxing, outfit del día, haul de ropa, semana de outfits y más.
+
+**Para quién:**
+Emprendedores de moda, lifestyle o cualquier categoría que quieren publicar contenido con narrativa, no solo fotos sueltas.
+
+**El resultado:**
+- Serie coherente de imágenes que se ven de la misma sesión
+- Haul: muestra cada prenda por separado con try-on, detalle y cierre
+- Unboxing: arco narrativo completo (caja cerrada → reveal → producto en uso)
+
+---
+
+### MÓDULO 10: Planner
+**"Tu semana de contenido lista en 2 minutos"**
+
+**Para qué sirve:**
+La usuaria responde 4 preguntas (qué vende, qué meta tiene, cuántas veces puede publicar, en qué redes) y el sistema genera un plan completo: qué publicar cada día, con qué caption, en qué plataforma, con el prompt listo para usar en el módulo correspondiente.
+
+**Para quién:**
+Emprendedoras que no saben por dónde empezar con el contenido o que se quedan sin ideas después de la primera semana.
+
+**El resultado:**
+- Plan semanal con tareas concretas por día
+- Caption completo con emojis listo para copiar
+- Prompt listo para pegar en Product Studio, UGC, Campaign o Prompt Studio
+- Burbuja flotante que acompaña la ejecución sin perder el contexto
+
+---
+
+### MÓDULO 11: Mis Marcas
+**"Tu identidad de marca en un lugar"**
+
+**Para qué sirve:**
+Guarda la información de la marca de la emprendedora: nombre, colores, logo, tono. Permite crear múltiples perfiles (si tiene más de una marca) y el sistema puede usar esa información como contexto al generar contenido.
+
+**Para quién:**
+Emprendedoras que quieren consistencia visual y no quieren repetir los datos de su marca cada vez que generan algo.
+
+---
+
 ## 5. PLANES — EN LENGUAJE HUMANO
 
 ### Plan Gratis — "Para probar"
-- **20 créditos al registrarte** (único, no se renuevan)
+- **20 créditos al registrarte** + 2 sesiones pro (única vez, no se renuevan)
 - Equivale a aproximadamente 10–20 imágenes según el módulo
 - Acceso a todos los módulos para explorar
 - **Para quién:** Quien quiere ver si la plataforma funciona antes de comprometer dinero
 - **Conversión esperada:** El free tier debe dejar al usuario con ganas de más, no satisfecho
 
-### Plan Explorer — $4.99 USD/semana
-- **60 créditos por semana** (~60 imágenes/semana)
+### Plan Semanal — $4.99 USD/semana
+- **60 créditos por semana** + 15 sesiones pro/semana (~30–60 imágenes/semana)
 - Para el emprendedor que publica contenido intensamente esta semana y la siguiente no necesita nada
 - Ideal para quienes tienen lanzamientos puntuales o campañas específicas
 - **Mensaje clave:** *"Menos que un café para una semana de contenido profesional"*
 
 ### Plan Starter — $14.99 USD/mes
-- **200 créditos mensuales** (~200 imágenes/mes)
+- **200 créditos mensuales** + 80 sesiones pro/mes (~100–200 imágenes/mes)
 - Para el emprendedor que publica con regularidad pero no todos los días
 - El plan de "mantenimiento" — siempre tiene contenido sin gastar de más
 - **Mensaje clave:** *"Menos que un fotógrafo por hora, para todo el mes"*
 
 ### Plan Pro — $39.99 USD/mes *(el más vendible)*
-- **500 créditos mensuales** (~500 imágenes/mes)
+- **500 créditos mensuales** + 200 sesiones pro/mes (~250–500 imágenes/mes)
 - Para el emprendedor que publica diariamente y necesita variedad
-- Incluye revelado de prompts gratis y generación prioritaria
+- Incluye revelado de prompts gratis y soporte prioritario
 - **Mensaje clave:** *"El estudio de contenido completo, por menos de lo que cobra un diseñador por hora"*
 
 ### Plan Studio — $99.99 USD/mes
-- **1200 créditos mensuales** (~1200 imágenes/mes)
+- **1200 créditos mensuales** + 500 sesiones pro/mes (~600–1200 imágenes/mes)
 - Para agencias, freelancers o marcas con catálogo amplio
 - Produce contenido para múltiples productos o múltiples clientes
 - **Mensaje clave:** *"Volumen de agencia, precio de herramienta"*
+
+**Top-ups disponibles (sin cambiar de plan):**
+- Créditos extra: 30 cr ($3.29) / 80 cr ($7.99) / 200 cr ($18.99)
+- Pro-credits extra: 20 pc ($5.99) / 60 pc ($14.99) / 150 pc ($34.99) / 400 pc ($79.99)
 
 ---
 

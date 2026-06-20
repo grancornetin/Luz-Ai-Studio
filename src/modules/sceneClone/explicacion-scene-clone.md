@@ -93,9 +93,10 @@ Guarda sesiones en IndexedDB (`app_clone_master`). Almacena referencias, imagen 
 
 | Qué | Costo |
 |-----|-------|
-| Paso 1 base | 2 créditos |
-| Paso 2 personalización outfit/producto | 2 créditos |
-| Total sesión con personalización | 4 créditos |
+| Paso 1 base — Gemini (CLONE_IMAGE) | 2 créditos |
+| Paso 1 base — Seedream | 1 crédito |
+| Paso 2 personalización outfit/producto | 2 créditos (Gemini) / 1 cr (Seedream) |
+| Total sesión con personalización (Gemini) | 4 créditos |
 | No usa pro-credits | — |
 
 Si falla por un error reembolsable, se intenta reembolsar el costo completo de esa generación.

@@ -31,6 +31,25 @@ export type HaulItemKind =
 
 export type HaulPileState = 'clean' | 'light_pile' | 'medium_pile' | 'messy_but_believable';
 
+// Componentes semánticos internos de un look_completo / full_outfit.
+// Derivados del selector manual o inferidos desde el prompt/brief del usuario.
+// Permiten al planner y al prompter saber qué piezas debe preservar el modelo.
+export interface HaulOutfitComponents {
+  hasTop:       boolean;   // top / blusa / camiseta visible
+  hasBottom:    boolean;   // pantalón / falda / short visible
+  hasDress:     boolean;   // vestido o pieza one-piece que reemplaza top+bottom
+  hasOuterwear: boolean;   // chaqueta / blazer / abrigo visible
+  hasFootwear:  boolean;   // calzado visible (cualquier tipo)
+  hasHosiery:   boolean;   // pantys / medias / leggings visibles bajo otro item
+  hasBag:       boolean;   // bolso / cartera visible en el look
+  hasJewelry:   boolean;   // joyería visible (aretes, collar, pulsera, anillo)
+  hasAccessory: boolean;   // accesorio adicional (cinturón, sombrero, gafas, etc.)
+  // Señal de riesgo de integración anatómica: calzado alto + pierna cubierta
+  footwearLegCoverageRisk: boolean;
+  // Descripción compacta de los componentes para inyectar en el prompt
+  componentsSummary: string;
+}
+
 export interface HaulItem {
   id:                          string;       // 'outfit_0', 'outfit_1', 'acc_0', etc.
   sourceIndex:                 number;       // índice original en el array de refs
@@ -46,6 +65,9 @@ export interface HaulItem {
   detailEligible:              boolean;      // puede aparecer como detalle/macro
   canBeIntegratedIntoOutfit:   boolean;      // puede combinarse con otro outfit como complemento
   priority:                    'required' | 'normal' | 'optional';
+  // Solo presente para resolvedKind === 'full_outfit' o 'mixed_set'
+  // Describe qué piezas componen el look para prompting y validación de fidelidad
+  outfitComponents?:           HaulOutfitComponents;
 }
 
 export type HaulResolvedKind =
@@ -77,6 +99,13 @@ export interface HaulCoverageLedgerItem {
   actualPromptedSupportShots:  number;
   coverageStatus:              'uncovered' | 'support_only' | 'covered' | 'overexposed';
   shotIds:                     string[];
+  // Para look_completo: qué componentes del outfit deben estar presentes para considerar cobertura real
+  // 'full' = look completo con todos los componentes principales
+  // 'partial' = al menos 1 pieza clave visible (warning)
+  // 'none' = item nunca apareció
+  fidelityLevel?:              'full' | 'partial' | 'none';
+  // Nota de fidelidad para debug — describe si el item apareció con o sin sus componentes clave
+  fidelityNote?:               string;
 }
 
 export interface HaulCoveragePlan {
@@ -92,6 +121,26 @@ export interface HaulCoveragePlan {
   supportOnlyItems:        string[];
   overexposedItems:        string[];
   coverageWarnings:        string[];
+}
+
+// ── Visual Reference Analysis ─────────────────────────────────
+// Resultado del análisis multimodal de una referencia individual.
+// Generado por geminiService.analyzeVisualReferences() — una sola llamada
+// para todas las imágenes. Reutilizable por cualquier módulo (haul, outfit_check, etc.).
+export interface VisualRefAnalysis {
+  index:               number;           // posición en el array original de refs
+  resolvedKind:        HaulResolvedKind; // tipo detectado visualmente por Gemini
+  confidence:          'high' | 'medium' | 'low';
+  components:          HaulOutfitComponents;
+  visualDescription:   string;           // descripción compacta de lo visible: colores, piezas, materiales
+  dominantColors:      string[];         // máximo 3: ['blanco roto', 'negro', 'beige']
+  hasPerson:           boolean;          // si hay una persona usando las prendas en la imagen
+  isFlatlayOrProduct:  boolean;          // si es flat lay, producto solo o collage
+}
+
+export interface VisualRefsAnalysisResult {
+  refs:      VisualRefAnalysis[];
+  analyzedAt: number;   // timestamp — para saber si el análisis es del run actual
 }
 
 export interface HaulManifest {
@@ -611,6 +660,8 @@ export interface PhotodumpDebugData {
   routingWarnings?:                  string[];
   sceneFingerprintSummary?:          string;
   sceneContinuityWarnings?:          string[];
+  // Análisis visual de referencias (outfit_haul) — resultado de la llamada Gemini previa
+  visualRefsAnalysis?:               VisualRefsAnalysisResult;
   count:        number;
   plan:         any;
   shots:        PhotodumpShotDebug[];

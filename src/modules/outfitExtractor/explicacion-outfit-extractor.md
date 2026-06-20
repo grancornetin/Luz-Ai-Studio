@@ -62,7 +62,8 @@ Tipos principales: `OutfitKit`, `SavedOutfitItem`, `OutfitCombination`, coordena
 
 | Qué | Costo |
 |-----|-------|
-| Escanear outfit (Gemini análisis) | Gratis |
-| Render de cada prenda | 2 créditos |
+| Escanear outfit — Gemini análisis (OUTFIT_ANALYSIS) | 0 créditos — gratis |
+| Render de cada prenda — Gemini (OUTFIT_PER_GARMENT) | 2 créditos |
+| Render de cada prenda — Seedream | 1 crédito |
 | Composición de outfit | 2 créditos |
 | No usa pro-credits | — |

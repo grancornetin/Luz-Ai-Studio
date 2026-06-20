@@ -7,7 +7,7 @@
 > 4. No borrar secciones — si algo fue eliminado, marcarlo como "Eliminado en [fecha]" y explicar por qué.
 > 5. El objetivo es que otra IA pueda leer este archivo y entender completamente qué hace el módulo, cómo funciona, y en qué estado está, sin necesidad de leer el código.
 
-**Última actualización:** Mayo 2026
+**Última actualización:** Junio 2026
 **Propósito:** Generar contenido visual tipo UGC (User Generated Content) de alta calidad para que emprendedores muestren sus productos de forma auténtica y humana, como si lo publicara un influencer real.
 
 ---
@@ -115,9 +115,10 @@ Panel visual que muestra el costo antes de generar: créditos por shot, total, c
 
 | Qué | Costo |
 |-----|-------|
-| Generar REF0 | 2 créditos |
-| Cada shot derivado | 2 créditos |
-| Sesión completa (6 shots) | 14 créditos |
+| Generar REF0 | 2 créditos (UGC_PER_SHOT) |
+| Cada shot derivado | 2 créditos (UGC_PER_SHOT) |
+| Sesión completa (REF0 + 6 shots) | 14 créditos |
+| Con Seedream | 1 crédito/shot (mitad) |
 | No usa pro-credits | — |
 
 ---

@@ -8,7 +8,7 @@
 > 5. El objetivo es que otra IA pueda leer este archivo y entender completamente qué hace el módulo, cómo funciona, y en qué estado está, sin necesidad de leer el código.
 > 6. **INSTRUCCIÓN DE CONTINUIDAD:** Al final del documento siempre debe existir la sección "Estado de trabajo actual" con el estado exacto de qué se está haciendo, en qué receta se está, y qué quedó pendiente. Cuando una receta se cierra, moverla a "Recetas cerradas". Esto permite retomar el trabajo en un nuevo chat sin perder contexto.
 
-**Última actualización:** Junio 2026 (outfit_check cerrada; outfit_haul implementada, pendiente prueba de aceptación)
+**Última actualización:** Junio 2026 (outfit_haul v1.8 — arquitectura rediseñada, selector de tipo de referencia, cobertura garantizada por ítem)
 **Propósito:** Generar series fotográficas con narrativa visual coherente. Un "photodump" es una colección de fotos que cuentan una historia o transmiten un mood, muy popular en Instagram y TikTok.
 
 ---
@@ -33,11 +33,12 @@ El flujo completo es:
 
 | Archivo | Rol |
 |---------|-----|
-| `PhotodumpModule.tsx` | Componente principal. Wizard 4 pasos + galería de sets guardados |
-| `PDStep2Receta.tsx` | Paso 2: selección de receta + carga de referencias por slot |
-| `photodumpDirectorService.ts` | Lógica de generación: plan narrativo, REF0, shots, captions |
+| `PhotodumpModule.tsx` | Componente principal. Wizard 4 pasos + galería de sets guardados. Maneja generación, debug para admins, retry automático con safe-retry para haul |
+| `PDStep2Receta.tsx` | Paso 2: selección de receta + carga de referencias por slot. Para haul: slots outfit hasta 10 ítems, accesorios hasta 5, sublabels dinámicos por tipo |
+| `HaulReferenceTypeSelector.tsx` | Selector de tipo de referencia para haul. 14 opciones (auto / look_completo / varios_items / top / bottom / vestido / enterizo / chaqueta / calzado / pantys / bolso / joyeria / accesorio). El valor viaja al pipeline y condiciona el planner y los prompts |
+| `photodumpDirectorService.ts` | Lógica de generación: plan narrativo, REF0, shots, captions. Contiene `buildHaulManifest`, `buildHaulShotPlan`, `computeFinalHaulCoverageFromShots` y todos los builders de shots por tipo (try-on, adjusting, footwear, bag, jewelry, accessory, overview, recap) |
 | `photodumpIntelligence.ts` | Lee banco UGC de familias visuales (story_support, creator_aesthetic). **Independiente de recetas.** |
-| `types.ts` | Todos los tipos: PhotodumpSet, RecipeRefConfig, PhotodumpRefs, etc. |
+| `types.ts` | Todos los tipos: PhotodumpSet, RecipeRefConfig, PhotodumpRefs, HaulItem, HaulManifest, HaulRefKind, HaulResolvedKind, VisualRefsAnalysisResult, etc. |
 | `photodumpStorage.ts` | IndexedDB (`app_photodump_module`). Guarda sets completos |
 
 ### Infraestructura de generación
@@ -127,15 +128,16 @@ Rotan entre tipos de momento: context, detail, emotion, texture, action, atmosph
 
 | Qué | Costo |
 |-----|-------|
-| 1 sesión Photodump (plan + captions) | 1 pro-credit |
-| Cada imagen generada (REF0 + shots) | 2 créditos c/u |
-| Serie de 4 imágenes | 1 pro-credit + 10 créditos (REF0 + 4 shots + 1 plan) |
+| 1 sesión Photodump (PHOTODUMP_SESSION) | 1 pro-credit |
+| Cada imagen generada (PHOTODUMP_PER_IMAGE) | 2 créditos c/u |
+| Con Seedream | 1 crédito/imagen (mitad) |
+| Serie de 4 imágenes (Gemini) | 1 pro-credit + 10 créditos (REF0 + 4 shots) |
+| Serie de 6 imágenes haul (Gemini) | 1 pro-credit + 14 créditos (REF0 + 6 shots) |
 
 ---
 
-## Estado de trabajo actual
+## Metodología de trabajo
 
-**Metodología de trabajo:**
 - Se trabaja receta a receta en orden
 - Primero: diseño y razonamiento del flujo sin tocar código
 - Segundo: implementación acordada
@@ -212,38 +214,71 @@ Rotan entre tipos de momento: context, detail, emotion, texture, action, atmosph
 
 ---
 
-### ✅ `outfit_haul` — IMPLEMENTADA (pendiente prueba final en app)
+### ✅ `outfit_haul` — VALIDADA (v1.8, Junio 2026)
 
 **Historia:** "Me probé todo esto / estas son las prendas que me quedé"
 
+**Arquitectura (rediseñada en v1.4–v1.8):**
+El sistema haul tiene tres fases que garantizan cobertura de TODOS los ítems subidos:
+
+**FASE 1 — Coverage obligatoria (garantizada):**
+Cada ítem sube tiene exactamente 1 hero slot asignado antes de narrativa:
+- `HAUL_TRY_ON_N` — prendas wearables (top, bottom, vestido, enterizo, outerwear, full_outfit)
+- `HAUL_FOOTWEAR_N` — calzado (en slots outfit o acc)
+- `HAUL_BAG_N` — bolsos y carteras
+- `HAUL_JEWELRY_N` — joyería
+- `HAUL_ACCESSORY_CLOSEUP_N` — accesorios genéricos
+
+**FASE 2 — Budget narrativo:**
+Con el presupuesto restante se distribuyen:
+- `HAUL_OVERVIEW` — apertura contextual (siempre 1°)
+- `HAUL_ADJUSTING_N` / `HAUL_STYLED_N` — variedad para ítems ya cubiertos
+- `HAUL_RECAP` — cierre si hay ≥2 outfits y hay budget
+
+**FASE 3 — Interleaving:**
+Los ítems no-wearables (calzado, bolsos, joyería) se distribuyen uniformemente entre los try-ons, no al final. Garantiza que el set se vea narrativamente natural.
+
 **Slots:**
 - `avatar` (requerido): cara/identidad
-- `outfit` (requerido): hasta 10 prendas — una por slot, una por shot de try-on
+- `outfit` (requerido): hasta 10 prendas — con selector de tipo `HaulReferenceTypeSelector` por cada slot (auto / look_completo / top / bottom / vestido / enterizo / chaqueta / calzado / pantys / bolso / joyeria / accesorio)
 - `accesorios` (opcional): hasta 5, con checkbox ⭐ (close-up obligatorio por cada marcado)
-- `escena` (opcional): no usada en haul MVP (el espacio se establece en REF0)
 
-**Count policy:** `storyShotCount = min(requestedCount, 20)`. REF0 siempre es extra (+1). Total visible = storyShotCount + 1.
+**Selector de tipo de referencia (HaulRefKind):**
+El usuario puede indicar manualmente qué contiene cada imagen. 14 opciones disponibles.
+Si elige `auto`, el planner usa heurística + análisis visual para inferir el tipo.
+El `manualKind` viaja al `HaulItem.manualKind` y determina el `resolvedKind` y el `promptKindLabel`.
 
-**HaulManifest:** Se construye antes de planificar — clasifica prendas vs. accesorios, identifica close-ups obligatorios, determina cuántos try-ons y details caben en el budget.
+**Análisis visual de referencias (VisualRefsAnalysisResult):**
+Cuando el usuario sube imágenes, se puede invocar análisis multimodal con Gemini para detectar `resolvedKind`, `components` (hasTop, hasBottom, etc.), `dominantColors`, `hasPerson`, `isFlatlayOrProduct`. El resultado enriquece el `HaulManifest` antes de planificar.
 
-**Arco (buildHaulShotPlan):**
-1. `HAUL_OVERVIEW` — Contexto inicial: colección a vista, sin catálogo
-2. `HAUL_TRY_ON_N` — Avatar vistiendo cada prenda (2:1 try-on vs. adjusting ratio)
-3. `HAUL_ADJUSTING_N` — Micro-gesto: ajuste de cuello, manga, cintura
-4. `HAUL_DETAIL_GARMENT_N` — Macro de tejido/textura/detalle de la prenda
-5. `HAUL_ACCESSORY_CLOSEUP_N` — Close-up obligatorio para cada accesorio marcado ⭐
-6. `HAUL_WINNER` — Último try-on: la prenda ganadora (si hay budget)
-7. `HAUL_RECAP` — Cierre: todo el haul vista general
+**Count policy:** `storyShotCount = min(requestedCount, 20)`. REF0 siempre extra (+1). Total visible = storyShotCount + 1.
 
-**Progresión de desorden (HaulPileState):** `clean → light_pile → medium_pile → messy_but_believable`. Derivada del ratio tryOnIndex/totalOutfits, inyectada como texto en el prompt de cada shot.
+**Cobertura post-generación (`computeFinalHaulCoverageFromShots`):**
+Después de generar, se calcula el ledger final con shots REALES (no solo el plan). Distingue covered / support_only / uncovered / overexposed por ítem. Debug visible para admins.
 
-**REF0:** Establece el espacio del haul (dormitorio, probador) con iPhone UGC realismo. No es un look final. La ropa del avatar NO es un ítem del haul.
+**Contexto de uso vs locación (`wearingContextOnly`):**
+"Para la oficina" → `wearingContextOnly=true` — no contamina la locación del haul.
+"En la oficina" → `wearingContextOnly=false` — puede ser locación real del haul.
+La etiqueta `wearingContextStyleLabel` inyecta el contexto de moda sin traer señales visuales de locación.
 
-**HPI:** Safe para haul — solo body/expression. Desactivado en overview, closeup y detail. Micro-acción en adjusting. Evaluación de postura en try-on/winner. Sin props/locations de intelligence.
+**Retry automático (safe_required_item_retry):**
+Shots con content-policy failure en haul hacen retry automático con prompt conservador diferenciado:
+- Hero shots (try-on, footwear, bag, jewelry, adjusting, styled): `safeRetryPurpose` preserva la referencia del ítem con lenguaje de moda neutro.
+- Shots de contexto: purpose genérico "natural haul moment".
+- `forbiddenElements` ampliados para reducir riesgo de rechazos repetidos.
 
-**Family blocks:** Desactivados (igual que outfit_check MVP).
+**REF0:** Establece el espacio del haul (dormitorio, probador) con iPhone UGC realismo. La ropa del avatar NO es un ítem del haul ("AVATAR CLOTHING IS NOT A HAUL ITEM").
 
-**Regla clave:** "AVATAR CLOTHING IS NOT A HAUL ITEM" — inyectada en shotIdentityBlock, shotOutfitInstruction y REF0.
+**HPI:** Safe para haul — solo body/expression. Desactivado en overview, closeup y detail. Micro-acción en adjusting. Evaluación de postura en try-on. Sin props/locations de intelligence.
+
+**Family blocks:** Desactivados.
+
+**Debug de admins incluye:**
+- `haulManifest`: clasificación completa de ítems
+- `manualKindLostWarning`: detecta si el selector manual se perdió en el pipeline
+- `haulWearingContext`: separación contexto de uso vs locación de captura
+- `finalCoverageLedger`: cobertura real post-generación
+- `referenceRouting`: clasificación semántica por tipo (garmentRefs, footwearRefs, jewelryRefs, accessoryRefs)
 
 ---
 
@@ -268,37 +303,28 @@ Rotan entre tipos de momento: context, detail, emotion, texture, action, atmosph
 
 ## Estado de trabajo actual
 
-**Receta activa: `outfit_haul` — implementación completa, pendiente prueba de aceptación en app**
+**Receta activa: `outfit_week` — implementada, pendiente prueba de aceptación en app**
 
-**Qué se hizo:** Rediseño completo del sistema haul. Se reemplazó `buildHaulShotPool` + `distributeHaulShots` por una arquitectura nueva con `buildHaulManifest` + `buildHaulShotPlan`. Se separó el reference routing de haul del bloque outfit_check/week. Se agregó HPI seguro para haul, family blocks desactivados, anti-editorial iPhone UGC por shot, y regla "avatar clothing is not a haul item".
+**outfit_haul (v1.8) — arquitectura estabilizada:**
+- `HaulReferenceTypeSelector` con 14 opciones de tipo de ítem
+- `buildHaulManifest` + `buildHaulShotPlan` con 3 fases de coverage garantizada
+- `computeFinalHaulCoverageFromShots` para ledger post-generación con shots reales
+- `VisualRefsAnalysisResult` para análisis multimodal de referencias
+- `wearingContextOnly` / `wearingContextStyleLabel` para separar contexto de uso vs locación
+- Safe retry diferenciado por tipo de shot (hero vs contexto)
+- Debug completo para admins: manualKindLostWarning, haulWearingContext, finalCoverageLedger
 
-**Archivos modificados:**
-- `photodumpDirectorService.ts` — HaulManifest, shot planner, builders por tipo, HPI seguro, routing, REF0
-- `PhotodumpModule.tsx` — count policy, visibleImageCount, haulManifestDebug, validadores de contradicciones haul
-- `PDStep2Receta.tsx` — slots outfit hasta 10, accesorios hasta 5, sublabels dinámicos
-- `types.ts` — HaulItem, HaulManifest, HaulProgressState, campos debug haul
-
-**Prueba de aceptación pendiente:**
-- Prompt: "Haul de mis 6 outfits nuevos"
-- 6 outfits subidos, 3 accesorios, 2 con close-up marcado
-- 12 imágenes solicitadas
-- Verificar: 12 story shots + 1 REF0 = 13 imágenes totales
-- Verificar: close-ups aparecen en el arco
-- Verificar: sin mezcla de outfits entre shots
-- Verificar: progresión de desorden visible en prompts del debug
-
-**Próxima acción:** Probar en app y ajustar según resultado.
+**Próxima acción:** Probar `outfit_week` en app.
 
 ---
 
 ## Recetas pendientes (en orden)
 
-1. `outfit_haul` — **prueba de aceptación en app** (implementación lista)
-2. `outfit_week` — implementada, falta validar en app
-3. `day_in_life`
-4. `launch`
-5. `bts` — **IMPORTANTE: el avatar puede aparecer, NO es obligatoriamente faceless. Evaluar caso a caso.**
-6. `travel`
+1. `outfit_week` — **prueba de aceptación en app** (implementación lista)
+2. `day_in_life`
+3. `launch`
+4. `bts` — **IMPORTANTE: el avatar puede aparecer, NO es obligatoriamente faceless. Evaluar caso a caso.**
+5. `travel`
 
 **Notas globales para no repetir errores:**
 - BTS NO es siempre faceless. El usuario lo aclaró explícitamente.

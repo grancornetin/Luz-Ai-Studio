@@ -20,7 +20,8 @@ import {
   OutfitBriefContext, OutfitDestinationClass, PrepEnvironmentClass, OutfitComposition,
   PoseIntent, DetailKind, EnvironmentAffordance, SceneContinuityMode,
   HaulItem, HaulManifest, HaulItemKind, HaulPileState, HaulCoveragePlan, HaulRefKind,
-  HaulResolvedKind, HaulCoverageRole, HaulCoverageLedgerItem,
+  HaulResolvedKind, HaulCoverageRole, HaulCoverageLedgerItem, HaulOutfitComponents,
+  VisualRefsAnalysisResult,
 } from './types';
 import {
   getStorySupportFamilies, initPhotodumpIntelligence, StorySupportFamily,
@@ -3056,6 +3057,69 @@ function resolvedKindToPromptLabel(rk: HaulResolvedKind): string {
   return labels[rk] ?? 'VISUAL ITEM';
 }
 
+// ── Descomposición semántica de look_completo ─────────────────
+// Infiere qué piezas tiene un look completo o set mixto a partir de las refs del usuario.
+// No requiere computer vision real — usa el selector manual del usuario + señales del brief.
+// La estructura resultante permite al planner y al prompter saber qué NO debe perder el modelo.
+function inferOutfitComponents(
+  manualKind:    HaulRefKind,
+  label:         string,
+  accManualKinds?: HaulRefKind[],  // kinds de accesorios del mismo haul (para saber si hay calzado/bag/jewelry)
+): HaulOutfitComponents {
+  // Para look_completo: asumimos que tiene top + bottom a menos que las referencias asociadas
+  // digan que es un vestido. Si el haul tiene calzado/joyería en otros slots, no los contamos
+  // aquí — eso lo hace el planner a nivel de manifest completo.
+  // La función trabaja solo con la información de ESTA referencia puntual.
+  const isFullOutfit  = manualKind === 'look_completo';
+  const isMixedSet    = manualKind === 'varios_items';
+  const isDress       = manualKind === 'vestido';
+  const isOnepiece    = manualKind === 'enterizo';
+
+  // Para look completo y sets mixtos, inferimos una estructura base.
+  // El usuario no nos dijo exactamente qué piezas tiene, pero podemos hacer
+  // suposiciones razonables que el prompt puede corregir con las refs visuales.
+  const hasTop        = isFullOutfit || isMixedSet;
+  const hasBottom     = (isFullOutfit || isMixedSet) && !isDress && !isOnepiece;
+  const hasDress      = isDress || isOnepiece;
+  const hasOuterwear  = false; // no sabemos — se infiere del prompt del usuario
+  // Señal de calzado: si en los manualKinds de accesorios hay 'calzado', asumimos que puede
+  // aparecer integrado cuando este look se usa como try-on
+  const hasFootwear   = (accManualKinds ?? []).some(k => k === 'calzado') ||
+                        (isFullOutfit && label.toLowerCase().includes('completo'));
+  const hasHosiery    = (accManualKinds ?? []).some(k => k === 'pantys');
+  const hasBag        = (accManualKinds ?? []).some(k => k === 'bolso');
+  const hasJewelry    = (accManualKinds ?? []).some(k => k === 'joyeria');
+  const hasAccessory  = (accManualKinds ?? []).some(k => k === 'accesorio');
+
+  // Riesgo de integración anatómica: si el look incluye pantalón/leggings/falda Y calzado alto
+  const footwearLegCoverageRisk = (hasBottom || hasHosiery) && hasFootwear;
+
+  // Resumen compacto para inyectar en el prompt
+  const parts: string[] = [];
+  if (hasDress)      parts.push('dress/onepiece');
+  else {
+    if (hasTop)      parts.push('top');
+    if (hasBottom)   parts.push('bottom');
+  }
+  if (hasOuterwear)  parts.push('outerwear');
+  if (hasHosiery)    parts.push('hosiery/tights');
+  if (hasFootwear)   parts.push('footwear');
+  if (hasBag)        parts.push('bag');
+  if (hasJewelry)    parts.push('jewelry');
+  if (hasAccessory)  parts.push('accessory');
+
+  const componentsSummary = parts.length > 0
+    ? `Expected pieces in this look: ${parts.join(', ')}.`
+    : `Full coordinated look — preserve all visible pieces as a cohesive unit.`;
+
+  return {
+    hasTop, hasBottom, hasDress, hasOuterwear, hasFootwear,
+    hasHosiery, hasBag, hasJewelry, hasAccessory,
+    footwearLegCoverageRisk,
+    componentsSummary,
+  };
+}
+
 // Genera el bloque de interpretación del ítem para el prompt final
 function buildHaulItemTypeBlock(item: HaulItem): string {
   const isManual = item.manualKind !== 'auto';
@@ -3067,29 +3131,27 @@ PROMPT GUIDANCE: ${item.promptKindLabel}
 
 ${item.resolvedKind === 'full_outfit' ? `→ Treat as a COORDINATED OUTFIT/LOOK. The pieces shown together are intended to be worn as a set.
    Preserve the combination logic and styling relationship between visible pieces.
-   Do NOT reduce it to one isolated garment. If a neutral base is needed for missing pieces, use the simplest neutral possible — it must NOT become the hero.
+   Do NOT reduce it to one isolated garment. Do NOT treat it as a vague "look" — every visible piece must appear.
 
-⚠️ TALL FOOTWEAR INTEGRATION — SYMMETRY CONSTRAINT (HARD RULE):
-If this outfit includes any legwear (jeans, pants, leggings, tights, skirt, or dress hem)
-AND any tall footwear that covers a significant portion of the leg
-(knee-high boots, over-the-knee boots, tall shaft boots, or similar):
+${item.outfitComponents ? `OUTFIT COMPONENT CONTRACT — ALL pieces listed below MUST be visible and faithful in this shot:
+${item.outfitComponents.componentsSummary}
+PARTIAL LOOK RULE: If only SOME components appear, the image is a partial failure — the generation must show the COMPLETE look as described.
+FORBIDDEN: losing any of the main listed pieces. Showing only the top but not the bottom. Wearing a different shoe than the reference provides.
+  • Top: ${item.outfitComponents.hasTop ? 'REQUIRED — must be visible' : 'not expected'}
+  • Bottom: ${item.outfitComponents.hasBottom ? 'REQUIRED — silhouette, length, and fit readable' : 'not expected'}
+  • Dress/Onepiece: ${item.outfitComponents.hasDress ? 'REQUIRED — full silhouette top to hem visible' : 'not expected'}
+  • Footwear: ${item.outfitComponents.hasFootwear ? 'REQUIRED — show correctly integrated on both feet' : 'not expected in this shot'}
+  • Hosiery/Tights: ${item.outfitComponents.hasHosiery ? 'REQUIRED — visible on both legs consistently' : 'not expected'}
+  • Bag: ${item.outfitComponents.hasBag ? 'INCLUDE if it appears in the reference — worn or held naturally' : 'not expected'}
+  • Jewelry: ${item.outfitComponents.hasJewelry ? 'INCLUDE if it appears in the reference — worn naturally' : 'not expected'}
 
-  STEP 1 — Choose ONE coherent integration style based on the outfit and reference:
-    — tucked in: legwear goes inside the boot shaft
-    — over the boot: legwear rests on top of or drapes over the shaft
-    — under the boot: shaft covers the outside of the legwear
-    — any other visually logical resolution consistent with the garments shown
-
-  STEP 2 — Apply that SAME resolution identically on BOTH legs.
-
-  FORBIDDEN — these are generation errors:
-    ✗ One leg tucked in, the other not
-    ✗ One boot shaft under the fabric, the other outside it
-    ✗ Shaft/hem intersection that creates broken geometry, partial penetration, or clipping on one side
-    ✗ One leg anatomically correct, the other floating or disconnected
-    ✗ Asymmetric layering where both legs are styled differently without any reference basis
-
-  The model picks the styling. The rule is: both sides must match.` : ''}${item.resolvedKind === 'mixed_set' ? `→ Treat as a PRODUCT GROUP — multiple items in one image, not necessarily one complete outfit.
+${item.outfitComponents.footwearLegCoverageRisk ? `⚠️ FOOTWEAR + LEGWEAR INTEGRATION WARNING FOR THIS LOOK:
+This outfit combines legwear (pants/skirt/tights/leggings) with footwear that may cover the leg.
+MANDATORY SYMMETRY: Both legs must have IDENTICAL integration — choose one coherent style and apply it to BOTH sides:
+  — legwear tucked into boot/shaft on both legs
+  — boot shaft under legwear on both legs
+  — legwear draping over footwear on both legs
+FORBIDDEN: one leg tucked, the other not. Shaft clipping through fabric on one side. Half-inside half-outside. Leg geometry mismatch.` : ''}` : `If a neutral base is needed for missing pieces, use the simplest neutral possible — it must NOT become the hero.`}` : ''}${item.resolvedKind === 'mixed_set' ? `→ Treat as a PRODUCT GROUP — multiple items in one image, not necessarily one complete outfit.
    Do NOT assume every piece goes together unless the reference clearly shows it.
    Show the person interacting with one or more items naturally.` : ''}${item.resolvedKind === 'dress' ? `→ Treat as a DRESS or ONE-PIECE. It is the main garment — top to hem.
    Do NOT treat it as a generic garment. Ensure the full silhouette reads clearly.` : ''}${item.resolvedKind === 'onepiece' ? `→ Treat as a JUMPSUIT / BODYSUIT / ONEPIECE. It covers the body as a single piece.
@@ -3152,7 +3214,11 @@ function inferHaulItemKind(slotLabel: string, index: number, manualKind?: HaulRe
   return inferHaulItemKindByLabel(slotLabel);
 }
 
-export function buildHaulManifest(refs: PhotodumpRefs, requestedCount: number): HaulManifest {
+export function buildHaulManifest(
+  refs:           PhotodumpRefs,
+  requestedCount: number,
+  visualAnalysis?: VisualRefsAnalysisResult,
+): HaulManifest {
   const maxStoryShots = Math.min(requestedCount, 20);
 
   // REGLA DURA: avatarRef y bodyRef NUNCA entran en haulItems.
@@ -3166,9 +3232,35 @@ export function buildHaulManifest(refs: PhotodumpRefs, requestedCount: number): 
   const bagItems:      HaulItem[] = [];
   const jewelryItems:  HaulItem[] = [];
 
+  // Pre-calcular los manualKinds de accesorios para poder inferir outfitComponents
+  const accManualKindsPre: HaulRefKind[] = (refs.haulAccKinds ?? []);
+
   rawOutfits.forEach((url, i) => {
     const manualKind: HaulRefKind = outfitManualKinds[i] ?? 'auto';
-    const kind = inferHaulItemKind(`Prenda ${i + 1}`, i, manualKind);
+
+    // Análisis visual de Gemini para este slot (si está disponible).
+    // El índice en visualAnalysis coincide con la posición en rawOutfits (outfitRef=0, outfitRefs[0]=1...).
+    const visualRef = visualAnalysis?.refs.find(r => r.index === i);
+
+    // Regla de prioridad:
+    // 1. Selector manual explícito del usuario → siempre gana (intención declarada)
+    // 2. Análisis visual de Gemini (confidence high/medium) → corrige 'auto'
+    // 3. Heurística de texto (inferHaulItemKind) → fallback si no hay análisis
+    const kind: HaulItemKind = (() => {
+      if (manualKind !== 'auto') return haulRefKindToItemKind(manualKind);
+      if (visualRef && (visualRef.confidence === 'high' || visualRef.confidence === 'medium')) {
+        // Mapear resolvedKind visual → HaulItemKind
+        const rk = visualRef.resolvedKind;
+        if (rk === 'footwear')  return 'footwear';
+        if (rk === 'bag')       return 'bag';
+        if (rk === 'jewelry')   return 'jewelry';
+        if (rk === 'accessory') return 'accessory';
+        if (rk === 'full_outfit' || rk === 'mixed_set') return 'outfit_set';
+        return 'garment';
+      }
+      return inferHaulItemKindByLabel(`Prenda ${i + 1}`);
+    })();
+
     const resolvedKind = resolveHaulKind(manualKind, kind);
     const promptKindLabel = resolvedKindToPromptLabel(resolvedKind);
 
@@ -3186,6 +3278,18 @@ export function buildHaulManifest(refs: PhotodumpRefs, requestedCount: number): 
     const label = `${kindLabel[kind] ?? 'Ítem'} ${i + 1}`;
 
     const isTryOnEligible = kind !== 'footwear' && kind !== 'bag' && kind !== 'jewelry' && kind !== 'accessory';
+
+    // outfitComponents: priorizar análisis visual de Gemini si está disponible.
+    // Fallback: inferOutfitComponents semántico (basado en selector + accesorios del haul).
+    const outfitComponents = (resolvedKind === 'full_outfit' || resolvedKind === 'mixed_set')
+      ? (visualRef?.components ?? inferOutfitComponents(manualKind, label, accManualKindsPre))
+      : undefined;
+
+    // Añadir descripción visual al label si Gemini la proveyó (enriquece el prompt)
+    const enrichedLabel = visualRef?.visualDescription
+      ? `${label} — ${visualRef.visualDescription}`
+      : label;
+
     const item: HaulItem = {
       id:                        `outfit_${i}`,
       sourceIndex:               i,
@@ -3194,13 +3298,14 @@ export function buildHaulManifest(refs: PhotodumpRefs, requestedCount: number): 
       manualKind,
       resolvedKind,
       promptKindLabel,
-      label,
+      label:                     enrichedLabel,
       closeupRequested:          false,
       tryOnEligible:             isTryOnEligible,
       footwearTryOnEligible:     kind === 'footwear',
       detailEligible:            true,
       canBeIntegratedIntoOutfit: kind === 'footwear' || kind === 'accessory' || kind === 'bag' || kind === 'jewelry',
       priority:                  'required' as const,
+      outfitComponents,
     };
 
     if (kind === 'footwear') {
@@ -3215,19 +3320,39 @@ export function buildHaulManifest(refs: PhotodumpRefs, requestedCount: number): 
   });
 
   // Accesorios: accesorioRefs[] + closeup flags + manual kinds
-  const rawAccs        = (refs.accesorioRefs ?? []).filter(Boolean) as string[];
-  const closeupArr     = refs.accesorioCloseup ?? [];
-  const accManualKinds = refs.haulAccKinds ?? [];
+  const rawAccs    = (refs.accesorioRefs ?? []).filter(Boolean) as string[];
+  const closeupArr = refs.accesorioCloseup ?? [];
+  // accManualKindsPre ya fue definida arriba para inferir outfitComponents
+  const accManualKinds = accManualKindsPre;
 
   const accessoryItems: HaulItem[] = rawAccs.map((url, i) => {
     const manualKind: HaulRefKind = accManualKinds[i] ?? 'auto';
-    const accKind: HaulItemKind =
-      manualKind === 'bolso'   ? 'bag'
-      : manualKind === 'joyeria' ? 'jewelry'
-      : manualKind === 'calzado' ? 'footwear'
-      : 'accessory';
+
+    // Índice global: accesorios vienen después de los outfits en el array enviado a Gemini
+    const visualAccRef = visualAnalysis?.refs.find(r => r.index === rawOutfits.length + i);
+
+    // Prioridad: selector manual > análisis Gemini > heurística
+    const accKind: HaulItemKind = (() => {
+      if (manualKind === 'bolso')   return 'bag';
+      if (manualKind === 'joyeria') return 'jewelry';
+      if (manualKind === 'calzado') return 'footwear';
+      if (manualKind !== 'auto')    return 'accessory';
+      if (visualAccRef && (visualAccRef.confidence === 'high' || visualAccRef.confidence === 'medium')) {
+        const rk = visualAccRef.resolvedKind;
+        if (rk === 'footwear') return 'footwear';
+        if (rk === 'bag')      return 'bag';
+        if (rk === 'jewelry')  return 'jewelry';
+      }
+      return 'accessory';
+    })();
+
     const resolvedKind = resolveHaulKind(manualKind, accKind);
     const promptKindLabel = resolvedKindToPromptLabel(resolvedKind);
+    const baseLabel = `Accesorio ${i + 1}`;
+    const label = visualAccRef?.visualDescription
+      ? `${baseLabel} — ${visualAccRef.visualDescription}`
+      : baseLabel;
+
     return {
       id:                        `acc_${i}`,
       sourceIndex:               i,
@@ -3236,13 +3361,12 @@ export function buildHaulManifest(refs: PhotodumpRefs, requestedCount: number): 
       manualKind,
       resolvedKind,
       promptKindLabel,
-      label:                     `Accesorio ${i + 1}`,
+      label,
       closeupRequested:          !!closeupArr[i],
       tryOnEligible:             false,
       footwearTryOnEligible:     accKind === 'footwear',
       detailEligible:            true,
       canBeIntegratedIntoOutfit: true,
-      // Every uploaded accessory is required — the closeupRequested flag only affects shot style
       priority:                  'required' as const,
     };
   });
@@ -3563,6 +3687,27 @@ export function buildHaulShotPlan(
     } else {
       entry.coverageStatus = 'covered';
     }
+
+    // Fidelity note: para look_completo con outfitComponents, indica qué tan completo
+    // puede ser la cobertura visual (basado solo en plan — se actualiza con shots reales en Module)
+    const item = manifest.allItems.find(it => it.id === itemId);
+    if (item?.outfitComponents && entry.coverageStatus === 'covered') {
+      const comps = item.outfitComponents;
+      const hasComplexLook = comps.hasFootwear || comps.hasHosiery || comps.hasBag || comps.hasJewelry;
+      entry.fidelityLevel = hasComplexLook ? 'full' : 'full';
+      entry.fidelityNote = hasComplexLook
+        ? `Look completo con ${comps.componentsSummary} — requires full multi-piece fidelity in try-on shot`
+        : `Basic look — top/bottom fidelity required`;
+    } else if (entry.coverageStatus === 'covered') {
+      entry.fidelityLevel = 'full';
+    } else if (entry.coverageStatus === 'support_only') {
+      entry.fidelityLevel = 'partial';
+      entry.fidelityNote = 'Item only in support/background shots — no dedicated on-body hero shot';
+    } else {
+      entry.fidelityLevel = 'none';
+      entry.fidelityNote = 'Item never appeared in plan';
+    }
+
     const idx = manifest.coveragePlan.ledger.findIndex(l => l.itemId === itemId);
     if (idx >= 0) manifest.coveragePlan.ledger[idx] = entry;
     manifest.coveragePlan.plannedCoverage[itemId] = entry.plannedHeroShots + entry.plannedSupportShots;
@@ -3899,12 +4044,34 @@ function buildHaulTryOnShot(
 
   const variations = kindVariations[kindVariationKey] ?? kindVariations.garment;
 
+  // Enriquecer purpose y requiredElements para look_completo con outfitComponents
+  const comps = item.outfitComponents;
+  const componentsPurposeSuffix = comps
+    ? ` COMPONENT CONTRACT: ${comps.componentsSummary} All listed pieces must be simultaneously visible and faithful in this shot.`
+    : '';
+  const componentsRequired: string[] = comps ? [
+    ...(comps.hasTop       ? ['top_piece_visible_and_faithful']     : []),
+    ...(comps.hasBottom    ? ['bottom_piece_visible_length_readable'] : []),
+    ...(comps.hasDress     ? ['dress_full_silhouette_hem_to_shoulder'] : []),
+    ...(comps.hasFootwear  ? ['footwear_on_both_feet_consistently']  : []),
+    ...(comps.hasHosiery   ? ['hosiery_visible_on_both_legs']        : []),
+    ...(comps.hasBag       ? ['bag_visible_worn_or_held']            : []),
+    ...(comps.hasJewelry   ? ['jewelry_visible_worn_naturally']      : []),
+  ] : [];
+
   return {
     key:    `HAUL_TRY_ON_${shotNum}`,
     beat:   'action',
     role:   `TRY-ON ${shotNum}/${totalOutfits} — ${item.label}`,
-    purpose: `The person wearing ${item.label} (garment ${shotNum} of ${totalOutfits}). ${pileNote} Natural attitude — trying it on, evaluating, moving. NOT a catalog pose. Real room visible. iPhone UGC feel.`,
-    requiredElements:  ['avatar_wearing_item', 'garment_clearly_visible_and_readable', 'real_environment_visible', 'natural_try_on_attitude', 'no_catalog_pose'],
+    purpose: `The person wearing ${item.label} (garment ${shotNum} of ${totalOutfits}). ${pileNote} Natural attitude — trying it on, evaluating, moving. NOT a catalog pose. Real room visible. iPhone UGC feel.${componentsPurposeSuffix}`,
+    requiredElements:  [
+      'avatar_wearing_item',
+      'garment_clearly_visible_and_readable',
+      'real_environment_visible',
+      'natural_try_on_attitude',
+      'no_catalog_pose',
+      ...componentsRequired,
+    ],
     forbiddenElements: ['catalog_stance', 'studio_backdrop', 'white_background', 'mannequin_pose', 'beautification', 'ad_composition', 'editorial_lighting', 'high_fashion_look'],
     variationSpace:    variations,
     framing:     'MEDIUM_OR_WIDE',
@@ -5404,14 +5571,30 @@ STRICTLY FORBIDDEN — DO NOT GENERATE:
   ✗ New props, new mirrors, new furniture not in REF0
   ✗ Room redesign between shots — same room, same light direction
 
-⚠️ TALL FOOTWEAR + LEGWEAR INTEGRATION (GLOBAL RULE — ALL HAUL SHOTS):
-If the person's look in this shot combines any legwear (pants, jeans, skirt, dress hem, leggings, tights)
-with tall footwear that covers a significant portion of the leg (knee-high boots, over-knee boots, tall shaft):
-  • Choose ONE coherent integration: tucked in, over-boot, under-boot, or draped — based on the look.
-  • Apply that SAME resolution IDENTICALLY on BOTH legs — no asymmetry.
-  • FORBIDDEN: left leg tucked, right leg not. One shaft clipping through fabric. One boot floating.
-  • FORBIDDEN: broken geometry, partial penetration, or contradictory layering on either side.
-  The styling choice is free. The rule is: both legs must match.
+⚠️ FOOTWEAR + LEGWEAR ANATOMICAL INTEGRATION (GLOBAL RULE — ALL HAUL SHOTS):
+Any time the person's visible look includes BOTH legwear AND footwear, apply this rule:
+
+LEGWEAR includes: pants, jeans, trousers, leggings, skirt, dress hem, tights, hosiery, shorts.
+FOOTWEAR includes: boots (any shaft height), sneakers, heels, sandals, loafers, flats, any shoes.
+
+MANDATORY SYMMETRY — both legs/feet must look IDENTICAL in how they integrate:
+  — If legwear is tucked into footwear → BOTH legs tucked, same depth
+  — If footwear is worn over legwear → BOTH legs show the same drape/overlap
+  — If footwear is under legwear hem → BOTH sides show consistent coverage
+  — If wearing heels with a skirt → BOTH feet at same angle, same heel height visible consistently
+  — If wearing sandals with tights → BOTH feet show the same tights texture at the toe
+
+FORBIDDEN anatomical errors — these are hard generation failures:
+  ✗ One leg tucked into boot/shaft, the other leg hanging outside
+  ✗ One boot shaft piercing through the pants fabric, the other sitting on top
+  ✗ Left foot appears to wear one style of integration, right foot a different one
+  ✗ Footwear geometry that is physically impossible (shaft passing through solid fabric)
+  ✗ Half-tuck, half-drape — inconsistent on same person in same shot
+  ✗ One leg floating or disconnected from the body due to footwear clipping
+  ✗ Different apparent heel height between left and right shoe
+  ✗ One sandal strap visible, matching strap missing on the other foot
+
+EXCEPTION — intentional asymmetry: only if the reference explicitly shows it (e.g., one boot folded down). Match the reference exactly in that case.
 
 ⚠️ SAFE HAUL FALLBACK (only if try-on fails):
 If wearing this garment causes a content policy issue, do NOT redesign the garment.

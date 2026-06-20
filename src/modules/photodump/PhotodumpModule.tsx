@@ -17,6 +17,7 @@ import { useAuth } from '../auth/AuthContext';
 import { downloadAsZip } from '../../utils/imageUtils';
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
 import { newSessionId } from '../../services/imageApiService';
+import { geminiService } from '../../services/geminiService';
 import { photodumpStorage } from './photodumpStorage';
 import {
   PhotodumpSet, PhotodumpDestino, PhotodumpRefs, PhotodumpOutfitMode,
@@ -70,6 +71,7 @@ const WIZARD_STEPS_LIBRE = [
 ];
 
 const GENERATION_STEPS: ProgressStep[] = [
+  { id: 'analyze',  label: 'Analizando referencias visuales'   },
   { id: 'plan',     label: 'Armando la estructura narrativa'   },
   { id: 'ref0',     label: 'Generando imagen ancla del set'    },
   { id: 'shots',    label: 'Generando imágenes de la historia' },
@@ -383,7 +385,33 @@ const PhotodumpModule: React.FC = () => {
         : (refs.gender ?? 'female');
       const refsWithMode = { ...refs, outfitMode, gender: inferredGender };
 
+      // ── Paso 0: análisis visual de referencias (outfit_haul) ──────────────
+      // Una sola llamada Gemini multimodal con todas las imágenes juntas.
+      // Enriquece el manifest con resolvedKind y outfitComponents reales,
+      // no solo inferidos del selector manual.
       setProgressStepIndex(0);
+      let visualAnalysis: import('./types').VisualRefsAnalysisResult | undefined;
+      if (recipe === 'outfit_haul') {
+        const allRefImages = [
+          refs.outfitRef,
+          ...(refs.outfitRefs ?? []),
+          ...(refs.accesorioRefs ?? []),
+        ].filter(Boolean) as string[];
+        const allRefHints = [
+          ...(refs.haulOutfitKinds ?? []),
+          ...(refs.haulAccKinds ?? []),
+        ];
+        if (allRefImages.length > 0) {
+          visualAnalysis = await geminiService.analyzeVisualReferences(
+            allRefImages,
+            allRefHints,
+            'fashion haul content generation',
+          ).catch(() => undefined);
+        }
+      }
+
+      // ── Paso 1: plan narrativo ─────────────────────────────────────────────
+      setProgressStepIndex(1);
       // Count policy:
       //   outfit_check : máximo 8 visibles, REF0 ocupa 1 slot
       //   outfit_haul  : hasta 20 story shots, REF0 siempre aparte (no ocupa slot)
@@ -401,7 +429,7 @@ const PhotodumpModule: React.FC = () => {
       setSavedShots(shots);
       setSavedPlan(plan);
 
-      setProgressStepIndex(1);
+      setProgressStepIndex(2);
       const ref0Result = await generatePhotodumpREF0(
         refsWithMode, narrative, protagonist, destino, basePrompt, sessionParams, recipe,
       );
@@ -417,7 +445,7 @@ const PhotodumpModule: React.FC = () => {
       // Sin llamarlo el ledger queda en cero — es necesario para debug real.
       const haulManifestDebug = (() => {
         if (!isAdmin || recipe !== 'outfit_haul') return undefined;
-        const m = buildHaulManifest(refsWithMode, storyShotCount);
+        const m = buildHaulManifest(refsWithMode, storyShotCount, visualAnalysis);
         buildHaulShotPlan(m); // side-effect: escribe ledger y warnings en m.coveragePlan
         return m;
       })();
@@ -438,7 +466,7 @@ const PhotodumpModule: React.FC = () => {
         status:      'ok',
       }] : [];
 
-      setProgressStepIndex(2);
+      setProgressStepIndex(3);
       const shotUrls: string[] = [];
       const failed: number[]   = [];
       const failedErrors: string[] = [];
@@ -787,6 +815,7 @@ const PhotodumpModule: React.FC = () => {
         destinationClass:    briefCtxDebug?.destinationClass,
         prepEnvironmentClass: briefCtxDebug?.prepEnvironmentClass,
         haulManifest:        haulManifestDebug,
+        visualRefsAnalysis:  recipe === 'outfit_haul' ? visualAnalysis : undefined,
         // Detectar si el selector manual se perdió en el pipeline
         manualKindLostWarning: (() => {
           if (recipe !== 'outfit_haul' || !haulManifestDebug) return undefined;
@@ -872,7 +901,7 @@ const PhotodumpModule: React.FC = () => {
 
       setSavedDebugData(debugData);
 
-      setProgressStepIndex(3);
+      setProgressStepIndex(4);
       const captions = await generatePhotodumpCaptions(basePrompt, narrative, shots, refs.gender ?? 'female');
       setSavedCaptions(captions);
       setSavedShotUrls(shotUrls);

@@ -30,13 +30,12 @@ El fundador es un desarrollador independiente con operación desde Chile, aún s
 
 ### Modelos de IA usados
 
-| Modelo | Uso | Ubicación |
-|---|---|---|
-| `gemini-3.1-flash-image-preview` | Generación de imágenes (default) | global |
-| `gemini-3-pro-image-preview` | Fallback en generaciones con fidelidad facial crítica | global |
-| `gemini-2.5-flash` | Análisis de texto, outfits, productos, asistente | us-central1 |
+| Modelo | Nombre interno | Uso | Ubicación |
+|---|---|---|---|
+| `gemini-3.1-flash-image-preview` | MODELS.FLASH | Generación de imágenes (default) | global |
+| `gemini-2.5-flash` | MODELS.TEXT | Análisis de texto, outfits, productos, asistente, Planner | us-central1 |
 
-**Nota importante:** `gemini-2.5-flash-image` fue eliminado del stack por problemas de drift de identidad con referencias. Todos los módulos usan Gemini 3 para imagen.
+**Nota importante:** `gemini-3-pro-image-preview` ya no se usa como fallback. `gemini-2.5-flash-image` fue eliminado por problemas de drift de identidad. El único modelo de imagen activo es Gemini 3.1 Flash Image (alias "Nano Banana 2" en la app). Seedream 4.5 y GPT Image 2 son modelos alternativos opcionales con costo 1 crédito/imagen.
 
 ### Flujo de generación de imagen (toda generación pasa por esto)
 
@@ -176,20 +175,35 @@ El costo escala con el volumen de generaciones (QStash) y usuarios (Redis). Es u
 
 ## SECCIÓN 4 — PLANES Y CRÉDITOS ACTUALES (ESTADO ACTUAL DEL CÓDIGO)
 
-Definidos en `src/services/creditConfig.ts`:
+Definidos en `src/services/creditConfig.ts`.
 
-| Plan | Créditos/mes | Precio | Precio por crédito | ~Imágenes/mes |
+**Regla de precio:** 1 crédito = $0.10 USD = $100 CLP
+
+| Plan | Créditos/período | Pro-credits | Precio | ~Imágenes |
 |---|---|---|---|---|
-| Free | 20 (único) | $0 | — | ~10 |
-| Starter | 240 | $9.99 | $0.0416 | ~80 |
-| Pro | 600 | $19.99 | $0.0333 | ~200 |
-| Studio | 1500 | $39.99 | $0.0266 | ~500 |
+| Free | 20 (único, no renueva) | 2 sesiones | $0 | ~10–20 |
+| Semanal | 60/semana | 15/semana | $4.99/semana | ~30–60 |
+| Starter | 200/mes | 80/mes | $14.99/mes | ~100–200 |
+| Pro | 500/mes | 200/mes | $39.99/mes | ~250–500 |
+| Studio | 1200/mes | 500/mes | $99.99/mes | ~600–1200 |
 
-**Observaciones sobre los planes actuales:**
-- El precio por crédito baja según el plan (descuento por volumen), lo que es estándar.
-- A $0.033–$0.042 por crédito, la mayoría de generaciones con Flash tienen margen positivo.
-- Con Pro como worst-case, el margen se vuelve negativo en módulos de batch (Campaign, Photodump, Outfit Kit).
-- El plan Free de 20 créditos (única vez) alcanza para ~5 generaciones de AI Generator con persona o 2-3 sesiones de UGC.
+**Pro-credits:** segunda moneda para Campaign, Photodump y Planner. Se consume 1 por sesión generada. Las imágenes dentro de la sesión siguen costando créditos normales.
+
+**Top-ups de créditos disponibles:** 30 cr ($3.29) / 80 cr ($7.99) / 200 cr ($18.99)
+**Top-ups de pro-credits disponibles:** 20 pc ($5.99) / 60 pc ($14.99) / 150 pc ($34.99) / 400 pc ($79.99)
+
+**Costos por módulo (creditConfig.ts actual):**
+| Módulo | Créditos | Notas |
+|---|---|---|
+| Image generation (Gemini) | 2 cr/imagen | base |
+| Image generation (Seedream) | 1 cr/imagen | mitad |
+| Model DNA (clone / manual) | 8 cr (4 imgs × 2) | siempre Gemini |
+| Campaign session | 1 pro-credit + 2 cr/imagen | ancla 4 cr (2 imgs) |
+| Photodump session | 1 pro-credit + 2 cr/imagen | REF0 + shots |
+| Planner strategic plan | 1 pro-credit + 2 cr | texto Gemini |
+| Outfit analysis | 0 cr | texto gratis |
+| Product analysis | 0 cr | texto gratis |
+| Reveal prompt | 1 cr | precio fijo |
 
 **Preguntas abiertas para la estrategia:**
 1. ¿Cuántos créditos asignar a cada módulo para cubrir el escenario Pro + reintentos?
@@ -368,4 +382,4 @@ Verificar vigencia de precios en estas fuentes antes de hacer proyecciones final
 
 ---
 
-*Documento generado el 2026-04-23. Los precios de API de Google Gemini cambian frecuentemente — verificar antes de usar en proyecciones financieras.*
+*Documento actualizado 2026-06-20. Los precios de API de Google Gemini cambian frecuentemente — verificar antes de usar en proyecciones financieras.*

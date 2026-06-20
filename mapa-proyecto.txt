@@ -1,6 +1,6 @@
 ================================================================================
 MAPA DEL PROYECTO: LUZ IA STUDIO
-Ultima actualizacion: Mayo 2026 (agregado Publicar Studio)
+Ultima actualizacion: Junio 2026 (Planner reemplaza Projects+PublicarStudio; BrandProfiles; haul v1.8)
 ================================================================================
 
 Este mapa esta hecho para que puedas saber donde buscar cada cosa sin tener que
@@ -127,22 +127,32 @@ MODULOS DE GENERACION  (lo que vende la app)
 ────────────────────────────────────────────────────────────────────────────────
 
   MODEL DNA (clonar avatar desde fotos)
+  Ruta: /crear/clonar
 
-src/modules/CloningModule.tsx
+src/modules/modelDNA/ModelDNAModule.tsx
   QUE HACE: pantalla donde el usuario sube fotos y crea un avatar.
-            Hace 4 generaciones: cuerpo principal, vista trasera, vista
-            lateral y rostro.
+            Hace 3 generaciones: body master (frontal), vistas tecnicas
+            (trasera + lateral), face master (rostro close-up).
   SI LO TOCO QUE PASA: afecta el modulo Model DNA. Costo: ver creditConfig.
 
-src/modules/CloneImageModule.tsx
-  QUE HACE: clona o transforma una imagen ya existente.
-
-src/modules/ManualCreatorModule.tsx (y duplicado en /modules)
+src/modules/manualCreator/ManualCreatorModule.tsx
   QUE HACE: crear avatar 100% por texto, sin fotos. El usuario llena un
             formulario con genero, edad, ojos, pelo, etc.
+  Ruta: /crear/manual
 
 src/modules/cloneMaster/storage.ts
-  QUE HACE: guarda clones del usuario en el navegador (no se usa en UI hoy).
+  QUE HACE: guarda sesiones de Scene Clone en IndexedDB (app_clone_master).
+
+
+  SCENE CLONE (recrear escena de una foto de referencia)
+  Ruta: /clonar
+
+src/modules/sceneClone/SceneCloneModule.tsx
+  QUE HACE: el usuario sube una foto objetivo + fotos de su modelo y el sistema
+            recrea la misma escena con la identidad propia. Admite cambio de
+            outfit y reemplazo de producto en dos pasos.
+
+  NOTA: modo de 2 personas eliminado en Mayo 2026.
 
 
   CONTENT STUDIO PRO (UGC profesional)
@@ -343,67 +353,123 @@ src/modules/promptLibrary/utils/promptHelpers.ts
   QUE HACE: utilidades pequeñas usadas en varios sitios del modulo.
 
 
-  PUBLICAR STUDIO  (planificador de contenido social)
-  Ruta: /publicar
-  Documentacion completa: src/modules/contentPlanner/explicacion-publicar-studio.md
+  CAMPAIGN GENERATOR (kit completo de campana publicitaria)
+  Ruta: /campaign
+  Documentacion completa: src/modules/campaign/explicacion-campaign.md
 
-src/modules/contentPlanner/ContentPlannerModule.tsx
-  QUE HACE: pantalla principal del modulo. Tiene el selector de proyectos
-            (crea uno nuevo o usa uno existente), el sidebar con estadisticas
-            del plan activo, y los tres tabs: Copiloto / Calendario / Remix.
-  SI LO TOCO QUE PASA: afecta el layout general y la navegacion entre tabs.
+src/modules/campaign/CampaignModule.tsx
+  QUE HACE: wizard de 7 pasos que genera un kit de campana completo:
+            plan estrategico + imagenes consistentes + copy por pieza +
+            calendario de 7 dias + hashtags + descargables (ZIP/PDF/HTML).
 
-src/modules/contentPlanner/ContentPlannerCopilot.tsx
-  QUE HACE: el copiloto elevado del modulo. Extiende el ProjectCopilot con:
-            - Remix Engine (bloque [REMIX]): genera 15-25 ideas de posts
-            - Conoce 6 modulos de navegacion (antes solo 3)
-            - Captions, checklist, calendario igual que el original
-            Llama a /api/gemini/content igual que el ProjectCopilot — no
-            requiere cambios en el backend.
-  SI LO TOCO QUE PASA: afecta toda la conversacion del planificador. Cambios
-                       en el system prompt cambian el comportamiento del IA.
+src/modules/campaign/campaignService.ts
+  QUE HACE: director creativo — analiza brief con Gemini, genera 2 propuestas
+            de estilo ancla (Opcion A/B), genera N imagenes derivadas con
+            consistencia visual garantizada (sistema de locks).
 
-src/modules/contentPlanner/WeeklyCalendar.tsx
-  QUE HACE: vista semanal visual del calendario. Navega semana a semana,
-            muestra puntos de color por estado (pendiente/listo/saltado),
-            calcula la racha de dias consecutivos publicados, y tiene botones
-            Listo / Generar / Saltear por cada entrada.
-  SI LO TOCO QUE PASA: afecta la vista de calendario del planificador.
+src/modules/campaign/campaignPdfService.ts
+  QUE HACE: genera el HTML interactivo y el PDF descargable de la campana.
 
-src/modules/contentPlanner/RemixIdeasGrid.tsx
-  QUE HACE: grilla de las ideas generadas por el Remix Engine. Filtros por
-            modulo, agrupadas por tipo de post, cada card expandible con la
-            descripcion de imagen que necesita. Exporta el tipo RemixIdea
-            que usa ContentPlannerCopilot.tsx.
-  SI LO TOCO QUE PASA: afecta la pantalla de ideas del planificador.
+src/modules/campaign/campaignStorage.ts
+  QUE HACE: guarda campanas en IndexedDB (campaings del usuario).
 
-src/modules/contentPlanner/explicacion-publicar-studio.md
+src/modules/campaign/types.ts
+  QUE HACE: tipos del modulo (CampaignChannel, CampaignPiece, CampaignPlan,
+            CampaignSet, ImageSlotRole, ANCHOR_IMAGE_COUNT, etc).
+
+
+  PHOTODUMP MODE (series fotograficas con narrativa)
+  Ruta: /photodump
+  Documentacion completa: src/modules/photodump/explicacion-photodump.md
+
+src/modules/photodump/PhotodumpModule.tsx
+  QUE HACE: wizard 4 pasos + galeria de sets guardados. Genera 3-8 imagenes
+            con hilo narrativo. Incluye debug completo para admins y retry
+            automatico (safe_required_item_retry) para haul.
+
+src/modules/photodump/PDStep2Receta.tsx
+  QUE HACE: paso 2 — seleccion de receta y carga de referencias por slot.
+            Para outfit_haul: hasta 10 prendas con selector de tipo por slot.
+
+src/modules/photodump/HaulReferenceTypeSelector.tsx
+  QUE HACE: selector de tipo de item para haul. 14 opciones (auto,
+            look_completo, top, bottom, vestido, enterizo, chaqueta, calzado,
+            pantys, bolso, joyeria, accesorio, varios_items).
+
+src/modules/photodump/photodumpDirectorService.ts
+  QUE HACE: director visual. Genera plan narrativo, REF0, shots y captions.
+            Para haul: buildHaulManifest + buildHaulShotPlan +
+            computeFinalHaulCoverageFromShots aseguran coverage garantizada
+            de cada item subido.
+
+src/modules/photodump/photodumpIntelligence.ts
+  QUE HACE: banco de familias visuales UGC (story_support, creator_aesthetic).
+
+src/modules/photodump/photodumpStorage.ts
+  QUE HACE: guarda sets completos en IndexedDB (app_photodump_module).
+
+
+  PLANNER  (asistente de contenido semanal)
+  Ruta: /planner
+  Documentacion completa: src/modules/planner/explicacion-planner.md
+  NOTA: reemplaza los anteriores "Publicar Studio" (/publicar) y "Proyectos" (/projects).
+        Las rutas /projects y /projects/:id redirigen a /planner.
+
+src/modules/planner/PlannerList.tsx
+  QUE HACE: pantalla de inicio del Planner. Muestra todos los planes del
+            usuario como cards con miniatura, progreso y fecha.
+            Boton "Nuevo plan" navega al onboarding.
+
+src/modules/planner/PlannerOnboarding.tsx
+  QUE HACE: wizard de 4 preguntas (/planner/nuevo) que genera el plan
+            completo via Gemini al hacer clic en "Armar mi semana".
+            Crea el proyecto en Firestore y redirige a PlannerDetail.
+
+src/modules/planner/PlannerDetail.tsx (antes PlannerWeek)
+  QUE HACE: vista semanal principal (/planner/:id). Tarjetas expandibles
+            por dia con caption listo, prompt, hashtags, instrucciones de
+            modulo y botones Ejecutar / Hecho / Saltar.
+  SI LO TOCO QUE PASA: afecta la experiencia central del planner.
+
+src/modules/planner/PlannerWeek.tsx
+  QUE HACE: componente de vista de tareas por dia. Contiene la logica de
+            navegacion al modulo correspondiente y de marcado de progreso.
+
+src/components/PlannerTaskBubble.tsx
+  QUE HACE: burbuja flotante global (bottom-6 left-6, z-900). Siempre
+            montada en App.tsx. Se activa con el evento planner:task:activate
+            y acompana a la emprendedora mientras genera en otro modulo.
+            Permite copiar prompt/caption y marcar tarea como completada
+            sin volver al planner.
+
+src/modules/planner/growthPlanner/
+  QUE HACE: motor de generacion de planes (engineV2). Contiene los blueprints
+            de tareas, arquetipos de negocio, adaptadores por nicho, generador
+            de esqueleto de plan, validadores y logica de anti-repeticion.
+            Esto no es llamado directamente por el usuario — lo usa
+            PlannerOnboarding al generar el plan.
+
+src/modules/planner/explicacion-planner.md
   QUE HACE: documentacion completa del modulo para IAs y desarrolladores.
-            Explica cada archivo, las decisiones tecnicas y los pendientes.
 
 
-  PROYECTOS  (carpetas de generaciones del usuario)
+  MIS MARCAS  (perfiles de marca)
+  Ruta: /mis-marcas
 
-src/modules/projects/ProjectsList.tsx
-  QUE HACE: lista de proyectos del usuario.
+src/modules/brandProfiles/BrandProfilesModule.tsx
+  QUE HACE: pantalla principal del modulo. Lista los perfiles de marca
+            del usuario con status (incompleta / basica / completa / avanzada).
+            Permite crear, editar, eliminar y marcar uno como default.
+            Genera reporte descargable de la marca.
 
-src/modules/projects/ProjectDetail.tsx
-  QUE HACE: detalle de un proyecto (todas las imagenes guardadas en el).
-            Incluye el ProjectCopilot embebido (version original, mas simple
-            que el de Publicar Studio) y el ProjectCalendar. Los proyectos
-            creados en Publicar Studio tambien aparecen aqui — comparten
-            la misma coleccion de Firestore.
+src/modules/brandProfiles/BrandProfileEditor.tsx
+  QUE HACE: editor de un perfil de marca. Wizard de pasos con nombre,
+            paleta de colores editable, assets de Storage (logo, etc.)
+            y resumen generado por IA.
 
-src/modules/projects/ProjectCopilot.tsx
-  QUE HACE: copiloto embebido en el workspace de proyectos. Version mas
-            simple que ContentPlannerCopilot: conoce 3 modulos, no tiene
-            Remix Engine. Comparte la misma estructura de bloques especiales
-            ([CAPTIONS], [CHECKLIST], [CALENDAR], [ACCIONES]).
-
-src/modules/projects/ProjectCalendar.tsx
-  QUE HACE: vista del calendario dentro del workspace de proyectos. Muestra
-            las mismas entradas que WeeklyCalendar pero con un diseno
-            integrado al layout de tres columnas del workspace.
+src/modules/brandProfiles/types.ts
+  QUE HACE: define BrandProfile, los campos de identidad visual (colores,
+            assets, status), y BrandColor.
 
 
   PANEL ADMIN
@@ -540,8 +606,6 @@ PAGINAS COMPLETAS  (cada ruta de la app)
 
 src/views/Landing.tsx               - pagina publica de inicio (hero, modulos)
 src/views/Dashboard.tsx             - panel del usuario con cards de modulos
-  NOTA: agregar la card de Publicar Studio en Dashboard.tsx para que aparezca
-        en la pantalla de inicio. Por ahora solo esta en el menu lateral.
 src/views/ContentCreator.tsx        - redireccion a Content Studio Pro
 src/views/OutfitExtractor.tsx       - vista del modulo Outfit Extractor
 src/views/PromptStudioView.tsx      - vista del Prompt Studio
@@ -788,9 +852,9 @@ GUIAS RAPIDAS DE "DONDE TOCO PARA..."
     src/modules/promptLibrary/services/promptLibraryService.ts
 
   Cambiar como funciona el modulo Model DNA (avatar desde fotos)
-    src/modules/CloningModule.tsx     (UI)
-    src/services/avatarCloneService.ts (cliente)
-    api/avatar/clone.ts                (servidor)
+    src/modules/modelDNA/ModelDNAModule.tsx  (UI)
+    src/services/avatarCloneService.ts        (cliente)
+    api/avatar/clone.ts                       (servidor)
 
   Agregar un nuevo modulo de generacion
     1. Crear el componente en src/modules/MiNuevoModulo/
@@ -798,20 +862,22 @@ GUIAS RAPIDAS DE "DONDE TOCO PARA..."
     3. Agregar el costo en src/services/creditConfig.ts
     4. Agregar la card en src/views/Dashboard.tsx
 
-  Cambiar el copiloto de planificacion de contenido (Publicar Studio)
-    src/modules/contentPlanner/ContentPlannerCopilot.tsx
-    - Para cambiar preguntas iniciales: constante INITIAL_SUGGESTIONS
-    - Para cambiar el comportamiento del IA: funcion buildSystemPrompt()
-    - Para agregar un modulo nuevo a la navegacion: objeto MODULE_ROUTES
-      dentro de handleAction() y la funcion buildSystemPrompt()
+  Cambiar el Planner (asistente de contenido semanal)
+    src/modules/planner/PlannerOnboarding.tsx  — onboarding y generacion del plan
+    src/modules/planner/PlannerDetail.tsx      — vista semanal y ejecucion de tareas
+    src/components/PlannerTaskBubble.tsx       — burbuja flotante de acompanamiento
+    src/modules/planner/growthPlanner/         — motor de generacion de planes (engineV2)
 
-  Cambiar la vista semanal del calendario
-    src/modules/contentPlanner/WeeklyCalendar.tsx
-    - Para cambiar colores por modulo: objeto MODULE_META
-    - Para cambiar la logica de racha: funcion de calculo dentro de stats
+  Cambiar como funciona el haul en Photodump
+    src/modules/photodump/photodumpDirectorService.ts  (buildHaulManifest, buildHaulShotPlan)
+    src/modules/photodump/HaulReferenceTypeSelector.tsx (selector de tipo de item)
+    src/modules/photodump/PhotodumpModule.tsx           (count policy, retry, debug)
 
-  Ver documentacion completa del Publicar Studio
-    src/modules/contentPlanner/explicacion-publicar-studio.md
+  Ver documentacion completa del Planner
+    src/modules/planner/explicacion-planner.md
+
+  Ver documentacion completa de Photodump
+    src/modules/photodump/explicacion-photodump.md
 
 ================================================================================
 NOTAS IMPORTANTES PARA NO ROMPER NADA
@@ -836,9 +902,13 @@ NOTAS IMPORTANTES PARA NO ROMPER NADA
      que devolver respuestas al cliente, escriben el resultado en Redis.
 
   6. Hay archivos duplicados a proposito (hooks/useCreditGuard y
-     src/hooks/useCreditGuard, modules/ManualCreatorModule y
-     src/modules/ManualCreatorModule). El archivo ACTIVO es el que esta
-     dentro de src. Los de fuera son legado, pero no borrar antes de
-     verificar que no se importan.
+     src/hooks/useCreditGuard). El archivo ACTIVO es el que esta
+     dentro de src. El de fuera es legado, no borrar sin verificar
+     que no se importe en algun modulo antiguo.
+
+  7. Las rutas /projects y /projects/:id redirigen a /planner desde
+     Mayo 2026. Los modulos ContentPlanner y ProjectCopilot siguen
+     existiendo en el codigo pero ya no se montan en ninguna ruta.
+     No borrar todavia — pueden reutilizarse en el futuro.
 
 ================================================================================

@@ -27,6 +27,7 @@ interface ContentRequest {
     | 'extractAvatarProfile'
     | 'analyzeProduct'
     | 'analyzeOutfit'
+    | 'analyzeVisualRefs'
     | 'generateText'
     | 'generateTextAsync'
     | 'getContentJobStatus'
@@ -382,6 +383,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const text = extractText(response);
 
       return res.status(200).json({ success: true, text });
+    }
+
+    // ─── ACCIÓN ESPECÍFICA: analyzeVisualRefs ────────────────────────────
+    // Analiza N imágenes en una sola llamada multimodal y devuelve un JSON
+    // indexado por posición. Reutilizable por cualquier módulo.
+    if (body.action === 'analyzeVisualRefs') {
+      config.responseMimeType = 'application/json';
+
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents: [{ role: 'user', parts }],
+        config,
+      });
+
+      const rawText = extractText(response) || '{}';
+      const cleanText = rawText.replace(/```json\s*|\s*```/g, '').trim();
+
+      let parsedJson: unknown = null;
+      try {
+        parsedJson = JSON.parse(cleanText);
+      } catch {
+        parsedJson = parseJsonMaybe(cleanText);
+      }
+
+      if (!parsedJson) {
+        return res.status(422).json({ success: false, error: 'Invalid JSON from analyzeVisualRefs', raw: cleanText });
+      }
+
+      return res.status(200).json({ success: true, text: cleanText, json: parsedJson });
     }
 
     // ─── ACCIÓN ESPECÍFICA: analyzeOutfit ─────────────────────────────

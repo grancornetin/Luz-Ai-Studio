@@ -1,5 +1,5 @@
 # LUZ IA Studio — Identidad Visual Completa
-**Versión 1.0 · Mayo 2026 · Para uso en prompts de IA y diseño**
+**Versión 1.1 · Junio 2026 · Para uso en prompts de IA y diseño**
 
 ---
 
@@ -55,6 +55,10 @@ Este documento es una referencia de identidad visual para usar en prompts de IA,
 | Scene Clone | Azul | `#63B3ED` |
 | Outfit Extractor | Verde | `#68D391` |
 | Product Studio | Naranja | `#F6AD55` |
+| Campaign Generator | Rosa brand | `#F72C5B` |
+| Photodump | Violeta | `#7C3AED` |
+| Planner | Esmeralda | `#10B981` |
+| Mis Marcas | Ámbar | `#F59E0B` |
 
 ---
 
@@ -193,5 +197,5 @@ Adjunto el logo oficial de Luz IA Studio para mantener consistencia de marca.
 
 ---
 
-*Documento de identidad visual — Luz IA Studio · Mayo 2026*
+*Documento de identidad visual — Luz IA Studio · Junio 2026*
 *Usar en prompts de IA, briefings de diseño y generación de contenido de marca.*

@@ -161,6 +161,82 @@ export const geminiService = {
     } catch (e) { return this.handleApiError(e); }
   },
 
+  // ── Análisis visual de múltiples referencias — una sola llamada ──────────────
+  // Recibe N imágenes (base64 o URL de dato) y devuelve un análisis por imagen.
+  // Diseñada para ser reutilizada por outfit_haul, outfit_check, y cualquier módulo
+  // que necesite entender qué hay en sus referencias antes de planificar shots.
+  //
+  // Parámetros:
+  //   images        — array de base64 o data-URI (se comprimen a 512px antes de enviar)
+  //   selectorHints — kinds elegidos manualmente por el usuario (mismo índice que images).
+  //                   Gemini los recibe como "contexto del usuario" — puede confirmar o corregir.
+  //   context       — texto breve opcional para dar contexto al análisis ("haul de moda", etc.)
+  async analyzeVisualReferences(
+    images:         string[],
+    selectorHints?: string[],   // valores del selector manual (HaulRefKind[])
+    context?:       string,
+  ): Promise<import('../modules/photodump/types').VisualRefsAnalysisResult> {
+    try {
+      if (images.length === 0) {
+        return { refs: [], analyzedAt: Date.now() };
+      }
+
+      // Comprimir todas las imágenes a 512px para no saturar el request
+      const { compressImageForUpload } = await import('../utils/imageUtils');
+      const compressed = await Promise.all(
+        images.map(async (img, i) => {
+          const small = await compressImageForUpload(img, 512, 0.75).catch(() => img);
+          return extractImageRef(small, `visualRef[${i}]`);
+        })
+      );
+
+      // Construir lista de hints para que Gemini sepa qué dijo el usuario
+      const hintsBlock = selectorHints && selectorHints.length > 0
+        ? `\nUSER SELECTOR HINTS (respect unless clearly wrong):\n${selectorHints.map((h, i) => `  Image ${i}: "${h}"`).join('\n')}`
+        : '';
+
+      const contextBlock = context ? `\nCONTEXT: ${context}` : '';
+
+      const prompt = `You are a fashion analyst reviewing reference images for a content generation pipeline.
+Analyze each image in order and return a JSON object.${contextBlock}${hintsBlock}
+
+VALID resolvedKind values: full_outfit, top, bottom, dress, onepiece, outerwear, hosiery, footwear, bag, jewelry, accessory, mixed_set
+
+For each image return:
+- index: integer (0-based position)
+- resolvedKind: best matching value from the list above
+- confidence: "high" | "medium" | "low"
+- components: object with boolean fields: hasTop, hasBottom, hasDress, hasOuterwear, hasFootwear, hasHosiery, hasBag, hasJewelry, hasAccessory, footwearLegCoverageRisk
+  - footwearLegCoverageRisk: true if image shows footwear AND a leg-covering garment (pants, tights, tall boots) — risk of mismatched integration
+- visualDescription: one concise English sentence describing what is visible (garment types, colors, silhouette)
+- dominantColors: array of up to 3 color names in Spanish (e.g. ["blanco roto", "negro"])
+- hasPerson: true if a person is wearing the items in the image
+- isFlatlayOrProduct: true if it is a flat lay, product-only shot, or collage
+
+Respond ONLY with valid JSON, no markdown:
+{"refs": [ ...one object per image... ]}`;
+
+      const result = await callContentApi({
+        action:    'analyzeVisualRefs',
+        images:    compressed.map(e => e.data),
+        mimeTypes: compressed.map(e => e.mimeType),
+        prompt,
+        model:     'gemini-2.5-flash',
+      });
+
+      const parsed = result.json as { refs?: unknown[] } | null;
+      if (!parsed || !Array.isArray(parsed.refs)) {
+        console.warn('[analyzeVisualReferences] unexpected response shape:', result);
+        return { refs: [], analyzedAt: Date.now() };
+      }
+
+      return {
+        refs:       parsed.refs as import('../modules/photodump/types').VisualRefAnalysis[],
+        analyzedAt: Date.now(),
+      };
+    } catch (e) { return this.handleApiError(e); }
+  },
+
   // ── Análisis de imagen con texto personalizado (para Scene Clone) ──────────
   async analyzeImageWithText(imageBase64: string, prompt: string): Promise<string> {
     try {
