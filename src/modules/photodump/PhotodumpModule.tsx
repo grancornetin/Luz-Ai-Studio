@@ -441,14 +441,18 @@ const PhotodumpModule: React.FC = () => {
 
       // Debug: acumular prompts de cada shot (solo para admins)
       const inferredDest = isAdmin ? inferDestinationFromBrief(basePrompt) : 'none' as const;
+
+      // Manifest de haul — se construye siempre para outfit_haul (no solo para admins)
+      // para garantizar que generatePhotodumpShot use la clasificación correcta (con visualAnalysis).
       // buildHaulShotPlan popula el ledger (plannedHeroShots, coverageStatus, etc.).
-      // Sin llamarlo el ledger queda en cero — es necesario para debug real.
-      const haulManifestDebug = (() => {
-        if (!isAdmin || recipe !== 'outfit_haul') return undefined;
+      const haulManifestForGen = (() => {
+        if (recipe !== 'outfit_haul') return undefined;
         const m = buildHaulManifest(refsWithMode, storyShotCount, visualAnalysis);
         buildHaulShotPlan(m); // side-effect: escribe ledger y warnings en m.coveragePlan
         return m;
       })();
+      // Para debug solo se usa cuando isAdmin — mismo objeto, sin coste extra
+      const haulManifestDebug = isAdmin ? haulManifestForGen : undefined;
       const briefCtxDebug = isAdmin && recipe === 'outfit_check' ? parseOutfitBriefContext(basePrompt) : undefined;
       const outfitCompositionDebug = isAdmin && recipe === 'outfit_check'
         ? inferOutfitComposition(refsWithMode, basePrompt) : undefined;
@@ -481,6 +485,7 @@ const PhotodumpModule: React.FC = () => {
             plan.assignedFamilies, plan.sessionFamilies,
             shots.length, protagonist, recipe,
             plan.presentationStyle,
+            haulManifestForGen,
           );
           shotUrls.push(result.imageUrl);
           setPartialImages(prev => [...prev, result.imageUrl]);
@@ -566,9 +571,14 @@ const PhotodumpModule: React.FC = () => {
                 haulCoverageRole = 'hero';
               } else if (sk.startsWith('HAUL_JEWELRY_') || sk.startsWith('HAUL_ACCESSORY_CLOSEUP_')) {
                 const idx = parseInt(sk.replace(/^HAUL_(JEWELRY|ACCESSORY_CLOSEUP)_/, ''), 10) - 1;
-                const it = sk.startsWith('HAUL_JEWELRY_')
-                  ? haulManifestDebug.accessoryItems.filter(x => x.kind === 'jewelry')[idx]
-                  : haulManifestDebug.closeupItems[idx];
+                let it: typeof haulManifestDebug.accessoryItems[0] | undefined;
+                if (sk.startsWith('HAUL_JEWELRY_')) {
+                  it = haulManifestDebug.accessoryItems.filter(x => x.kind === 'jewelry')[idx];
+                } else {
+                  // HAUL_ACCESSORY_CLOSEUP_ corresponde a generic accessories (no bag, no jewelry)
+                  const genericAccItems = haulManifestDebug.accessoryItems.filter(x => x.kind !== 'bag' && x.kind !== 'jewelry');
+                  it = genericAccItems[idx];
+                }
                 haulPrimaryId = it?.id; haulManualKindDebug = it?.manualKind; haulResolvedKindDebug = it?.resolvedKind;
                 haulCoverageRole = 'hero';
               } else if (sk === 'HAUL_OVERVIEW' || sk === 'HAUL_RECAP') {
@@ -643,6 +653,12 @@ const PhotodumpModule: React.FC = () => {
               primaryItemManualKind:   haulManualKindDebug as any,
               primaryItemResolvedKind: haulResolvedKindDebug as any,
               coverageRole:            haulCoverageRole,
+              // actualPrimaryRefRouted: true si el shot es hero Y la ref primaria fue resuelta.
+              // false = shot hero sin ref → scheduled_not_routed en el ledger final.
+              ...(recipe === 'outfit_haul' && haulCoverageRole === 'hero' ? {
+                actualPrimaryRefRouted: !!haulPrimaryId,
+                actualPrimaryRefKind:   haulResolvedKindDebug as any,
+              } : {}),
               sceneFingerprintApplied: recipe === 'outfit_haul',
               sceneDriftRisk:          recipe === 'outfit_haul'
                 ? (arcRatio > 0.8 ? 'medium' : 'low')
@@ -726,6 +742,7 @@ const PhotodumpModule: React.FC = () => {
                 plan.assignedFamilies, plan.sessionFamilies,
                 shots.length, protagonist, recipe,
                 plan.presentationStyle,
+                haulManifestForGen,
               );
             } catch {
               // segundo intento también falló — se trata como fallo definitivo

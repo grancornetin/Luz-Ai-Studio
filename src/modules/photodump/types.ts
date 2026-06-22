@@ -97,7 +97,12 @@ export interface HaulCoverageLedgerItem {
   plannedSupportShots:         number;
   actualPromptedHeroShots:     number;
   actualPromptedSupportShots:  number;
-  coverageStatus:              'uncovered' | 'support_only' | 'covered' | 'overexposed';
+  // Shots hero donde la referencia primaria del item fue realmente routeada al generador.
+  // Un shot puede estar "promovido" (actualPromptedHeroShots++) pero sin ref routeada si
+  // la referencia visual no se encontró en el manifest en el momento de generación.
+  actualRoutedHeroRefs?:       number;
+  // 'planned_not_routed': el shot existió y no falló, pero la ref primaria no llegó al modelo.
+  coverageStatus:              'uncovered' | 'support_only' | 'covered' | 'overexposed' | 'planned_not_routed';
   shotIds:                     string[];
   // Para look_completo: qué componentes del outfit deben estar presentes para considerar cobertura real
   // 'full' = look completo con todos los componentes principales
@@ -574,6 +579,10 @@ export interface PhotodumpShotDebug {
   primaryItemManualKind?:   HaulRefKind;
   primaryItemResolvedKind?: HaulResolvedKind;
   coverageRole?:            HaulCoverageRole;
+  // true = shot hero con primaryItemId resuelto correctamente → ref primaria llegó al modelo
+  // false = shot hero sin primaryItemId → scheduled_not_routed en ledger final
+  actualPrimaryRefRouted?:  boolean;
+  actualPrimaryRefKind?:    HaulResolvedKind;
   accessoryCloseupRequested?: boolean;
   referenceRouting?: {
     avatarRefs:         number;

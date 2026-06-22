@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, Download, RefreshCw, Send, Share2 } from 'lucide-react';
 import { ImageLightbox } from '../../../components/shared/ImageLightbox';
 import { AddToProjectButton } from '../../../components/shared/AddToProjectButton';
@@ -178,8 +179,8 @@ const GeneratedImages: React.FC<GeneratedImagesProps> = ({
         </button>
       </div>
 
-      {/* Lightbox */}
-      {lightboxOpen && (
+      {/* Lightbox — renderizado via portal para escapar del stacking context del motion.div */}
+      {lightboxOpen && createPortal(
         <ImageLightbox
           images={images}
           initialIndex={lightboxIndex}
@@ -191,7 +192,8 @@ const GeneratedImages: React.FC<GeneratedImagesProps> = ({
             icon: <Share2 className="w-4 h-4" />,
           }}
           metadata={{ label: 'Imagen generada' }}
-        />
+        />,
+        document.body
       )}
     </div>
   );

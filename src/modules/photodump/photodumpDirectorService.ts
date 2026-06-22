@@ -3551,6 +3551,8 @@ export function buildHaulShotPlan(
   }
 
   // Variety slots: adjusting / styled (only after all items have 1 hero shot)
+  // Anti-overexposure rule: never assign a 2nd+ shot to an outfit if any required item
+  // (accessory, footwear, bag, jewelry) is still uncovered in the ledger at this point.
   const varietyBudgetRaw = narrativeBudget - 1; // -1 for overview
   const wantRecap = tryOnQueue.length >= 2 && varietyBudgetRaw >= 2;
   const varietyBudget = wantRecap ? Math.max(0, varietyBudgetRaw - 1) : varietyBudgetRaw;
@@ -3567,14 +3569,25 @@ export function buildHaulShotPlan(
       const heroCount = ledgerMap.get(item.id)?.plannedHeroShots ?? 0;
 
       if (heroCount < 2) {
-        const useAdjusting = tryOnIndexForVariety % 2 === 0;
-        const varShot = useAdjusting
-          ? buildHaulAdjustingShot(item, manifest.tryOnItems.indexOf(item), pileState)
-          : buildHaulStyledResultShot(item, manifest.tryOnItems.indexOf(item), pileState);
-        narrativeShots.push(varShot);
-        addHeroShot(item.id, varShot.key);
-        varietySlotsUsed++;
-        tryOnIndexForVariety++;
+        // Anti-overexposure: check if any required non-wearable item is still uncovered
+        // If so, skip this variety slot — non-wearables have priority over outfit extras.
+        const hasUncoveredRequired = manifest.allItems.some(it => {
+          if (it.priority !== 'required') return false;
+          const wearableKinds: HaulResolvedKind[] = ['full_outfit', 'top', 'bottom', 'dress', 'onepiece', 'outerwear', 'hosiery', 'mixed_set'];
+          if (wearableKinds.includes(it.resolvedKind)) return false; // wearables already have their try-on
+          const l = ledgerMap.get(it.id);
+          return !l || l.plannedHeroShots === 0;
+        });
+        if (!hasUncoveredRequired) {
+          const useAdjusting = tryOnIndexForVariety % 2 === 0;
+          const varShot = useAdjusting
+            ? buildHaulAdjustingShot(item, manifest.tryOnItems.indexOf(item), pileState)
+            : buildHaulStyledResultShot(item, manifest.tryOnItems.indexOf(item), pileState);
+          narrativeShots.push(varShot);
+          addHeroShot(item.id, varShot.key);
+          varietySlotsUsed++;
+          tryOnIndexForVariety++;
+        }
       }
       varietyIdx++;
       if (varietyIdx >= varietyCandidates.length * 2) break;
@@ -3771,14 +3784,17 @@ export function computeFinalHaulCoverageFromShots(
   coveredRequiredItemCount: number;
   failedRequiredItemCount:  number;
 } {
-  // Build a map: shotKey → debug result
-  const shotResultByKey = new Map<string, 'ok' | 'failed'>();
+  // Build maps: shotKey → result, shotKey → primaryItemId (para detectar routing real)
+  const shotResultByKey    = new Map<string, 'ok' | 'failed'>();
+  const shotPrimaryItemMap = new Map<string, string | undefined>();
   debugShots.forEach(ds => {
-    if (ds.key) shotResultByKey.set(ds.key, ds.status);
+    if (ds.key) {
+      shotResultByKey.set(ds.key, ds.status);
+      shotPrimaryItemMap.set(ds.key, ds.primaryItemId);
+    }
   });
 
   // Hero shots by item: shotKey → itemId mapping from planned shots
-  // We use the same shot key naming conventions as the planner
   const heroShotToItem = new Map<string, string>();
   manifest.allItems.forEach(item => {
     const ledgerEntry = manifest.coveragePlan.ledger.find(l => l.itemId === item.id);
@@ -3791,19 +3807,30 @@ export function computeFinalHaulCoverageFromShots(
 
   // Recalculate ledger from actual generated results
   const finalLedger: HaulCoverageLedgerItem[] = manifest.coveragePlan.ledger.map(l => {
-    const heroShotIds = l.shotIds;
-    const actualOkHero = heroShotIds.filter(sk => shotResultByKey.get(sk) === 'ok').length;
+    const heroShotIds      = l.shotIds;
+    const actualOkHero     = heroShotIds.filter(sk => shotResultByKey.get(sk) === 'ok').length;
     const actualFailedHero = heroShotIds.filter(sk => shotResultByKey.get(sk) === 'failed').length;
 
+    // actualRoutedHeroRefs: shots ok donde primaryItemId coincide con este item.
+    // Esto distingue "shot existió" de "ref del item llegó al modelo".
+    const actualRoutedHeroRefs = heroShotIds.filter(sk =>
+      shotResultByKey.get(sk) === 'ok' && shotPrimaryItemMap.get(sk) === l.itemId,
+    ).length;
+
     let coverageStatus: HaulCoverageLedgerItem['coverageStatus'];
-    if (actualOkHero === 0 && l.plannedSupportShots > 0) {
-      // Check if this is a wearable — support-only doesn't count for wearables
+    if (actualOkHero === 0 && actualFailedHero > 0) {
+      // Todos los hero shots fallaron (content policy o network)
+      coverageStatus = 'uncovered';
+    } else if (actualOkHero > 0 && actualRoutedHeroRefs === 0) {
+      // Shot generado pero sin ref primaria routeada — cobertura nominal, no real
+      coverageStatus = 'planned_not_routed';
+    } else if (actualRoutedHeroRefs === 0 && l.plannedSupportShots > 0) {
       const item = manifest.allItems.find(it => it.id === l.itemId);
       const wearableKinds: HaulResolvedKind[] = ['full_outfit', 'top', 'bottom', 'dress', 'onepiece', 'outerwear', 'hosiery', 'mixed_set'];
       coverageStatus = (item && wearableKinds.includes(item.resolvedKind)) ? 'uncovered' : 'support_only';
-    } else if (actualOkHero === 0) {
+    } else if (actualRoutedHeroRefs === 0) {
       coverageStatus = 'uncovered';
-    } else if (l.required && actualOkHero >= 3) {
+    } else if (l.required && actualRoutedHeroRefs >= 3) {
       coverageStatus = 'overexposed';
     } else {
       coverageStatus = 'covered';
@@ -3813,6 +3840,7 @@ export function computeFinalHaulCoverageFromShots(
       ...l,
       actualPromptedHeroShots:    actualOkHero,
       actualPromptedSupportShots: l.actualPromptedSupportShots,
+      actualRoutedHeroRefs,
       coverageStatus,
     };
   });
@@ -3825,6 +3853,7 @@ export function computeFinalHaulCoverageFromShots(
       const l = finalLedger.find(x => x.itemId === it.id);
       if (!l) return true;
       if (l.coverageStatus === 'uncovered') return true;
+      if (l.coverageStatus === 'planned_not_routed') return true;  // ref nunca llegó al modelo
       if (wearableKinds.includes(it.resolvedKind) && l.coverageStatus === 'support_only') return true;
       return false;
     })
@@ -3834,10 +3863,15 @@ export function computeFinalHaulCoverageFromShots(
     .filter(it => {
       const l = finalLedger.find(x => x.itemId === it.id);
       if (!l) return false;
-      // Item has planned hero shots but ALL of them failed
+      // Item has planned hero shots but ALL of them failed (content policy / network)
       return l.plannedHeroShots > 0 && l.actualPromptedHeroShots === 0;
     })
     .map(it => it.id);
+
+  // planned_not_routed: shot generado ok pero sin ref primaria routeada
+  const plannedNotRoutedItems = finalLedger
+    .filter(l => l.coverageStatus === 'planned_not_routed' && l.required)
+    .map(l => l.itemId);
 
   const supportOnlyItems = finalLedger
     .filter(l => l.coverageStatus === 'support_only' && l.required)
@@ -3863,8 +3897,14 @@ export function computeFinalHaulCoverageFromShots(
       );
     }
   });
+  plannedNotRoutedItems.forEach(itemId => {
+    const item = manifest.allItems.find(it => it.id === itemId);
+    blockingIssues.push(
+      `required item ${itemId} (${item?.label ?? itemId}) was shot but primary ref was not routed to the model — ref may have been missing or misclassified`,
+    );
+  });
   uncoveredRequiredItems
-    .filter(id => !failedCoverageItems.includes(id))
+    .filter(id => !failedCoverageItems.includes(id) && !plannedNotRoutedItems.includes(id))
     .forEach(id => {
       const item = manifest.allItems.find(it => it.id === id);
       blockingIssues.push(`required item ${id} (${item?.label ?? id}) has no planned hero shot`);
@@ -3873,6 +3913,7 @@ export function computeFinalHaulCoverageFromShots(
   const coverageWarnings: string[] = [
     ...uncoveredRequiredItems.map(id => `UNCOVERED: ${finalLedger.find(l => l.itemId === id)?.label ?? id}`),
     ...failedCoverageItems.map(id => `FAILED_HERO: ${finalLedger.find(l => l.itemId === id)?.label ?? id}`),
+    ...plannedNotRoutedItems.map(id => `PLANNED_NOT_ROUTED: ${finalLedger.find(l => l.itemId === id)?.label ?? id}`),
     ...supportOnlyItems.map(id => `SUPPORT_ONLY: ${finalLedger.find(l => l.itemId === id)?.label ?? id}`),
     ...overexposedItems.map(id => `OVEREXPOSED: ${finalLedger.find(l => l.itemId === id)?.label ?? id}`),
   ];
@@ -3889,7 +3930,7 @@ export function computeFinalHaulCoverageFromShots(
     supportOnlyItems,
     overexposedItems,
     coverageWarnings,
-    isComplete:               uncoveredRequiredItems.length === 0 && failedCoverageItems.length === 0,
+    isComplete:               uncoveredRequiredItems.length === 0 && failedCoverageItems.length === 0 && plannedNotRoutedItems.length === 0,
     blockingIssues,
     requiredItemCount:        requiredItems.length,
     coveredRequiredItemCount,
@@ -5066,6 +5107,7 @@ export async function generatePhotodumpShot(
   protagonist:        PhotodumpProtagonist = 'person',
   recipe?:            string,
   presentationStyle?: OutfitPresentationStyle,
+  haulManifest?:      HaulManifest,
 ): Promise<PhotodumpShotResult> {
 
   const aspectInstr = getAspectInstruction(destino);
@@ -5148,16 +5190,17 @@ export async function generatePhotodumpShot(
       // footwear detail: solo el calzado + avatar mínimo (manos/pie)
       const footwearIdx = Math.max(0, parseInt(shotKey.replace('HAUL_FOOTWEAR_', ''), 10) - 1);
       if (refs.avatarRef) refsToPass.push(refs.avatarRef);
-      const manifestForRouting = buildHaulManifest(refs, 20);
-      const footwearRef = manifestForRouting.footwearItems[footwearIdx]?.refUrl;
+      // Usar el manifest ya construido (con visualAnalysis) para garantizar clasificación consistente
+      const mForFootwear = haulManifest ?? buildHaulManifest(refs, 20);
+      const footwearRef = mForFootwear.footwearItems[footwearIdx]?.refUrl;
       if (footwearRef) refsToPass.push(footwearRef);
 
     } else if (shotKey.startsWith('HAUL_BAG_')) {
       // bolso detail: solo el bolso + avatar mínimo
       const bagIdx = Math.max(0, parseInt(shotKey.replace('HAUL_BAG_', ''), 10) - 1);
       if (refs.avatarRef) refsToPass.push(refs.avatarRef);
-      const manifestForBag = buildHaulManifest(refs, 20);
-      const bagItems = manifestForBag.accessoryItems.filter(it => it.kind === 'bag');
+      const mForBag = haulManifest ?? buildHaulManifest(refs, 20);
+      const bagItems = mForBag.accessoryItems.filter(it => it.kind === 'bag');
       const bagRef = bagItems[bagIdx]?.refUrl;
       if (bagRef) refsToPass.push(bagRef);
 
@@ -5165,8 +5208,8 @@ export async function generatePhotodumpShot(
       // joyería detail: solo la joya + avatar mínimo
       const jewIdx = Math.max(0, parseInt(shotKey.replace('HAUL_JEWELRY_', ''), 10) - 1);
       if (refs.avatarRef) refsToPass.push(refs.avatarRef);
-      const manifestForJew = buildHaulManifest(refs, 20);
-      const jewItems = manifestForJew.accessoryItems.filter(it => it.kind === 'jewelry');
+      const mForJew = haulManifest ?? buildHaulManifest(refs, 20);
+      const jewItems = mForJew.accessoryItems.filter(it => it.kind === 'jewelry');
       const jewRef = jewItems[jewIdx]?.refUrl;
       if (jewRef) refsToPass.push(jewRef);
 
@@ -5361,36 +5404,39 @@ This shot showcases the piece itself as part of the haul/outfit story.`
   const allOutfitsForShot = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
 
   // Para haul: resolver el HaulItem activo de este shot (para inyectar manualKind en prompt)
+  // Usar el manifest ya construido (con visualAnalysis) para garantizar clasificación consistente.
   const shotKey_ = shot.key ?? '';
   let haulActiveItem: HaulItem | undefined;
   if (recipe === 'outfit_haul') {
-    const haulManifestForShot = buildHaulManifest(refs, 20);
+    const m = haulManifest ?? buildHaulManifest(refs, 20);
     if (shotKey_.startsWith('HAUL_TRY_ON_')) {
       const idx = parseInt(shotKey_.replace('HAUL_TRY_ON_', ''), 10) - 1;
-      haulActiveItem = haulManifestForShot.outfitItems[idx] ?? haulManifestForShot.tryOnItems[idx];
+      haulActiveItem = m.outfitItems[idx] ?? m.tryOnItems[idx];
     } else if (shotKey_ === 'HAUL_SELECTION') {
-      haulActiveItem = haulManifestForShot.outfitItems[haulManifestForShot.outfitItems.length - 1];
+      haulActiveItem = m.outfitItems[m.outfitItems.length - 1];
     } else if (shotKey_.startsWith('HAUL_ADJUSTING_')) {
       const idx = parseInt(shotKey_.replace('HAUL_ADJUSTING_', ''), 10) - 1;
-      haulActiveItem = haulManifestForShot.outfitItems[idx] ?? haulManifestForShot.tryOnItems[idx];
+      haulActiveItem = m.outfitItems[idx] ?? m.tryOnItems[idx];
     } else if (shotKey_.startsWith('HAUL_STYLED_')) {
       const idx = parseInt(shotKey_.replace('HAUL_STYLED_', ''), 10) - 1;
-      haulActiveItem = haulManifestForShot.outfitItems[idx] ?? haulManifestForShot.tryOnItems[idx];
+      haulActiveItem = m.outfitItems[idx] ?? m.tryOnItems[idx];
     } else if (shotKey_.startsWith('HAUL_FOOTWEAR_')) {
       const idx = parseInt(shotKey_.replace('HAUL_FOOTWEAR_', ''), 10) - 1;
-      haulActiveItem = haulManifestForShot.footwearItems[idx];
+      haulActiveItem = m.footwearItems[idx];
     } else if (shotKey_.startsWith('HAUL_BAG_')) {
       const idx = parseInt(shotKey_.replace('HAUL_BAG_', ''), 10) - 1;
-      haulActiveItem = haulManifestForShot.accessoryItems.filter(it => it.kind === 'bag')[idx];
+      haulActiveItem = m.accessoryItems.filter(it => it.kind === 'bag')[idx];
     } else if (shotKey_.startsWith('HAUL_JEWELRY_')) {
       const idx = parseInt(shotKey_.replace('HAUL_JEWELRY_', ''), 10) - 1;
-      haulActiveItem = haulManifestForShot.accessoryItems.filter(it => it.kind === 'jewelry')[idx];
+      haulActiveItem = m.accessoryItems.filter(it => it.kind === 'jewelry')[idx];
     } else if (shotKey_.startsWith('HAUL_ACCESSORY_CLOSEUP_')) {
+      // Generic accessories: bag/jewelry ya tienen sus propios keys — aquí solo van los genéricos
       const idx = parseInt(shotKey_.replace('HAUL_ACCESSORY_CLOSEUP_', ''), 10) - 1;
-      haulActiveItem = haulManifestForShot.closeupItems[idx];
+      const genericAccItems = m.accessoryItems.filter(it => it.kind !== 'bag' && it.kind !== 'jewelry');
+      haulActiveItem = genericAccItems[idx];
     } else if (shotKey_.startsWith('HAUL_SETUP_')) {
       const idx = parseInt(shotKey_.replace('HAUL_SETUP_', ''), 10) - 1;
-      haulActiveItem = haulManifestForShot.outfitItems[idx] ?? haulManifestForShot.tryOnItems[idx];
+      haulActiveItem = m.outfitItems[idx] ?? m.tryOnItems[idx];
     }
   }
   const haulItemTypeBlock = haulActiveItem ? buildHaulItemTypeBlock(haulActiveItem) : '';
@@ -5400,7 +5446,11 @@ This shot showcases the piece itself as part of the haul/outfit story.`
     ? shotKey_ === 'HAUL_OVERVIEW'
       ? `HAUL COLLECTION: The garment references show a subset of the haul items. Show them as a collection — on a bed, rack, surface, or held — NOT worn as a complete look. They should feel like items waiting to be tried on. Real arrangement, not a catalog grid.`
       : shotKey_.startsWith('HAUL_ACCESSORY_CLOSEUP_')
-        ? `ACCESSORY CLOSE-UP: The accessory reference shows the EXACT piece to feature. Reproduce it faithfully — same shape, color, material, hardware, design. Do NOT fuse it with other accessories. Do NOT change it into a different accessory type.`
+        ? (() => {
+            const visual = haulActiveItem?.label ?? '';
+            const colorHint = visual.length > 0 ? `\nPRIMARY ACCESSORY REFERENCE: ${visual}` : '';
+            return `ACCESSORY CLOSE-UP: The accessory reference shows the EXACT piece to feature. Reproduce it faithfully — same shape, color, material, hardware, design. Do NOT fuse it with other accessories. Do NOT change it into a different accessory type.${colorHint}`;
+          })()
         : shotKey_ === 'HAUL_INTRO' || shotKey_ === 'OUTFIT_ARRIVING'
           ? `OUTFIT PRESENTATION: The garment references show the exact pieces to display. Show them as objects — on a rack, laid flat, or held by hands. The garments must be clearly readable. Do NOT show a full-body catalog pose.`
           : shotKey_ === 'ACCESSORY_CLOSEUP'
@@ -5413,15 +5463,27 @@ Show the footwear as: a close-up detail, held by hand, placed on a surface, or b
 Do NOT invent a complete look. The shoe IS the subject.
 ${haulItemTypeBlock}`
                 : shotKey_.startsWith('HAUL_BAG_')
-                ? `BAG / BOLSO — THIS SHOT: The reference provided is a STANDALONE BAG or PURSE.
+                ? (() => {
+                    const visual = haulActiveItem?.label ?? '';
+                    const primaryRefBlock = visual.length > 0
+                      ? `\nPRIMARY BAG REFERENCE: Use the uploaded bag reference as the exact source of truth.\n${visual}\nRecreate the same bag shape, material, hardware, and color. Do not invent a different bag.`
+                      : '\nPRIMARY BAG REFERENCE: Use the uploaded bag reference as the exact source of truth. Reproduce its exact design, material, and color.';
+                    return `BAG / BOLSO — THIS SHOT: The reference provided is a STANDALONE BAG or PURSE.
 Do NOT generate a full outfit around it. Show the bag as protagonist — held, worn over shoulder, resting on bed, or detail of hardware/stitching.
-Real room context. Natural light. The bag IS the subject of this shot.
-${haulItemTypeBlock}`
+Real room context. Natural light. The bag IS the subject of this shot.${primaryRefBlock}
+${haulItemTypeBlock}`;
+                  })()
                 : shotKey_.startsWith('HAUL_JEWELRY_')
-                ? `JEWELRY ITEM — THIS SHOT: The reference provided is a JEWELRY PIECE.
+                ? (() => {
+                    const visual = haulActiveItem?.label ?? '';
+                    const primaryRefBlock = visual.length > 0
+                      ? `\nPRIMARY JEWELRY REFERENCE: Use the uploaded jewelry reference as the exact source of truth.\n${visual}\nRecreate the same jewelry design, material, color, scale, and shape. Do not invent a different piece. Do not replace with generic jewelry.`
+                      : '\nPRIMARY JEWELRY REFERENCE: Use the uploaded jewelry reference as the exact source of truth. Reproduce its exact design, material, and color.';
+                    return `JEWELRY ITEM — THIS SHOT: The reference provided is a JEWELRY PIECE.
 Do NOT generate a full outfit for context. Show the jewelry intimately — worn on body (ear, neck, wrist, finger), held between fingers, or resting on fabric.
-Macro or semi-macro framing. Real skin texture if worn. The jewelry IS the subject.
-${haulItemTypeBlock}`
+Macro or semi-macro framing. Real skin texture if worn. The jewelry IS the subject.${primaryRefBlock}
+${haulItemTypeBlock}`;
+                  })()
                 : shotKey_.startsWith('HAUL_SETUP_')
                 ? `HAUL SETUP MOMENT — THIS SHOT: Show the person interacting with haul items as OBJECTS (not yet worn).
 Hands active — organizing, selecting, holding up to preview. Real room context. UGC energy.
