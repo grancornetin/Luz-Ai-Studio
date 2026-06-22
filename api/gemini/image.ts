@@ -179,7 +179,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             // Validar imagen
             const imgErr = validateBase64Image(ref.data, ref.mimeType || 'image/jpeg');
             if (imgErr) return res.status(400).json({ error: `Reference image ${i + 1}: ${imgErr}` });
-            parts.push({ text: `REF${i}:` });
+            const label = typeof ref.label === 'string' && ref.label.trim()
+              ? ref.label.trim().replace(/[^\w.-]/g, '_').slice(0, 64)
+              : `REF${i}`;
+            parts.push({ text: `${label}:` });
             parts.push({
               inlineData: {
                 mimeType: ref.mimeType || 'image/jpeg',

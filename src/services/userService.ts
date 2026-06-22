@@ -7,8 +7,8 @@ import {
   serverTimestamp, increment, Timestamp,
 } from 'firebase/firestore';
 import { PLAN_CREDITS } from './creditConfig';
-import type { PlanId } from './creditsService';
 import { resetPeriodIfNeeded, getEffectiveCredits } from './creditsService';
+import type { PlanId } from './creditsService';
 import { generateReferralCode } from './referralService';
 
 // ── Interfaces exportadas ─────────────────────────────────────────────────────

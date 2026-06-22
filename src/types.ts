@@ -30,6 +30,20 @@ export interface ProductProfile {
   category: string;
   baseImages: string[];
   generatedImages: string[];
+  inspirationImage?: string | null;
+  generationConfig?: {
+    productTitle?: string;
+    productDescription?: string;
+    objective?: string | null;
+    stylePreset?: string | null;
+    mode?: string;
+    count?: string | number;
+    modelId?: string;
+  };
+  referenceSummary?: {
+    productImages?: string[];
+    inspirationImage?: string | null;
+  };
   productPrompt: string;
   technicalDescription: string;
   commercialDescription: string;

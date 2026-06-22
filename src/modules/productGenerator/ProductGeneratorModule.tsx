@@ -21,7 +21,7 @@ import { imageApiService, extractImageRef, newSessionId } from '../../services/i
 import { useAuth } from '../auth/AuthContext';
 import { generationHistoryService } from '../../services/generationHistoryService';
 import { getNotification } from '../../services/notificationsService';
-import { downloadAsZip } from '../../utils/imageUtils';
+import { downloadAsZip, downloadImage } from '../../utils/imageUtils';
 
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
 import { type ProgressStep } from '../../components/shared/GenerationProgress';
@@ -32,7 +32,10 @@ import {
   buildPromptPayloadsFromDirectorResult,
   type ProductDirectorInput,
   type ProductDirectorResult,
+  type ProductGridType,
+  type ProductObjective,
   type ProductPromptPayload,
+  type ProductStyle,
 } from './productDirectorService';
 
 // Wizard pieces
@@ -49,6 +52,7 @@ import {
   INITIAL_WIZARD_STATE,
   type WizardStep,
   type WizardState,
+  type PackCount,
 } from './wizardTypes';
 
 // ─── Etapas de progreso narradas ──────────────────────────────────────────────
@@ -98,6 +102,27 @@ function computeCost(wizard: WizardState, modelId: 'gemini' | 'seedream' | 'gpti
   return count * MODEL_CREDIT_COST[modelId] + (gridCollage ? 1 : 0);
 }
 
+const PRODUCT_OBJECTIVES: ProductObjective[] = ['social', 'ecommerce', 'technical_catalog', 'ads'];
+const PRODUCT_STYLES: ProductStyle[] = ['minimal', 'premium', 'lifestyle', 'dark', 'natural'];
+const PRODUCT_GRID_TYPES: ProductGridType[] = ['1x2', '2x2', '3x3'];
+const PACK_COUNTS: PackCount[] = [1, 2, 4, 6];
+
+function asProductObjective(value: unknown): ProductObjective | null {
+  return PRODUCT_OBJECTIVES.includes(value as ProductObjective) ? value as ProductObjective : null;
+}
+
+function asProductStyle(value: unknown): ProductStyle | null {
+  return PRODUCT_STYLES.includes(value as ProductStyle) ? value as ProductStyle : null;
+}
+
+function asProductGridType(value: unknown): ProductGridType | null {
+  return PRODUCT_GRID_TYPES.includes(value as ProductGridType) ? value as ProductGridType : null;
+}
+
+function asPackCount(value: unknown): PackCount | null {
+  return PACK_COUNTS.includes(value as PackCount) ? value as PackCount : null;
+}
+
 // El director devuelve aspect ratios en su set propio ('1:1' | '3:4' | '4:5' | '9:16').
 // imageApiService acepta '1:1' | '3:4' | '4:3' | '9:16' | '16:9'.
 // Mapeamos '4:5' → '3:4' (vertical más cercano permitido).
@@ -138,7 +163,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [lightboxMetadata, setLightboxMetadata] = useState<{ label: string }>({ label: '' });
-  const [_selectedProduct, setSelectedProduct] = useState<ProductProfile | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<ProductProfile | null>(null);
 
   // ─── Retomar sesión desde notificación (?session=xxx) ───────────────────────
   // Cuando el usuario clickea una notificación, llega acá con el sessionId en
@@ -211,18 +236,30 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
   const validFiles = (state: WizardState = wizard) =>
     state.product.slots.filter((f): f is string => !!f);
 
-  const buildRefObjects = (state: WizardState) => {
-    const productRefs = validFiles(state).map((img, i) => {
-      try { return extractImageRef(img, `productRef[${i}]`); }
-      catch { return null; }
-    }).filter(Boolean) as Array<{ data: string; mimeType: string }>;
+  type LabeledImageRef = { data: string; mimeType: string; label?: string };
 
-    let inspirationRef: { data: string; mimeType: string } | null = null;
+  const buildRefObjects = (state: WizardState): LabeledImageRef[] => {
+    const productRefs = validFiles(state).map((img, i) => {
+      try {
+        return {
+          ...extractImageRef(img, `productRef[${i}]`),
+          label: `PRODUCT_IDENTITY_REF_${i + 1}`,
+        };
+      }
+      catch { return null; }
+    }).filter(Boolean) as LabeledImageRef[];
+
+    let inspirationRef: LabeledImageRef | null = null;
     if (state.style.referenceImg) {
-      try { inspirationRef = extractImageRef(state.style.referenceImg, 'inspirationRef'); }
+      try {
+        inspirationRef = {
+          ...extractImageRef(state.style.referenceImg, 'inspirationRef'),
+          label: 'INSPIRATION_SCENE_REF',
+        };
+      }
       catch { /* no-op */ }
     }
-    return inspirationRef ? [...productRefs, inspirationRef] : productRefs;
+    return inspirationRef ? [inspirationRef, ...productRefs] : productRefs;
   };
 
   // ─── Generación principal: análisis + plan + N imágenes + collage ───────────
@@ -529,6 +566,24 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
         color:    (directorResult.analysis.metadata?.color as string) ?? '',
         style:    wizard.style.preset ?? 'minimal',
       },
+      inspirationImage: wizard.style.referenceImg,
+      generationConfig: {
+        productTitle: wizard.product.title,
+        productDescription: wizard.product.desc,
+        objective: wizard.goal,
+        stylePreset: wizard.style.preset,
+        mode: wizard.style.referenceImg ? 'recreate' : wizard.type.mode,
+        count: wizard.style.referenceImg
+          ? wizard.type.refCount
+          : wizard.type.mode === 'pack'
+          ? wizard.type.packCount
+          : wizard.type.gridSize,
+        modelId,
+      },
+      referenceSummary: {
+        productImages: files,
+        inspirationImage: wizard.style.referenceImg,
+      },
       createdAt: Date.now(),
     };
     saveProduct(newProduct);
@@ -538,40 +593,8 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Descarga robusta: para URLs http(s) hace fetch → blob → objectURL para forzar
-  // descarga (evita que iOS Safari/Android Chrome abran la imagen en vez de bajarla).
-  // Para data URLs y blob URLs cae al método clásico.
   const handleDownloadIndividual = async (url: string, filename: string) => {
-    try {
-      if (url.startsWith('http://') || url.startsWith('https://')) {
-        const res = await fetch(url, { mode: 'cors' });
-        if (!res.ok) throw new Error('fetch failed');
-        const blob = await res.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = objectUrl;
-        link.download = filename;
-        link.rel = 'noopener';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        // dar tiempo al browser a iniciar la descarga antes de revocar
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 4000);
-        return;
-      }
-      // data: o blob: → descarga directa
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      link.rel = 'noopener';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (err) {
-      console.error('Descarga directa falló, abriendo en nueva pestaña:', err);
-      // Fallback final: abrir en nueva pestaña para que el usuario use "Guardar imagen como..."
-      window.open(url, '_blank', 'noopener,noreferrer');
-    }
+    await downloadImage(url, filename);
   };
 
   const handleDownloadZip = async () => {
@@ -637,6 +660,117 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
   const openProductDetail = (product: ProductProfile) => {
     setSelectedProduct(product);
     openLightbox(product.generatedImages, 0, product.name);
+  };
+
+  const reuseSelectedProductSetup = () => {
+    if (!selectedProduct) return;
+
+    const config = selectedProduct.generationConfig ?? {};
+    const productRefs = (selectedProduct.referenceSummary?.productImages ?? selectedProduct.baseImages ?? [])
+      .filter(Boolean)
+      .slice(0, 4);
+    const inspiration = selectedProduct.referenceSummary?.inspirationImage ?? selectedProduct.inspirationImage ?? null;
+    const slots = [...productRefs, null, null, null, null].slice(0, 4) as (string | null)[];
+    const nextType = { ...INITIAL_WIZARD_STATE.type };
+    const refCount = config.count === 1 || config.count === 2 ? config.count : null;
+    const gridType = asProductGridType(config.count);
+    const packCount = asPackCount(config.count);
+
+    if (inspiration) {
+      nextType.refCount = refCount ?? nextType.refCount;
+    } else if (config.mode === 'grid' && gridType) {
+      nextType.mode = 'grid';
+      nextType.gridSize = gridType;
+    } else if (config.mode === 'pack' && packCount) {
+      nextType.mode = 'pack';
+      nextType.packCount = packCount;
+    }
+
+    setWizard({
+      product: {
+        title: config.productTitle ?? selectedProduct.name ?? '',
+        desc: config.productDescription ?? selectedProduct.commercialDescription ?? '',
+        slots,
+      },
+      goal: asProductObjective(config.objective),
+      style: {
+        referenceImg: inspiration,
+        preset: inspiration ? null : asProductStyle(config.stylePreset ?? selectedProduct.metadata?.style),
+      },
+      type: nextType,
+    });
+    setLightboxOpen(false);
+    setSelectedProduct(null);
+    setActiveTab('create');
+    setStep(inspiration ? 4 : 3);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const renderSelectedProductDetails = () => {
+    if (!selectedProduct) return null;
+
+    const config = selectedProduct.generationConfig ?? {};
+    const productRefs = selectedProduct.referenceSummary?.productImages ?? selectedProduct.baseImages ?? [];
+    const inspiration = selectedProduct.referenceSummary?.inspirationImage ?? selectedProduct.inspirationImage;
+    const refs = [
+      ...productRefs.map((src: string, i: number) => ({ label: `Producto ${i + 1}`, src })),
+      ...(inspiration ? [{ label: 'Inspiración', src: inspiration }] : []),
+    ].filter((ref) => !!ref.src);
+    const configItems = [
+      config.objective ? `Objetivo: ${config.objective}` : null,
+      config.mode ? `Modo: ${config.mode}` : null,
+      config.stylePreset ? `Estilo: ${config.stylePreset}` : null,
+      config.count ? `Cantidad: ${config.count}` : null,
+      config.modelId ? `Modelo: ${config.modelId}` : null,
+    ].filter((item): item is string => Boolean(item));
+
+    return (
+      <div className="rounded-2xl bg-white/10 border border-white/10 backdrop-blur-md p-3 text-white">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/50">Set replicable</p>
+            <p className="text-sm font-bold leading-tight">{selectedProduct.name}</p>
+          </div>
+          <span className="text-[10px] font-bold text-white/50">{selectedProduct.generatedImages?.length ?? 0} generadas</span>
+        </div>
+
+        {configItems.length > 0 && (
+          <div className="flex gap-1.5 flex-wrap mb-3">
+            {configItems.map((item) => (
+              <span key={item} className="text-[10px] text-white/75 bg-white/10 border border-white/10 px-2 py-1 rounded-full">
+                {item}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {refs.length > 0 && (
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/50 mb-2">
+              Referencias usadas
+            </p>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {refs.map((ref, i) => (
+                <div key={`${ref.label}-${i}`} className="w-16 flex-shrink-0">
+                  <div className="w-16 h-16 rounded-xl overflow-hidden bg-white/10 border border-white/10">
+                    <img src={ref.src} alt={ref.label} className="w-full h-full object-cover" />
+                  </div>
+                  <p className="mt-1 text-[9px] text-white/55 truncate">{ref.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={reuseSelectedProductSetup}
+          className="mt-3 w-full rounded-xl bg-white text-slate-900 px-3 py-2.5 text-[11px] font-black uppercase tracking-widest hover:bg-white/90 transition-colors"
+        >
+          Reutilizar referencias
+        </button>
+      </div>
+    );
   };
 
   // ─── Validaciones por paso ──────────────────────────────────────────────────
@@ -854,13 +988,12 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
             {products.map(product => (
               <ResultCard
                 key={product.id}
-                images={[...(product.generatedImages ?? []), ...(product.baseImages ?? [])].filter(Boolean).slice(0, 3)}
+                images={(product.generatedImages ?? []).filter(Boolean).slice(0, 1)}
                 title={product.name}
                 subtitle={`${product.category}${product.metadata?.material ? ` · ${product.metadata.material}` : ''}`}
                 date={product.createdAt}
                 badge={{ label: '✓ Guardado', color: 'green' }}
                 pills={[product.category, product.metadata?.material, product.metadata?.style].filter(Boolean) as string[]}
-                refSlots={(product.baseImages ?? []).slice(0, 2).map((src, i) => ({ label: `Base ${i + 1}`, src }))}
                 accentColor="blue"
                 onClick={() => openProductDetail(product)}
                 actions={[
@@ -882,10 +1015,11 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
             onDownload={(url, idx) => {
               handleDownloadIndividual(
                 url,
-                `${wizard.product.title.replace(/\s+/g, '_') || 'product'}_image_${idx + 1}.png`,
+                `${(selectedProduct?.name || wizard.product.title || 'product').replace(/\s+/g, '_')}_image_${idx + 1}.png`,
               );
             }}
             metadata={lightboxMetadata}
+            details={renderSelectedProductDetails()}
           />
         )}
       </div>

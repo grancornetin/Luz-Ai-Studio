@@ -21,7 +21,7 @@ import {
   X, Copy, Play, Heart, ChevronLeft, ChevronRight,
   Maximize2, Minimize2, Bookmark, Send, Trash2,
   MessageCircle, FolderPlus, Check, Share2, MoreHorizontal,
-  ChevronDown
+  ChevronDown, Eye, EyeOff
 } from 'lucide-react';
 
 import { Prompt, PromptBoard } from '../types/promptTypes';
@@ -30,8 +30,6 @@ import { usePromptComments } from '../hooks/usePromptLibrary';
 import { useAuth } from '../../auth/AuthContext';
 import { revealPrompt, isPromptRevealed } from '../../../services/promptRevealService';
 import { isPromptRevealFree, CREDIT_COSTS } from '../../../services/creditConfig';
-import { Eye, EyeOff } from 'lucide-react';
-
 // ══════════════════════════════════════════════════════════════
 // 🔬 WORD-LEVEL DIFF ENGINE (LCS-based, preserved from original)
 // ══════════════════════════════════════════════════════════════

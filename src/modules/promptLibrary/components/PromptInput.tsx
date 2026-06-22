@@ -25,12 +25,12 @@ const PromptInput: React.FC<PromptInputProps> = ({ value, onChange, onAutoFormat
   const [cursorPos,  setCursorPos]  = useState(0);
   const [isFocused,  setIsFocused]  = useState(false);
 
-  // Auto-resize textarea
+  // Auto-resize textarea — never collapse below minHeight to avoid visual flash
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
+    el.style.height = '140px'; // reset to minHeight (not 'auto') to avoid collapse flash
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 140), MAX_HEIGHT)}px`;
     el.style.overflowY = el.scrollHeight > MAX_HEIGHT ? 'auto' : 'hidden';
   }, [value]);
 
@@ -67,14 +67,23 @@ const PromptInput: React.FC<PromptInputProps> = ({ value, onChange, onAutoFormat
     setTimeout(() => el.focus(), 0);
   };
 
-  // Render text with @token highlights as HTML for the mirror layer
+  // Render ONLY @token highlights for the mirror overlay.
+  // Non-@token text is replaced with invisible spans so the mirror has the
+  // same line-break behaviour as the textarea without painting duplicate text.
   const renderHighlighted = (text: string) => {
     if (!text) return '';
     return text
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
-      .replace(/(@\w+)/g, '<mark style="background:transparent;color:var(--brand-600,#FF748B);font-weight:600;">$1</mark>')
+      .replace(/(@\w+)/g, '\x00$1\x00')
+      .split('\x00')
+      .map((segment, i) =>
+        segment.startsWith('@')
+          ? `<mark style="background:transparent;color:var(--brand-600,#FF748B);font-weight:700;">${segment}</mark>`
+          : `<span style="color:transparent;">${segment}</span>`
+      )
+      .join('')
       .replace(/\n/g, '<br>');
   };
 
@@ -89,7 +98,7 @@ const PromptInput: React.FC<PromptInputProps> = ({ value, onChange, onAutoFormat
             : 'border-slate-100 bg-slate-50'
         }`}
       >
-        {/* Real textarea — text is transparent so the mirror layer paints it */}
+        {/* Real textarea — text is opaque; mirror layer paints @token highlights on top */}
         <textarea
           ref={textareaRef}
           value={value}
@@ -106,8 +115,7 @@ const PromptInput: React.FC<PromptInputProps> = ({ value, onChange, onAutoFormat
             minHeight: 140,
             maxHeight: MAX_HEIGHT,
             caretColor: 'var(--brand-600, #FF748B)',
-            color: 'transparent',
-            WebkitTextFillColor: 'transparent',
+            color: '#1e293b',
             position: 'relative',
             zIndex: 2,
           }}

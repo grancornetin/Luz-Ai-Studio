@@ -230,12 +230,20 @@ ${hasSecondSubject && s2SlotRef ? `- ${s2SlotRef} is the positional slot anchor 
 [SCENE TEMPLATE RULES]
 - Preserve the environment/background from ${sceneRef}.
 - Preserve the camera angle and framing from ${sceneRef}.
-- Preserve the pose and body placement from ${sceneRef}.
+- Preserve the pose and body placement from ${sceneRef} with high fidelity — body angle, arm position, hand placement, tilt of the head, shoulder direction.
 - Preserve the crop from ${sceneRef}.
 - Preserve the lighting direction and white balance from ${sceneRef}.
+- Preserve the EXACT facial expression from ${sceneRef}: the mouth shape (open/closed/smile/serious), the specific eye shape (squinting/wide/soft/intense), the eyebrow position, cheek tension, and overall emotional tone.
 - Preserve the approximate gesture, posture, leaning, and interpersonal interaction from ${sceneRef}.
 - Preserve visible props and environmental objects unless explicitly replaced elsewhere.
 - Treat the anchor people only as pose/composition placeholders, not as identity references.
+
+[FACIAL EXPRESSION LOCK]
+- The facial expression of each subject in the output MUST match the facial expression of the corresponding person in ${sceneRef}.
+- Do NOT default to a neutral face — copy the emotional state from ${sceneRef}.
+- If the person in ${sceneRef} is smiling, the subject must smile with equivalent intensity.
+- If the person in ${sceneRef} has a relaxed, serious, or playful expression, match it exactly.
+- Expression cloning is as important as identity cloning for the quality of this output.
 
 [IDENTITY REPLACEMENT RULES]
 - Replace every visible original anchor person identity.
@@ -268,6 +276,13 @@ ${hasSecondSubject && s2FaceRef && s2BodyRef ? `
 - The most important objective is correct identity replacement while preserving scene composition.
 
 ${getCameraStylePrompt(params.cameraStyle)}
+
+[OUTPUT QUALITY]
+- Output at maximum possible resolution and detail. Every facial pore, hair strand, fabric texture, and skin detail must be crisp and sharp.
+- The output must look like a high-end editorial photograph, never a blurry or downscaled result.
+- Even if the reference images provided are low resolution or blurry, the OUTPUT must be rendered at the highest quality possible — treat the references only as identity/composition guides, not as quality templates.
+- Apply natural skin texture, catch lights in eyes, realistic hair render, sharp clothing details.
+- Final image must look like it was shot on a high-end camera at 1024px or higher equivalent.
 
 [HARD RULES]
 - Photorealistic smartphone image. No illustration. No CGI. No 3D render look.
@@ -360,6 +375,12 @@ ${refs.productRefs.map((p) => `- Replace only the corresponding product/accessor
 
 ${getCameraStylePrompt(params.cameraStyle)}
 
+[OUTPUT QUALITY]
+- Output at maximum possible resolution and detail. Every facial pore, hair strand, fabric texture, and skin detail must be crisp and sharp.
+- Even if the reference images provided are low resolution or blurry, the OUTPUT must be rendered at the highest quality possible.
+- Apply natural skin texture, catch lights in eyes, realistic hair render, sharp clothing details.
+- Final image must look like a high-end editorial photograph at 1024px or higher equivalent.
+
 [HARD RULES]
 - Photorealistic smartphone image. No illustration. No CGI. No 3D render look.
 - No text. No watermark.
@@ -420,6 +441,11 @@ ${hasSecondSubject && s2FaceRef ? `- Subject 2 face must clearly match ${s2FaceR
 ${hasSecondSubject && s2BodyRef ? `- Subject 2 body proportions and skin tone must follow ${s2BodyRef}.` : ''}
 
 ${getCameraStylePrompt(params.cameraStyle)}
+
+[OUTPUT QUALITY]
+- Output at maximum possible resolution and detail. Even if reference images are low resolution or blurry, the OUTPUT must be crisp, sharp and high quality.
+- Apply natural skin texture, catch lights in eyes, realistic hair render, and sharp clothing details.
+- Final image must look like a high-end editorial photograph at 1024px or higher equivalent.
 
 [HARD RULES]
 - Photorealistic smartphone image only.
@@ -491,6 +517,11 @@ ${refs.productRefs.map((p) => `- Replace only the matching product/accessory wit
 `.trim() : ''}
 
 ${getCameraStylePrompt(params.cameraStyle)}
+
+[OUTPUT QUALITY]
+- Output at maximum possible resolution and detail. Even if reference images are low resolution or blurry, the OUTPUT must be crisp, sharp and high quality.
+- Apply natural skin texture, catch lights in eyes, realistic hair render, and sharp clothing details.
+- Final image must look like a high-end editorial photograph at 1024px or higher equivalent.
 
 [HARD RULES]
 - Photorealistic smartphone image only.

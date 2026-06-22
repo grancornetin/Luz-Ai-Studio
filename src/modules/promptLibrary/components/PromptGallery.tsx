@@ -22,6 +22,7 @@ interface PromptGalleryProps {
   onDelete: (id: string) => void;
   onEdit?: (id: string, changes: { title?: string; tags?: string[] }) => Promise<void>;
   onSave?: (id: string) => void;
+  onReport?: (id: string) => void;
   isAdmin: boolean;
   savedIds?: Set<string>;
   likedIds?: Set<string>;
@@ -54,7 +55,7 @@ const ITEMS_PER_PAGE = 20;
 const PromptGallery: React.FC<PromptGalleryProps> = ({
   prompts, allTags, searchQuery, setSearchQuery,
   activeTag, setActiveTag, sortBy, setSortBy,
-  onPromptClick, onLike, onRecreate, onDelete, onEdit, onSave,
+  onPromptClick, onLike, onRecreate, onDelete, onEdit, onSave, onReport,
   isAdmin, savedIds = new Set(), likedIds = new Set(),
   loading = false,
 }) => {
@@ -233,6 +234,7 @@ const PromptGallery: React.FC<PromptGalleryProps> = ({
                 onLike={e => { e.stopPropagation(); onLike(prompt.id); }}
                 onRecreate={e => { e.stopPropagation(); onRecreate(prompt); }}
                 onSave={onSave ? e => { e.stopPropagation(); onSave(prompt.id); } : undefined}
+                onReport={onReport ? e => { e.stopPropagation(); onReport(prompt.id); } : undefined}
                 isAdmin={isAdmin}
                 onDelete={(e, id) => { e.stopPropagation(); onDelete(id); }}
                 onEdit={onEdit}

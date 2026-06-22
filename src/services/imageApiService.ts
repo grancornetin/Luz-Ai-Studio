@@ -17,9 +17,10 @@ import { getAuth } from 'firebase/auth';
 import { generationHistoryService, MODULE_LABELS } from './generationHistoryService';
 
 const API_URL     = '/api/gemini/image';
-const POLL_INTERVAL_MS   = 2000;   // 2 s entre polls
-const MAX_POLL_ATTEMPTS  = 120;    // 120 × 2 s = 4 minutos máximo (cubre GPT Image 2 ~135s)
-const MAX_SILENT_RETRIES = 2;      // 2 intentos: el inicial + 1 retry para rate-limit
+const POLL_INTERVAL_MS      = 2000;  // 2 s entre polls
+const MAX_POLL_ATTEMPTS     = 120;   // 120 × 2 s = 4 min — Gemini / Seedream
+const MAX_POLL_ATTEMPTS_GPT = 210;   // 210 × 2 s = 7 min — GPT Image 2 (puede tardar hasta ~6 min)
+const MAX_SILENT_RETRIES    = 2;     // el inicial + 1 retry para rate-limit
 const RATE_LIMIT_BACKOFF_MS = [3000, 8000]; // 3s, 8s — backoff corto, el 429 es transiente
 
 export type ImageJobStatus = 'pending' | 'processing' | 'retrying' | 'completed' | 'failed';
@@ -114,7 +115,7 @@ export type ModelId = 'gemini' | 'seedream' | 'gptimage';
 export interface GenerateImageParams {
   prompt:           string;
   negative?:        string;
-  referenceImages?: Array<{ data: string; mimeType: string }>;
+  referenceImages?: Array<{ data: string; mimeType: string; label?: string }>;
   aspectRatio?:     '1:1' | '3:4' | '4:3' | '4:5' | '9:16' | '16:9';
   shotIndex?:       number;
   totalShots?:      number;
@@ -222,8 +223,9 @@ async function generateImageOnce(params: GenerateImageParams): Promise<string> {
   params.onStatusChange?.('pending', undefined, shotIndex);
 
   let notFoundCount = 0;
+  const maxAttempts = params.modelId === 'gptimage' ? MAX_POLL_ATTEMPTS_GPT : MAX_POLL_ATTEMPTS;
 
-  for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await sleep(POLL_INTERVAL_MS);
 
     let job: Awaited<ReturnType<typeof pollJob>>;
@@ -267,9 +269,9 @@ function resolveHistoryModule(module?: string): string {
 
 function historyReferencesFromParams(params: GenerateImageParams) {
   return (params.referenceImages || []).map((ref, index) => ({
-    label: `Referencia ${index + 1}`,
+    label: ref.label || `Referencia ${index + 1}`,
     mimeType: ref.mimeType,
-    role: `REF${index}`,
+    role: ref.label || `REF${index}`,
     imageUrl: `data:${ref.mimeType || 'image/jpeg'};base64,${ref.data}`,
   }));
 }

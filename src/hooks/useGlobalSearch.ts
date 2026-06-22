@@ -1,5 +1,6 @@
 // src/hooks/useGlobalSearch.ts
 import Fuse from 'fuse.js';
+import type { IFuseOptions } from 'fuse.js';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../modules/auth/AuthContext';
 import { generationHistoryService } from '../services/generationHistoryService';
@@ -17,8 +18,6 @@ export interface SearchableItem {
   imageUrl?: string;
   metadata?: Record<string, any>;
 }
-
-import type { IFuseOptions } from 'fuse.js';
 
 const FUSE_OPTIONS: IFuseOptions<SearchableItem> = {
   keys: [

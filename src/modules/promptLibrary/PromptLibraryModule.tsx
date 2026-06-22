@@ -37,8 +37,13 @@ const PromptLibraryModule: React.FC = () => {
     sortBy,
     setSortBy,
     likePrompt,
+    toggleSave,
     deletePrompt,
+    editPrompt,
     publishPrompt,
+    reportPrompt,
+    savedIds,
+    likedIds,
     loading
   } = usePromptLibrary();
 
@@ -160,7 +165,13 @@ const PromptLibraryModule: React.FC = () => {
                 onLike={likePrompt}
                 onRecreate={handleRecreate}
                 onDelete={deletePrompt}
+                onEdit={editPrompt}
+                onSave={(id) => toggleSave(id)}
+                onReport={(id) => reportPrompt(id)}
                 isAdmin={isAdmin}
+                savedIds={savedIds}
+                likedIds={likedIds}
+                loading={loading}
               />
 
             </motion.div>

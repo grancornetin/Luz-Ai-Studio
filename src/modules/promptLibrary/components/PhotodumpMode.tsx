@@ -8,7 +8,7 @@ import ModuleTutorial from '../../../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../../../components/shared/tutorialConfigs';
 import { generationService, GenerationProgress } from '../services/generationService';
 import { PromptDNA } from '../types/promptTypes';
-import { downloadAsZip } from '../../../utils/imageUtils';
+import { downloadAsZip, downloadImage as saveImage } from '../../../utils/imageUtils';
 import { ImageLightbox } from '../../../components/shared/ImageLightbox';
 import { geminiService } from '../../../services/geminiService';
 import { newSessionId } from '../../../services/imageApiService';
@@ -231,10 +231,7 @@ const PhotodumpMode: React.FC<PhotodumpModeProps> = ({ basePrompt, dna, referenc
   };
 
   const downloadImage = (img: string, index: number) => {
-    const link = document.createElement('a');
-    link.href = img;
-    link.download = `photodump_${index + 1}.png`;
-    link.click();
+    saveImage(img, `photodump_${index + 1}.png`);
   };
 
   const downloadAllZip = async () => {

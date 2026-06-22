@@ -230,6 +230,8 @@ export default function CloneImageModule() {
 
   const [baseComposition, setBaseComposition] = useState<string | null>(null);
   const [finalImage, setFinalImage] = useState<string | null>(null);
+  // Referencia al último finalImage generado, para poder restaurarlo en la comparación antes/después
+  const lastFinalImageRef = React.useRef<string | null>(null);
 
   // Retomar sesión desde notificación
   const [searchParams, setSearchParams] = useSearchParams();
@@ -349,10 +351,9 @@ export default function CloneImageModule() {
       setFinalImage(null);
       setMaxStep(Math.min(maxStep, 2));
     }
-    if (fromStep === 3) {
-      setFinalImage(null);
-      setMaxStep(Math.min(maxStep, 3));
-    }
+    // No reseteamos finalImage al volver de step 4 a step 3:
+    // el usuario puede volver a ver el resultado base sin perder el final ya generado.
+    // Solo se borra finalImage si cambian identidades (fromStep <= 2).
   }
 
   const { checkAndDeduct, showNoCredits, requiredCredits, closeModal, refundCredits } = useCreditGuard();
@@ -511,6 +512,7 @@ export default function CloneImageModule() {
 
       const img = await cloneImageService.cloneImage(payload);
       setFinalImage(img);
+      lastFinalImageRef.current = img;
 
       generationHistoryService.save({
         imageUrl: img,
@@ -608,6 +610,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
     setOutfit1(null);
     setBaseComposition(null);
     setFinalImage(null);
+    lastFinalImageRef.current = null;
     setReplaceOutfit1(false);
     setDetectedProducts([]);
     setError(null);
@@ -702,7 +705,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
           </div>
         )}
 
-        <div className={`grid grid-cols-1 lg:grid-cols-12 gap-8 px-4 md:px-0 ${loading && (step === 3 || step === 4) ? 'hidden' : ''}`}>
+        <div className={`grid grid-cols-1 lg:grid-cols-12 gap-8 px-4 md:px-0 ${loading && (step === 3 || step === 4) ? 'hidden' : ''} ${showHistory ? 'hidden' : ''}`}>
 
           <div className="lg:col-span-4 space-y-6">
             <section className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
@@ -984,16 +987,29 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
               </div>
 
               {step === 4 && baseComposition && finalImage && (
-                 <div className="mt-6 flex gap-4 h-24">
-                    <div className="w-20 rounded-xl overflow-hidden border border-white/20 cursor-pointer opacity-60 hover:opacity-100 transition-opacity" onClick={() => setFinalImage(null)}>
-                       <img src={baseComposition} className="w-full h-full object-cover" />
-                    </div>
-                    <div className="flex-1 flex items-center">
-                       <div className="h-0.5 w-full bg-white/10"></div>
-                    </div>
-                    <div className="w-20 rounded-xl overflow-hidden border-2 border-accent-500 cursor-pointer shadow-[0_0_15px_rgba(228,241,172,0.3)]">
-                       <img src={finalImage} className="w-full h-full object-cover" />
-                    </div>
+                 <div className="mt-6 space-y-2">
+                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">Antes / Después — toca para comparar</p>
+                   <div className="flex gap-3 h-24">
+                      <button
+                        className={`flex-1 rounded-xl overflow-hidden border-2 transition-all relative ${activePreview === baseComposition ? 'border-white opacity-100 shadow-[0_0_12px_rgba(255,255,255,0.3)]' : 'border-white/20 opacity-50 hover:opacity-80'}`}
+                        onClick={() => setFinalImage(null)}
+                        title="Ver base (antes)"
+                      >
+                         <img src={baseComposition} className="w-full h-full object-cover" />
+                         <span className="absolute bottom-1 inset-x-0 text-center text-[8px] font-black text-white uppercase tracking-widest drop-shadow">Antes</span>
+                      </button>
+                      <div className="flex items-center flex-shrink-0">
+                         <div className="text-white/30 text-lg">→</div>
+                      </div>
+                      <button
+                        className={`flex-1 rounded-xl overflow-hidden border-2 transition-all relative ${activePreview === finalImage ? 'border-accent-400 opacity-100 shadow-[0_0_15px_rgba(228,241,172,0.3)]' : 'border-white/20 opacity-50 hover:opacity-80'}`}
+                        onClick={() => { if (lastFinalImageRef.current) setFinalImage(lastFinalImageRef.current); }}
+                        title="Ver imagen final (después)"
+                      >
+                         <img src={finalImage} className="w-full h-full object-cover" />
+                         <span className="absolute bottom-1 inset-x-0 text-center text-[8px] font-black text-white uppercase tracking-widest drop-shadow">Después</span>
+                      </button>
+                   </div>
                  </div>
               )}
 
@@ -1003,21 +1019,16 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
 
         {showHistory && (
           <section className="px-4 md:px-0 animate-in fade-in duration-300">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-lg font-black text-slate-900 uppercase italic tracking-tighter">Historial</h2>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tus sesiones guardadas</p>
-              </div>
-              <button onClick={() => setShowHistory(false)} className="w-8 h-8 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">
-                <i className="fa-solid fa-xmark text-xs"></i>
-              </button>
-            </div>
             <ResultLibraryGrid
               loading={false}
               stats={[
                 { label: 'Sesiones', value: sessions.length, sub: 'guardadas' },
                 { label: 'Finalizadas', value: sessions.filter(s => !!s.finalImage).length, sub: 'con imagen final', color: 'text-emerald-600' },
               ]}
+              primaryAction={{
+                label: '← Volver al editor',
+                onClick: () => setShowHistory(false),
+              }}
               searchTexts={sessions.map(s => `clone ${s.id} ${s.cameraStyle ?? ''}`)}
               emptyTitle="Sin sesiones guardadas"
               emptyDescription="Completá una clonación para que aparezca aquí"

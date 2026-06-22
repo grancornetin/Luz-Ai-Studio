@@ -6,7 +6,7 @@
 // Costo por imagen según modelo:
 //   Nano Banana 2 (Gemini): 2 créditos/imagen
 //   Seedream 4.5:           1 crédito/imagen
-//   GPT Image 2:            2 créditos/imagen
+//   GPT Image 2:            2 créditos/imagen (igual a Gemini)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const MODELS = {
@@ -26,7 +26,7 @@ export const MODEL_LOCATIONS: Record<string, string> = {
 export const MODEL_CREDIT_COST: Record<'gemini' | 'seedream' | 'gptimage', number> = {
   gemini:   2,   // Nano Banana 2 — 2 créditos/imagen
   seedream: 1,   // Seedream 4.5  — 1 crédito/imagen
-  gptimage: 1,   // GPT Image 2   — 1 crédito/imagen (excepción: prompt_studio cobra 2)
+  gptimage: 2,   // GPT Image 2   — 2 créditos/imagen
 };
 
 /** Devuelve el costo en créditos de N imágenes según el modelo activo. */

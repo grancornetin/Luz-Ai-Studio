@@ -7,8 +7,8 @@ import { BrandAISummaryStep } from './components/BrandAISummaryStep';
 import { brandProfileAiService } from '../../services/brandProfileAiService';
 import { brandProfileService } from '../../services/brandProfileService';
 import { downloadBrandReport } from '../../utils/brandReportUtils';
-import type { BrandProfile, BrandColor, BrandAsset } from './types';
 import { EMPTY_BRAND_PROFILE } from './types';
+import type { BrandProfile, BrandColor, BrandAsset } from './types';
 
 const WIZARD_STEPS = [
   { id: 'welcome',    label: 'Bienvenida' },

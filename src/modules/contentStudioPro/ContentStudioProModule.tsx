@@ -54,7 +54,7 @@ import { GenerationProgress, type ProgressStep, type CompletedShot } from '../..
 import { useGenerationProgress } from '../../hooks/useGenerationProgress';
 import { CostSummary } from './components/CostSummary';
 
-type Step = 'setup' | 'generating_master' | 'checkpoint' | 'producing' | 'library' | 'batch_generating';
+type Step = 'setup' | 'generating_master' | 'checkpoint' | 'producing' | 'retrying' | 'library' | 'batch_generating';
 type FilterTab = 'TODAS' | 'AVATAR' | 'PRODUCT' | 'OUTFIT' | 'SCENE';
 
 const MAX_REGEN_ATTEMPTS = 3;
@@ -400,6 +400,7 @@ const ContentStudioProModule: React.FC = () => {
         sceneText,
         image0Url: image0,
         ref0Analysis: analysis,
+        sessionPlan: plan,
         attemptsImage0: 1,
         shots: initialShots,
         userShotCount,
@@ -714,7 +715,9 @@ const ContentStudioProModule: React.FC = () => {
     const failedShots = targetSet.shots.filter(s => s.status === 'error');
     if (failedShots.length === 0) return;
 
-    setStep('producing');
+    // Usamos 'retrying' en lugar de 'producing' para mostrar el grid completo
+    // con los shots ya completados visibles mientras se reintenta solo los fallidos
+    setStep('retrying');
     setCurrentSet(targetSet);
 
     // Build fresh progress steps for the retry
@@ -791,7 +794,9 @@ const ContentStudioProModule: React.FC = () => {
           retryTotal,
           useProduct,
           focusRef,
-          sessionPlan,
+          // Usar el sessionPlan guardado en el set — garantiza consistencia incluso si el
+          // state se perdió por recarga o retorno desde notificación
+          targetSet.sessionPlan ?? sessionPlan,
           (attempt) => {
             updateShotStatus(shot.key, 'retrying', undefined, undefined, attempt - 1);
           },
@@ -1316,6 +1321,66 @@ const ContentStudioProModule: React.FC = () => {
                   totalShots={progressTotalShots}
                   etaSeconds={progressEta}
                 />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* RETRYING — muestra el grid completo con shots exitosos visibles mientras reintenta fallidos */}
+        {step === 'retrying' && currentSet && (
+          <div className="space-y-6 md:space-y-8 animate-in fade-in duration-700 px-4 md:px-0">
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3.5 flex items-center gap-3">
+              <i className="fa-solid fa-rotate-right text-amber-500 animate-spin text-sm"></i>
+              <div>
+                <p className="text-[11px] font-black text-amber-800 uppercase tracking-widest">Reintentando shots fallidos</p>
+                <p className="text-[10px] text-amber-600">Los shots completados se mantienen visibles mientras se regeneran los que fallaron.</p>
+              </div>
+            </div>
+            <div className="bg-white p-6 md:p-10 rounded-[32px] md:rounded-[56px] border border-slate-100 shadow-sm space-y-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-14 rounded-xl overflow-hidden border-2 border-brand-600 flex-shrink-0">
+                  <img src={currentSet.image0Url!} className="w-full h-full object-cover" />
+                </div>
+                <div>
+                  <p className="t-meta text-slate-900">Sesión en reintento</p>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-widest">{FOCUS_LABELS[currentSet.focus]?.split(' / ')[0]}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
+                <div className="aspect-[3/4] rounded-[24px] overflow-hidden border-2 border-brand-600 relative">
+                  <img src={currentSet.image0Url!} className="w-full h-full object-cover" />
+                  <div className="absolute top-4 left-4">
+                    <span className="px-3 py-1 bg-brand-600 text-white text-[10px] font-black rounded-full uppercase">Master</span>
+                  </div>
+                </div>
+                {currentSet.shots.map((s, idx) => (
+                  <div key={idx} className="aspect-[3/4] bg-slate-50 rounded-[24px] overflow-hidden relative flex flex-col shadow-lg">
+                    <div className="flex-1 relative overflow-hidden">
+                      {s.status === 'generating' ? (
+                        <div className="flex h-full items-center justify-center bg-amber-50/80">
+                          <div className="flex flex-col items-center gap-2">
+                            <i className="fa-solid fa-rotate-right animate-spin text-xl text-amber-500"></i>
+                            <span className="text-[10px] font-black uppercase text-amber-500 tracking-widest">Reintentando...</span>
+                          </div>
+                        </div>
+                      ) : s.imageUrl ? (
+                        <img src={s.imageUrl} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="flex h-full items-center justify-center bg-red-50/80">
+                          <i className="fa-solid fa-circle-exclamation text-red-300 text-2xl"></i>
+                        </div>
+                      )}
+                      <div className="absolute top-3 left-3">
+                        <span className="px-2 py-1 bg-black/40 text-white text-[9px] font-black rounded-full uppercase">Shot {idx + 1}</span>
+                      </div>
+                      {s.imageUrl && s.status === 'done' && (
+                        <div className="absolute top-3 right-3">
+                          <span className="px-2 py-1 bg-emerald-500 text-white text-[9px] font-black rounded-full">✓</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

@@ -306,12 +306,20 @@ export const usePromptLibrary = () => {
     }
   }, [user]);
 
+  const likedIds = useMemo(() => {
+    if (!user) return new Set<string>();
+    const s = new Set<string>();
+    prompts.forEach(p => { if (p.likedBy.includes(user.uid)) s.add(p.id); });
+    return s;
+  }, [prompts, user]);
+
   return {
     // Data
     prompts: filteredPrompts,
     allTags,
     loading,
     savedIds,
+    likedIds,
     boards,
 
     // Filters
@@ -333,7 +341,7 @@ export const usePromptLibrary = () => {
     addToBoard,
 
     // Utils
-    isLiked: (id: string) => user ? prompts.find(p => p.id === id)?.likedBy.includes(user.uid) ?? false : false,
+    isLiked: (id: string) => likedIds.has(id),
     isSaved: (id: string) => savedIds.has(id),
   };
 };

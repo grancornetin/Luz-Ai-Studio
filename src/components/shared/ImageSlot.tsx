@@ -8,7 +8,7 @@ import { Upload, X, RefreshCw, User, Package, Shirt, Palette, Image as ImageIcon
 import { readAndCompressFile } from '../../utils/imageUtils';
 import UploadConsentModal from './UploadConsentModal';
 import { getAuth } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 const CONSENT_LS_KEY = 'luz_upload_consent_v1';
@@ -17,7 +17,25 @@ function hasConsented(): boolean {
   try { return !!localStorage.getItem(CONSENT_LS_KEY); } catch { return false; }
 }
 
+function markLocalConsent() {
+  try { localStorage.setItem(CONSENT_LS_KEY, new Date().toISOString()); } catch { /* ignore */ }
+}
+
+async function hasRemoteConsent(): Promise<boolean> {
+  try {
+    const user = getAuth().currentUser;
+    if (!user) return false;
+    const snap = await getDoc(doc(db, 'users', user.uid, 'consents', 'uploadTerms'));
+    const accepted = snap.exists() && snap.data()?.accepted === true;
+    if (accepted) markLocalConsent();
+    return accepted;
+  } catch {
+    return false;
+  }
+}
+
 async function saveConsentToFirestore() {
+  markLocalConsent();
   try {
     const user = getAuth().currentUser;
     if (!user) return;
@@ -27,7 +45,6 @@ async function saveConsentToFirestore() {
       version:    'v1',
       userAgent:  navigator.userAgent,
     }, { merge: true });
-    localStorage.setItem(CONSENT_LS_KEY, new Date().toISOString());
   } catch { /* no bloquear la UI si falla */ }
 }
 
@@ -164,7 +181,7 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (hasConsented()) {
+    if (hasConsented() || await hasRemoteConsent()) {
       await processFile(file);
     } else {
       pendingFileRef.current = file;
@@ -177,7 +194,7 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
     if (!file || !file.type.startsWith('image/')) return;
-    if (hasConsented()) {
+    if (hasConsented() || await hasRemoteConsent()) {
       await processFile(file);
     } else {
       pendingFileRef.current = file;

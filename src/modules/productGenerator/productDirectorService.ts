@@ -441,10 +441,10 @@ const PRODUCT_NEGATIVE_PROMPT = [
 
 const SOURCE_ORDER_RULE = [
   'REFERENCE ORDER RULE:',
-  'When a reference image is provided, the FIRST image is the visual reference to recreate.',
-  'All following images are product identity images only.',
-  'The reference image controls the scene, camera, lighting and layout.',
-  'The product images control product identity, anatomy, material, color, branding and real design details.',
+  'When a reference image is provided, the image labeled INSPIRATION_SCENE_REF is the visual reference to recreate.',
+  'Images labeled PRODUCT_IDENTITY_REF_1, PRODUCT_IDENTITY_REF_2, etc. are product identity images only.',
+  'INSPIRATION_SCENE_REF controls the scene, camera, lighting and layout.',
+  'PRODUCT_IDENTITY_REF images control product identity, anatomy, material, color, branding and real design details.',
 ].join('\n');
 
 const PRODUCT_IDENTITY_RULES = [
@@ -1661,6 +1661,15 @@ export const buildPromptPayloadsFromDirectorResult = (
     const isReferenceShot = shot.type === 'REFERENCE_MATCH' || shot.type === 'REFERENCE_VARIATION';
     const outputStructureRule = getOutputStructureRule(normalizedMode);
     const aspectRatio = getAspectRatioForObjective(input.objective);
+    const referenceSourceMap = input.referenceImage
+      ? [
+          'REFERENCE SOURCE MAP:',
+          '- INSPIRATION_SCENE_REF: recreate only its scene, camera position, layout, lighting, mood and supporting prop roles.',
+          `- ${input.productImages.map((_, idx) => `PRODUCT_IDENTITY_REF_${idx + 1}`).join(', ')}: use only for the uploaded product identity, anatomy, material, color, branding and visible design details.`,
+          '- Never reproduce the background, table, wall, crop, phone-camera angle or composition from PRODUCT_IDENTITY_REF images.',
+          '- The final output must not be a near-copy of any PRODUCT_IDENTITY_REF image.',
+        ].join('\n')
+      : '';
 
     // Para reference shots el environmentRules del ShotPlan ya contiene todos los
     // bloques de reglas (buildReferenceMatchEnvironmentRules / buildReferenceVariationEnvironmentRules).
@@ -1678,6 +1687,7 @@ export const buildPromptPayloadsFromDirectorResult = (
       input.productDescription ? `USER PRODUCT CONTEXT: ${input.productDescription}` : '',
       `PRODUCT ANCHOR: ${result.analysis.productAnchor}`,
       `TECHNICAL DESCRIPTION: ${result.analysis.technicalDescription}`,
+      referenceSourceMap,
 
       '',
       'MASTER CONTEXT:',

@@ -334,9 +334,17 @@ FORBIDDEN in AVATAR mode:
 - Any shot that looks like a clothing catalog
 - Symmetric stiff poses
 - Studio backgrounds or neutral walls only
+
+VISUAL HIERARCHY — BACKGROUND / SCENE ROLE:
+The environment exists ONLY to anchor the person in a believable real-world context.
+Background elements (furniture, walls, decor, plants) are ALWAYS secondary.
+They must NOT draw the eye away from the face.
+If a scene element (lamp, painting, open door) competes with the face for visual attention → blur it, darken it, or recompose to exclude it.
+Use shallow depth of field whenever it helps the face dominate.
+Scene detail is allowed only when it reinforces the person's personality or story.
 `;
   }
-  
+
   if (focus === 'OUTFIT') {
     return `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -373,9 +381,19 @@ POSES MUST HAVE LIFE:
 OUTFIT CHECK SESSION FEEL:
 - Looks like a real person's fashion content, not a product catalog.
 - The person exists inside the clothes, not the clothes existing separately.
+
+VISUAL HIERARCHY — BACKGROUND / SCENE ROLE:
+The OUTFIT is the absolute visual hero. Every compositional choice must serve the outfit.
+Background / scene elements are SUPPORTING CAST — never the main attraction.
+The scene may appear ONLY to provide lifestyle context that enhances the outfit's appeal
+(e.g. a sunlit street makes a linen dress feel fresh; a gym setting makes activewear feel sporty).
+If a background element competes with the outfit for visual attention → use shallow focus, adjust framing, or darken the background.
+FORBIDDEN: wide establishing shots where the room/setting takes up more visual weight than the outfit.
+FORBIDDEN: background details (art on walls, decorative props) that attract the eye before the clothing does.
+A blurred or slightly underexposed background is always correct when in doubt.
 `;
   }
-  
+
   if (focus === 'PRODUCT') {
     return `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -413,9 +431,16 @@ FORBIDDEN:
 - Product too small to read or identify.
 - Studio white background unless absolutely contextual.
 - Person's face cropped while product is shown.
+
+VISUAL HIERARCHY — BACKGROUND / SCENE ROLE:
+PRODUCT and FACE share the top of the visual hierarchy — everything else is subordinate.
+The background / setting provides usage context (a kitchen for food, a desk for tech, outdoors for sports gear).
+Scene elements are there to make the product feel real and desirable — NOT to be interesting by themselves.
+If any background object (lamp, plant, furniture, window) competes with the product for attention → recompose to remove it or use shallow depth of field to blur it.
+The viewer's eye path must land on PRODUCT first, then FACE — never on the background first.
 `;
   }
-  
+
   if (focus === 'SCENE') {
     return `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -452,9 +477,17 @@ FORBIDDEN:
 - Redesigning the scene (NO added furniture, NO beautification of space).
 - Empty expression — person must visibly enjoy/experience the place.
 - Shot S4 (detail) eliminating the person entirely — always keep a body anchor.
+
+VISUAL HIERARCHY — SCENE vs PERSON BALANCE:
+The SCENE is the hero, but the PERSON is always the emotional narrator of the scene.
+Scene details (architecture, decor, lighting, atmosphere) fill the visual field — this is intentional and correct for SCENE focus.
+However: the person must always feel like they BELONG in the scene and guide the viewer's experience.
+The person's face, expression, or body language must provide the emotional anchor — WITHOUT competing with the scene for architectural dominance.
+Think: "The scene catches the eye first, then the person brings it to life."
+Avoid shots where the person is so small or obscured that the scene reads as an empty location photo.
 `;
   }
-  
+
   return '';
 };
 

@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { LogOut, User as UserIcon, Menu, X, Bell } from 'lucide-react';
-import { useNotifications } from './hooks/useNotifications';
+import { useNotifications, startNotificationsListener, stopNotificationsListener } from './hooks/useNotifications';
 
 // Vistas y Módulos — carga diferida para reducir bundle inicial
 const Landing               = lazy(() => import('./views/Landing'));
@@ -44,7 +44,6 @@ import PlannerTaskBubble from './components/PlannerTaskBubble';
 import NotificationsHUD from './components/NotificationsHUD';
 import { MobileBottomNav } from './components/shared/MobileBottomNav';
 import { GlobalSearchModal } from './components/shared/GlobalSearchModal';
-import { startNotificationsListener, stopNotificationsListener } from './hooks/useNotifications';
 import { AvatarProfile, ProductProfile } from './types';
 
 const NotificationsPanel = lazy(() => import('./views/NotificationsPanel'));

@@ -5,7 +5,7 @@
 import React from 'react';
 import { Prompt } from '../types/promptTypes';
 import {
-  Heart, Copy, Play, Trash2, Bookmark,
+  Heart, Play, Trash2, Bookmark,
   Flag, Images, MessageCircle, MoreHorizontal, Pencil, X, Check
 } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
@@ -180,15 +180,6 @@ const PromptCard: React.FC<PromptCardProps> = ({
             >
               <Play className="w-3 h-3 fill-current" />
               Recrear
-            </button>
-
-            {/* COPY */}
-            <button
-              onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(prompt.promptText); }}
-              className="w-9 h-9 bg-white/20 backdrop-blur-sm text-white rounded-xl flex items-center justify-center hover:bg-white/30 transition-colors"
-              title="Copiar prompt"
-            >
-              <Copy className="w-3.5 h-3.5" />
             </button>
 
             {/* SAVE / BOOKMARK */}

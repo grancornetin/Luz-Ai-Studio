@@ -100,28 +100,81 @@ export async function readAndCompressFile(file: File): Promise<string> {
 // NUEVAS FUNCIONES PARA DESCARGA INDIVIDUAL Y MASIVA (ZIP)
 // ═══════════════════════════════════════════════════════════════════
 
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [header, b64] = dataUrl.split(',');
+  const mime = header.match(/:(.*?);/)?.[1] ?? 'image/jpeg';
+  const bytes = atob(b64);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+async function urlToBlob(url: string): Promise<Blob> {
+  if (url.startsWith('data:')) return dataUrlToBlob(url);
+
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.blob();
+}
+
+function isAppleMobile(): boolean {
+  const ua = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+async function tryNativeImageShare(blob: Blob, filename: string): Promise<boolean> {
+  if (!navigator.share || typeof File === 'undefined') return false;
+
+  const extension = blob.type.split('/')[1] || 'png';
+  const safeFilename = filename.includes('.') ? filename : `${filename}.${extension}`;
+  const file = new File([blob], safeFilename, { type: blob.type || 'image/png' });
+  const shareData: ShareData = {
+    files: [file],
+    title: safeFilename,
+  };
+
+  if (navigator.canShare && !navigator.canShare(shareData)) return false;
+
+  try {
+    await navigator.share(shareData);
+    return true;
+  } catch (error: any) {
+    if (error?.name === 'AbortError') return true;
+    console.warn('No se pudo abrir el guardado nativo:', error);
+    return false;
+  }
+}
+
 /**
  * Descarga una única imagen (funciona con dataURLs y URLs HTTP/HTTPS).
- * Si es dataURL, usa el método tradicional de anchor.
- * Si es URL, usa fetch + blob para mejor control de nombre de archivo.
+ * En iPhone/iPad usa la hoja nativa de compartir cuando está disponible,
+ * porque Safari guarda descargas en Archivos y no puede escribir directo en Fotos.
  */
-export async function downloadImage(url: string, filename: string): Promise<void> {
+export async function downloadImage(
+  url: string,
+  filename: string,
+  options: { preferNativeShare?: boolean } = {},
+): Promise<void> {
   try {
-    // Si es dataURL, podemos descargar directamente sin fetch
-    if (url.startsWith('data:')) {
+    const shouldShare = options.preferNativeShare ?? isAppleMobile();
+
+    if (shouldShare) {
+      const blob = await urlToBlob(url);
+      const shared = await tryNativeImageShare(blob, filename);
+      if (shared) return;
+
+      const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = url;
+      link.href = blobUrl;
       link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
       return;
     }
 
-    // Para URLs externas, usar fetch para obtener el blob y asignar nombre
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const blob = await response.blob();
+    const blob = await urlToBlob(url);
     const blobUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = blobUrl;
@@ -170,16 +223,6 @@ export async function downloadAsZip(
       await downloadImage(images[i], `${imageNamePrefix}_${i + 1}.${ext}`);
     }
     return;
-  }
-
-  // Convierte un data URL a Blob sin usar fetch() — evita el límite de tamaño de Chrome
-  function dataUrlToBlob(dataUrl: string): Blob {
-    const [header, b64] = dataUrl.split(',');
-    const mime = header.match(/:(.*?);/)?.[1] ?? 'image/jpeg';
-    const bytes = atob(b64);
-    const arr   = new Uint8Array(bytes.length);
-    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-    return new Blob([arr], { type: mime });
   }
 
   const zip = new JSZip();

@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { generationService, GenerationProgress } from '../services/generationService';
 import { PromptDNA } from '../types/promptTypes';
-import { downloadAsZip } from '../../../utils/imageUtils';
+import { downloadAsZip, downloadImage as saveImage } from '../../../utils/imageUtils';
 import { ImageLightbox } from '../../../components/shared/ImageLightbox';
 import { FloatingActionBar } from '../../../components/shared/FloatingActionBar';
 import { useScrollFAB } from '../../../hooks/useScrollFAB';
@@ -239,10 +239,7 @@ const CampaignGenerator: React.FC<CampaignGeneratorProps> = ({ basePrompt, dna, 
   };
 
   const downloadImage = (img: string, index: number) => {
-    const link = document.createElement('a');
-    link.href = img;
-    link.download = `campaign_${index + 1}.png`;
-    link.click();
+    saveImage(img, `campaign_${index + 1}.png`);
   };
 
   const downloadAllZip = async () => {

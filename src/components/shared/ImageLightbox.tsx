@@ -1,5 +1,6 @@
 import React, { useEffect, useCallback, useState, useRef } from 'react';
 import { X, ChevronLeft, ChevronRight, Download, Share2 } from 'lucide-react';
+import { downloadImage } from '../../utils/imageUtils';
 
 interface ImageLightboxProps {
   images: string[];
@@ -7,6 +8,7 @@ interface ImageLightboxProps {
   onClose: () => void;
   onDownload?: (imageUrl: string, index: number) => void;
   metadata?: { label?: string; date?: string; credits?: number };
+  details?: React.ReactNode;
   extraButton?: {
     label: string;
     onClick: (imageUrl: string, index: number) => void;
@@ -20,6 +22,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
   onClose,
   onDownload,
   metadata,
+  details,
   extraButton,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
@@ -89,10 +92,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
     if (onDownload) {
       onDownload(currentImage, currentIndex);
     } else {
-      const a = document.createElement('a');
-      a.href = currentImage;
-      a.download = `imagen-${Date.now()}.jpg`;
-      a.click();
+      downloadImage(currentImage, `imagen-${Date.now()}.jpg`);
     }
   };
 
@@ -121,11 +121,12 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
 
       {/* ── IMAGEN CENTRAL ────────────────────────────────── */}
       <div className="flex-1 flex items-center justify-center relative overflow-hidden px-2">
-        {/* Flecha prev — solo desktop */}
+        {/* Flecha prev */}
         {hasPrev && (
           <button
             onClick={goPrev}
-            className="absolute left-2 z-10 hidden sm:flex w-11 h-11 bg-white/10 hover:bg-white/20 rounded-full items-center justify-center text-white transition-colors"
+            aria-label="Imagen anterior"
+            className="absolute left-2 z-10 flex w-11 h-11 bg-white/10 hover:bg-white/20 rounded-full items-center justify-center text-white transition-colors"
           >
             <ChevronLeft size={26} />
           </button>
@@ -152,11 +153,12 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
           />
         </div>
 
-        {/* Flecha next — solo desktop */}
+        {/* Flecha next */}
         {hasNext && (
           <button
             onClick={goNext}
-            className="absolute right-2 z-10 hidden sm:flex w-11 h-11 bg-white/10 hover:bg-white/20 rounded-full items-center justify-center text-white transition-colors"
+            aria-label="Imagen siguiente"
+            className="absolute right-2 z-10 flex w-11 h-11 bg-white/10 hover:bg-white/20 rounded-full items-center justify-center text-white transition-colors"
           >
             <ChevronRight size={26} />
           </button>
@@ -184,6 +186,12 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
               }`}
             />
           ))}
+        </div>
+      )}
+
+      {details && (
+        <div className="flex-shrink-0 px-4 pb-2 max-h-[24vh] overflow-y-auto">
+          {details}
         </div>
       )}
 

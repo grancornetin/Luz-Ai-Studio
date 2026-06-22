@@ -147,7 +147,8 @@ export interface ContentStudioProSet {
   sceneText?: string;
   faceAnchorUrl?: string | null;
   image0Url?: string | null;
-  ref0Analysis?: REF0Analysis;  // NUEVO: análisis guardado
+  ref0Analysis?: REF0Analysis;
+  sessionPlan?: any;  // plan de sesión guardado para reintentos coherentes
   shots: Shot[];
   attemptsImage0: number;
   userShotCount?: number;
