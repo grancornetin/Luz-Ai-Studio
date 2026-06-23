@@ -31,6 +31,61 @@ export type HaulItemKind =
 
 export type HaulPileState = 'clean' | 'light_pile' | 'medium_pile' | 'messy_but_believable';
 
+// Estado del ítem en la progresión del haul — para evitar duplicaciones ilógicas
+export type HaulItemState =
+  | 'untried'           // aún no se mostró
+  | 'currently_worn'    // puesta en el cuerpo en este shot
+  | 'being_held'        // sostenida con manos — no puesta
+  | 'on_bed'            // dejada sobre la cama (ya probada)
+  | 'on_chair'          // colgada o doblada en silla
+  | 'on_floor'          // en el suelo
+  | 'tried_done'        // ya apareció y se pasó a la siguiente
+  | 'featured_closeup'; // protagonizó un closeup dedicado
+
+// Cómo puede aparecer un ítem según su tipo — bloquea transformaciones prohibidas
+export type HaulItemAllowedUseMode =
+  | 'worn_as_complete_look'    // full_outfit: usado completo en el cuerpo
+  | 'worn_as_garment_layer'    // top/bottom/outerwear: pieza individual puesta
+  | 'worn_as_dress'            // dress: pieza completa de hombro a dobladillo
+  | 'worn_as_onepiece'         // enterizo/jumpsuit
+  | 'worn_as_styling_layer'    // hosiery: capa de medias/pantys visible en piernas
+  | 'worn_on_feet'             // footwear: en los pies, held, or on surface
+  | 'held_or_carried'          // bag: sostenida o en hombro
+  | 'worn_as_accessory'        // accessory genérico: puesto o sostenido
+  | 'worn_as_jewelry'          // jewelry: macro, en cuerpo, o held
+  | 'displayed_as_object';     // cualquier ítem como objeto, no puesto
+
+// Mapa físico del mundo capturado desde REF0 para anclar el espacio de haul
+export interface HaulWorldMap {
+  // Elementos de arquitectura detectados en REF0
+  hasBed:          boolean;
+  bedCount:        number;     // cuántas camas (máx 1 en haul normal)
+  hasWindow:       boolean;
+  hasRack:         boolean;    // rack de ropa
+  hasMirror:       boolean;    // espejo de cuerpo entero o de pared
+  hasChair:        boolean;
+  hasDresser:      boolean;
+  hasDesk:         boolean;
+  hasOfficeFurniture: boolean; // escritorio de oficina, silla de oficina
+  // Elementos de clutter de haul presentes en REF0
+  hasShoppingBags: boolean;
+  hasCardboardBoxes: boolean;
+  // Elementos de escena
+  lightSource:     'natural_window' | 'artificial' | 'mixed' | 'unknown';
+  lightDirection:  string;
+  roomMood:        string;
+  // Superficies permitidas para desplegar ropa
+  allowedClothingSurfaces: string[];   // e.g. ['bed', 'chair', 'floor']
+  // Lista de objetos grandes que SÍ existen en REF0
+  allowedLargeFurniture: string[];
+  // Lista de objetos prohibidos (no aparecen en REF0)
+  forbiddenInventions: string[];
+  // Nivel máximo de desorden visual permitido
+  maxClutterLevel: 'minimal' | 'light' | 'medium' | 'high';
+  // Resumen en texto para inyectar en el prompt
+  worldLockSummary: string;
+}
+
 // Componentes semánticos internos de un look_completo / full_outfit.
 // Derivados del selector manual o inferidos desde el prompt/brief del usuario.
 // Permiten al planner y al prompter saber qué piezas debe preservar el modelo.
@@ -584,6 +639,18 @@ export interface PhotodumpShotDebug {
   actualPrimaryRefRouted?:  boolean;
   actualPrimaryRefKind?:    HaulResolvedKind;
   accessoryCloseupRequested?: boolean;
+  // Validadores de integridad semántica por shot
+  itemRoleValidation?: {
+    primaryItemAllowedUseModes?: HaulItemAllowedUseMode[];
+    singleGarmentConvertedToFullOutfit?: boolean;
+    avatarBaseClothingLeakDetected?:     boolean;
+    manualKindIgnored?:                  boolean;
+    inventedOutfitDetected?:             boolean;
+    brandedPackagingRisk?:               boolean;
+  };
+  // Estado del haul antes/después de este shot (para detectar duplicaciones ilógicas)
+  haulProgressStateBefore?: Record<string, HaulItemState>;
+  haulProgressStateAfter?:  Record<string, HaulItemState>;
   referenceRouting?: {
     avatarRefs:         number;
     ref0Used:           boolean;
@@ -669,6 +736,28 @@ export interface PhotodumpDebugData {
   routingWarnings?:                  string[];
   sceneFingerprintSummary?:          string;
   sceneContinuityWarnings?:          string[];
+  // Haul world map — mapa físico del mundo de REF0
+  haulWorldMap?:                     HaulWorldMap;
+  // Coverage map detallado por ítem (post-generación)
+  coverageMap?: {
+    itemId:             string;
+    manualKind:         HaulRefKind;
+    resolvedKind:       HaulResolvedKind;
+    label:              string;
+    required:           boolean;
+    allowedUseModes:    HaulItemAllowedUseMode[];
+    routedToShots:      string[];
+    coverageCount:      number;
+    coverageSatisfied:  boolean;
+    warnings:           string[];
+  }[];
+  // Warnings de validación semántica del haul
+  uncoveredRequiredItemsWarnings?:   string[];
+  overrepresentedItemsWarnings?:     string[];
+  missingAccessoryCoverageWarnings?: string[];
+  missingFootwearCoverageWarnings?:  string[];
+  inventedOutfitWarnings?:           string[];
+  brandedPackagingWarnings?:         string[];
   // Análisis visual de referencias (outfit_haul) — resultado de la llamada Gemini previa
   visualRefsAnalysis?:               VisualRefsAnalysisResult;
   count:        number;

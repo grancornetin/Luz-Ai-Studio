@@ -40,6 +40,8 @@ import {
   inferOutfitComposition,
   buildHaulManifest,
   buildHaulShotPlan,
+  buildHaulWorldMap,
+  getAllowedUseModes,
   computeFinalHaulCoverageFromShots,
   type PhotodumpShotResult,
 } from './photodumpDirectorService';
@@ -912,6 +914,50 @@ const PhotodumpModule: React.FC = () => {
         sceneContinuityWarnings: recipe === 'outfit_haul' && failed.length > 0
           ? [`${failed.length} shot(s) failed — coverage gaps possible`]
           : undefined,
+        // Haul World Map — mapa físico del mundo de REF0
+        haulWorldMap: recipe === 'outfit_haul' && ref0Analysis
+          ? buildHaulWorldMap(ref0Analysis)
+          : undefined,
+        // Coverage map detallado por ítem — incluye allowedUseModes para validación
+        coverageMap: (() => {
+          if (recipe !== 'outfit_haul' || !haulManifestDebug) return undefined;
+          const finalLedger = finalCoverage?.ledger ?? haulManifestDebug.coveragePlan.ledger;
+          return haulManifestDebug.allItems.map(it => {
+            const l = finalLedger.find(x => x.itemId === it.id);
+            const warnings: string[] = [];
+            if (!l || l.coverageStatus === 'uncovered') warnings.push('UNCOVERED — item never appeared');
+            if (l?.coverageStatus === 'support_only')   warnings.push('SUPPORT_ONLY — appeared only as background');
+            if (l?.coverageStatus === 'overexposed')    warnings.push('OVEREXPOSED — too many hero shots');
+            if (l?.coverageStatus === 'planned_not_routed') warnings.push('PLANNED_NOT_ROUTED — shot existed but ref never reached the model');
+            return {
+              itemId:            it.id,
+              manualKind:        it.manualKind,
+              resolvedKind:      it.resolvedKind,
+              label:             it.label,
+              required:          it.priority === 'required',
+              allowedUseModes:   getAllowedUseModes(it.resolvedKind),
+              routedToShots:     l?.shotIds ?? [],
+              coverageCount:     (l?.plannedHeroShots ?? 0) + (l?.plannedSupportShots ?? 0),
+              coverageSatisfied: l?.coverageStatus === 'covered',
+              warnings,
+            };
+          });
+        })(),
+        // Warnings semánticos del haul
+        uncoveredRequiredItemsWarnings: (() => {
+          const base = finalCoverage?.uncoveredRequiredItems ?? haulManifestDebug?.coveragePlan.uncoveredRequiredItems ?? [];
+          return base.length > 0 ? base.map(id => {
+            const item = haulManifestDebug?.allItems.find(it => it.id === id);
+            return `UNCOVERED_REQUIRED: ${item?.label ?? id} [${item?.resolvedKind ?? 'unknown'}] — needs at least 1 hero shot`;
+          }) : undefined;
+        })(),
+        overrepresentedItemsWarnings: (() => {
+          const base = finalCoverage?.overexposedItems ?? haulManifestDebug?.coveragePlan.overexposedItems ?? [];
+          return base.length > 0 ? base.map(id => {
+            const item = haulManifestDebug?.allItems.find(it => it.id === id);
+            return `OVEREXPOSED: ${item?.label ?? id} — 3+ hero shots while other items may be uncovered`;
+          }) : undefined;
+        })(),
         plan,
         shots:               debugShots,
       } : undefined;

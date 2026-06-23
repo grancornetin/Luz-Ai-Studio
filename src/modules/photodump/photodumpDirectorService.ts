@@ -21,6 +21,7 @@ import {
   PoseIntent, DetailKind, EnvironmentAffordance, SceneContinuityMode,
   HaulItem, HaulManifest, HaulItemKind, HaulPileState, HaulCoveragePlan, HaulRefKind,
   HaulResolvedKind, HaulCoverageRole, HaulCoverageLedgerItem, HaulOutfitComponents,
+  HaulWorldMap, HaulItemAllowedUseMode, HaulItemState,
   VisualRefsAnalysisResult,
 } from './types';
 import {
@@ -3120,6 +3121,371 @@ function inferOutfitComponents(
   };
 }
 
+// ── Haul World Map — construye mapa físico del mundo desde ref0Analysis ──────────
+// Convierte el análisis de REF0 en una estructura formal que ancla el espacio y
+// genera un bloque de instrucción estricto para cada story shot del haul.
+export function buildHaulWorldMap(ref0Analysis: any): HaulWorldMap {
+  if (!ref0Analysis) {
+    return {
+      hasBed: false, bedCount: 0, hasWindow: false, hasRack: false, hasMirror: false,
+      hasChair: false, hasDresser: false, hasDesk: false, hasOfficeFurniture: false,
+      hasShoppingBags: false, hasCardboardBoxes: false,
+      lightSource: 'unknown', lightDirection: 'ambient', roomMood: 'real interior',
+      allowedClothingSurfaces: ['bed', 'floor'], allowedLargeFurniture: [],
+      forbiddenInventions: ['rack', 'mirror', 'desk', 'office_chair', 'new_bed'],
+      maxClutterLevel: 'light',
+      worldLockSummary: 'REF0 not analyzed — apply conservative defaults: no new furniture, no new mirror, no rack, no office elements.',
+    };
+  }
+
+  try {
+    const s = ref0Analysis.spatial ?? {};
+    const l = ref0Analysis.lighting ?? {};
+    const elements: string[] = (s.elements ?? []).map((e: string) => e.toLowerCase());
+
+    const hasBed     = elements.some(e => e.includes('bed') || e.includes('cama'));
+    const bedCount   = hasBed ? 1 : 0;
+    const hasWindow  = elements.some(e => e.includes('window') || e.includes('ventana'));
+    const hasRack    = elements.some(e => e.includes('rack') || e.includes('rail') || e.includes('perchero'));
+    const hasMirror  = elements.some(e => e.includes('mirror') || e.includes('espejo'));
+    const hasChair   = elements.some(e => e.includes('chair') || e.includes('silla'));
+    const hasDresser = elements.some(e => e.includes('dresser') || e.includes('wardrobe') || e.includes('closet'));
+    const hasDesk    = elements.some(e => e.includes('desk') || e.includes('escritorio') || e.includes('table'));
+    const hasOfficeFurniture = elements.some(e =>
+      e.includes('office') || e.includes('ergonomic') || e.includes('computer') || e.includes('monitor')
+    );
+    const hasShoppingBags  = elements.some(e => e.includes('bag') || e.includes('bolsa'));
+    const hasCardboardBoxes = elements.some(e => e.includes('box') || e.includes('caja'));
+
+    const lightSource: HaulWorldMap['lightSource'] =
+      (l.primarySource ?? '').includes('window') || (l.primarySource ?? '').includes('natural') ? 'natural_window'
+      : (l.primarySource ?? '').includes('artificial') || (l.primarySource ?? '').includes('lamp') ? 'artificial'
+      : 'mixed';
+
+    const allowedSurfaces: string[] = [];
+    if (hasBed)   allowedSurfaces.push('bed');
+    if (hasChair) allowedSurfaces.push('chair');
+    allowedSurfaces.push('floor');
+
+    const allowedLargeFurniture: string[] = [];
+    if (hasBed)     allowedLargeFurniture.push('bed');
+    if (hasChair)   allowedLargeFurniture.push('chair');
+    if (hasRack)    allowedLargeFurniture.push('clothing rack');
+    if (hasMirror)  allowedLargeFurniture.push('mirror');
+    if (hasDresser) allowedLargeFurniture.push('dresser/wardrobe');
+    if (hasDesk)    allowedLargeFurniture.push('desk/table');
+
+    const forbiddenInventions: string[] = [];
+    if (!hasRack)   forbiddenInventions.push('clothing rack or garment rail');
+    if (!hasMirror) forbiddenInventions.push('full-length mirror or wall mirror');
+    if (!hasDesk)   forbiddenInventions.push('desk or writing table');
+    if (!hasOfficeFurniture) forbiddenInventions.push('office chair or ergonomic seating');
+    if (bedCount === 0) forbiddenInventions.push('any bed');
+    forbiddenInventions.push('branded shopping bags', 'retail store logos', 'new architectural elements');
+
+    const maxClutterLevel: HaulWorldMap['maxClutterLevel'] =
+      hasShoppingBags && hasCardboardBoxes ? 'medium' : hasShoppingBags ? 'light' : 'minimal';
+
+    const allowedLines = allowedLargeFurniture.length > 0
+      ? `ALLOWED furniture (present in REF0): ${allowedLargeFurniture.join(', ')}.`
+      : 'ALLOWED furniture: only what is already established in REF0.';
+    const forbiddenLines = forbiddenInventions.map(f => `  ✗ ${f}`).join('\n');
+    const surfaceLines = `Haul items may be placed on: ${allowedSurfaces.join(', ')}.`;
+
+    const worldLockSummary = `ROOM WORLD LOCK — REF0 PHYSICAL MAP:
+${allowedLines}
+${surfaceLines}
+FORBIDDEN — do NOT invent or add:
+${forbiddenLines}
+Lighting: ${lightSource === 'natural_window' ? 'natural window light — preserve direction and warmth' : lightSource}.
+Do NOT redesign, rearrange, or add to this space between shots.`;
+
+    return {
+      hasBed, bedCount, hasWindow, hasRack, hasMirror, hasChair, hasDresser,
+      hasDesk, hasOfficeFurniture, hasShoppingBags, hasCardboardBoxes,
+      lightSource, lightDirection: l.direction ?? 'ambient',
+      roomMood: s.geometry ?? 'real interior',
+      allowedClothingSurfaces: allowedSurfaces,
+      allowedLargeFurniture,
+      forbiddenInventions,
+      maxClutterLevel,
+      worldLockSummary,
+    };
+  } catch {
+    return {
+      hasBed: false, bedCount: 0, hasWindow: false, hasRack: false, hasMirror: false,
+      hasChair: false, hasDresser: false, hasDesk: false, hasOfficeFurniture: false,
+      hasShoppingBags: false, hasCardboardBoxes: false,
+      lightSource: 'unknown', lightDirection: 'ambient', roomMood: 'real interior',
+      allowedClothingSurfaces: ['bed', 'floor'], allowedLargeFurniture: [],
+      forbiddenInventions: ['rack', 'mirror', 'desk', 'office_chair'],
+      maxClutterLevel: 'light',
+      worldLockSummary: 'REF0 analysis error — apply conservative defaults: no new furniture added.',
+    };
+  }
+}
+
+// ── Haul Item Role Lock — bloque de uso permitido por ítem ────────────────────
+// Define exactamente cómo puede (y NO puede) usarse un ítem según su manualKind.
+// Esto impide que un top se convierta en vestido, un bottom en look completo, etc.
+function buildHaulItemRoleLockBlock(item: HaulItem): string {
+  const rk = item.resolvedKind;
+  const isManual = item.manualKind !== 'auto';
+  const tag = isManual ? `MANUAL TAG: ${item.manualKind.toUpperCase()}` : `AUTO-DETECTED: ${rk.toUpperCase()}`;
+
+  const rules: Record<HaulResolvedKind, string> = {
+    full_outfit: `ITEM ROLE LOCK — FULL LOOK:
+${tag}
+This reference IS a complete coordinated look. Show it exactly as designed — all pieces together.
+✓ ALLOWED: worn as a complete outfit (all visible pieces on body simultaneously)
+✓ ALLOWED: held up or displayed showing the complete composition
+✗ FORBIDDEN: breaking it apart into individual pieces and wearing only one
+✗ FORBIDDEN: adding unrelated garments to "complete" the look
+✗ FORBIDDEN: transforming it into a different garment type (e.g., treating a look as just a top)`,
+
+    mixed_set: `ITEM ROLE LOCK — MULTI-ITEM SET:
+${tag}
+This reference shows multiple products together. They may or may not form a single outfit.
+✓ ALLOWED: showing the person interacting with one or more pieces naturally
+✓ ALLOWED: displaying them as a group on a surface
+✗ FORBIDDEN: assuming all pieces must be worn simultaneously if they don't form a cohesive look
+✗ FORBIDDEN: inventing new pieces to "complete" any sub-look`,
+
+    top: `ITEM ROLE LOCK — INDIVIDUAL TOP:
+${tag}
+This is a SINGLE TOP PIECE (blouse, shirt, t-shirt, corset, camisole).
+✓ ALLOWED: worn as the featured top with a neutral bottom for context
+✓ ALLOWED: held up toward camera, laid flat, or shown as a detail
+✗ FORBIDDEN: transforming this top into a dress or full outfit
+✗ FORBIDDEN: wearing it as a skirt, bottom, or outer layer unless the reference explicitly shows it
+✗ FORBIDDEN: treating it as a complete coordinated look`,
+
+    bottom: `ITEM ROLE LOCK — INDIVIDUAL BOTTOM:
+${tag}
+This is a SINGLE BOTTOM PIECE (pants, skirt, shorts, jeans, trousers).
+✓ ALLOWED: worn as the featured bottom with a simple neutral top for context
+✓ ALLOWED: held, laid flat, or shown as detail
+✗ FORBIDDEN: transforming this bottom into a dress or top
+✗ FORBIDDEN: treating it as a complete outfit
+✗ FORBIDDEN: letting the neutral context top become the visual hero`,
+
+    dress: `ITEM ROLE LOCK — DRESS:
+${tag}
+This is a DRESS — a single main garment from shoulder (or neckline) to hem.
+✓ ALLOWED: worn as the complete garment — full silhouette visible
+✓ ALLOWED: held up or shown full length
+✗ FORBIDDEN: treating this dress as a top or combining it with another skirt/bottom
+✗ FORBIDDEN: transforming it into a different dress design
+✗ FORBIDDEN: losing the hem or skirt portion — full silhouette required`,
+
+    onepiece: `ITEM ROLE LOCK — ONE-PIECE / JUMPSUIT:
+${tag}
+This is a JUMPSUIT, BODYSUIT, or ONE-PIECE GARMENT — covers body as a single continuous piece.
+✓ ALLOWED: worn as the complete piece — top-to-bottom silhouette visible
+✓ ALLOWED: shown being put on or adjusted
+✗ FORBIDDEN: splitting it visually into top + bottom
+✗ FORBIDDEN: treating the body/torso portion as a standalone top`,
+
+    outerwear: `ITEM ROLE LOCK — OUTERWEAR / JACKET / BLAZER:
+${tag}
+This is OUTERWEAR — a jacket, blazer, coat, or cardigan worn as an outer layer.
+✓ ALLOWED: worn open over a simple neutral base
+✓ ALLOWED: worn closed, being put on, or held up
+✗ FORBIDDEN: treating this outerwear as the bottom or dress
+✗ FORBIDDEN: inventing specific garments underneath — any simple neutral base is fine
+✗ FORBIDDEN: losing the outer layer nature of this piece`,
+
+    footwear: `ITEM ROLE LOCK — STANDALONE FOOTWEAR:
+${tag}
+This is a SHOE, BOOT, SANDAL, or SNEAKER — a standalone footwear item.
+✓ ALLOWED: shown at foot level being tried on, placed on surface, held by hands, or as a close-up detail
+✗ FORBIDDEN: building a complete outfit from this shoe reference alone
+✗ FORBIDDEN: this footwear reference being treated as clothing
+✗ FORBIDDEN: inventing pants, dresses, or any garment from this shoe image`,
+
+    hosiery: `ITEM ROLE LOCK — HOSIERY / PANTYHOSE / STYLING LAYER:
+${tag}
+This is a HOSIERY or LAYERING PIECE (tights, pantyhose, leggings as underlay, stockings).
+✓ ALLOWED: shown as a styling layer on legs, visible under or with another garment
+✓ ALLOWED: shown being pulled up or adjusted at leg level
+✗ FORBIDDEN: treating hosiery as thick pants or standalone bottom
+✗ FORBIDDEN: making hosiery the dominant garment — it is a layering piece
+✗ FORBIDDEN: losing the transparent or semi-transparent leg quality if the reference shows it`,
+
+    bag: `ITEM ROLE LOCK — STANDALONE BAG / PURSE:
+${tag}
+This is a BAG — handbag, tote, clutch, crossbody, or shoulder bag.
+✓ ALLOWED: held in hand, worn on shoulder/arm, resting on surface, or shown as hardware detail
+✗ FORBIDDEN: building a full outfit around this bag reference
+✗ FORBIDDEN: treating the bag as a clothing item
+✗ FORBIDDEN: inventing garments from the bag image`,
+
+    jewelry: `ITEM ROLE LOCK — JEWELRY PIECE:
+${tag}
+This is a JEWELRY PIECE (earrings, necklace, bracelet, ring, anklet).
+✓ ALLOWED: worn on body (ear, neck, wrist, finger), held between fingers, or resting on fabric
+✓ ALLOWED: macro or semi-macro framing that makes the jewelry clearly readable
+✗ FORBIDDEN: generating a full outfit context for this shot
+✗ FORBIDDEN: replacing this jewelry with generic/invented jewelry
+✗ FORBIDDEN: the jewelry disappearing into the background
+SIZE AND SCALE: Reproduce the EXACT size, proportion, and scale shown in the reference. Do NOT upsize or downsize.`,
+
+    accessory: `ITEM ROLE LOCK — GENERIC ACCESSORY:
+${tag}
+This is a GENERIC ACCESSORY (belt, hat, glasses, scarf, cap, or similar).
+✓ ALLOWED: worn as an accessory in its natural position, or shown as a detail
+✓ ALLOWED: displayed/held clearly so it is the visual focus
+✗ FORBIDDEN: treating this accessory as a main garment
+✗ FORBIDDEN: losing the accessory behind other elements`,
+
+    unknown_visual_item: `ITEM ROLE LOCK — VISUAL ITEM (AUTO-DETECTED):
+${tag}
+The exact type was auto-detected. Inspect the reference carefully before generating.
+✓ Show it in a way consistent with what it actually IS in the reference.
+✗ FORBIDDEN: assuming it is clothing if it appears to be an accessory or product.`,
+  };
+
+  return rules[rk] ?? `ITEM ROLE LOCK: Show this item faithfully as the type indicated — do not transform it into a different category of object.`;
+}
+
+// ── Haul Anatomy Block — reglas globales de anatomía ─────────────────────────
+// Se inyecta en TODOS los story shots del haul. Previene errores de manos, pies, dedos.
+function buildHaulAnatomyBlock(): string {
+  return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🫀 ANATOMY INTEGRITY — GLOBAL HARD RULES (apply to every haul shot):
+
+ONE PERSON ONLY. Do not generate background figures.
+HANDS:   Exactly 2 hands. 5 fingers per hand. No extra hand. No fused fingers. No floating hand.
+ARMS:    Exactly 2 arms. No third arm. No extra limb.
+LEGS:    Exactly 2 legs. Both must be grounded and connected to the body.
+FEET:    Exactly 2 feet. No floating shoe. Both feet must show the same footwear type and integration.
+
+FINGER RULE: All 5 fingers must be individually distinguishable. No blob hands. No extra fingers. No missing finger.
+FOOT/BOOT RULE: If legwear meets footwear, BOTH legs must show identical integration — no half-tuck, no shaft-through-fabric.
+EARRING RULE: If earrings appear, both ears must show the SAME earring design. No mismatched earrings. No deformed ear.
+BODY PROPORTIONS: Do not elongate, compress, or distort any body part. Maintain natural human proportions.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+}
+
+// ── Haul Progress State — estado lógico de los ítems en este shot ────────────
+// Genera el bloque de texto que le dice al modelo qué ítems ya fueron mostrados,
+// cuál es el protagonista actual, y cuáles aún están pendientes.
+// Evita que una prenda aparezca "puesta y a la vez intacta sobre la cama" en el mismo shot.
+function buildHaulProgressBlock(
+  shotKey:   string,
+  manifest:  HaulManifest,
+  shotIndex: number,   // 0-based entre los story shots
+  totalShots: number,
+): string {
+  if (!manifest) return '';
+
+  const allItems = manifest.allItems;
+  if (allItems.length === 0) return '';
+
+  // Detectar el ítem primario de este shot
+  let primaryId: string | undefined;
+  if (shotKey.startsWith('HAUL_TRY_ON_') || shotKey.startsWith('HAUL_SELECTION') ||
+      shotKey.startsWith('HAUL_ADJUSTING_') || shotKey.startsWith('HAUL_STYLED_')) {
+    const numStr = shotKey.replace(/^HAUL_(TRY_ON|ADJUSTING|STYLED)_/, '');
+    const idx    = shotKey === 'HAUL_SELECTION'
+      ? manifest.outfitItems.length - 1
+      : Math.max(0, parseInt(numStr, 10) - 1);
+    primaryId = manifest.outfitItems[idx]?.id ?? manifest.tryOnItems[idx]?.id;
+  } else if (shotKey.startsWith('HAUL_FOOTWEAR_')) {
+    const idx = Math.max(0, parseInt(shotKey.replace('HAUL_FOOTWEAR_', ''), 10) - 1);
+    primaryId = manifest.footwearItems[idx]?.id;
+  } else if (shotKey.startsWith('HAUL_BAG_')) {
+    const idx = Math.max(0, parseInt(shotKey.replace('HAUL_BAG_', ''), 10) - 1);
+    primaryId = manifest.accessoryItems.filter(it => it.kind === 'bag')[idx]?.id;
+  } else if (shotKey.startsWith('HAUL_JEWELRY_')) {
+    const idx = Math.max(0, parseInt(shotKey.replace('HAUL_JEWELRY_', ''), 10) - 1);
+    primaryId = manifest.accessoryItems.filter(it => it.kind === 'jewelry')[idx]?.id;
+  } else if (shotKey.startsWith('HAUL_ACCESSORY_CLOSEUP_')) {
+    const idx = Math.max(0, parseInt(shotKey.replace('HAUL_ACCESSORY_CLOSEUP_', ''), 10) - 1);
+    primaryId = manifest.accessoryItems.filter(it => it.kind !== 'bag' && it.kind !== 'jewelry')[idx]?.id;
+  }
+
+  // Clasificar ítems en estados para este momento del haul
+  // Heurística: ítems cuyo shot key ya pasó en el arc = tried_done
+  // El primario = currently_worn / featured_closeup
+  // El resto = untried
+  const isTryOnShot = shotKey.startsWith('HAUL_TRY_ON_') || shotKey.startsWith('HAUL_SELECTION') ||
+                      shotKey.startsWith('HAUL_ADJUSTING_') || shotKey.startsWith('HAUL_STYLED_');
+  const isDetailShot = shotKey.startsWith('HAUL_FOOTWEAR_') || shotKey.startsWith('HAUL_BAG_') ||
+                       shotKey.startsWith('HAUL_JEWELRY_') || shotKey.startsWith('HAUL_ACCESSORY_CLOSEUP_');
+
+  const wornItems:    HaulItem[] = [];
+  const untried:      HaulItem[] = [];
+  const triedDone:    HaulItem[] = [];
+
+  allItems.forEach(it => {
+    if (it.id === primaryId) {
+      wornItems.push(it);
+    } else if (shotIndex > 0 && manifest.coveragePlan.ledger.find(l => l.itemId === it.id)?.plannedHeroShots === 0) {
+      untried.push(it);
+    } else {
+      // Approximate: items before current position are tried_done
+      const itemIdx = manifest.allItems.indexOf(it);
+      if (itemIdx < shotIndex) {
+        triedDone.push(it);
+      } else {
+        untried.push(it);
+      }
+    }
+  });
+
+  const lines: string[] = ['🔄 HAUL PROGRESS STATE — ITEM STATES FOR THIS SHOT:'];
+
+  if (wornItems.length > 0) {
+    const state = isTryOnShot ? 'CURRENTLY WORN (protagonist of this shot)' : 'FEATURED AS OBJECT (protagonist of this shot)';
+    lines.push(`  ${state}:`);
+    wornItems.forEach(it => lines.push(`    → ${it.label} [${it.resolvedKind}]`));
+    if (isTryOnShot) {
+      lines.push(`  RULE: This item IS on the body right now. Do NOT show it simultaneously as an intact unworn piece on the bed/chair as the main subject. The WORN version is the truth of this shot.`);
+    } else if (isDetailShot) {
+      lines.push(`  RULE: Show this item as an OBJECT (not worn). Macro/intimate framing. It is the subject, not a body accessory in a wide shot.`);
+    }
+  }
+
+  if (triedDone.length > 0) {
+    lines.push(`  ALREADY SHOWN (tried or featured in earlier shots):`);
+    triedDone.forEach(it => lines.push(`    • ${it.label} — set aside on bed/chair in background, NOT the hero`));
+    lines.push(`  RULE: These items MAY appear as background haul clutter, but they must NOT compete for visual attention with the current hero item.`);
+  }
+
+  if (untried.length > 0) {
+    lines.push(`  NOT YET FEATURED (upcoming items — not yet shown):`);
+    untried.forEach(it => lines.push(`    ○ ${it.label}`));
+    lines.push(`  RULE: These items should NOT appear as clearly featured pieces yet — they may be in bags or off-frame.`);
+  }
+
+  const arcLabel = shotIndex <= Math.floor(totalShots * 0.33) ? 'EARLY'
+    : shotIndex <= Math.floor(totalShots * 0.66) ? 'MIDDLE' : 'LATE';
+  lines.push(`  Arc position: ${arcLabel} (shot ${shotIndex + 1} of ${totalShots}).`);
+
+  return lines.join('\n');
+}
+
+// ── Allowed use modes por resolvedKind — para el debug coverageMap ────────────
+export function getAllowedUseModes(rk: HaulResolvedKind): HaulItemAllowedUseMode[] {
+  const map: Record<HaulResolvedKind, HaulItemAllowedUseMode[]> = {
+    full_outfit:         ['worn_as_complete_look', 'displayed_as_object'],
+    mixed_set:           ['displayed_as_object', 'worn_as_complete_look', 'worn_as_garment_layer'],
+    top:                 ['worn_as_garment_layer', 'displayed_as_object'],
+    bottom:              ['worn_as_garment_layer', 'displayed_as_object'],
+    dress:               ['worn_as_dress', 'displayed_as_object'],
+    onepiece:            ['worn_as_onepiece', 'displayed_as_object'],
+    outerwear:           ['worn_as_garment_layer', 'displayed_as_object'],
+    footwear:            ['worn_on_feet', 'displayed_as_object'],
+    hosiery:             ['worn_as_styling_layer', 'displayed_as_object'],
+    bag:                 ['held_or_carried', 'displayed_as_object'],
+    jewelry:             ['worn_as_jewelry', 'displayed_as_object'],
+    accessory:           ['worn_as_accessory', 'displayed_as_object'],
+    unknown_visual_item: ['displayed_as_object'],
+  };
+  return map[rk] ?? ['displayed_as_object'];
+}
+
 // Genera el bloque de interpretación del ítem para el prompt final
 function buildHaulItemTypeBlock(item: HaulItem): string {
   const isManual = item.manualKind !== 'auto';
@@ -5214,11 +5580,17 @@ export async function generatePhotodumpShot(
       if (jewRef) refsToPass.push(jewRef);
 
     } else if (shotKey.startsWith('HAUL_SETUP_')) {
-      // setup shot: avatar + la prenda correspondiente como objeto
+      // setup shot: avatar + la prenda específica del setup como objeto
       const setupIdx = Math.max(0, parseInt(shotKey.replace('HAUL_SETUP_', ''), 10) - 1);
       if (refs.avatarRef) refsToPass.push(refs.avatarRef);
-      // El ítem del setup corresponde a tryOnIndex en ese momento — usamos subset de 3 como fallback
-      allOutfits.slice(0, 3).forEach(r => refsToPass.push(r));
+      const mForSetup = haulManifest ?? buildHaulManifest(refs, 20);
+      const setupItem = mForSetup.outfitItems[setupIdx] ?? mForSetup.tryOnItems[setupIdx];
+      if (setupItem?.refUrl) {
+        refsToPass.push(setupItem.refUrl);
+      } else {
+        // fallback: subset de 3 prendas si no se puede resolver el ítem específico
+        allOutfits.slice(0, 3).forEach(r => refsToPass.push(r));
+      }
 
     } else if (shotKey.startsWith('HAUL_STYLED_')) {
       // styled result: avatar x2 + misma prenda del try-on correspondiente
@@ -5439,7 +5811,17 @@ This shot showcases the piece itself as part of the haul/outfit story.`
       haulActiveItem = m.outfitItems[idx] ?? m.tryOnItems[idx];
     }
   }
-  const haulItemTypeBlock = haulActiveItem ? buildHaulItemTypeBlock(haulActiveItem) : '';
+  const haulItemTypeBlock     = haulActiveItem ? buildHaulItemTypeBlock(haulActiveItem) : '';
+  const haulItemRoleLockBlock = recipe === 'outfit_haul' && haulActiveItem
+    ? buildHaulItemRoleLockBlock(haulActiveItem)
+    : '';
+  const haulAnatomyBlock      = recipe === 'outfit_haul' ? buildHaulAnatomyBlock() : '';
+  const haulProgressBlock     = recipe === 'outfit_haul' && haulManifest
+    ? buildHaulProgressBlock(shotKey_, haulManifest, shot.arcPosition - 1, totalShots)
+    : '';
+  const haulWorldMapBlock = recipe === 'outfit_haul' && ref0Analysis
+    ? buildHaulWorldMap(ref0Analysis).worldLockSummary
+    : '';
 
   // Instrucción de outfit específica para este shot
   const shotOutfitInstruction = isOutfitShot
@@ -5669,6 +6051,14 @@ Use the reference to understand the piece exactly, then show the person wearing 
 One garment ref = one shot's piece. Do not mix garment refs across shots.
 ONE person maximum in any frame. Any background figure is a generation error.
 HAUL CONTEXT: ${shot.purpose}
+
+${haulWorldMapBlock}
+
+${haulItemRoleLockBlock}
+
+${haulProgressBlock}
+
+${haulAnatomyBlock}
 
 NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${shot.role}.`
       : isOutfitShot
