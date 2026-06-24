@@ -123,10 +123,28 @@ function isCommerciallyRelevant(item, normalizedPrompt) {
 // no por keywords sueltas.
 // ══════════════════════════════════════════════════════════════════════════════
 
+// Señales fuertes de que el sujeto principal es un OBJETO, no una persona.
+// Si el prompt contiene cualquiera de estas, nunca puede ser avatar/fashion/outfit.
+const PRODUCT_SIGNALS = [
+  'product shot','product photo','product image','product render','product photography',
+  'packaging','bottle','can','jar','skincare product','cosmetic product','ecommerce',
+  'mockup','label design','supplement','perfume bottle','spray bottle','container',
+  'serum bottle','cream jar','lipstick','mascara wand','foundation bottle',
+  'product on surface','product on table','product floating','product levitating',
+];
+
+function hasProductSignal(p) {
+  return PRODUCT_SIGNALS.some(s => p.includes(s));
+}
+
 function detectCategory(item, prompt) {
   const cats = Array.isArray(item.categories)
     ? item.categories.join(' ').toLowerCase() : '';
   const p = `${cats} ${prompt}`.toLowerCase();
+
+  // Guardián: si hay señal clara de producto, nunca puede ser avatar/fashion/outfit.
+  // Esto previene que "close-up of perfume bottle" se clasifique como avatar.
+  const isProduct = hasProductSignal(p) || cats.includes('product');
 
   // 1. POSTER — diseño gráfico, tipografía, layout estructurado
   if (/\b(poster|flyer|banner|typograph|graphic design|album art|movie poster|concert poster|headline|layout|cover design)\b/.test(p))
@@ -137,7 +155,7 @@ function detectCategory(item, prompt) {
     return 'branding';
 
   // 3. PRODUCT — objeto/producto como sujeto principal
-  if (/\b(product shot|product photo|product image|product render|packaging|bottle|can|jar|skincare product|cosmetic product|ecommerce|mockup|label design|supplement|perfume bottle|spray bottle)\b/.test(p))
+  if (isProduct)
     return 'product';
 
   // 4. EDITORIAL — composición limpia, fondo minimal/degradado, estética de revista
@@ -158,6 +176,7 @@ function detectCategory(item, prompt) {
     return 'fashion';
 
   // 7. AVATAR — cara o identidad como foco principal (close-up, retrato, selfie)
+  // Solo si NO hay señal de producto (ya garantizado por el guardián arriba)
   if (/\b(portrait|close.up|face.*focus|headshot|beauty shot|skin texture|extreme close.up|macro.*face|eyes.*focus)\b/.test(p))
     return 'avatar';
   if (/\b(model photo|portrait session|editorial portrait|studio portrait|selfie)\b/.test(p))
@@ -168,7 +187,6 @@ function detectCategory(item, prompt) {
     return 'ugc';
 
   // Fallbacks desde categorías del JSON original
-  if (cats.includes('product'))    return 'product';
   if (cats.includes('fashion'))    return 'fashion';
   if (cats.includes('food'))       return 'food';
   if (cats.includes('photograph')) return 'avatar';

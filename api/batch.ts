@@ -286,7 +286,7 @@ async function startImageGeneration(baseUrl: string, prompt: string): Promise<st
     method: 'POST', headers,
     body: JSON.stringify({
       action: 'generateImageAsync',
-      payload: { prompt, aspectRatio: '3:4', modelId: 'seedream', module: 'batch_prompt_importer' },
+      payload: { prompt, aspectRatio: '3:4', modelId: 'gemini', module: 'batch_prompt_importer' },
     }),
   });
   if (!res.ok) throw new Error(`Image start failed: ${res.status} ${await res.text()}`);

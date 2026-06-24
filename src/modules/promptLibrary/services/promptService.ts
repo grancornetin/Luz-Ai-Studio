@@ -39,6 +39,7 @@ import {
 } from 'firebase/firestore';
 import { db, storage } from '../../../firebase';
 import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage';
+import { compressImageForGallery } from '../../../utils/imageUtils';
 import {
   Prompt,
   PromptDNA,
@@ -124,17 +125,15 @@ async function uploadPromptImageIfNeeded(
   // Ya es una URL remota → nada que hacer
   if (!imageUrl || !imageUrl.startsWith('data:')) return imageUrl;
 
-  // Parsear el base64
-  const match = imageUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s);
-  if (!match) throw new Error('Invalid base64 image format');
+  // Comprimir a tamaño de galería (600px, 65%) antes de subir a Storage
+  // Reduce el peso hasta 4x sin diferencia visible en pantalla
+  const compressed = await compressImageForGallery(imageUrl);
 
-  const mimeType  = match[1];                         // e.g. "image/jpeg"
-  const ext       = mimeType.split('/')[1] || 'jpg'; // e.g. "jpeg"
-  const filename  = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-  const path      = `globalPrompts/${authorId}/${filename}`;
+  const filename = `${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+  const path     = `globalPrompts/${authorId}/${filename}`;
 
   const imgRef = storageRef(storage, path);
-  await uploadString(imgRef, imageUrl, 'data_url');
+  await uploadString(imgRef, compressed, 'data_url');
   return await getDownloadURL(imgRef);
 }
 

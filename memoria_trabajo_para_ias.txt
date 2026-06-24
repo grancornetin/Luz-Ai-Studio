@@ -37,7 +37,7 @@ Eso me complica, porque no sé ubicar con seguridad las partes internas del arch
 
 La forma correcta de ayudarme es:
 
-### Entregar archivos completos, listos para copiar y pegar
+### Entregar archivos completos, listos para copiar y pegar siempre que no tengas acceso a mi codigo:
 
 Si hay que modificar un archivo, entrégame el archivo completo corregido.
 
@@ -60,6 +60,8 @@ Luego yo podré:
 Si una solución requiere modificar 3 archivos, entrégame los 3 archivos completos, cada uno con su ruta clara.
 
 ---
+
+Si tienes acceso a mi codigo y la capacidad para hacer los cambios tu mismo, hazlos y solo explicame al final lo que hiciste.
 
 ## 3. Cómo debes explicarme las cosas técnicas
 

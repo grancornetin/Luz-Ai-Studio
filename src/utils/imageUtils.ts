@@ -21,6 +21,10 @@
 const MAX_WIDTH = 1024;
 const JPEG_QUALITY = 0.82;
 
+// Parámetros para galería pública — imágenes livianas para Storage
+const GALLERY_MAX_WIDTH = 600;
+const GALLERY_JPEG_QUALITY = 0.65;
+
 /**
  * Comprime una imagen (data URL o base64 puro) usando Canvas.
  * - Redimensiona si el ancho supera MAX_WIDTH (mantiene proporción).
@@ -80,6 +84,16 @@ export async function compressImageForUpload(
       img.src = `data:image/jpeg;base64,${image}`;
     }
   });
+}
+
+/**
+ * Comprime una imagen para la galería pública.
+ * Usa parámetros más agresivos (600px, 65%) porque en galería
+ * las imágenes se ven pequeñas en pantalla. Reduce el peso en
+ * Storage hasta 4x comparado con la compresión estándar.
+ */
+export async function compressImageForGallery(image: string): Promise<string> {
+  return compressImageForUpload(image, GALLERY_MAX_WIDTH, GALLERY_JPEG_QUALITY);
 }
 
 /**
