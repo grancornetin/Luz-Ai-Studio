@@ -13,6 +13,7 @@ import { Client as QStashClient } from '@upstash/qstash';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { getApps } from 'firebase-admin/app';
+import { GoogleGenAI } from '@google/genai';
 import { adminDb } from '../src/server/firebaseAdmin.js';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -275,6 +276,48 @@ function generateTags(prompt: string, category: string): string[] {
   return Array.from(tags).slice(0, 6);
 }
 
+// ── Generación de título con Gemini ──────────────────────────────────────────
+
+function getGenAIClient(): GoogleGenAI {
+  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '';
+  const credentials = JSON.parse(raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf-8'));
+  return new GoogleGenAI({
+    vertexai: true,
+    project: process.env.GCP_PROJECT_ID!,
+    location: process.env.GCP_LOCATION || 'us-central1',
+    googleAuthOptions: { credentials },
+  });
+}
+
+async function generateTitleWithGemini(prompt: string, category: string): Promise<string> {
+  try {
+    const ai = getGenAIClient();
+    const systemPrompt = `You are a creative director naming images for a professional AI image gallery.
+Given a generation prompt and category, create a SHORT, evocative title (4-7 words max).
+Rules:
+- NO technical words (ultra detailed, sharp focus, professional lighting, no artifacts)
+- NO generic words (beautiful, stunning, amazing, perfect)
+- Focus on the SUBJECT and MOOD of the image
+- Title case format
+- Return ONLY the title, nothing else`;
+
+    const userPrompt = `Category: ${category}\nPrompt: ${prompt.slice(0, 400)}`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+      config: { systemInstruction: systemPrompt, maxOutputTokens: 30, temperature: 0.7 },
+    });
+
+    const title = response.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+    // Validar que sea razonable: entre 3 y 80 caracteres
+    if (title.length >= 3 && title.length <= 80) return title;
+  } catch {
+    // Si falla Gemini, usar el fallback local sin interrumpir el batch
+  }
+  return generateTitle(prompt, category);
+}
+
 // ── Generación de imagen ──────────────────────────────────────────────────────
 
 async function startImageGeneration(baseUrl: string, prompt: string): Promise<string> {
@@ -388,7 +431,7 @@ async function handleWorker(req: VercelRequest, res: VercelResponse) {
   const baseUrl          = getBaseUrl(req);
   const normalizedPrompt = normalizePrompt(item.rawPrompt);
   const category         = item.category || 'other';
-  const title            = generateTitle(normalizedPrompt, category);
+  const title            = await generateTitleWithGemini(normalizedPrompt, category);
   const tags             = (Array.isArray(item.preparedTags) && item.preparedTags.length > 0)
     ? item.preparedTags
     : generateTags(normalizedPrompt, category);
