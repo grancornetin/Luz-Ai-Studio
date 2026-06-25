@@ -513,7 +513,7 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
         onClick={onClose}
       >
         <div
-          className="bg-white w-full max-w-6xl md:max-h-[92vh] rounded-none md:rounded-[48px] overflow-hidden flex flex-col md:flex-row relative shadow-2xl min-h-screen md:min-h-0"
+          className="bg-white w-full max-w-6xl md:h-[92vh] rounded-none md:rounded-[48px] overflow-hidden flex flex-col md:flex-row relative shadow-2xl min-h-screen md:min-h-0"
           onClick={e => e.stopPropagation()}
         >
 
@@ -526,7 +526,7 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
           </button>
 
           {/* ════════════════ LEFT — IMAGE PANEL ════════════ */}
-          <div className="md:w-[45%] h-[55vw] md:h-full relative bg-slate-900 flex-shrink-0">
+          <div className="md:w-[45%] h-[55vw] md:h-full relative bg-slate-900 flex-shrink-0 md:sticky md:top-0">
 
             {/* MAIN IMAGE */}
             <div className="relative w-full h-full overflow-hidden">
@@ -600,10 +600,10 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
           </div>
 
           {/* ════════════════ RIGHT — CONTENT ════════════════ */}
-          <div className="md:w-[55%] h-full flex flex-col overflow-hidden">
+          <div className="md:w-[55%] flex flex-col md:overflow-y-auto md:h-full">
 
             {/* TOP BAR */}
-            <div className="flex items-start justify-between gap-4 px-8 pt-8 pb-4 flex-shrink-0 border-b border-slate-100">
+            <div className="flex items-start justify-between gap-4 px-8 pt-8 pb-4 border-b border-slate-100 sticky top-0 bg-white z-10">
 
               {/* AUTHOR + TITLE */}
               <div className="min-w-0 flex-1">
@@ -643,7 +643,7 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
             </div>
 
             {/* ACTION BAR */}
-            <div className="flex items-center gap-2 px-8 py-3 flex-shrink-0 border-b border-slate-100">
+            <div className="flex items-center gap-2 px-8 py-3 border-b border-slate-100 sticky top-[73px] bg-white z-10">
 
               {/* LIKE */}
               <button
@@ -719,7 +719,7 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
             </div>
 
             {/* TAB SWITCHER: Details / Comments */}
-            <div className="flex px-8 pt-4 gap-6 flex-shrink-0 border-b border-slate-100">
+            <div className="flex px-8 pt-4 gap-6 border-b border-slate-100 sticky top-[121px] bg-white z-10">
               {/* Detalles: si no está revelado, sólo clickeable para abrir reveal modal */}
               <button
                 onClick={() => {
@@ -755,7 +755,7 @@ const PromptDetailModal: React.FC<PromptDetailModalProps> = ({
             </div>
 
             {/* SCROLLABLE CONTENT */}
-            <div className="flex-1 overflow-y-auto px-8 py-6 space-y-8">
+            <div className="flex-1 px-8 py-6 space-y-8">
 
               {activeRightTab === 'details' && (
                 <>

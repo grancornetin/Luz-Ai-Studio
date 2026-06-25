@@ -122,41 +122,53 @@ async function processGenerationJob(jobId: string, parts: any[]): Promise<void> 
   job.updatedAt = Date.now();
   await saveJob(job);
 
-  // Solo Flash — sin fallback a Pro para controlar costos.
-  const MODEL    = 'gemini-3.1-flash-image-preview';
-  const ai       = getGenAIClient('global');
+  const MODELS = [
+    { name: 'gemini-3.1-flash-image-preview', location: 'global' },
+    { name: 'gemini-3-pro-image-preview',      location: 'global' },
+  ];
 
-  try {
-    console.log(`[Worker Job ${jobId}] Using ${MODEL}`);
-    const response = await ai.models.generateContent({
-      model:    MODEL,
-      contents: [{ role: 'user', parts }],
-      config:   { responseModalities: ['TEXT', 'IMAGE'] },
-    });
+  let lastError = 'Unknown error';
 
-    for (const candidate of response.candidates || []) {
-      for (const part of candidate.content?.parts || []) {
-        if (part.inlineData?.data) {
-          const mime = part.inlineData.mimeType || 'image/png';
-          job.status    = 'completed';
-          job.result    = `data:${mime};base64,${part.inlineData.data}`;
-          job.updatedAt = Date.now();
-          await saveJob(job);
-          console.log(`[Worker Job ${jobId}] Completed`);
-          await persistJobOutcome(job, true);
-          return;
+  for (const model of MODELS) {
+    try {
+      console.log(`[Worker Job ${jobId}] Trying ${model.name}`);
+      const ai = getGenAIClient(model.location);
+      const response = await ai.models.generateContent({
+        model:    model.name,
+        contents: [{ role: 'user', parts }],
+        config:   { responseModalities: ['TEXT', 'IMAGE'] },
+      });
+
+      for (const candidate of response.candidates || []) {
+        for (const part of candidate.content?.parts || []) {
+          if (part.inlineData?.data) {
+            const mime = part.inlineData.mimeType || 'image/png';
+            job.status    = 'completed';
+            job.result    = `data:${mime};base64,${part.inlineData.data}`;
+            job.updatedAt = Date.now();
+            await saveJob(job);
+            console.log(`[Worker Job ${jobId}] Completed with ${model.name}`);
+            await persistJobOutcome(job, true);
+            return;
+          }
         }
       }
+      lastError = `${model.name} returned no image`;
+      console.warn(`[Worker Job ${jobId}] ${lastError}`);
+    } catch (e: any) {
+      lastError = e.message || `${model.name} failed`;
+      console.warn(`[Worker Job ${jobId}] ${model.name} failed: ${lastError}`);
+      // Small delay before trying next model
+      await new Promise(r => setTimeout(r, 2000));
     }
-    throw new Error('Model returned no image');
-  } catch (e: any) {
-    job.status    = 'failed';
-    job.error     = e.message || 'Flash model failed';
-    job.updatedAt = Date.now();
-    await saveJob(job);
-    console.error(`[Worker Job ${jobId}] Failed: ${e.message}`);
-    await persistJobOutcome(job, false);
   }
+
+  job.status    = 'failed';
+  job.error     = lastError;
+  job.updatedAt = Date.now();
+  await saveJob(job);
+  console.error(`[Worker Job ${jobId}] All models failed. Last error: ${lastError}`);
+  await persistJobOutcome(job, false);
 }
 
 // ─── Handler principal ────────────────────────────────────────────────────────

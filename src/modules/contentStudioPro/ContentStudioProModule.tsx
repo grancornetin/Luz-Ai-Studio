@@ -64,8 +64,8 @@ const MAX_BATCH_SIZE = 5;
 const MIN_BATCH_SIZE = 2;
 
 // Reintentos automáticos
-const AUTO_RETRY_ATTEMPTS = 1;   // reducido de 3 → 1 para evitar 429 por reintentos en cadena
-const AUTO_RETRY_DELAY_MS = 3000; // aumentado a 3s para dar tiempo a que Gemini se recupere
+const AUTO_RETRY_ATTEMPTS = 2;   // 2 intentos: el parallelismo ya se redujo a lotes de 2
+const AUTO_RETRY_DELAY_MS = 5000; // 5s entre reintentos internos para dar tiempo a Gemini
 
 interface BatchSession {
   id: string;
@@ -651,41 +651,54 @@ const ContentStudioProModule: React.FC = () => {
       moduleLabel: `Content Studio (${FOCUS_LABELS[focus].split(' / ')[0]})`,
     } : undefined;
 
-    const shotPromises = updatedShots.map(async (shot, idx) => {
-      updateShotStatus(shot.key, 'processing');
+    // Procesar shots en lotes de 2 con pausa entre lotes para evitar 429 de Gemini.
+    const BATCH_SIZE = 2;
+    const BATCH_DELAY_MS = 4000;
 
-      try {
-        const url = await generateShotWithAutoRetry(
-          producingSet,
-          shot,
-          idx + 1,                  // shotIndex en la notificación (master fue 0)
-          totalShotsForSession,
-          useProduct,
-          focusRef,
-          sessionPlan,
-          (attempt) => {
-            updateShotStatus(shot.key, 'retrying', undefined, undefined, attempt - 1);
-          },
-          sessionParamsForShots,
-        );
+    for (let batchStart = 0; batchStart < updatedShots.length; batchStart += BATCH_SIZE) {
+      const batch = updatedShots.slice(batchStart, batchStart + BATCH_SIZE);
 
-        updateShotStatus(shot.key, 'completed', url);
-        addProgressShot(url, idx);
-        // avanza al siguiente paso de shot (idx+2 porque el paso 0 es "Analizando")
-        advanceProgress(idx + 2);
+      const batchPromises = batch.map(async (shot, batchIdx) => {
+        const idx = batchStart + batchIdx;
+        updateShotStatus(shot.key, 'processing');
 
-        saveToHistorySafe({
-          imageUrl: url,
-          moduleLabel: `UGC Pro (${FOCUS_LABELS[focus].split(' / ')[0]} - ${shot.name})`,
-          promptText: `Shot ${shot.key} for ${focus}`,
-        });
+        try {
+          const url = await generateShotWithAutoRetry(
+            producingSet,
+            shot,
+            idx + 1,
+            totalShotsForSession,
+            useProduct,
+            focusRef,
+            sessionPlan,
+            (attempt) => {
+              updateShotStatus(shot.key, 'retrying', undefined, undefined, attempt - 1);
+            },
+            sessionParamsForShots,
+          );
 
-      } catch (e: any) {
-        updateShotStatus(shot.key, 'failed', undefined, e?.message || 'Error desconocido');
+          updateShotStatus(shot.key, 'completed', url);
+          addProgressShot(url, idx);
+          advanceProgress(idx + 2);
+
+          saveToHistorySafe({
+            imageUrl: url,
+            moduleLabel: `UGC Pro (${FOCUS_LABELS[focus].split(' / ')[0]} - ${shot.name})`,
+            promptText: `Shot ${shot.key} for ${focus}`,
+          });
+
+        } catch (e: any) {
+          updateShotStatus(shot.key, 'failed', undefined, e?.message || 'Error desconocido');
+        }
+      });
+
+      await Promise.all(batchPromises);
+
+      // Pausa entre lotes para no saturar Gemini, excepto después del último lote
+      if (batchStart + BATCH_SIZE < updatedShots.length) {
+        await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
       }
-    });
-
-    await Promise.all(shotPromises);
+    }
 
     // Paso final "Finalizando"
     advanceProgress(updatedShots.length + 1);
@@ -782,7 +795,9 @@ const ContentStudioProModule: React.FC = () => {
     };
     const retryTotal = failedShots.length;
 
-    const retryPromises = failedShots.map(async (shot, retryIdx) => {
+    // Reintentar de a 1 shot por vez para no acumular 429s
+    for (let retryIdx = 0; retryIdx < failedShots.length; retryIdx++) {
+      const shot = failedShots[retryIdx];
       const idx = updatedShots.findIndex(s => s.key === shot.key);
       updateShotStatus(shot.key, 'processing');
 
@@ -790,12 +805,10 @@ const ContentStudioProModule: React.FC = () => {
         const url = await generateShotWithAutoRetry(
           targetSet,
           shot,
-          retryIdx,                   // posición en la nueva notificación de retry
+          retryIdx,
           retryTotal,
           useProduct,
           focusRef,
-          // Usar el sessionPlan guardado en el set — garantiza consistencia incluso si el
-          // state se perdió por recarga o retorno desde notificación
           targetSet.sessionPlan ?? sessionPlan,
           (attempt) => {
             updateShotStatus(shot.key, 'retrying', undefined, undefined, attempt - 1);
@@ -804,7 +817,7 @@ const ContentStudioProModule: React.FC = () => {
         );
         updateShotStatus(shot.key, 'completed', url);
         addProgressShot(url, idx);
-        advanceProgress(retryIdx + 2); // 0=init, 1=first shot, ...
+        advanceProgress(retryIdx + 2);
 
         saveToHistorySafe({
           imageUrl: url,
@@ -815,9 +828,12 @@ const ContentStudioProModule: React.FC = () => {
       } catch (e: any) {
         updateShotStatus(shot.key, 'failed', undefined, e?.message || 'Error desconocido');
       }
-    });
 
-    await Promise.all(retryPromises);
+      // Pausa entre reintentos para no saturar Gemini
+      if (retryIdx < failedShots.length - 1) {
+        await new Promise(r => setTimeout(r, 4000));
+      }
+    }
     stopProgress();
 
     const finalSet = { ...targetSet, shots: updatedShots };
