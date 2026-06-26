@@ -73,14 +73,6 @@ const MAX_RENDER_ATTEMPTS = 1 + RENDER_RETRY_DELAYS_MS.length;
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-const formatDelay = (ms: number) => {
-  const seconds = Math.ceil(ms / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const rest = seconds % 60;
-  return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
-};
-
 const shouldRetryRenderError = (error: unknown) => {
   const appError = parseErrorCode(error);
   return [
@@ -251,7 +243,7 @@ const OutfitExtractorModule: React.FC = () => {
     for (let attempt = 1; attempt <= MAX_RENDER_ATTEMPTS; attempt++) {
       item.renderAttempts = attempt;
       item.lastError = null;
-      setLoadingMsg(`Generando ${item.name} (intento ${attempt}/${MAX_RENDER_ATTEMPTS})...`);
+      setLoadingMsg(`Generando ${item.name}...`);
 
       try {
         const url = await outfitService.generateItemRender(
@@ -293,7 +285,7 @@ const OutfitExtractorModule: React.FC = () => {
         if (!canRetry) break;
 
         const delay = (RENDER_RETRY_DELAYS_MS[attempt - 1] ?? RENDER_BATCH_DELAY_MS) + (batchPosition * RENDER_RETRY_STAGGER_MS);
-        setLoadingMsg(`${item.name} recibio limite de API. Reintentamos en ${formatDelay(delay)}...`);
+        setLoadingMsg(`Seguimos preparando ${item.name}...`);
         await sleep(delay);
       }
     }
@@ -333,7 +325,7 @@ const OutfitExtractorModule: React.FC = () => {
       const batchCount = Math.ceil(totalToRender / RENDER_BATCH_SIZE);
 
       if (options.initialDelayMs && options.initialDelayMs > 0) {
-        setLoadingMsg(`Pausa anti-429: esperamos ${formatDelay(options.initialDelayMs)} antes de reintentar.`);
+        setLoadingMsg('Preparando tus renders...');
         await sleep(options.initialDelayMs);
       }
 
@@ -342,7 +334,7 @@ const OutfitExtractorModule: React.FC = () => {
         const batch = renderItems.slice(batchStart, batchStart + RENDER_BATCH_SIZE);
         const names = batch.map(item => item.name).join(' + ');
 
-        setLoadingMsg(`Generando lote ${batchIndex + 1}/${batchCount}: ${names}`);
+        setLoadingMsg(`Generando ${names}...`);
         batch.forEach(item => {
           item.status = 'generating';
           item.lastError = null;
@@ -357,7 +349,7 @@ const OutfitExtractorModule: React.FC = () => {
 
         const hasMoreBatches = batchIndex < batchCount - 1;
         if (hasMoreBatches) {
-          setLoadingMsg(`Lote ${batchIndex + 1} listo. Pausa anti-429 de ${formatDelay(RENDER_BATCH_DELAY_MS)} antes del siguiente lote.`);
+          setLoadingMsg('Seguimos preparando tus renders...');
           await sleep(RENDER_BATCH_DELAY_MS);
         }
       }
@@ -821,9 +813,6 @@ const OutfitExtractorModule: React.FC = () => {
                         </div>
                       )}
 
-                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5 text-[11px] text-emerald-900 leading-[1.55]">
-                        <strong>Sin sorpresas.</strong> Las prendas fallidas se reintentan con pausa anti-429 sin costo adicional.
-                      </div>
                     </div>
                   )}
 
@@ -839,7 +828,7 @@ const OutfitExtractorModule: React.FC = () => {
                       {failedSelectedCount > 0 && (
                         <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-[11px] text-amber-900 space-y-2">
                           <p>
-                            <strong>{failedSelectedCount}</strong> {failedSelectedCount === 1 ? 'prenda necesita' : 'prendas necesitan'} reintento. La app esperara 30s antes de volver a enviar para evitar el 429.
+                            <strong>{failedSelectedCount}</strong> {failedSelectedCount === 1 ? 'prenda quedó pendiente' : 'prendas quedaron pendientes'}.
                           </p>
                           <button
                             type="button"
@@ -847,7 +836,7 @@ const OutfitExtractorModule: React.FC = () => {
                             className="w-full py-2 rounded-xl bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center gap-2"
                           >
                             <i className="fa-solid fa-rotate-right" />
-                            Reintentar fallidas
+                            Reintentar
                           </button>
                         </div>
                       )}
@@ -879,7 +868,7 @@ const OutfitExtractorModule: React.FC = () => {
                                   type="button"
                                   onClick={(e) => { e.stopPropagation(); retryErroredRenders(item.id); }}
                                   className="px-2.5 py-1.5 rounded-lg bg-red-500 text-white text-[9px] font-black uppercase tracking-wider active:scale-95 transition-all flex items-center gap-1.5"
-                                  title={item.lastError || 'Reintentar render'}
+                                  title="Reintentar render"
                                 >
                                   <i className="fa-solid fa-rotate-right" />
                                   Reintentar
@@ -1075,7 +1064,7 @@ const OutfitExtractorModule: React.FC = () => {
                             type="button"
                             onClick={(e) => { e.stopPropagation(); retryErroredRenders(item.id); }}
                             className="w-full py-2 rounded-xl bg-red-50 text-red-600 text-[9px] font-black uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center gap-2"
-                            title={item.lastError || 'Reintentar render'}
+                            title="Reintentar render"
                           >
                             <i className="fa-solid fa-rotate-right" />
                             Reintentar

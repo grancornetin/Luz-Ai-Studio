@@ -7,6 +7,7 @@ import { Receiver } from '@upstash/qstash';
 import { Redis } from '@upstash/redis';
 import { GoogleGenAI } from '@google/genai';
 import { reportShotResult, appendToHistory } from '../_notifications.js';
+import { concurrencyRelease } from '../_concurrency.js';
 
 // ─── Redis (mismo config que ugc.ts) ────────────────────────────────────────
 const redis = new Redis({
@@ -38,6 +39,7 @@ interface Job {
   moduleLabel?: string;
   metadata?: Record<string, any>;
   refunded?: boolean;
+  userPlan?: string;
 }
 
 // ─── Helpers Redis ───────────────────────────────────────────────────────────
@@ -70,6 +72,11 @@ function getGenAIClient(location: string): GoogleGenAI {
 
 // ─── Notificación + historial al terminar el job ──────────────────────────────
 async function persistJobOutcome(job: Job, success: boolean): Promise<void> {
+  // Liberar slot de concurrencia siempre — éxito o fallo
+  if (job.uid) {
+    await concurrencyRelease(job.uid).catch(() => {});
+  }
+
   if (!job.uid || !job.sessionId || job.totalShots == null || job.shotIndex == null) {
     return;
   }

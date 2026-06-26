@@ -4,6 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 import { Redis } from '@upstash/redis';
 import { Client as QStashClient } from '@upstash/qstash';
 import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, checkRateLimit, sanitizeUid, verifyAuth } from '../_middleware.js';
+import { concurrencyAcquire } from '../_concurrency.js';
 
 const RETRY_DELAY_MS = 3000;
 
@@ -24,6 +25,7 @@ interface Job {
   moduleLabel?: string;
   metadata?: Record<string, any>;
   refunded?: boolean;
+  userPlan?: string;
 }
 
 // Usar variables KV_REST_API_* que Vercel inyecta automáticamente
@@ -167,6 +169,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         prompt, referenceImages, aspectRatio = '3:4',
         shotIndex, totalShots, modelId = 'gemini',
         sessionId, module: moduleName, moduleLabel, metadata,
+        userPlan,
       } = payload;
       if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
 
@@ -181,13 +184,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       parts.push({ text: prompt });
 
-      const jobId = generateJobId();
+      const jobId   = generateJobId();
       const safeUid = sanitizeUid(verifiedUid);
+      const now     = Date.now();
+      const plan    = (userPlan as string) || 'free';
+
+      // Control de concurrencia: limitar jobs activos por usuario según su plan
+      const hasSlot = await concurrencyAcquire(safeUid, plan);
+      if (!hasSlot) {
+        return res.status(429).json({
+          error: 'Tienes demasiadas generaciones activas. Espera a que terminen antes de iniciar más.',
+          code:  'CONCURRENCY_LIMIT',
+        });
+      }
+
+      // Prioridad en cola: menor número = se despacha antes
+      // studio y admin van primero, free va último
+      const PLAN_PRIORITY: Record<string, number> = {
+        admin: 1, studio: 1, pro: 2, starter: 3, weekly: 4, free: 5,
+      };
+      const priority   = PLAN_PRIORITY[plan] ?? 5;
+      // score = prioridad * 1e13 + timestamp → desempate FIFO dentro del mismo plan
+      const queueScore = priority * 1e13 + now;
+
       const job: Job = {
         id: jobId,
         status: 'pending',
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
+        createdAt: now,
+        updatedAt: now,
         shotIndex,
         totalShots,
         uid: safeUid,
@@ -195,30 +219,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         module: moduleName,
         moduleLabel,
         metadata,
+        userPlan: plan,
       };
-
-      // Siempre guardar parts en Redis — evita superar límite 1MB de QStash
-      // con referencias de imagen pesadas, independiente del modelo.
-      await Promise.all([
-        saveJob(job),
-        redis.set(`img_parts:${jobId}`, JSON.stringify(parts), { ex: 3600 }),
-      ]);
 
       const qstash = new QStashClient({ token: process.env.QSTASH_TOKEN! });
       const isSeedream = modelId === 'seedream';
-      const workerUrl = isSeedream
-        ? `${process.env.WORKER_BASE_URL}/api/gemini/seedream-worker`
-        : `${process.env.WORKER_BASE_URL}/api/gemini/ugc-worker`;
 
-      // Seedream: pasa prompt y aspectRatio (worker lee parts de Redis)
-      // Gemini ugc-worker: ahora también lee parts de Redis (no vienen en body)
-      const workerBody = isSeedream
-        ? { jobId, prompt, aspectRatio }
-        : { jobId };
+      if (isSeedream) {
+        // Seedream no usa la cola de prioridad — va directo a su worker
+        await Promise.all([
+          saveJob(job),
+          redis.set(`img_parts:${jobId}`, JSON.stringify(parts), { ex: 3600 }),
+        ]);
+        const seedreamUrl = `${process.env.WORKER_BASE_URL}/api/gemini/seedream-worker`;
+        await qstash.publishJSON({ url: seedreamUrl, body: { jobId, prompt, aspectRatio }, retries: 2 });
+        console.log(`[UGC] Seedream job ${jobId} dispatched directly`);
+      } else {
+        // Gemini: encolar con prioridad en Redis sorted set
+        // Guardamos _queueScore en el job para poder re-encolar si el dispatcher falla
+        (job as any)._queueScore = queueScore;
+        await Promise.all([
+          saveJob(job),
+          redis.set(`img_parts:${jobId}`, JSON.stringify(parts), { ex: 3600 }),
+          redis.zadd('queue:gemini', { score: queueScore, member: jobId }),
+        ]);
+        // Despertar al dispatcher para que procese la cola inmediatamente
+        const dispatcherUrl = `${process.env.WORKER_BASE_URL}/api/gemini/queue-dispatcher`;
+        await qstash.publishJSON({ url: dispatcherUrl, body: { trigger: 'enqueue', jobId }, retries: 1 });
+        console.log(`[UGC] Job ${jobId} queued (plan=${userPlan ?? 'unknown'} priority=${priority} score=${queueScore})`);
+      }
 
-      await qstash.publishJSON({ url: workerUrl, body: workerBody, retries: 2 });
-
-      console.log(`[UGC] Job ${jobId} enqueued model=${modelId} → ${workerUrl}`);
       return res.status(202).json({ success: true, jobId, status: 'pending', shotIndex, totalShots });
     }
 

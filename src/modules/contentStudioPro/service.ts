@@ -1136,6 +1136,7 @@ async function generateWithPolling(
     module?: string;
     moduleLabel?: string;
     metadata?: Record<string, any>;
+    userPlan?: string;
   },
 ): Promise<string> {
   const referenceImages = await prepareReferenceImagesCompressed(refs);
@@ -1407,6 +1408,7 @@ UNIVERSAL RULES:
       module?: string;
       moduleLabel?: string;
       metadata?: Record<string, any>;
+      userPlan?: string;
     },
   ): Promise<string> {
     await this.ensureAccess();

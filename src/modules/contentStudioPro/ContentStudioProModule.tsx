@@ -498,6 +498,7 @@ const ContentStudioProModule: React.FC = () => {
       module?: string;
       moduleLabel?: string;
       metadata?: Record<string, any>;
+      userPlan?: string;
     },
   ): Promise<string> => {
     let lastError: any = null;
@@ -650,6 +651,7 @@ const ContentStudioProModule: React.FC = () => {
       sessionId: currentSessionId,
       module: 'content_studio',
       moduleLabel: `Content Studio (${FOCUS_LABELS[focus].split(' / ')[0]})`,
+      userPlan: credits.plan,
     } : undefined;
 
     // Secuencial puro: un shot a la vez con pausa entre cada uno.
@@ -788,6 +790,7 @@ const ContentStudioProModule: React.FC = () => {
       sessionId: retrySessionId,
       module: 'content_studio',
       moduleLabel: `Content Studio (${FOCUS_LABELS[targetSet.focus].split(' / ')[0]} – Retry)`,
+      userPlan: credits.plan,
     };
     const retryTotal = failedShots.length;
 

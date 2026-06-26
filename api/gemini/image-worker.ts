@@ -14,6 +14,7 @@ import { Receiver } from '@upstash/qstash';
 import { Redis } from '@upstash/redis';
 import { GoogleGenAI } from '@google/genai';
 import { reportShotResult, appendToHistory } from '../_notifications.js';
+import { concurrencyRelease } from '../_concurrency.js';
 
 // ─── Redis ───────────────────────────────────────────────────────────────────
 const redis = new Redis({
@@ -47,6 +48,7 @@ interface ImageJob {
   moduleLabel?: string;
   metadata?: Record<string, any>;
   refunded?: boolean;
+  userPlan?: string;
 }
 
 // ─── Helpers Redis ────────────────────────────────────────────────────────────
@@ -82,6 +84,11 @@ function getGenAIClient(): GoogleGenAI {
 // Persiste el resultado a Firestore (notificación) y a Redis (historial).
 // Si falla, el reembolso lo hace reportShotResult dentro de la transacción.
 async function persistJobOutcome(job: ImageJob, success: boolean): Promise<void> {
+  // Liberar slot de concurrencia siempre — éxito o fallo
+  if (job.uid) {
+    await concurrencyRelease(job.uid).catch(() => {});
+  }
+
   if (!job.uid || !job.sessionId || job.totalShots == null || job.shotIndex == null) {
     // Backwards compatibility: jobs viejos sin uid/sessionId — no notificamos
     return;

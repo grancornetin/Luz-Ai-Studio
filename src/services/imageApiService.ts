@@ -15,6 +15,7 @@
 
 import { getAuth } from 'firebase/auth';
 import { generationHistoryService, MODULE_LABELS } from './generationHistoryService';
+import { getCurrentUserPlan } from './userPlanStore';
 
 const API_URL     = '/api/gemini/image';
 const POLL_INTERVAL_MS      = 2000;  // 2 s entre polls
@@ -85,6 +86,9 @@ export function parseErrorCode(raw: unknown): AppError {
     if (typeof msg === 'string' && msg) return parseErrorCode(msg);
   } catch { /* no es JSON */ }
 
+  if (lower.includes('concurrency_limit') || lower.includes('demasiadas generaciones activas')) {
+    return { code: ErrorCode.RATE_LIMIT, message: 'Tienes demasiadas generaciones activas. Espera a que terminen antes de iniciar más.' };
+  }
   if (lower.includes('429') || lower.includes('quota') || lower.includes('resource_exhausted') || lower.includes('exhausted')) {
     return { code: ErrorCode.RATE_LIMIT, message: 'Demasiadas solicitudes simultáneas. Espera unos segundos e intenta de nuevo.' };
   }
@@ -125,6 +129,7 @@ export interface GenerateImageParams {
   uid?:             string;   // uid del usuario autenticado (requerido en no-batch)
   sessionId?:       string;   // agrupa shots de un mismo set en la notificación
   metadata?:        Record<string, any>; // info libre para mostrar en el panel
+  userPlan?:        string;   // plan del usuario — usado para prioridad y límite de concurrencia
   onStatusChange?:  (status: ImageJobStatus, image?: string, shotIndex?: number) => void;
 }
 
@@ -159,6 +164,7 @@ async function startJob(params: GenerateImageParams): Promise<{ jobId: string; s
         uid:             params.uid ?? getAuth().currentUser?.uid,
         sessionId:       params.sessionId,
         metadata:        params.metadata,
+        userPlan:        params.userPlan ?? getCurrentUserPlan(),
       },
     }),
   });

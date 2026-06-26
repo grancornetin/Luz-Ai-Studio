@@ -43,6 +43,7 @@ interface ImageJob {
   moduleLabel?: string;
   metadata?: Record<string, any>;
   refunded?: boolean; // marcado por el worker cuando reembolsa server-side
+  userPlan?: string;  // plan del usuario — usado por el worker para concurrencyRelease
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -67,6 +68,7 @@ async function getJob(jobId: string): Promise<ImageJob | null> {
 }
 
 import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, getBatchImageRatelimit, checkRateLimit, sanitizeUid, verifyAuth } from '../_middleware.js';
+import { concurrencyAcquire } from '../_concurrency.js';
 
 // ─── Circuit breaker ──────────────────────────────────────────────────────────
 // Cuando un proveedor agota su cuota, se marca en Redis por 2h.
@@ -134,6 +136,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         sessionId,
         metadata,
         modelId = 'gemini',   // 'gemini' | 'seedream' | 'gptimage'
+        userPlan,
       } = payload;
 
       if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
@@ -199,8 +202,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // Crear job en Redis — las imágenes (parts) se guardan en Redis, NO en QStash
       // QStash tiene límite de 1MB por mensaje; las imágenes en base64 lo exceden fácilmente.
-      const jobId = generateJobId();
+      const jobId   = generateJobId();
       const safeUid = verifiedUid ? sanitizeUid(verifiedUid) : undefined;
+
+      // Control de concurrencia: limitar jobs activos por usuario según su plan.
+      // Batch importer y jobs sin uid quedan exentos del límite.
+      if (safeUid && !isBatch) {
+        const plan = (userPlan as string) || 'free';
+        const hasSlot = await concurrencyAcquire(safeUid, plan);
+        if (!hasSlot) {
+          return res.status(429).json({
+            error: 'Tienes demasiadas generaciones activas. Espera a que terminen antes de iniciar más.',
+            code:  'CONCURRENCY_LIMIT',
+          });
+        }
+      }
+
       const job: ImageJob = {
         id:        jobId,
         status:    'pending',
@@ -213,6 +230,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         sessionId:   sessionId,
         moduleLabel: moduleLabel,
         metadata:    metadata,
+        userPlan:    userPlan as string | undefined,
       };
 
       // Elegir proveedor disponible (circuit breaker automático)

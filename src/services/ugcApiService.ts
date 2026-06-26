@@ -3,6 +3,7 @@
 
 import { getAuth } from 'firebase/auth';
 import { generationHistoryService, MODULE_LABELS } from './generationHistoryService';
+import { getCurrentUserPlan } from './userPlanStore';
 
 async function getAuthHeader(): Promise<Record<string, string>> {
   const token = await getAuth().currentUser?.getIdToken().catch(() => null);
@@ -109,6 +110,7 @@ class UGCApiService {
     module?: string;
     moduleLabel?: string;
     metadata?: Record<string, any>;
+    userPlan?: string;
     onStatusChange?: (status: string, image?: string, shotIndex?: number) => void;
   }): Promise<string> {
     // gptimage pasa por el router EvoLink (/api/gemini/image), igual que desde PromptStudio.
@@ -133,6 +135,7 @@ class UGCApiService {
           module: params.module,
           moduleLabel: params.moduleLabel,
           metadata: params.metadata,
+          userPlan: params.userPlan ?? getCurrentUserPlan(),
         },
       }),
     });

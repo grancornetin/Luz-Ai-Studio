@@ -18,6 +18,7 @@ import { PLAN_PRO_CREDITS } from '../../services/creditConfig';
 import { handleFirestoreError, OperationType } from '../../services/firestoreUtils';
 import { autoCheckMissions } from '../../services/missionsService';
 import { runMigration } from '../../utils/migratePrompts';
+import { setCurrentUserPlan } from '../../services/userPlanStore';
 
 export interface UserInterests {
   categories: string[];
@@ -189,6 +190,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (userDocSnap.exists()) {
             const d = userDocSnap.data();
             const planKey = (d.plan || 'free') as string;
+            setCurrentUserPlan(planKey);
             const periodPro = PLAN_PRO_CREDITS[planKey] ?? 0;
             const usedPro   = d.proCreditsUsedThisPeriod ?? 0;
             const topUpPro  = d.proTopUpCredits ?? 0;
@@ -296,6 +298,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (snap.exists()) {
         const d = snap.data();
         const planKey = (d.plan || 'free') as string;
+        setCurrentUserPlan(planKey);
         const periodPro = PLAN_PRO_CREDITS[planKey] ?? 0;
         const usedPro   = d.proCreditsUsedThisPeriod ?? 0;
         const topUpPro  = d.proTopUpCredits ?? 0;

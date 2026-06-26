@@ -12,6 +12,9 @@
     "api/gemini/evolink-worker.ts": {
       "maxDuration": 300
     },
+    "api/gemini/queue-dispatcher.ts": {
+      "maxDuration": 30
+    },
     "api/avatar/clone-worker.ts": {
       "maxDuration": 300
     },
