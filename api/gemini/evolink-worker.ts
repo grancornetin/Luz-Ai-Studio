@@ -220,9 +220,19 @@ async function processEvolinkJob(
 
   const refsToSend = referenceDataUrls.slice(0, config.maxRefs);
 
+  // GPT Image tiene límite de prompt más bajo que Gemini. Truncar si es necesario.
+  const MAX_PROMPT_CHARS = modelProvider === 'gptimage' ? 32000 : Infinity;
+  const safePrompt = prompt.length > MAX_PROMPT_CHARS
+    ? prompt.slice(0, MAX_PROMPT_CHARS)
+    : prompt;
+
+  if (prompt.length > MAX_PROMPT_CHARS) {
+    console.warn(`${tag} Prompt truncado de ${prompt.length} a ${MAX_PROMPT_CHARS} chars`);
+  }
+
   const evolinkBody: Record<string, unknown> = {
     model:  config.modelId,
-    prompt,
+    prompt: safePrompt,
     size:   toEvolinkSize(aspectRatio),
   };
 
@@ -361,12 +371,14 @@ async function processEvolinkJob(
     }
 
     if (status === 'failed' || status === 'error') {
-      const errMsg = taskData.error || taskData.message || 'EvoLink task failed';
+      const rawErr  = taskData.error || taskData.message || taskData.error_message || taskData;
+      const errMsg  = typeof rawErr === 'string' ? rawErr : JSON.stringify(rawErr);
       job.status    = 'failed';
       job.error     = errMsg;
       job.updatedAt = Date.now();
       await saveJob(job);
       console.error(`${tag} EvoLink task failed: ${errMsg}`);
+      console.error(`${tag} Full taskData on failure:`, JSON.stringify(taskData));
       await persistJobOutcome(job, false);
       return;
     }
