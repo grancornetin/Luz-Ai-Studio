@@ -73,7 +73,7 @@ import { concurrencyAcquire } from '../_concurrency.js';
 // ─── Circuit breaker ──────────────────────────────────────────────────────────
 // Cuando un proveedor agota su cuota, se marca en Redis por 2h.
 // El orchestrator elige el primer proveedor disponible automáticamente.
-const CIRCUIT_TTL = 60 * 60 * 2; // 2 horas
+const CIRCUIT_TTL = 60; // 1 minuto — suficiente para que Gemini se recupere de un rate limit puntual
 
 async function isProviderDown(provider: string): Promise<boolean> {
   try {

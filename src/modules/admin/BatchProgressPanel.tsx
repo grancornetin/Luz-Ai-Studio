@@ -73,6 +73,8 @@ const BatchProgressPanel: React.FC = () => {
   const [loadingBatches, setLoadingBatches] = useState(true);
   const [circuitResetting, setCircuitResetting] = useState(false);
   const [circuitMsg, setCircuitMsg]   = useState<string | null>(null);
+  const [concurrencyResetting, setConcurrencyResetting] = useState(false);
+  const [concurrencyMsg, setConcurrencyMsg] = useState<string | null>(null);
 
   // Suscripción a batches (últimos 10)
   useEffect(() => {
@@ -120,25 +122,26 @@ const BatchProgressPanel: React.FC = () => {
     return true;
   });
 
+  async function adminPost(action: string, extra?: Record<string, any>) {
+    const token = await getAuth().currentUser?.getIdToken();
+    return fetch('/api/admin/circuit-reset', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ action, ...extra }),
+    });
+  }
+
   async function handleResetCircuits() {
     setCircuitResetting(true);
     setCircuitMsg(null);
     try {
-      const token = await getAuth().currentUser?.getIdToken();
-      const res = await fetch('/api/gemini/image', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          action: 'resetCircuits',
-          payload: { secret: import.meta.env.VITE_BATCH_ADMIN_SECRET },
-        }),
-      });
+      const res  = await adminPost('reset_circuits');
       const data = await res.json();
       if (res.ok) {
-        setCircuitMsg('Circuits reseteados. Gemini, Seedream y GPT Image 2 vuelven a estar activos.');
+        setCircuitMsg('Circuits reseteados — Gemini, Seedream y GPT Image vuelven a estar activos.');
       } else {
         setCircuitMsg(`Error: ${data.error || res.status}`);
       }
@@ -146,6 +149,24 @@ const BatchProgressPanel: React.FC = () => {
       setCircuitMsg(`Error de red: ${e.message}`);
     } finally {
       setCircuitResetting(false);
+    }
+  }
+
+  async function handleResetConcurrency() {
+    setConcurrencyResetting(true);
+    setConcurrencyMsg(null);
+    try {
+      const res  = await adminPost('reset_concurrency');
+      const data = await res.json();
+      if (res.ok) {
+        setConcurrencyMsg('Concurrencia reseteada — podés volver a generar.');
+      } else {
+        setConcurrencyMsg(`Error: ${data.error || res.status}`);
+      }
+    } catch (e: any) {
+      setConcurrencyMsg(`Error de red: ${e.message}`);
+    } finally {
+      setConcurrencyResetting(false);
     }
   }
 
@@ -172,27 +193,53 @@ const BatchProgressPanel: React.FC = () => {
       <main className="max-w-6xl mx-auto px-6 md:px-12 py-10 space-y-8">
 
         {/* Diagnóstico de infraestructura */}
-        <section className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4">
+        <section className="bg-white border border-slate-200 rounded-2xl p-6 space-y-6">
           <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">
-            Infraestructura — Circuit Breakers
+            Infraestructura — Controles de emergencia
           </h2>
-          <p className="text-sm text-slate-500">
-            Cuando Gemini o GPT Image 2 falla repetidamente, el sistema los marca como caídos por 2 horas y hace fallback al otro modelo.
-            Si los errores ya se resolvieron, reseteá aquí para volver al modelo primario.
-          </p>
-          <button
-            type="button"
-            onClick={handleResetCircuits}
-            disabled={circuitResetting}
-            className="px-5 py-2.5 rounded-xl bg-rose-600 text-white text-sm font-bold disabled:opacity-50 hover:bg-rose-700 transition-colors"
-          >
-            {circuitResetting ? 'Reseteando...' : 'Resetear todos los circuit breakers'}
-          </button>
-          {circuitMsg && (
-            <p className={`text-sm font-medium ${circuitMsg.startsWith('Error') ? 'text-red-600' : 'text-emerald-600'}`}>
-              {circuitMsg}
+
+          {/* Circuit breakers */}
+          <div className="space-y-3">
+            <p className="text-sm font-bold text-slate-700">Circuit Breakers</p>
+            <p className="text-sm text-slate-500">
+              Cuando Gemini, GPT Image o Seedream recibe un 429, el sistema los bloquea 1 minuto automáticamente.
+              Si ya pasó el minuto y todavía ves errores, usa este botón para forzar el desbloqueo.
             </p>
-          )}
+            <button
+              type="button"
+              onClick={handleResetCircuits}
+              disabled={circuitResetting}
+              className="px-5 py-2.5 rounded-xl bg-rose-600 text-white text-sm font-bold disabled:opacity-50 hover:bg-rose-700 transition-colors"
+            >
+              {circuitResetting ? 'Reseteando...' : 'Resetear circuit breakers'}
+            </button>
+            {circuitMsg && (
+              <p className={`text-sm font-medium ${circuitMsg.startsWith('Error') ? 'text-red-600' : 'text-emerald-600'}`}>
+                {circuitMsg}
+              </p>
+            )}
+          </div>
+
+          {/* Concurrencia */}
+          <div className="space-y-3 border-t border-slate-100 pt-5">
+            <p className="text-sm font-bold text-slate-700">Contador de concurrencia</p>
+            <p className="text-sm text-slate-500">
+              Si quedaste bloqueado con "demasiadas generaciones activas" después de un error, usa este botón para liberar tu contador.
+            </p>
+            <button
+              type="button"
+              onClick={handleResetConcurrency}
+              disabled={concurrencyResetting}
+              className="px-5 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-bold disabled:opacity-50 hover:bg-amber-600 transition-colors"
+            >
+              {concurrencyResetting ? 'Reseteando...' : 'Liberar mi concurrencia'}
+            </button>
+            {concurrencyMsg && (
+              <p className={`text-sm font-medium ${concurrencyMsg.startsWith('Error') ? 'text-red-600' : 'text-emerald-600'}`}>
+                {concurrencyMsg}
+              </p>
+            )}
+          </div>
         </section>
 
         {/* Lista de batches */}
