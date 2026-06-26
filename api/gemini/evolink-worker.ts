@@ -55,26 +55,32 @@ interface ImageJob {
 }
 
 // ─── Config por proveedor ─────────────────────────────────────────────────────
+// Tiempos de Vercel maxDuration: seedream=150s, gptimage=150s
+// Margen de seguridad: polling máximo debe ser ≤ maxDuration - 15s para que
+// el worker siempre pueda escribir el resultado final en Redis antes de morir.
 const PROVIDER_CONFIG: Record<ModelProvider, {
-  modelId:     string;
-  maxRefs:     number;
-  pollDelayMs: number;
-  maxAttempts: number;
-  circuitKey:  string;
+  modelId:       string;
+  maxRefs:       number;
+  pollDelayMs:   number;
+  maxAttempts:   number;
+  circuitKey:    string;
+  softTimeoutMs: number; // tiempo desde workerStart tras el cual loguear advertencia
 }> = {
   seedream: {
-    modelId:     SEEDREAM_MODEL_ID,
-    maxRefs:     5,
-    pollDelayMs: 2000,
-    maxAttempts: 45,
-    circuitKey:  'circuit:seedream',
+    modelId:       SEEDREAM_MODEL_ID,
+    maxRefs:       5,
+    pollDelayMs:   2000,
+    maxAttempts:   45,   // 45 × 2s = 90s — cabe en 150s con margen
+    circuitKey:    'circuit:seedream',
+    softTimeoutMs: 80_000,
   },
   gptimage: {
-    modelId:     GPT_IMAGE_MODEL_ID,
-    maxRefs:     16,
-    pollDelayMs: 2000,  // 2s — igual que Seedream, GPT Image 2 suele responder en 30-60s
-    maxAttempts: 55,    // 55 × 2s = 110s — cabe con margen en maxDuration:150s de Vercel
-    circuitKey:  'circuit:gptimage',
+    modelId:       GPT_IMAGE_MODEL_ID,
+    maxRefs:       16,
+    pollDelayMs:   2500,  // 2.5s entre polls
+    maxAttempts:   104,   // 104 × 2.5s = 260s — deja 40s de margen en maxDuration:300s
+    circuitKey:    'circuit:gptimage',
+    softTimeoutMs: 200_000,
   },
 };
 
@@ -182,8 +188,9 @@ async function processEvolinkJob(
   aspectRatio:   string,
   modelProvider: ModelProvider,
 ): Promise<void> {
-  const config = PROVIDER_CONFIG[modelProvider];
-  const tag    = `[EvolinkWorker:${modelProvider} ${jobId}]`;
+  const config     = PROVIDER_CONFIG[modelProvider];
+  const tag        = `[EvolinkWorker:${modelProvider} ${jobId}]`;
+  const workerStart = Date.now();
 
   const job = await getJob(jobId);
   if (!job) {
@@ -302,6 +309,11 @@ async function processEvolinkJob(
   // ── Polling ───────────────────────────────────────────────────────────────
   for (let attempt = 0; attempt < config.maxAttempts; attempt++) {
     await sleep(config.pollDelayMs);
+
+    const elapsed = Date.now() - workerStart;
+    if (elapsed > config.softTimeoutMs) {
+      console.warn(`${tag} Soft timeout: ${elapsed}ms elapsed — EvoLink still processing. Credits may be consumed without result.`);
+    }
 
     let taskData: any;
     try {

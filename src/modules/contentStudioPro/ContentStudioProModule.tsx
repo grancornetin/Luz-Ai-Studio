@@ -53,6 +53,7 @@ import { GenerateButton } from '../../components/shared/GenerateButton';
 import { GenerationProgress, type ProgressStep, type CompletedShot } from '../../components/shared/GenerationProgress';
 import { useGenerationProgress } from '../../hooks/useGenerationProgress';
 import { CostSummary } from './components/CostSummary';
+import { MasterLoader } from './components/MasterLoader';
 
 type Step = 'setup' | 'generating_master' | 'checkpoint' | 'producing' | 'retrying' | 'library' | 'batch_generating';
 type FilterTab = 'TODAS' | 'AVATAR' | 'PRODUCT' | 'OUTFIT' | 'SCENE';
@@ -1297,17 +1298,9 @@ const ContentStudioProModule: React.FC = () => {
           </div>
         )}
 
-        {/* LOADING NORMAL */}
+        {/* LOADING MASTER */}
         {(step === 'generating_master') && (
-          <div className="min-h-[500px] md:min-h-[600px] flex flex-col items-center justify-center space-y-8 md:space-y-12 bg-slate-900 rounded-[40px] md:rounded-[64px] border-8 border-slate-800 shadow-2xl p-6 md:p-10 text-center animate-in zoom-in mx-4">
-            <div className="w-16 h-16 md:w-20 md:h-20 border-4 border-white/5 border-t-brand-500 rounded-full animate-spin shadow-[0_0_30px_rgba(247,44,91,0.3)]"></div>
-            <div className="space-y-4">
-              <h2 className="t-display text-xl md:text-3xl text-white">{loadingMsg}</h2>
-              <p className="t-meta text-slate-500 tracking-[0.5em] animate-pulse">
-                UGC SYSTEM • {modelId === 'gptimage' ? 'GPT IMAGE 2' : 'GEMINI'} ACTIVE
-              </p>
-            </div>
-          </div>
+          <MasterLoader modelId={modelId} focus={focus} />
         )}
 
         {/* PRODUCING */}
