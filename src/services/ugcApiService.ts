@@ -9,8 +9,9 @@ async function getAuthHeader(): Promise<Record<string, string>> {
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 }
 
-function friendlyApiError(raw: string): string {
-  let msg = (raw || '').toLowerCase();
+function friendlyApiError(raw: any): string {
+  const rawStr = typeof raw === 'string' ? raw : JSON.stringify(raw) || '';
+  let msg = rawStr.toLowerCase();
   try {
     const parsed = JSON.parse(raw);
     const code = parsed?.error?.code ?? parsed?.code;
@@ -30,7 +31,7 @@ function friendlyApiError(raw: string): string {
   if (msg.includes('content') && (msg.includes('filter') || msg.includes('block') || msg.includes('policy'))) {
     return 'El contenido fue bloqueado por las políticas de la IA. Ajusta el prompt e intenta de nuevo.';
   }
-  return raw;
+  return rawStr;
 }
 
 export interface REF0Analysis {
