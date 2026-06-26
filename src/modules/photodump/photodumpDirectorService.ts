@@ -22,6 +22,7 @@ import {
   HaulItem, HaulManifest, HaulItemKind, HaulPileState, HaulCoveragePlan, HaulRefKind,
   HaulResolvedKind, HaulCoverageRole, HaulCoverageLedgerItem, HaulOutfitComponents,
   HaulWorldMap, HaulItemAllowedUseMode, HaulItemState,
+  HaulStyledCombination, HaulStylingGraph, HaulShotItemPlan, HaulBaseStartingLook,
   VisualRefsAnalysisResult,
 } from './types';
 import {
@@ -80,6 +81,8 @@ export interface PhotodumpShotDirective {
   continuityMode?:           SceneContinuityMode;
   environmentAffordances?:   EnvironmentAffordance[];
   closureReason?:            string;
+  // Haul: plan de ítems por shot — qué aparece, se sostiene, está prohibido
+  haulItemPlan?:             HaulShotItemPlan;
 }
 
 // Estilo visual de presentación para recetas outfit.
@@ -3121,6 +3124,58 @@ function inferOutfitComponents(
   };
 }
 
+// ── Haul Shot Item Plan Block — qué aparece exactamente en este shot ─────────────
+// Genera el contrato explícito de ítems para este shot: qué se usa, qué se sostiene,
+// qué está en background y qué está PROHIBIDO. Reemplaza las instrucciones genéricas
+// de "items scattered nearby" con un inventario controlado por shot.
+function buildHaulShotItemPlanBlock(plan: HaulShotItemPlan, manifest: HaulManifest): string {
+  const resolveLabels = (ids: string[]): string => {
+    const labels = ids.map(id => manifest.allItems.find(it => it.id === id)?.label ?? id).filter(Boolean);
+    return labels.length > 0 ? labels.join(', ') : 'none';
+  };
+
+  const wornStr    = resolveLabels(plan.wornItems);
+  const heldStr    = resolveLabels(plan.heldItems);
+  const surfaceStr = resolveLabels(plan.surfaceItems);
+  const bgStr      = resolveLabels(plan.backgroundItems);
+  const forbStr    = resolveLabels(plan.forbiddenItems);
+  const primStr    = resolveLabels(plan.primaryItems);
+
+  const lines: string[] = [
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    '📋 SHOT ITEM INVENTORY CONTRACT (exact — do not deviate):',
+    `  PRIMARY FOCUS:   ${primStr}`,
+    `  WORN on body:    ${wornStr}`,
+    `  HELD in hand:    ${heldStr}`,
+    `  ON surface:      ${surfaceStr}`,
+    `  BACKGROUND:      ${bgStr}`,
+  ];
+
+  if (plan.forbiddenItems.length > 0) {
+    lines.push(`  ✗ FORBIDDEN in this shot: ${forbStr}`);
+  }
+
+  // Regla de conflicto held+worn
+  const conflicts = plan.heldItems.filter(id => plan.wornItems.includes(id));
+  if (conflicts.length > 0) {
+    const conflictLabels = resolveLabels(conflicts);
+    lines.push(`  ✗ CONFLICT RULE: ${conflictLabels} CANNOT be held AND worn simultaneously in this shot.`);
+  }
+
+  if (plan.supportBaseLook) {
+    lines.push(`  BASE LOOK: Person wears a simple neutral non-product base (plain top + basic bottoms). This base is NOT a haul product — do NOT present it as such.`);
+  }
+
+  if (plan.integrationNote) {
+    lines.push(`  NOTE: ${plan.integrationNote}`);
+  }
+
+  lines.push('  STRICT: only the items listed above should be visible as featured elements. Do NOT add invented garments, random accessories, or unlisted haul items as prominent elements.');
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+  return lines.join('\n');
+}
+
 // ── Haul World Map — construye mapa físico del mundo desde ref0Analysis ──────────
 // Convierte el análisis de REF0 en una estructura formal que ancla el espacio y
 // genera un bloque de instrucción estricto para cada story shot del haul.
@@ -3186,19 +3241,31 @@ export function buildHaulWorldMap(ref0Analysis: any): HaulWorldMap {
     const maxClutterLevel: HaulWorldMap['maxClutterLevel'] =
       hasShoppingBags && hasCardboardBoxes ? 'medium' : hasShoppingBags ? 'light' : 'minimal';
 
+    const packageMaxVisible = hasShoppingBags && hasCardboardBoxes ? 2
+      : hasShoppingBags || hasCardboardBoxes ? 1 : 0;
+
     const allowedLines = allowedLargeFurniture.length > 0
       ? `ALLOWED furniture (present in REF0): ${allowedLargeFurniture.join(', ')}.`
       : 'ALLOWED furniture: only what is already established in REF0.';
     const forbiddenLines = forbiddenInventions.map(f => `  ✗ ${f}`).join('\n');
     const surfaceLines = `Haul items may be placed on: ${allowedSurfaces.join(', ')}.`;
+    const packageLine  = packageMaxVisible > 0
+      ? `Max ${packageMaxVisible} unbranded plain bag(s)/box(es) visible — NO logos, NO retail brand names.`
+      : `NO shopping bags or cardboard boxes — they were NOT in REF0. Do NOT invent packaging.`;
 
-    const worldLockSummary = `ROOM WORLD LOCK — REF0 PHYSICAL MAP:
+    const worldLockSummary = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏠 ROOM WORLD LOCK — REF0 PHYSICAL MAP (strict — do NOT redesign this space):
 ${allowedLines}
 ${surfaceLines}
-FORBIDDEN — do NOT invent or add:
+PACKAGING: ${packageLine}
+FORBIDDEN — do NOT invent or add any of these:
 ${forbiddenLines}
+  ✗ clothing or garments NOT uploaded by the user
+  ✗ external brand logos (ZARA, H&M, Shein, Bershka, Pull&Bear, etc.)
+  ✗ new architectural elements (new walls, windows, doorways not in REF0)
 Lighting: ${lightSource === 'natural_window' ? 'natural window light — preserve direction and warmth' : lightSource}.
-Do NOT redesign, rearrange, or add to this space between shots.`;
+RULE: Do NOT add, redesign, rearrange, or invent any element of this physical space between shots. What REF0 shows is the maximum — not the minimum.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
     return {
       hasBed, bedCount, hasWindow, hasRack, hasMirror, hasChair, hasDresser,
@@ -3764,6 +3831,7 @@ export function buildHaulManifest(
     label:                      it.label,
     required:                   it.priority === 'required',
     plannedHeroShots:           0,
+    plannedIntegratedShots:     0,
     plannedSupportShots:        0,
     actualPromptedHeroShots:    0,
     actualPromptedSupportShots: 0,
@@ -3796,6 +3864,178 @@ export function buildHaulManifest(
     requestedCount,
     maxStoryShots,
     coveragePlan,
+    baseStartingLook: {
+      id:           'base_starting_look',
+      label:        'neutral non-product base',
+      description:  'simple neutral fitted top + basic jeans/leggings/shorts — understated, NOT a haul item, NOT visible in avatar reference',
+      isHaulItem:   false,
+      allowedShots: ['HAUL_OVERVIEW', 'HAUL_ACCESSORY_CLOSEUP', 'HAUL_JEWELRY', 'HAUL_BAG', 'HAUL_FOOTWEAR'],
+      forbiddenShots: ['HAUL_TRY_ON', 'HAUL_SELECTION', 'HAUL_STYLED', 'HAUL_RECAP'],
+    },
+  };
+}
+
+// ── Haul Styling Graph — pairing semántico entre ítems ───────
+// Analiza los ítems del manifest y genera combinaciones compatibles.
+// Reglas: color/ocasión/formalidad coherente, no mezcla aberrante.
+// Exportada para reutilización en otras recetas de photodump.
+export function buildHaulStylingGraph(manifest: HaulManifest): HaulStylingGraph {
+  const combinations: HaulStyledCombination[] = [];
+  const warnings: string[] = [];
+
+  const wearableKinds: HaulResolvedKind[] = ['full_outfit', 'top', 'bottom', 'dress', 'onepiece', 'outerwear', 'hosiery', 'mixed_set'];
+  const wearables    = manifest.allItems.filter(it => wearableKinds.includes(it.resolvedKind));
+  const footwears    = manifest.allItems.filter(it => it.resolvedKind === 'footwear');
+  const bags         = manifest.allItems.filter(it => it.resolvedKind === 'bag');
+  const jewels       = manifest.allItems.filter(it => it.resolvedKind === 'jewelry');
+  const accessories  = manifest.allItems.filter(it => it.resolvedKind === 'accessory');
+  const hosiery      = manifest.allItems.filter(it => it.resolvedKind === 'hosiery');
+
+  // Ítem IDs que ya participan en alguna combinación
+  const pairedItemIds = new Set<string>();
+
+  // ── Paso 1: combinar bases wearable con complementos compatibles ──
+  for (const base of wearables) {
+    if (base.resolvedKind === 'hosiery') continue; // hosiery no es base primario
+
+    const combo: HaulStyledCombination = {
+      id:                  `combo_${base.id}`,
+      label:               base.label,
+      itemIds:             [base.id],
+      primaryWearableId:   base.id,
+      compatibilityScore:  80,
+      compatibilityReason: `${base.label} as primary wearable`,
+    };
+
+    // Asignar campos según resolvedKind del base
+    if (base.resolvedKind === 'top')       combo.topId       = base.id;
+    if (base.resolvedKind === 'bottom')    combo.bottomId    = base.id;
+    if (base.resolvedKind === 'dress')     combo.dressId     = base.id;
+    if (base.resolvedKind === 'onepiece')  combo.onepieceId  = base.id;
+    if (base.resolvedKind === 'outerwear') combo.outerwearId = base.id;
+    if (base.resolvedKind === 'full_outfit' || base.resolvedKind === 'mixed_set') {
+      combo.topId    = base.id;
+      combo.bottomId = base.id;
+    }
+
+    // ── Top + Bottom pairing ──────────────────────────────────
+    if (base.resolvedKind === 'top') {
+      const bottom = wearables.find(it =>
+        it.resolvedKind === 'bottom' && !pairedItemIds.has(it.id),
+      );
+      if (bottom) {
+        combo.bottomId = bottom.id;
+        combo.itemIds.push(bottom.id);
+        combo.label   = `${base.label} + ${bottom.label}`;
+        combo.compatibilityScore  = 85;
+        combo.compatibilityReason = 'top + bottom pairing';
+      }
+    }
+    if (base.resolvedKind === 'bottom') {
+      const top = wearables.find(it =>
+        it.resolvedKind === 'top' && !pairedItemIds.has(it.id),
+      );
+      if (top) {
+        combo.topId = top.id;
+        combo.itemIds.push(top.id);
+        combo.label   = `${top.label} + ${base.label}`;
+        combo.compatibilityScore  = 85;
+        combo.compatibilityReason = 'top + bottom pairing';
+      }
+    }
+
+    // ── Outerwear sobre look base ─────────────────────────────
+    if (base.resolvedKind !== 'outerwear') {
+      const outer = wearables.find(it =>
+        it.resolvedKind === 'outerwear' && !combo.itemIds.includes(it.id),
+      );
+      if (outer) {
+        combo.outerwearId = outer.id;
+        combo.itemIds.push(outer.id);
+        combo.label  += ` + ${outer.label}`;
+      }
+    }
+
+    // ── Hosiery con falda/vestido/enterizo ───────────────────
+    const needsHosiery = ['dress', 'onepiece', 'bottom'].includes(base.resolvedKind ?? '');
+    if (needsHosiery && hosiery.length > 0) {
+      const hose = hosiery.find(it => !combo.itemIds.includes(it.id));
+      if (hose) {
+        combo.hosieryId = hose.id;
+        combo.itemIds.push(hose.id);
+      }
+    }
+
+    // ── Calzado compatible ────────────────────────────────────
+    if (footwears.length > 0) {
+      // Regla: no usar tacones elegantes con ropa muy casual. Scoring simplificado:
+      // si la base tiene outfitComponents con footwear → buscar calzado compatible.
+      // Sin outfitComponents: asignar el primer calzado disponible.
+      const fw = footwears.find(it => !combo.itemIds.includes(it.id));
+      if (fw) {
+        combo.footwearId = fw.id;
+        combo.itemIds.push(fw.id);
+        combo.compatibilityScore = Math.max(60, combo.compatibilityScore - 5); // ligera reducción por incertidumbre
+        combo.compatibilityReason += ` + footwear integrated`;
+      }
+    }
+
+    // ── Bolso compatible ──────────────────────────────────────
+    if (bags.length > 0) {
+      const bag = bags.find(it => !combo.itemIds.includes(it.id));
+      if (bag) {
+        combo.bagId = bag.id;
+        combo.itemIds.push(bag.id);
+      }
+    }
+
+    // ── Joyería compatible ────────────────────────────────────
+    const jewelryForCombo = jewels.filter(it => !combo.itemIds.includes(it.id)).slice(0, 2);
+    if (jewelryForCombo.length > 0) {
+      combo.jewelryIds = jewelryForCombo.map(j => j.id);
+      combo.itemIds.push(...combo.jewelryIds);
+    }
+
+    // ── Accesorios ────────────────────────────────────────────
+    const accsForCombo = accessories.filter(it => !combo.itemIds.includes(it.id)).slice(0, 1);
+    if (accsForCombo.length > 0) {
+      combo.accessoryIds = accsForCombo.map(a => a.id);
+      combo.itemIds.push(...combo.accessoryIds);
+    }
+
+    // Registrar todos los ítems de esta combinación como paired
+    combo.itemIds.forEach(id => pairedItemIds.add(id));
+
+    // Advertir si la combinación es arriesgada (score bajo)
+    if (combo.compatibilityScore < 65) combo.risky = true;
+
+    combinations.push(combo);
+  }
+
+  // ── Paso 2: identificar ítems sin pairing ────────────────────
+  const allItemIds    = manifest.allItems.map(it => it.id);
+  const standaloneIds = allItemIds.filter(id => !pairedItemIds.has(id));
+
+  // Ítems complementarios solos sin base wearable
+  const unpairedIds = standaloneIds.filter(id => {
+    const item = manifest.allItems.find(it => it.id === id);
+    return item && !wearableKinds.includes(item.resolvedKind);
+  });
+
+  if (combinations.length === 0 && unpairedIds.length > 0) {
+    warnings.push('NO_WEARABLE_BASE: all items are accessories/footwear/jewelry — no styled combinations possible, all items will be standalone shots');
+  }
+
+  const risky = combinations.filter(c => c.risky);
+  if (risky.length > 0) {
+    warnings.push(`RISKY_COMBINATIONS: ${risky.map(c => c.id).join(', ')} — compatibility score < 65, integration may look forced`);
+  }
+
+  return {
+    combinations,
+    standaloneItems: standaloneIds,
+    unpairedItems:   unpairedIds,
+    warnings,
   };
 }
 
@@ -3813,6 +4053,22 @@ export function buildHaulShotPlan(
 ): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
   const total = manifest.maxStoryShots;
 
+  // ── Build / reuse styling graph ──────────────────────────────
+  const graph = manifest.stylingGraph ?? buildHaulStylingGraph(manifest);
+  // Store back for debug access
+  manifest.stylingGraph = graph;
+
+  // Helper: find the best compatible wearable for an accessory/footwear item
+  const findCompatibleOutfitFor = (itemId: string): { outfitItemId: string; outfitLabel: string } | null => {
+    for (const combo of graph.combinations) {
+      if (combo.itemIds.includes(itemId) && combo.primaryWearableId && combo.primaryWearableId !== itemId) {
+        const base = manifest.allItems.find(it => it.id === combo.primaryWearableId);
+        if (base) return { outfitItemId: base.id, outfitLabel: base.label };
+      }
+    }
+    return null;
+  };
+
   // ── Ledger tracking ─────────────────────────────────────────
   const ledgerMap = new Map<string, HaulCoverageLedgerItem>(
     manifest.coveragePlan.ledger.map(l => [l.itemId, { ...l }]),
@@ -3820,6 +4076,10 @@ export function buildHaulShotPlan(
   const addHeroShot = (itemId: string, shotKey: string) => {
     const l = ledgerMap.get(itemId);
     if (l) { l.plannedHeroShots++; l.shotIds.push(shotKey); }
+  };
+  const addIntegratedShot = (itemId: string, shotKey: string) => {
+    const l = ledgerMap.get(itemId);
+    if (l) { l.plannedIntegratedShots = (l.plannedIntegratedShots ?? 0) + 1; l.shotIds.push(shotKey); }
   };
   const addSupportShot = (itemId: string, shotKey: string) => {
     const l = ledgerMap.get(itemId);
@@ -3848,35 +4108,43 @@ export function buildHaulShotPlan(
   });
   const coveredByFirst = new Set(tryOnQueue.map(it => it.id));
 
-  // Non-wearable items from the outfit slots (footwear/bag/jewelry uploaded in outfit slots)
+  // Non-wearable items from the outfit slots — use styling graph for integration
   const footwearFromOutfits = manifest.footwearItems;
   const obligatoryFootwear: PlannedShot[] = footwearFromOutfits.map((item, fi) => {
-    const shot = buildHaulFootwearShot(item, fi);
+    const combo = findCompatibleOutfitFor(item.id);
+    const shot  = buildHaulFootwearShot(item, fi, combo);
     addHeroShot(item.id, shot.key);
+    if (combo) addIntegratedShot(combo.outfitItemId, shot.key);
     return shot;
   });
 
   // Accessories (from accesorioRefs slot): bags, jewelry, generic accessories
-  const accessoryBags    = manifest.accessoryItems.filter(it => it.kind === 'bag');
-  const accessoryJewelry = manifest.accessoryItems.filter(it => it.kind === 'jewelry');
-  const accessoryGeneric = manifest.accessoryItems.filter(it => it.kind !== 'bag' && it.kind !== 'jewelry');
+  const accessoryBags     = manifest.accessoryItems.filter(it => it.kind === 'bag');
+  const accessoryJewelry  = manifest.accessoryItems.filter(it => it.kind === 'jewelry');
+  const accessoryGeneric  = manifest.accessoryItems.filter(it => it.kind !== 'bag' && it.kind !== 'jewelry');
   const accessoryFootwear = manifest.accessoryItems.filter(it => it.kind === 'footwear');
 
   const obligatoryBags: PlannedShot[] = accessoryBags.map((item, bi) => {
-    const shot = buildHaulBagShot(item, bi);
+    const combo = findCompatibleOutfitFor(item.id);
+    const shot  = buildHaulBagShot(item, bi, combo);
     addHeroShot(item.id, shot.key);
+    if (combo) addIntegratedShot(combo.outfitItemId, shot.key);
     return shot;
   });
 
   const obligatoryJewelry: PlannedShot[] = accessoryJewelry.map((item, ji) => {
-    const shot = buildHaulJewelryShot(item, ji);
+    const combo = findCompatibleOutfitFor(item.id);
+    const shot  = buildHaulJewelryShot(item, ji, combo);
     addHeroShot(item.id, shot.key);
+    if (combo) addIntegratedShot(combo.outfitItemId, shot.key);
     return shot;
   });
 
   const obligatoryAccFootwear: PlannedShot[] = accessoryFootwear.map((item, fi) => {
-    const shot = buildHaulFootwearShot(item, footwearFromOutfits.length + fi);
+    const combo = findCompatibleOutfitFor(item.id);
+    const shot  = buildHaulFootwearShot(item, footwearFromOutfits.length + fi, combo);
     addHeroShot(item.id, shot.key);
+    if (combo) addIntegratedShot(combo.outfitItemId, shot.key);
     return shot;
   });
 
@@ -4057,9 +4325,16 @@ export function buildHaulShotPlan(
 
   // ── Actualizar ledger con status final ─────────────────────
   ledgerMap.forEach((entry, itemId) => {
-    if (entry.plannedHeroShots === 0 && entry.plannedSupportShots === 0) {
+    const hasHero       = entry.plannedHeroShots > 0;
+    const hasIntegrated = (entry.plannedIntegratedShots ?? 0) > 0;
+    const hasSupport    = entry.plannedSupportShots > 0;
+
+    if (!hasHero && !hasIntegrated && !hasSupport) {
       entry.coverageStatus = 'uncovered';
-    } else if (entry.plannedHeroShots === 0) {
+    } else if (!hasHero && hasIntegrated) {
+      // Accessories/footwear/jewelry that appear integrated in another item's shot
+      entry.coverageStatus = 'integrated';
+    } else if (!hasHero && hasSupport) {
       entry.coverageStatus = 'support_only';
     } else if (entry.required && entry.plannedHeroShots >= 3) {
       entry.coverageStatus = 'overexposed';
@@ -4077,8 +4352,11 @@ export function buildHaulShotPlan(
       entry.fidelityNote = hasComplexLook
         ? `Look completo con ${comps.componentsSummary} — requires full multi-piece fidelity in try-on shot`
         : `Basic look — top/bottom fidelity required`;
-    } else if (entry.coverageStatus === 'covered') {
+    } else if (entry.coverageStatus === 'covered' || entry.coverageStatus === 'integrated') {
       entry.fidelityLevel = 'full';
+      if (entry.coverageStatus === 'integrated') {
+        entry.fidelityNote = 'Item appears integrated in a compatible styled look — counts as covered';
+      }
     } else if (entry.coverageStatus === 'support_only') {
       entry.fidelityLevel = 'partial';
       entry.fidelityNote = 'Item only in support/background shots — no dedicated on-body hero shot';
@@ -4089,27 +4367,27 @@ export function buildHaulShotPlan(
 
     const idx = manifest.coveragePlan.ledger.findIndex(l => l.itemId === itemId);
     if (idx >= 0) manifest.coveragePlan.ledger[idx] = entry;
-    manifest.coveragePlan.plannedCoverage[itemId] = entry.plannedHeroShots + entry.plannedSupportShots;
+    manifest.coveragePlan.plannedCoverage[itemId] = entry.plannedHeroShots + (entry.plannedIntegratedShots ?? 0) + entry.plannedSupportShots;
   });
 
   // Calcular warnings — support_only escalated to uncovered for wearables (need body hero shot)
+  // 'integrated' counts as covered for accessories/footwear/jewelry
   const requiredIds = manifest.allItems.filter(it => it.priority === 'required').map(it => it.id);
+  const wearableKindsConst: HaulResolvedKind[] = ['full_outfit', 'top', 'bottom', 'dress', 'onepiece', 'outerwear', 'hosiery', 'mixed_set'];
   manifest.coveragePlan.uncoveredRequiredItems = requiredIds.filter(id => {
     const l = ledgerMap.get(id);
     if (!l || l.coverageStatus === 'uncovered') return true;
-    // Wearable items (full_outfit, top, bottom, dress, onepiece, outerwear, hosiery)
-    // must have a dedicated on-body hero shot — overview/support shots don't count
+    // Wearable items must have a dedicated on-body hero shot — support_only doesn't count
     const item = manifest.allItems.find(it => it.id === id);
-    const wearableKinds: HaulResolvedKind[] = ['full_outfit', 'top', 'bottom', 'dress', 'onepiece', 'outerwear', 'hosiery', 'mixed_set'];
-    if (item && wearableKinds.includes(item.resolvedKind) && l.coverageStatus === 'support_only') return true;
+    if (item && wearableKindsConst.includes(item.resolvedKind) && l.coverageStatus === 'support_only') return true;
+    // 'integrated' is acceptable coverage for non-wearables
     return false;
   });
   manifest.coveragePlan.supportOnlyItems = requiredIds.filter(id => {
     const l = ledgerMap.get(id);
     if (l?.coverageStatus !== 'support_only') return false;
     const item = manifest.allItems.find(it => it.id === id);
-    const wearableKinds: HaulResolvedKind[] = ['full_outfit', 'top', 'bottom', 'dress', 'onepiece', 'outerwear', 'hosiery', 'mixed_set'];
-    if (item && wearableKinds.includes(item.resolvedKind)) return false; // escalated above
+    if (item && wearableKindsConst.includes(item.resolvedKind)) return false; // escalated above
     return true;
   });
   manifest.coveragePlan.overexposedItems = Array.from(ledgerMap.values())
@@ -4327,15 +4605,16 @@ function pileStateDesc(state: HaulPileState, count: number): string {
 function buildHaulOverviewShot(
   manifest: HaulManifest,
 ): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
-  const itemCount = manifest.outfitItems.length;
-  const hasAccs   = manifest.accessoryItems.length > 0;
+  const itemCount  = manifest.outfitItems.length;
+  const hasAccs    = manifest.accessoryItems.length > 0;
+  const allItemIds = manifest.allItems.map(it => it.id);
   return {
     key:    'HAUL_OVERVIEW',
     beat:   'context',
     role:   'HAUL OVERVIEW',
     purpose: `Opening shot: all (or most) haul items visible as a collection — on a bed, rack, chair, floor, bags, or boxes. ${itemCount} garments${hasAccs ? ' + accessories' : ''} visible. The person may be partially visible arranging pieces or selecting something. Communicates "this is everything I got." NOT a studio catalog.`,
     requiredElements:  ['haul_items_visible_as_collection', 'real_room_context', 'organic_not_catalog_arrangement'],
-    forbiddenElements: ['white_background', 'studio_lighting', 'catalog_grid', 'full_body_catalog_pose', 'forced_symmetry', 'editorial_polish'],
+    forbiddenElements: ['white_background', 'studio_lighting', 'catalog_grid', 'full_body_catalog_pose', 'forced_symmetry', 'editorial_polish', 'invented_clothing_not_in_haul', 'extra_furniture_not_in_ref0'],
     variationSpace: [
       `flat lay of all ${itemCount} garments on bed — imperfect arrangement, slightly overlapping, real sheets visible`,
       `pieces hanging on rack or draped over chair, hands partially visible adjusting the last piece`,
@@ -4348,6 +4627,16 @@ function buildHaulOverviewShot(
     hpiAllowed:  false,
     wearState:   'not_wearing_final_outfit',
     cameraMode:  'object_flatlay',
+    haulItemPlan: {
+      primaryItems:    allItemIds,
+      wornItems:       [],
+      heldItems:       [],
+      surfaceItems:    allItemIds,
+      backgroundItems: [],
+      forbiddenItems:  [],
+      supportBaseLook: false,
+      integrationNote: 'All uploaded haul items visible as a collection — person NOT wearing any of them yet',
+    },
   };
 }
 
@@ -4369,7 +4658,7 @@ function buildHaulTryOnShot(
       role:   `HAUL SELECTION — ${item.label}`,
       purpose: `The person wearing one of their favorite pieces from the haul. ${pileNote} Natural expression — not "winning" necessarily, just genuinely wearing it. The haul energy is winding down. Full body or medium shot. The garment reads clearly. NOT a catalog pose. NOT forced "winner" energy.`,
       requiredElements:  ['avatar_wearing_item', 'garment_clearly_readable', 'natural_relaxed_expression'],
-      forbiddenElements: ['catalog_stance', 'studio_backdrop', 'white_background', 'mannequin_pose', 'beautification', 'ad_composition', 'editorial_lighting', 'forced_winner_pose'],
+      forbiddenElements: ['catalog_stance', 'studio_backdrop', 'white_background', 'mannequin_pose', 'beautification', 'ad_composition', 'editorial_lighting', 'forced_winner_pose', 'avatar_base_clothing_as_haul_item'],
       variationSpace: [
         `full body wearing ${item.label}, haul pile visible in background, relaxed natural posture`,
         `medium shot wearing ${item.label}, genuine expression, background shows haul context`,
@@ -4383,6 +4672,16 @@ function buildHaulTryOnShot(
       hpiScope:    'full',
       wearState:   'wearing_full_outfit',
       cameraMode:  'third_person',
+      haulItemPlan: {
+        primaryItems:    [item.id],
+        wornItems:       [item.id],
+        heldItems:       [],
+        surfaceItems:    [],
+        backgroundItems: [],
+        forbiddenItems:  [],
+        supportBaseLook: false,
+        integrationNote: `Person wearing ${item.label} — avatar base clothing must NOT appear as a haul product`,
+      },
     };
   }
 
@@ -4479,7 +4778,7 @@ function buildHaulTryOnShot(
       'no_catalog_pose',
       ...componentsRequired,
     ],
-    forbiddenElements: ['catalog_stance', 'studio_backdrop', 'white_background', 'mannequin_pose', 'beautification', 'ad_composition', 'editorial_lighting', 'high_fashion_look'],
+    forbiddenElements: ['catalog_stance', 'studio_backdrop', 'white_background', 'mannequin_pose', 'beautification', 'ad_composition', 'editorial_lighting', 'high_fashion_look', 'avatar_base_clothing_worn_as_haul_product'],
     variationSpace:    variations,
     framing:     'MEDIUM_OR_WIDE',
     composition: 'TRY_ON_IN_REAL_CONTEXT',
@@ -4488,6 +4787,16 @@ function buildHaulTryOnShot(
     hpiScope:    'full',
     wearState:   'wearing_full_outfit',
     cameraMode:  'third_person',
+    haulItemPlan: {
+      primaryItems:    [item.id],
+      wornItems:       [item.id],
+      heldItems:       [],
+      surfaceItems:    [],
+      backgroundItems: [],
+      forbiddenItems:  [],
+      supportBaseLook: false,
+      integrationNote: `Person wearing ${item.label} as primary haul item — ropa visible en avatar ref NO es producto del haul`,
+    },
   };
 }
 
@@ -4516,6 +4825,16 @@ function buildHaulAdjustingShot(
     hpiScope:    'micro_action_only',
     wearState:   'wearing_full_outfit',
     cameraMode:  'third_person',
+    haulItemPlan: {
+      primaryItems:    [item.id],
+      wornItems:       [item.id],
+      heldItems:       [],
+      surfaceItems:    [],
+      backgroundItems: [],
+      forbiddenItems:  [],
+      supportBaseLook: false,
+      integrationNote: `Adjusting ${item.label} — person wearing it, hands active on the garment`,
+    },
   };
 }
 
@@ -4568,45 +4887,96 @@ function buildHaulAccessoryCloseupShot(
     hpiAllowed:  false,
     wearState:   'not_wearing_final_outfit',
     cameraMode:  'detail_macro',
+    haulItemPlan: {
+      primaryItems:    [item.id],
+      wornItems:       [],
+      heldItems:       [item.id],
+      surfaceItems:    [item.id],
+      backgroundItems: [],
+      forbiddenItems:  [],
+      supportBaseLook: true,
+      integrationNote: `Close-up of ${item.label} — accessory as object, no full outfit context`,
+    },
   };
 }
 
 function buildHaulFootwearShot(
-  item:       HaulItem,
-  footwearIdx: number,
+  item:            HaulItem,
+  footwearIdx:     number,
+  compatibleCombo?: { outfitItemId: string; outfitLabel: string } | null,
 ): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
+  const hasCompatible = !!compatibleCombo;
+  const integrationNote = hasCompatible
+    ? `${item.label} worn with ${compatibleCombo!.outfitLabel} — footwear and outfit appear together`
+    : `${item.label} as standalone detail — NOT worn simultaneously AND NOT held simultaneously in the same shot`;
+
+  const purpose = hasCompatible
+    ? `${item.label} integrated with a compatible haul look (${compatibleCombo!.outfitLabel}). Foot-level or medium shot showing both pieces together. Footwear fits naturally with the outfit — no contradiction. Real room, real light. FOOTWEAR CONTRACT: shoe appears on BOTH feet, same design both sides, no boot fusing with leg/pants/skin.`
+    : `${item.label} is a footwear item. Show it as: held near camera between both hands, placed on a bed or floor surface, or being tried on at foot level. The footwear is the protagonist. Real light, real surface. FOOTWEAR CONTRACT: if worn → on BOTH feet, same design, same leg integration. If held → NOT simultaneously worn. Never fuse boot shaft with pants or skin. Never show one leg different from the other.`;
+
+  const variations = hasCompatible ? [
+    `foot-level shot: ${item.label} worn with ${compatibleCombo!.outfitLabel} — both feet visible, consistent styling`,
+    `medium shot — lower body showing ${item.label} with compatible haul look, real room`,
+    `sitting on bed edge wearing ${item.label} with ${compatibleCombo!.outfitLabel} — legs and footwear in frame`,
+    `close of feet wearing ${item.label} — floor visible, haul context around`,
+  ] : [
+    `${item.label} held between both hands near camera — NOT worn, real room in background`,
+    `${item.label} placed on bed or floor next to haul pile — design and texture readable, natural light`,
+    `foot-level shot: ${item.label} being put on — both feet, consistent, floor and room visible`,
+    `close-up of ${item.label} on a real surface — design, hardware, sole readable`,
+  ];
+
   return {
     key:    `HAUL_FOOTWEAR_${footwearIdx + 1}`,
     beat:   'detail',
     role:   `FOOTWEAR — ${item.label}`,
-    purpose: `${item.label} is a footwear item — a standalone shoe, boot, or sandal. Do NOT generate a full outfit from this reference alone. Show it as: a shoe/boot detail close to the camera, held by hand near waist level, placed on a bed or floor next to the haul pile, or being tried on at foot level. The footwear is the protagonist of this shot. Real light, real surface, intimate framing. NOT a catalog product shot.`,
-    requiredElements:  ['footwear_clearly_visible', 'real_light_and_texture', 'intimate_or_detail_framing'],
-    forbiddenElements: ['full_body_outfit_invented_from_shoe', 'studio_backdrop', 'catalog_product_shot', 'white_background', 'editorial_lighting', 'invented_complete_look'],
-    variationSpace: [
-      `${item.label} held between both hands near the camera, real room in background`,
-      `${item.label} placed on bed or haul pile — detail and texture readable, natural light`,
-      `foot-level shot: ${item.label} being put on or worn, floor and room visible`,
-      `close-up of ${item.label} resting on a real surface — design, texture, hardware readable`,
+    purpose,
+    requiredElements: hasCompatible
+      ? ['footwear_worn_with_compatible_outfit', 'both_feet_consistent_design', 'real_light_and_texture']
+      : ['footwear_clearly_visible', 'real_light_and_texture', 'intimate_or_detail_framing'],
+    forbiddenElements: [
+      'full_body_outfit_invented_from_shoe_alone',
+      'studio_backdrop',
+      'catalog_product_shot',
+      'white_background',
+      'editorial_lighting',
+      'one_leg_different_from_other',
+      'boot_shaft_fusing_with_pants_or_skin',
+      'footwear_held_and_worn_simultaneously',
+      'asymmetric_footwear_styling',
     ],
-    framing:     'CLOSE_UP_OR_MEDIUM',
-    composition: 'FOOTWEAR_DETAIL',
+    variationSpace: variations,
+    framing:     hasCompatible ? 'MEDIUM_OR_WIDE' : 'CLOSE_UP_OR_MEDIUM',
+    composition: hasCompatible ? 'FOOTWEAR_WITH_COMPATIBLE_LOOK' : 'FOOTWEAR_DETAIL',
     cameraAngle: 'EYE_LEVEL_OR_SLIGHT_ANGLE',
     hpiAllowed:  false,
-    wearState:   'not_wearing_final_outfit',
-    cameraMode:  'detail_macro',
+    wearState:   hasCompatible ? 'wearing_full_outfit' : 'not_wearing_final_outfit',
+    cameraMode:  hasCompatible ? 'third_person' : 'detail_macro',
+    haulItemPlan: {
+      primaryItems:    [item.id],
+      wornItems:       hasCompatible ? [item.id, compatibleCombo!.outfitItemId] : [],
+      heldItems:       hasCompatible ? [] : [item.id],
+      surfaceItems:    hasCompatible ? [] : [item.id],
+      backgroundItems: [],
+      forbiddenItems:  [],
+      supportBaseLook: !hasCompatible,
+      combinationId:   hasCompatible ? `combo_${compatibleCombo!.outfitItemId}` : undefined,
+      integrationNote,
+    },
   };
 }
 
 function buildHaulRecapShot(
   manifest: HaulManifest,
 ): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
+  const allItemIds = manifest.allItems.map(it => it.id);
   return {
     key:    'HAUL_RECAP',
     beat:   'atmosphere',
     role:   'HAUL RECAP',
-    purpose: `Closing shot of the haul. The person is wearing one of the haul looks already shown — NOT a new outfit, NOT avatar base clothing. They are surrounded by the haul items they uploaded (on bed, chair, or floor). Relaxed, natural mood. Communicates "that was everything." iPhone UGC energy, not editorial.`,
+    purpose: `Closing shot of the haul. The person is wearing ONE of the haul looks already shown — NOT a new outfit, NOT avatar base clothing, NOT an invented outfit. They are surrounded by haul items they uploaded (on bed, chair, or floor). Relaxed, natural mood. Communicates "that was everything." iPhone UGC energy, not editorial.`,
     requiredElements:  ['person_wearing_one_of_the_haul_looks_already_shown', 'haul_items_visible_in_background', 'natural_relaxed_mood'],
-    forbiddenElements: ['catalog_pose', 'studio_backdrop', 'editorial_lighting', 'forced_symmetry', 'ad_feel'],
+    forbiddenElements: ['catalog_pose', 'studio_backdrop', 'editorial_lighting', 'forced_symmetry', 'ad_feel', 'avatar_base_clothing_as_haul_look', 'invented_new_outfit_never_shown'],
     variationSpace: [
       `person sitting or standing surrounded by haul items — items on bed/rack visible, relaxed smile`,
       `medium shot of person holding favorite piece(s), background shows the haul in progress`,
@@ -4620,6 +4990,16 @@ function buildHaulRecapShot(
     hpiScope:    'full',
     wearState:   'wearing_full_outfit',
     cameraMode:  'third_person',
+    haulItemPlan: {
+      primaryItems:    allItemIds,
+      wornItems:       [],  // planner resolverá qué look se usa en el arc
+      heldItems:       [],
+      surfaceItems:    allItemIds,
+      backgroundItems: allItemIds,
+      forbiddenItems:  [],
+      supportBaseLook: false,
+      integrationNote: 'Recap: person wears a PREVIOUSLY SHOWN haul look — all haul items visible in background',
+    },
   };
 }
 
@@ -4689,56 +5069,142 @@ function buildHaulStyledResultShot(
 // ── Haul: Bag/bolso shot ──────────────────────────────────────
 
 function buildHaulBagShot(
-  item:  HaulItem,
-  bagIdx: number,
+  item:            HaulItem,
+  bagIdx:          number,
+  compatibleCombo?: { outfitItemId: string; outfitLabel: string } | null,
 ): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
+  const hasCompatible = !!compatibleCombo;
+
+  const purpose = hasCompatible
+    ? `${item.label} carried with a compatible haul look (${compatibleCombo!.outfitLabel}). The person holds or wears the bag naturally while also wearing the compatible outfit. Medium or medium-close framing. Real room. The bag is clearly readable — design, hardware, shape faithful to the reference. Do NOT invent additional garments.`
+    : `${item.label} is a bag or purse. Show it with character — not a catalog shot: held casually over shoulder or in hand, resting on bed near haul pile, detail of hardware or stitching, being opened or adjusted. Real room light. The bag is the protagonist. Do NOT invent a full styled outfit — person may be present but NOT showing off a full haul look.`;
+
+  const variations = hasCompatible ? [
+    `person carrying ${item.label} over shoulder wearing ${compatibleCombo!.outfitLabel} — medium shot, natural posture`,
+    `${item.label} held in hand while wearing ${compatibleCombo!.outfitLabel} — candid real moment`,
+    `medium: person with ${item.label} and ${compatibleCombo!.outfitLabel} — bag as style detail of the look`,
+    `close of ${item.label} being opened or adjusted while ${compatibleCombo!.outfitLabel} visible around it`,
+  ] : [
+    `${item.label} held casually over shoulder or in hand — natural posture, room visible behind`,
+    `${item.label} resting on bed or haul pile — design and texture readable, real light`,
+    `close-up of ${item.label} hardware, stitching, or clasp — macro real texture`,
+    `person opening or adjusting ${item.label} — hands active, candid interaction`,
+  ];
+
   return {
     key:    `HAUL_BAG_${bagIdx + 1}`,
     beat:   'detail',
     role:   `BAG / BOLSO — ${item.label}`,
-    purpose: `${item.label} is a bag or purse. Show it as a product with character — not a catalog shot. Options: held casually over shoulder or in hand, resting on bed near haul pile, detail of hardware or stitching, being opened or adjusted. Real room light. The bag is the protagonist. Do NOT invent a full outfit around it.`,
-    requiredElements:  ['bag_clearly_visible', 'real_light_and_texture', 'intimate_or_contextual_framing'],
-    forbiddenElements: ['white_studio_background', 'catalog_product_shot', 'editorial_lighting', 'forced_symmetry', 'invented_full_outfit_for_context'],
-    variationSpace: [
-      `${item.label} held casually over shoulder or in hand — natural posture, room visible behind`,
-      `${item.label} resting on bed or haul pile — design and texture readable, real light`,
-      `close-up of ${item.label} hardware, stitching, or clasp — macro real texture`,
-      `person opening or adjusting ${item.label} — hands active, candid interaction`,
+    purpose,
+    requiredElements:  [
+      'bag_clearly_visible_faithful_to_reference',
+      'real_light_and_texture',
+      hasCompatible ? 'compatible_outfit_worn_in_same_shot' : 'intimate_or_contextual_framing',
     ],
-    framing:     'MEDIUM_OR_CLOSE',
-    composition: 'BAG_AS_PROTAGONIST',
+    forbiddenElements: [
+      'white_studio_background',
+      'catalog_product_shot',
+      'editorial_lighting',
+      'forced_symmetry',
+      'invented_outfit_not_in_haul',
+      'bag_design_changed_or_fused',
+    ],
+    variationSpace: variations,
+    framing:     hasCompatible ? 'MEDIUM_OR_WIDE' : 'MEDIUM_OR_CLOSE',
+    composition: hasCompatible ? 'BAG_WITH_COMPATIBLE_LOOK' : 'BAG_AS_PROTAGONIST',
     cameraAngle: 'EYE_LEVEL_OR_SLIGHT_ANGLE',
     hpiAllowed:  false,
-    wearState:   'not_wearing_final_outfit',
-    cameraMode:  'third_person',
+    wearState:   hasCompatible ? 'wearing_full_outfit' : 'not_wearing_final_outfit',
+    cameraMode:  hasCompatible ? 'third_person' : 'third_person',
+    haulItemPlan: {
+      primaryItems:    [item.id],
+      wornItems:       hasCompatible ? [compatibleCombo!.outfitItemId] : [],
+      heldItems:       [item.id],
+      surfaceItems:    hasCompatible ? [] : [item.id],
+      backgroundItems: [],
+      forbiddenItems:  [],
+      supportBaseLook: !hasCompatible,
+      combinationId:   hasCompatible ? `combo_${compatibleCombo!.outfitItemId}` : undefined,
+      integrationNote: hasCompatible
+        ? `${item.label} carried with ${compatibleCombo!.outfitLabel} — bag held, outfit worn`
+        : `${item.label} standalone — held or surface placement, no invented look`,
+    },
   };
 }
 
 // ── Haul: Jewelry shot ────────────────────────────────────────
 
 function buildHaulJewelryShot(
-  item:       HaulItem,
-  jewelryIdx: number,
+  item:            HaulItem,
+  jewelryIdx:      number,
+  compatibleCombo?: { outfitItemId: string; outfitLabel: string } | null,
 ): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
+  const hasCompatible = !!compatibleCombo;
+
+  // Determinar si son aros (earrings) para regla de simetría
+  const lowerLabel = item.label.toLowerCase();
+  const isEarrings = lowerLabel.includes('aro') || lowerLabel.includes('earring') || lowerLabel.includes('arete') || lowerLabel.includes('pendiente');
+  const earringRule = isEarrings
+    ? ' EARRING SYMMETRY: both ears must wear the same earring — same design, same scale, same position. Never mismatched.'
+    : '';
+
+  const purpose = hasCompatible
+    ? `${item.label} worn with a compatible haul outfit (${compatibleCombo!.outfitLabel}). Close crop near the body part where jewelry is worn — ear/neck/wrist visible. Jewelry is the detail protagonist but outfit context is present.${earringRule} Do NOT invent new garments — only use the referenced haul outfit.`
+    : `${item.label} is a jewelry piece. Show it intimately: worn on body (ear/wrist/neck/finger) with natural light — close crop, real skin visible; OR held between fingers macro-close to camera; OR resting on real fabric surface. Reproduce ${item.label} faithfully: exact shape, color, material, scale, pair if applicable.${earringRule} Do NOT invent full outfit context that was not provided.`;
+
+  const variations = hasCompatible ? [
+    `close crop: ${item.label} worn with ${compatibleCombo!.outfitLabel} — face/neck/wrist tight framing, jewelry as focal detail`,
+    `person putting on ${item.label} while wearing ${compatibleCombo!.outfitLabel} — hands active, candid gesture`,
+    `medium shot — ${item.label} detail as styling finishing touch on ${compatibleCombo!.outfitLabel} look`,
+    `macro of ${item.label} on body with ${compatibleCombo!.outfitLabel} soft-focused behind — depth, real light`,
+  ] : [
+    `${item.label} worn on body — ear/wrist/neck visible, natural light, real skin texture, macro-intimate`,
+    `${item.label} held between fingers — macro framing, design and detail readable, real hand`,
+    `${item.label} resting on fabric surface (bed, haul garment) — real environment, intimate detail`,
+    `person putting on or adjusting ${item.label} — candid gesture, hands and jewelry in frame`,
+  ];
+
   return {
     key:    `HAUL_JEWELRY_${jewelryIdx + 1}`,
     beat:   'detail',
     role:   `JEWELRY — ${item.label}`,
-    purpose: `${item.label} is a jewelry piece. Show it intimately — not a catalog shot. Options: worn on the body (ear, wrist, neck, finger) with natural light, held between fingers close to camera, resting on fabric or a real surface. Macro or semi-macro framing. Real skin texture if worn. Do NOT invent other garments around it.`,
-    requiredElements:  ['jewelry_clearly_visible', 'real_light', 'intimate_macro_framing'],
-    forbiddenElements: ['white_studio_background', 'catalog_product_shot', 'editorial_lighting', 'full_body_outfit_invented'],
-    variationSpace: [
-      `${item.label} worn on body — ear, wrist, or neck visible, natural light, real skin texture`,
-      `${item.label} held between fingers — macro framing, design and detail readable`,
-      `${item.label} resting on fabric surface (bed, clothes) — real environment, intimate`,
-      `person putting on or adjusting ${item.label} — candid gesture, hands and jewelry in frame`,
+    purpose,
+    requiredElements: [
+      'jewelry_faithfully_reproduced_exact_shape_color_scale',
+      'real_light',
+      'intimate_macro_framing',
+      ...(isEarrings ? ['both_ears_same_earring_design'] : []),
+      ...(hasCompatible ? ['compatible_outfit_present_in_shot'] : []),
     ],
+    forbiddenElements: [
+      'white_studio_background',
+      'catalog_product_shot',
+      'editorial_lighting',
+      'invented_outfit_not_in_haul',
+      'different_jewelry_than_reference',
+      'wrong_scale_jewelry',
+      ...(isEarrings ? ['mismatched_earrings', 'single_earring_only'] : []),
+    ],
+    variationSpace: variations,
     framing:     'CLOSE_UP_OR_MACRO',
-    composition: 'JEWELRY_INTIMATE_DETAIL',
+    composition: hasCompatible ? 'JEWELRY_WITH_COMPATIBLE_LOOK' : 'JEWELRY_INTIMATE_DETAIL',
     cameraAngle: 'SLIGHT_ANGLE_OR_STRAIGHT',
     hpiAllowed:  false,
-    wearState:   'not_wearing_final_outfit',
-    cameraMode:  'detail_macro',
+    wearState:   hasCompatible ? 'wearing_full_outfit' : 'not_wearing_final_outfit',
+    cameraMode:  hasCompatible ? 'third_person' : 'detail_macro',
+    haulItemPlan: {
+      primaryItems:    [item.id],
+      wornItems:       [item.id, ...(hasCompatible ? [compatibleCombo!.outfitItemId] : [])],
+      heldItems:       hasCompatible ? [] : [item.id],
+      surfaceItems:    [],
+      backgroundItems: [],
+      forbiddenItems:  [],
+      supportBaseLook: !hasCompatible,
+      combinationId:   hasCompatible ? `combo_${compatibleCombo!.outfitItemId}` : undefined,
+      integrationNote: hasCompatible
+        ? `${item.label} integrated with ${compatibleCombo!.outfitLabel} — jewelry is detail focal point`
+        : `${item.label} standalone — macro or held shot, no invented outfit context`,
+    },
   };
 }
 
@@ -5504,11 +5970,27 @@ export async function generatePhotodumpShot(
     if (sceneForShot) refsToPass.push(sceneForShot);
   } else if (recipe === 'outfit_haul') {
     // ── Haul: routing de referencias por tipo de shot ─────────
-    // Cada shot recibe SOLO lo que necesita — no un dump de todas las refs.
-    // REF0 siempre primero como ancla de mundo visual.
+    // Cada shot recibe SOLO lo que necesita — routing por itemId del manifest,
+    // NO por índice crudo de allOutfits. Fallback a índice solo si manifest no tiene el ítem.
     const allOutfits    = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
     const allAccesorios = (refs.accesorioRefs ?? []).filter(Boolean) as string[];
     const shotKey       = shot.key ?? '';
+    const m             = haulManifest ?? buildHaulManifest(refs, 20);
+
+    // Helper: buscar ref de ítem por ID en el manifest
+    const getRefByItemId = (itemId: string): string | undefined =>
+      m.allItems.find(it => it.id === itemId)?.refUrl;
+
+    // Helper: refs para los worn/held items del haulItemPlan del shot
+    const getItemPlanRefs = (): string[] => {
+      const plan = shot.haulItemPlan;
+      if (!plan) return [];
+      const worn = plan.wornItems.map(getRefByItemId).filter(Boolean) as string[];
+      const held = plan.heldItems.map(getRefByItemId).filter(Boolean) as string[];
+      // dedup
+      const seen = new Set<string>();
+      return [...worn, ...held].filter(r => { if (seen.has(r)) return false; seen.add(r); return true; });
+    };
 
     refsToPass.push(ref0Url);  // REF0 siempre presente
 
@@ -5516,94 +5998,144 @@ export async function generatePhotodumpShot(
       // close-up: accesorio específico + avatar mínimo para contexto corporal
       const accIdx = parseInt(shotKey.replace('HAUL_ACCESSORY_CLOSEUP_', ''), 10) - 1;
       if (refs.avatarRef) refsToPass.push(refs.avatarRef);
-      if (allAccesorios[accIdx]) refsToPass.push(allAccesorios[accIdx]);
+      // Buscar por ID desde manifest — fallback a índice de accesorioRefs
+      const accItem = m.accessoryItems.filter(it => it.kind !== 'bag' && it.kind !== 'jewelry')[accIdx];
+      const accRef  = accItem?.refUrl ?? allAccesorios[accIdx];
+      if (accRef) refsToPass.push(accRef);
 
     } else if (shotKey === 'HAUL_OVERVIEW') {
-      // overview: avatar + subset de prendas (máx 4) + accesorios (máx 2)
+      // overview: avatar + todos los ítems del haul (máx 6 refs de prendas)
       if (refs.avatarRef) refsToPass.push(refs.avatarRef);
-      allOutfits.slice(0, 4).forEach(r => refsToPass.push(r));
-      allAccesorios.slice(0, 2).forEach(r => refsToPass.push(r));
+      m.allItems.slice(0, 6).forEach(it => { if (it.refUrl) refsToPass.push(it.refUrl); });
       if (refs.sceneRef) refsToPass.push(refs.sceneRef);
 
     } else if (shotKey.startsWith('HAUL_TRY_ON_') || shotKey === 'HAUL_SELECTION') {
-      // try-on/selection: avatar x2 + prenda específica (solo esa — no dump de todos los outfits)
+      // try-on/selection: avatar x2 + la prenda específica por ID del manifest
       if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef);
       if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
-      let itemIdx = 0;
-      if (shotKey.startsWith('HAUL_TRY_ON_')) {
-        itemIdx = parseInt(shotKey.replace('HAUL_TRY_ON_', ''), 10) - 1;
+      // Resolver por plan de ítems del shot (primaryItems / wornItems) si existe
+      const planRefs = getItemPlanRefs();
+      if (planRefs.length > 0) {
+        planRefs.forEach(r => refsToPass.push(r));
       } else {
-        // HAUL_SELECTION: último outfit en la lista
-        itemIdx = Math.max(0, allOutfits.length - 1);
+        // Fallback: resolver por índice numérico del shotKey
+        let itemIdx = 0;
+        if (shotKey.startsWith('HAUL_TRY_ON_')) {
+          itemIdx = parseInt(shotKey.replace('HAUL_TRY_ON_', ''), 10) - 1;
+        } else {
+          itemIdx = Math.max(0, m.outfitItems.length - 1);
+        }
+        const item = m.outfitItems[itemIdx] ?? m.tryOnItems[itemIdx];
+        if (item?.refUrl) refsToPass.push(item.refUrl);
+        else if (allOutfits[itemIdx]) refsToPass.push(allOutfits[itemIdx]);
       }
-      if (allOutfits[itemIdx]) refsToPass.push(allOutfits[itemIdx]);
-      // NO pasamos sceneRef extra — REF0 ya ancla el espacio
 
     } else if (shotKey.startsWith('HAUL_ADJUSTING_')) {
-      // adjusting: avatar x2 + misma prenda del try-on correspondiente
-      const itemIdx = Math.max(0, parseInt(shotKey.replace('HAUL_ADJUSTING_', ''), 10) - 1);
+      // adjusting: avatar x2 + misma prenda — resolver por manifest
       if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef);
       if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
-      if (allOutfits[itemIdx]) refsToPass.push(allOutfits[itemIdx]);
+      const planRefs = getItemPlanRefs();
+      if (planRefs.length > 0) {
+        planRefs.forEach(r => refsToPass.push(r));
+      } else {
+        const itemIdx = Math.max(0, parseInt(shotKey.replace('HAUL_ADJUSTING_', ''), 10) - 1);
+        const item    = m.outfitItems[itemIdx];
+        if (item?.refUrl) refsToPass.push(item.refUrl);
+        else if (allOutfits[itemIdx]) refsToPass.push(allOutfits[itemIdx]);
+      }
 
     } else if (shotKey.startsWith('HAUL_DETAIL_')) {
       // detalle de prenda: solo la prenda + avatar mínimo (manos)
-      const itemIdx = Math.max(0, parseInt(shotKey.replace('HAUL_DETAIL_', ''), 10) - 1);
       if (refs.avatarRef) refsToPass.push(refs.avatarRef);
-      if (allOutfits[itemIdx]) refsToPass.push(allOutfits[itemIdx]);
+      const planRefs = getItemPlanRefs();
+      if (planRefs.length > 0) {
+        planRefs.forEach(r => refsToPass.push(r));
+      } else {
+        const itemIdx = Math.max(0, parseInt(shotKey.replace('HAUL_DETAIL_', ''), 10) - 1);
+        const item    = m.outfitItems[itemIdx];
+        if (item?.refUrl) refsToPass.push(item.refUrl);
+        else if (allOutfits[itemIdx]) refsToPass.push(allOutfits[itemIdx]);
+      }
 
     } else if (shotKey.startsWith('HAUL_FOOTWEAR_')) {
-      // footwear detail: solo el calzado + avatar mínimo (manos/pie)
+      // footwear: calzado + avatar + ref de outfit compatible si hay integración
       const footwearIdx = Math.max(0, parseInt(shotKey.replace('HAUL_FOOTWEAR_', ''), 10) - 1);
       if (refs.avatarRef) refsToPass.push(refs.avatarRef);
-      // Usar el manifest ya construido (con visualAnalysis) para garantizar clasificación consistente
-      const mForFootwear = haulManifest ?? buildHaulManifest(refs, 20);
-      const footwearRef = mForFootwear.footwearItems[footwearIdx]?.refUrl;
-      if (footwearRef) refsToPass.push(footwearRef);
+      // Resolver por ID del manifest — priorizar footwearItems, luego accessoryFootwear
+      const allFw = [...m.footwearItems, ...m.accessoryItems.filter(it => it.kind === 'footwear')];
+      const fwItem = allFw[footwearIdx];
+      if (fwItem?.refUrl) refsToPass.push(fwItem.refUrl);
+      // Si hay integración con outfit, pasar también la ref del outfit
+      const plan = shot.haulItemPlan;
+      if (plan?.wornItems) {
+        plan.wornItems.filter(id => id !== fwItem?.id).forEach(id => {
+          const ref = getRefByItemId(id);
+          if (ref) refsToPass.push(ref);
+        });
+      }
 
     } else if (shotKey.startsWith('HAUL_BAG_')) {
-      // bolso detail: solo el bolso + avatar mínimo
-      const bagIdx = Math.max(0, parseInt(shotKey.replace('HAUL_BAG_', ''), 10) - 1);
+      // bolso: bag + avatar + ref de outfit compatible si hay integración
+      const bagIdx  = Math.max(0, parseInt(shotKey.replace('HAUL_BAG_', ''), 10) - 1);
       if (refs.avatarRef) refsToPass.push(refs.avatarRef);
-      const mForBag = haulManifest ?? buildHaulManifest(refs, 20);
-      const bagItems = mForBag.accessoryItems.filter(it => it.kind === 'bag');
-      const bagRef = bagItems[bagIdx]?.refUrl;
-      if (bagRef) refsToPass.push(bagRef);
+      const bagItems = m.accessoryItems.filter(it => it.kind === 'bag');
+      const bagItem  = bagItems[bagIdx];
+      if (bagItem?.refUrl) refsToPass.push(bagItem.refUrl);
+      const plan = shot.haulItemPlan;
+      if (plan?.wornItems) {
+        plan.wornItems.filter(id => id !== bagItem?.id).forEach(id => {
+          const ref = getRefByItemId(id);
+          if (ref) refsToPass.push(ref);
+        });
+      }
 
     } else if (shotKey.startsWith('HAUL_JEWELRY_')) {
-      // joyería detail: solo la joya + avatar mínimo
-      const jewIdx = Math.max(0, parseInt(shotKey.replace('HAUL_JEWELRY_', ''), 10) - 1);
+      // joyería: jewel + avatar + ref de outfit compatible si hay integración
+      const jewIdx   = Math.max(0, parseInt(shotKey.replace('HAUL_JEWELRY_', ''), 10) - 1);
       if (refs.avatarRef) refsToPass.push(refs.avatarRef);
-      const mForJew = haulManifest ?? buildHaulManifest(refs, 20);
-      const jewItems = mForJew.accessoryItems.filter(it => it.kind === 'jewelry');
-      const jewRef = jewItems[jewIdx]?.refUrl;
-      if (jewRef) refsToPass.push(jewRef);
+      const jewItems = m.accessoryItems.filter(it => it.kind === 'jewelry');
+      const jewItem  = jewItems[jewIdx];
+      if (jewItem?.refUrl) refsToPass.push(jewItem.refUrl);
+      const plan = shot.haulItemPlan;
+      if (plan?.wornItems) {
+        plan.wornItems.filter(id => id !== jewItem?.id).forEach(id => {
+          const ref = getRefByItemId(id);
+          if (ref) refsToPass.push(ref);
+        });
+      }
 
     } else if (shotKey.startsWith('HAUL_SETUP_')) {
       // setup shot: avatar + la prenda específica del setup como objeto
       const setupIdx = Math.max(0, parseInt(shotKey.replace('HAUL_SETUP_', ''), 10) - 1);
       if (refs.avatarRef) refsToPass.push(refs.avatarRef);
-      const mForSetup = haulManifest ?? buildHaulManifest(refs, 20);
-      const setupItem = mForSetup.outfitItems[setupIdx] ?? mForSetup.tryOnItems[setupIdx];
+      const setupItem = m.outfitItems[setupIdx] ?? m.tryOnItems[setupIdx];
       if (setupItem?.refUrl) {
         refsToPass.push(setupItem.refUrl);
       } else {
-        // fallback: subset de 3 prendas si no se puede resolver el ítem específico
+        // fallback: subset de 3 prendas
         allOutfits.slice(0, 3).forEach(r => refsToPass.push(r));
       }
 
     } else if (shotKey.startsWith('HAUL_STYLED_')) {
-      // styled result: avatar x2 + misma prenda del try-on correspondiente
-      const styledIdx = Math.max(0, parseInt(shotKey.replace('HAUL_STYLED_', ''), 10) - 1);
+      // styled result: avatar x2 + prenda por ID del manifest
       if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef);
       if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
-      if (allOutfits[styledIdx]) refsToPass.push(allOutfits[styledIdx]);
+      const planRefs = getItemPlanRefs();
+      if (planRefs.length > 0) {
+        planRefs.forEach(r => refsToPass.push(r));
+      } else {
+        const styledIdx = Math.max(0, parseInt(shotKey.replace('HAUL_STYLED_', ''), 10) - 1);
+        const item      = m.outfitItems[styledIdx];
+        if (item?.refUrl) refsToPass.push(item.refUrl);
+        else if (allOutfits[styledIdx]) refsToPass.push(allOutfits[styledIdx]);
+      }
 
     } else {
-      // HAUL_RECAP y cualquier otro shot: avatar x2 + subset de 3 prendas
+      // HAUL_RECAP y cualquier otro shot: avatar x2 + subset de 3 prendas por ID
       if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef);
       if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
-      allOutfits.slice(0, 3).forEach(r => refsToPass.push(r));
+      m.outfitItems.slice(0, 3).forEach(it => { if (it.refUrl) refsToPass.push(it.refUrl); });
+      if (refsToPass.length <= 3) allOutfits.slice(0, 3).forEach(r => refsToPass.push(r));
     }
 
   } else if (recipe === 'outfit_check' || recipe === 'outfit_week') {
@@ -5821,6 +6353,10 @@ This shot showcases the piece itself as part of the haul/outfit story.`
     : '';
   const haulWorldMapBlock = recipe === 'outfit_haul' && ref0Analysis
     ? buildHaulWorldMap(ref0Analysis).worldLockSummary
+    : '';
+  // Bloque de plan de ítems por shot — qué aparece exactamente en este shot
+  const haulShotItemPlanBlock = recipe === 'outfit_haul' && shot.haulItemPlan && haulManifest
+    ? buildHaulShotItemPlanBlock(shot.haulItemPlan, haulManifest)
     : '';
 
   // Instrucción de outfit específica para este shot
@@ -6053,6 +6589,8 @@ ONE person maximum in any frame. Any background figure is a generation error.
 HAUL CONTEXT: ${shot.purpose}
 
 ${haulWorldMapBlock}
+
+${haulShotItemPlanBlock}
 
 ${haulItemRoleLockBlock}
 

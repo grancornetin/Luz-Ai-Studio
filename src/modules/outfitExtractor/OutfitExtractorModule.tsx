@@ -12,10 +12,10 @@ import { useModelSelection } from '../../hooks/useModelSelection';
 import { generationHistoryService } from '../../services/generationHistoryService';
 import { outfitService } from './outfitService';
 import { outfitStorage } from './outfitStorage';
-import { OutfitKit, SavedOutfitItem, OutfitCombination } from './types';
+import { OutfitKit, OutfitItem, SavedOutfitItem, OutfitCombination } from './types';
 import { downloadAsZip } from '../../utils/imageUtils';
 import { useAuth } from '../../modules/auth/AuthContext';
-import { newSessionId } from '../../services/imageApiService';
+import { ErrorCode, newSessionId, parseErrorCode } from '../../services/imageApiService';
 import { getNotification } from '../../services/notificationsService';
 import { useSearchParams } from 'react-router-dom';
 import { GenerateButton } from '../../components/shared/GenerateButton';
@@ -65,6 +65,32 @@ const StepHeader: React.FC<{ title: string; subtitle: string; icon: string }> = 
   </div>
 );
 
+const RENDER_BATCH_SIZE = 2;
+const RENDER_BATCH_DELAY_MS = 30000;
+const RENDER_RETRY_DELAYS_MS = [30000, 60000, 90000];
+const RENDER_RETRY_STAGGER_MS = 5000;
+const MAX_RENDER_ATTEMPTS = 1 + RENDER_RETRY_DELAYS_MS.length;
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const formatDelay = (ms: number) => {
+  const seconds = Math.ceil(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
+};
+
+const shouldRetryRenderError = (error: unknown) => {
+  const appError = parseErrorCode(error);
+  return [
+    ErrorCode.RATE_LIMIT,
+    ErrorCode.TIMEOUT,
+    ErrorCode.SERVER_ERROR,
+    ErrorCode.UNKNOWN,
+  ].includes(appError.code);
+};
+
 // ── Módulo principal ─────────────────────────────────────────────────────────
 
 const OutfitExtractorModule: React.FC = () => {
@@ -96,6 +122,7 @@ const OutfitExtractorModule: React.FC = () => {
   const { isVisible: fabVisible } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: false });
   const { checkAndDeduct, showNoCredits, requiredCredits, closeModal } = useCreditGuard();
   const containerRef = useRef<HTMLDivElement>(null);
+  const renderQueueRunningRef = useRef(false);
 
   // Retomar sesión desde notificación
   const [searchParams, setSearchParams] = useSearchParams();
@@ -204,41 +231,51 @@ const OutfitExtractorModule: React.FC = () => {
     });
   };
 
-  const confirmSelectionAndRender = async () => {
-    if (!currentKit) return;
-    const selectedItems = currentKit.items.filter(i => i.selected);
-    if (selectedItems.length === 0) return alert('Seleccioná al menos una prenda para generar.');
+  const commitRenderItems = (kit: OutfitKit, items: OutfitItem[]) => {
+    setCurrentKit(prev => {
+      const baseKit = prev && prev.id === kit.id ? prev : kit;
+      return { ...baseKit, items: [...items] };
+    });
+  };
 
-    const ok = await checkAndDeduct(selectedItems.length * outfitCostPerItem);
-    if (!ok) return;
+  const generateItemRenderWithRetries = async (
+    item: OutfitItem,
+    kit: OutfitKit,
+    shotIndex: number,
+    totalShots: number,
+    batchPosition: number,
+    sessionId: string,
+  ) => {
+    let lastError: unknown = null;
 
-    setStep('generating_renders');
-    const updatedItems = [...currentKit.items];
-    const sessionId = newSessionId();
-    const totalSelected = selectedItems.length;
-    const baseSessionParams = {
-      uid: user?.uid,
-      sessionId,
-      module: 'outfit',
-      moduleLabel: 'Extraer prendas',
-      metadata: { kitId: currentKit.id, totalItems: totalSelected },
-    };
+    for (let attempt = 1; attempt <= MAX_RENDER_ATTEMPTS; attempt++) {
+      item.renderAttempts = attempt;
+      item.lastError = null;
+      setLoadingMsg(`Generando ${item.name} (intento ${attempt}/${MAX_RENDER_ATTEMPTS})...`);
 
-    let shotIdx = 0;
-    for (let i = 0; i < updatedItems.length; i++) {
-      const item = updatedItems[i];
-      if (!item.selected) continue;
-      setLoadingMsg(`Generando render: ${item.name}...`);
-      item.status = 'generating';
-      setCurrentKit({ ...currentKit, items: [...updatedItems] });
-      const currentShotIdx = shotIdx++;
       try {
         const url = await outfitService.generateItemRender(
-          item, currentKit.originalImage, modelId,
-          { ...baseSessionParams, shotIndex: currentShotIdx, totalShots: totalSelected },
+          item, kit.originalImage, modelId,
+          {
+            uid: user?.uid,
+            sessionId,
+            module: 'outfit',
+            moduleLabel: 'Extraer prendas',
+            shotIndex,
+            totalShots,
+            metadata: {
+              kitId: kit.id,
+              itemId: item.id,
+              itemName: item.name,
+              attempt,
+              totalItems: totalShots,
+            },
+          },
         );
+
         item.imageUrl = url;
         item.status = 'done';
+        item.lastError = null;
         generationHistoryService.save({
           imageUrl: url,
           module: 'outfit_extractor',
@@ -246,12 +283,114 @@ const OutfitExtractorModule: React.FC = () => {
           creditsUsed: outfitCostPerItem,
           promptText: `Render for ${item.name}`,
         }).catch(console.error);
-      } catch {
-        item.status = 'error';
+        return;
+      } catch (err) {
+        lastError = err;
+        const appError = parseErrorCode(err);
+        item.lastError = appError.message;
+
+        const canRetry = attempt < MAX_RENDER_ATTEMPTS && shouldRetryRenderError(err);
+        if (!canRetry) break;
+
+        const delay = (RENDER_RETRY_DELAYS_MS[attempt - 1] ?? RENDER_BATCH_DELAY_MS) + (batchPosition * RENDER_RETRY_STAGGER_MS);
+        setLoadingMsg(`${item.name} recibio limite de API. Reintentamos en ${formatDelay(delay)}...`);
+        await sleep(delay);
       }
-      setCurrentKit({ ...currentKit, items: [...updatedItems] });
     }
-    setStep('reviewing_renders');
+
+    const appError = parseErrorCode(lastError);
+    item.status = 'error';
+    item.lastError = appError.message;
+  };
+
+  const renderQueuedItems = async (
+    kit: OutfitKit,
+    itemIds: string[],
+    options: { initialDelayMs?: number; lockAlreadyHeld?: boolean } = {},
+  ) => {
+    if (renderQueueRunningRef.current && !options.lockAlreadyHeld) return;
+    if (!options.lockAlreadyHeld) renderQueueRunningRef.current = true;
+
+    try {
+      setStep('generating_renders');
+      const idsToRender = new Set(itemIds);
+      const updatedItems = kit.items.map(item => idsToRender.has(item.id)
+        ? {
+          ...item,
+          status: 'pending' as const,
+          imageUrl: item.status === 'done' ? item.imageUrl : null,
+          lastError: null,
+          renderAttempts: 0,
+          selected: true,
+        }
+        : { ...item },
+      );
+      commitRenderItems(kit, updatedItems);
+
+      const renderItems = updatedItems.filter(item => idsToRender.has(item.id));
+      const totalToRender = renderItems.length;
+      const sessionId = newSessionId();
+      const batchCount = Math.ceil(totalToRender / RENDER_BATCH_SIZE);
+
+      if (options.initialDelayMs && options.initialDelayMs > 0) {
+        setLoadingMsg(`Pausa anti-429: esperamos ${formatDelay(options.initialDelayMs)} antes de reintentar.`);
+        await sleep(options.initialDelayMs);
+      }
+
+      for (let batchIndex = 0; batchIndex < batchCount; batchIndex++) {
+        const batchStart = batchIndex * RENDER_BATCH_SIZE;
+        const batch = renderItems.slice(batchStart, batchStart + RENDER_BATCH_SIZE);
+        const names = batch.map(item => item.name).join(' + ');
+
+        setLoadingMsg(`Generando lote ${batchIndex + 1}/${batchCount}: ${names}`);
+        batch.forEach(item => {
+          item.status = 'generating';
+          item.lastError = null;
+        });
+        commitRenderItems(kit, updatedItems);
+
+        await Promise.all(batch.map(async (item, batchPosition) => {
+          const shotIndex = renderItems.findIndex(renderItem => renderItem.id === item.id);
+          await generateItemRenderWithRetries(item, kit, shotIndex, totalToRender, batchPosition, sessionId);
+          commitRenderItems(kit, updatedItems);
+        }));
+
+        const hasMoreBatches = batchIndex < batchCount - 1;
+        if (hasMoreBatches) {
+          setLoadingMsg(`Lote ${batchIndex + 1} listo. Pausa anti-429 de ${formatDelay(RENDER_BATCH_DELAY_MS)} antes del siguiente lote.`);
+          await sleep(RENDER_BATCH_DELAY_MS);
+        }
+      }
+    } finally {
+      if (!options.lockAlreadyHeld) renderQueueRunningRef.current = false;
+      setStep('reviewing_renders');
+      setLoadingMsg('');
+    }
+  };
+
+  const confirmSelectionAndRender = async () => {
+    if (!currentKit || renderQueueRunningRef.current) return;
+    const selectedItems = currentKit.items.filter(i => i.selected);
+    if (selectedItems.length === 0) return alert('Seleccioná al menos una prenda para generar.');
+
+    renderQueueRunningRef.current = true;
+    try {
+      const ok = await checkAndDeduct(selectedItems.length * outfitCostPerItem);
+      if (!ok) return;
+
+      await renderQueuedItems(currentKit, selectedItems.map(item => item.id), { lockAlreadyHeld: true });
+    } finally {
+      renderQueueRunningRef.current = false;
+    }
+  };
+
+  const retryErroredRenders = async (itemId?: string) => {
+    if (!currentKit || renderQueueRunningRef.current) return;
+    const retryIds = currentKit.items
+      .filter(item => item.status === 'error' && (!itemId || item.id === itemId))
+      .map(item => item.id);
+    if (retryIds.length === 0) return;
+    await renderQueuedItems(currentKit, retryIds, { initialDelayMs: RENDER_BATCH_DELAY_MS });
   };
 
   const composeFinalKit = async () => {
@@ -429,6 +568,8 @@ const OutfitExtractorModule: React.FC = () => {
   const outfitCostPerItem   = modelId === 'gptimage' ? 1 : CREDIT_COSTS.OUTFIT_PER_GARMENT;
 
   const selectedItemsCount  = currentKit?.items.filter(i => i.selected).length || 0;
+  const failedSelectedCount = currentKit?.items.filter(i => i.selected && i.status === 'error').length || 0;
+  const doneSelectedCount   = currentKit?.items.filter(i => i.selected && i.status === 'done').length || 0;
   const renderCost          = selectedItemsCount * outfitCostPerItem;
   const creditsAfterRender  = Math.max(0, credits.available - renderCost);
   const comboCost           = outfitCostPerItem;
@@ -681,7 +822,7 @@ const OutfitExtractorModule: React.FC = () => {
                       )}
 
                       <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5 text-[11px] text-emerald-900 leading-[1.55]">
-                        <strong>Sin sorpresas.</strong> Solo se descuenta si la generación se completa.
+                        <strong>Sin sorpresas.</strong> Las prendas fallidas se reintentan con pausa anti-429 sin costo adicional.
                       </div>
                     </div>
                   )}
@@ -692,8 +833,24 @@ const OutfitExtractorModule: React.FC = () => {
                       <StepHeader title="Renders listos" subtitle="Elegí cuáles van al kit final" icon="fa-images" />
 
                       <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-[11px] text-emerald-900">
-                        <strong>{currentKit.items.filter(i => i.selected && i.status === 'done').length}</strong> de <strong>{selectedItemsCount}</strong> prendas listas. Tocá una para incluirla o quitarla del kit.
+                        <strong>{doneSelectedCount}</strong> de <strong>{selectedItemsCount}</strong> prendas listas. Tocá una para incluirla o quitarla del kit.
                       </div>
+
+                      {failedSelectedCount > 0 && (
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-[11px] text-amber-900 space-y-2">
+                          <p>
+                            <strong>{failedSelectedCount}</strong> {failedSelectedCount === 1 ? 'prenda necesita' : 'prendas necesitan'} reintento. La app esperara 30s antes de volver a enviar para evitar el 429.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => retryErroredRenders()}
+                            className="w-full py-2 rounded-xl bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center gap-2"
+                          >
+                            <i className="fa-solid fa-rotate-right" />
+                            Reintentar fallidas
+                          </button>
+                        </div>
+                      )}
 
                       {/* Lista de prendas con toggle de inclusión */}
                       <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
@@ -717,7 +874,17 @@ const OutfitExtractorModule: React.FC = () => {
                             </div>
                             <p className="text-[11px] font-black text-slate-900 uppercase truncate flex-1">{item.name}</p>
                             {item.status === 'error'
-                              ? <span className="text-[9px] text-red-400 font-bold uppercase">Error</span>
+                              ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); retryErroredRenders(item.id); }}
+                                  className="px-2.5 py-1.5 rounded-lg bg-red-500 text-white text-[9px] font-black uppercase tracking-wider active:scale-95 transition-all flex items-center gap-1.5"
+                                  title={item.lastError || 'Reintentar render'}
+                                >
+                                  <i className="fa-solid fa-rotate-right" />
+                                  Reintentar
+                                </button>
+                              )
                               : (
                                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${item.selected ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-200'}`}>
                                   {item.selected && <i className="fa-solid fa-check text-[9px]" />}
@@ -876,7 +1043,7 @@ const OutfitExtractorModule: React.FC = () => {
                         onClick={() => item.status === 'done' && toggleItemSelection(item.id)}
                         className={`bg-white p-3 rounded-[28px] border-4 shadow-sm space-y-3 group transition-all ${
                           item.status === 'error'
-                            ? 'border-red-100 opacity-50 cursor-not-allowed'
+                            ? 'border-red-100 cursor-default'
                             : item.selected
                             ? 'border-brand-600 cursor-pointer'
                             : 'border-slate-100 opacity-60 cursor-pointer hover:opacity-80'
@@ -903,6 +1070,17 @@ const OutfitExtractorModule: React.FC = () => {
                           )}
                         </div>
                         <p className="text-[9px] font-black text-slate-900 uppercase truncate text-center px-1">{item.name}</p>
+                        {item.status === 'error' && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); retryErroredRenders(item.id); }}
+                            className="w-full py-2 rounded-xl bg-red-50 text-red-600 text-[9px] font-black uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center gap-2"
+                            title={item.lastError || 'Reintentar render'}
+                          >
+                            <i className="fa-solid fa-rotate-right" />
+                            Reintentar
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>

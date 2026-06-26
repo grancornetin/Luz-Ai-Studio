@@ -142,6 +142,47 @@ export type HaulResolvedKind =
 
 export type HaulCoverageRole = 'hero' | 'support' | 'context';
 
+// ── Styling Graph — pairing semántico entre ítems del haul ────
+export interface HaulStyledCombination {
+  id:                   string;
+  label:                string;
+  itemIds:              string[];
+  primaryWearableId?:   string;    // ítem principal puesto en el cuerpo
+  topId?:               string;
+  bottomId?:            string;
+  dressId?:             string;
+  onepieceId?:          string;
+  outerwearId?:         string;
+  footwearId?:          string;
+  hosieryId?:           string;
+  bagId?:               string;
+  jewelryIds?:          string[];
+  accessoryIds?:        string[];
+  compatibilityScore:   number;    // 0–100
+  compatibilityReason:  string;
+  risky?:               boolean;   // combinación posible pero potencialmente extraña
+}
+
+export interface HaulStylingGraph {
+  combinations:     HaulStyledCombination[];
+  standaloneItems:  string[];   // ítems sin pairing posible — van como detail/held
+  unpairedItems:    string[];   // ítems sin ningún wearable base disponible
+  warnings:         string[];
+}
+
+// ── Shot Item Plan — qué aparece (y qué NO) en cada shot ──────
+export interface HaulShotItemPlan {
+  primaryItems:      string[];   // ítems protagonistas del shot
+  wornItems:         string[];   // ítems usados en el cuerpo
+  heldItems:         string[];   // ítems sostenidos en mano (NOT worn simultaneously)
+  surfaceItems:      string[];   // ítems sobre cama/silla/suelo/caja
+  backgroundItems:   string[];   // ítems secundarios visibles de fondo
+  forbiddenItems:    string[];   // ítems que NO deben aparecer
+  supportBaseLook?:  boolean;    // si usa base neutral no-producto
+  combinationId?:    string;     // ref a HaulStyledCombination si aplica
+  integrationNote?:  string;     // descripción de la integración para el prompt
+}
+
 export interface HaulCoverageLedgerItem {
   itemId:                      string;
   manualKind:                  HaulRefKind;
@@ -149,15 +190,14 @@ export interface HaulCoverageLedgerItem {
   label:                       string;
   required:                    boolean;
   plannedHeroShots:            number;
+  plannedIntegratedShots:      number;   // shots donde aparece integrado en combinación
   plannedSupportShots:         number;
   actualPromptedHeroShots:     number;
   actualPromptedSupportShots:  number;
   // Shots hero donde la referencia primaria del item fue realmente routeada al generador.
-  // Un shot puede estar "promovido" (actualPromptedHeroShots++) pero sin ref routeada si
-  // la referencia visual no se encontró en el manifest en el momento de generación.
   actualRoutedHeroRefs?:       number;
   // 'planned_not_routed': el shot existió y no falló, pero la ref primaria no llegó al modelo.
-  coverageStatus:              'uncovered' | 'support_only' | 'covered' | 'overexposed' | 'planned_not_routed';
+  coverageStatus:              'uncovered' | 'support_only' | 'integrated' | 'covered' | 'overexposed' | 'planned_not_routed';
   shotIds:                     string[];
   // Para look_completo: qué componentes del outfit deben estar presentes para considerar cobertura real
   // 'full' = look completo con todos los componentes principales
@@ -203,6 +243,15 @@ export interface VisualRefsAnalysisResult {
   analyzedAt: number;   // timestamp — para saber si el análisis es del run actual
 }
 
+export interface HaulBaseStartingLook {
+  id:           'base_starting_look';
+  label:        string;
+  description:  string;
+  isHaulItem:   false;
+  allowedShots: string[];
+  forbiddenShots: string[];
+}
+
 export interface HaulManifest {
   totalItems:          number;
   outfitItems:         HaulItem[];  // garments + outfit_sets (tryOnEligible)
@@ -214,6 +263,8 @@ export interface HaulManifest {
   requestedCount:      number;      // shots de historia pedidos por el usuario
   maxStoryShots:       number;      // min(requestedCount, 20)
   coveragePlan:        HaulCoveragePlan;
+  stylingGraph?:       HaulStylingGraph;   // pairing semántico — se rellena post-manifest
+  baseStartingLook:    HaulBaseStartingLook;
 }
 
 export interface HaulProgressState {
@@ -639,6 +690,8 @@ export interface PhotodumpShotDebug {
   actualPrimaryRefRouted?:  boolean;
   actualPrimaryRefKind?:    HaulResolvedKind;
   accessoryCloseupRequested?: boolean;
+  // Plan de ítems por shot — qué aparece, qué se sostiene, qué está prohibido
+  haulItemPlan?:            HaulShotItemPlan;
   // Validadores de integridad semántica por shot
   itemRoleValidation?: {
     primaryItemAllowedUseModes?: HaulItemAllowedUseMode[];
@@ -647,6 +700,8 @@ export interface PhotodumpShotDebug {
     manualKindIgnored?:                  boolean;
     inventedOutfitDetected?:             boolean;
     brandedPackagingRisk?:               boolean;
+    heldAndWornConflict?:                boolean;
+    indexRoutingUsed?:                   boolean;
   };
   // Estado del haul antes/después de este shot (para detectar duplicaciones ilógicas)
   haulProgressStateBefore?: Record<string, HaulItemState>;
@@ -738,7 +793,24 @@ export interface PhotodumpDebugData {
   sceneContinuityWarnings?:          string[];
   // Haul world map — mapa físico del mundo de REF0
   haulWorldMap?:                     HaulWorldMap;
-  // Coverage map detallado por ítem (post-generación)
+  // Styling graph — combinaciones semánticas entre ítems
+  haulStylingGraph?:                 HaulStylingGraph;
+  // Shot item plans — qué aparece en cada shot
+  haulShotItemPlans?:                Record<string, HaulShotItemPlan>;
+  // Coverage by item — detalle de cobertura por ítem
+  coverageByItem?: {
+    itemId:              string;
+    label:               string;
+    manualKind:          HaulRefKind;
+    resolvedKind:        HaulResolvedKind;
+    coverageStatus:      HaulCoverageLedgerItem['coverageStatus'];
+    heroShotIds:         string[];
+    integratedShotIds:   string[];
+    supportShotIds:      string[];
+    missingReason?:      string;
+    allowedUseModes:     HaulItemAllowedUseMode[];
+  }[];
+  // Coverage map detallado por ítem (post-generación) — legacy, mantener para compatibilidad
   coverageMap?: {
     itemId:             string;
     manualKind:         HaulRefKind;
@@ -751,6 +823,8 @@ export interface PhotodumpDebugData {
     coverageSatisfied:  boolean;
     warnings:           string[];
   }[];
+  // Resolved refs per shot — qué URLs pasaron al modelo por shot
+  resolvedRefsPerShot?:              Record<string, string[]>;
   // Warnings de validación semántica del haul
   uncoveredRequiredItemsWarnings?:   string[];
   overrepresentedItemsWarnings?:     string[];
@@ -758,6 +832,9 @@ export interface PhotodumpDebugData {
   missingFootwearCoverageWarnings?:  string[];
   inventedOutfitWarnings?:           string[];
   brandedPackagingWarnings?:         string[];
+  worldViolationsPredicted?:         string[];
+  avatarBaseClothingRisk?:           boolean;
+  indexRoutingUsed?:                 boolean;
   // Análisis visual de referencias (outfit_haul) — resultado de la llamada Gemini previa
   visualRefsAnalysis?:               VisualRefsAnalysisResult;
   count:        number;

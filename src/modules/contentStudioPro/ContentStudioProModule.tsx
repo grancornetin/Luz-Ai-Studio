@@ -652,52 +652,47 @@ const ContentStudioProModule: React.FC = () => {
       moduleLabel: `Content Studio (${FOCUS_LABELS[focus].split(' / ')[0]})`,
     } : undefined;
 
-    // Procesar shots en lotes de 2 con pausa entre lotes para evitar 429 de Gemini.
-    const BATCH_SIZE = 2;
-    const BATCH_DELAY_MS = 4000;
+    // Secuencial puro: un shot a la vez con pausa entre cada uno.
+    // Cualquier paralelismo — incluso lotes de 2 — provoca 429 en Gemini
+    // porque QStash ejecuta los workers simultáneamente.
+    const INTER_SHOT_DELAY_MS = 15000;
 
-    for (let batchStart = 0; batchStart < updatedShots.length; batchStart += BATCH_SIZE) {
-      const batch = updatedShots.slice(batchStart, batchStart + BATCH_SIZE);
+    for (let idx = 0; idx < updatedShots.length; idx++) {
+      const shot = updatedShots[idx];
+      updateShotStatus(shot.key, 'processing');
 
-      const batchPromises = batch.map(async (shot, batchIdx) => {
-        const idx = batchStart + batchIdx;
-        updateShotStatus(shot.key, 'processing');
+      try {
+        const url = await generateShotWithAutoRetry(
+          producingSet,
+          shot,
+          idx + 1,
+          totalShotsForSession,
+          useProduct,
+          focusRef,
+          sessionPlan,
+          (attempt) => {
+            updateShotStatus(shot.key, 'retrying', undefined, undefined, attempt - 1);
+          },
+          sessionParamsForShots,
+        );
 
-        try {
-          const url = await generateShotWithAutoRetry(
-            producingSet,
-            shot,
-            idx + 1,
-            totalShotsForSession,
-            useProduct,
-            focusRef,
-            sessionPlan,
-            (attempt) => {
-              updateShotStatus(shot.key, 'retrying', undefined, undefined, attempt - 1);
-            },
-            sessionParamsForShots,
-          );
+        updateShotStatus(shot.key, 'completed', url);
+        addProgressShot(url, idx);
+        advanceProgress(idx + 2);
 
-          updateShotStatus(shot.key, 'completed', url);
-          addProgressShot(url, idx);
-          advanceProgress(idx + 2);
+        saveToHistorySafe({
+          imageUrl: url,
+          moduleLabel: `UGC Pro (${FOCUS_LABELS[focus].split(' / ')[0]} - ${shot.name})`,
+          promptText: `Shot ${shot.key} for ${focus}`,
+        });
 
-          saveToHistorySafe({
-            imageUrl: url,
-            moduleLabel: `UGC Pro (${FOCUS_LABELS[focus].split(' / ')[0]} - ${shot.name})`,
-            promptText: `Shot ${shot.key} for ${focus}`,
-          });
+      } catch (e: any) {
+        updateShotStatus(shot.key, 'failed', undefined, e?.message || 'Error desconocido');
+      }
 
-        } catch (e: any) {
-          updateShotStatus(shot.key, 'failed', undefined, e?.message || 'Error desconocido');
-        }
-      });
-
-      await Promise.all(batchPromises);
-
-      // Pausa entre lotes para no saturar Gemini, excepto después del último lote
-      if (batchStart + BATCH_SIZE < updatedShots.length) {
-        await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
+      // Pausa entre shots para no saturar Gemini, excepto después del último
+      if (idx < updatedShots.length - 1) {
+        await new Promise(r => setTimeout(r, INTER_SHOT_DELAY_MS));
       }
     }
 
@@ -830,9 +825,9 @@ const ContentStudioProModule: React.FC = () => {
         updateShotStatus(shot.key, 'failed', undefined, e?.message || 'Error desconocido');
       }
 
-      // Pausa entre reintentos para no saturar Gemini
+      // Pausa entre reintentos — más larga que en producción normal porque ya hubo 429
       if (retryIdx < failedShots.length - 1) {
-        await new Promise(r => setTimeout(r, 4000));
+        await new Promise(r => setTimeout(r, 20000));
       }
     }
     stopProgress();

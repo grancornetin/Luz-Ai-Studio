@@ -41,6 +41,7 @@ import {
   buildHaulManifest,
   buildHaulShotPlan,
   buildHaulWorldMap,
+  buildHaulStylingGraph,
   getAllowedUseModes,
   computeFinalHaulCoverageFromShots,
   type PhotodumpShotResult,
@@ -477,8 +478,8 @@ const PhotodumpModule: React.FC = () => {
       const failed: number[]   = [];
       const failedErrors: string[] = [];
       for (let i = 0; i < shots.length; i++) {
-        // Delay escalonado: shots 1-4 esperan 5s, shots 5+ esperan 20s (Gemini rate-limit)
-        if (i > 0) await new Promise(r => setTimeout(r, i < 5 ? 5000 : 20000));
+        // Delay escalonado: shots 1-4 esperan 15s, shots 5+ esperan 25s (Gemini rate-limit)
+        if (i > 0) await new Promise(r => setTimeout(r, i < 5 ? 15000 : 25000));
         const sh = shots[i];
         try {
           const result: PhotodumpShotResult = await generatePhotodumpShot(
@@ -713,7 +714,7 @@ const PhotodumpModule: React.FC = () => {
           let retryResult: PhotodumpShotResult | null = null;
           if (recipe === 'outfit_haul' && isContentPolicy) {
             try {
-              await new Promise(r => setTimeout(r, 3000));
+              await new Promise(r => setTimeout(r, 10000));
               // Determinar si es un shot hero de ítem requerido
               const isHeroShot = sh.key && (
                 sh.key.startsWith('HAUL_TRY_ON_') ||
@@ -918,17 +919,57 @@ const PhotodumpModule: React.FC = () => {
         haulWorldMap: recipe === 'outfit_haul' && ref0Analysis
           ? buildHaulWorldMap(ref0Analysis)
           : undefined,
-        // Coverage map detallado por ítem — incluye allowedUseModes para validación
+        // Haul Styling Graph — combinaciones semánticas entre ítems
+        haulStylingGraph: recipe === 'outfit_haul' && haulManifestDebug
+          ? (haulManifestDebug.stylingGraph ?? buildHaulStylingGraph(haulManifestDebug))
+          : undefined,
+        // Shot Item Plans — qué aparece en cada shot
+        haulShotItemPlans: recipe === 'outfit_haul' && shots.length > 0
+          ? Object.fromEntries(
+              shots.map(s => [s.key, s.haulItemPlan]).filter(([, plan]) => plan != null)
+            )
+          : undefined,
+        // Coverage by item — detalle explícito por ítem
+        coverageByItem: (() => {
+          if (recipe !== 'outfit_haul' || !haulManifestDebug) return undefined;
+          const finalLedger = finalCoverage?.ledger ?? haulManifestDebug.coveragePlan.ledger;
+          return haulManifestDebug.allItems.map(it => {
+            const l = finalLedger.find(x => x.itemId === it.id);
+            const heroShots    = (l?.shotIds ?? []).filter(sk => {
+              const ds = debugShots.find(d => d.key === sk);
+              return ds?.coverageRole === 'hero' && ds?.status === 'ok';
+            });
+            const integratedShots: string[] = []; // populated from stylingGraph if items share shots
+            let missingReason: string | undefined;
+            if (!l || l.coverageStatus === 'uncovered') missingReason = 'Item never appeared — no hero shot planned or generated';
+            else if (l.coverageStatus === 'support_only') missingReason = 'Item only appeared in background/support context';
+            else if (l.coverageStatus === 'planned_not_routed') missingReason = 'Shot generated but primary ref never reached the model';
+            return {
+              itemId:          it.id,
+              label:           it.label,
+              manualKind:      it.manualKind,
+              resolvedKind:    it.resolvedKind,
+              coverageStatus:  l?.coverageStatus ?? 'uncovered',
+              heroShotIds:     heroShots,
+              integratedShotIds: integratedShots,
+              supportShotIds:  [],
+              missingReason,
+              allowedUseModes: getAllowedUseModes(it.resolvedKind),
+            };
+          });
+        })(),
+        // Coverage map legado — mantener para compatibilidad
         coverageMap: (() => {
           if (recipe !== 'outfit_haul' || !haulManifestDebug) return undefined;
           const finalLedger = finalCoverage?.ledger ?? haulManifestDebug.coveragePlan.ledger;
           return haulManifestDebug.allItems.map(it => {
             const l = finalLedger.find(x => x.itemId === it.id);
             const warnings: string[] = [];
-            if (!l || l.coverageStatus === 'uncovered') warnings.push('UNCOVERED — item never appeared');
-            if (l?.coverageStatus === 'support_only')   warnings.push('SUPPORT_ONLY — appeared only as background');
-            if (l?.coverageStatus === 'overexposed')    warnings.push('OVEREXPOSED — too many hero shots');
-            if (l?.coverageStatus === 'planned_not_routed') warnings.push('PLANNED_NOT_ROUTED — shot existed but ref never reached the model');
+            if (!l || l.coverageStatus === 'uncovered')      warnings.push('UNCOVERED — item never appeared');
+            if (l?.coverageStatus === 'support_only')        warnings.push('SUPPORT_ONLY — appeared only as background');
+            if (l?.coverageStatus === 'integrated')          warnings.push('INTEGRATED — appeared in a compatible styled combo');
+            if (l?.coverageStatus === 'overexposed')         warnings.push('OVEREXPOSED — too many hero shots');
+            if (l?.coverageStatus === 'planned_not_routed')  warnings.push('PLANNED_NOT_ROUTED — shot existed but ref never reached the model');
             return {
               itemId:            it.id,
               manualKind:        it.manualKind,
@@ -937,12 +978,14 @@ const PhotodumpModule: React.FC = () => {
               required:          it.priority === 'required',
               allowedUseModes:   getAllowedUseModes(it.resolvedKind),
               routedToShots:     l?.shotIds ?? [],
-              coverageCount:     (l?.plannedHeroShots ?? 0) + (l?.plannedSupportShots ?? 0),
-              coverageSatisfied: l?.coverageStatus === 'covered',
+              coverageCount:     (l?.plannedHeroShots ?? 0) + (l?.plannedIntegratedShots ?? 0) + (l?.plannedSupportShots ?? 0),
+              coverageSatisfied: l?.coverageStatus === 'covered' || l?.coverageStatus === 'integrated',
               warnings,
             };
           });
         })(),
+        // Resolved refs per shot — qué URLs pasaron al modelo
+        resolvedRefsPerShot: undefined, // populated below if admin
         // Warnings semánticos del haul
         uncoveredRequiredItemsWarnings: (() => {
           const base = finalCoverage?.uncoveredRequiredItems ?? haulManifestDebug?.coveragePlan.uncoveredRequiredItems ?? [];
@@ -958,6 +1001,28 @@ const PhotodumpModule: React.FC = () => {
             return `OVEREXPOSED: ${item?.label ?? id} — 3+ hero shots while other items may be uncovered`;
           }) : undefined;
         })(),
+        missingAccessoryCoverageWarnings: (() => {
+          if (!haulManifestDebug) return undefined;
+          const finalLedger = finalCoverage?.ledger ?? haulManifestDebug.coveragePlan.ledger;
+          const accItems = haulManifestDebug.accessoryItems.filter(it => it.resolvedKind === 'accessory');
+          const missing = accItems.filter(it => {
+            const l = finalLedger.find(x => x.itemId === it.id);
+            return !l || (l.coverageStatus !== 'covered' && l.coverageStatus !== 'integrated');
+          });
+          return missing.length > 0 ? missing.map(it => `ACCESSORY_NOT_INTEGRATED: ${it.label} — no hero or integrated shot`) : undefined;
+        })(),
+        missingFootwearCoverageWarnings: (() => {
+          if (!haulManifestDebug) return undefined;
+          const finalLedger = finalCoverage?.ledger ?? haulManifestDebug.coveragePlan.ledger;
+          const fwItems = [...haulManifestDebug.footwearItems, ...haulManifestDebug.accessoryItems.filter(it => it.resolvedKind === 'footwear')];
+          const missing = fwItems.filter(it => {
+            const l = finalLedger.find(x => x.itemId === it.id);
+            return !l || (l.coverageStatus !== 'covered' && l.coverageStatus !== 'integrated');
+          });
+          return missing.length > 0 ? missing.map(it => `FOOTWEAR_NOT_INTEGRATED: ${it.label} — no hero or integrated shot`) : undefined;
+        })(),
+        avatarBaseClothingRisk: recipe === 'outfit_haul',
+        indexRoutingUsed: false,
         plan,
         shots:               debugShots,
       } : undefined;
@@ -1037,8 +1102,8 @@ const PhotodumpModule: React.FC = () => {
     const ref0Analysis = savedRef0Analysis;
 
     for (let ri = 0; ri < failedIndexes.length; ri++) {
-      // En retry siempre usamos 20s: los shots fallidos ya están en la zona de rate-limit
-      if (ri > 0) await new Promise(r => setTimeout(r, 20000));
+      // En retry siempre usamos 25s: los shots fallidos ya están en la zona de rate-limit
+      if (ri > 0) await new Promise(r => setTimeout(r, 25000));
       const i = failedIndexes[ri];
       try {
         const result = await generatePhotodumpShot(

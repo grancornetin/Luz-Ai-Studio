@@ -8,6 +8,8 @@ export interface OutfitItem {
   originalDescription?: string;
   imageUrl?: string | null;
   status: 'pending' | 'generating' | 'done' | 'error';
+  renderAttempts?: number;
+  lastError?: string | null;
   selected: boolean;
   confidenceScore: number;
   coordinates: {
