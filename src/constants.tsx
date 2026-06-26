@@ -57,6 +57,21 @@ export const OUTFIT_ANALYZER_SCHEMA = {
           category: { type: Type.STRING, enum: ["main_garment", "top", "bottom", "footwear", "bag", "accessory"] },
           visual_description: { type: Type.STRING, description: "Descripción técnica visual exhaustiva" },
           ghost_mannequin_prompt: { type: Type.STRING, description: "Prompt específico para renderizado de producto aislado" },
+          layer_metadata: {
+            type: Type.OBJECT,
+            properties: {
+              layer_role: { type: Type.STRING, enum: ["base_upper", "mid_upper", "outerwear", "bottom", "footwear", "bag", "accessory", "one_piece"] },
+              garment_type: { type: Type.STRING },
+              body_zones: { type: Type.ARRAY, items: { type: Type.STRING } },
+              fit: { type: Type.STRING, enum: ["tight", "regular", "relaxed", "oversized", "wide"] },
+              coverage: { type: Type.STRING, enum: ["cropped", "waist", "hip", "thigh", "knee", "calf", "ankle", "full_length"] },
+              opening: { type: Type.STRING, enum: ["open_front", "closed_front", "pullover", "zipper", "buttoned", "wrap"] },
+              leg_shape: { type: Type.STRING, enum: ["skinny", "straight", "wide", "flare", "bootcut", "short"] },
+              footwear_height: { type: Type.STRING, enum: ["low", "ankle", "mid_calf", "knee", "over_knee"] },
+              wearing_rules: { type: Type.ARRAY, items: { type: Type.STRING } }
+            },
+            required: ["layer_role", "garment_type", "body_zones", "wearing_rules"]
+          },
           confidence_score: { type: Type.NUMBER },
           coordinates: {
             type: Type.OBJECT,
@@ -67,7 +82,7 @@ export const OUTFIT_ANALYZER_SCHEMA = {
             required: ["x", "y"]
           }
         },
-        required: ["name", "category", "visual_description", "ghost_mannequin_prompt", "coordinates", "confidence_score"]
+        required: ["name", "category", "visual_description", "ghost_mannequin_prompt", "layer_metadata", "coordinates", "confidence_score"]
       }
     }
   },

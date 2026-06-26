@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useState, useEffect } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { LogOut, User as UserIcon, Menu, X, Bell } from 'lucide-react';
 import { useNotifications, startNotificationsListener, stopNotificationsListener } from './hooks/useNotifications';
@@ -458,6 +458,7 @@ const AppContent: React.FC = () => {
           </div>
           {isNewUser && <OnboardingWizard onDone={markOnboardingDone} />}
           <AppAssistant />
+          <AdminResetButton />
           <PlannerTaskBubble />
           <NotificationsHUD />
           <GlobalSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
@@ -465,6 +466,50 @@ const AppContent: React.FC = () => {
       } />
     </Routes>
     </Suspense>
+  );
+};
+
+// ── Botón flotante de reset para admins ──────────────────────────────────────
+const AdminResetButton: React.FC = () => {
+  const { isAdmin } = useAuth();
+  const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'err'>('idle');
+
+  const handleReset = useCallback(async () => {
+    setStatus('loading');
+    try {
+      const { getAuth } = await import('firebase/auth');
+      const token = await getAuth().currentUser?.getIdToken();
+      const res = await fetch('/api/admin/circuit-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ action: 'reset_circuits' }),
+      });
+      const also = await fetch('/api/admin/circuit-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ action: 'reset_concurrency' }),
+      });
+      setStatus(res.ok && also.ok ? 'ok' : 'err');
+    } catch {
+      setStatus('err');
+    }
+    setTimeout(() => setStatus('idle'), 3000);
+  }, []);
+
+  if (!isAdmin) return null;
+
+  const label = status === 'loading' ? '...' : status === 'ok' ? '✓' : status === 'err' ? '✗' : '⚡';
+  const color = status === 'ok' ? 'bg-emerald-500' : status === 'err' ? 'bg-red-500' : 'bg-amber-500 hover:bg-amber-400';
+
+  return (
+    <button
+      onClick={handleReset}
+      disabled={status === 'loading'}
+      title="Reset circuits + concurrencia (solo admin)"
+      className={`hidden md:flex fixed bottom-24 right-6 z-[900] w-14 h-14 rounded-2xl shadow-2xl items-center justify-center text-white text-xl font-black transition-all duration-200 disabled:opacity-60 ${color}`}
+    >
+      {label}
+    </button>
   );
 };
 

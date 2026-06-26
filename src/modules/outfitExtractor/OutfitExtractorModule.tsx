@@ -407,6 +407,7 @@ const OutfitExtractorModule: React.FC = () => {
           category: it.category,
           description: it.description,
           visualDescription: it.visualDescription,
+          layerMetadata: it.layerMetadata,
           imageUrl: it.imageUrl!,
           createdAt: Date.now(),
         }));
@@ -434,6 +435,7 @@ const OutfitExtractorModule: React.FC = () => {
         category: it.category,
         description: it.description,
         visualDescription: it.visualDescription,
+        layerMetadata: it.layerMetadata,
         imageUrl: it.imageUrl!,
         createdAt: Date.now(),
       }));
