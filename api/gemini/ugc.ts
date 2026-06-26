@@ -193,7 +193,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const hasSlot = await concurrencyAcquire(safeUid, plan);
       if (!hasSlot) {
         return res.status(429).json({
-          error: 'Tienes demasiadas generaciones activas. Espera a que terminen antes de iniciar más.',
+          error: 'Estamos preparando tus imágenes. Espera un momento y vuelve a intentar.',
           code:  'CONCURRENCY_LIMIT',
         });
       }

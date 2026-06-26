@@ -65,10 +65,8 @@ const StepHeader: React.FC<{ title: string; subtitle: string; icon: string }> = 
   </div>
 );
 
-const RENDER_BATCH_SIZE = 2;
-const RENDER_BATCH_DELAY_MS = 30000;
-const RENDER_RETRY_DELAYS_MS = [30000, 60000, 90000];
-const RENDER_RETRY_STAGGER_MS = 5000;
+const RENDER_ITEM_DELAY_MS = 30000;
+const RENDER_RETRY_DELAYS_MS = [60000, 120000, 180000];
 const MAX_RENDER_ATTEMPTS = 1 + RENDER_RETRY_DELAYS_MS.length;
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -235,7 +233,6 @@ const OutfitExtractorModule: React.FC = () => {
     kit: OutfitKit,
     shotIndex: number,
     totalShots: number,
-    batchPosition: number,
     sessionId: string,
   ) => {
     let lastError: unknown = null;
@@ -284,7 +281,7 @@ const OutfitExtractorModule: React.FC = () => {
         const canRetry = attempt < MAX_RENDER_ATTEMPTS && shouldRetryRenderError(err);
         if (!canRetry) break;
 
-        const delay = (RENDER_RETRY_DELAYS_MS[attempt - 1] ?? RENDER_BATCH_DELAY_MS) + (batchPosition * RENDER_RETRY_STAGGER_MS);
+        const delay = RENDER_RETRY_DELAYS_MS[attempt - 1] ?? RENDER_ITEM_DELAY_MS;
         setLoadingMsg(`Seguimos preparando ${item.name}...`);
         await sleep(delay);
       }
@@ -322,35 +319,27 @@ const OutfitExtractorModule: React.FC = () => {
       const renderItems = updatedItems.filter(item => idsToRender.has(item.id));
       const totalToRender = renderItems.length;
       const sessionId = newSessionId();
-      const batchCount = Math.ceil(totalToRender / RENDER_BATCH_SIZE);
 
       if (options.initialDelayMs && options.initialDelayMs > 0) {
         setLoadingMsg('Preparando tus renders...');
         await sleep(options.initialDelayMs);
       }
 
-      for (let batchIndex = 0; batchIndex < batchCount; batchIndex++) {
-        const batchStart = batchIndex * RENDER_BATCH_SIZE;
-        const batch = renderItems.slice(batchStart, batchStart + RENDER_BATCH_SIZE);
-        const names = batch.map(item => item.name).join(' + ');
+      for (let itemIndex = 0; itemIndex < renderItems.length; itemIndex++) {
+        const item = renderItems[itemIndex];
 
-        setLoadingMsg(`Generando ${names}...`);
-        batch.forEach(item => {
-          item.status = 'generating';
-          item.lastError = null;
-        });
+        setLoadingMsg(`Generando ${item.name}...`);
+        item.status = 'generating';
+        item.lastError = null;
         commitRenderItems(kit, updatedItems);
 
-        await Promise.all(batch.map(async (item, batchPosition) => {
-          const shotIndex = renderItems.findIndex(renderItem => renderItem.id === item.id);
-          await generateItemRenderWithRetries(item, kit, shotIndex, totalToRender, batchPosition, sessionId);
-          commitRenderItems(kit, updatedItems);
-        }));
+        await generateItemRenderWithRetries(item, kit, itemIndex, totalToRender, sessionId);
+        commitRenderItems(kit, updatedItems);
 
-        const hasMoreBatches = batchIndex < batchCount - 1;
-        if (hasMoreBatches) {
+        const hasMoreItems = itemIndex < renderItems.length - 1;
+        if (hasMoreItems) {
           setLoadingMsg('Seguimos preparando tus renders...');
-          await sleep(RENDER_BATCH_DELAY_MS);
+          await sleep(RENDER_ITEM_DELAY_MS);
         }
       }
     } finally {
@@ -382,7 +371,7 @@ const OutfitExtractorModule: React.FC = () => {
       .filter(item => item.status === 'error' && (!itemId || item.id === itemId))
       .map(item => item.id);
     if (retryIds.length === 0) return;
-    await renderQueuedItems(currentKit, retryIds, { initialDelayMs: RENDER_BATCH_DELAY_MS });
+    await renderQueuedItems(currentKit, retryIds, { initialDelayMs: RENDER_ITEM_DELAY_MS });
   };
 
   const composeFinalKit = async () => {

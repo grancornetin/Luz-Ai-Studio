@@ -65,7 +65,7 @@ export function parseErrorCode(raw: unknown): AppError {
     const code = obj?.error?.code ?? obj?.code;
     const msg  = obj?.error?.message ?? obj?.message ?? '';
     if (code === 429 || String(code) === '429') {
-      return { code: ErrorCode.RATE_LIMIT, message: 'Demasiadas solicitudes simultáneas. Espera unos segundos e intenta de nuevo.' };
+      return { code: ErrorCode.RATE_LIMIT, message: 'Estamos preparando tus imágenes. Espera un momento y vuelve a intentar.' };
     }
     if (typeof msg === 'string' && msg) return parseErrorCode(msg);
     asString = typeof msg === 'string' ? msg : (String(code) || 'Error desconocido');
@@ -81,16 +81,16 @@ export function parseErrorCode(raw: unknown): AppError {
     const code = parsed?.error?.code ?? parsed?.code;
     const msg  = parsed?.error?.message ?? parsed?.message ?? '';
     if (code === 429 || String(code) === '429') {
-      return { code: ErrorCode.RATE_LIMIT, message: 'Demasiadas solicitudes simultáneas. Espera unos segundos e intenta de nuevo.' };
+      return { code: ErrorCode.RATE_LIMIT, message: 'Estamos preparando tus imágenes. Espera un momento y vuelve a intentar.' };
     }
     if (typeof msg === 'string' && msg) return parseErrorCode(msg);
   } catch { /* no es JSON */ }
 
   if (lower.includes('concurrency_limit') || lower.includes('demasiadas generaciones activas')) {
-    return { code: ErrorCode.RATE_LIMIT, message: 'Tienes demasiadas generaciones activas. Espera a que terminen antes de iniciar más.' };
+    return { code: ErrorCode.RATE_LIMIT, message: 'Estamos preparando tus imágenes. Espera un momento y vuelve a intentar.' };
   }
   if (lower.includes('429') || lower.includes('quota') || lower.includes('resource_exhausted') || lower.includes('exhausted')) {
-    return { code: ErrorCode.RATE_LIMIT, message: 'Demasiadas solicitudes simultáneas. Espera unos segundos e intenta de nuevo.' };
+    return { code: ErrorCode.RATE_LIMIT, message: 'Estamos preparando tus imágenes. Espera un momento y vuelve a intentar.' };
   }
   if (lower.includes('timeout') || lower.includes('timed out')) {
     return { code: ErrorCode.TIMEOUT, message: 'La generación tardó demasiado. Podés reintentar sin costo adicional.' };
