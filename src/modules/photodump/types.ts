@@ -743,12 +743,16 @@ export interface PhotodumpDebugData {
   inferredGender: string;
   inferredDestination?: InferredDestination;
   // Campos de conteo claros
-  requestedCount:      number;
-  visibleImageCount:   number;
-  ref0IncludedInCount: boolean;
-  storyShotCount:      number;
-  generatedImageCount: number;
-  failedShotCount:     number;
+  requestedCount:       number;
+  visibleImageCount:    number;
+  ref0IncludedInCount:  boolean;
+  storyShotCount:       number;
+  generatedImageCount:  number;
+  failedShotCount:      number;
+  recoveredShotCount?:   number;  // shots fallados que se recuperaron con safe-retry
+  unrecoveredShotCount?: number;  // shots que fallaron y no fueron recuperados
+  fallbackUsed?:         boolean; // true si algún shot usó safe-retry path
+  finalVisibleImageCount?: number; // REF0 + story shots generados con éxito
   // Contexto del brief
   briefContext?:       OutfitBriefContext;
   outfitComposition?:  OutfitComposition;
@@ -803,10 +807,16 @@ export interface PhotodumpDebugData {
     label:               string;
     manualKind:          HaulRefKind;
     resolvedKind:        HaulResolvedKind;
+    requiredCoverage:    boolean;
     coverageStatus:      HaulCoverageLedgerItem['coverageStatus'];
+    promptedHeroShots:   number;
+    routedHeroRefs:      number;
+    visualRole:          'closeup' | 'worn' | 'held' | 'flatlay' | 'integrated_with_outfit' | 'background_only' | 'none';
     heroShotIds:         string[];
     integratedShotIds:   string[];
     supportShotIds:      string[];
+    covered:             boolean;
+    coverageReason:      string;
     missingReason?:      string;
     allowedUseModes:     HaulItemAllowedUseMode[];
   }[];
@@ -835,6 +845,45 @@ export interface PhotodumpDebugData {
   worldViolationsPredicted?:         string[];
   avatarBaseClothingRisk?:           boolean;
   indexRoutingUsed?:                 boolean;
+  // Count recovery — desglose exacto de qué pasó con cada slot
+  countRecoveryDebug?: {
+    requested:  number;
+    planned:    number;
+    generated:  number;
+    failed:     number;
+    recovered:  number;
+    final:      number;
+  };
+  // Avatar base clothing risk (detectado por heurística, no confirmado por modelo)
+  avatarBaseClothingUsedAsTryOn?:                  boolean;
+  avatarBaseClothingUsedForAccessoryIntegration?:  boolean;
+  // Accessory coverage map — detalle por accesorio/joya/calzado
+  accessoryCoverageMap?: Record<string, {
+    kind:             string;
+    manualKind?:      string;
+    resolvedKind?:    string;
+    required:         boolean;
+    closeupRequested: boolean;
+    compatibleOutfitMatches: Array<{
+      outfitId:        string;
+      score:           number;
+      reason:          string;
+      selected:        boolean;
+      integrationMode?: string;
+    }>;
+    promptedHeroShots:   string[];
+    routedHeroRefs:      string[];
+    integratedInShots:   string[];
+    closeupShots:        string[];
+    flatlayOnlyShots:    string[];
+    backgroundOnlyShots: string[];
+    covered:             boolean;
+    coverageReason:      string;
+  }>;
+  // Redundant closeups — accesorios que solo recibieron closeup aislado cuando podían integrarse
+  redundantAccessoryCloseups?: string[];
+  // Uncovered accessories — accesorios requeridos sin hero ni integrated shot
+  uncoveredAccessories?: string[];
   // Análisis visual de referencias (outfit_haul) — resultado de la llamada Gemini previa
   visualRefsAnalysis?:               VisualRefsAnalysisResult;
   count:        number;

@@ -4039,6 +4039,140 @@ export function buildHaulStylingGraph(manifest: HaulManifest): HaulStylingGraph 
   };
 }
 
+// ── Accessory-Outfit Compatibility Scoring ────────────────────
+// Heurística de compatibilidad entre accesorio/joyería/calzado y outfit.
+// No requiere IA — trabaja con color family, material/metal y vibe.
+// Exportada para reutilización en otras recetas de photodump.
+
+export interface AccessoryOutfitMatch {
+  accessoryId:     string;
+  outfitId:        string;
+  score:           number;   // 0–100
+  reason:          string;
+  integrationMode: 'worn' | 'adjusting' | 'held' | 'detail_on_body' | 'flatlay_pairing';
+}
+
+export function scoreAccessoryOutfitCompatibility(
+  accessory: HaulItem,
+  outfit:    HaulItem,
+): AccessoryOutfitMatch {
+  const accLabel  = (accessory.label ?? '').toLowerCase();
+  const outLabel  = (outfit.label ?? '').toLowerCase();
+  const accKind   = accessory.resolvedKind;
+  const outKind   = outfit.resolvedKind;
+
+  // ── Color family detection ──
+  const GOLD_SIGNALS    = ['dorado', 'gold', 'golden', 'camel', 'beige', 'bronce', 'bronze', 'copper'];
+  const SILVER_SIGNALS  = ['plateado', 'silver', 'plata', 'grey', 'gris', 'chrome', 'acero'];
+  const BLACK_SIGNALS   = ['negro', 'black', 'ebony', 'dark', 'oscuro', 'cuero negro', 'leather'];
+  const WHITE_SIGNALS   = ['blanco', 'white', 'ivory', 'cream', 'crema', 'off-white'];
+  const WARM_SIGNALS    = ['café', 'brown', 'tan', 'terracota', 'naranja', 'orange', 'rojo', 'red', 'burdeos', 'vino', 'wine', 'rust', 'coral'];
+  const COOL_SIGNALS    = ['azul', 'blue', 'verde', 'green', 'navy', 'celeste', 'teal', 'aqua', 'lila', 'morado', 'purple', 'violet'];
+  const NEUTRAL_SIGNALS = ['gris', 'grey', 'gray', 'nude', 'neutro', 'neutral', 'beige', 'khaki', 'arena'];
+  const DENIM_SIGNALS   = ['jean', 'denim', 'vaquero', 'jeans'];
+
+  const hasAny = (text: string, signals: string[]) => signals.some(s => text.includes(s));
+
+  const accIsGold    = hasAny(accLabel, GOLD_SIGNALS);
+  const accIsSilver  = hasAny(accLabel, SILVER_SIGNALS);
+  const accIsBlack   = hasAny(accLabel, BLACK_SIGNALS);
+  const accIsWhite   = hasAny(accLabel, WHITE_SIGNALS);
+  const accIsWarm    = hasAny(accLabel, WARM_SIGNALS);
+  const accIsCool    = hasAny(accLabel, COOL_SIGNALS);
+  const accIsNeutral = hasAny(accLabel, NEUTRAL_SIGNALS);
+  const accIsGreen   = accLabel.includes('verde') || accLabel.includes('green');
+
+  const outIsBlack   = hasAny(outLabel, BLACK_SIGNALS);
+  const outIsWhite   = hasAny(outLabel, WHITE_SIGNALS);
+  const outIsWarm    = hasAny(outLabel, WARM_SIGNALS);
+  const outIsCool    = hasAny(outLabel, COOL_SIGNALS);
+  const outIsNeutral = hasAny(outLabel, NEUTRAL_SIGNALS);
+  const outIsDenim   = hasAny(outLabel, DENIM_SIGNALS);
+
+  // ── Vibe detection ──
+  const ELEGANT_SIGNALS = ['vestido', 'dress', 'falda', 'skirt', 'blazer', 'traje', 'suit', 'elegante', 'formal', 'noche', 'night', 'satin', 'satén', 'silk', 'seda'];
+  const CASUAL_SIGNALS  = ['casual', 'basic', 'everyday', 'jeans', 'jean', 'denim', 'hoodie', 'sweater', 'polera', 'remera', 'tshirt', 't-shirt', 'shorts', 'short'];
+  const LEATHER_SIGNALS = ['cuero', 'leather', 'eco-cuero', 'leatherette', 'faux leather'];
+  const SPORT_SIGNALS   = ['sport', 'gym', 'legging', 'leggins', 'track', 'jogger', 'activewear', 'deportivo'];
+
+  const outIsElegant = hasAny(outLabel, ELEGANT_SIGNALS);
+  const outIsCasual  = hasAny(outLabel, CASUAL_SIGNALS);
+  const outIsLeather = hasAny(outLabel, LEATHER_SIGNALS);
+  const outIsSport   = hasAny(outLabel, SPORT_SIGNALS);
+
+  // ── Item kind ──
+  const isJewelry  = accKind === 'jewelry';
+  const isFootwear = accKind === 'footwear';
+  const isBag      = accKind === 'bag';
+  const isBelt     = accLabel.includes('cinturón') || accLabel.includes('belt') || accLabel.includes('cinto');
+  const isGlasses  = accLabel.includes('gafas') || accLabel.includes('lentes') || accLabel.includes('sunglasses') || accLabel.includes('anteojos');
+  const isHat      = accLabel.includes('sombrero') || accLabel.includes('hat') || accLabel.includes('gorra') || accLabel.includes('boina');
+
+  // ── Conflict detection (hard blockers) ──
+  const isHeels    = isFootwear && (accLabel.includes('taco') || accLabel.includes('heel') || accLabel.includes('stiletto') || accLabel.includes('pump'));
+  const isBoots    = isFootwear && (accLabel.includes('bota') || accLabel.includes('boot'));
+  const isSneakers = isFootwear && (accLabel.includes('zapatilla') || accLabel.includes('sneaker') || accLabel.includes('tenis'));
+
+  // Anti-match: heels with sportswear
+  if (isHeels && outIsSport) return { accessoryId: accessory.id, outfitId: outfit.id, score: 5, reason: 'heels + sportswear — style clash', integrationMode: 'flatlay_pairing' };
+  // Anti-match: sneakers with formal/elegant
+  if (isSneakers && outIsElegant && !outIsCasual) return { accessoryId: accessory.id, outfitId: outfit.id, score: 15, reason: 'sneakers + formal outfit — low compatibility', integrationMode: 'flatlay_pairing' };
+
+  // ── Scoring ──
+  let score = 50; // baseline neutral
+  const reasons: string[] = [];
+
+  // Gold jewelry + warm/beige/brown outfit → great
+  if (isJewelry && accIsGold && (outIsWarm || outIsNeutral)) { score += 25; reasons.push('gold jewelry + warm/neutral tones'); }
+  // Silver jewelry + cool/black/white → great
+  if (isJewelry && accIsSilver && (outIsCool || outIsBlack || outIsWhite)) { score += 25; reasons.push('silver jewelry + cool/dark tones'); }
+  // Green jewelry + neutral/white/denim → good
+  if (isJewelry && accIsGreen && (outIsNeutral || outIsWhite || outIsDenim || outIsBlack)) { score += 20; reasons.push('green jewelry + neutral/denim/black base'); }
+  // Any jewelry + neutral outfit → safe
+  if (isJewelry && outIsNeutral) { score += 15; reasons.push('jewelry + neutral outfit — always compatible'); }
+  // Jewelry + denim → casual match
+  if (isJewelry && outIsDenim) { score += 15; reasons.push('jewelry + denim — casual compatibility'); }
+  // Black footwear + elegant or leather → excellent
+  if (isFootwear && accIsBlack && (outIsElegant || outIsLeather)) { score += 30; reasons.push('black footwear + elegant/leather look'); }
+  // White footwear + white/neutral/denim → excellent
+  if (isFootwear && accIsWhite && (outIsWhite || outIsNeutral || outIsDenim)) { score += 30; reasons.push('white footwear + light/neutral/denim outfit'); }
+  // Warm-tone footwear + warm outfit
+  if (isFootwear && accIsWarm && outIsWarm) { score += 20; reasons.push('warm-tone footwear + warm outfit'); }
+  // Footwear + elegant outfit → always push integration
+  if (isFootwear && outIsElegant) { score += 20; reasons.push('footwear preferred with elegant look'); }
+  // Bag + any non-sport outfit → good
+  if (isBag && !outIsSport) { score += 15; reasons.push('bag integrates well with non-sport look'); }
+  // Bag + elegant → great
+  if (isBag && outIsElegant) { score += 20; reasons.push('bag + elegant look'); }
+  // Belt + bottom/dress → contextual
+  if (isBelt && (outKind === 'bottom' || outKind === 'dress' || outKind === 'onepiece')) { score += 25; reasons.push('belt + bottom/dress — natural pairing'); }
+  // Glasses + casual/denim → relaxed match
+  if (isGlasses && (outIsCasual || outIsDenim)) { score += 15; reasons.push('glasses + casual look'); }
+  // Hat + casual or denim → match
+  if (isHat && (outIsCasual || outIsDenim)) { score += 15; reasons.push('hat + casual/denim look'); }
+  // Neutral accessory → safe with anything
+  if (accIsNeutral) { score += 10; reasons.push('neutral-tone accessory — universally compatible'); }
+
+  // Clamp 0–100
+  score = Math.min(100, Math.max(0, score));
+
+  // ── Integration mode ──
+  let integrationMode: AccessoryOutfitMatch['integrationMode'];
+  if (isJewelry) integrationMode = score >= 65 ? 'worn' : 'detail_on_body';
+  else if (isFootwear) integrationMode = score >= 60 ? 'worn' : 'detail_on_body';
+  else if (isBag) integrationMode = score >= 60 ? 'held' : 'flatlay_pairing';
+  else if (isBelt) integrationMode = 'worn';
+  else integrationMode = score >= 60 ? 'worn' : 'flatlay_pairing';
+
+  return {
+    accessoryId:     accessory.id,
+    outfitId:        outfit.id,
+    score,
+    reason:          reasons.length > 0 ? reasons.join('; ') : 'baseline neutral compatibility',
+    integrationMode,
+  };
+}
+
 // ── Outfit Haul — Shot planner ────────────────────────────────
 // Genera exactamente `manifest.maxStoryShots` story shots con cobertura inteligente.
 // Orden de reserva:
@@ -4048,6 +4182,10 @@ export function buildHaulStylingGraph(manifest: HaulManifest): HaulStylingGraph 
 //   4. detalles / adjusting para variedad
 //   5. HAUL_RECAP de cierre si hay espacio
 
+// Threshold above which an accessory is integrated into a compatible outfit shot
+// rather than receiving an isolated closeup. Score is 0–100.
+const COMPATIBILITY_THRESHOLD = 65;
+
 export function buildHaulShotPlan(
   manifest: HaulManifest,
 ): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
@@ -4055,19 +4193,55 @@ export function buildHaulShotPlan(
 
   // ── Build / reuse styling graph ──────────────────────────────
   const graph = manifest.stylingGraph ?? buildHaulStylingGraph(manifest);
-  // Store back for debug access
   manifest.stylingGraph = graph;
 
-  // Helper: find the best compatible wearable for an accessory/footwear item
-  const findCompatibleOutfitFor = (itemId: string): { outfitItemId: string; outfitLabel: string } | null => {
+  // All wearable items in the manifest (outfits + tops + bottoms, etc.)
+  const wearableKindsSet = new Set<HaulResolvedKind>(['full_outfit', 'top', 'bottom', 'dress', 'onepiece', 'outerwear', 'hosiery', 'mixed_set']);
+  const allWearables = manifest.allItems.filter(it => wearableKindsSet.has(it.resolvedKind));
+
+  // Helper: find best compatible wearable for an accessory using the scorer.
+  // Uses stylingGraph first (semantic pairing), then falls back to raw scorer over allWearables.
+  // Returns null if best score < COMPATIBILITY_THRESHOLD.
+  const findCompatibleOutfitFor = (
+    item: HaulItem,
+  ): { outfitItemId: string; outfitLabel: string; score: number; integrationMode: AccessoryOutfitMatch['integrationMode'] } | null => {
+    // 1. Check styling graph combinations first
     for (const combo of graph.combinations) {
-      if (combo.itemIds.includes(itemId) && combo.primaryWearableId && combo.primaryWearableId !== itemId) {
+      if (combo.itemIds.includes(item.id) && combo.primaryWearableId && combo.primaryWearableId !== item.id) {
         const base = manifest.allItems.find(it => it.id === combo.primaryWearableId);
-        if (base) return { outfitItemId: base.id, outfitLabel: base.label };
+        if (base) {
+          const match = scoreAccessoryOutfitCompatibility(item, base);
+          if (match.score >= COMPATIBILITY_THRESHOLD) {
+            return { outfitItemId: base.id, outfitLabel: base.label, score: match.score, integrationMode: match.integrationMode };
+          }
+        }
+      }
+    }
+    // 2. Fallback: score all wearables and pick best
+    if (allWearables.length > 0) {
+      const matches = allWearables.map(w => scoreAccessoryOutfitCompatibility(item, w));
+      const best = matches.reduce((a, b) => (a.score >= b.score ? a : b));
+      if (best.score >= COMPATIBILITY_THRESHOLD) {
+        const base = manifest.allItems.find(it => it.id === best.outfitId);
+        if (base) return { outfitItemId: base.id, outfitLabel: base.label, score: best.score, integrationMode: best.integrationMode };
       }
     }
     return null;
   };
+
+  // Track which items already appear in the HAUL_OVERVIEW (all items do, as flatlay)
+  // so we can avoid redundant isolated closeups when integration is available
+  const appearsInOverview = new Set(manifest.allItems.map(it => it.id));
+
+  // Track accessory→outfit matches for debug export
+  const accessoryCompatibilityLog = new Map<string, Array<{ outfitId: string; score: number; reason: string; selected: boolean; integrationMode?: string }>>();
+  manifest.accessoryItems.forEach(acc => {
+    const matches = allWearables.map(w => {
+      const m = scoreAccessoryOutfitCompatibility(acc, w);
+      return { outfitId: w.id, score: m.score, reason: m.reason, selected: false, integrationMode: m.integrationMode };
+    });
+    accessoryCompatibilityLog.set(acc.id, matches);
+  });
 
   // ── Ledger tracking ─────────────────────────────────────────
   const ledgerMap = new Map<string, HaulCoverageLedgerItem>(
@@ -4108,11 +4282,16 @@ export function buildHaulShotPlan(
   });
   const coveredByFirst = new Set(tryOnQueue.map(it => it.id));
 
-  // Non-wearable items from the outfit slots — use styling graph for integration
+  // Non-wearable items from the outfit slots — use styling graph + scorer for integration
   const footwearFromOutfits = manifest.footwearItems;
   const obligatoryFootwear: PlannedShot[] = footwearFromOutfits.map((item, fi) => {
-    const combo = findCompatibleOutfitFor(item.id);
-    const shot  = buildHaulFootwearShot(item, fi, combo);
+    const combo = findCompatibleOutfitFor(item);
+    if (combo) {
+      const log = accessoryCompatibilityLog.get(item.id);
+      if (log) { const e = log.find(m => m.outfitId === combo.outfitItemId); if (e) e.selected = true; }
+    }
+    const compatArg = combo ? { outfitItemId: combo.outfitItemId, outfitLabel: combo.outfitLabel } : null;
+    const shot = buildHaulFootwearShot(item, fi, compatArg);
     addHeroShot(item.id, shot.key);
     if (combo) addIntegratedShot(combo.outfitItemId, shot.key);
     return shot;
@@ -4121,39 +4300,69 @@ export function buildHaulShotPlan(
   // Accessories (from accesorioRefs slot): bags, jewelry, generic accessories
   const accessoryBags     = manifest.accessoryItems.filter(it => it.kind === 'bag');
   const accessoryJewelry  = manifest.accessoryItems.filter(it => it.kind === 'jewelry');
-  const accessoryGeneric  = manifest.accessoryItems.filter(it => it.kind !== 'bag' && it.kind !== 'jewelry');
+  const accessoryGeneric  = manifest.accessoryItems.filter(it => it.kind !== 'bag' && it.kind !== 'jewelry' && it.kind !== 'footwear');
   const accessoryFootwear = manifest.accessoryItems.filter(it => it.kind === 'footwear');
 
   const obligatoryBags: PlannedShot[] = accessoryBags.map((item, bi) => {
-    const combo = findCompatibleOutfitFor(item.id);
-    const shot  = buildHaulBagShot(item, bi, combo);
+    const combo = findCompatibleOutfitFor(item);
+    if (combo) {
+      const log = accessoryCompatibilityLog.get(item.id);
+      if (log) { const e = log.find(m => m.outfitId === combo.outfitItemId); if (e) e.selected = true; }
+    }
+    const compatArg = combo ? { outfitItemId: combo.outfitItemId, outfitLabel: combo.outfitLabel } : null;
+    const shot = buildHaulBagShot(item, bi, compatArg);
     addHeroShot(item.id, shot.key);
     if (combo) addIntegratedShot(combo.outfitItemId, shot.key);
     return shot;
   });
 
   const obligatoryJewelry: PlannedShot[] = accessoryJewelry.map((item, ji) => {
-    const combo = findCompatibleOutfitFor(item.id);
-    const shot  = buildHaulJewelryShot(item, ji, combo);
+    const combo = findCompatibleOutfitFor(item);
+    if (combo) {
+      const log = accessoryCompatibilityLog.get(item.id);
+      if (log) { const e = log.find(m => m.outfitId === combo.outfitItemId); if (e) e.selected = true; }
+    }
+    const compatArg = combo ? { outfitItemId: combo.outfitItemId, outfitLabel: combo.outfitLabel } : null;
+    const shot = buildHaulJewelryShot(item, ji, compatArg);
     addHeroShot(item.id, shot.key);
     if (combo) addIntegratedShot(combo.outfitItemId, shot.key);
     return shot;
   });
 
   const obligatoryAccFootwear: PlannedShot[] = accessoryFootwear.map((item, fi) => {
-    const combo = findCompatibleOutfitFor(item.id);
-    const shot  = buildHaulFootwearShot(item, footwearFromOutfits.length + fi, combo);
+    const combo = findCompatibleOutfitFor(item);
+    if (combo) {
+      const log = accessoryCompatibilityLog.get(item.id);
+      if (log) { const e = log.find(m => m.outfitId === combo.outfitItemId); if (e) e.selected = true; }
+    }
+    const compatArg = combo ? { outfitItemId: combo.outfitItemId, outfitLabel: combo.outfitLabel } : null;
+    const shot = buildHaulFootwearShot(item, footwearFromOutfits.length + fi, compatArg);
     addHeroShot(item.id, shot.key);
     if (combo) addIntegratedShot(combo.outfitItemId, shot.key);
     return shot;
   });
 
+  // Generic accessories: prefer integration when compatible, else closeup
+  // Redundancy rule: if item already in overview AND has compatible outfit → integrate; skip isolated closeup
   const obligatoryGenericAcc: PlannedShot[] = accessoryGeneric.map((item, ai) => {
-    // Generic accessories get an accessory closeup shot regardless of closeupRequested flag
+    const combo = findCompatibleOutfitFor(item);
+    const alreadyInOverview = appearsInOverview.has(item.id);
+    // If compatible outfit found AND item is not marked closeupRequested → integrate, no isolated closeup
+    if (combo && (!item.closeupRequested || alreadyInOverview)) {
+      const log = accessoryCompatibilityLog.get(item.id);
+      if (log) { const e = log.find(m => m.outfitId === combo.outfitItemId); if (e) e.selected = true; }
+      const shot = buildHaulAccessoryCloseupShot(item, ai); // still builds a shot, builder uses combo in prompt
+      addHeroShot(item.id, shot.key);
+      addIntegratedShot(combo.outfitItemId, shot.key);
+      return shot;
+    }
     const shot = buildHaulAccessoryCloseupShot(item, ai);
     addHeroShot(item.id, shot.key);
     return shot;
   });
+
+  // Export accessoryCompatibilityLog to manifest for debug access
+  (manifest as any)._accessoryCompatibilityLog = Object.fromEntries(accessoryCompatibilityLog);
 
   // Total obligatory slots (guaranteed in final plan)
   const obligatorySlots: PlannedShot[] = [
@@ -4461,17 +4670,33 @@ export function computeFinalHaulCoverageFromShots(
       shotResultByKey.get(sk) === 'ok' && shotPrimaryItemMap.get(sk) === l.itemId,
     ).length;
 
+    // actualIntegratedOk: shots ok donde este item aparece como integrado (no es el primaryItemId,
+    // pero el shot fue generado ok y el item fue planeado como integrado).
+    // Aplica a accesorios/joyería/calzado que están en un combo con un outfit.
+    const isIntegratedItem = (l.plannedIntegratedShots ?? 0) > 0 && l.plannedHeroShots === 0;
+    const actualIntegratedOk = isIntegratedItem
+      ? heroShotIds.filter(sk => shotResultByKey.get(sk) === 'ok').length
+      : 0;
+
+    const item = manifest.allItems.find(it => it.id === l.itemId);
+    const wearableKindsLocal: HaulResolvedKind[] = ['full_outfit', 'top', 'bottom', 'dress', 'onepiece', 'outerwear', 'hosiery', 'mixed_set'];
+    const isWearable = item ? wearableKindsLocal.includes(item.resolvedKind) : false;
+
     let coverageStatus: HaulCoverageLedgerItem['coverageStatus'];
-    if (actualOkHero === 0 && actualFailedHero > 0) {
+    if (isIntegratedItem && actualIntegratedOk > 0) {
+      // Accessory/footwear/jewelry planned as integrated — shot generated ok
+      coverageStatus = 'integrated';
+    } else if (isIntegratedItem && actualFailedHero > 0) {
+      // Planned integrated but the host shot failed
+      coverageStatus = 'uncovered';
+    } else if (actualOkHero === 0 && actualFailedHero > 0) {
       // Todos los hero shots fallaron (content policy o network)
       coverageStatus = 'uncovered';
-    } else if (actualOkHero > 0 && actualRoutedHeroRefs === 0) {
+    } else if (actualOkHero > 0 && actualRoutedHeroRefs === 0 && !isIntegratedItem) {
       // Shot generado pero sin ref primaria routeada — cobertura nominal, no real
       coverageStatus = 'planned_not_routed';
     } else if (actualRoutedHeroRefs === 0 && l.plannedSupportShots > 0) {
-      const item = manifest.allItems.find(it => it.id === l.itemId);
-      const wearableKinds: HaulResolvedKind[] = ['full_outfit', 'top', 'bottom', 'dress', 'onepiece', 'outerwear', 'hosiery', 'mixed_set'];
-      coverageStatus = (item && wearableKinds.includes(item.resolvedKind)) ? 'uncovered' : 'support_only';
+      coverageStatus = isWearable ? 'uncovered' : 'support_only';
     } else if (actualRoutedHeroRefs === 0) {
       coverageStatus = 'uncovered';
     } else if (l.required && actualRoutedHeroRefs >= 3) {
@@ -4484,7 +4709,7 @@ export function computeFinalHaulCoverageFromShots(
       ...l,
       actualPromptedHeroShots:    actualOkHero,
       actualPromptedSupportShots: l.actualPromptedSupportShots,
-      actualRoutedHeroRefs,
+      actualRoutedHeroRefs:       isIntegratedItem ? actualIntegratedOk : actualRoutedHeroRefs,
       coverageStatus,
     };
   });
@@ -4564,7 +4789,7 @@ export function computeFinalHaulCoverageFromShots(
 
   const coveredRequiredItemCount = requiredItems.filter(it => {
     const l = finalLedger.find(x => x.itemId === it.id);
-    return l?.coverageStatus === 'covered' || l?.coverageStatus === 'overexposed';
+    return l?.coverageStatus === 'covered' || l?.coverageStatus === 'overexposed' || l?.coverageStatus === 'integrated';
   }).length;
 
   return {

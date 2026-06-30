@@ -709,46 +709,59 @@ const PhotodumpModule: React.FC = () => {
             errMsg.toLowerCase().includes('policy') ||
             errMsg.toLowerCase().includes('prohibited');
 
-          // Retry automático para haul con content-policy failure
-          // Para items requeridos: usar prompt conservador que preserve la ref del ítem pero elimina lenguaje de riesgo
+          // Retry automático para haul:
+          // • content-policy: safe-retry con prompt conservador
+          // • timeout/red: backoff retry con el mismo prompt
           let retryResult: PhotodumpShotResult | null = null;
-          if (recipe === 'outfit_haul' && isContentPolicy) {
+          if (recipe === 'outfit_haul') {
+            const isHeroShot = sh.key && (
+              sh.key.startsWith('HAUL_TRY_ON_') ||
+              sh.key.startsWith('HAUL_FOOTWEAR_') ||
+              sh.key.startsWith('HAUL_BAG_') ||
+              sh.key.startsWith('HAUL_JEWELRY_') ||
+              sh.key.startsWith('HAUL_ACCESSORY_CLOSEUP_') ||
+              sh.key.startsWith('HAUL_ADJUSTING_') ||
+              sh.key.startsWith('HAUL_STYLED_')
+            );
             try {
-              await new Promise(r => setTimeout(r, 10000));
-              // Determinar si es un shot hero de ítem requerido
-              const isHeroShot = sh.key && (
-                sh.key.startsWith('HAUL_TRY_ON_') ||
-                sh.key.startsWith('HAUL_FOOTWEAR_') ||
-                sh.key.startsWith('HAUL_BAG_') ||
-                sh.key.startsWith('HAUL_JEWELRY_') ||
-                sh.key.startsWith('HAUL_ACCESSORY_CLOSEUP_') ||
-                sh.key.startsWith('HAUL_ADJUSTING_') ||
-                sh.key.startsWith('HAUL_STYLED_')
-              );
-              // Safe retry: purpose neutro que baja riesgo de safety sin perder el ítem
-              const safeRetryPurpose = isHeroShot
-                ? `Fashion try-on: show the garment/item from the reference clearly visible on the person or held toward the camera. Modest, everyday styling. Natural standing or adjusting pose. Covered, non-revealing. The garment is the focus — show its color, cut, and fabric faithfully. Real bedroom setting, iPhone snapshot quality.`
-                : `Natural haul moment in a real bedroom. Person in modest, everyday clothing. Relaxed, non-posed. Real room, natural light. iPhone snapshot quality.`;
-              const safeRetryShot = {
-                ...sh,
-                purpose:          safeRetryPurpose,
-                requiredElements: [...(sh.requiredElements ?? []), 'modest_natural_pose', 'garment_clearly_visible'],
-                forbiddenElements: [
-                  ...(sh.forbiddenElements ?? []),
-                  'revealing_pose', 'sexualized_framing', 'bodycon_language', 'tight_language',
-                  'transparent_language', 'sheer_language', 'lingerie_language', 'skin_focus',
-                ],
-              };
-              retryResult = await generatePhotodumpShot(
-                safeRetryShot, refsWithMode, ref0Url, ref0Analysis,
-                basePrompt, narrative, destino, sessionParams,
-                plan.assignedFamilies, plan.sessionFamilies,
-                shots.length, protagonist, recipe,
-                plan.presentationStyle,
-                haulManifestForGen,
-              );
+              if (isContentPolicy) {
+                // Content policy: wait 10s, retry with conservative prompt
+                await new Promise(r => setTimeout(r, 10000));
+                const safeRetryPurpose = isHeroShot
+                  ? `Fashion try-on: show the garment/item from the reference clearly visible on the person or held toward the camera. Modest, everyday styling. Natural standing or adjusting pose. Covered, non-revealing. The garment is the focus — show its color, cut, and fabric faithfully. Real bedroom setting, iPhone snapshot quality.`
+                  : `Natural haul moment in a real bedroom. Person in modest, everyday clothing. Relaxed, non-posed. Real room, natural light. iPhone snapshot quality.`;
+                retryResult = await generatePhotodumpShot(
+                  {
+                    ...sh,
+                    purpose:          safeRetryPurpose,
+                    requiredElements: [...(sh.requiredElements ?? []), 'modest_natural_pose', 'garment_clearly_visible'],
+                    forbiddenElements: [
+                      ...(sh.forbiddenElements ?? []),
+                      'revealing_pose', 'sexualized_framing', 'bodycon_language', 'tight_language',
+                      'transparent_language', 'sheer_language', 'lingerie_language', 'skin_focus',
+                    ],
+                  },
+                  refsWithMode, ref0Url, ref0Analysis,
+                  basePrompt, narrative, destino, sessionParams,
+                  plan.assignedFamilies, plan.sessionFamilies,
+                  shots.length, protagonist, recipe,
+                  plan.presentationStyle,
+                  haulManifestForGen,
+                );
+              } else {
+                // Network / timeout: backoff 5s, retry with same prompt
+                await new Promise(r => setTimeout(r, 5000));
+                retryResult = await generatePhotodumpShot(
+                  sh, refsWithMode, ref0Url, ref0Analysis,
+                  basePrompt, narrative, destino, sessionParams,
+                  plan.assignedFamilies, plan.sessionFamilies,
+                  shots.length, protagonist, recipe,
+                  plan.presentationStyle,
+                  haulManifestForGen,
+                );
+              }
             } catch {
-              // segundo intento también falló — se trata como fallo definitivo
+              // Segundo intento también falló — se trata como fallo definitivo
             }
           }
 
@@ -766,9 +779,11 @@ const PhotodumpModule: React.FC = () => {
               wearState:  sh.wearState,
               cameraMode: sh.cameraMode,
               fallbackUsed:    true,
-              fallbackShotMode: 'safe_required_item_retry',
+              fallbackShotMode: isContentPolicy ? 'safe_required_item_retry' : 'network_backoff_retry',
               retryCount:      1,
-              possibleContradictions: [`content-policy retry: original failed (${errMsg.slice(0, 80)}), safe retry succeeded`],
+              possibleContradictions: [isContentPolicy
+                ? `content-policy retry: original failed (${errMsg.slice(0, 80)}), safe retry succeeded`
+                : `network retry: original failed (${errMsg.slice(0, 80)}), backoff retry succeeded`],
               status:     'ok',
             });
           } else {
@@ -824,12 +839,16 @@ const PhotodumpModule: React.FC = () => {
         inferredGender:      inferredGender,
         inferredDestination: inferredDest,
         count,
-        requestedCount:      count,
-        visibleImageCount:   recipe === 'outfit_check' ? visibleCount : storyShotCount + 1,
-        ref0IncludedInCount: recipe === 'outfit_check',
-        storyShotCount:      storyShotCount,
-        generatedImageCount: shotUrls.filter(Boolean).length,
-        failedShotCount:     failed.length,
+        requestedCount:       count,
+        visibleImageCount:    recipe === 'outfit_check' ? visibleCount : storyShotCount + 1,
+        ref0IncludedInCount:  recipe === 'outfit_check',
+        storyShotCount:       storyShotCount,
+        generatedImageCount:  shotUrls.filter(Boolean).length,
+        failedShotCount:      failed.length,
+        recoveredShotCount:   recipe === 'outfit_haul' ? debugShots.filter(ds => ds.fallbackUsed && ds.status === 'ok').length : undefined,
+        unrecoveredShotCount: recipe === 'outfit_haul' ? failed.length : undefined,
+        fallbackUsed:         recipe === 'outfit_haul' ? debugShots.some(ds => ds.fallbackUsed) : undefined,
+        finalVisibleImageCount: recipe === 'outfit_haul' ? (shotUrls.filter(Boolean).length + 1) : undefined,
         briefContext:        briefCtxDebug,
         outfitComposition:   outfitCompositionDebug,
         destinationClass:    briefCtxDebug?.destinationClass,
@@ -935,26 +954,66 @@ const PhotodumpModule: React.FC = () => {
           const finalLedger = finalCoverage?.ledger ?? haulManifestDebug.coveragePlan.ledger;
           return haulManifestDebug.allItems.map(it => {
             const l = finalLedger.find(x => x.itemId === it.id);
-            const heroShots    = (l?.shotIds ?? []).filter(sk => {
+            const heroShots = (l?.shotIds ?? []).filter(sk => {
               const ds = debugShots.find(d => d.key === sk);
               return ds?.coverageRole === 'hero' && ds?.status === 'ok';
             });
-            const integratedShots: string[] = []; // populated from stylingGraph if items share shots
+            const integratedShots = (l?.coverageStatus === 'integrated')
+              ? (l?.shotIds ?? []).filter(sk => debugShots.find(d => d.key === sk)?.status === 'ok')
+              : [];
+            const supportShots = (l?.shotIds ?? []).filter(sk => {
+              const ds = debugShots.find(d => d.key === sk);
+              return ds?.coverageRole === 'support' && ds?.status === 'ok';
+            });
+
+            // visualRole: qué papel visual tuvo este ítem en sus shots
+            type VisualRole = 'closeup' | 'worn' | 'held' | 'flatlay' | 'integrated_with_outfit' | 'background_only' | 'none';
+            let visualRole: VisualRole = 'none';
+            const allOkShotKeys = (l?.shotIds ?? []).filter(sk => debugShots.find(d => d.key === sk)?.status === 'ok');
+            if (allOkShotKeys.length > 0) {
+              const firstKey = allOkShotKeys[0];
+              if (l?.coverageStatus === 'integrated') visualRole = 'integrated_with_outfit';
+              else if (firstKey.startsWith('HAUL_ACCESSORY_CLOSEUP_') || firstKey.startsWith('HAUL_JEWELRY_') || firstKey.startsWith('HAUL_BAG_') || firstKey.startsWith('HAUL_FOOTWEAR_')) visualRole = 'closeup';
+              else if (firstKey.startsWith('HAUL_TRY_ON_') || firstKey.startsWith('HAUL_ADJUSTING_') || firstKey.startsWith('HAUL_STYLED_') || firstKey.startsWith('HAUL_SELECTION')) visualRole = 'worn';
+              else if (firstKey === 'HAUL_OVERVIEW' || firstKey === 'HAUL_RECAP') visualRole = 'flatlay';
+              else if (l?.coverageStatus === 'support_only') visualRole = 'background_only';
+            }
+
+            // requiredCoverage: item is required if marked as required priority
+            const requiredCoverage = it.priority === 'required';
+            // covered: hero or integrated counts as primary coverage
+            const covered = l?.coverageStatus === 'covered' || l?.coverageStatus === 'overexposed' || l?.coverageStatus === 'integrated';
+            let coverageReason: string;
+            if (covered && l?.coverageStatus === 'integrated') coverageReason = 'Appeared integrated in a compatible styled look — counts as covered';
+            else if (covered) coverageReason = `${heroShots.length} hero shot(s) generated with primary ref routed`;
+            else if (l?.coverageStatus === 'planned_not_routed') coverageReason = 'Shot generated ok but primary ref never reached the model';
+            else if (l?.coverageStatus === 'support_only') coverageReason = 'Only appeared in background/support role — no dedicated hero shot';
+            else coverageReason = 'No hero or integrated shot generated';
+
             let missingReason: string | undefined;
-            if (!l || l.coverageStatus === 'uncovered') missingReason = 'Item never appeared — no hero shot planned or generated';
-            else if (l.coverageStatus === 'support_only') missingReason = 'Item only appeared in background/support context';
-            else if (l.coverageStatus === 'planned_not_routed') missingReason = 'Shot generated but primary ref never reached the model';
+            if (!covered) {
+              if (!l || l.coverageStatus === 'uncovered') missingReason = 'Item never appeared — no hero shot planned or generated';
+              else if (l.coverageStatus === 'support_only') missingReason = 'Item only appeared in background/support context';
+              else if (l.coverageStatus === 'planned_not_routed') missingReason = 'Shot generated but primary ref never reached the model';
+            }
+
             return {
-              itemId:          it.id,
-              label:           it.label,
-              manualKind:      it.manualKind,
-              resolvedKind:    it.resolvedKind,
-              coverageStatus:  l?.coverageStatus ?? 'uncovered',
-              heroShotIds:     heroShots,
-              integratedShotIds: integratedShots,
-              supportShotIds:  [],
+              itemId:             it.id,
+              label:              it.label,
+              manualKind:         it.manualKind,
+              resolvedKind:       it.resolvedKind,
+              requiredCoverage,
+              coverageStatus:     l?.coverageStatus ?? 'uncovered',
+              promptedHeroShots:  l?.actualPromptedHeroShots ?? 0,
+              routedHeroRefs:     l?.actualRoutedHeroRefs ?? 0,
+              visualRole,
+              heroShotIds:        heroShots,
+              integratedShotIds:  integratedShots,
+              supportShotIds:     supportShots,
+              covered,
+              coverageReason,
               missingReason,
-              allowedUseModes: getAllowedUseModes(it.resolvedKind),
+              allowedUseModes:    getAllowedUseModes(it.resolvedKind),
             };
           });
         })(),
@@ -1023,6 +1082,111 @@ const PhotodumpModule: React.FC = () => {
         })(),
         avatarBaseClothingRisk: recipe === 'outfit_haul',
         indexRoutingUsed: false,
+        // Count recovery — muestra exactamente qué pasó con cada slot
+        countRecoveryDebug: recipe === 'outfit_haul' ? (() => {
+          const recovered = debugShots.filter(ds => ds.fallbackUsed && ds.status === 'ok').length;
+          const generated = shotUrls.filter(Boolean).length;
+          return {
+            requested:  count,
+            planned:    shots.length,
+            generated,
+            failed:     failed.length,
+            recovered,
+            final:      generated + 1, // +1 = REF0
+          };
+        })() : undefined,
+        // Avatar base clothing risk flags
+        avatarBaseClothingUsedAsTryOn: false, // the model cannot confirm this — it's a risk flag
+        avatarBaseClothingUsedForAccessoryIntegration: false, // same — risk flag only
+        // Accessory coverage map — por accesorio, qué matches se evaluaron y qué shot se asignó
+        accessoryCoverageMap: recipe === 'outfit_haul' && haulManifestDebug ? (() => {
+          const finalLedger = finalCoverage?.ledger ?? haulManifestDebug.coveragePlan.ledger;
+          const rawLog: Record<string, Array<{ outfitId: string; score: number; reason: string; selected: boolean; integrationMode?: string }>>
+            = (haulManifestDebug as any)._accessoryCompatibilityLog ?? {};
+          const result: Record<string, {
+            kind: string;
+            manualKind?: string;
+            resolvedKind?: string;
+            required: boolean;
+            closeupRequested: boolean;
+            compatibleOutfitMatches: Array<{ outfitId: string; score: number; reason: string; selected: boolean; integrationMode?: string }>;
+            promptedHeroShots: string[];
+            routedHeroRefs: string[];
+            integratedInShots: string[];
+            closeupShots: string[];
+            flatlayOnlyShots: string[];
+            backgroundOnlyShots: string[];
+            covered: boolean;
+            coverageReason: string;
+          }> = {};
+          const allAccItems = [
+            ...haulManifestDebug.accessoryItems,
+            ...haulManifestDebug.footwearItems,
+            ...haulManifestDebug.allItems.filter(it => it.resolvedKind === 'jewelry'),
+          ];
+          const seen = new Set<string>();
+          allAccItems.forEach(it => {
+            if (seen.has(it.id)) return;
+            seen.add(it.id);
+            const l = finalLedger.find(x => x.itemId === it.id);
+            const matches = rawLog[it.id] ?? [];
+            const heroShotIds = (l?.shotIds ?? []).filter(sk => debugShots.find(d => d.key === sk)?.coverageRole === 'hero' && debugShots.find(d => d.key === sk)?.status === 'ok');
+            const integratedIds = (l?.coverageStatus === 'integrated') ? (l?.shotIds ?? []).filter(sk => debugShots.find(d => d.key === sk)?.status === 'ok') : [];
+            const closeupsIds = heroShotIds.filter(sk => sk.startsWith('HAUL_ACCESSORY_CLOSEUP_') || sk.startsWith('HAUL_JEWELRY_') || sk.startsWith('HAUL_BAG_') || sk.startsWith('HAUL_FOOTWEAR_'));
+            const flatlayIds  = (l?.shotIds ?? []).filter(sk => sk === 'HAUL_OVERVIEW' || sk === 'HAUL_RECAP');
+            const bgIds       = (l?.shotIds ?? []).filter(sk => debugShots.find(d => d.key === sk)?.coverageRole === 'support');
+            const covered = l?.coverageStatus === 'covered' || l?.coverageStatus === 'overexposed' || l?.coverageStatus === 'integrated';
+            let coverageReason: string;
+            if (l?.coverageStatus === 'integrated') coverageReason = 'Integrated into a compatible styled outfit shot';
+            else if (heroShotIds.length > 0) coverageReason = `${heroShotIds.length} hero shot(s) generated`;
+            else if (flatlayIds.length > 0) coverageReason = 'Flatlay only — no dedicated hero shot';
+            else coverageReason = 'Not covered — no hero or integrated shot';
+            result[it.id] = {
+              kind:            it.kind ?? it.resolvedKind,
+              manualKind:      it.manualKind,
+              resolvedKind:    it.resolvedKind,
+              required:        it.priority === 'required',
+              closeupRequested: it.closeupRequested ?? false,
+              compatibleOutfitMatches: matches,
+              promptedHeroShots:  heroShotIds,
+              routedHeroRefs:     heroShotIds, // same — hero shot = routed if primaryItemId matches
+              integratedInShots:  integratedIds,
+              closeupShots:       closeupsIds,
+              flatlayOnlyShots:   flatlayIds,
+              backgroundOnlyShots: bgIds,
+              covered,
+              coverageReason,
+            };
+          });
+          return Object.keys(result).length > 0 ? result : undefined;
+        })() : undefined,
+        // Redundant closeup detection — closeups for items already in overview with no integration
+        redundantAccessoryCloseups: recipe === 'outfit_haul' && haulManifestDebug ? (() => {
+          const finalLedger = finalCoverage?.ledger ?? haulManifestDebug.coveragePlan.ledger;
+          const redundant: string[] = [];
+          haulManifestDebug.accessoryItems.forEach(it => {
+            const l = finalLedger.find(x => x.itemId === it.id);
+            if (!l) return;
+            const heroShotIds = (l.shotIds ?? []).filter(sk => debugShots.find(d => d.key === sk)?.coverageRole === 'hero' && debugShots.find(d => d.key === sk)?.status === 'ok');
+            const isCloseupOnly = heroShotIds.every(sk => sk.startsWith('HAUL_ACCESSORY_CLOSEUP_') || sk.startsWith('HAUL_JEWELRY_'));
+            const hasIntegration = l.coverageStatus === 'integrated' || heroShotIds.some(sk => !sk.startsWith('HAUL_ACCESSORY_CLOSEUP_') && !sk.startsWith('HAUL_JEWELRY_'));
+            if (isCloseupOnly && !hasIntegration && l.plannedHeroShots > 1) {
+              redundant.push(`${it.label} (${it.id}) — ${heroShotIds.length} closeup shot(s), could integrate with compatible outfit`);
+            }
+          });
+          return redundant.length > 0 ? redundant : undefined;
+        })() : undefined,
+        // Uncovered accessories
+        uncoveredAccessories: recipe === 'outfit_haul' && haulManifestDebug ? (() => {
+          const finalLedger = finalCoverage?.ledger ?? haulManifestDebug.coveragePlan.ledger;
+          const accItems = [...haulManifestDebug.accessoryItems, ...haulManifestDebug.footwearItems];
+          return accItems
+            .filter(it => {
+              const l = finalLedger.find(x => x.itemId === it.id);
+              return !l || (l.coverageStatus !== 'covered' && l.coverageStatus !== 'integrated' && l.coverageStatus !== 'overexposed');
+            })
+            .map(it => it.id);
+        })() : undefined,
         plan,
         shots:               debugShots,
       } : undefined;

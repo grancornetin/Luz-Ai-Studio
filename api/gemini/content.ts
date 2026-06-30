@@ -33,7 +33,13 @@ interface ContentRequest {
     | 'getContentJobStatus'
     | 'runContentJob'
     | 'generatePlainText'
-    | 'assistantChat';
+    | 'assistantChat'
+    | 'analyzeREF0'
+    | 'inferGender'
+    | 'analyzeAnchor'
+    | 'analyzeProductRelevance'
+    | 'analyzeUGCOutfit'
+    | 'analyzeScene';
   images?: string[];
   mimeTypes?: string[];
   prompt: string;
@@ -159,6 +165,11 @@ function parseJsonMaybe(text: string): unknown {
   return null;
 }
 
+function cleanBase64(b64: string): string {
+  if (!b64) return '';
+  return b64.replace(/^data:image\/(png|jpeg|webp);base64,/, '').replace(/\s/g, '');
+}
+
 function buildParts(body: Pick<ContentRequest, 'images' | 'mimeTypes' | 'prompt'>): any[] {
   const parts: Array<any> = [];
   if (body.images && body.images.length > 0) {
@@ -273,10 +284,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    if (!body.action || !body.prompt) {
-      if (body.action !== 'getContentJobStatus') {
-        return res.status(400).json({ error: 'Missing action or prompt' });
-      }
+    const payloadOnlyActions = ['analyzeREF0', 'inferGender', 'analyzeAnchor', 'analyzeProductRelevance', 'analyzeUGCOutfit', 'analyzeScene', 'getContentJobStatus'];
+    if (!body.action || (!body.prompt && !payloadOnlyActions.includes(body.action))) {
+      return res.status(400).json({ error: 'Missing action or prompt' });
     }
 
     if (body.action === 'getContentJobStatus') {
@@ -296,10 +306,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Validar prompt — chat usa límite estricto, análisis de imagen el general
-    const promptErr = body.action === 'assistantChat'
-      ? validateChatPrompt(body.prompt)
-      : validatePrompt(body.prompt);
-    if (promptErr) return res.status(400).json({ error: promptErr });
+    // Las acciones que usan payload en lugar de prompt se saltan esta validación.
+    if (!payloadOnlyActions.includes(body.action)) {
+      const promptErr = body.action === 'assistantChat'
+        ? validateChatPrompt(body.prompt)
+        : validatePrompt(body.prompt);
+      if (promptErr) return res.status(400).json({ error: promptErr });
+    }
 
     // Validar imágenes si las hay
     if (body.images?.length) {
@@ -443,6 +456,138 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       return res.status(200).json({ success: true, text: cleanText, json: parsedJson });
+    }
+
+    // ─── ACCIONES DE ANÁLISIS UGC (migradas desde ugc.ts) ────────────
+    // Usan payload.imageData / payload.mimeType en lugar de body.images[]
+    // para mantener compatibilidad con el contrato original de ugcApiService.
+
+    if (body.action === 'analyzeREF0') {
+      const { imageData, mimeType } = body.payload || {};
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          { role: 'user', parts: [
+            { text: 'Analyze this image. Respond ONLY with JSON.' },
+            { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
+            { text: `{
+  "lighting": { "primarySource": "string", "direction": "string", "colorTemperature": "string", "shadowType": "string", "intensity": "string" },
+  "spatial": { "elements": ["string"], "walls": "string", "floor": "string", "geometry": "string" },
+  "poseContext": { "hasSeating": "boolean", "hasLeaningSurface": "boolean", "hasTable": "boolean", "availableActions": ["string"] }
+}` },
+          ]},
+        ],
+        config: { responseMimeType: 'application/json' },
+      });
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      return res.status(200).json(JSON.parse(text.replace(/```json|```/g, '').trim()));
+    }
+
+    if (body.action === 'inferGender') {
+      const { imageData, mimeType } = body.payload || {};
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          { role: 'user', parts: [
+            { text: 'Look at this photo of a person. Determine their apparent gender presentation for the purpose of generating appropriate HPI pose and expression guidance, and for writing correctly-gendered Spanish captions. Respond ONLY with JSON.' },
+            { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
+            { text: '{"gender": "female" | "male" | "neutral"}' },
+          ]},
+        ],
+        config: { responseMimeType: 'application/json' },
+      });
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      return res.status(200).json(JSON.parse(text.replace(/```json|```/g, '').trim()));
+    }
+
+    if (body.action === 'analyzeAnchor') {
+      const { imageData, mimeType } = body.payload || {};
+      const anchorSchema = `{
+  "lighting": { "primarySource": "string", "direction": "string", "colorTemperature": "string", "shadowType": "string", "intensity": "string", "productionLevel": "string" },
+  "environment": { "locationType": "string", "indoorOutdoor": "string", "backgroundDesc": "string", "surfaceLanguage": "string", "productionTier": "string", "propsLevel": "string" },
+  "styling": { "hasVisiblePerson": false, "garmentCategory": "string", "outfitColorFamily": "string", "formalityTier": "string", "silhouette": "string", "doNotSwitch": "string", "bodyType": "string", "visibleMarks": "string" },
+  "product": { "category": "string", "colorFamily": "string", "materialDesc": "string", "dominanceLevel": "string" },
+  "composition": { "shotType": "string", "cameraDistance": "string", "negativeSpace": "string", "visualHierarchy": "string", "framingStyle": "string" },
+  "mood": { "emotionalRegister": "string", "energyLevel": "string", "colorPalette": "string", "overallMood": "string" }
+}`;
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          { role: 'user', parts: [
+            { text: 'You are a visual analyst for a campaign generator. Analyze this anchor image and extract ALL visual invariants that must be preserved across every derived campaign image. Be specific and concrete. Respond ONLY with the JSON object below.' },
+            { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
+            { text: anchorSchema },
+          ]},
+        ],
+        config: { responseMimeType: 'application/json' },
+      });
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      return res.status(200).json(JSON.parse(text.replace(/```json|```/g, '').trim()));
+    }
+
+    if (body.action === 'analyzeProductRelevance') {
+      const { productRef, focus, outfitRef, sceneRef, sceneText } = body.payload || {};
+      const parts: any[] = [];
+      if (productRef?.data) {
+        parts.push({ text: 'PRODUCT IMAGE:' });
+        parts.push({ inlineData: { mimeType: productRef.mimeType || 'image/jpeg', data: cleanBase64(productRef.data) } });
+      }
+      if (focus === 'OUTFIT' && outfitRef?.data) {
+        parts.push({ text: 'OUTFIT REFERENCE:' });
+        parts.push({ inlineData: { mimeType: outfitRef.mimeType || 'image/jpeg', data: cleanBase64(outfitRef.data) } });
+      }
+      if (focus === 'SCENE' && sceneRef?.data) {
+        parts.push({ text: 'SCENE REFERENCE:' });
+        parts.push({ inlineData: { mimeType: sceneRef.mimeType || 'image/jpeg', data: cleanBase64(sceneRef.data) } });
+      }
+      parts.push({ text: `
+Analyze if product is relevant to ${focus} context.
+${focus === 'OUTFIT' ? 'Is this a complement to the outfit (jewelry, bag, belt, shoes = YES)?' : ''}
+${focus === 'SCENE' ? 'Does this product naturally belong in this environment?' : ''}
+${sceneText ? `Scene description: ${sceneText}` : ''}
+Respond ONLY with JSON: { "isRelevant": boolean, "suggestion": "string", "productType": "jewelry|accessory|clothing|electronics|food|sports|home|other" }
+` });
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [{ role: 'user', parts }],
+        config: { responseMimeType: 'application/json' },
+      });
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      return res.status(200).json(JSON.parse(text.replace(/```json|```/g, '').trim()));
+    }
+
+    if (body.action === 'analyzeUGCOutfit') {
+      const { imageData, mimeType } = body.payload || {};
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          { role: 'user', parts: [
+            { text: 'Analyze this outfit. Respond ONLY with JSON.' },
+            { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
+            { text: '{ "hasJacket": "boolean", "hasPants": "boolean", "hasShoes": "boolean", "hasAccessories": "boolean", "hasDetail": "boolean", "fabricType": "string", "colors": ["string"], "hasTop": "boolean", "hasBottom": "boolean", "hasBelt": "boolean", "hasBag": "boolean", "hasHat": "boolean", "hasNecklace": "boolean", "bottomType": "shorts|pants|skirt|unknown" }' },
+          ]},
+        ],
+        config: { responseMimeType: 'application/json' },
+      });
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      return res.status(200).json(JSON.parse(text.replace(/```json|```/g, '').trim()));
+    }
+
+    if (body.action === 'analyzeScene') {
+      const { imageData, mimeType } = body.payload || {};
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          { role: 'user', parts: [
+            { text: 'Analyze this scene. Respond ONLY with JSON.' },
+            { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
+            { text: '{ "hasFurniture": "boolean", "hasNature": "boolean", "hasEquipment": "boolean", "hasTable": "boolean", "hasSeating": "boolean", "hasWindows": "boolean", "hasProps": "boolean", "sceneType": "string" }' },
+          ]},
+        ],
+        config: { responseMimeType: 'application/json' },
+      });
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      return res.status(200).json(JSON.parse(text.replace(/```json|```/g, '').trim()));
     }
 
     // ─── RESTO DE ACCIONES ───────────────────────────────────────────

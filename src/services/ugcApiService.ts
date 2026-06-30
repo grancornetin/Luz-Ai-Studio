@@ -93,6 +93,7 @@ export interface ProductRelevanceResult {
 
 class UGCApiService {
   private baseUrl = '/api/gemini/ugc';
+  private contentUrl = '/api/gemini/content';
 
   // ──────────────────────────────────────────────────────────────
   // generateImageAsync - Generación asíncrona con polling
@@ -296,7 +297,7 @@ class UGCApiService {
     imageData: string;
     mimeType: string;
   }): Promise<{ gender: 'female' | 'male' | 'neutral' }> {
-    const response = await fetch(this.baseUrl, {
+    const response = await fetch(this.contentUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
       body: JSON.stringify({
@@ -315,7 +316,7 @@ class UGCApiService {
     imageData: string;
     mimeType: string;
   }): Promise<REF0Analysis> {
-    const response = await fetch(this.baseUrl, {
+    const response = await fetch(this.contentUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
       body: JSON.stringify({
@@ -341,7 +342,7 @@ class UGCApiService {
     sceneRef?: { data: string; mimeType: string } | null;
     sceneText?: string;
   }): Promise<ProductRelevanceResult> {
-    const response = await fetch(this.baseUrl, {
+    const response = await fetch(this.contentUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
       body: JSON.stringify({
@@ -364,11 +365,11 @@ class UGCApiService {
     imageData: string;
     mimeType: string;
   }): Promise<OutfitAnalysis> {
-    const response = await fetch(this.baseUrl, {
+    const response = await fetch(this.contentUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
       body: JSON.stringify({
-        action: 'analyzeOutfit',
+        action: 'analyzeUGCOutfit',
         payload: params,
       }),
     });
@@ -389,7 +390,7 @@ class UGCApiService {
     imageData: string;
     mimeType: string;
   }): Promise<import('../modules/campaign/types').CampaignAnchorAnalysis> {
-    const response = await fetch(this.baseUrl, {
+    const response = await fetch(this.contentUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
       body: JSON.stringify({
@@ -412,7 +413,7 @@ class UGCApiService {
     imageData: string;
     mimeType: string;
   }): Promise<SceneAnalysis> {
-    const response = await fetch(this.baseUrl, {
+    const response = await fetch(this.contentUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
       body: JSON.stringify({
