@@ -56,7 +56,7 @@ async function getJob(jobId: string): Promise<Job | null> {
 
 // ─── Google GenAI (mismo config que ugc.ts) ──────────────────────────────────
 function getCredentials(): Record<string, unknown> {
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '';
+  const raw = process.env.GEMINI_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '';
   const decoded = raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf-8');
   return JSON.parse(decoded);
 }

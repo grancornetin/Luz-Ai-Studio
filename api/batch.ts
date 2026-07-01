@@ -279,7 +279,7 @@ function generateTags(prompt: string, category: string): string[] {
 // ── Generación de título con Gemini ──────────────────────────────────────────
 
 function getGenAIClient(): GoogleGenAI {
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '';
+  const raw = process.env.GEMINI_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '';
   const credentials = JSON.parse(raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf-8'));
   return new GoogleGenAI({
     vertexai: true,
