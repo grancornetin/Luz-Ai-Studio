@@ -1,4 +1,4 @@
-// api/_concurrency.ts
+// src/server/api/concurrency.ts
 // Control de concurrencia por usuario — limita cuántos jobs Gemini puede tener
 // activos simultáneamente una misma cuenta, sin importar cuántos módulos tenga abiertos.
 //

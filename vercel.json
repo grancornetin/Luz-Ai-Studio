@@ -24,15 +24,14 @@
     "api/webhooks/dodopayments.ts": {
       "maxDuration": 10
     },
-    "api/admin/circuit-reset.ts": {
-      "maxDuration": 10
-    },
     "api/**/*.ts": {
       "maxDuration": 60,
       "memory": 1024
     }
   },
   "rewrites": [
+    { "source": "/api/history", "destination": "/api/credits?route=history" },
+    { "source": "/api/admin/circuit-reset", "destination": "/api/credits?route=admin-circuit-reset" },
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/__/auth/:path*", "destination": "https://gen-lang-client-0895574081.firebaseapp.com/__/auth/:path*" },
     { "source": "/__/firebase/:path*", "destination": "https://gen-lang-client-0895574081.firebaseapp.com/__/firebase/:path*" },

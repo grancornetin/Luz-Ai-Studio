@@ -98,7 +98,7 @@ import {
   validatePrompt,
   validateChatPrompt,
   verifyAuth,
-} from '../_middleware.js';
+} from '../../src/server/api/middleware.js';
 
 function extractText(response: any): string {
   return response.candidates?.[0]?.content?.parts

@@ -67,8 +67,8 @@ async function getJob(jobId: string): Promise<ImageJob | null> {
   return data as ImageJob;
 }
 
-import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, getBatchImageRatelimit, checkRateLimit, sanitizeUid, verifyAuth } from '../_middleware.js';
-import { concurrencyAcquire } from '../_concurrency.js';
+import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, getBatchImageRatelimit, checkRateLimit, sanitizeUid, verifyAuth } from '../../src/server/api/middleware.js';
+import { concurrencyAcquire } from '../../src/server/api/concurrency.js';
 
 // ─── Circuit breaker ──────────────────────────────────────────────────────────
 // Cuando un proveedor agota su cuota, se marca en Redis por 2h.

@@ -12,7 +12,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Receiver } from '@upstash/qstash';
 import { Redis } from '@upstash/redis';
-import { reportShotResult, appendToHistory } from '../_notifications.js';
+import { reportShotResult, appendToHistory } from '../../src/server/api/notifications.js';
 
 // ─── Redis ───────────────────────────────────────────────────────────────────
 const redis = new Redis({

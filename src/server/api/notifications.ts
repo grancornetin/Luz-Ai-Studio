@@ -1,4 +1,4 @@
-// api/_notifications.ts
+// src/server/api/notifications.ts
 // Helpers compartidos para que los workers (image-worker, evolink-worker)
 // escriban notificaciones a Firestore y reembolsen créditos cuando un shot falla.
 //

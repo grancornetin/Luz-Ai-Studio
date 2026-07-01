@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Receiver } from '@upstash/qstash';
 import { Redis } from '@upstash/redis';
 import { GoogleGenAI } from '@google/genai';
-import { reportShotResult, appendToHistory } from '../_notifications.js';
+import { reportShotResult, appendToHistory } from '../../src/server/api/notifications.js';
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL!,

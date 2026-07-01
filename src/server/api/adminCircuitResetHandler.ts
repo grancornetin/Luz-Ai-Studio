@@ -4,7 +4,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Redis } from '@upstash/redis';
-import { verifyAuth } from '../_middleware.js';
+import { verifyAuth } from './middleware.js';
 
 const redis = new Redis({
   url:   process.env.KV_REST_API_URL!,
@@ -15,7 +15,7 @@ const ADMIN_UIDS = (process.env.ADMIN_UIDS || '').split(',').map(s => s.trim()).
 
 const CIRCUIT_KEYS = ['circuit:gemini', 'circuit:gptimage', 'circuit:seedream'];
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export async function handleAdminCircuitResetRequest(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');

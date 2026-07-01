@@ -4,7 +4,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Redis } from '@upstash/redis';
-import { setSecurityHeaders, setCorsHeaders, sanitizeUid, verifyAuth } from './_middleware.js';
+import { setSecurityHeaders, setCorsHeaders, sanitizeUid, verifyAuth } from './middleware.js';
 
 const redis = new Redis({
   url:   process.env.KV_REST_API_URL!,
@@ -78,7 +78,7 @@ async function setHistory(uid: string, records: GenerationRecord[]): Promise<voi
   await redis.set(historyKey(uid), records, { ex: HISTORY_TTL_SECONDS });
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export async function handleHistoryRequest(req: VercelRequest, res: VercelResponse) {
   setSecurityHeaders(res);
   // CORS restringido a la lista blanca centralizada (_middleware.ts).
   if (setCorsHeaders(req, res)) return;
@@ -172,4 +172,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: error.message });
   }
 }
-

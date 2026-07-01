@@ -1,4 +1,4 @@
-// api/_middleware.ts
+// src/server/api/middleware.ts
 // Middleware de seguridad centralizado para todos los endpoints.
 // Aplica: CORS restringido, security headers, verificación de Firebase Auth, rate limiting.
 
