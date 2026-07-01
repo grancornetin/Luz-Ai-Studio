@@ -8,7 +8,7 @@
 > 5. El objetivo es que otra IA pueda leer este archivo y entender completamente qué hace el módulo, cómo funciona, y en qué estado está, sin necesidad de leer el código.
 > 6. **INSTRUCCIÓN DE CONTINUIDAD:** Al final del documento siempre debe existir la sección "Estado de trabajo actual" con el estado exacto de qué se está haciendo, en qué receta se está, y qué quedó pendiente. Cuando una receta se cierra, moverla a "Recetas cerradas". Esto permite retomar el trabajo en un nuevo chat sin perder contexto.
 
-**Última actualización:** Junio 2026 (outfit_haul v1.8 — arquitectura rediseñada, selector de tipo de referencia, cobertura garantizada por ítem)
+**Última actualización:** Julio 2026 (outfit_haul cerrada 9/10. outfit_week patch v2 implementado — pendiente prueba en app.)
 **Propósito:** Generar series fotográficas con narrativa visual coherente. Un "photodump" es una colección de fotos que cuentan una historia o transmiten un mood, muy popular en Instagram y TikTok.
 
 ---
@@ -214,11 +214,11 @@ Rotan entre tipos de momento: context, detail, emotion, texture, action, atmosph
 
 ---
 
-### ✅ `outfit_haul` — VALIDADA (v1.8, Junio 2026)
+### ✅ `outfit_haul` — CERRADA (v1.8+patches, Julio 2026) — 9/10
 
 **Historia:** "Me probé todo esto / estas son las prendas que me quedé"
 
-**Arquitectura (rediseñada en v1.4–v1.8):**
+**Arquitectura (rediseñada en v1.4–v1.8 + patches finales):**
 El sistema haul tiene tres fases que garantizan cobertura de TODOS los ítems subidos:
 
 **FASE 1 — Coverage obligatoria (garantizada):**
@@ -236,91 +236,150 @@ Con el presupuesto restante se distribuyen:
 - `HAUL_RECAP` — cierre si hay ≥2 outfits y hay budget
 
 **FASE 3 — Interleaving:**
-Los ítems no-wearables (calzado, bolsos, joyería) se distribuyen uniformemente entre los try-ons, no al final. Garantiza que el set se vea narrativamente natural.
+Los ítems no-wearables (calzado, bolsos, joyería) se distribuyen uniformemente entre los try-ons, no al final.
+
+**Scoring de compatibilidad (`scoreAccessoryOutfitCompatibility`):**
+Función heurística exportada (0–100) que determina si un accesorio se integra en un outfit o recibe shot aislado. `COMPATIBILITY_THRESHOLD = 65`. Considera: color family (gold/silver/black/white/warm/cool/neutral/denim), vibe (elegant/casual/leather/sport), kind (jewelry/footwear/bag/belt/glasses/hat). Anti-matches duros: heels+sport=5, sneakers+formal=15.
+
+**HaulStylingGraph:** Grafo semántico de combinaciones entre ítems. `buildHaulStylingGraph(manifest)` crea pares top+bottom, dress+footwear, jewelry+outfit, etc. sin hardcoding de colores específicos.
+
+**HaulShotItemPlan:** Cada shot declara explícitamente `primaryItems`, `wornItems`, `heldItems`, `surfaceItems`, `backgroundItems`, `forbiddenItems`. Inyectado en el prompt antes del role lock.
+
+**Retry doble:**
+- Content-policy: safe-retry con prompt conservador (lenguaje de moda neutro, `forbiddenElements` ampliados)
+- Network/timeout: backoff 5s con el mismo shot
 
 **Slots:**
 - `avatar` (requerido): cara/identidad
-- `outfit` (requerido): hasta 10 prendas — con selector de tipo `HaulReferenceTypeSelector` por cada slot (auto / look_completo / top / bottom / vestido / enterizo / chaqueta / calzado / pantys / bolso / joyeria / accesorio)
-- `accesorios` (opcional): hasta 5, con checkbox ⭐ (close-up obligatorio por cada marcado)
+- `outfit` (requerido): hasta 10 prendas — con selector de tipo `HaulReferenceTypeSelector` por cada slot (14 opciones)
+- `accesorios` (opcional): hasta 5, con checkbox ⭐
 
-**Selector de tipo de referencia (HaulRefKind):**
-El usuario puede indicar manualmente qué contiene cada imagen. 14 opciones disponibles.
-Si elige `auto`, el planner usa heurística + análisis visual para inferir el tipo.
-El `manualKind` viaja al `HaulItem.manualKind` y determina el `resolvedKind` y el `promptKindLabel`.
-
-**Análisis visual de referencias (VisualRefsAnalysisResult):**
-Cuando el usuario sube imágenes, se puede invocar análisis multimodal con Gemini para detectar `resolvedKind`, `components` (hasTop, hasBottom, etc.), `dominantColors`, `hasPerson`, `isFlatlayOrProduct`. El resultado enriquece el `HaulManifest` antes de planificar.
-
-**Count policy:** `storyShotCount = min(requestedCount, 20)`. REF0 siempre extra (+1). Total visible = storyShotCount + 1.
-
-**Cobertura post-generación (`computeFinalHaulCoverageFromShots`):**
-Después de generar, se calcula el ledger final con shots REALES (no solo el plan). Distingue covered / support_only / uncovered / overexposed por ítem. Debug visible para admins.
-
-**Contexto de uso vs locación (`wearingContextOnly`):**
-"Para la oficina" → `wearingContextOnly=true` — no contamina la locación del haul.
-"En la oficina" → `wearingContextOnly=false` — puede ser locación real del haul.
-La etiqueta `wearingContextStyleLabel` inyecta el contexto de moda sin traer señales visuales de locación.
-
-**Retry automático (safe_required_item_retry):**
-Shots con content-policy failure en haul hacen retry automático con prompt conservador diferenciado:
-- Hero shots (try-on, footwear, bag, jewelry, adjusting, styled): `safeRetryPurpose` preserva la referencia del ítem con lenguaje de moda neutro.
-- Shots de contexto: purpose genérico "natural haul moment".
-- `forbiddenElements` ampliados para reducir riesgo de rechazos repetidos.
-
-**REF0:** Establece el espacio del haul (dormitorio, probador) con iPhone UGC realismo. La ropa del avatar NO es un ítem del haul ("AVATAR CLOTHING IS NOT A HAUL ITEM").
-
-**HPI:** Safe para haul — solo body/expression. Desactivado en overview, closeup y detail. Micro-acción en adjusting. Evaluación de postura en try-on. Sin props/locations de intelligence.
-
-**Family blocks:** Desactivados.
-
-**Debug de admins incluye:**
-- `haulManifest`: clasificación completa de ítems
-- `manualKindLostWarning`: detecta si el selector manual se perdió en el pipeline
-- `haulWearingContext`: separación contexto de uso vs locación de captura
-- `finalCoverageLedger`: cobertura real post-generación
-- `referenceRouting`: clasificación semántica por tipo (garmentRefs, footwearRefs, jewelryRefs, accessoryRefs)
+**Debug completo para admins:**
+- `haulManifest`, `haulStylingGraph`, `haulShotItemPlans`
+- `coverageByItem`: por ítem — `requiredCoverage`, `promptedHeroShots`, `routedHeroRefs`, `visualRole` (closeup/worn/held/flatlay/integrated_with_outfit/background_only), `covered`, `coverageReason`
+- `accessoryCoverageMap`: por accesorio — matches evaluados con score + razón + selected, shots clasificados
+- `countRecoveryDebug`: `requested/planned/generated/failed/recovered/final`
+- `redundantAccessoryCloseups`, `uncoveredAccessories`
+- `haulWorldMap`, `resolvedRefsPerShot`, `worldViolationsPredicted`
 
 ---
 
-### ⏳ `outfit_week` — IMPLEMENTADA, pendiente prueba en app
+### 🔄 `outfit_week` — PATCH v2 IMPLEMENTADO, pendiente prueba (Julio 2026)
 
-**Historia:** "Estos fueron mis outfits de la semana / del mes / de la ocasión"
+**Historia:** "mis favoritos de la semana / outfits de la semana / accesorios de la semana / bolsos de la semana / maquillaje de la semana"
+
+Esta receta es **versátil** — se adapta al tipo dominante de ítems subidos. No es solo "outfits de cuerpo completo".
 
 **Slots:**
-- `avatar` (requerido)
-- `outfit` (requerido): hasta 7 outfits completos — uno por slot, uno por shot
-- `accesorios` (opcional): hasta 3, con checkbox ⭐
-- `escena` (opcional): ambiente general que contextualiza la semana
+- `avatar` (requerido): cara/identidad
+- `outfit` (requerido): hasta 7 ítems — outfits completos, prendas, bolsos, accesorios, maquillaje, etc.
+- `accesorios` (opcional): hasta 3, con checkbox ⭐ de close-up
+- `escena` (opcional): ambiente general
 
-**Arco orgánico:**
-- Cada shot = un outfit distinto, full body.
-- Framings rotan (full body frontal → espejo → three-quarters → ligeramente bajo → candid → etc.) para dar sensación de días distintos.
-- No hay arco lineal — el orden de outfits sigue el orden en que se subieron.
+---
 
-**REF0:** Avatar con primer outfit, full body, ambiente establecido para el set.
+**Arquitectura del patch v2:**
+
+**WeeklyManifest:**
+Construido por `buildWeeklyManifest(refs, count)`. Clasifica todos los ítems subidos (outfitSets, standaloneGarments, shoes, bags, jewelry, accessories, makeup, products). Detecta el tipo dominante del set (`outfits | accessories | bags | makeup | mixed`) para adaptar los roles narrativos.
+
+**Planner por roles (`buildWeeklyShotPlan`):**
+Genera una secuencia de `WeeklyShotPlan[]` con roles narrativos en vez de `WEEK_OUTFIT_1..N`:
+- `WEEK_ANCHOR` — primer shot / base visual
+- `WEEK_OVERVIEW` — selección semanal sobre cama/rack/superficie (si hay ≥2 ítems)
+- `WEEK_LOOK_HERO` — look completo full body (uno por outfit)
+- `WEEK_MIRROR_LOOK` — variante espejo para romper repetición (cada 3er look hero)
+- `WEEK_ACCESSORY_INTEGRATED` — accesorio integrado con outfit compatible (scoring 0–100)
+- `WEEK_ACCESSORY_WORN` — joyería puesta en el cuerpo
+- `WEEK_ACCESSORY_HELD` — bolso/accesorio sostenido
+- `WEEK_ACCESSORY_DETAIL` — macro de pieza (solo si ⭐ y hay budget)
+- `WEEK_STYLING_PROCESS` — ajustando/vistiéndose
+- `WEEK_CLOSER` — cierre del carrusel (anti-redundancia: reemplaza full-body genérico final)
+- `WEEK_FAVORITE` — favorito de la semana
+- `WEEK_DETAIL` — detalle de prenda/textura
+
+**Cobertura garantizada:**
+- Cada ítem subido es `priority: 'required'`
+- El plan asigna al menos 1 shot a cada ítem antes de añadir shots narrativos extra
+- Los accesorios se integran primero con outfit compatible (si score ≥65), y solo reciben closeup aislado si hay budget adicional o si el usuario lo pidió con ⭐
+
+**Index routing activado (`indexRoutingUsed: true`):**
+Cada shot recibe exactamente las refs que le corresponden según el plan:
+- `outfit_N` → `allOutfitUrls[N]`
+- `acc_N` → `allAccUrls[N]`
+- Primaries + secondaries resueltos desde `WeeklyShotPlan.primaryItemIds` y `secondaryItemIds`
+- NO se pasan todas las refs a todos los shots
+
+**HPI safe (`buildWeeklySafeHpiBlock`):**
+Poses naturales de lifestyle. Bloqueadas: poses de fitness, torso twists extremos, lat pulldown, reclined couch editorial. Ramas por rol: mirror_look, styling_process, accessory_worn, on_the_go, closer.
+
+**Avatar base clothing suprimido:**
+Bloque duro en REF0 y en todos los story shots. El avatar es solo identidad facial y proporciones. La ropa del avatar nunca cuenta como outfit de la semana.
+
+**Prop budget activo (`scenePropBudgetApplied: true`):**
+Máx 1–3 props neutros sin branding por shot. OVERVIEW puede tener más ítems. Sin cajas de retail con logos. Sin clutter.
+
+**Branding prohibido (`externalBrandingForbiddenApplied: true`):**
+No logos de Zara, H&M, Shein, Nike, Adidas en ninguna bag, caja o prop.
+
+**Anti-redundancia del último shot:**
+Si el shot final es otro full-body genérico y ya hay ≥2 look heroes, se reemplaza por `WEEK_DETAIL` o `WEEK_CLOSER`. `redundancyScore` y `replacedBecauseRedundant` se reportan en debug.
+
+---
+
+**Debug esperado en outfit_week:**
+```
+weeklyManifest, weeklyStructure, shotRoles[], redundancyScores[],
+indexRoutingUsed: true, scenePropBudgetApplied: true,
+externalBrandingForbiddenApplied: true,
+avatarBaseClothingSuppressedInRef0: true,
+avatarBaseClothingSuppressedInStoryShots: true,
+avatarBaseClothingLeakRisk, avatarBaseClothingUsedAsWeeklyItem: false,
+accessoryIntegrationUsed, uncoveredRequiredItems_weekly[],
+coveredItemIds_weekly[], unsafeHpiSuppressed: true,
+hpiProfileUsed: 'weekly_safe', propBudget, brandRiskDetected,
+countRecoveryDebug
+```
+
+**Próxima acción:** Probar en app. Evaluar:
+1. ¿Los roles narrativos se generan correctamente (ANCHOR → OVERVIEW → LOOK_HERO × N → ACCESSORY_INTEGRATED → CLOSER)?
+2. ¿El outfit correcto llega al shot correcto (index routing)?
+3. ¿Los accesorios se integran con outfits en vez de aparecer solo como closeup?
+4. ¿El debug muestra `indexRoutingUsed: true` y los roles esperados?
+5. ¿La REF0 no usa la ropa base del avatar?
+6. ¿El último shot no es redundante?
 
 ---
 
 ## Estado de trabajo actual
 
-**Receta activa: `outfit_week` — implementada, pendiente prueba de aceptación en app**
+**Receta activa: `outfit_week`**
 
-**outfit_haul (v1.8) — arquitectura estabilizada:**
-- `HaulReferenceTypeSelector` con 14 opciones de tipo de ítem
-- `buildHaulManifest` + `buildHaulShotPlan` con 3 fases de coverage garantizada
-- `computeFinalHaulCoverageFromShots` para ledger post-generación con shots reales
-- `VisualRefsAnalysisResult` para análisis multimodal de referencias
-- `wearingContextOnly` / `wearingContextStyleLabel` para separar contexto de uso vs locación
-- Safe retry diferenciado por tipo de shot (hero vs contexto)
-- Debug completo para admins: manualKindLostWarning, haulWearingContext, finalCoverageLedger
+Estado: patch v2 implementado, pendiente prueba en app.
 
-**Próxima acción:** Probar `outfit_week` en app.
+**Qué cambió en patch v2 (Julio 2026):**
+- Reemplazado `buildOutfitWeekShotPool` por planner narrativo completo con `WeeklyManifest` + `WeeklyShotPlan`
+- 13 roles narrativos en vez de `WEEK_OUTFIT_1..N` genéricos
+- Index routing activado: cada shot recibe solo sus refs específicas (outfit N → URL N)
+- Detección de tipo dominante del set (`outfits | accessories | bags | makeup | mixed`)
+- Compatibilidad accesorio↔outfit (score 0–100) — integra antes de hacer closeup aislado
+- Anti-redundancia en el último shot
+- Avatar base clothing suprimido en REF0 y story shots (bloque duro)
+- Prop budget + no external branding activados
+- HPI safe (`buildWeeklySafeHpiBlock`) — sin poses de fitness ni editorial extremo
+- Debug: `weeklyManifest`, `shotRoles`, `indexRoutingUsed: true`, `unsafeHpiSuppressed: true`, etc.
+
+**Próxima acción:** Probar en app con los 4 test cases del brief:
+- Test A: 4 outfits + 2 aros, count 8
+- Test B: 3 aros + 2 bolsos + 1 zapato, count 8 (dominante = accessories)
+- Test C: 5 bolsos, count 8 (dominante = bags)
+- Test D: maquillaje, count 8
 
 ---
 
 ## Recetas pendientes (en orden)
 
-1. `outfit_week` — **prueba de aceptación en app** (implementación lista)
+1. `outfit_week` — **prueba en app** (patch v2 listo)
 2. `day_in_life`
 3. `launch`
 4. `bts` — **IMPORTANTE: el avatar puede aparecer, NO es obligatoriamente faceless. Evaluar caso a caso.**
@@ -330,3 +389,4 @@ Shots con content-policy failure en haul hacen retry automático con prompt cons
 - BTS NO es siempre faceless. El usuario lo aclaró explícitamente.
 - No establecer reglas rígidas antes de probar — descubrir a través del testing por receta.
 - No hacer parches por shot específico — siempre atacar la raíz en la generación de prompts.
+- Cuando una receta pasa prueba → moverla a "Recetas cerradas" con descripción de qué se implementó.

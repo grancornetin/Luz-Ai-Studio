@@ -44,6 +44,7 @@ import {
   buildHaulStylingGraph,
   getAllowedUseModes,
   computeFinalHaulCoverageFromShots,
+  buildWeeklyManifest,
   type PhotodumpShotResult,
 } from './photodumpDirectorService';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
@@ -896,10 +897,10 @@ const PhotodumpModule: React.FC = () => {
         failedRequiredItemCount:      finalCoverage?.failedRequiredItemCount,
         requiredItemCoverageComplete: finalCoverage?.isComplete,
         // Feature flags debug — confirma que las reglas están activas en este run
-        scenePropBudgetApplied:                  recipe === 'outfit_haul',
-        externalBrandingForbiddenApplied:         recipe === 'outfit_haul',
-        avatarBaseClothingSuppressedInRef0:        recipe === 'outfit_haul',
-        avatarBaseClothingSuppressedInStoryShots:  recipe === 'outfit_haul',
+        scenePropBudgetApplied:                  recipe === 'outfit_haul' || recipe === 'outfit_week',
+        externalBrandingForbiddenApplied:         recipe === 'outfit_haul' || recipe === 'outfit_week',
+        avatarBaseClothingSuppressedInRef0:        recipe === 'outfit_haul' || recipe === 'outfit_week',
+        avatarBaseClothingSuppressedInStoryShots:  recipe === 'outfit_haul' || recipe === 'outfit_week',
         routingWarnings: (() => {
           if (recipe !== 'outfit_haul' || !haulManifestDebug) return undefined;
           const warnings: string[] = [];
@@ -1080,10 +1081,47 @@ const PhotodumpModule: React.FC = () => {
           });
           return missing.length > 0 ? missing.map(it => `FOOTWEAR_NOT_INTEGRATED: ${it.label} — no hero or integrated shot`) : undefined;
         })(),
-        avatarBaseClothingRisk: recipe === 'outfit_haul',
-        indexRoutingUsed: false,
+        avatarBaseClothingRisk: recipe === 'outfit_haul' || recipe === 'outfit_week',
+        avatarBaseClothingLeakRisk: recipe === 'outfit_week'
+          ? 'SUPPRESSED — avatar base clothing blocked in REF0 and all story shots via hard rule'
+          : undefined,
+        avatarBaseClothingUsedAsWeeklyItem: recipe === 'outfit_week' ? false : undefined,
+        indexRoutingUsed: recipe === 'outfit_week' || recipe === 'outfit_haul',
+        // Weekly manifest debug (solo outfit_week)
+        weeklyManifest: recipe === 'outfit_week' ? (() => {
+          try { return buildWeeklyManifest(refs, count); } catch { return undefined; }
+        })() : undefined,
+        weeklyStructure: recipe === 'outfit_week' ? (() => {
+          try { return buildWeeklyManifest(refs, count).weeklyStructure; } catch { return undefined; }
+        })() : undefined,
+        shotRoles: recipe === 'outfit_week'
+          ? shots.map(s => s.weeklyItemPlan?.role ?? s.key ?? s.role ?? 'unknown')
+          : undefined,
+        redundancyScores: recipe === 'outfit_week'
+          ? shots.map(s => s.weeklyItemPlan?.redundancyScore ?? 0)
+          : undefined,
+        accessoryIntegrationUsed: recipe === 'outfit_week'
+          ? shots.some(s => {
+              const r = s.weeklyItemPlan?.role ?? '';
+              return r === 'WEEK_ACCESSORY_INTEGRATED' || r === 'WEEK_ACCESSORY_WORN';
+            })
+          : undefined,
+        uncoveredRequiredItems_weekly: recipe === 'outfit_week' ? (() => {
+          try { return buildWeeklyManifest(refs, count).uncoveredRequiredItems; } catch { return undefined; }
+        })() : undefined,
+        coveredItemIds_weekly: recipe === 'outfit_week' ? (() => {
+          try { return buildWeeklyManifest(refs, count).coveredItemIds; } catch { return undefined; }
+        })() : undefined,
+        unsafeHpiSuppressed: recipe === 'outfit_week' ? true : undefined,
+        hpiProfileUsed: recipe === 'outfit_week' ? 'weekly_safe' : undefined,
+        propBudget: recipe === 'outfit_week'
+          ? 'max 1–3 neutral unbranded props per scene; no retail branding; no clutter; overview role may show more items'
+          : undefined,
+        brandRiskDetected: recipe === 'outfit_week'
+          ? debugShots.some(ds => (ds.failureReason ?? '').toLowerCase().includes('brand'))
+          : undefined,
         // Count recovery — muestra exactamente qué pasó con cada slot
-        countRecoveryDebug: recipe === 'outfit_haul' ? (() => {
+        countRecoveryDebug: (recipe === 'outfit_haul' || recipe === 'outfit_week') ? (() => {
           const recovered = debugShots.filter(ds => ds.fallbackUsed && ds.status === 'ok').length;
           const generated = shotUrls.filter(Boolean).length;
           return {

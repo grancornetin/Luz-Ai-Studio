@@ -857,6 +857,20 @@ export interface PhotodumpDebugData {
   // Avatar base clothing risk (detectado por heurística, no confirmado por modelo)
   avatarBaseClothingUsedAsTryOn?:                  boolean;
   avatarBaseClothingUsedForAccessoryIntegration?:  boolean;
+  avatarBaseClothingLeakRisk?:                     string;
+  avatarBaseClothingUsedAsWeeklyItem?:             boolean;
+  // Weekly manifest (solo outfit_week)
+  weeklyManifest?:                WeeklyManifest;
+  weeklyStructure?:               string;
+  shotRoles?:                     string[];
+  redundancyScores?:              number[];
+  accessoryIntegrationUsed?:      boolean;
+  uncoveredRequiredItems_weekly?: string[];
+  coveredItemIds_weekly?:         string[];
+  unsafeHpiSuppressed?:           boolean;
+  hpiProfileUsed?:                string;
+  propBudget?:                    string;
+  brandRiskDetected?:             boolean;
   // Accessory coverage map — detalle por accesorio/joya/calzado
   accessoryCoverageMap?: Record<string, {
     kind:             string;
@@ -1001,3 +1015,116 @@ export const MOMENT_TYPE_META = {
 };
 
 export const STORY_ARC_META = MOMENT_TYPE_META;
+
+// ── Outfit Week — Weekly Edit / Weekly Favorites ───────────────
+
+// Rol narrativo de cada shot en la secuencia semanal
+export type WeeklyShotRole =
+  | 'WEEK_ANCHOR'                 // primer shot / base visual del set
+  | 'WEEK_OVERVIEW'               // selección semanal sobre cama/rack/superficie
+  | 'WEEK_LOOK_HERO'              // look completo — full body
+  | 'WEEK_MIRROR_LOOK'            // espejo — alternativa al look hero
+  | 'WEEK_STYLING_PROCESS'        // proceso de armado / vestirse / ajustar
+  | 'WEEK_ACCESSORY_INTEGRATED'   // accesorio integrado con outfit compatible
+  | 'WEEK_ACCESSORY_DETAIL'       // accesorio en detalle / macro
+  | 'WEEK_ACCESSORY_WORN'         // accesorio puesto (aros, collar, pulsera)
+  | 'WEEK_ACCESSORY_HELD'         // accesorio sostenido frente a cámara
+  | 'WEEK_DETAIL'                 // detalle de prenda / textura / cierre / bordado
+  | 'WEEK_ON_THE_GO'              // en movimiento — caminando, saliendo
+  | 'WEEK_FAVORITE'               // favorito de la semana — objeto o look
+  | 'WEEK_CLOSER';                // cierre del carrusel
+
+// Tipo de ítem semanal — más granular que HaulItemKind para detectar tipo dominante
+export type WeeklyItemKind =
+  | 'outfit_set'    // look completo para probar
+  | 'top'
+  | 'bottom'
+  | 'outerwear'
+  | 'dress'
+  | 'shoes'
+  | 'boots'
+  | 'bag'
+  | 'jewelry'
+  | 'accessory'
+  | 'makeup'
+  | 'product'
+  | 'unknown';
+
+// Tipo dominante detectado en el set — adapta los roles
+export type WeeklySetDominantType =
+  | 'outfits'       // mayoría son outfits completos / prendas wearables
+  | 'accessories'   // mayoría son accesorios / joyería / bolsos
+  | 'bags'          // mayoría son bolsos
+  | 'makeup'        // mayoría son productos de maquillaje
+  | 'mixed';        // mix variado
+
+export interface WeeklyItem {
+  id:                       string;         // 'outfit_0', 'outfit_1', 'acc_0', etc.
+  sourceIndex:              number;         // índice en el array de refs
+  refUrl:                   string;
+  kind:                     WeeklyItemKind;
+  label:                    string;
+  priority:                 'required' | 'normal' | 'optional';
+  tryOnEligible:            boolean;        // puede mostrarse puesto en el cuerpo
+  detailEligible:           boolean;        // puede ser detalle / macro
+  accessoryEligible:        boolean;        // es accesorio / joyería / bolso
+  canBeIntegratedWithOutfit: boolean;       // puede combinarse con otro outfit
+  compatibleWith?:          string[];       // ids de ítems compatibles para integración
+}
+
+export interface WeeklyCompatibilityPair {
+  accessoryId:  string;
+  outfitId:     string;
+  score:        number;      // 0–100
+  reason:       string;
+  integrationMode: 'worn' | 'held' | 'flatlay' | 'detail';
+}
+
+export interface WeeklyCoverageEntry {
+  itemId:       string;
+  kind:         WeeklyItemKind;
+  covered:      boolean;
+  coveredByShots: string[];
+  coverageType: ('worn' | 'laid_flat' | 'held' | 'detail' | 'integrated' | 'background')[];
+}
+
+export interface WeeklyShotPlan {
+  role:             WeeklyShotRole;
+  primaryItemIds:   string[];   // ítems protagonistas del shot
+  secondaryItemIds: string[];   // ítems secundarios / integrados
+  outfitIndex?:     number;     // índice del outfit asignado (para look heroes)
+  accessoryId?:     string;     // accesorio asignado (para shots de accesorio)
+  integratedWithOutfitId?: string;   // outfit con el que se integra el accesorio
+  refsToRoute:      string[];   // URLs exactas a pasar al modelo
+  redundancyScore:  number;     // 0–100, score de redundancia vs shots anteriores
+  replacedBecauseRedundant: boolean;
+  replacementRole?: WeeklyShotRole;
+  fallbackUsed?:    boolean;
+  fallbackRole?:    WeeklyShotRole;
+  retryCount?:      number;
+}
+
+export interface WeeklyManifest {
+  totalItems:         number;
+  dominantType:       WeeklySetDominantType;
+  outfitSets:         WeeklyItem[];   // look_completo / dress / onepiece
+  standaloneGarments: WeeklyItem[];   // top / bottom / outerwear — no parte de un set
+  shoes:              WeeklyItem[];   // shoes / boots
+  bags:               WeeklyItem[];
+  jewelry:            WeeklyItem[];
+  accessories:        WeeklyItem[];   // accesorios genéricos
+  makeup:             WeeklyItem[];
+  products:           WeeklyItem[];
+  allItems:           WeeklyItem[];
+  requiredItems:      WeeklyItem[];
+  compatibilityPairs: WeeklyCompatibilityPair[];
+  coverageMap:        Record<string, WeeklyCoverageEntry>;
+  shotPlan:           WeeklyShotPlan[];   // plan de shots con roles y routing explícito
+  // Debug
+  uncoveredRequiredItems: string[];
+  coveredItemIds:         string[];
+  weeklyStructure:        string;    // descripción del arco para debug
+  accessoryIntegrationUsed: boolean;
+  unsafeHpiSuppressed:      boolean;
+  brandRiskDetected:        boolean;
+}

@@ -83,6 +83,8 @@ export interface PhotodumpShotDirective {
   closureReason?:            string;
   // Haul: plan de ítems por shot — qué aparece, se sostiene, está prohibido
   haulItemPlan?:             HaulShotItemPlan;
+  // Weekly edit: plan de rol narrativo + routing de ítems por shot
+  weeklyItemPlan?:           import('./types').WeeklyShotPlan;
 }
 
 // Estilo visual de presentación para recetas outfit.
@@ -1568,6 +1570,95 @@ The mood is end-of-session: relaxed, authentic, low-key.`;
   return '';
 }
 
+// ── Weekly Safe HPI — poses naturales para outfit_week ───────────────────────
+// Sin poses de fitness, sin editorial extremo, sin torso twists raros.
+// Solo lifestyle natural: de pie, espejo, caminando, ajustando, sosteniendo.
+function buildWeeklySafeHpiBlock(shotKey: string, gender: 'female' | 'male' | 'neutral'): string {
+  const genderNote = gender === 'male' ? 'masculine' : 'feminine';
+
+  // Shots sin cuerpo completo — overview, detalle, accesorio solo
+  if (
+    shotKey.includes('WEEK_OVERVIEW') ||
+    shotKey.includes('WEEK_ACCESSORY_DETAIL') ||
+    shotKey.includes('WEEK_DETAIL')
+  ) return '';
+
+  if (shotKey.includes('WEEK_MIRROR_LOOK')) {
+    return `🎯 BODY LANGUAGE (weekly — mirror check, natural ${genderNote}):
+The person checks their outfit in a mirror. Natural, real-life posture:
+  - standing facing the mirror, full body visible in reflection
+  - slight weight shift, one hand on hip or adjusting a sleeve
+  - phone visible if it is a selfie, or third-person capture without phone
+  - expression: genuine, checking — not posed for a shoot
+FORBIDDEN: extreme torso twist, over-shoulder editorial, lat pulldown stance, fitness pose, catalog stance.
+This is a real person checking their look — not a brand shoot.`;
+  }
+
+  if (shotKey.includes('WEEK_STYLING_PROCESS')) {
+    return `🎯 MICRO-ACTION (weekly — styling process, natural ${genderNote}):
+The person is getting dressed or styling a piece. Choose ONE real action:
+  - adjusting sleeve or cuff
+  - buttoning a jacket or blazer
+  - tucking in a blouse
+  - putting on earrings or adjusting them
+  - arranging a scarf or collar
+  - slipping on a shoe and adjusting the strap
+  - smoothing fabric at the waist
+FORBIDDEN: catalog stance, athletic pose, arms symmetrically at sides, gym gesture, fitness move.
+The action must feel authentic — like getting ready in real life.`;
+  }
+
+  if (shotKey.includes('WEEK_ACCESSORY_WORN') || shotKey.includes('WEEK_ACCESSORY_INTEGRATED')) {
+    return `🎯 BODY LANGUAGE (weekly — accessory worn, natural ${genderNote}):
+The person wears or holds the accessory naturally with the outfit. Choose ONE:
+  - tilting head slightly to show earrings, natural expression
+  - hand lightly at collar area showing a necklace
+  - holding bag at side or on shoulder while looking ahead naturally
+  - wrist extended naturally showing a bracelet or watch
+  - walking naturally with bag on shoulder, candid energy
+FORBIDDEN: product-shoot pose, extreme arm extension, catalog presentation, fitness stance.
+The accessory should feel naturally integrated — not displayed like a product catalog.`;
+  }
+
+  if (shotKey.includes('WEEK_ON_THE_GO')) {
+    return `🎯 BODY LANGUAGE (weekly — on the go, natural ${genderNote}):
+Person is in motion — walking, arriving, leaving. Candid energy.
+  - mid-step with natural arm swing
+  - turning to look at something, slight movement
+  - arriving and looking ahead, not at camera
+  - bag swinging naturally as they walk
+FORBIDDEN: static catalog pose, gym walk, over-the-shoulder forced look, editorial model walk.
+This is real movement, not a runway.`;
+  }
+
+  if (shotKey.includes('WEEK_CLOSER') || shotKey.includes('WEEK_FAVORITE')) {
+    return `🎯 BODY LANGUAGE (weekly closer — relaxed ${genderNote} energy):
+End of the weekly edit. Relaxed, low-key, genuine. Choose ONE:
+  - seated on edge of bed or chair, relaxed and natural
+  - standing with slight lean, arms loosely down or one hand in pocket
+  - holding favorite item naturally, looking at it
+  - mirror selfie from a slightly different angle than any prior mirror shot
+FORBIDDEN: catalog stance, forced smile, fitness pose, editorial tension.
+The mood is: done with the week, genuine, real.`;
+  }
+
+  // Default: look hero y otros shots con cuerpo completo
+  return `🎯 BODY LANGUAGE (weekly look — natural ${genderNote} stance):
+The person is wearing the weekly outfit. Choose ONE natural posture:
+  - standing naturally with slight weight shift, arms loosely at sides or one hand at pocket
+  - leaning against wall or surface, relaxed and casual
+  - looking down at outfit momentarily, then back to neutral
+  - walking naturally toward or past the camera
+  - hand adjusting a sleeve, collar, or hem — micro-action
+FORBIDDEN: catalog mannequin pose, extreme torso twist, lat pulldown, reclined couch editorial, athletic stance, gym movement, over-shoulder forced look.
+USE INSTEAD: natural standing, adjusting sleeve, mirror selfie, holding bag, putting earrings, walking naturally, looking down at outfit, hand on waistband, seated casual.
+This is a real person sharing their weekly looks — not a brand shoot.
+
+⚠️ SAFE LANGUAGE — DO NOT USE THESE TERMS:
+sexy, revealing, bodycon catsuit, sensual, seductive, skin-tight, sheer body.
+USE INSTEAD: fashion outfit, weekly look, natural fit, casual lifestyle.`;
+}
+
 // ── Visual Family: hint abstracto para outfit_check ──────────────────────────
 // No inyecta el promptBlock literal (que puede meter laptop, mug, terrace, activewear).
 // Solo usa señales de composición y mood sin objetos/escenas concretas.
@@ -1956,20 +2047,14 @@ function buildStoryDirectives(
   }
 
   if (recipe === 'outfit_week') {
-    const outfitCount = Math.max(1, [refs?.avatarRef, ...(refs?.outfitRefs ?? [])].filter(Boolean).length);
-    // Generar un shot por outfit (o por count si es mayor que outfits)
-    const weekCount   = Math.max(count, outfitCount);
-    const pool        = buildOutfitWeekShotPool(weekCount);
-    const baseShots   = pool.slice(0, count);
-    const closeupIndexes = (refs?.accesorioCloseup ?? [])
-      .map((v, i) => v ? i : -1).filter(i => i >= 0);
-    const accPool = closeupIndexes.length > 0 ? buildOutfitCheckShotPool() : [];
-    const accShot = accPool.find(s => s.key === 'ACCESSORY_CLOSEUP');
-    const allShots = [
-      ...baseShots,
-      ...closeupIndexes.map(() => accShot!),
-    ];
-    return allShots.map((shot, i) => ({ ...shot, arcPosition: i + 1, aspectRatio: ar }));
+    // Construir manifest completo con roles narrativos, cobertura y routing
+    const weekManifest = buildWeeklyManifest(refs ?? {} as PhotodumpRefs, count);
+    const plan = weekManifest.shotPlan;
+    // Convertir cada WeeklyShotPlan en un PhotodumpShotDirective con metadata de routing
+    const directives = plan.slice(0, count).map((sp, i) =>
+      weeklyRoleToDirective(sp, i, count, weekManifest.outfitSets, weekManifest.accessories)
+    );
+    return directives.map((d, i) => ({ ...d, arcPosition: i + 1, aspectRatio: ar }));
   }
 
   const isFaceless = narrative === 'faceless';
@@ -5433,42 +5518,479 @@ function buildHaulJewelryShot(
   };
 }
 
-// ── Outfit Week shots ────────────────────────────────────────
-// Historia: "Estos fueron mis outfits de la semana / del mes / de la ocasión"
-// Cada shot = un outfit completo, full body. Variedad de ángulos y mood entre shots.
+// ── Outfit Week — Weekly Edit / Weekly Favorites ─────────────
+// Historia: "mis favoritos de la semana / outfits de la semana / accesorios de la semana"
+// Planificación basada en roles narrativos + manifest de ítems con cobertura garantizada.
 
-function buildOutfitWeekShotPool(outfitCount: number): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
-  // Rotación de framings y ángulos para que ningún shot se sienta idéntico al anterior
-  const framingRotation = [
-    { framing: 'WIDE_FULL_BODY', composition: 'FULL_BODY_NATURAL', angle: 'EYE_LEVEL_OR_SLIGHTLY_LOW' },
-    { framing: 'WIDE_FULL_BODY', composition: 'MIRROR_SELFIE_FULL_BODY', angle: 'EYE_LEVEL' },
-    { framing: 'MEDIUM', composition: 'THREE_QUARTERS_NATURAL', angle: 'EYE_LEVEL' },
-    { framing: 'WIDE_FULL_BODY', composition: 'FULL_BODY_IN_CONTEXT', angle: 'SLIGHTLY_LOW_LOOKING_UP' },
-    { framing: 'MEDIUM', composition: 'CANDID_IN_SPACE', angle: 'EYE_LEVEL' },
-    { framing: 'WIDE_FULL_BODY', composition: 'WALKING_OR_ARRIVING', angle: 'EYE_LEVEL' },
-    { framing: 'MEDIUM', composition: 'LEANING_OR_RESTING', angle: 'EYE_LEVEL_OR_SLIGHTLY_HIGH' },
-  ];
+// Clasifica un ítem por su posición en el array (outfit slots vs accesorio slots)
+function classifyWeeklyItem(
+  refUrl: string,
+  sourceIndex: number,
+  isOutfitSlot: boolean,
+  slotIndex: number,
+): import('./types').WeeklyItem {
+  // Heurística de kind por slot — en outfit_week no hay selector manual como en haul
+  // Usamos el slot para inferir: outfit slots = wearable, accesorio slots = accesorio
+  const kind: import('./types').WeeklyItemKind = isOutfitSlot ? 'outfit_set' : 'accessory';
+  const tryOnEligible   = isOutfitSlot;
+  const accessoryEligible = !isOutfitSlot;
+  const detailEligible  = true;
+  const canIntegrate    = !isOutfitSlot; // accesorios pueden integrarse con outfits
 
-  return Array.from({ length: outfitCount }, (_, i) => {
-    const rot = framingRotation[i % framingRotation.length];
-    return {
-      key:   `WEEK_OUTFIT_${i + 1}`,
-      beat:  'context' as MomentType,
-      role:  `OUTFIT ${i + 1} of ${outfitCount}`,
-      purpose: `El avatar con el outfit ${i + 1} completo. Full body visible. El look debe leerse completamente. Ambiente real — puede ser interior o exterior. La luz y el ángulo varían respecto al shot anterior para dar sensación de días distintos.`,
-      requiredElements: ['full_body_visible', 'complete_outfit_readable_head_to_toe', 'real_environment_not_studio', 'authentic_attitude'],
-      forbiddenElements: ['catalog_mannequin_pose', 'studio_backdrop', 'white_background', 'identical_framing_as_prior_shot', 'beautification', 'ad_feel'],
-      variationSpace: [
-        `full body con outfit ${i + 1}, pose natural apoyada o de pie, ambiente real de fondo`,
-        `selfie de espejo full body con outfit ${i + 1}, actitud casual, ambiente del día visible`,
-        `medium shot con outfit ${i + 1}, tres cuartos, ángulo levemente distinto al anterior`,
-        `full body caminando o llegando a algún lugar con outfit ${i + 1}, movimiento orgánico`,
-      ],
-      framing:     rot.framing,
-      composition: rot.composition,
-      cameraAngle: rot.angle,
-    };
+  return {
+    id:                       isOutfitSlot ? `outfit_${slotIndex}` : `acc_${slotIndex}`,
+    sourceIndex,
+    refUrl,
+    kind,
+    label:                    isOutfitSlot ? `Outfit ${slotIndex + 1}` : `Accesorio ${slotIndex + 1}`,
+    priority:                 'required',
+    tryOnEligible,
+    detailEligible,
+    accessoryEligible,
+    canBeIntegratedWithOutfit: canIntegrate,
+    compatibleWith:           [],
+  };
+}
+
+// Detecta el tipo dominante del set para adaptar los roles narrativos
+function detectWeeklyDominantType(
+  outfitItems: import('./types').WeeklyItem[],
+  accItems: import('./types').WeeklyItem[],
+): import('./types').WeeklySetDominantType {
+  const total = outfitItems.length + accItems.length;
+  if (total === 0) return 'mixed';
+  if (outfitItems.length === 0 && accItems.length > 0) return 'accessories';
+  if (outfitItems.length >= accItems.length * 2) return 'outfits';
+  if (accItems.length > outfitItems.length) return 'accessories';
+  return 'mixed';
+}
+
+// Compatibilidad simple entre accesorio y outfit (0–100)
+function scoreWeeklyCompatibility(
+  acc: import('./types').WeeklyItem,
+  outfit: import('./types').WeeklyItem,
+): { score: number; reason: string; integrationMode: 'worn' | 'held' | 'flatlay' | 'detail' } {
+  // Sin análisis visual disponible en este punto — score conservador base que favorece integración
+  // La lógica se refina en el prompt builder con instrucciones de compatibilidad
+  const baseScore = acc.kind === 'jewelry'   ? 80
+    : acc.kind === 'bag'                      ? 75
+    : acc.kind === 'shoes' || acc.kind === 'boots' ? 70
+    : 65;
+
+  const integrationMode: 'worn' | 'held' | 'flatlay' | 'detail' =
+    acc.kind === 'jewelry'                        ? 'worn'
+    : acc.kind === 'bag'                          ? 'held'
+    : acc.kind === 'shoes' || acc.kind === 'boots' ? 'worn'
+    : 'held';
+
+  return {
+    score:  baseScore,
+    reason: `${acc.label} can naturally ${integrationMode === 'worn' ? 'be worn with' : 'be held/paired with'} ${outfit.label}`,
+    integrationMode,
+  };
+}
+
+// Construye el WeeklyManifest desde las refs subidas
+export function buildWeeklyManifest(refs: import('./types').PhotodumpRefs, requestedCount: number): import('./types').WeeklyManifest {
+  const allOutfitUrls  = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
+  const allAccUrls     = (refs.accesorioRefs ?? []).filter(Boolean) as string[];
+  const accCloseup     = refs.accesorioCloseup ?? [];
+
+  const outfitItems: import('./types').WeeklyItem[] = allOutfitUrls.map((url, i) =>
+    classifyWeeklyItem(url, i, true, i)
+  );
+
+  const accessoryItems: import('./types').WeeklyItem[] = allAccUrls.map((url, i) => {
+    const item = classifyWeeklyItem(url, outfitItems.length + i, false, i);
+    // Si tiene ⭐ de closeup, prioridad required sigue siendo la misma — ya es required por default
+    return item;
   });
+
+  // Separar por tipo (en outfit_week todos los outfit slots son outfit_set por default)
+  const outfitSets         = outfitItems; // todos en outfit slot
+  const standaloneGarments: import('./types').WeeklyItem[] = [];
+  const shoes: import('./types').WeeklyItem[]    = [];
+  const bags: import('./types').WeeklyItem[]     = [];
+  const jewelry: import('./types').WeeklyItem[]  = [];
+  const accessories: import('./types').WeeklyItem[] = accessoryItems;
+  const makeup: import('./types').WeeklyItem[]   = [];
+  const products: import('./types').WeeklyItem[] = [];
+
+  const allItems = [...outfitItems, ...accessoryItems];
+  const requiredItems = allItems; // todos son required en weekly
+
+  const dominantType = detectWeeklyDominantType(outfitItems, accessoryItems);
+
+  // Compatibilidad: cada accesorio con cada outfit
+  const compatibilityPairs: import('./types').WeeklyCompatibilityPair[] = [];
+  for (const acc of accessoryItems) {
+    let bestScore = 0;
+    let bestOutfit: import('./types').WeeklyItem | null = null;
+    for (const outfit of outfitItems) {
+      const { score, reason, integrationMode } = scoreWeeklyCompatibility(acc, outfit);
+      if (score > bestScore) {
+        bestScore = score;
+        bestOutfit = outfit;
+        if (score >= 65) {
+          compatibilityPairs.push({ accessoryId: acc.id, outfitId: outfit.id, score, reason, integrationMode });
+          acc.compatibleWith = [...(acc.compatibleWith ?? []), outfit.id];
+        }
+      }
+    }
+  }
+
+  // Coverage map inicial — todos uncovered
+  const coverageMap: Record<string, import('./types').WeeklyCoverageEntry> = {};
+  for (const item of allItems) {
+    coverageMap[item.id] = {
+      itemId:       item.id,
+      kind:         item.kind,
+      covered:      false,
+      coveredByShots: [],
+      coverageType: [],
+    };
+  }
+
+  // Construir el plan de shots con roles narrativos
+  const shotPlan = buildWeeklyShotPlan(outfitItems, accessoryItems, compatibilityPairs, accCloseup, requestedCount, dominantType);
+
+  // Marcar cobertura según el plan
+  const coveredItemIds: string[] = [];
+  for (const sp of shotPlan) {
+    for (const id of [...sp.primaryItemIds, ...sp.secondaryItemIds]) {
+      if (coverageMap[id]) {
+        coverageMap[id].covered = true;
+        coverageMap[id].coveredByShots.push(sp.role);
+        if (!coveredItemIds.includes(id)) coveredItemIds.push(id);
+      }
+    }
+  }
+
+  const uncoveredRequiredItems = requiredItems
+    .filter(it => !coveredItemIds.includes(it.id))
+    .map(it => it.id);
+
+  const accessoryIntegrationUsed = shotPlan.some(
+    sp => sp.role === 'WEEK_ACCESSORY_INTEGRATED' || sp.role === 'WEEK_ACCESSORY_WORN'
+  );
+
+  const weeklyStructure = buildWeeklyStructureDescription(shotPlan, dominantType);
+
+  return {
+    totalItems:         allItems.length,
+    dominantType,
+    outfitSets,
+    standaloneGarments,
+    shoes,
+    bags,
+    jewelry,
+    accessories,
+    makeup,
+    products,
+    allItems,
+    requiredItems,
+    compatibilityPairs,
+    coverageMap,
+    shotPlan,
+    uncoveredRequiredItems,
+    coveredItemIds,
+    weeklyStructure,
+    accessoryIntegrationUsed,
+    unsafeHpiSuppressed:  true,
+    brandRiskDetected:    false,
+  };
+}
+
+// Descripción legible del arco para debug
+function buildWeeklyStructureDescription(
+  plan: import('./types').WeeklyShotPlan[],
+  dominant: import('./types').WeeklySetDominantType,
+): string {
+  const roles = plan.map(sp => sp.role).join(' → ');
+  return `Weekly edit (${dominant}) | ${plan.length} shots | Arc: ${roles}`;
+}
+
+// Planificador de roles narrativos — núcleo del patch
+function buildWeeklyShotPlan(
+  outfitItems:   import('./types').WeeklyItem[],
+  accessoryItems: import('./types').WeeklyItem[],
+  compatPairs:   import('./types').WeeklyCompatibilityPair[],
+  accCloseup:    boolean[],
+  count:         number,
+  dominant:      import('./types').WeeklySetDominantType,
+): import('./types').WeeklyShotPlan[] {
+  const plan: import('./types').WeeklyShotPlan[] = [];
+  let budget = count;
+
+  // Slot 1 siempre: WEEK_ANCHOR (look hero o overview según dominant)
+  const anchorRole: import('./types').WeeklyShotRole =
+    dominant === 'outfits' && outfitItems.length > 0 ? 'WEEK_LOOK_HERO'
+    : dominant === 'accessories'                       ? 'WEEK_OVERVIEW'
+    : 'WEEK_ANCHOR';
+
+  const anchorOutfitIdx = 0;
+  plan.push({
+    role:             anchorRole,
+    primaryItemIds:   outfitItems.length > 0 ? [outfitItems[anchorOutfitIdx].id] : [],
+    secondaryItemIds: [],
+    outfitIndex:      outfitItems.length > 0 ? anchorOutfitIdx : undefined,
+    refsToRoute:      [],
+    redundancyScore:  0,
+    replacedBecauseRedundant: false,
+  });
+  budget--;
+
+  // Si hay varios ítems y quedan slots, añadir OVERVIEW (selección sobre cama/rack)
+  const totalItems = outfitItems.length + accessoryItems.length;
+  if (budget > 0 && totalItems >= 2) {
+    plan.push({
+      role:             'WEEK_OVERVIEW',
+      primaryItemIds:   [...outfitItems.slice(0, 3).map(it => it.id), ...accessoryItems.slice(0, 2).map(it => it.id)],
+      secondaryItemIds: [],
+      refsToRoute:      [],
+      redundancyScore:  0,
+      replacedBecauseRedundant: false,
+    });
+    budget--;
+  }
+
+  // Look heroes: uno por outfit (saltando el outfit del ANCHOR si ya fue LOOK_HERO)
+  const outfitsAlreadyCovered = anchorRole === 'WEEK_LOOK_HERO' && outfitItems.length > 0 ? [outfitItems[0].id] : [];
+  const outfitsForHeroes = outfitItems.filter(it => !outfitsAlreadyCovered.includes(it.id));
+
+  const lookHeroCount = Math.min(outfitsForHeroes.length, Math.max(0, budget - 2)); // reservar 2 slots para acc + closer
+  for (let i = 0; i < lookHeroCount && budget > 1; i++) {
+    const outfit = outfitsForHeroes[i];
+    // Anti-redundancia: rotar framing entre LOOK_HERO y MIRROR_LOOK
+    const role: import('./types').WeeklyShotRole = i % 3 === 1 ? 'WEEK_MIRROR_LOOK' : 'WEEK_LOOK_HERO';
+    plan.push({
+      role,
+      primaryItemIds:   [outfit.id],
+      secondaryItemIds: [],
+      outfitIndex:      outfitItems.findIndex(it => it.id === outfit.id),
+      refsToRoute:      [],
+      redundancyScore:  i > 2 ? 40 : 0, // score crece con repeticiones
+      replacedBecauseRedundant: false,
+    });
+    budget--;
+  }
+
+  // Accesorios: integración inteligente con outfit compatible (no solo closeup rígido)
+  const usedAccessories = new Set<string>();
+  for (const acc of accessoryItems) {
+    if (budget <= 1) break;
+    // Buscar outfit compatible
+    const bestPair = compatPairs
+      .filter(p => p.accessoryId === acc.id)
+      .sort((a, b) => b.score - a.score)[0];
+
+    const needsCloseup = accCloseup[accessoryItems.indexOf(acc)] === true;
+
+    if (bestPair && outfitItems.length > 0) {
+      // Integrar con outfit compatible
+      plan.push({
+        role:             'WEEK_ACCESSORY_INTEGRATED',
+        primaryItemIds:   [acc.id],
+        secondaryItemIds: [bestPair.outfitId],
+        accessoryId:      acc.id,
+        integratedWithOutfitId: bestPair.outfitId,
+        refsToRoute:      [],
+        redundancyScore:  0,
+        replacedBecauseRedundant: false,
+      });
+      usedAccessories.add(acc.id);
+      budget--;
+
+      // Closeup adicional solo si el usuario lo pidió y hay budget
+      if (needsCloseup && budget > 1) {
+        plan.push({
+          role:           'WEEK_ACCESSORY_DETAIL',
+          primaryItemIds: [acc.id],
+          secondaryItemIds: [],
+          accessoryId:    acc.id,
+          refsToRoute:    [],
+          redundancyScore: 10,
+          replacedBecauseRedundant: false,
+        });
+        budget--;
+      }
+    } else {
+      // Sin outfit compatible — shot worn/held según tipo
+      const role: import('./types').WeeklyShotRole =
+        acc.kind === 'jewelry' ? 'WEEK_ACCESSORY_WORN'
+        : 'WEEK_ACCESSORY_HELD';
+      plan.push({
+        role,
+        primaryItemIds:   [acc.id],
+        secondaryItemIds: [],
+        accessoryId:      acc.id,
+        refsToRoute:      [],
+        redundancyScore:  5,
+        replacedBecauseRedundant: false,
+      });
+      usedAccessories.add(acc.id);
+      budget--;
+    }
+  }
+
+  // Closer: si queda budget, agregar shot de cierre con anti-redundancia
+  if (budget > 0) {
+    // Verificar si el último shot del plan ya es full-body genérico
+    const lastShot = plan[plan.length - 1];
+    const isLastRedundant = lastShot && (
+      lastShot.role === 'WEEK_LOOK_HERO' || lastShot.role === 'WEEK_MIRROR_LOOK'
+    ) && plan.filter(s => s.role === 'WEEK_LOOK_HERO' || s.role === 'WEEK_MIRROR_LOOK').length >= 2;
+
+    const closerRole: import('./types').WeeklyShotRole = isLastRedundant ? 'WEEK_DETAIL' : 'WEEK_CLOSER';
+    const closerOutfit = outfitItems[outfitItems.length - 1];
+    plan.push({
+      role:             closerRole,
+      primaryItemIds:   closerOutfit ? [closerOutfit.id] : (accessoryItems[0] ? [accessoryItems[0].id] : []),
+      secondaryItemIds: [],
+      outfitIndex:      closerOutfit ? outfitItems.length - 1 : undefined,
+      refsToRoute:      [],
+      redundancyScore:  isLastRedundant ? 70 : 10,
+      replacedBecauseRedundant: isLastRedundant,
+      replacementRole:  isLastRedundant ? closerRole : undefined,
+    });
+    budget--;
+  }
+
+  // Rellenar budget sobrante con styling process si hay outfits
+  while (budget > 0 && outfitItems.length > 0) {
+    plan.push({
+      role:             'WEEK_STYLING_PROCESS',
+      primaryItemIds:   [outfitItems[plan.length % outfitItems.length].id],
+      secondaryItemIds: [],
+      outfitIndex:      plan.length % outfitItems.length,
+      refsToRoute:      [],
+      redundancyScore:  30,
+      replacedBecauseRedundant: false,
+    });
+    budget--;
+  }
+
+  return plan;
+}
+
+// Convierte un WeeklyShotPlan en un PhotodumpShotDirective con prompt completo
+function weeklyRoleToDirective(
+  sp:           import('./types').WeeklyShotPlan,
+  position:     number,
+  totalShots:   number,
+  outfitItems:  import('./types').WeeklyItem[],
+  accItems:     import('./types').WeeklyItem[],
+): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
+  // Framings rotan para look heroes — garantiza variedad visual
+  const heroFramings = [
+    { framing: 'WIDE_FULL_BODY', composition: 'FULL_BODY_NATURAL',        angle: 'EYE_LEVEL_OR_SLIGHTLY_LOW' },
+    { framing: 'WIDE_FULL_BODY', composition: 'MIRROR_SELFIE_FULL_BODY',  angle: 'EYE_LEVEL' },
+    { framing: 'MEDIUM',         composition: 'THREE_QUARTERS_NATURAL',   angle: 'EYE_LEVEL' },
+    { framing: 'WIDE_FULL_BODY', composition: 'FULL_BODY_IN_CONTEXT',     angle: 'SLIGHTLY_LOW_LOOKING_UP' },
+    { framing: 'MEDIUM',         composition: 'CANDID_IN_SPACE',          angle: 'EYE_LEVEL' },
+    { framing: 'WIDE_FULL_BODY', composition: 'WALKING_OR_ARRIVING',      angle: 'EYE_LEVEL' },
+    { framing: 'MEDIUM',         composition: 'LEANING_OR_RESTING',       angle: 'EYE_LEVEL_OR_SLIGHTLY_HIGH' },
+  ];
+  const heroIdx = outfitItems.findIndex(it => sp.primaryItemIds[0] === it.id);
+  const rot = heroFramings[(heroIdx >= 0 ? heroIdx : position) % heroFramings.length];
+
+  const roleDescriptions: Record<import('./types').WeeklyShotRole, { purpose: string; required: string[]; forbidden: string[]; beat: MomentType }> = {
+    WEEK_ANCHOR: {
+      purpose: 'Opening anchor of the weekly set. Person in their space, first outfit or general mood. Establishes visual world: light quality, ambient tone, environment. Full body or medium shot. Authentic, lived-in iPhone quality.',
+      required: ['real_environment', 'authentic_mood', 'clear_identity'],
+      forbidden: ['studio_backdrop', 'catalog_pose', 'white_background'],
+      beat: 'context',
+    },
+    WEEK_OVERVIEW: {
+      purpose: 'Weekly selection overview. Outfits and accessories arranged naturally on bed, rack, chair, or clean surface. NOT a collage or grid. A real photo of the week\'s items together. The person may appear partially (hands, arms) or not at all — this is about the ITEMS, not the person. Clean, editorial but real.',
+      required: ['items_visible_and_readable', 'organized_not_chaotic', 'real_surface'],
+      forbidden: ['collage_layout', 'catalog_grid', 'floating_items', 'white_background', 'studio_lighting'],
+      beat: 'context',
+    },
+    WEEK_LOOK_HERO: {
+      purpose: `Weekly look hero — full body shot with outfit clearly readable head to toe. The person wears the assigned weekly outfit. Framing: ${rot.composition}. Angle: ${rot.angle}. Real environment, authentic attitude. NOT a catalog. NOT a mannequin pose. This should feel like a real person sharing their outfit.`,
+      required: ['full_body_visible', 'outfit_readable_head_to_toe', 'real_environment', 'authentic_attitude'],
+      forbidden: ['catalog_mannequin_pose', 'studio_backdrop', 'identical_framing_as_prior_shot', 'beautification'],
+      beat: 'context',
+    },
+    WEEK_MIRROR_LOOK: {
+      purpose: 'Mirror selfie or mirror check. Person checks their weekly outfit in a mirror — full body visible in the reflection. Can be phone visible (selfie) or third-person capture. Outfit fully readable. Authentic mood.',
+      required: ['mirror_visible', 'full_body_in_reflection', 'outfit_readable'],
+      forbidden: ['catalog_pose', 'studio_lighting', 'invented_background'],
+      beat: 'candid',
+    },
+    WEEK_STYLING_PROCESS: {
+      purpose: 'Styling process moment. Adjusting sleeve, buttoning up, tucking in, arranging scarf, putting on shoes. The person is getting dressed or adjusting — NOT a finished look pose. Authentic and candid.',
+      required: ['styling_action_visible', 'authentic_not_posed'],
+      forbidden: ['finished_catalog_pose', 'full_body_static_pose'],
+      beat: 'action',
+    },
+    WEEK_ACCESSORY_INTEGRATED: {
+      purpose: 'Accessory integrated naturally into a compatible weekly outfit. The person wears the accessory with a compatible look — NOT isolated. Shot frames both the accessory and the outfit. Shows how the piece completes the look.',
+      required: ['accessory_visible_and_readable', 'outfit_context_present', 'natural_integration'],
+      forbidden: ['accessory_floating', 'isolated_closeup_only', 'invented_outfit'],
+      beat: 'detail',
+    },
+    WEEK_ACCESSORY_DETAIL: {
+      purpose: 'Accessory detail — close-up or macro of the piece. Held, laid flat, or detail of how it is worn. Real surface. Natural light. The accessory fills most of the frame. Faithful to the uploaded reference.',
+      required: ['accessory_fills_frame', 'faithful_to_reference', 'real_light'],
+      forbidden: ['catalog_surface', 'studio_background', 'invented_design'],
+      beat: 'detail',
+    },
+    WEEK_ACCESSORY_WORN: {
+      purpose: 'Accessory worn — jewelry, earrings, or small accessory visible on the person. Close-up of ear/neck/wrist/finger showing the piece being worn. OR the person putting it on. Authentic, intimate, not a product shot.',
+      required: ['accessory_worn_on_body', 'faithful_to_reference', 'intimate_framing'],
+      forbidden: ['product_catalog_background', 'floating_accessory', 'invented_design'],
+      beat: 'detail',
+    },
+    WEEK_ACCESSORY_HELD: {
+      purpose: 'Accessory held — bag, shoes, or accessory held by hand or displayed naturally. Person holds it toward camera or has it at their side. Can be standing or seated. The item is clear and readable.',
+      required: ['item_held_and_readable', 'hands_or_person_present', 'faithful_to_reference'],
+      forbidden: ['floating_object', 'invented_surface_branding', 'catalog_background'],
+      beat: 'reveal',
+    },
+    WEEK_DETAIL: {
+      purpose: 'Garment or accessory detail — fabric texture, zipper, embroidery, pattern, stitching. Close-up or macro. No full body needed. Shows the quality and character of the piece. Authentic light.',
+      required: ['detail_fills_frame', 'real_fabric_or_material_texture', 'authentic_light'],
+      forbidden: ['catalog_shot', 'studio_background', 'product_background'],
+      beat: 'detail',
+    },
+    WEEK_ON_THE_GO: {
+      purpose: 'Person in motion — walking, leaving, arriving. Weekly outfit in a real environment. Candid feel — movement captured mid-step or turning. Not a static pose.',
+      required: ['motion_implied', 'real_environment', 'outfit_readable'],
+      forbidden: ['static_catalog_pose', 'studio'],
+      beat: 'action',
+    },
+    WEEK_FAVORITE: {
+      purpose: 'Favorite of the week — the person\'s pick highlighted. Can be a specific outfit, accessory, or item that feels special. Selfie energy, slightly more intimate framing. "This was my favorite" mood.',
+      required: ['item_clearly_readable', 'intimate_framing', 'authentic_expression'],
+      forbidden: ['catalog_expression', 'studio_feel'],
+      beat: 'emotion',
+    },
+    WEEK_CLOSER: {
+      purpose: 'Weekly set closing shot. Final summary mood. Can be: mirror selfie from a different angle, flat lay of favorite items, hand holding favorite bag/shoes, or a candid moment of the person done with the set. NOT another full-body generic pose if that was the previous shot.',
+      required: ['different_from_previous_shot', 'closing_mood'],
+      forbidden: ['identical_to_previous_shot', 'another_generic_full_body_if_overused'],
+      beat: 'atmosphere',
+    },
+  };
+
+  const desc = roleDescriptions[sp.role];
+  const outfitNum = sp.outfitIndex !== undefined ? sp.outfitIndex + 1 : 1;
+
+  return {
+    key:              `${sp.role}_${position}`,
+    beat:             desc.beat,
+    role:             sp.role,
+    purpose:          desc.purpose,
+    requiredElements: desc.required,
+    forbiddenElements: desc.forbidden,
+    variationSpace:   [desc.purpose],
+    framing:          rot.framing,
+    composition:      rot.composition,
+    cameraAngle:      rot.angle,
+    weeklyItemPlan:   sp,
+  };
 }
 
 // ── Generación del plan ───────────────────────────────────────
@@ -5772,10 +6294,28 @@ It must NOT be mistaken for a haul product or reappear as a haul item in story s
 iPhone UGC realism: natural window light, slight handheld imperfection, real room texture, real skin.
 No beauty filter. No editorial grade. No fashion campaign lighting. No studio polish.
 This REF0 establishes: the person's identity, the real haul space, the iPhone UGC aesthetic, and the mood of the session.`,
-    outfit_week: `SHOT: Full body of the person with the FIRST OUTFIT on, in the general environment for the week set.
-Full body visible — the look must be readable head to toe. Real environment, authentic light.
-This REF0 establishes the visual world: same light quality, same ambient mood, across all the week's outfits.
-iPhone photo quality. NOT a catalog. NOT a studio.`,
+    outfit_week: `SHOT: Full body of the person in a natural, real environment — this is the visual anchor for the entire weekly set.
+The person wears the FIRST WEEKLY OUTFIT. Full body visible and readable head to toe.
+Real environment, authentic light — same room, same light direction, same ambient mood will anchor all subsequent shots.
+iPhone photo quality. NOT a catalog. NOT a studio. NOT a white background.
+
+⚠️ AVATAR BASE CLOTHING — HARD RULE:
+The clothing visible in the avatar/body reference is ONLY for identity and body proportions.
+Do NOT treat avatar base clothing as the first weekly outfit or as any item of the week.
+Do NOT carry over avatar reference clothing into this shot as the visible look.
+The person must wear the ACTUAL FIRST WEEKLY OUTFIT uploaded by the user — not the avatar's base clothes.
+If the first outfit reference is a dress, the person wears the dress. If it is a top + bottom, the person wears those pieces.
+
+⛔ NO EXTERNAL BRANDING:
+Do NOT generate bags, boxes, or props with visible brand names.
+Do NOT invent Zara, H&M, Shein, Topshop or any retail brand.
+If props appear, they must be plain, generic, unbranded.
+
+🛍️ SCENE PROP BUDGET:
+Maximum 1–2 neutral props in the scene. No clutter. No boxes or bags unless organic and unbranded.
+The space should feel real, tidy, and editorial — not a warehouse or a store.
+
+This REF0 establishes: identity, first weekly look, visual world (light, color, room mood) for the entire weekly set.`,
   };
 
   const anchorShotDesc = isUnboxing
@@ -6363,8 +6903,49 @@ export async function generatePhotodumpShot(
       if (refsToPass.length <= 3) allOutfits.slice(0, 3).forEach(r => refsToPass.push(r));
     }
 
-  } else if (recipe === 'outfit_check' || recipe === 'outfit_week') {
-    // outfit_check / outfit_week: avatar x3 + ref0 + prenda(s) + escena
+  } else if (recipe === 'outfit_week') {
+    // outfit_week: INDEX ROUTING OBLIGATORIO — cada shot recibe solo sus refs específicas
+    // El plan está en shot.weeklyItemPlan (inyectado por weeklyRoleToDirective)
+    if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
+    if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
+    refsToPass.push(ref0Url);
+
+    const weekPlan: import('./types').WeeklyShotPlan | undefined = shot.weeklyItemPlan;
+    const allOutfitUrls  = [refs.outfitRef, ...(refs.outfitRefs  ?? [])].filter(Boolean) as string[];
+    const allAccUrls     = (refs.accesorioRefs ?? []).filter(Boolean) as string[];
+
+    if (weekPlan) {
+      // Routing explícito desde el plan: primary → urls de outfit/acc
+      // Primaries: ítems protagonistas del shot
+      for (const itemId of weekPlan.primaryItemIds) {
+        if (itemId.startsWith('outfit_')) {
+          const idx = parseInt(itemId.replace('outfit_', ''), 10);
+          if (allOutfitUrls[idx]) refsToPass.push(allOutfitUrls[idx]);
+        } else if (itemId.startsWith('acc_')) {
+          const idx = parseInt(itemId.replace('acc_', ''), 10);
+          if (allAccUrls[idx]) refsToPass.push(allAccUrls[idx]);
+        }
+      }
+      // Secondaries: ítems de integración (accesorio + outfit compatible)
+      for (const itemId of weekPlan.secondaryItemIds) {
+        if (itemId.startsWith('outfit_')) {
+          const idx = parseInt(itemId.replace('outfit_', ''), 10);
+          if (allOutfitUrls[idx]) refsToPass.push(allOutfitUrls[idx]);
+        } else if (itemId.startsWith('acc_')) {
+          const idx = parseInt(itemId.replace('acc_', ''), 10);
+          if (allAccUrls[idx]) refsToPass.push(allAccUrls[idx]);
+        }
+      }
+    } else {
+      // Fallback: primer outfit disponible (no debería ocurrir con el nuevo planner)
+      if (allOutfitUrls[0]) refsToPass.push(allOutfitUrls[0]);
+    }
+
+    // Escena opcional — solo si el usuario la subió
+    if (refs.sceneRef) refsToPass.push(refs.sceneRef);
+
+  } else if (recipe === 'outfit_check') {
+    // outfit_check: avatar x3 + ref0 + prenda(s) + escena
     if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
     if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
     refsToPass.push(ref0Url);
@@ -6376,26 +6957,18 @@ export async function generatePhotodumpShot(
       const closeupShots  = allAccesorios.length;
       const accIdx        = (shot.arcPosition - 1) % Math.max(closeupShots, 1);
       if (allAccesorios[accIdx]) refsToPass.push(allAccesorios[accIdx]);
-    } else if (recipe === 'outfit_week') {
-      const weekOutfitIndex = shot.arcPosition - 1;
-      if (allOutfits[weekOutfitIndex % Math.max(allOutfits.length, 1)]) {
-        refsToPass.push(allOutfits[weekOutfitIndex % allOutfits.length]);
-      }
     } else {
       // outfit_check: mismo outfit en todos los shots
       allOutfits.slice(0, 2).forEach(r => refsToPass.push(r));
     }
 
     // Escena: outfit_check usa scenePrueba/Destino según el shot
-    if (recipe === 'outfit_check') {
-      const isLastShot = shot.key === 'OUTFIT_DESTINATION';
-      const sceneRef   = isLastShot
-        ? (refs.sceneDestinoRef ?? refs.scenePruebaRef ?? refs.sceneRef)
-        : (refs.scenePruebaRef ?? refs.sceneRef);
-      if (sceneRef) refsToPass.push(sceneRef);
-    } else {
-      if (refs.sceneRef) refsToPass.push(refs.sceneRef);
-    }
+    const isLastShot = shot.key === 'OUTFIT_DESTINATION';
+    const sceneRef   = isLastShot
+      ? (refs.sceneDestinoRef ?? refs.scenePruebaRef ?? refs.sceneRef)
+      : (refs.scenePruebaRef ?? refs.sceneRef);
+    if (sceneRef) refsToPass.push(sceneRef);
+
   } else {
     // Comportamiento original para todas las demás recetas
     if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
@@ -6483,6 +7056,12 @@ export async function generatePhotodumpShot(
     if (hpiEligible) {
       const briefCtxForHpi = parseOutfitBriefContext(basePrompt);
       hpiBlock  = buildOutfitCompatibleHpiBlock(shot.key ?? '', refs.gender ?? 'female', briefCtxForHpi.destinationClass);
+      hpiSource = hpiBlock ? 'filtered_outfit_hpi' : 'disabled';
+    }
+  } else if (recipe === 'outfit_week') {
+    // weekly_safe HPI — poses naturales de lifestyle, sin poses de fitness ni editorial extremo
+    if (hpiEligible) {
+      hpiBlock  = buildWeeklySafeHpiBlock(shot.key ?? '', refs.gender ?? 'female');
       hpiSource = hpiBlock ? 'filtered_outfit_hpi' : 'disabled';
     }
   } else {
@@ -6824,6 +7403,51 @@ ${haulProgressBlock}
 ${haulAnatomyBlock}
 
 NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${shot.role}.`
+      : recipe === 'outfit_week'
+      ? (() => {
+          const weekPlan: import('./types').WeeklyShotPlan | undefined = shot.weeklyItemPlan;
+          const roleLabel = weekPlan?.role ?? shot.role ?? 'WEEKLY SHOT';
+          const primaryIds  = weekPlan?.primaryItemIds.join(', ')  ?? 'first outfit';
+          const secondaryIds = weekPlan?.secondaryItemIds.length ? weekPlan.secondaryItemIds.join(', ') : 'none';
+          const isOverview   = roleLabel.includes('OVERVIEW');
+          const isDetail     = roleLabel.includes('DETAIL') || roleLabel.includes('ACCESSORY_DETAIL');
+          const isAccessory  = roleLabel.includes('ACCESSORY');
+          return `SHOT IDENTITY — WEEKLY EDIT:
+- Face reference (appears 3 times): EXACT identity — same bone structure, same hair, same skin tone. No beautification.
+${refs.bodyRef ? '- Body reference: establishes physique (build, proportions). Do NOT make the person heavier or slimmer than shown.' : ''}
+- REF0: establishes the visual world — same light quality, same ambient mood, same color temperature.
+- Weekly role: ${roleLabel}
+- Primary items for THIS shot: ${primaryIds}
+- Secondary / integrated items: ${secondaryIds}
+${isOverview ? '- OVERVIEW MODE: Show items arranged naturally on a surface. Person may appear partially or not at all. NOT a catalog grid or collage.' : ''}
+${isDetail || isAccessory ? '- ACCESSORY / DETAIL MODE: Garment reference shows the EXACT piece. Reproduce faithfully. Do NOT fuse with other pieces or invent variants.' : ''}
+
+⛔ AVATAR BASE CLOTHING — HARD RULE — NO EXCEPTIONS:
+The clothing visible in the avatar/body reference images is ONLY for identity (face, hair, skin tone) and body proportions.
+Do NOT treat avatar base clothing as a weekly outfit or as any item in this weekly set.
+Do NOT carry over avatar reference clothing as the person's look in ANY shot.
+When a weekly outfit is assigned to this shot, the person MUST wear that specific uploaded outfit — NOT the avatar's base clothes.
+The avatar's base outfit must NEVER be mistaken for or substituted as a weekly item.
+
+⛔ NO EXTERNAL BRANDING — HARD RULE:
+Do NOT generate bags, boxes, or props with visible brand names or logos.
+Do NOT invent Zara, H&M, Shein, Forever21, Topshop, Pull&Bear or any retail chain branding.
+If bags or boxes appear: they must be PLAIN, UNBRANDED, GENERIC — solid color, no text, no logo.
+Exception: only if the user explicitly uploaded a branded reference — reproduce that faithfully.
+
+🛍️ SCENE PROP BUDGET — WEEKLY:
+Maximum 1–3 neutral, unbranded props per scene.
+Do NOT fill the scene with boxes, bags, or shopping bags unless the role is OVERVIEW.
+The space should feel clean, real, and editorial — not a warehouse or store room.
+Do NOT invent large props, new furniture, or decor elements not established in REF0.
+
+⚠️ REFERENCE ROLE — READ CAREFULLY:
+Weekly outfit references are photos of the GARMENTS ALONE — not a person wearing them. Use them to understand the piece, then show the person wearing it naturally.
+References are IDENTITY constraints, NOT a checklist. Show only what belongs to THIS shot's role.
+ONE person maximum in any frame. Any background figure is a generation error.
+
+NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${roleLabel}.`;
+        })()
       : isOutfitShot
       ? `SHOT IDENTITY — OUTFIT SET:
 - Face reference (appears 3 times): EXACT identity — same bone structure, same hair, same skin tone. No beautification.
@@ -6876,6 +7500,25 @@ FORBIDDEN:
 
 This is a real person trying on clothes in their real space and sharing it on social media.
 The image should feel like it came directly from someone's camera roll.`
+      : recipe === 'outfit_week'
+      ? `📱 iPhone WEEKLY EDIT REALISM (NON-NEGOTIABLE):
+You are capturing a real weekly fashion edit on an iPhone — "my outfits / favorites of the week."
+REQUIRED: natural window light, slight handheld imperfection, real room texture, real skin tone.
+REQUIRED: the space feels lived-in and real — a real room or real environment, not a studio set.
+
+FORBIDDEN:
+- editorial fashion shoot aesthetics
+- high fashion campaign lighting
+- beauty filters or skin retouching
+- studio backdrop or artificial softbox
+- catalog or brand-shoot composition
+- generic white background
+- external brand logos (Zara, H&M, Nike, etc.)
+- invented retail packaging or shopping bags with brand names
+- props not established in REF0 (unless the shot role requires a neutral surface)
+
+This is a real creator sharing their weekly looks and favorites on social media.
+The image should feel authentic, lived-in, and carouseable — not an ad.`
       : `📱 iPhone UGC REALISM (NON-NEGOTIABLE):
 You are taking a new iPhone-style photo inside the same existing moment as REF0.
 Natural light, handheld imperfection, real skin texture, no studio polish.
