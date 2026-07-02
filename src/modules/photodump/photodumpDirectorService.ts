@@ -7612,6 +7612,100 @@ After this opening shot, the person appears wearing the outfit — posing, check
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 }
 
+// ── Global Brief Tag → Ref Map ────────────────────────────────
+// Parsea el brief y construye un mapa de slot → URLs ordenadas por orden de aparición de tags.
+// Usado por todas las recetas para enriquecer el routing de refs y el bloque de contexto del prompt.
+interface BriefTagRefMap {
+  outfit:     string[];   // outfitRef + outfitRefs[], reordenados según orden de @outfitN en el brief
+  accesorio:  string[];   // accesorioRefs[], reordenados según orden de @accesorioN
+  producto:   string[];   // productRef + productRefs[], reordenados según orden de @productoN
+  escena:     string[];   // sceneRef + sceneRefs[], reordenados según orden de @escenaN
+  tagContext: string;     // bloque de texto para el prompt que explica qué slot = qué tag semántico
+  hasAnyTag:  boolean;
+}
+
+function buildBriefTagRefMap(brief: string, refs: PhotodumpRefs): BriefTagRefMap {
+  const allOutfitUrls    = [refs.outfitRef,     ...(refs.outfitRefs    ?? [])].filter(Boolean) as string[];
+  const allAccUrls       = (refs.accesorioRefs  ?? []).filter(Boolean) as string[];
+  const allProductoUrls  = [refs.productRef,    ...(refs.productRefs   ?? [])].filter(Boolean) as string[];
+  const allEscenaUrls    = [refs.sceneRef,       ...(refs.sceneRefs    ?? [])].filter(Boolean) as string[];
+
+  // Tags con el orden de aparición en el brief
+  const tagMatches = [...brief.matchAll(/@([a-záéíóúüñA-ZÁÉÍÓÚÜÑ]+)(\d*)/gi)];
+
+  // Índices de cada slot que aparecen en el brief, en orden de aparición
+  const outfitOrder:   number[] = [];
+  const accesorioOrder: number[] = [];
+  const productoOrder: number[] = [];
+  const escenaOrder:   number[] = [];
+  const seenOutfit    = new Set<number>();
+  const seenAccesorio = new Set<number>();
+  const seenProducto  = new Set<number>();
+  const seenEscena    = new Set<number>();
+
+  const tagContextLines: string[] = [];
+
+  for (const m of tagMatches) {
+    const base    = m[1].toLowerCase();
+    const numStr  = m[2];
+    const humanN  = numStr ? parseInt(numStr, 10) : 1;
+    const idx     = humanN - 1;  // 0-based
+
+    if ((base === 'outfit' || base === 'look') && allOutfitUrls[idx] !== undefined) {
+      if (!seenOutfit.has(idx)) { outfitOrder.push(idx); seenOutfit.add(idx); }
+      // Buscar contexto semántico 60 chars antes del tag
+      const tagPos = m.index ?? 0;
+      const ctx    = brief.slice(Math.max(0, tagPos - 60), tagPos + 40).replace(/@\w+\d*/g, '').trim();
+      const ctxShort = ctx.slice(0, 60).replace(/\s+/g, ' ').trim();
+      if (ctxShort) tagContextLines.push(`  • Reference image ${idx + 1} (outfit slot ${humanN}): "${ctxShort}"`);
+    } else if ((base === 'accesorio' || base === 'aro' || base === 'aros' || base === 'bag' || base === 'bolso') && allAccUrls[idx] !== undefined) {
+      if (!seenAccesorio.has(idx)) { accesorioOrder.push(idx); seenAccesorio.add(idx); }
+      const tagPos  = m.index ?? 0;
+      const ctx     = brief.slice(Math.max(0, tagPos - 60), tagPos + 40).replace(/@\w+\d*/g, '').trim();
+      const ctxShort = ctx.slice(0, 60).replace(/\s+/g, ' ').trim();
+      if (ctxShort) tagContextLines.push(`  • Reference image (accessory slot ${humanN}): "${ctxShort}"`);
+    } else if (base === 'producto' && allProductoUrls[idx] !== undefined) {
+      if (!seenProducto.has(idx)) { productoOrder.push(idx); seenProducto.add(idx); }
+      const tagPos  = m.index ?? 0;
+      const ctx     = brief.slice(Math.max(0, tagPos - 60), tagPos + 40).replace(/@\w+\d*/g, '').trim();
+      const ctxShort = ctx.slice(0, 60).replace(/\s+/g, ' ').trim();
+      if (ctxShort) tagContextLines.push(`  • Reference image (product slot ${humanN}): "${ctxShort}"`);
+    } else if ((base === 'escena' || base === 'scene') && allEscenaUrls[idx] !== undefined) {
+      if (!seenEscena.has(idx)) { escenaOrder.push(idx); seenEscena.add(idx); }
+      const tagPos  = m.index ?? 0;
+      const ctx     = brief.slice(Math.max(0, tagPos - 60), tagPos + 40).replace(/@\w+\d*/g, '').trim();
+      const ctxShort = ctx.slice(0, 60).replace(/\s+/g, ' ').trim();
+      if (ctxShort) tagContextLines.push(`  • Reference image (scene slot ${humanN}): "${ctxShort}"`);
+    }
+  }
+
+  // Reordenar: primero los que aparecen en el brief (en orden de aparición), luego el resto
+  const reorder = (all: string[], order: number[]) => {
+    const rest = all.map((_, i) => i).filter(i => !order.includes(i));
+    return [...order, ...rest].map(i => all[i]).filter(Boolean) as string[];
+  };
+
+  const hasAnyTag = outfitOrder.length > 0 || accesorioOrder.length > 0 || productoOrder.length > 0 || escenaOrder.length > 0;
+
+  const tagContext = hasAnyTag && tagContextLines.length > 0
+    ? `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏷️ REFERENCE SLOT CONTEXT (from user's brief):
+The user tagged specific reference images with semantic context. Each uploaded reference image corresponds to:
+${tagContextLines.join('\n')}
+Use this context to understand the ROLE and OCCASION of each reference image. The image order in the references matches the slot numbers above.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+    : '';
+
+  return {
+    outfit:    reorder(allOutfitUrls, outfitOrder),
+    accesorio: reorder(allAccUrls,    accesorioOrder),
+    producto:  reorder(allProductoUrls, productoOrder),
+    escena:    reorder(allEscenaUrls, escenaOrder),
+    tagContext,
+    hasAnyTag,
+  };
+}
+
 export async function generatePhotodumpShot(
   shot:               PhotodumpShotDirective,
   refs:               PhotodumpRefs,
@@ -7635,8 +7729,18 @@ export async function generatePhotodumpShot(
 
   const outfitMode = refs.outfitMode ?? 'generate';
 
+  // ── Brief tag → ref map (todas las recetas) ───────────────────
+  // Si el brief contiene @tags, reordena las refs según el orden de aparición en el brief
+  // y construye un bloque de texto para el prompt con el contexto semántico de cada slot.
+  const briefTagMap = basePrompt.includes('@') ? buildBriefTagRefMap(basePrompt, refs) : null;
+
   // ── Outfit por shot: cada prenda se asigna a un shot distinto ─
-  const { outfitUrl: outfitForThisShot, isFlatLay } = getOutfitForShot(refs, shot.arcPosition - 1);
+  // Si hay tag map, usar los outfits reordenados por brief
+  const outfitRefsForRotation = briefTagMap?.outfit.length ? briefTagMap.outfit : undefined;
+  const { outfitUrl: outfitForThisShot, isFlatLay } = getOutfitForShot(
+    outfitRefsForRotation ? { ...refs, outfitRef: outfitRefsForRotation[0] ?? refs.outfitRef, outfitRefs: outfitRefsForRotation.slice(1) } : refs,
+    shot.arcPosition - 1,
+  );
 
   // ── Budget de referencias por shot ───────────────────────────
   const refsToPass: string[] = [];
@@ -7893,16 +7997,29 @@ export async function generatePhotodumpShot(
     if (sceneRef) refsToPass.push(sceneRef);
 
   } else {
-    // Comportamiento original para todas las demás recetas
+    // Recetas genéricas: day_in_life, travel, bts, launch y cualquier futura.
+    // Si el brief tiene @tags, las refs se reordenan según el orden de aparición de los tags.
     if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
     if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
     refsToPass.push(ref0Url);
-    if (outfitForThisShot) refsToPass.push(outfitForThisShot);
-    if (refs.productRef) refsToPass.push(refs.productRef);
-    const extraProducts = (refs.productRefs ?? []).filter(Boolean) as string[];
-    extraProducts.forEach(r => refsToPass.push(r));
-    const sceneForShot = getSceneRefForShot(refs, shot.arcPosition - 1, totalShots);
-    if (sceneForShot) refsToPass.push(sceneForShot);
+
+    if (briefTagMap?.hasAnyTag) {
+      // Usar refs reordenadas por brief: outfit rotado ya en outfitForThisShot,
+      // productos y escenas en el orden marcado con @tags
+      if (outfitForThisShot) refsToPass.push(outfitForThisShot);
+      briefTagMap.producto.slice(0, 2).forEach(r => refsToPass.push(r));
+      const sceneTagged = briefTagMap.escena[0]
+        ?? getSceneRefForShot(refs, shot.arcPosition - 1, totalShots);
+      if (sceneTagged) refsToPass.push(sceneTagged);
+    } else {
+      // Comportamiento original sin tags
+      if (outfitForThisShot) refsToPass.push(outfitForThisShot);
+      if (refs.productRef) refsToPass.push(refs.productRef);
+      const extraProducts = (refs.productRefs ?? []).filter(Boolean) as string[];
+      extraProducts.forEach(r => refsToPass.push(r));
+      const sceneForShot = getSceneRefForShot(refs, shot.arcPosition - 1, totalShots);
+      if (sceneForShot) refsToPass.push(sceneForShot);
+    }
   }
 
   const extraProducts = (refs.productRefs ?? []).filter(Boolean) as string[];
@@ -8610,6 +8727,8 @@ ${injectREF0Analysis(ref0Analysis, shot.narrativeStage)}
 STORY CONTEXT: "${basePrompt}"
 NARRATIVE: ${NARRATIVE_META[narrative].label}
 FORMAT: ${aspectInstr}
+
+${briefTagMap?.tagContext ?? ''}
 
 ${familyBlock}
 
