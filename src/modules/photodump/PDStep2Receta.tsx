@@ -93,19 +93,97 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   const refKeys = (Object.keys(meta.refs) as (keyof typeof meta.refs)[])
     .filter(k => meta.refs[k] !== 'none');
 
-  // Tags disponibles según refs cargadas
-  const availableTags: { tag: string; label: string; color: string }[] = [];
-  if (refs.avatarRef)    availableTags.push({ tag: '@persona',  label: 'persona',  color: 'text-indigo-600 bg-indigo-50 border-indigo-200' });
-  if (refs.outfitRef)    availableTags.push({ tag: '@outfit',   label: 'outfit',   color: 'text-purple-600 bg-purple-50 border-purple-200' });
-  if (refs.productRef)   availableTags.push({ tag: '@producto', label: 'producto', color: 'text-emerald-600 bg-emerald-50 border-emerald-200' });
-  if (refs.packagingRef) availableTags.push({ tag: '@empaque',  label: 'empaque',  color: 'text-amber-600 bg-amber-50 border-amber-200' });
-  if (refs.sceneRef)     availableTags.push({ tag: '@escena',   label: 'escena',   color: 'text-blue-600 bg-blue-50 border-blue-200' });
-  (refs.outfitRefs ?? []).forEach((r, i) => {
-    if (r) availableTags.push({ tag: `@outfit${i + 2}`, label: `outfit ${i + 2}`, color: 'text-purple-500 bg-purple-50 border-purple-200' });
+  // ── Sistema de tags: qué tags existen y cuáles están activos en el brief ──
+
+  // Todos los tags posibles, cada uno con su slot-key e índice para iluminar el slot
+  interface TagDef {
+    tag:     string;
+    label:   string;
+    color:   string;
+    slotKey: string;
+    slotIdx: number;
+    preview: string | null;
+  }
+
+  const allTagDefs: TagDef[] = [];
+
+  // @persona / @cuerpo
+  if (refs.avatarRef) allTagDefs.push({
+    tag: '@persona', label: 'persona', slotKey: 'avatar', slotIdx: 0, preview: refs.avatarRef,
+    color: 'text-indigo-600 bg-indigo-50 border-indigo-200',
   });
-  (refs.productRefs ?? []).forEach((r, i) => {
-    if (r) availableTags.push({ tag: `@producto${i + 2}`, label: `producto ${i + 2}`, color: 'text-emerald-500 bg-emerald-50 border-emerald-200' });
+  if (refs.bodyRef) allTagDefs.push({
+    tag: '@cuerpo', label: 'cuerpo', slotKey: 'avatar', slotIdx: 1, preview: refs.bodyRef,
+    color: 'text-indigo-500 bg-indigo-50 border-indigo-200',
   });
+
+  // @outfit, @outfit2… (outfit_week / haul: cada slot es un outfit numerado desde 1)
+  const outfitAll = [refs.outfitRef, ...(refs.outfitRefs ?? [])];
+  const outfitTagIsNumbered = recipe === 'outfit_week' || recipe === 'outfit_haul';
+  outfitAll.forEach((r, i) => {
+    if (!r) return;
+    const tag = i === 0 && !outfitTagIsNumbered ? '@outfit' : `@outfit${i + 1}`;
+    allTagDefs.push({
+      tag, label: i === 0 && !outfitTagIsNumbered ? 'outfit' : `outfit ${i + 1}`,
+      slotKey: 'outfit', slotIdx: i, preview: r,
+      color: 'text-purple-600 bg-purple-50 border-purple-200',
+    });
+  });
+
+  // @accesorio1, @accesorio2…
+  (refs.accesorioRefs ?? []).forEach((r, i) => {
+    if (!r) return;
+    allTagDefs.push({
+      tag: `@accesorio${i + 1}`, label: `accesorio ${i + 1}`,
+      slotKey: 'accesorios', slotIdx: i, preview: r,
+      color: 'text-pink-600 bg-pink-50 border-pink-200',
+    });
+  });
+
+  // @producto, @producto2…
+  const productoAll = [refs.productRef, ...(refs.productRefs ?? [])];
+  productoAll.forEach((r, i) => {
+    if (!r) return;
+    const tag = i === 0 ? '@producto' : `@producto${i + 1}`;
+    allTagDefs.push({
+      tag, label: i === 0 ? 'producto' : `producto ${i + 1}`,
+      slotKey: 'producto', slotIdx: i, preview: r,
+      color: 'text-emerald-600 bg-emerald-50 border-emerald-200',
+    });
+  });
+
+  // @empaque
+  if (refs.packagingRef) allTagDefs.push({
+    tag: '@empaque', label: 'empaque', slotKey: 'empaque', slotIdx: 0, preview: refs.packagingRef,
+    color: 'text-amber-600 bg-amber-50 border-amber-200',
+  });
+
+  // @escena, @escena_prueba, @escena_destino
+  if (refs.sceneRef) allTagDefs.push({
+    tag: '@escena', label: 'escena', slotKey: 'escena', slotIdx: 0, preview: refs.sceneRef,
+    color: 'text-blue-600 bg-blue-50 border-blue-200',
+  });
+  if (refs.scenePruebaRef) allTagDefs.push({
+    tag: '@escena_prueba', label: 'escena prueba', slotKey: 'escena_prueba', slotIdx: 0, preview: refs.scenePruebaRef,
+    color: 'text-cyan-600 bg-cyan-50 border-cyan-200',
+  });
+  if (refs.sceneDestinoRef) allTagDefs.push({
+    tag: '@escena_destino', label: 'escena destino', slotKey: 'escena_destino', slotIdx: 0, preview: refs.sceneDestinoRef,
+    color: 'text-violet-600 bg-violet-50 border-violet-200',
+  });
+
+  // Tags activos (mencionados en el brief)
+  const tagsInBrief = new Set(
+    (basePrompt.match(/@[a-záéíóúüñA-ZÁÉÍÓÚÜÑ_]+\d*/g) ?? []).map(t => t.toLowerCase())
+  );
+  const isTagActive = (tag: string) => tagsInBrief.has(tag.toLowerCase());
+
+  // Para cada slot, qué tags están activos (para iluminar el borde del acordeón)
+  const isSlotTagged = (slotKey: string): boolean =>
+    allTagDefs.some(td => td.slotKey === slotKey && isTagActive(td.tag));
+
+  // Tags para insertar (chips bajo el brief) — solo los que existen (tienen imagen)
+  const availableTags = allTagDefs;
 
   // ── Helpers para leer/escribir refs por slot key ─────────────
   const getSlotImages = (key: string): (string | null)[] => {
@@ -355,20 +433,38 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
               className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3.5 text-[15px] text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 transition-all resize-none leading-relaxed"
             />
             {availableTags.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                <span className="flex items-center gap-1 text-[10px] text-slate-400 font-bold uppercase tracking-wider flex-shrink-0">
-                  <AtSign size={9} /> Insertar
-                </span>
-                {availableTags.map(t => (
-                  <button
-                    key={t.tag}
-                    type="button"
-                    onClick={() => insertTag(t.tag)}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold transition-opacity hover:opacity-80 ${t.color}`}
-                  >
-                    {t.tag}
-                  </button>
-                ))}
+              <div className="mt-2 space-y-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="flex items-center gap-1 text-[10px] text-slate-400 font-bold uppercase tracking-wider flex-shrink-0">
+                    <AtSign size={9} /> Insertar
+                  </span>
+                  {availableTags.map(t => {
+                    const active = isTagActive(t.tag);
+                    return (
+                      <button
+                        key={t.tag}
+                        type="button"
+                        onClick={() => insertTag(t.tag)}
+                        title={active ? `${t.tag} está en el brief ✓` : `Insertar ${t.tag} en el brief`}
+                        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-bold transition-all hover:scale-105 ${t.color} ${
+                          active ? 'ring-2 ring-offset-1 ring-current opacity-100 shadow-sm' : 'opacity-70 hover:opacity-100'
+                        }`}
+                      >
+                        {t.preview && (
+                          <img src={t.preview} className="w-3.5 h-3.5 rounded-full object-cover flex-shrink-0" />
+                        )}
+                        {t.tag}
+                        {active && <span className="text-[8px]">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+                {tagsInBrief.size > 0 && (
+                  <p className="text-[10px] text-brand-600 font-semibold flex items-center gap-1">
+                    <AtSign size={9} />
+                    {[...tagsInBrief].filter(t => allTagDefs.some(td => td.tag.toLowerCase() === t)).length} tag{[...tagsInBrief].filter(t => allTagDefs.some(td => td.tag.toLowerCase() === t)).length !== 1 ? 's' : ''} conectado{[...tagsInBrief].filter(t => allTagDefs.some(td => td.tag.toLowerCase() === t)).length !== 1 ? 's' : ''} al brief
+                  </p>
+                )}
               </div>
             ) : (
               <p className="text-[11px] text-slate-400 mt-1.5">
@@ -396,9 +492,12 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                   : (key === 'producto' || key === 'empaque') ? 'product'
                   : 'scene';
 
-                const isAccesorios = key === 'accesorios';
-                const images       = getSlotImages(key);
-                const closeups     = refs.accesorioCloseup ?? Array(recipe === 'outfit_haul' ? 5 : 3).fill(false);
+                const isAccesorios  = key === 'accesorios';
+                const images        = getSlotImages(key);
+                const closeups      = refs.accesorioCloseup ?? Array(recipe === 'outfit_haul' ? 5 : 3).fill(false);
+                const slotTagged    = isSlotTagged(key);
+                const slotTagDefs   = allTagDefs.filter(td => td.slotKey === key);
+                const slotTagsForHeader = slotTagDefs.map(td => td.tag).slice(0, 3);
 
                 return (
                   <div
@@ -406,7 +505,9 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                     className={`border rounded-2xl overflow-hidden transition-all ${
                       isOpen
                         ? `${style.border} ${style.bg}`
-                        : 'border-slate-200 bg-white'
+                        : slotTagged
+                          ? `${style.border} ${style.bg} ring-2 ring-offset-1`
+                          : 'border-slate-200 bg-white'
                     }`}
                   >
                     {/* Header acordeón */}
@@ -422,8 +523,32 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                         {SLOT_LABEL[key]}
                       </span>
 
+                      {/* Tags del slot */}
+                      {filled > 0 && !isOpen && slotTagsForHeader.length > 0 && (
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {slotTagsForHeader.map(t => {
+                            const active = isTagActive(t);
+                            return (
+                              <span
+                                key={t}
+                                className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border transition-all ${
+                                  active
+                                    ? `${style.label} ${style.bg} ${style.border} shadow-sm`
+                                    : 'text-slate-300 bg-slate-50 border-slate-100'
+                                }`}
+                              >
+                                {t}{active && ' ✓'}
+                              </span>
+                            );
+                          })}
+                          {allTagDefs.filter(td => td.slotKey === key).length > 3 && (
+                            <span className="text-[9px] text-slate-400">+{allTagDefs.filter(td => td.slotKey === key).length - 3}</span>
+                          )}
+                        </div>
+                      )}
+
                       {filled > 0 && !isOpen && (
-                        <span className={`text-[9px] font-bold ${style.label}`}>
+                        <span className={`text-[9px] font-bold ${style.label} flex-shrink-0`}>
                           {filled} foto{filled > 1 ? 's' : ''}
                           {isAccesorios && (refs.accesorioCloseup ?? []).filter(Boolean).length > 0 &&
                             ` · ${(refs.accesorioCloseup ?? []).filter(Boolean).length} close-up`}
@@ -451,15 +576,29 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                             const isDisabled = i > 0 && !images[0];
                             const hasImage   = !!images[i];
                             const isCloseup  = isAccesorios && closeups[i];
+                            // Tag propio de este sub-slot (e.g. @outfit2 para index 1)
+                            const subTagDef  = slotTagDefs[i];
+                            const subTagActive = subTagDef ? isTagActive(subTagDef.tag) : false;
 
                             return (
                               <div key={i} className="flex flex-col gap-1">
                                 <div className="flex items-center justify-between">
-                                  <p className={`text-[9px] font-bold uppercase tracking-wider ${
-                                    isFirst ? style.label : 'text-slate-400'
-                                  }`}>
-                                    {subLabels[i] ?? `Foto ${i + 1}`}
-                                  </p>
+                                  <div className="flex flex-col gap-0.5">
+                                    <p className={`text-[9px] font-bold uppercase tracking-wider ${
+                                      isFirst ? style.label : 'text-slate-400'
+                                    }`}>
+                                      {subLabels[i] ?? `Foto ${i + 1}`}
+                                    </p>
+                                    {subTagDef && hasImage && (
+                                      <span className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded border w-fit transition-all ${
+                                        subTagActive
+                                          ? `${style.label} ${style.bg} ${style.border}`
+                                          : 'text-slate-300 bg-slate-50 border-slate-100'
+                                      }`}>
+                                        {subTagDef.tag}{subTagActive && ' ✓'}
+                                      </span>
+                                    )}
+                                  </div>
                                   {/* Checkbox de close-up para accesorios */}
                                   {isAccesorios && hasImage && (
                                     <button
