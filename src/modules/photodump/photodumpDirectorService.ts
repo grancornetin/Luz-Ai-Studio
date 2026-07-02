@@ -2048,7 +2048,7 @@ function buildStoryDirectives(
 
   if (recipe === 'outfit_week') {
     // Construir manifest completo con roles narrativos, cobertura y routing
-    const weekManifest = buildWeeklyManifest(refs ?? {} as PhotodumpRefs, count);
+    const weekManifest = buildWeeklyManifest((refs ?? {}) as PhotodumpRefs, count);
     const plan = weekManifest.shotPlan;
     // Convertir cada WeeklyShotPlan en un PhotodumpShotDirective con metadata de routing
     const directives = plan.slice(0, count).map((sp, i) =>
@@ -5520,7 +5520,7 @@ function buildHaulJewelryShot(
 
 // ── Outfit Week — Weekly Edit / Weekly Favorites ─────────────
 // Historia: "mis favoritos de la semana / outfits de la semana / accesorios de la semana"
-// Planificación basada en roles narrativos + manifest de ítems con cobertura garantizada.
+// Planificación basada en roles narrativos + manifest de ítems con cobertura REAL garantizada.
 
 // Clasifica un ítem por su posición en el array (outfit slots vs accesorio slots)
 function classifyWeeklyItem(
@@ -5529,14 +5529,7 @@ function classifyWeeklyItem(
   isOutfitSlot: boolean,
   slotIndex: number,
 ): import('./types').WeeklyItem {
-  // Heurística de kind por slot — en outfit_week no hay selector manual como en haul
-  // Usamos el slot para inferir: outfit slots = wearable, accesorio slots = accesorio
   const kind: import('./types').WeeklyItemKind = isOutfitSlot ? 'outfit_set' : 'accessory';
-  const tryOnEligible   = isOutfitSlot;
-  const accessoryEligible = !isOutfitSlot;
-  const detailEligible  = true;
-  const canIntegrate    = !isOutfitSlot; // accesorios pueden integrarse con outfits
-
   return {
     id:                       isOutfitSlot ? `outfit_${slotIndex}` : `acc_${slotIndex}`,
     sourceIndex,
@@ -5544,10 +5537,10 @@ function classifyWeeklyItem(
     kind,
     label:                    isOutfitSlot ? `Outfit ${slotIndex + 1}` : `Accesorio ${slotIndex + 1}`,
     priority:                 'required',
-    tryOnEligible,
-    detailEligible,
-    accessoryEligible,
-    canBeIntegratedWithOutfit: canIntegrate,
+    tryOnEligible:            isOutfitSlot,
+    detailEligible:           true,
+    accessoryEligible:        !isOutfitSlot,
+    canBeIntegratedWithOutfit: !isOutfitSlot,
     compatibleWith:           [],
   };
 }
@@ -5565,15 +5558,15 @@ function detectWeeklyDominantType(
   return 'mixed';
 }
 
-// Compatibilidad simple entre accesorio y outfit (0–100)
+// Compatibilidad accesorio ↔ outfit — 0–100
+// Sin análisis visual: usa el tipo de ítem para determinar modo de integración.
+// El prompt builder refina con instrucciones de compatibilidad de estilo/color.
 function scoreWeeklyCompatibility(
   acc: import('./types').WeeklyItem,
   outfit: import('./types').WeeklyItem,
 ): { score: number; reason: string; integrationMode: 'worn' | 'held' | 'flatlay' | 'detail' } {
-  // Sin análisis visual disponible en este punto — score conservador base que favorece integración
-  // La lógica se refina en el prompt builder con instrucciones de compatibilidad
-  const baseScore = acc.kind === 'jewelry'   ? 80
-    : acc.kind === 'bag'                      ? 75
+  const baseScore = acc.kind === 'jewelry' ? 80
+    : acc.kind === 'bag'                    ? 75
     : acc.kind === 'shoes' || acc.kind === 'boots' ? 70
     : 65;
 
@@ -5584,9 +5577,629 @@ function scoreWeeklyCompatibility(
     : 'held';
 
   return {
-    score:  baseScore,
-    reason: `${acc.label} can naturally ${integrationMode === 'worn' ? 'be worn with' : 'be held/paired with'} ${outfit.label}`,
+    score: baseScore,
+    reason: `${acc.label} pairs naturally with ${outfit.label} (${integrationMode})`,
     integrationMode,
+  };
+}
+
+// ── Role templates por dominantType ──────────────────────────
+// Define la secuencia base de roles narrativos para cada tipo de set.
+// El planner rellena los heroes con los outfits reales del manifest.
+function getWeeklyRoleTemplate(
+  dominant: import('./types').WeeklySetDominantType,
+  outfitCount: number,
+  accCount: number,
+  count: number,
+): import('./types').WeeklyShotRole[] {
+  if (dominant === 'outfits' || (dominant === 'mixed' && outfitCount >= accCount)) {
+    // Template A: outfits de la semana
+    // Estructura: OVERVIEW → N look heroes → ACC_INTEGRATED × acc → CLOSER
+    const roles: import('./types').WeeklyShotRole[] = ['WEEK_OVERVIEW'];
+    const heroSlots = Math.min(outfitCount, count - 2 - Math.min(accCount, Math.floor((count - 2) / 4)));
+    for (let i = 0; i < heroSlots; i++) {
+      // Romper monotonía: cada 3er hero usa MIRROR_LOOK
+      roles.push(i % 3 === 2 ? 'WEEK_MIRROR_LOOK' : 'WEEK_LOOK_HERO');
+    }
+    const accSlots = Math.min(accCount, count - roles.length - 1);
+    for (let i = 0; i < accSlots; i++) roles.push('WEEK_ACCESSORY_INTEGRATED');
+    roles.push('WEEK_CLOSER');
+    return roles;
+  }
+
+  if (dominant === 'accessories') {
+    // Template B: accesorios de la semana — sin forzar full-body looks
+    return [
+      'WEEK_OVERVIEW',
+      'WEEK_ACCESSORY_WORN',
+      'WEEK_ACCESSORY_HELD',
+      'WEEK_ACCESSORY_DETAIL',
+      'WEEK_ACCESSORY_WORN',
+      'WEEK_ACCESSORY_HELD',
+      'WEEK_ACCESSORY_DETAIL',
+      'WEEK_CLOSER',
+    ].slice(0, count) as import('./types').WeeklyShotRole[];
+  }
+
+  if (dominant === 'bags') {
+    return [
+      'WEEK_OVERVIEW',
+      'WEEK_ACCESSORY_HELD',
+      'WEEK_ACCESSORY_DETAIL',
+      'WEEK_ACCESSORY_HELD',
+      'WEEK_DETAIL',
+      'WEEK_ACCESSORY_HELD',
+      'WEEK_DETAIL',
+      'WEEK_CLOSER',
+    ].slice(0, count) as import('./types').WeeklyShotRole[];
+  }
+
+  if (dominant === 'makeup') {
+    return [
+      'WEEK_OVERVIEW',
+      'WEEK_DETAIL',
+      'WEEK_STYLING_PROCESS',
+      'WEEK_DETAIL',
+      'WEEK_ACCESSORY_DETAIL',
+      'WEEK_STYLING_PROCESS',
+      'WEEK_DETAIL',
+      'WEEK_CLOSER',
+    ].slice(0, count) as import('./types').WeeklyShotRole[];
+  }
+
+  // mixed — balance
+  const roles: import('./types').WeeklyShotRole[] = ['WEEK_OVERVIEW'];
+  if (outfitCount > 0) roles.push('WEEK_LOOK_HERO');
+  if (accCount > 0) roles.push('WEEK_ACCESSORY_INTEGRATED');
+  if (outfitCount > 1) roles.push('WEEK_LOOK_HERO');
+  if (accCount > 1) roles.push('WEEK_ACCESSORY_WORN');
+  roles.push('WEEK_DETAIL', 'WEEK_CLOSER');
+  return roles.slice(0, count);
+}
+
+// ── Plan de integración de accesorios: distribución anti-acumulación ──
+// Garantiza que los accesorios se repartan entre distintos outfits.
+function buildWeeklyAccessoryIntegrationPlan(
+  accessoryItems: import('./types').WeeklyItem[],
+  outfitItems: import('./types').WeeklyItem[],
+  compatPairs: import('./types').WeeklyCompatibilityPair[],
+  accCloseup: boolean[],
+): import('./types').WeeklyAccessoryIntegrationEntry[] {
+  const plan: import('./types').WeeklyAccessoryIntegrationEntry[] = [];
+  // Rastrea cuántas veces fue elegido cada outfit para el reparto
+  const outfitUsageCount: Record<string, number> = {};
+  for (const o of outfitItems) outfitUsageCount[o.id] = 0;
+
+  for (let ai = 0; ai < accessoryItems.length; ai++) {
+    const acc = accessoryItems[ai];
+    const pairs = compatPairs
+      .filter(p => p.accessoryId === acc.id)
+      .sort((a, b) => b.score - a.score);
+
+    if (pairs.length === 0 || outfitItems.length === 0) {
+      plan.push({
+        accessoryId:       acc.id,
+        accessoryLabel:    acc.label,
+        selectedOutfitId:  undefined,
+        compatibleOutfitIds: [],
+        reason:            'No compatible outfits — isolated shot',
+        integrationMode:   acc.kind === 'jewelry' ? 'worn' : acc.kind === 'bag' ? 'held' : 'macro',
+        fallbackToIsolated: true,
+      });
+      continue;
+    }
+
+    // Elegir el outfit compatible con MENOR uso hasta ahora — anti-acumulación
+    let selectedPair = pairs[0];
+    let lowestUsage = outfitUsageCount[pairs[0].outfitId] ?? 0;
+    let avoidedOutfitId: string | undefined;
+    let avoidedReason: string | undefined;
+
+    for (const pair of pairs) {
+      const usage = outfitUsageCount[pair.outfitId] ?? 0;
+      if (usage < lowestUsage) {
+        lowestUsage = usage;
+        avoidedOutfitId = selectedPair.outfitId;
+        avoidedReason = `Already used ${outfitUsageCount[selectedPair.outfitId]} times`;
+        selectedPair = pair;
+      }
+    }
+
+    const wouldOverRepeat = lowestUsage >= 2;
+    outfitUsageCount[selectedPair.outfitId] = (outfitUsageCount[selectedPair.outfitId] ?? 0) + 1;
+
+    plan.push({
+      accessoryId:        acc.id,
+      accessoryLabel:     acc.label,
+      selectedOutfitId:   selectedPair.outfitId,
+      compatibleOutfitIds: pairs.map(p => p.outfitId),
+      reason:             selectedPair.reason,
+      integrationMode:    selectedPair.integrationMode as 'worn' | 'held' | 'detail' | 'flatlay' | 'macro',
+      avoidedBecauseWouldOverRepeat: wouldOverRepeat,
+      avoidedOutfitId,
+      avoidedReason,
+      fallbackToIsolated: false,
+    });
+  }
+
+  return plan;
+}
+
+// ── Reemplazo de shots redundantes — por dominantType ──
+// Devuelve un rol alternativo real para el cierre según el tipo de contenido.
+function getNonRedundantCloserRole(
+  dominant: import('./types').WeeklySetDominantType,
+  existingRoles: import('./types').WeeklyShotRole[],
+): { role: import('./types').WeeklyShotRole; reason: string } {
+  if (dominant === 'outfits') {
+    const candidates: Array<{ role: import('./types').WeeklyShotRole; avoid: import('./types').WeeklyShotRole[] }> = [
+      { role: 'WEEK_DETAIL',     avoid: ['WEEK_DETAIL'] },
+      { role: 'WEEK_ACCESSORY_INTEGRATED', avoid: ['WEEK_ACCESSORY_INTEGRATED', 'WEEK_ACCESSORY_INTEGRATED', 'WEEK_ACCESSORY_INTEGRATED'] },
+      { role: 'WEEK_MIRROR_LOOK', avoid: ['WEEK_MIRROR_LOOK', 'WEEK_MIRROR_LOOK'] },
+      { role: 'WEEK_FAVORITE',   avoid: ['WEEK_FAVORITE'] },
+      { role: 'WEEK_CLOSER',     avoid: [] },
+    ];
+    for (const c of candidates) {
+      const used = existingRoles.filter(r => r === c.avoid[0]).length;
+      if (used < 2) return { role: c.role, reason: `Replaced redundant full-body with ${c.role}` };
+    }
+    return { role: 'WEEK_CLOSER', reason: 'Fallback closer' };
+  }
+  if (dominant === 'accessories') {
+    return { role: 'WEEK_ACCESSORY_DETAIL', reason: 'Accessory detail as closer' };
+  }
+  if (dominant === 'bags') {
+    return { role: 'WEEK_DETAIL', reason: 'Bag interior or texture detail as closer' };
+  }
+  if (dominant === 'makeup') {
+    return { role: 'WEEK_DETAIL', reason: 'Product detail as closer' };
+  }
+  return { role: 'WEEK_CLOSER', reason: 'Default closer' };
+}
+
+// ── Planificador de roles narrativos — núcleo del patch v3 ──
+function buildWeeklyShotPlan(
+  outfitItems:      import('./types').WeeklyItem[],
+  accessoryItems:   import('./types').WeeklyItem[],
+  compatPairs:      import('./types').WeeklyCompatibilityPair[],
+  accIntPlan:       import('./types').WeeklyAccessoryIntegrationEntry[],
+  accCloseup:       boolean[],
+  count:            number,
+  dominant:         import('./types').WeeklySetDominantType,
+): {
+  shotPlan:        import('./types').WeeklyShotPlan[];
+  redundancyDebug: import('./types').WeeklyRedundancyDebugEntry[];
+  compositionMap:  import('./types').WeeklyCompositionVarietyMap;
+} {
+  const plan: import('./types').WeeklyShotPlan[] = [];
+  const redundancyDebug: import('./types').WeeklyRedundancyDebugEntry[] = [];
+
+  // Obtener template de roles para este dominantType
+  const roleTemplate = getWeeklyRoleTemplate(dominant, outfitItems.length, accessoryItems.length, count);
+
+  // Rastreadores de uso
+  let outfitCursor    = 0;                    // siguiente outfit para hero slots
+  let accCursor       = 0;                    // siguiente accesorio para acc slots
+  const outfitHeroCount: Record<string, number> = {};
+  for (const o of outfitItems) outfitHeroCount[o.id] = 0;
+  const fullBodyCount = { count: 0 };
+
+  for (let si = 0; si < roleTemplate.length && plan.length < count; si++) {
+    const role = roleTemplate[si];
+    const shotIdx = plan.length;
+
+    let shotPlan: import('./types').WeeklyShotPlan;
+
+    // ── OVERVIEW ──────────────────────────────────────────────
+    if (role === 'WEEK_OVERVIEW') {
+      // Overview: todos los outfits + accesorios en visible order (max ~5 refs para no saturar)
+      const overviewOutfits = outfitItems.slice(0, Math.min(outfitItems.length, 4)).map(it => it.id);
+      const overviewAccs    = accessoryItems.slice(0, Math.min(accessoryItems.length, 2)).map(it => it.id);
+      shotPlan = {
+        role,
+        primaryItemIds:   [...overviewOutfits, ...overviewAccs],
+        secondaryItemIds: [],
+        backgroundItemIds: [],
+        forbiddenItemIds: [],
+        refsToRoute:      [],
+        redundancyScore:  0,
+        replacedBecauseRedundant: false,
+        compositionMode:  'flatlay_or_rack_all_items',
+        visualWeightIntent: 'All weekly items displayed together — NOT a worn look',
+      };
+    }
+
+    // ── LOOK HERO ─────────────────────────────────────────────
+    else if (role === 'WEEK_LOOK_HERO' || role === 'WEEK_MIRROR_LOOK') {
+      if (outfitCursor >= outfitItems.length) {
+        // No hay más outfits — reemplazar por detail del último
+        const lastOutfit = outfitItems[outfitItems.length - 1];
+        const { role: altRole, reason } = getNonRedundantCloserRole(dominant, plan.map(s => s.role));
+        shotPlan = {
+          role: altRole,
+          primaryItemIds:   lastOutfit ? [lastOutfit.id] : [],
+          secondaryItemIds: [],
+          refsToRoute:      [],
+          redundancyScore:  8,
+          replacedBecauseRedundant: true,
+          replacementRole:  altRole,
+          replacementReason: `No more outfits left for hero slot ${si}: ${reason}`,
+        };
+        redundancyDebug.push({ shotIndex: shotIdx, role: role as import('./types').WeeklyShotRole, score: 8, reason: 'No more outfits', replacedBecauseRedundant: true, replacementRole: altRole, replacementReason: reason });
+      } else {
+        const outfit = outfitItems[outfitCursor];
+        outfitCursor++;
+        const heroUseCount = outfitHeroCount[outfit.id] ?? 0;
+        outfitHeroCount[outfit.id] = heroUseCount + 1;
+        fullBodyCount.count++;
+
+        // Todos los otros outfits como forbidden (no mezclar outfits en hero shots)
+        const forbiddenOutfitIds = outfitItems.filter(o => o.id !== outfit.id).map(o => o.id);
+
+        const redundancyScore = heroUseCount >= 1 ? 9 : fullBodyCount.count > outfitItems.length ? 6 : 0;
+        let finalRole: import('./types').WeeklyShotRole = role;
+        let replaced  = false;
+        let replacementRole: import('./types').WeeklyShotRole | undefined;
+        let replacementReason: string | undefined;
+
+        if (redundancyScore >= 8) {
+          const alt = getNonRedundantCloserRole(dominant, plan.map(s => s.role));
+          finalRole = alt.role;
+          replaced  = true;
+          replacementRole   = alt.role;
+          replacementReason = alt.reason;
+        }
+
+        shotPlan = {
+          role:             finalRole,
+          primaryItemIds:   [outfit.id],
+          secondaryItemIds: [],
+          backgroundItemIds: [],
+          forbiddenItemIds:  forbiddenOutfitIds,
+          outfitIndex:      outfitCursor - 1,
+          refsToRoute:      [],
+          redundancyScore,
+          replacedBecauseRedundant: replaced,
+          replacementRole,
+          replacementReason,
+          compositionMode:  role === 'WEEK_MIRROR_LOOK' ? 'mirror_selfie_full_body' : 'full_body_authentic',
+          visualWeightIntent: `${outfit.label} is the sole protagonist — full look readable head to toe`,
+        };
+
+        redundancyDebug.push({
+          shotIndex: shotIdx,
+          role: role as import('./types').WeeklyShotRole,
+          score: redundancyScore,
+          reason: heroUseCount >= 1 ? `${outfit.label} already had a hero shot` : 'First hero for this outfit',
+          replacedBecauseRedundant: replaced,
+          replacementRole,
+          replacementReason,
+          redundantShotNotReplaced: redundancyScore >= 8 && !replaced,
+        });
+      }
+    }
+
+    // ── ACCESSORY INTEGRATED ──────────────────────────────────
+    else if (role === 'WEEK_ACCESSORY_INTEGRATED') {
+      if (accCursor >= accIntPlan.length) {
+        // Sin más accesorios — saltar este slot con detail o styiling
+        const fallbackRole: import('./types').WeeklyShotRole = outfitItems.length > 0 ? 'WEEK_DETAIL' : 'WEEK_CLOSER';
+        const fallbackOutfit = outfitItems[Math.max(0, outfitCursor - 1)];
+        shotPlan = {
+          role:             fallbackRole,
+          primaryItemIds:   fallbackOutfit ? [fallbackOutfit.id] : [],
+          secondaryItemIds: [],
+          refsToRoute:      [],
+          redundancyScore:  3,
+          replacedBecauseRedundant: false,
+          fallbackUsed:     true,
+          fallbackRole,
+          compositionMode:  'texture_detail_closeup',
+          visualWeightIntent: 'Garment detail or texture — no full body needed',
+        };
+      } else {
+        const entry   = accIntPlan[accCursor];
+        accCursor++;
+        const needsCloseup = accCloseup[accessoryItems.findIndex(a => a.id === entry.accessoryId)] === true;
+
+        if (entry.fallbackToIsolated) {
+          // No hay outfit compatible — shot isolado según tipo
+          const acc = accessoryItems.find(a => a.id === entry.accessoryId);
+          const isoRole: import('./types').WeeklyShotRole =
+            acc?.kind === 'jewelry' ? 'WEEK_ACCESSORY_WORN' : 'WEEK_ACCESSORY_HELD';
+          shotPlan = {
+            role:             isoRole,
+            primaryItemIds:   [entry.accessoryId],
+            secondaryItemIds: [],
+            accessoryId:      entry.accessoryId,
+            refsToRoute:      [],
+            redundancyScore:  2,
+            replacedBecauseRedundant: false,
+            compositionMode:  entry.integrationMode === 'worn' ? 'worn_on_body_closeup' : 'held_toward_camera',
+            visualWeightIntent: `${entry.accessoryLabel} isolated — no outfit context needed`,
+          };
+        } else {
+          shotPlan = {
+            role:             'WEEK_ACCESSORY_INTEGRATED',
+            primaryItemIds:   [entry.accessoryId],
+            secondaryItemIds: entry.selectedOutfitId ? [entry.selectedOutfitId] : [],
+            backgroundItemIds: [],
+            forbiddenItemIds:  outfitItems.filter(o => o.id !== entry.selectedOutfitId).map(o => o.id),
+            accessoryId:      entry.accessoryId,
+            integratedWithOutfitId: entry.selectedOutfitId,
+            refsToRoute:      [],
+            redundancyScore:  0,
+            replacedBecauseRedundant: false,
+            compositionMode:  `accessory_${entry.integrationMode}_with_outfit`,
+            visualWeightIntent: `${entry.accessoryLabel} visible as part of the look with the compatible outfit — NOT floating or isolated`,
+          };
+        }
+
+        // Closeup adicional solo si el usuario lo pidió y hay budget
+        if (needsCloseup && plan.length + 1 < count) {
+          // Se inserta como un shot extra en el plan (fuera del template)
+          plan.push(shotPlan);
+          redundancyDebug.push({ shotIndex: plan.length - 1, role: shotPlan.role, score: 0, reason: 'Accessory integrated', replacedBecauseRedundant: false });
+          shotPlan = {
+            role:             'WEEK_ACCESSORY_DETAIL',
+            primaryItemIds:   [entry.accessoryId],
+            secondaryItemIds: [],
+            accessoryId:      entry.accessoryId,
+            refsToRoute:      [],
+            redundancyScore:  3,
+            replacedBecauseRedundant: false,
+            compositionMode:  'macro_detail_closeup',
+            visualWeightIntent: `${entry.accessoryLabel} macro — user requested close-up (⭐)`,
+          };
+        }
+      }
+    }
+
+    // ── CLOSER ────────────────────────────────────────────────
+    else if (role === 'WEEK_CLOSER') {
+      const existingRoles = plan.map(s => s.role);
+      const fullBodyInPlan = existingRoles.filter(r => r === 'WEEK_LOOK_HERO' || r === 'WEEK_MIRROR_LOOK').length;
+      const isRedundant    = fullBodyInPlan >= 2;
+
+      let finalRole: import('./types').WeeklyShotRole = 'WEEK_CLOSER';
+      let replaced  = false;
+      let replacementRole: import('./types').WeeklyShotRole | undefined;
+      let replacementReason: string | undefined;
+
+      if (isRedundant) {
+        const alt = getNonRedundantCloserRole(dominant, existingRoles);
+        finalRole         = alt.role;
+        replaced          = true;
+        replacementRole   = alt.role;
+        replacementReason = alt.reason;
+      }
+
+      const closerOutfit = outfitItems.length > 0 ? outfitItems[outfitItems.length - 1] : null;
+      const closerAcc    = accessoryItems.length  > 0 ? accessoryItems[0] : null;
+
+      shotPlan = {
+        role:             finalRole,
+        primaryItemIds:   closerAcc ? [closerAcc.id] : closerOutfit ? [closerOutfit.id] : [],
+        secondaryItemIds: closerOutfit && closerAcc ? [closerOutfit.id] : [],
+        refsToRoute:      [],
+        redundancyScore:  isRedundant ? 9 : 1,
+        replacedBecauseRedundant: replaced,
+        replacementRole,
+        replacementReason,
+        compositionMode:  'closing_non_redundant',
+        visualWeightIntent: 'Close the set with a different visual gesture — not another full-body standing pose',
+      };
+
+      redundancyDebug.push({
+        shotIndex: plan.length,
+        role:      'WEEK_CLOSER',
+        score:     isRedundant ? 9 : 1,
+        reason:    isRedundant ? `${fullBodyInPlan} full-body shots already — closer must differ` : 'Clean closer',
+        replacedBecauseRedundant: replaced,
+        replacementRole,
+        replacementReason,
+        redundantShotNotReplaced: isRedundant && !replaced,
+      });
+    }
+
+    // ── ROLES ESPECÍFICOS de accesorios / makeup / bags ──────
+    else if (
+      role === 'WEEK_ACCESSORY_WORN' ||
+      role === 'WEEK_ACCESSORY_HELD' ||
+      role === 'WEEK_ACCESSORY_DETAIL' ||
+      role === 'WEEK_DETAIL'
+    ) {
+      // Asignar el siguiente accesorio disponible (o el último outfit para detail)
+      const targetAcc  = accessoryItems[accCursor % Math.max(accessoryItems.length, 1)];
+      const targetItem = targetAcc ?? (outfitItems.length > 0 ? outfitItems[outfitCursor % outfitItems.length] : null);
+      if (targetAcc) accCursor++;
+
+      const compositionByRole: Record<string, string> = {
+        WEEK_ACCESSORY_WORN:   'worn_on_body_macro',
+        WEEK_ACCESSORY_HELD:   'held_toward_camera',
+        WEEK_ACCESSORY_DETAIL: 'macro_detail_surface',
+        WEEK_DETAIL:           'texture_or_material_closeup',
+      };
+
+      shotPlan = {
+        role,
+        primaryItemIds:   targetItem ? [targetItem.id] : [],
+        secondaryItemIds: [],
+        accessoryId:      targetAcc?.id,
+        refsToRoute:      [],
+        redundancyScore:  0,
+        replacedBecauseRedundant: false,
+        compositionMode:  compositionByRole[role] ?? 'detail_shot',
+        visualWeightIntent: targetItem ? `${targetItem.label} as the visual focus of this shot` : 'Detail shot',
+      };
+    }
+
+    // ── STYLING PROCESS / otros ───────────────────────────────
+    else {
+      const targetOutfit = outfitItems.length > 0 ? outfitItems[outfitCursor % outfitItems.length] : null;
+      shotPlan = {
+        role,
+        primaryItemIds:   targetOutfit ? [targetOutfit.id] : [],
+        secondaryItemIds: [],
+        refsToRoute:      [],
+        redundancyScore:  0,
+        replacedBecauseRedundant: false,
+        compositionMode:  'process_or_candid',
+        visualWeightIntent: 'Candid process moment — not a finished look',
+      };
+    }
+
+    plan.push(shotPlan);
+  }
+
+  // ── Relleno: si quedan slots sin cubrir por el template ───
+  while (plan.length < count) {
+    const fallbackOutfit = outfitItems[outfitCursor % Math.max(outfitItems.length, 1)];
+    if (outfitCursor < outfitItems.length) outfitCursor++;
+    plan.push({
+      role:             'WEEK_STYLING_PROCESS',
+      primaryItemIds:   fallbackOutfit ? [fallbackOutfit.id] : [],
+      secondaryItemIds: [],
+      refsToRoute:      [],
+      redundancyScore:  4,
+      replacedBecauseRedundant: false,
+      compositionMode:  'process_or_candid',
+      visualWeightIntent: 'Filler styling moment',
+    });
+  }
+
+  // ── Composition variety map ──
+  const compositionMap: import('./types').WeeklyCompositionVarietyMap = {
+    fullBodyStandingCount:    plan.filter(s => s.role === 'WEEK_LOOK_HERO').length,
+    mirrorCount:              plan.filter(s => s.role === 'WEEK_MIRROR_LOOK').length,
+    flatlayCount:             plan.filter(s => s.role === 'WEEK_OVERVIEW').length,
+    detailCount:              plan.filter(s => s.role === 'WEEK_DETAIL' || s.role === 'WEEK_ACCESSORY_DETAIL').length,
+    accessoryIntegratedCount: plan.filter(s => s.role === 'WEEK_ACCESSORY_INTEGRATED').length,
+    seatedCount:              0,
+    inHandCount:              plan.filter(s => s.role === 'WEEK_ACCESSORY_HELD').length,
+    tooManyGenericFullBodyShots: plan.filter(s => s.role === 'WEEK_LOOK_HERO').length > outfitItems.length + 1,
+  };
+
+  return { shotPlan: plan, redundancyDebug, compositionMap };
+}
+
+// ── WeeklyItemCoverage con peso visual ──────────────────────
+function buildWeeklyCoverageMap(
+  allItems:  import('./types').WeeklyItem[],
+  shotPlan:  import('./types').WeeklyShotPlan[],
+): Record<string, import('./types').WeeklyItemCoverage> {
+  const map: Record<string, import('./types').WeeklyItemCoverage> = {};
+  for (const item of allItems) {
+    map[item.id] = {
+      itemId:                       item.id,
+      itemKind:                     item.kind,
+      label:                        item.label,
+      totalAppearances:             0,
+      heroAppearances:              0,
+      secondaryAppearances:         0,
+      detailAppearances:            0,
+      integratedAccessoryAppearances: 0,
+      overviewAppearances:          0,
+      visualWeight:                 0,
+      isPrimaryInAnyShot:           false,
+      isOnlyBackground:             true,
+      isOnlyInOverview:             true,
+      realCoverage:                 false,
+    };
+  }
+
+  const WEIGHT_HERO      = 30;
+  const WEIGHT_DETAIL    = 20;
+  const WEIGHT_INTEGRATED = 18;
+  const WEIGHT_SECONDARY = 10;
+  const WEIGHT_OVERVIEW  = 3;
+
+  for (const shot of shotPlan) {
+    const isHeroRole   = ['WEEK_LOOK_HERO', 'WEEK_MIRROR_LOOK', 'WEEK_ANCHOR'].includes(shot.role);
+    const isDetailRole = ['WEEK_DETAIL', 'WEEK_ACCESSORY_DETAIL', 'WEEK_ACCESSORY_WORN', 'WEEK_ACCESSORY_HELD'].includes(shot.role);
+    const isIntRole    = shot.role === 'WEEK_ACCESSORY_INTEGRATED';
+    const isOverview   = shot.role === 'WEEK_OVERVIEW';
+
+    for (const id of shot.primaryItemIds) {
+      const cov = map[id];
+      if (!cov) continue;
+      cov.totalAppearances++;
+      cov.isPrimaryInAnyShot = true;
+      cov.isOnlyBackground   = false;
+      if (!isOverview) cov.isOnlyInOverview = false;
+
+      if (isHeroRole)   { cov.heroAppearances++; cov.visualWeight += WEIGHT_HERO; }
+      if (isDetailRole) { cov.detailAppearances++; cov.visualWeight += WEIGHT_DETAIL; }
+      if (isIntRole)    { cov.integratedAccessoryAppearances++; cov.visualWeight += WEIGHT_INTEGRATED; }
+      if (isOverview)   { cov.overviewAppearances++; cov.visualWeight += WEIGHT_OVERVIEW; }
+      if (!isHeroRole && !isDetailRole && !isIntRole && !isOverview) {
+        cov.heroAppearances++;
+        cov.visualWeight += WEIGHT_SECONDARY;
+      }
+    }
+
+    for (const id of shot.secondaryItemIds) {
+      const cov = map[id];
+      if (!cov) continue;
+      cov.totalAppearances++;
+      cov.secondaryAppearances++;
+      cov.isOnlyBackground = false;
+      if (!isOverview) cov.isOnlyInOverview = false;
+      cov.visualWeight += WEIGHT_SECONDARY;
+    }
+  }
+
+  // Determinar cobertura real (no solo presencia superficial)
+  const MINIMUM_WEIGHT = 10; // al menos un secondary appearance real
+  for (const cov of Object.values(map)) {
+    cov.realCoverage = (
+      cov.isPrimaryInAnyShot &&
+      !cov.isOnlyInOverview &&
+      cov.visualWeight >= MINIMUM_WEIGHT
+    );
+  }
+
+  return map;
+}
+
+// ── Dominance check ─────────────────────────────────────────
+function buildWeeklyDominanceCheck(
+  coverageMap: Record<string, import('./types').WeeklyItemCoverage>,
+  allItems: import('./types').WeeklyItem[],
+): import('./types').WeeklyDominanceCheck {
+  const weights = allItems.map(it => coverageMap[it.id]?.visualWeight ?? 0);
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+  if (totalWeight === 0 || allItems.length === 0) {
+    return {
+      dominantItemVisualWeight: 0,
+      averageVisualWeight:      0,
+      dominanceRatio:           0,
+      dominantItemRisk:         false,
+      corrected:                false,
+      correctionActions:        [],
+    };
+  }
+
+  let dominantIdx = 0;
+  for (let i = 1; i < weights.length; i++) {
+    if (weights[i] > weights[dominantIdx]) dominantIdx = i;
+  }
+
+  const dominantItem   = allItems[dominantIdx];
+  const dominantWeight = weights[dominantIdx];
+  const avgWeight      = totalWeight / allItems.length;
+  const dominanceRatio = dominantWeight / totalWeight;
+  const DOMINANCE_THRESHOLD = 0.40;
+
+  return {
+    dominantItemId:          dominantItem?.id,
+    dominantItemLabel:       dominantItem?.label,
+    dominantItemVisualWeight: dominantWeight,
+    averageVisualWeight:      avgWeight,
+    dominanceRatio,
+    dominantItemRisk:        dominanceRatio > DOMINANCE_THRESHOLD && allItems.length >= 3,
+    corrected:               false, // el planner ya previene esto via anti-acumulación; se puede marcar en post
+    correctionActions:       [],
   };
 }
 
@@ -5599,62 +6212,51 @@ export function buildWeeklyManifest(refs: import('./types').PhotodumpRefs, reque
   const outfitItems: import('./types').WeeklyItem[] = allOutfitUrls.map((url, i) =>
     classifyWeeklyItem(url, i, true, i)
   );
+  const accessoryItems: import('./types').WeeklyItem[] = allAccUrls.map((url, i) =>
+    classifyWeeklyItem(url, outfitItems.length + i, false, i)
+  );
 
-  const accessoryItems: import('./types').WeeklyItem[] = allAccUrls.map((url, i) => {
-    const item = classifyWeeklyItem(url, outfitItems.length + i, false, i);
-    // Si tiene ⭐ de closeup, prioridad required sigue siendo la misma — ya es required por default
-    return item;
-  });
-
-  // Separar por tipo (en outfit_week todos los outfit slots son outfit_set por default)
-  const outfitSets         = outfitItems; // todos en outfit slot
+  const outfitSets         = outfitItems;
   const standaloneGarments: import('./types').WeeklyItem[] = [];
-  const shoes: import('./types').WeeklyItem[]    = [];
-  const bags: import('./types').WeeklyItem[]     = [];
-  const jewelry: import('./types').WeeklyItem[]  = [];
-  const accessories: import('./types').WeeklyItem[] = accessoryItems;
-  const makeup: import('./types').WeeklyItem[]   = [];
-  const products: import('./types').WeeklyItem[] = [];
+  const shoes:     import('./types').WeeklyItem[] = [];
+  const bags:      import('./types').WeeklyItem[] = [];
+  const jewelry:   import('./types').WeeklyItem[] = [];
+  const accessories = accessoryItems;
+  const makeup:    import('./types').WeeklyItem[] = [];
+  const products:  import('./types').WeeklyItem[] = [];
 
-  const allItems = [...outfitItems, ...accessoryItems];
-  const requiredItems = allItems; // todos son required en weekly
+  const allItems      = [...outfitItems, ...accessoryItems];
+  const requiredItems = allItems;
 
   const dominantType = detectWeeklyDominantType(outfitItems, accessoryItems);
 
-  // Compatibilidad: cada accesorio con cada outfit
+  // Compatibilidad cruzada — todos los pares accesorio × outfit
   const compatibilityPairs: import('./types').WeeklyCompatibilityPair[] = [];
   for (const acc of accessoryItems) {
-    let bestScore = 0;
-    let bestOutfit: import('./types').WeeklyItem | null = null;
     for (const outfit of outfitItems) {
       const { score, reason, integrationMode } = scoreWeeklyCompatibility(acc, outfit);
-      if (score > bestScore) {
-        bestScore = score;
-        bestOutfit = outfit;
-        if (score >= 65) {
-          compatibilityPairs.push({ accessoryId: acc.id, outfitId: outfit.id, score, reason, integrationMode });
-          acc.compatibleWith = [...(acc.compatibleWith ?? []), outfit.id];
-        }
+      if (score >= 65) {
+        compatibilityPairs.push({ accessoryId: acc.id, outfitId: outfit.id, score, reason, integrationMode });
+        acc.compatibleWith = [...(acc.compatibleWith ?? []), outfit.id];
       }
     }
   }
 
-  // Coverage map inicial — todos uncovered
+  // Plan de integración de accesorios — anti-acumulación
+  const accIntPlan = buildWeeklyAccessoryIntegrationPlan(accessoryItems, outfitItems, compatibilityPairs, accCloseup);
+
+  // Plan de shots con roles narrativos
+  const { shotPlan, redundancyDebug, compositionMap } = buildWeeklyShotPlan(
+    outfitItems, accessoryItems, compatibilityPairs, accIntPlan, accCloseup, requestedCount, dominantType,
+  );
+
+  // Coverage map clásico (binario) — compatibilidad con código existente
   const coverageMap: Record<string, import('./types').WeeklyCoverageEntry> = {};
   for (const item of allItems) {
     coverageMap[item.id] = {
-      itemId:       item.id,
-      kind:         item.kind,
-      covered:      false,
-      coveredByShots: [],
-      coverageType: [],
+      itemId: item.id, kind: item.kind, covered: false, coveredByShots: [], coverageType: [],
     };
   }
-
-  // Construir el plan de shots con roles narrativos
-  const shotPlan = buildWeeklyShotPlan(outfitItems, accessoryItems, compatibilityPairs, accCloseup, requestedCount, dominantType);
-
-  // Marcar cobertura según el plan
   const coveredItemIds: string[] = [];
   for (const sp of shotPlan) {
     for (const id of [...sp.primaryItemIds, ...sp.secondaryItemIds]) {
@@ -5666,15 +6268,24 @@ export function buildWeeklyManifest(refs: import('./types').PhotodumpRefs, reque
     }
   }
 
+  // Coverage con peso visual
+  const weeklyCoverageMap = buildWeeklyCoverageMap(allItems, shotPlan);
+
+  // Items sin cobertura REAL (no solo presencia superficial)
   const uncoveredRequiredItems = requiredItems
-    .filter(it => !coveredItemIds.includes(it.id))
+    .filter(it => !weeklyCoverageMap[it.id]?.realCoverage)
     .map(it => it.id);
+
+  // Dominance check
+  const weeklyDominanceCheck = buildWeeklyDominanceCheck(weeklyCoverageMap, allItems);
 
   const accessoryIntegrationUsed = shotPlan.some(
     sp => sp.role === 'WEEK_ACCESSORY_INTEGRATED' || sp.role === 'WEEK_ACCESSORY_WORN'
   );
 
-  const weeklyStructure = buildWeeklyStructureDescription(shotPlan, dominantType);
+  const tooManyGenericFullBodyShots = compositionMap.tooManyGenericFullBodyShots;
+  const redundantShotNotReplaced    = redundancyDebug.some(r => r.redundantShotNotReplaced === true);
+  const weeklyStructure             = buildWeeklyStructureDescription(shotPlan, dominantType);
 
   return {
     totalItems:         allItems.length,
@@ -5692,6 +6303,13 @@ export function buildWeeklyManifest(refs: import('./types').PhotodumpRefs, reque
     compatibilityPairs,
     coverageMap,
     shotPlan,
+    weeklyCoverageMap,
+    weeklyDominanceCheck,
+    weeklyAccessoryIntegrationPlan: accIntPlan,
+    compositionVarietyMap: compositionMap,
+    redundancyDebug,
+    tooManyGenericFullBodyShots,
+    redundantShotNotReplaced,
     uncoveredRequiredItems,
     coveredItemIds,
     weeklyStructure,
@@ -5710,169 +6328,6 @@ function buildWeeklyStructureDescription(
   return `Weekly edit (${dominant}) | ${plan.length} shots | Arc: ${roles}`;
 }
 
-// Planificador de roles narrativos — núcleo del patch
-function buildWeeklyShotPlan(
-  outfitItems:   import('./types').WeeklyItem[],
-  accessoryItems: import('./types').WeeklyItem[],
-  compatPairs:   import('./types').WeeklyCompatibilityPair[],
-  accCloseup:    boolean[],
-  count:         number,
-  dominant:      import('./types').WeeklySetDominantType,
-): import('./types').WeeklyShotPlan[] {
-  const plan: import('./types').WeeklyShotPlan[] = [];
-  let budget = count;
-
-  // Slot 1 siempre: WEEK_ANCHOR (look hero o overview según dominant)
-  const anchorRole: import('./types').WeeklyShotRole =
-    dominant === 'outfits' && outfitItems.length > 0 ? 'WEEK_LOOK_HERO'
-    : dominant === 'accessories'                       ? 'WEEK_OVERVIEW'
-    : 'WEEK_ANCHOR';
-
-  const anchorOutfitIdx = 0;
-  plan.push({
-    role:             anchorRole,
-    primaryItemIds:   outfitItems.length > 0 ? [outfitItems[anchorOutfitIdx].id] : [],
-    secondaryItemIds: [],
-    outfitIndex:      outfitItems.length > 0 ? anchorOutfitIdx : undefined,
-    refsToRoute:      [],
-    redundancyScore:  0,
-    replacedBecauseRedundant: false,
-  });
-  budget--;
-
-  // Si hay varios ítems y quedan slots, añadir OVERVIEW (selección sobre cama/rack)
-  const totalItems = outfitItems.length + accessoryItems.length;
-  if (budget > 0 && totalItems >= 2) {
-    plan.push({
-      role:             'WEEK_OVERVIEW',
-      primaryItemIds:   [...outfitItems.slice(0, 3).map(it => it.id), ...accessoryItems.slice(0, 2).map(it => it.id)],
-      secondaryItemIds: [],
-      refsToRoute:      [],
-      redundancyScore:  0,
-      replacedBecauseRedundant: false,
-    });
-    budget--;
-  }
-
-  // Look heroes: uno por outfit (saltando el outfit del ANCHOR si ya fue LOOK_HERO)
-  const outfitsAlreadyCovered = anchorRole === 'WEEK_LOOK_HERO' && outfitItems.length > 0 ? [outfitItems[0].id] : [];
-  const outfitsForHeroes = outfitItems.filter(it => !outfitsAlreadyCovered.includes(it.id));
-
-  const lookHeroCount = Math.min(outfitsForHeroes.length, Math.max(0, budget - 2)); // reservar 2 slots para acc + closer
-  for (let i = 0; i < lookHeroCount && budget > 1; i++) {
-    const outfit = outfitsForHeroes[i];
-    // Anti-redundancia: rotar framing entre LOOK_HERO y MIRROR_LOOK
-    const role: import('./types').WeeklyShotRole = i % 3 === 1 ? 'WEEK_MIRROR_LOOK' : 'WEEK_LOOK_HERO';
-    plan.push({
-      role,
-      primaryItemIds:   [outfit.id],
-      secondaryItemIds: [],
-      outfitIndex:      outfitItems.findIndex(it => it.id === outfit.id),
-      refsToRoute:      [],
-      redundancyScore:  i > 2 ? 40 : 0, // score crece con repeticiones
-      replacedBecauseRedundant: false,
-    });
-    budget--;
-  }
-
-  // Accesorios: integración inteligente con outfit compatible (no solo closeup rígido)
-  const usedAccessories = new Set<string>();
-  for (const acc of accessoryItems) {
-    if (budget <= 1) break;
-    // Buscar outfit compatible
-    const bestPair = compatPairs
-      .filter(p => p.accessoryId === acc.id)
-      .sort((a, b) => b.score - a.score)[0];
-
-    const needsCloseup = accCloseup[accessoryItems.indexOf(acc)] === true;
-
-    if (bestPair && outfitItems.length > 0) {
-      // Integrar con outfit compatible
-      plan.push({
-        role:             'WEEK_ACCESSORY_INTEGRATED',
-        primaryItemIds:   [acc.id],
-        secondaryItemIds: [bestPair.outfitId],
-        accessoryId:      acc.id,
-        integratedWithOutfitId: bestPair.outfitId,
-        refsToRoute:      [],
-        redundancyScore:  0,
-        replacedBecauseRedundant: false,
-      });
-      usedAccessories.add(acc.id);
-      budget--;
-
-      // Closeup adicional solo si el usuario lo pidió y hay budget
-      if (needsCloseup && budget > 1) {
-        plan.push({
-          role:           'WEEK_ACCESSORY_DETAIL',
-          primaryItemIds: [acc.id],
-          secondaryItemIds: [],
-          accessoryId:    acc.id,
-          refsToRoute:    [],
-          redundancyScore: 10,
-          replacedBecauseRedundant: false,
-        });
-        budget--;
-      }
-    } else {
-      // Sin outfit compatible — shot worn/held según tipo
-      const role: import('./types').WeeklyShotRole =
-        acc.kind === 'jewelry' ? 'WEEK_ACCESSORY_WORN'
-        : 'WEEK_ACCESSORY_HELD';
-      plan.push({
-        role,
-        primaryItemIds:   [acc.id],
-        secondaryItemIds: [],
-        accessoryId:      acc.id,
-        refsToRoute:      [],
-        redundancyScore:  5,
-        replacedBecauseRedundant: false,
-      });
-      usedAccessories.add(acc.id);
-      budget--;
-    }
-  }
-
-  // Closer: si queda budget, agregar shot de cierre con anti-redundancia
-  if (budget > 0) {
-    // Verificar si el último shot del plan ya es full-body genérico
-    const lastShot = plan[plan.length - 1];
-    const isLastRedundant = lastShot && (
-      lastShot.role === 'WEEK_LOOK_HERO' || lastShot.role === 'WEEK_MIRROR_LOOK'
-    ) && plan.filter(s => s.role === 'WEEK_LOOK_HERO' || s.role === 'WEEK_MIRROR_LOOK').length >= 2;
-
-    const closerRole: import('./types').WeeklyShotRole = isLastRedundant ? 'WEEK_DETAIL' : 'WEEK_CLOSER';
-    const closerOutfit = outfitItems[outfitItems.length - 1];
-    plan.push({
-      role:             closerRole,
-      primaryItemIds:   closerOutfit ? [closerOutfit.id] : (accessoryItems[0] ? [accessoryItems[0].id] : []),
-      secondaryItemIds: [],
-      outfitIndex:      closerOutfit ? outfitItems.length - 1 : undefined,
-      refsToRoute:      [],
-      redundancyScore:  isLastRedundant ? 70 : 10,
-      replacedBecauseRedundant: isLastRedundant,
-      replacementRole:  isLastRedundant ? closerRole : undefined,
-    });
-    budget--;
-  }
-
-  // Rellenar budget sobrante con styling process si hay outfits
-  while (budget > 0 && outfitItems.length > 0) {
-    plan.push({
-      role:             'WEEK_STYLING_PROCESS',
-      primaryItemIds:   [outfitItems[plan.length % outfitItems.length].id],
-      secondaryItemIds: [],
-      outfitIndex:      plan.length % outfitItems.length,
-      refsToRoute:      [],
-      redundancyScore:  30,
-      replacedBecauseRedundant: false,
-    });
-    budget--;
-  }
-
-  return plan;
-}
-
 // Convierte un WeeklyShotPlan en un PhotodumpShotDirective con prompt completo
 function weeklyRoleToDirective(
   sp:           import('./types').WeeklyShotPlan,
@@ -5881,7 +6336,7 @@ function weeklyRoleToDirective(
   outfitItems:  import('./types').WeeklyItem[],
   accItems:     import('./types').WeeklyItem[],
 ): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
-  // Framings rotan para look heroes — garantiza variedad visual
+  // Framings rotan por índice de outfit — garantiza variedad entre heroes
   const heroFramings = [
     { framing: 'WIDE_FULL_BODY', composition: 'FULL_BODY_NATURAL',        angle: 'EYE_LEVEL_OR_SLIGHTLY_LOW' },
     { framing: 'WIDE_FULL_BODY', composition: 'MIRROR_SELFIE_FULL_BODY',  angle: 'EYE_LEVEL' },
@@ -5892,91 +6347,124 @@ function weeklyRoleToDirective(
     { framing: 'MEDIUM',         composition: 'LEANING_OR_RESTING',       angle: 'EYE_LEVEL_OR_SLIGHTLY_HIGH' },
   ];
   const heroIdx = outfitItems.findIndex(it => sp.primaryItemIds[0] === it.id);
-  const rot = heroFramings[(heroIdx >= 0 ? heroIdx : position) % heroFramings.length];
+  const rot     = heroFramings[(heroIdx >= 0 ? heroIdx : position) % heroFramings.length];
 
-  const roleDescriptions: Record<import('./types').WeeklyShotRole, { purpose: string; required: string[]; forbidden: string[]; beat: MomentType }> = {
+  // Resolver labels de los ítems asignados al shot — para inyectar en el prompt
+  const allItems = [...outfitItems, ...accItems];
+  const resolveLabelList = (ids: string[]) =>
+    ids.map(id => allItems.find(it => it.id === id)?.label ?? id).join(', ');
+
+  const primaryLabel    = resolveLabelList(sp.primaryItemIds);
+  const secondaryLabel  = resolveLabelList(sp.secondaryItemIds);
+  const visualIntent    = sp.visualWeightIntent ?? '';
+  const compositionMode = sp.compositionMode    ?? '';
+
+  // Forbidden items — labels de ítems que NO deben aparecer en este shot
+  const forbiddenLabels = (sp.forbiddenItemIds ?? [])
+    .map(id => allItems.find(it => it.id === id)?.label ?? id);
+
+  const baseForbidden = [
+    'studio_backdrop', 'catalog_pose', 'beautification',
+    'invented_outfit', 'avatar_base_clothing_as_featured_outfit',
+    'external_brand_logo', 'retail_bag_with_brand',
+    ...(forbiddenLabels.length > 0 ? [`other_outfits_in_frame: [${forbiddenLabels.join(', ')}]`] : []),
+  ];
+
+  const roleDescriptions: Record<import('./types').WeeklyShotRole, { purpose: string; required: string[]; forbidden: string[]; beat: MomentType; framing: string; composition: string; angle: string }> = {
     WEEK_ANCHOR: {
-      purpose: 'Opening anchor of the weekly set. Person in their space, first outfit or general mood. Establishes visual world: light quality, ambient tone, environment. Full body or medium shot. Authentic, lived-in iPhone quality.',
-      required: ['real_environment', 'authentic_mood', 'clear_identity'],
-      forbidden: ['studio_backdrop', 'catalog_pose', 'white_background'],
+      purpose: `Opening anchor of the weekly set. PRIMARY ITEM: ${primaryLabel || 'general mood'}. ${visualIntent}. Person in their space establishing visual world — light quality, ambient tone, environment. Full body or medium shot. Authentic, lived-in iPhone quality. Composition: ${compositionMode || 'authentic_natural'}.`,
+      required: ['real_environment', 'authentic_mood', 'clear_identity', 'primary_item_readable'],
+      forbidden: [...baseForbidden, 'white_background'],
       beat: 'context',
+      framing: 'WIDE_FULL_BODY', composition: 'FULL_BODY_NATURAL', angle: 'EYE_LEVEL',
     },
     WEEK_OVERVIEW: {
-      purpose: 'Weekly selection overview. Outfits and accessories arranged naturally on bed, rack, chair, or clean surface. NOT a collage or grid. A real photo of the week\'s items together. The person may appear partially (hands, arms) or not at all — this is about the ITEMS, not the person. Clean, editorial but real.',
-      required: ['items_visible_and_readable', 'organized_not_chaotic', 'real_surface'],
-      forbidden: ['collage_layout', 'catalog_grid', 'floating_items', 'white_background', 'studio_lighting'],
+      purpose: `Weekly selection overview. ALL WEEKLY ITEMS arranged naturally together — ${primaryLabel}${secondaryLabel ? ` and ${secondaryLabel}` : ''}. MUST show all items in one frame on a real surface (bed, rack, chair, floor). ${visualIntent}. The person may appear partially (hands, arms organizing) or not at all. NOT a worn look. NOT a collage. A real editorial photo of the week's picks together.`,
+      required: ['all_primary_items_visible_and_readable', 'organized_natural_arrangement', 'real_surface', 'no_person_wearing_final_look'],
+      forbidden: [...baseForbidden, 'collage_layout', 'catalog_grid', 'floating_items', 'person_already_dressed_in_final_outfit'],
       beat: 'context',
+      framing: 'WIDE', composition: 'FLATLAY_OR_RACK_EDITORIAL', angle: 'SLIGHTLY_HIGH_OR_OVERHEAD',
     },
     WEEK_LOOK_HERO: {
-      purpose: `Weekly look hero — full body shot with outfit clearly readable head to toe. The person wears the assigned weekly outfit. Framing: ${rot.composition}. Angle: ${rot.angle}. Real environment, authentic attitude. NOT a catalog. NOT a mannequin pose. This should feel like a real person sharing their outfit.`,
-      required: ['full_body_visible', 'outfit_readable_head_to_toe', 'real_environment', 'authentic_attitude'],
-      forbidden: ['catalog_mannequin_pose', 'studio_backdrop', 'identical_framing_as_prior_shot', 'beautification'],
+      purpose: `Weekly look hero for ${primaryLabel}. ${visualIntent}. Full body shot — outfit clearly readable head to toe. THIS outfit only — do NOT include elements from other uploaded outfits. Framing: ${compositionMode || rot.composition}. Angle: ${rot.angle}. Real environment, authentic attitude. NOT a catalog. NOT mannequin pose. Real person sharing their outfit of the week.`,
+      required: ['full_body_visible', 'assigned_outfit_readable_head_to_toe', 'real_environment', 'authentic_attitude', 'only_assigned_outfit_visible'],
+      forbidden: [...baseForbidden, 'identical_framing_as_prior_hero_shot', ...(forbiddenLabels.length > 0 ? [`do_not_show: ${forbiddenLabels.join(', ')}`] : [])],
       beat: 'context',
+      framing: rot.framing, composition: rot.composition, angle: rot.angle,
     },
     WEEK_MIRROR_LOOK: {
-      purpose: 'Mirror selfie or mirror check. Person checks their weekly outfit in a mirror — full body visible in the reflection. Can be phone visible (selfie) or third-person capture. Outfit fully readable. Authentic mood.',
-      required: ['mirror_visible', 'full_body_in_reflection', 'outfit_readable'],
-      forbidden: ['catalog_pose', 'studio_lighting', 'invented_background'],
+      purpose: `Mirror look for ${primaryLabel}. ${visualIntent}. Person checks this weekly outfit in a mirror — full body visible in the reflection. Can be phone visible (selfie) or third-person capture. THIS outfit only. Authentic mood — not a catalog shot.`,
+      required: ['mirror_visible', 'full_body_in_reflection', 'assigned_outfit_readable', 'only_assigned_outfit'],
+      forbidden: [...baseForbidden, 'invented_background', ...(forbiddenLabels.length > 0 ? [`do_not_show: ${forbiddenLabels.join(', ')}`] : [])],
       beat: 'candid',
+      framing: 'WIDE_FULL_BODY', composition: 'MIRROR_SELFIE_FULL_BODY', angle: 'EYE_LEVEL',
     },
     WEEK_STYLING_PROCESS: {
-      purpose: 'Styling process moment. Adjusting sleeve, buttoning up, tucking in, arranging scarf, putting on shoes. The person is getting dressed or adjusting — NOT a finished look pose. Authentic and candid.',
-      required: ['styling_action_visible', 'authentic_not_posed'],
-      forbidden: ['finished_catalog_pose', 'full_body_static_pose'],
+      purpose: `Styling process moment with ${primaryLabel}. ${visualIntent}. Person adjusting, buttoning, tucking, arranging — getting dressed or fine-tuning the look. NOT a finished posed look. Authentic and candid energy. Medium or detail framing.`,
+      required: ['styling_action_visible', 'authentic_not_posed', 'primary_item_context_present'],
+      forbidden: [...baseForbidden, 'finished_catalog_pose', 'full_body_static_standing_pose'],
       beat: 'action',
+      framing: 'MEDIUM', composition: 'ACTION_CANDID_DETAIL', angle: 'EYE_LEVEL',
     },
     WEEK_ACCESSORY_INTEGRATED: {
-      purpose: 'Accessory integrated naturally into a compatible weekly outfit. The person wears the accessory with a compatible look — NOT isolated. Shot frames both the accessory and the outfit. Shows how the piece completes the look.',
-      required: ['accessory_visible_and_readable', 'outfit_context_present', 'natural_integration'],
-      forbidden: ['accessory_floating', 'isolated_closeup_only', 'invented_outfit'],
+      purpose: `Accessory integrated shot: ${primaryLabel} worn/held WITH ${secondaryLabel || 'compatible outfit'}. ${visualIntent}. The accessory is clearly visible and readable as PART of the look — NOT isolated or floating. The outfit provides context. Show both items naturally together. Mode: ${compositionMode || 'worn_with_outfit'}.`,
+      required: ['accessory_clearly_visible', 'outfit_context_present', 'natural_integration_not_floating', 'both_items_readable'],
+      forbidden: [...baseForbidden, 'accessory_isolated_without_outfit_context', 'invented_outfit_not_from_refs', 'product_catalog_background'],
       beat: 'detail',
+      framing: 'MEDIUM', composition: 'ACCESSORY_WITH_OUTFIT_CONTEXT', angle: 'EYE_LEVEL',
     },
     WEEK_ACCESSORY_DETAIL: {
-      purpose: 'Accessory detail — close-up or macro of the piece. Held, laid flat, or detail of how it is worn. Real surface. Natural light. The accessory fills most of the frame. Faithful to the uploaded reference.',
-      required: ['accessory_fills_frame', 'faithful_to_reference', 'real_light'],
-      forbidden: ['catalog_surface', 'studio_background', 'invented_design'],
+      purpose: `Accessory detail / macro: ${primaryLabel}. ${visualIntent}. Close-up or macro — the piece fills most of the frame. Held, laid flat, or detail of how it is worn. Real surface. Natural light. Faithful to the uploaded reference — do NOT invent the design.`,
+      required: ['accessory_fills_frame', 'faithful_to_reference', 'real_natural_light', 'no_invented_design'],
+      forbidden: [...baseForbidden, 'catalog_surface', 'invented_design', 'full_body_shot'],
       beat: 'detail',
+      framing: 'CLOSE_UP', composition: 'MACRO_DETAIL_SURFACE', angle: 'SLIGHTLY_HIGH',
     },
     WEEK_ACCESSORY_WORN: {
-      purpose: 'Accessory worn — jewelry, earrings, or small accessory visible on the person. Close-up of ear/neck/wrist/finger showing the piece being worn. OR the person putting it on. Authentic, intimate, not a product shot.',
-      required: ['accessory_worn_on_body', 'faithful_to_reference', 'intimate_framing'],
-      forbidden: ['product_catalog_background', 'floating_accessory', 'invented_design'],
+      purpose: `Accessory worn: ${primaryLabel} visible on the person's body. ${visualIntent}. Close-up of ear / neck / wrist / finger showing the piece being worn — OR the person putting it on. Authentic, intimate. NOT a product shot. The reference defines the design — do NOT invent it.`,
+      required: ['accessory_worn_on_body', 'faithful_to_reference_design', 'intimate_framing', 'no_invented_design'],
+      forbidden: [...baseForbidden, 'product_catalog_background', 'floating_accessory', 'full_body_catalog_pose'],
       beat: 'detail',
+      framing: 'CLOSE_UP', composition: 'WORN_ON_BODY_MACRO', angle: 'EYE_LEVEL_OR_SLIGHTLY_HIGH',
     },
     WEEK_ACCESSORY_HELD: {
-      purpose: 'Accessory held — bag, shoes, or accessory held by hand or displayed naturally. Person holds it toward camera or has it at their side. Can be standing or seated. The item is clear and readable.',
+      purpose: `Accessory held: ${primaryLabel} held by hand or displayed naturally. ${visualIntent}. Person holds it toward camera or at their side — standing or seated. Item is clear and readable. Mode: ${compositionMode || 'held_toward_camera'}.`,
       required: ['item_held_and_readable', 'hands_or_person_present', 'faithful_to_reference'],
-      forbidden: ['floating_object', 'invented_surface_branding', 'catalog_background'],
+      forbidden: [...baseForbidden, 'floating_object_without_hands', 'invented_branding', 'catalog_background'],
       beat: 'reveal',
+      framing: 'MEDIUM', composition: 'HELD_TOWARD_CAMERA', angle: 'EYE_LEVEL',
     },
     WEEK_DETAIL: {
-      purpose: 'Garment or accessory detail — fabric texture, zipper, embroidery, pattern, stitching. Close-up or macro. No full body needed. Shows the quality and character of the piece. Authentic light.',
-      required: ['detail_fills_frame', 'real_fabric_or_material_texture', 'authentic_light'],
-      forbidden: ['catalog_shot', 'studio_background', 'product_background'],
+      purpose: `Garment or item detail: ${primaryLabel}. ${visualIntent}. Fabric texture, zipper, embroidery, pattern, stitching, material surface. Close-up or macro. No full body needed. Shows the quality and character of the piece. Authentic natural light. Mode: ${compositionMode || 'texture_closeup'}.`,
+      required: ['detail_fills_frame', 'real_material_texture_visible', 'authentic_natural_light'],
+      forbidden: [...baseForbidden, 'full_body_shot', 'studio_background', 'product_catalog_background'],
       beat: 'detail',
+      framing: 'CLOSE_UP', composition: 'TEXTURE_DETAIL_MACRO', angle: 'SLIGHTLY_HIGH',
     },
     WEEK_ON_THE_GO: {
-      purpose: 'Person in motion — walking, leaving, arriving. Weekly outfit in a real environment. Candid feel — movement captured mid-step or turning. Not a static pose.',
-      required: ['motion_implied', 'real_environment', 'outfit_readable'],
-      forbidden: ['static_catalog_pose', 'studio'],
+      purpose: `On-the-go moment: ${primaryLabel}. ${visualIntent}. Person in motion — walking, leaving, arriving. Weekly outfit in a real environment. Candid feel — movement captured mid-step or turning. Not a static pose.`,
+      required: ['motion_implied_or_visible', 'real_environment', 'outfit_readable'],
+      forbidden: [...baseForbidden, 'static_catalog_standing_pose', 'studio_setup'],
       beat: 'action',
+      framing: 'WIDE_FULL_BODY', composition: 'WALKING_OR_ARRIVING', angle: 'EYE_LEVEL',
     },
     WEEK_FAVORITE: {
-      purpose: 'Favorite of the week — the person\'s pick highlighted. Can be a specific outfit, accessory, or item that feels special. Selfie energy, slightly more intimate framing. "This was my favorite" mood.',
-      required: ['item_clearly_readable', 'intimate_framing', 'authentic_expression'],
-      forbidden: ['catalog_expression', 'studio_feel'],
+      purpose: `Favorite of the week: ${primaryLabel}. ${visualIntent}. The person's highlight pick. Can be a specific outfit, accessory, or item that feels special. Selfie energy or intimate medium shot. "This was my favorite" mood — not a catalog pose.`,
+      required: ['primary_item_clearly_readable', 'intimate_framing', 'authentic_expression_not_catalog'],
+      forbidden: [...baseForbidden, 'catalog_expression', 'studio_feel'],
       beat: 'emotion',
+      framing: 'MEDIUM', composition: 'INTIMATE_SELFIE_OR_CLOSE', angle: 'EYE_LEVEL',
     },
     WEEK_CLOSER: {
-      purpose: 'Weekly set closing shot. Final summary mood. Can be: mirror selfie from a different angle, flat lay of favorite items, hand holding favorite bag/shoes, or a candid moment of the person done with the set. NOT another full-body generic pose if that was the previous shot.',
-      required: ['different_from_previous_shot', 'closing_mood'],
-      forbidden: ['identical_to_previous_shot', 'another_generic_full_body_if_overused'],
+      purpose: `Closing shot of the weekly set. ${visualIntent}. Primary reference: ${primaryLabel || 'any weekly item'}. Final summary mood — MUST be visually different from the previous shots. Options: flat lay of favorite items, hand holding favorite bag, candid moment wrapping up, texture detail, mirror from different angle. NOT another full-body standing pose if those already dominated the set. Mode: ${compositionMode || 'closing_gesture'}.`,
+      required: ['visually_different_from_prior_full_body_shots', 'closing_mood', 'weekly_edit_wrap_up_feel'],
+      forbidden: [...baseForbidden, 'another_identical_full_body_standing_pose', 'copy_of_previous_shot'],
       beat: 'atmosphere',
+      framing: 'MEDIUM', composition: 'CLOSING_NON_REDUNDANT', angle: 'EYE_LEVEL_OR_SLIGHTLY_HIGH',
     },
   };
 
   const desc = roleDescriptions[sp.role];
-  const outfitNum = sp.outfitIndex !== undefined ? sp.outfitIndex + 1 : 1;
 
   return {
     key:              `${sp.role}_${position}`,
@@ -5986,9 +6474,9 @@ function weeklyRoleToDirective(
     requiredElements: desc.required,
     forbiddenElements: desc.forbidden,
     variationSpace:   [desc.purpose],
-    framing:          rot.framing,
-    composition:      rot.composition,
-    cameraAngle:      rot.angle,
+    framing:          desc.framing  ?? rot.framing,
+    composition:      desc.composition ?? rot.composition,
+    cameraAngle:      desc.angle    ?? rot.angle,
     weeklyItemPlan:   sp,
   };
 }
@@ -7406,45 +7894,62 @@ NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${shot.rol
       : recipe === 'outfit_week'
       ? (() => {
           const weekPlan: import('./types').WeeklyShotPlan | undefined = shot.weeklyItemPlan;
-          const roleLabel = weekPlan?.role ?? shot.role ?? 'WEEKLY SHOT';
-          const primaryIds  = weekPlan?.primaryItemIds.join(', ')  ?? 'first outfit';
-          const secondaryIds = weekPlan?.secondaryItemIds.length ? weekPlan.secondaryItemIds.join(', ') : 'none';
-          const isOverview   = roleLabel.includes('OVERVIEW');
-          const isDetail     = roleLabel.includes('DETAIL') || roleLabel.includes('ACCESSORY_DETAIL');
-          const isAccessory  = roleLabel.includes('ACCESSORY');
+          const roleLabel        = weekPlan?.role ?? shot.role ?? 'WEEKLY SHOT';
+          const primaryIds       = weekPlan?.primaryItemIds.join(', ')   ?? 'first outfit';
+          const secondaryIds     = weekPlan?.secondaryItemIds?.length ? weekPlan.secondaryItemIds.join(', ') : 'none';
+          const forbiddenIds     = weekPlan?.forbiddenItemIds?.length  ? weekPlan.forbiddenItemIds.join(', ')  : '';
+          const visualIntent     = weekPlan?.visualWeightIntent ?? '';
+          const compositionMode  = weekPlan?.compositionMode    ?? '';
+          const isOverview       = roleLabel.includes('OVERVIEW');
+          const isDetail         = roleLabel.includes('DETAIL') || roleLabel.includes('ACCESSORY_DETAIL');
+          const isAccessory      = roleLabel.includes('ACCESSORY');
+          const isHero           = roleLabel === 'WEEK_LOOK_HERO' || roleLabel === 'WEEK_MIRROR_LOOK';
           return `SHOT IDENTITY — WEEKLY EDIT:
 - Face reference (appears 3 times): EXACT identity — same bone structure, same hair, same skin tone. No beautification.
 ${refs.bodyRef ? '- Body reference: establishes physique (build, proportions). Do NOT make the person heavier or slimmer than shown.' : ''}
 - REF0: establishes the visual world — same light quality, same ambient mood, same color temperature.
-- Weekly role: ${roleLabel}
-- Primary items for THIS shot: ${primaryIds}
-- Secondary / integrated items: ${secondaryIds}
-${isOverview ? '- OVERVIEW MODE: Show items arranged naturally on a surface. Person may appear partially or not at all. NOT a catalog grid or collage.' : ''}
-${isDetail || isAccessory ? '- ACCESSORY / DETAIL MODE: Garment reference shows the EXACT piece. Reproduce faithfully. Do NOT fuse with other pieces or invent variants.' : ''}
+
+WEEKLY ROLE: ${roleLabel}
+PRIMARY ITEM(S) FOR THIS SHOT: ${primaryIds}
+SECONDARY / INTEGRATED ITEM(S): ${secondaryIds}
+VISUAL INTENT: ${visualIntent || `Show ${primaryIds} as the protagonist of this shot.`}
+COMPOSITION MODE: ${compositionMode || 'authentic_natural'}
+${forbiddenIds ? `FORBIDDEN ITEMS IN FRAME — DO NOT SHOW: ${forbiddenIds}` : ''}
+
+${isHero ? `HERO SHOT RULES:
+- The person wears the ASSIGNED outfit (${primaryIds}) fully — head to toe readable.
+- DO NOT mix in elements from other uploaded outfits.
+- This specific outfit is the SOLE visual protagonist.
+- Do NOT show other uploaded outfits in the background.` : ''}
+${isOverview ? `OVERVIEW RULES:
+- Show ALL weekly items arranged naturally together on a surface (bed, rack, chair, floor, table).
+- Person may appear partially (hands organizing) or not at all.
+- This is NOT a worn look. The person should NOT be modeling the outfit in this shot.
+- Arrange items in an editorial, organized but real way — NOT a catalog grid, NOT a collage.` : ''}
+${(isDetail || isAccessory) ? `ACCESSORY / DETAIL RULES:
+- The reference image shows the EXACT piece. Reproduce faithfully — do NOT invent variants or fuse with other pieces.
+- Do NOT substitute another piece for the specified accessory.
+${weekPlan?.integratedWithOutfitId ? `- This accessory appears WITH a compatible outfit (${secondaryIds}) — show both naturally together.` : ''}` : ''}
 
 ⛔ AVATAR BASE CLOTHING — HARD RULE — NO EXCEPTIONS:
 The clothing visible in the avatar/body reference images is ONLY for identity (face, hair, skin tone) and body proportions.
 Do NOT treat avatar base clothing as a weekly outfit or as any item in this weekly set.
-Do NOT carry over avatar reference clothing as the person's look in ANY shot.
 When a weekly outfit is assigned to this shot, the person MUST wear that specific uploaded outfit — NOT the avatar's base clothes.
-The avatar's base outfit must NEVER be mistaken for or substituted as a weekly item.
 
 ⛔ NO EXTERNAL BRANDING — HARD RULE:
-Do NOT generate bags, boxes, or props with visible brand names or logos.
-Do NOT invent Zara, H&M, Shein, Forever21, Topshop, Pull&Bear or any retail chain branding.
-If bags or boxes appear: they must be PLAIN, UNBRANDED, GENERIC — solid color, no text, no logo.
-Exception: only if the user explicitly uploaded a branded reference — reproduce that faithfully.
+Do NOT generate bags, boxes, or props with visible brand names or logos (Zara, H&M, Shein, Nike, etc.).
+If props appear: PLAIN, UNBRANDED, GENERIC only — solid color, no text, no logo.
 
 🛍️ SCENE PROP BUDGET — WEEKLY:
-Maximum 1–3 neutral, unbranded props per scene.
-Do NOT fill the scene with boxes, bags, or shopping bags unless the role is OVERVIEW.
-The space should feel clean, real, and editorial — not a warehouse or store room.
-Do NOT invent large props, new furniture, or decor elements not established in REF0.
+Maximum 1–3 neutral unbranded props per scene (exception: OVERVIEW role may show all weekly items).
+Space must feel clean, real, editorial — not a cluttered store room.
+Do NOT invent large props or furniture not established in REF0.
 
-⚠️ REFERENCE ROLE — READ CAREFULLY:
-Weekly outfit references are photos of the GARMENTS ALONE — not a person wearing them. Use them to understand the piece, then show the person wearing it naturally.
-References are IDENTITY constraints, NOT a checklist. Show only what belongs to THIS shot's role.
-ONE person maximum in any frame. Any background figure is a generation error.
+⚠️ REFERENCE ROLE:
+Weekly outfit/accessory references are photos of the ITEMS — not a person wearing them.
+Use them to understand the piece; show the person wearing it naturally in this shot.
+References = identity constraints, NOT a visual checklist.
+ONE person maximum in any frame.
 
 NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${roleLabel}.`;
         })()

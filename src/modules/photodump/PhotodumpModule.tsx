@@ -1087,31 +1087,46 @@ const PhotodumpModule: React.FC = () => {
           : undefined,
         avatarBaseClothingUsedAsWeeklyItem: recipe === 'outfit_week' ? false : undefined,
         indexRoutingUsed: recipe === 'outfit_week' || recipe === 'outfit_haul',
-        // Weekly manifest debug (solo outfit_week)
-        weeklyManifest: recipe === 'outfit_week' ? (() => {
-          try { return buildWeeklyManifest(refs, count); } catch { return undefined; }
-        })() : undefined,
-        weeklyStructure: recipe === 'outfit_week' ? (() => {
-          try { return buildWeeklyManifest(refs, count).weeklyStructure; } catch { return undefined; }
-        })() : undefined,
-        shotRoles: recipe === 'outfit_week'
-          ? shots.map(s => s.weeklyItemPlan?.role ?? s.key ?? s.role ?? 'unknown')
-          : undefined,
-        redundancyScores: recipe === 'outfit_week'
-          ? shots.map(s => s.weeklyItemPlan?.redundancyScore ?? 0)
-          : undefined,
-        accessoryIntegrationUsed: recipe === 'outfit_week'
-          ? shots.some(s => {
-              const r = s.weeklyItemPlan?.role ?? '';
-              return r === 'WEEK_ACCESSORY_INTEGRATED' || r === 'WEEK_ACCESSORY_WORN';
-            })
-          : undefined,
-        uncoveredRequiredItems_weekly: recipe === 'outfit_week' ? (() => {
-          try { return buildWeeklyManifest(refs, count).uncoveredRequiredItems; } catch { return undefined; }
-        })() : undefined,
-        coveredItemIds_weekly: recipe === 'outfit_week' ? (() => {
-          try { return buildWeeklyManifest(refs, count).coveredItemIds; } catch { return undefined; }
-        })() : undefined,
+        // Weekly manifest debug (solo outfit_week) — construido una sola vez y reutilizado
+        ...(recipe === 'outfit_week' ? (() => {
+          try {
+            const wm = buildWeeklyManifest(refs, count);
+            return {
+              weeklyManifest:       wm,
+              weeklyStructure:      wm.weeklyStructure,
+              shotRoles:            wm.shotPlan.map(sp => sp.role),
+              redundancyScores:     wm.redundancyDebug,
+              accessoryIntegrationUsed: wm.accessoryIntegrationUsed,
+              uncoveredRequiredItems_weekly: wm.uncoveredRequiredItems,
+              coveredItemIds_weekly: wm.coveredItemIds,
+              // Nuevos campos v3
+              weeklyCoverageMap:    wm.weeklyCoverageMap,
+              weeklyDominanceCheck: wm.weeklyDominanceCheck,
+              weeklyAccessoryIntegrationPlan: wm.weeklyAccessoryIntegrationPlan,
+              compositionVarietyMap: wm.compositionVarietyMap,
+              tooManyGenericFullBodyShots: wm.tooManyGenericFullBodyShots,
+              redundantShotNotReplaced:    wm.redundantShotNotReplaced,
+            };
+          } catch {
+            return {
+              weeklyManifest: undefined, weeklyStructure: undefined,
+              shotRoles: undefined, redundancyScores: undefined,
+              accessoryIntegrationUsed: undefined,
+              uncoveredRequiredItems_weekly: undefined, coveredItemIds_weekly: undefined,
+              weeklyCoverageMap: undefined, weeklyDominanceCheck: undefined,
+              weeklyAccessoryIntegrationPlan: undefined, compositionVarietyMap: undefined,
+              tooManyGenericFullBodyShots: undefined, redundantShotNotReplaced: undefined,
+            };
+          }
+        })() : {
+          weeklyManifest: undefined, weeklyStructure: undefined,
+          shotRoles: undefined, redundancyScores: undefined,
+          accessoryIntegrationUsed: undefined,
+          uncoveredRequiredItems_weekly: undefined, coveredItemIds_weekly: undefined,
+          weeklyCoverageMap: undefined, weeklyDominanceCheck: undefined,
+          weeklyAccessoryIntegrationPlan: undefined, compositionVarietyMap: undefined,
+          tooManyGenericFullBodyShots: undefined, redundantShotNotReplaced: undefined,
+        }),
         unsafeHpiSuppressed: recipe === 'outfit_week' ? true : undefined,
         hpiProfileUsed: recipe === 'outfit_week' ? 'weekly_safe' : undefined,
         propBudget: recipe === 'outfit_week'

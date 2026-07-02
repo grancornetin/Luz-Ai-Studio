@@ -8,7 +8,7 @@
 > 5. El objetivo es que otra IA pueda leer este archivo y entender completamente qué hace el módulo, cómo funciona, y en qué estado está, sin necesidad de leer el código.
 > 6. **INSTRUCCIÓN DE CONTINUIDAD:** Al final del documento siempre debe existir la sección "Estado de trabajo actual" con el estado exacto de qué se está haciendo, en qué receta se está, y qué quedó pendiente. Cuando una receta se cierra, moverla a "Recetas cerradas". Esto permite retomar el trabajo en un nuevo chat sin perder contexto.
 
-**Última actualización:** Julio 2026 (outfit_haul cerrada 9/10. outfit_week patch v2 implementado — pendiente prueba en app.)
+**Última actualización:** Julio 2026 (outfit_haul cerrada 9/10. outfit_week patch v3 implementado — pendiente prueba en app.)
 **Propósito:** Generar series fotográficas con narrativa visual coherente. Un "photodump" es una colección de fotos que cuentan una historia o transmiten un mood, muy popular en Instagram y TikTok.
 
 ---
@@ -264,7 +264,7 @@ Función heurística exportada (0–100) que determina si un accesorio se integr
 
 ---
 
-### 🔄 `outfit_week` — PATCH v2 IMPLEMENTADO, pendiente prueba (Julio 2026)
+### 🔄 `outfit_week` — PATCH v3 IMPLEMENTADO, pendiente prueba (Julio 2026)
 
 **Historia:** "mis favoritos de la semana / outfits de la semana / accesorios de la semana / bolsos de la semana / maquillaje de la semana"
 
@@ -327,27 +327,35 @@ Si el shot final es otro full-body genérico y ya hay ≥2 look heroes, se reemp
 
 ---
 
-**Debug esperado en outfit_week:**
+**Debug esperado en outfit_week (patch v3):**
 ```
-weeklyManifest, weeklyStructure, shotRoles[], redundancyScores[],
-indexRoutingUsed: true, scenePropBudgetApplied: true,
-externalBrandingForbiddenApplied: true,
-avatarBaseClothingSuppressedInRef0: true,
-avatarBaseClothingSuppressedInStoryShots: true,
-avatarBaseClothingLeakRisk, avatarBaseClothingUsedAsWeeklyItem: false,
-accessoryIntegrationUsed, uncoveredRequiredItems_weekly[],
-coveredItemIds_weekly[], unsafeHpiSuppressed: true,
-hpiProfileUsed: 'weekly_safe', propBudget, brandRiskDetected,
-countRecoveryDebug
+weeklyManifest, weeklyStructure,
+shotRoles[] → WEEK_OVERVIEW, WEEK_LOOK_HERO × N, WEEK_ACCESSORY_INTEGRATED, WEEK_CLOSER
+redundancyScores[] → array de WeeklyRedundancyDebugEntry con replacedBecauseRedundant
+weeklyCoverageMap → { [itemId]: WeeklyItemCoverage con visualWeight }
+weeklyDominanceCheck → { dominantItemRisk: false o corrected: true }
+weeklyAccessoryIntegrationPlan → distribución de accesorios entre outfits distintos
+compositionVarietyMap → tooManyGenericFullBodyShots: false
+tooManyGenericFullBodyShots: false
+redundantShotNotReplaced: false
+uncoveredRequiredItems_weekly[] → vacío (cobertura REAL, no superficial)
+indexRoutingUsed: true
+scenePropBudgetApplied: true
+externalBrandingForbiddenApplied: true
+avatarBaseClothingSuppressedInRef0: true
+avatarBaseClothingSuppressedInStoryShots: true
+unsafeHpiSuppressed: true
+hpiProfileUsed: 'weekly_safe'
 ```
 
-**Próxima acción:** Probar en app. Evaluar:
-1. ¿Los roles narrativos se generan correctamente (ANCHOR → OVERVIEW → LOOK_HERO × N → ACCESSORY_INTEGRATED → CLOSER)?
-2. ¿El outfit correcto llega al shot correcto (index routing)?
-3. ¿Los accesorios se integran con outfits en vez de aparecer solo como closeup?
-4. ¿El debug muestra `indexRoutingUsed: true` y los roles esperados?
-5. ¿La REF0 no usa la ropa base del avatar?
-6. ¿El último shot no es redundante?
+**Próxima acción:** Probar en app con Test A. Evaluar:
+1. ¿El arco es OVERVIEW → 4 LOOK_HERO × outfit → ACCESSORY_INTEGRATED × 2 → CLOSER?
+2. ¿Cada hero shot tiene solo el outfit asignado (no mezcla outfits)?
+3. ¿Los 2 aros aparecen en 2 shots distintos, integrados con outfits distintos?
+4. ¿`weeklyDominanceCheck.dominantItemRisk` es false?
+5. ¿`tooManyGenericFullBodyShots` es false?
+6. ¿`redundancyScores[last].replacedBecauseRedundant` es true si el cierre era redundante?
+7. ¿`weeklyCoverageMap` muestra `realCoverage: true` para todos los ítems?
 
 ---
 
@@ -355,19 +363,18 @@ countRecoveryDebug
 
 **Receta activa: `outfit_week`**
 
-Estado: patch v2 implementado, pendiente prueba en app.
+Estado: patch v3 implementado, pendiente prueba en app.
 
-**Qué cambió en patch v2 (Julio 2026):**
-- Reemplazado `buildOutfitWeekShotPool` por planner narrativo completo con `WeeklyManifest` + `WeeklyShotPlan`
-- 13 roles narrativos en vez de `WEEK_OUTFIT_1..N` genéricos
-- Index routing activado: cada shot recibe solo sus refs específicas (outfit N → URL N)
-- Detección de tipo dominante del set (`outfits | accessories | bags | makeup | mixed`)
-- Compatibilidad accesorio↔outfit (score 0–100) — integra antes de hacer closeup aislado
-- Anti-redundancia en el último shot
-- Avatar base clothing suprimido en REF0 y story shots (bloque duro)
-- Prop budget + no external branding activados
-- HPI safe (`buildWeeklySafeHpiBlock`) — sin poses de fitness ni editorial extremo
-- Debug: `weeklyManifest`, `shotRoles`, `indexRoutingUsed: true`, `unsafeHpiSuppressed: true`, etc.
+**Qué cambió en patch v3 (Julio 2026) sobre v2:**
+- **Orden narrativo fijo:** OVERVIEW siempre primero, luego LOOK_HERO × N, luego ACCESSORY_INTEGRATED, luego CLOSER. Ya no hay anchor hero antes que el overview.
+- **Role templates por dominantType:** cada tipo de set (outfits/accessories/bags/makeup/mixed) tiene su propia secuencia de roles óptima.
+- **Coverage con peso visual (`WeeklyItemCoverage`):** cada ítem tiene `visualWeight`, `heroAppearances`, `detailAppearances`, `isOnlyInOverview`, `realCoverage`. `uncoveredRequiredItems_weekly` solo se vacía si el ítem tiene cobertura REAL.
+- **Anti-dominancia (`WeeklyDominanceCheck`):** detecta si un ítem monopoliza >40% del peso visual total.
+- **Distribución de accesorios anti-acumulación:** cada accesorio se integra con el outfit compatible de MENOR uso hasta ese momento. Nunca dos accesorios al mismo outfit si hay alternativas.
+- **Reemplazo real de shots redundantes:** si `redundancyScore >= 8`, `replacedBecauseRedundant` es siempre `true`. Se registra `redundantShotNotReplaced: true` como warning si no fue reemplazado.
+- **`compositionVarietyMap`:** cuenta fullBodyStanding, mirror, flatlay, detail, inHand. `tooManyGenericFullBodyShots` bloqueado.
+- **Prompts específicos por rol:** cada shot tiene el label del ítem asignado, el `visualWeightIntent`, el `compositionMode`, y la lista de `forbiddenItemIds` inyectada en el prompt.
+- **Shot identity block refactorizado:** inyecta `FORBIDDEN ITEMS IN FRAME`, `HERO SHOT RULES`, `OVERVIEW RULES`, `ACCESSORY RULES` según el rol del shot.
 
 **Próxima acción:** Probar en app con los 4 test cases del brief:
 - Test A: 4 outfits + 2 aros, count 8

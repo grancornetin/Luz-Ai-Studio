@@ -863,7 +863,7 @@ export interface PhotodumpDebugData {
   weeklyManifest?:                WeeklyManifest;
   weeklyStructure?:               string;
   shotRoles?:                     string[];
-  redundancyScores?:              number[];
+  redundancyScores?:              WeeklyRedundancyDebugEntry[];
   accessoryIntegrationUsed?:      boolean;
   uncoveredRequiredItems_weekly?: string[];
   coveredItemIds_weekly?:         string[];
@@ -871,6 +871,13 @@ export interface PhotodumpDebugData {
   hpiProfileUsed?:                string;
   propBudget?:                    string;
   brandRiskDetected?:             boolean;
+  // Weekly coverage con peso visual
+  weeklyCoverageMap?:             Record<string, WeeklyItemCoverage>;
+  weeklyDominanceCheck?:          WeeklyDominanceCheck;
+  weeklyAccessoryIntegrationPlan?: WeeklyAccessoryIntegrationEntry[];
+  compositionVarietyMap?:         WeeklyCompositionVarietyMap;
+  tooManyGenericFullBodyShots?:   boolean;
+  redundantShotNotReplaced?:      boolean;
   // Accessory coverage map — detalle por accesorio/joya/calzado
   accessoryCoverageMap?: Record<string, {
     kind:             string;
@@ -1088,17 +1095,90 @@ export interface WeeklyCoverageEntry {
   coverageType: ('worn' | 'laid_flat' | 'held' | 'detail' | 'integrated' | 'background')[];
 }
 
+// Cobertura visual con peso — reemplaza el boolean binario
+export interface WeeklyItemCoverage {
+  itemId:                       string;
+  itemKind:                     WeeklyItemKind;
+  label:                        string;
+  totalAppearances:             number;
+  heroAppearances:              number;        // shots donde es primario y protagonista real
+  secondaryAppearances:         number;        // shots donde es secundario (integración)
+  detailAppearances:            number;        // shots de macro / detail
+  integratedAccessoryAppearances: number;      // como accesorio integrado con outfit
+  overviewAppearances:          number;        // solo aparece en overview
+  visualWeight:                 number;        // 0–100, promedio ponderado de apariciones
+  isPrimaryInAnyShot:           boolean;
+  isOnlyBackground:             boolean;
+  isOnlyInOverview:             boolean;       // nunca hero, nunca detail, nunca integrado
+  realCoverage:                 boolean;       // true solo si tiene al menos 1 aparición real no-background
+}
+
+// Guardrail de dominancia visual — detecta si un ítem monopoliza la secuencia
+export interface WeeklyDominanceCheck {
+  dominantItemId?:          string;
+  dominantItemLabel?:       string;
+  dominantItemVisualWeight: number;
+  averageVisualWeight:      number;
+  dominanceRatio:           number;         // 0–1, qué fracción del peso tiene el ítem más fuerte
+  dominantItemRisk:         boolean;        // true si supera el umbral del 40%
+  corrected:                boolean;        // true si se redistribuyó para corregirlo
+  correctionActions:        string[];
+}
+
+// Plan de integración de accesorios — distribución entre outfits
+export interface WeeklyAccessoryIntegrationEntry {
+  accessoryId:              string;
+  accessoryLabel:           string;
+  selectedOutfitId?:        string;
+  compatibleOutfitIds:      string[];
+  reason:                   string;
+  integrationMode:          'worn' | 'held' | 'detail' | 'flatlay' | 'macro';
+  avoidedBecauseWouldOverRepeat?: boolean;
+  avoidedOutfitId?:         string;
+  avoidedReason?:           string;
+  fallbackToIsolated:       boolean;
+}
+
+// Variedad de composición — previene demasiados full-body idénticos
+export interface WeeklyCompositionVarietyMap {
+  fullBodyStandingCount:    number;
+  mirrorCount:              number;
+  flatlayCount:             number;
+  detailCount:              number;
+  accessoryIntegratedCount: number;
+  seatedCount:              number;
+  inHandCount:              number;
+  tooManyGenericFullBodyShots: boolean;
+}
+
+// Debug extendido por shot — incluye redundancia con razón y reemplazo
+export interface WeeklyRedundancyDebugEntry {
+  shotIndex:            number;
+  role:                 WeeklyShotRole;
+  score:                number;
+  reason:               string;
+  replacedBecauseRedundant: boolean;
+  replacementRole?:     WeeklyShotRole;
+  replacementReason?:   string;
+  redundantShotNotReplaced?: boolean;   // warning: score>=8 pero no se reemplazó
+}
+
 export interface WeeklyShotPlan {
   role:             WeeklyShotRole;
   primaryItemIds:   string[];   // ítems protagonistas del shot
   secondaryItemIds: string[];   // ítems secundarios / integrados
+  backgroundItemIds?: string[]; // ítems de fondo (no protagonistas)
+  forbiddenItemIds?:  string[]; // ítems que NO deben aparecer en este shot
   outfitIndex?:     number;     // índice del outfit asignado (para look heroes)
   accessoryId?:     string;     // accesorio asignado (para shots de accesorio)
   integratedWithOutfitId?: string;   // outfit con el que se integra el accesorio
   refsToRoute:      string[];   // URLs exactas a pasar al modelo
-  redundancyScore:  number;     // 0–100, score de redundancia vs shots anteriores
+  redundancyScore:  number;     // 0–10 (antes 0–100, ahora normalizado a 0–10)
   replacedBecauseRedundant: boolean;
   replacementRole?: WeeklyShotRole;
+  replacementReason?: string;
+  compositionMode?: string;     // descripción del modo de composición para el prompt
+  visualWeightIntent?: string;  // qué ítem debe dominar visualmente
   fallbackUsed?:    boolean;
   fallbackRole?:    WeeklyShotRole;
   retryCount?:      number;
@@ -1120,7 +1200,15 @@ export interface WeeklyManifest {
   compatibilityPairs: WeeklyCompatibilityPair[];
   coverageMap:        Record<string, WeeklyCoverageEntry>;
   shotPlan:           WeeklyShotPlan[];   // plan de shots con roles y routing explícito
-  // Debug
+  // Debug de cobertura con peso visual
+  weeklyCoverageMap:  Record<string, WeeklyItemCoverage>;
+  weeklyDominanceCheck: WeeklyDominanceCheck;
+  weeklyAccessoryIntegrationPlan: WeeklyAccessoryIntegrationEntry[];
+  compositionVarietyMap: WeeklyCompositionVarietyMap;
+  redundancyDebug:    WeeklyRedundancyDebugEntry[];
+  tooManyGenericFullBodyShots: boolean;
+  redundantShotNotReplaced: boolean;
+  // Debug clásico
   uncoveredRequiredItems: string[];
   coveredItemIds:         string[];
   weeklyStructure:        string;    // descripción del arco para debug
