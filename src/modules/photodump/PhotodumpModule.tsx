@@ -1090,7 +1090,7 @@ const PhotodumpModule: React.FC = () => {
         // Weekly manifest debug (solo outfit_week) — construido una sola vez y reutilizado
         ...(recipe === 'outfit_week' ? (() => {
           try {
-            const wm = buildWeeklyManifest(refs, count);
+            const wm = buildWeeklyManifest(refs, count, basePrompt);
             return {
               weeklyManifest:       wm,
               weeklyStructure:      wm.weeklyStructure,
@@ -1106,6 +1106,12 @@ const PhotodumpModule: React.FC = () => {
               compositionVarietyMap: wm.compositionVarietyMap,
               tooManyGenericFullBodyShots: wm.tooManyGenericFullBodyShots,
               redundantShotNotReplaced:    wm.redundantShotNotReplaced,
+              // Nuevos campos v4 — reference tag resolver + avatar clothing policy
+              referenceTaggingUsed:            wm.referenceTagResolution?.referenceTaggingUsed ?? false,
+              referenceTagResolution:          wm.referenceTagResolution,
+              avatarBaseClothingPolicyApplied: wm.avatarBaseClothingPolicyApplied ?? true,
+              avatarBaseClothingFingerprint:   wm.avatarBaseClothingFingerprint,
+              avatarBaseClothingNegativePromptApplied: true,
             };
           } catch {
             return {
@@ -1116,6 +1122,9 @@ const PhotodumpModule: React.FC = () => {
               weeklyCoverageMap: undefined, weeklyDominanceCheck: undefined,
               weeklyAccessoryIntegrationPlan: undefined, compositionVarietyMap: undefined,
               tooManyGenericFullBodyShots: undefined, redundantShotNotReplaced: undefined,
+              referenceTaggingUsed: undefined, referenceTagResolution: undefined,
+              avatarBaseClothingPolicyApplied: undefined, avatarBaseClothingFingerprint: undefined,
+              avatarBaseClothingNegativePromptApplied: undefined,
             };
           }
         })() : {
@@ -1126,6 +1135,9 @@ const PhotodumpModule: React.FC = () => {
           weeklyCoverageMap: undefined, weeklyDominanceCheck: undefined,
           weeklyAccessoryIntegrationPlan: undefined, compositionVarietyMap: undefined,
           tooManyGenericFullBodyShots: undefined, redundantShotNotReplaced: undefined,
+          referenceTaggingUsed: undefined, referenceTagResolution: undefined,
+          avatarBaseClothingPolicyApplied: undefined, avatarBaseClothingFingerprint: undefined,
+          avatarBaseClothingNegativePromptApplied: undefined,
         }),
         unsafeHpiSuppressed: recipe === 'outfit_week' ? true : undefined,
         hpiProfileUsed: recipe === 'outfit_week' ? 'weekly_safe' : undefined,

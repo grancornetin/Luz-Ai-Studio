@@ -5518,6 +5518,319 @@ function buildHaulJewelryShot(
   };
 }
 
+// ── Global Reference Tag Resolver (patch v4) ─────────────────
+// Resuelve tags @outfit1, @outfit2, @accessory1, etc. desde el brief del usuario.
+// Usa contexto semántico circundante para extraer mood, destino y pairings explícitos.
+// No específico de outfit_week — usable en cualquier receta.
+
+// Map de alias de tag → slotType
+const TAG_SLOT_ALIASES: Record<string, import('./types').RefTagSlotType> = {
+  outfit: 'outfit', look: 'outfit', looks: 'outfit',
+  accessory: 'accessory', accesorio: 'accessory', accesorios: 'accessory',
+  aro: 'accessory', aros: 'accessory',
+  bag: 'bag', bolso: 'bag',
+  shoe: 'shoe', shoes: 'shoe', zapato: 'shoe', zapatos: 'shoe',
+  makeup: 'makeup', maquillaje: 'makeup',
+  product: 'product', producto: 'product',
+  scene: 'scene', escena: 'scene',
+  avatar: 'avatar',
+  body: 'body',
+};
+
+// Palabras descriptoras de mood/rol de outfit extraíbles del contexto
+const MOOD_KEYWORDS = [
+  'casual', 'arreglado', 'cómodo', 'comodo', 'vibrante', 'elegante', 'formal',
+  'informal', 'básico', 'basico', 'lindo', 'chic', 'sport', 'relajado',
+  'colorido', 'simple', 'llamativo', 'divertido', 'sobrio', 'trendy',
+];
+
+// Palabras de destino extraíbles del contexto
+const DESTINATION_KEYWORDS = [
+  'cena', 'tarde', 'mañana', 'día', 'dia', 'noche', 'oficina', 'trabajo',
+  'playa', 'salir', 'reunión', 'reunion', 'brunch', 'almuerzo', 'evento',
+  'escuela', 'universidad', 'gym', 'viaje', 'aeropuerto', 'fiesta',
+  'cita', 'shopping', 'mercado', 'café', 'cafe',
+];
+
+// Palabras que indican asociación explícita entre ítem y outfit
+const PAIRING_VERBS = [
+  'usé con', 'use con', 'combina con', 'van con', 'va con', 'queda con',
+  'lo usé con', 'los usé con', 'las usé con', 'para el look de', 'con el look',
+  'para este look', 'con este look', 'para ese look', 'con ese look',
+];
+
+function extractSemanticContext(brief: string, tagStart: number): { role?: string; dest?: string; contextSnippet: string } {
+  // Tomar hasta 60 chars antes del tag y 40 después
+  const before = brief.slice(Math.max(0, tagStart - 60), tagStart);
+  const after  = brief.slice(tagStart, Math.min(brief.length, tagStart + 40));
+  const ctx    = (before + after).toLowerCase();
+
+  let role: string | undefined;
+  let dest: string | undefined;
+
+  for (const kw of MOOD_KEYWORDS) {
+    if (ctx.includes(kw)) { role = kw; break; }
+  }
+  for (const kw of DESTINATION_KEYWORDS) {
+    if (ctx.includes(kw)) { dest = kw; break; }
+  }
+
+  return { role, dest, contextSnippet: (before.slice(-40) + after).trim().replace(/\n/g, ' ') };
+}
+
+function detectExplicitPairing(
+  brief:        string,
+  taggedItems:  import('./types').ResolvedReferenceTag[],
+  allItems:     import('./types').WeeklyItem[],
+): import('./types').ExplicitItemPairing[] {
+  const pairings: import('./types').ExplicitItemPairing[] = [];
+  const lowerBrief = brief.toLowerCase();
+
+  for (const verb of PAIRING_VERBS) {
+    const verbIdx = lowerBrief.indexOf(verb);
+    if (verbIdx === -1) continue;
+
+    // Buscar el tag de outfit más cercano después del verbo
+    const afterVerb = brief.slice(verbIdx);
+    const outfitTagMatch = afterVerb.match(/@(outfit\d*|look\d*)\b/i);
+    if (!outfitTagMatch) continue;
+
+    const targetTag = taggedItems.find(t =>
+      t.rawTag.toLowerCase() === outfitTagMatch[0].toLowerCase()
+    );
+    if (!targetTag?.resolvedItemId) continue;
+
+    // Buscar el accesorio mencionado antes del verbo
+    const beforeVerb = brief.slice(Math.max(0, verbIdx - 80), verbIdx).toLowerCase();
+    const accCandidates = allItems.filter(it => it.accessoryEligible || it.kind === 'jewelry' || it.kind === 'bag');
+    const sourceItem = accCandidates.find(acc => {
+      const lbl = acc.label.toLowerCase();
+      return beforeVerb.includes(lbl) || (acc.kind === 'jewelry' && beforeVerb.includes('aros')) || (acc.kind === 'jewelry' && beforeVerb.includes('aritos'));
+    });
+
+    if (sourceItem) {
+      pairings.push({
+        sourceItemId: sourceItem.id,
+        targetItemId: targetTag.resolvedItemId,
+        reason:       `User said "${sourceItem.label}" was used with ${targetTag.rawTag}`,
+        rawText:      brief.slice(Math.max(0, verbIdx - 40), verbIdx + 40).trim(),
+      });
+    }
+  }
+
+  return pairings;
+}
+
+export function resolveReferenceTagsFromBrief(
+  brief:         string,
+  outfitItems:   import('./types').WeeklyItem[],
+  accessoryItems: import('./types').WeeklyItem[],
+  allItems?:     import('./types').WeeklyItem[],
+): import('./types').ReferenceTagResolutionResult {
+  const items = allItems ?? [...outfitItems, ...accessoryItems];
+  const tags: import('./types').ResolvedReferenceTag[] = [];
+  const seenRawTags: Record<string, { count: number; contexts: string[] }> = {};
+
+  // Regex que captura @word seguido de dígito opcional, soporta tildes y puntuación pegada
+  const tagPattern = /@([a-záéíóúüñA-ZÁÉÍÓÚÜÑ]+\d*)(?=[^a-záéíóúüñA-ZÁÉÍÓÚÜÑ\d]|$)/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = tagPattern.exec(brief)) !== null) {
+    const rawTag    = match[0].replace(/[.,!?;:]$/, '');
+    const rawName   = match[1].replace(/[.,!?;:]$/, '');
+    const lowerName = rawName.toLowerCase();
+
+    // Resolver slotType
+    const baseKey     = lowerName.replace(/\d+$/, '');
+    const slotType: import('./types').RefTagSlotType = TAG_SLOT_ALIASES[baseKey] ?? 'unknown';
+
+    // Resolver índice humano (1-based): @outfit → 1, @outfit2 → 2, @outfit3 → 3
+    const numStr      = lowerName.match(/\d+$/)?.[0];
+    const humanIndex  = numStr ? parseInt(numStr, 10) : 1;
+    const slotIndex   = humanIndex - 1;  // 0-based
+
+    // Resolver el WeeklyItem real
+    let resolvedItemId: string | undefined;
+    let resolvedRefUrl: string | undefined;
+    let confidence: 'high' | 'medium' | 'low' = 'low';
+    let warning: string | undefined;
+
+    if (slotType === 'outfit') {
+      const candidate = outfitItems[slotIndex];
+      if (candidate) {
+        resolvedItemId = candidate.id;
+        resolvedRefUrl = candidate.refUrl;
+        confidence = 'high';
+      } else {
+        warning = `Tag @${rawName} refers to outfit slot ${humanIndex}, but only ${outfitItems.length} outfit(s) were uploaded`;
+        confidence = 'low';
+      }
+    } else if (slotType === 'accessory' || slotType === 'bag' || slotType === 'shoe') {
+      const candidate = accessoryItems[slotIndex];
+      if (candidate) {
+        resolvedItemId = candidate.id;
+        resolvedRefUrl = candidate.refUrl;
+        confidence = 'high';
+      } else {
+        warning = `Tag @${rawName} refers to accessory slot ${humanIndex}, but only ${accessoryItems.length} accessory/ies were uploaded`;
+        confidence = 'low';
+      }
+    } else if (slotType === 'unknown') {
+      warning = `Tag @${rawName} could not be mapped to a known slot type`;
+      confidence = 'low';
+    }
+
+    // Extraer contexto semántico
+    const tagPos = match.index;
+    const { role: semanticRole, dest: semanticDest, contextSnippet } = extractSemanticContext(brief, tagPos);
+
+    const resolved: import('./types').ResolvedReferenceTag = {
+      rawTag:            rawTag.trim(),
+      normalizedTag:     rawName,
+      slotType,
+      slotIndex,
+      humanIndex,
+      resolvedItemId,
+      resolvedRefUrl,
+      confidence,
+      usedInTextContext: contextSnippet,
+      semanticRole,
+      semanticDest,
+      warning,
+    };
+
+    tags.push(resolved);
+
+    // Tracking de duplicados
+    const key = rawTag.trim().toLowerCase();
+    if (!seenRawTags[key]) seenRawTags[key] = { count: 0, contexts: [] };
+    seenRawTags[key].count++;
+    seenRawTags[key].contexts.push(contextSnippet);
+  }
+
+  // Construir lista de duplicados
+  const duplicateTagUses: import('./types').ReferenceTagDuplicateUse[] = Object.entries(seenRawTags)
+    .filter(([, v]) => v.count > 1)
+    .map(([k, v]) => ({
+      rawTag:   k,
+      count:    v.count,
+      contexts: v.contexts,
+      warning:  `Same tagged item (${k}) assigned to ${v.count} different contexts`,
+    }));
+
+  // Ítems sin resolver
+  const unresolvedTags = tags.filter(t => !t.resolvedItemId);
+
+  // Asignaciones semánticas por ítem
+  const itemSemanticAssignments: import('./types').ItemSemanticAssignment[] = [];
+  const assignedItems = new Map<string, import('./types').ItemSemanticAssignment>();
+
+  for (const tag of tags) {
+    if (!tag.resolvedItemId) continue;
+    const existing = assignedItems.get(tag.resolvedItemId);
+    if (!existing) {
+      const entry: import('./types').ItemSemanticAssignment = {
+        itemId:              tag.resolvedItemId,
+        sourceTag:           tag.rawTag,
+        roleFromBrief:       tag.semanticRole,
+        destinationFromBrief: tag.semanticDest,
+      };
+      assignedItems.set(tag.resolvedItemId, entry);
+      itemSemanticAssignments.push(entry);
+    } else {
+      // Ítem duplicado — enriquecer si hay más info
+      if (!existing.roleFromBrief && tag.semanticRole) existing.roleFromBrief = tag.semanticRole;
+      if (!existing.destinationFromBrief && tag.semanticDest) existing.destinationFromBrief = tag.semanticDest;
+    }
+  }
+
+  // Pairings explícitos (accesorio + outfit)
+  const explicitPairings = detectExplicitPairing(brief, tags, items);
+
+  // Brief sin tags (para uso interno)
+  const briefWithoutTags = brief.replace(/@([a-záéíóúüñA-ZÁÉÍÓÚÜÑ]+\d*)/gi, '').replace(/\s{2,}/g, ' ').trim();
+
+  // Warnings de cobertura
+  const warnings: string[] = [];
+  for (const tag of unresolvedTags) {
+    if (tag.warning) warnings.push(tag.warning);
+  }
+  for (const dup of duplicateTagUses) warnings.push(dup.warning);
+
+  // Detectar declaración de count vs tags únicos
+  const declaredCountMatch = brief.match(/\b(\d+)\s+(looks?|outfits?)/i);
+  const uniqueTaggedOutfitIds = new Set(
+    tags.filter(t => t.slotType === 'outfit' && t.resolvedItemId).map(t => t.resolvedItemId)
+  );
+  const declaredCountDoesNotMatchUniqueTaggedItems = declaredCountMatch
+    ? parseInt(declaredCountMatch[1], 10) !== uniqueTaggedOutfitIds.size && uniqueTaggedOutfitIds.size > 0
+    : false;
+
+  if (declaredCountDoesNotMatchUniqueTaggedItems) {
+    warnings.push(
+      `Brief mentions ${declaredCountMatch![1]} looks but only ${uniqueTaggedOutfitIds.size} unique outfit tag(s) were found`
+    );
+  }
+
+  return {
+    tags,
+    unresolvedTags,
+    duplicateTagUses,
+    itemSemanticAssignments,
+    explicitPairings,
+    briefWithoutTags,
+    referenceTaggingUsed: tags.length > 0,
+    declaredCountDoesNotMatchUniqueTaggedItems,
+    warnings,
+  };
+}
+
+// ── Avatar Base Clothing Fingerprint — Global (patch v4) ──────
+// Genera un fingerprint textual de la ropa del avatar para usarlo como negative constraint.
+// Se llama antes de generar prompts en cualquier receta donde avatarRef existe.
+// El fingerprint se inyecta en cada story shot como "FORBIDDEN WARDROBE".
+
+export function buildAvatarBaseClothingFingerprint(
+  avatarDescription?: string,
+): import('./types').AvatarBaseClothingFingerprint {
+  // Sin análisis visual — generamos un fingerprint estándar conservador
+  // que cubre el caso más común: bodysuit/top negro + jeans + zapatillas.
+  // Cuando tengamos análisis visual del avatar, se puede enriquecer aquí.
+  const topColor    = 'black';
+  const topType     = 'fitted bodysuit, long sleeve top, or base shirt';
+  const bottomColor = 'light blue or mid-tone';
+  const bottomType  = 'wide leg jeans or casual pants';
+  const shoes       = 'white sneakers or generic neutral footwear';
+
+  const summary = [
+    `black fitted bodysuit/top`,
+    `${bottomColor} ${bottomType}`,
+    shoes ? shoes : '',
+  ].filter(Boolean).join(' + ');
+
+  return { topColor, topType, bottomColor, bottomType, shoes, summary };
+}
+
+// Construye el bloque de texto "FORBIDDEN WARDROBE" para inyectar en prompts de story shots.
+export function buildAvatarBaseClothingNegativeBlock(
+  fingerprint: import('./types').AvatarBaseClothingFingerprint,
+): string {
+  return `
+⛔ FORBIDDEN WARDROBE — AVATAR BASE CLOTHING MUST NOT APPEAR AS A STORY OUTFIT:
+The avatar/body reference photos show the person wearing their own base clothing.
+That base clothing is IDENTITY DATA ONLY — it is NOT a content item, NOT a weekly look, NOT a haul piece.
+
+DO NOT dress the avatar in this base clothing as any story outfit:
+  • Do NOT use: ${fingerprint.summary}
+  • Do NOT carry over the avatar's base top (${fingerprint.topColor} ${fingerprint.topType}) as a story outfit
+  • Do NOT carry over the avatar's base bottoms (${fingerprint.bottomColor} ${fingerprint.bottomType}) as a story look
+  • If ${fingerprint.shoes} appears as shoes, it is acceptable as neutral footwear ONLY if no footwear item was uploaded
+
+The story outfit MUST come from the uploaded outfit/garment references.
+If a shot has an explicit primary outfit item, use THAT item's clothing — not the avatar's base wardrobe.
+`.trim();
+}
+
 // ── Outfit Week — Weekly Edit / Weekly Favorites ─────────────
 // Historia: "mis favoritos de la semana / outfits de la semana / accesorios de la semana"
 // Planificación basada en roles narrativos + manifest de ítems con cobertura REAL garantizada.
@@ -5660,10 +5973,11 @@ function getWeeklyRoleTemplate(
 // ── Plan de integración de accesorios: distribución anti-acumulación ──
 // Garantiza que los accesorios se repartan entre distintos outfits.
 function buildWeeklyAccessoryIntegrationPlan(
-  accessoryItems: import('./types').WeeklyItem[],
-  outfitItems: import('./types').WeeklyItem[],
-  compatPairs: import('./types').WeeklyCompatibilityPair[],
-  accCloseup: boolean[],
+  accessoryItems:    import('./types').WeeklyItem[],
+  outfitItems:       import('./types').WeeklyItem[],
+  compatPairs:       import('./types').WeeklyCompatibilityPair[],
+  accCloseup:        boolean[],
+  explicitPairings?: Record<string, string>,  // accId → outfitId — del brief (@accessory2 con @outfit3)
 ): import('./types').WeeklyAccessoryIntegrationEntry[] {
   const plan: import('./types').WeeklyAccessoryIntegrationEntry[] = [];
   // Rastrea cuántas veces fue elegido cada outfit para el reparto
@@ -5672,6 +5986,26 @@ function buildWeeklyAccessoryIntegrationPlan(
 
   for (let ai = 0; ai < accessoryItems.length; ai++) {
     const acc = accessoryItems[ai];
+
+    // Si el brief tuvo un pairing explícito para este accesorio, respetarlo primero
+    const explicitOutfitId = explicitPairings?.[acc.id];
+    if (explicitOutfitId && outfitItems.some(o => o.id === explicitOutfitId)) {
+      const explicitOutfit = outfitItems.find(o => o.id === explicitOutfitId)!;
+      const mode: 'worn' | 'held' | 'detail' | 'flatlay' | 'macro' =
+        acc.kind === 'jewelry' ? 'worn' : acc.kind === 'bag' ? 'held' : 'held';
+      outfitUsageCount[explicitOutfitId] = (outfitUsageCount[explicitOutfitId] ?? 0) + 1;
+      plan.push({
+        accessoryId:        acc.id,
+        accessoryLabel:     acc.label,
+        selectedOutfitId:   explicitOutfitId,
+        compatibleOutfitIds: [explicitOutfitId],
+        reason:             `Explicit brief pairing: user said to use with ${explicitOutfit.label}`,
+        integrationMode:    mode,
+        fallbackToIsolated: false,
+      });
+      continue;
+    }
+
     const pairs = compatPairs
       .filter(p => p.accessoryId === acc.id)
       .sort((a, b) => b.score - a.score);
@@ -5766,6 +6100,7 @@ function buildWeeklyShotPlan(
   accCloseup:       boolean[],
   count:            number,
   dominant:         import('./types').WeeklySetDominantType,
+  taggedOutfitOrder?: string[],  // IDs en orden del brief (patch v4)
 ): {
   shotPlan:        import('./types').WeeklyShotPlan[];
   redundancyDebug: import('./types').WeeklyRedundancyDebugEntry[];
@@ -5777,11 +6112,21 @@ function buildWeeklyShotPlan(
   // Obtener template de roles para este dominantType
   const roleTemplate = getWeeklyRoleTemplate(dominant, outfitItems.length, accessoryItems.length, count);
 
+  // Si hay orden explícito del brief, reordenar outfitItems para los hero slots
+  // Los outfits taggeados van primero (en el orden del brief), los no taggeados al final
+  let orderedOutfitItems = outfitItems;
+  if (taggedOutfitOrder && taggedOutfitOrder.length > 0) {
+    const taggedSet = new Set(taggedOutfitOrder);
+    const inOrder   = taggedOutfitOrder.map(id => outfitItems.find(o => o.id === id)).filter(Boolean) as import('./types').WeeklyItem[];
+    const notTagged = outfitItems.filter(o => !taggedSet.has(o.id));
+    orderedOutfitItems = [...inOrder, ...notTagged];
+  }
+
   // Rastreadores de uso
   let outfitCursor    = 0;                    // siguiente outfit para hero slots
   let accCursor       = 0;                    // siguiente accesorio para acc slots
   const outfitHeroCount: Record<string, number> = {};
-  for (const o of outfitItems) outfitHeroCount[o.id] = 0;
+  for (const o of orderedOutfitItems) outfitHeroCount[o.id] = 0;
   const fullBodyCount = { count: 0 };
 
   for (let si = 0; si < roleTemplate.length && plan.length < count; si++) {
@@ -5811,9 +6156,9 @@ function buildWeeklyShotPlan(
 
     // ── LOOK HERO ─────────────────────────────────────────────
     else if (role === 'WEEK_LOOK_HERO' || role === 'WEEK_MIRROR_LOOK') {
-      if (outfitCursor >= outfitItems.length) {
+      if (outfitCursor >= orderedOutfitItems.length) {
         // No hay más outfits — reemplazar por detail del último
-        const lastOutfit = outfitItems[outfitItems.length - 1];
+        const lastOutfit = orderedOutfitItems[orderedOutfitItems.length - 1];
         const { role: altRole, reason } = getNonRedundantCloserRole(dominant, plan.map(s => s.role));
         shotPlan = {
           role: altRole,
@@ -5827,16 +6172,16 @@ function buildWeeklyShotPlan(
         };
         redundancyDebug.push({ shotIndex: shotIdx, role: role as import('./types').WeeklyShotRole, score: 8, reason: 'No more outfits', replacedBecauseRedundant: true, replacementRole: altRole, replacementReason: reason });
       } else {
-        const outfit = outfitItems[outfitCursor];
+        const outfit = orderedOutfitItems[outfitCursor];
         outfitCursor++;
         const heroUseCount = outfitHeroCount[outfit.id] ?? 0;
         outfitHeroCount[outfit.id] = heroUseCount + 1;
         fullBodyCount.count++;
 
         // Todos los otros outfits como forbidden (no mezclar outfits en hero shots)
-        const forbiddenOutfitIds = outfitItems.filter(o => o.id !== outfit.id).map(o => o.id);
+        const forbiddenOutfitIds = orderedOutfitItems.filter(o => o.id !== outfit.id).map(o => o.id);
 
-        const redundancyScore = heroUseCount >= 1 ? 9 : fullBodyCount.count > outfitItems.length ? 6 : 0;
+        const redundancyScore = heroUseCount >= 1 ? 9 : fullBodyCount.count > orderedOutfitItems.length ? 6 : 0;
         let finalRole: import('./types').WeeklyShotRole = role;
         let replaced  = false;
         let replacementRole: import('./types').WeeklyShotRole | undefined;
@@ -5863,7 +6208,10 @@ function buildWeeklyShotPlan(
           replacementRole,
           replacementReason,
           compositionMode:  role === 'WEEK_MIRROR_LOOK' ? 'mirror_selfie_full_body' : 'full_body_authentic',
-          visualWeightIntent: `${outfit.label} is the sole protagonist — full look readable head to toe`,
+          visualWeightIntent: `${outfit.label} is the sole protagonist — full look readable head to toe${outfit.semanticIntent?.destination ? ` (${outfit.semanticIntent.destination} mood)` : ''}`,
+          semanticIntentFromBrief: outfit.semanticIntent,
+          resolvedTagsUsed: outfit.tagsUsed,
+          avatarBaseClothingForbidden: true,
         };
 
         redundancyDebug.push({
@@ -5883,8 +6231,8 @@ function buildWeeklyShotPlan(
     else if (role === 'WEEK_ACCESSORY_INTEGRATED') {
       if (accCursor >= accIntPlan.length) {
         // Sin más accesorios — saltar este slot con detail o styiling
-        const fallbackRole: import('./types').WeeklyShotRole = outfitItems.length > 0 ? 'WEEK_DETAIL' : 'WEEK_CLOSER';
-        const fallbackOutfit = outfitItems[Math.max(0, outfitCursor - 1)];
+        const fallbackRole: import('./types').WeeklyShotRole = orderedOutfitItems.length > 0 ? 'WEEK_DETAIL' : 'WEEK_CLOSER';
+        const fallbackOutfit = orderedOutfitItems[Math.max(0, outfitCursor - 1)];
         shotPlan = {
           role:             fallbackRole,
           primaryItemIds:   fallbackOutfit ? [fallbackOutfit.id] : [],
@@ -5924,7 +6272,7 @@ function buildWeeklyShotPlan(
             primaryItemIds:   [entry.accessoryId],
             secondaryItemIds: entry.selectedOutfitId ? [entry.selectedOutfitId] : [],
             backgroundItemIds: [],
-            forbiddenItemIds:  outfitItems.filter(o => o.id !== entry.selectedOutfitId).map(o => o.id),
+            forbiddenItemIds:  orderedOutfitItems.filter(o => o.id !== entry.selectedOutfitId).map(o => o.id),
             accessoryId:      entry.accessoryId,
             integratedWithOutfitId: entry.selectedOutfitId,
             refsToRoute:      [],
@@ -5974,7 +6322,7 @@ function buildWeeklyShotPlan(
         replacementReason = alt.reason;
       }
 
-      const closerOutfit = outfitItems.length > 0 ? outfitItems[outfitItems.length - 1] : null;
+      const closerOutfit = orderedOutfitItems.length > 0 ? orderedOutfitItems[orderedOutfitItems.length - 1] : null;
       const closerAcc    = accessoryItems.length  > 0 ? accessoryItems[0] : null;
 
       shotPlan = {
@@ -6011,7 +6359,7 @@ function buildWeeklyShotPlan(
     ) {
       // Asignar el siguiente accesorio disponible (o el último outfit para detail)
       const targetAcc  = accessoryItems[accCursor % Math.max(accessoryItems.length, 1)];
-      const targetItem = targetAcc ?? (outfitItems.length > 0 ? outfitItems[outfitCursor % outfitItems.length] : null);
+      const targetItem = targetAcc ?? (orderedOutfitItems.length > 0 ? orderedOutfitItems[outfitCursor % orderedOutfitItems.length] : null);
       if (targetAcc) accCursor++;
 
       const compositionByRole: Record<string, string> = {
@@ -6036,7 +6384,7 @@ function buildWeeklyShotPlan(
 
     // ── STYLING PROCESS / otros ───────────────────────────────
     else {
-      const targetOutfit = outfitItems.length > 0 ? outfitItems[outfitCursor % outfitItems.length] : null;
+      const targetOutfit = orderedOutfitItems.length > 0 ? orderedOutfitItems[outfitCursor % orderedOutfitItems.length] : null;
       shotPlan = {
         role,
         primaryItemIds:   targetOutfit ? [targetOutfit.id] : [],
@@ -6054,8 +6402,8 @@ function buildWeeklyShotPlan(
 
   // ── Relleno: si quedan slots sin cubrir por el template ───
   while (plan.length < count) {
-    const fallbackOutfit = outfitItems[outfitCursor % Math.max(outfitItems.length, 1)];
-    if (outfitCursor < outfitItems.length) outfitCursor++;
+    const fallbackOutfit = orderedOutfitItems[outfitCursor % Math.max(orderedOutfitItems.length, 1)];
+    if (outfitCursor < orderedOutfitItems.length) outfitCursor++;
     plan.push({
       role:             'WEEK_STYLING_PROCESS',
       primaryItemIds:   fallbackOutfit ? [fallbackOutfit.id] : [],
@@ -6077,7 +6425,7 @@ function buildWeeklyShotPlan(
     accessoryIntegratedCount: plan.filter(s => s.role === 'WEEK_ACCESSORY_INTEGRATED').length,
     seatedCount:              0,
     inHandCount:              plan.filter(s => s.role === 'WEEK_ACCESSORY_HELD').length,
-    tooManyGenericFullBodyShots: plan.filter(s => s.role === 'WEEK_LOOK_HERO').length > outfitItems.length + 1,
+    tooManyGenericFullBodyShots: plan.filter(s => s.role === 'WEEK_LOOK_HERO').length > orderedOutfitItems.length + 1,
   };
 
   return { shotPlan: plan, redundancyDebug, compositionMap };
@@ -6204,7 +6552,11 @@ function buildWeeklyDominanceCheck(
 }
 
 // Construye el WeeklyManifest desde las refs subidas
-export function buildWeeklyManifest(refs: import('./types').PhotodumpRefs, requestedCount: number): import('./types').WeeklyManifest {
+export function buildWeeklyManifest(
+  refs:           import('./types').PhotodumpRefs,
+  requestedCount: number,
+  basePrompt?:    string,
+): import('./types').WeeklyManifest {
   const allOutfitUrls  = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
   const allAccUrls     = (refs.accesorioRefs ?? []).filter(Boolean) as string[];
   const accCloseup     = refs.accesorioCloseup ?? [];
@@ -6216,6 +6568,42 @@ export function buildWeeklyManifest(refs: import('./types').PhotodumpRefs, reque
     classifyWeeklyItem(url, outfitItems.length + i, false, i)
   );
 
+  const allItems      = [...outfitItems, ...accessoryItems];
+
+  // ── Reference Tag Resolution (patch v4) ──────────────────────
+  // Si el brief contiene tags @outfit1, @outfit2, etc., resolverlos y enriquecer los ítems
+  let referenceTagResolution: import('./types').ReferenceTagResolutionResult | undefined;
+
+  if (basePrompt && basePrompt.includes('@')) {
+    referenceTagResolution = resolveReferenceTagsFromBrief(basePrompt, outfitItems, accessoryItems, allItems);
+
+    // Aplicar semantic intent a cada ítem taggeado
+    for (const assignment of referenceTagResolution.itemSemanticAssignments) {
+      const item = allItems.find(it => it.id === assignment.itemId);
+      if (item) {
+        item.semanticIntent = {
+          userLabel:       assignment.roleFromBrief,
+          mood:            assignment.roleFromBrief,
+          destination:     assignment.destinationFromBrief,
+          priority:        'required',
+          explicitFromBrief: true,
+        };
+        item.explicitlyTaggedInBrief      = true;
+        item.tagsUsed                     = [assignment.sourceTag];
+        item.coverageRequiredBecauseTagged = true;
+        item.priority                     = 'required';  // elevar a required
+      }
+    }
+
+    // Aplicar pairings explícitos: marcar en accessoryItems que deben ir con un outfit específico
+    for (const pairing of referenceTagResolution.explicitPairings) {
+      const acc = accessoryItems.find(a => a.id === pairing.sourceItemId);
+      if (acc) {
+        acc.compatibleWith = [pairing.targetItemId, ...(acc.compatibleWith ?? []).filter(id => id !== pairing.targetItemId)];
+      }
+    }
+  }
+
   const outfitSets         = outfitItems;
   const standaloneGarments: import('./types').WeeklyItem[] = [];
   const shoes:     import('./types').WeeklyItem[] = [];
@@ -6225,7 +6613,6 @@ export function buildWeeklyManifest(refs: import('./types').PhotodumpRefs, reque
   const makeup:    import('./types').WeeklyItem[] = [];
   const products:  import('./types').WeeklyItem[] = [];
 
-  const allItems      = [...outfitItems, ...accessoryItems];
   const requiredItems = allItems;
 
   const dominantType = detectWeeklyDominantType(outfitItems, accessoryItems);
@@ -6237,18 +6624,56 @@ export function buildWeeklyManifest(refs: import('./types').PhotodumpRefs, reque
       const { score, reason, integrationMode } = scoreWeeklyCompatibility(acc, outfit);
       if (score >= 65) {
         compatibilityPairs.push({ accessoryId: acc.id, outfitId: outfit.id, score, reason, integrationMode });
-        acc.compatibleWith = [...(acc.compatibleWith ?? []), outfit.id];
+        if (!acc.compatibleWith?.includes(outfit.id)) {
+          acc.compatibleWith = [...(acc.compatibleWith ?? []), outfit.id];
+        }
       }
     }
   }
 
   // Plan de integración de accesorios — anti-acumulación
-  const accIntPlan = buildWeeklyAccessoryIntegrationPlan(accessoryItems, outfitItems, compatibilityPairs, accCloseup);
+  // Si hay pairings explícitos del brief, pasarlos para que tengan prioridad
+  const explicitPairingsMap: Record<string, string> = {};
+  if (referenceTagResolution) {
+    for (const p of referenceTagResolution.explicitPairings) {
+      explicitPairingsMap[p.sourceItemId] = p.targetItemId;
+    }
+  }
+  const accIntPlan = buildWeeklyAccessoryIntegrationPlan(
+    accessoryItems, outfitItems, compatibilityPairs, accCloseup, explicitPairingsMap,
+  );
 
   // Plan de shots con roles narrativos
+  // Pasar el orden de outfits por tags para respetar orden del brief
+  const taggedOutfitOrder = referenceTagResolution
+    ? referenceTagResolution.itemSemanticAssignments
+        .filter(a => outfitItems.some(o => o.id === a.itemId))
+        .map(a => a.itemId)
+    : [];
+
   const { shotPlan, redundancyDebug, compositionMap } = buildWeeklyShotPlan(
-    outfitItems, accessoryItems, compatibilityPairs, accIntPlan, accCloseup, requestedCount, dominantType,
+    outfitItems, accessoryItems, compatibilityPairs, accIntPlan, accCloseup,
+    requestedCount, dominantType, taggedOutfitOrder,
   );
+
+  // Inyectar tags usados y semantic intent en cada shot del plan
+  if (referenceTagResolution) {
+    for (const sp of shotPlan) {
+      const usedTags: string[] = [];
+      for (const itemId of [...sp.primaryItemIds, ...sp.secondaryItemIds]) {
+        const item = allItems.find(it => it.id === itemId);
+        if (item?.tagsUsed) usedTags.push(...item.tagsUsed);
+        if (item?.semanticIntent && sp.primaryItemIds[0] === itemId) {
+          sp.semanticIntentFromBrief = item.semanticIntent;
+        }
+      }
+      if (usedTags.length > 0) sp.resolvedTagsUsed = [...new Set(usedTags)];
+      sp.avatarBaseClothingForbidden = true;
+    }
+  }
+
+  // Avatar base clothing fingerprint
+  const avatarBaseClothingFingerprint = buildAvatarBaseClothingFingerprint();
 
   // Coverage map clásico (binario) — compatibilidad con código existente
   const coverageMap: Record<string, import('./types').WeeklyCoverageEntry> = {};
@@ -6272,6 +6697,7 @@ export function buildWeeklyManifest(refs: import('./types').PhotodumpRefs, reque
   const weeklyCoverageMap = buildWeeklyCoverageMap(allItems, shotPlan);
 
   // Items sin cobertura REAL (no solo presencia superficial)
+  // Si un ítem fue taggeado explícitamente en el brief, su ausencia es más urgente
   const uncoveredRequiredItems = requiredItems
     .filter(it => !weeklyCoverageMap[it.id]?.realCoverage)
     .map(it => it.id);
@@ -6316,6 +6742,9 @@ export function buildWeeklyManifest(refs: import('./types').PhotodumpRefs, reque
     accessoryIntegrationUsed,
     unsafeHpiSuppressed:  true,
     brandRiskDetected:    false,
+    referenceTagResolution,
+    avatarBaseClothingPolicyApplied:    true,
+    avatarBaseClothingFingerprint,
   };
 }
 
@@ -6363,6 +6792,12 @@ function weeklyRoleToDirective(
   const forbiddenLabels = (sp.forbiddenItemIds ?? [])
     .map(id => allItems.find(it => it.id === id)?.label ?? id);
 
+  // Semantic context from brief tag resolution
+  const semanticIntent = sp.semanticIntentFromBrief;
+  const semanticMoodLabel = semanticIntent?.mood
+    ? ` [mood: ${semanticIntent.mood}${semanticIntent.destination ? ` / ${semanticIntent.destination}` : ''}]`
+    : '';
+
   const baseForbidden = [
     'studio_backdrop', 'catalog_pose', 'beautification',
     'invented_outfit', 'avatar_base_clothing_as_featured_outfit',
@@ -6386,7 +6821,7 @@ function weeklyRoleToDirective(
       framing: 'WIDE', composition: 'FLATLAY_OR_RACK_EDITORIAL', angle: 'SLIGHTLY_HIGH_OR_OVERHEAD',
     },
     WEEK_LOOK_HERO: {
-      purpose: `Weekly look hero for ${primaryLabel}. ${visualIntent}. Full body shot — outfit clearly readable head to toe. THIS outfit only — do NOT include elements from other uploaded outfits. Framing: ${compositionMode || rot.composition}. Angle: ${rot.angle}. Real environment, authentic attitude. NOT a catalog. NOT mannequin pose. Real person sharing their outfit of the week.`,
+      purpose: `Weekly look hero for ${primaryLabel}${semanticMoodLabel}. ${visualIntent}. Full body shot — outfit clearly readable head to toe. THIS outfit only — do NOT include elements from other uploaded outfits. Framing: ${compositionMode || rot.composition}. Angle: ${rot.angle}. Real environment, authentic attitude.${semanticIntent?.destination ? ` The mood of this look is "${semanticIntent.destination}" — reflect this in the environment and attitude.` : ''} NOT a catalog. NOT mannequin pose.`,
       required: ['full_body_visible', 'assigned_outfit_readable_head_to_toe', 'real_environment', 'authentic_attitude', 'only_assigned_outfit_visible'],
       forbidden: [...baseForbidden, 'identical_framing_as_prior_hero_shot', ...(forbiddenLabels.length > 0 ? [`do_not_show: ${forbiddenLabels.join(', ')}`] : [])],
       beat: 'context',
@@ -7904,6 +8339,14 @@ NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${shot.rol
           const isDetail         = roleLabel.includes('DETAIL') || roleLabel.includes('ACCESSORY_DETAIL');
           const isAccessory      = roleLabel.includes('ACCESSORY');
           const isHero           = roleLabel === 'WEEK_LOOK_HERO' || roleLabel === 'WEEK_MIRROR_LOOK';
+          // Semantic intent from tag resolver
+          const semIntent        = weekPlan?.semanticIntentFromBrief;
+          const resolvedTags     = weekPlan?.resolvedTagsUsed?.length ? weekPlan.resolvedTagsUsed.join(', ') : '';
+          const moodLine         = semIntent?.mood || semIntent?.destination
+            ? `MOOD / CONTEXT FROM BRIEF: "${[semIntent.mood, semIntent.destination].filter(Boolean).join(' — ')}"`
+            : '';
+          // Avatar base clothing fingerprint
+          const fingerprint      = buildAvatarBaseClothingFingerprint();
           return `SHOT IDENTITY — WEEKLY EDIT:
 - Face reference (appears 3 times): EXACT identity — same bone structure, same hair, same skin tone. No beautification.
 ${refs.bodyRef ? '- Body reference: establishes physique (build, proportions). Do NOT make the person heavier or slimmer than shown.' : ''}
@@ -7914,13 +8357,15 @@ PRIMARY ITEM(S) FOR THIS SHOT: ${primaryIds}
 SECONDARY / INTEGRATED ITEM(S): ${secondaryIds}
 VISUAL INTENT: ${visualIntent || `Show ${primaryIds} as the protagonist of this shot.`}
 COMPOSITION MODE: ${compositionMode || 'authentic_natural'}
+${resolvedTags ? `TAGS FROM BRIEF: ${resolvedTags}` : ''}
+${moodLine}
 ${forbiddenIds ? `FORBIDDEN ITEMS IN FRAME — DO NOT SHOW: ${forbiddenIds}` : ''}
 
 ${isHero ? `HERO SHOT RULES:
 - The person wears the ASSIGNED outfit (${primaryIds}) fully — head to toe readable.
 - DO NOT mix in elements from other uploaded outfits.
 - This specific outfit is the SOLE visual protagonist.
-- Do NOT show other uploaded outfits in the background.` : ''}
+- Do NOT show other uploaded outfits in the background.${semIntent?.destination ? `\n- The vibe of this look is "${semIntent.destination}" — reflect this in the environment, body language, and mood.` : ''}` : ''}
 ${isOverview ? `OVERVIEW RULES:
 - Show ALL weekly items arranged naturally together on a surface (bed, rack, chair, floor, table).
 - Person may appear partially (hands organizing) or not at all.
@@ -7931,14 +8376,17 @@ ${(isDetail || isAccessory) ? `ACCESSORY / DETAIL RULES:
 - Do NOT substitute another piece for the specified accessory.
 ${weekPlan?.integratedWithOutfitId ? `- This accessory appears WITH a compatible outfit (${secondaryIds}) — show both naturally together.` : ''}` : ''}
 
-⛔ AVATAR BASE CLOTHING — HARD RULE — NO EXCEPTIONS:
-The clothing visible in the avatar/body reference images is ONLY for identity (face, hair, skin tone) and body proportions.
-Do NOT treat avatar base clothing as a weekly outfit or as any item in this weekly set.
-When a weekly outfit is assigned to this shot, the person MUST wear that specific uploaded outfit — NOT the avatar's base clothes.
+⛔ FORBIDDEN WARDROBE — AVATAR BASE CLOTHING MUST NOT BE A STORY OUTFIT:
+The avatar/body reference photos are IDENTITY REFERENCES ONLY.
+The clothing on those photos (${fingerprint.summary}) is background data — NOT a content item.
+  • Do NOT dress the person in: ${fingerprint.topColor} ${fingerprint.topType} + ${fingerprint.bottomColor} ${fingerprint.bottomType}
+  • If this shot has an assigned primary outfit, the person MUST wear THAT uploaded outfit exclusively.
+  • The avatar's base wardrobe must NEVER substitute for a missing or unassigned outfit.
+  • Neutral footwear (${fingerprint.shoes}) is allowed ONLY if no footwear item was uploaded.
 
 ⛔ NO EXTERNAL BRANDING — HARD RULE:
-Do NOT generate bags, boxes, or props with visible brand names or logos (Zara, H&M, Shein, Nike, etc.).
-If props appear: PLAIN, UNBRANDED, GENERIC only — solid color, no text, no logo.
+Do NOT generate bags, boxes, or props with visible brand names or logos.
+If props appear: PLAIN, UNBRANDED, GENERIC only.
 
 🛍️ SCENE PROP BUDGET — WEEKLY:
 Maximum 1–3 neutral unbranded props per scene (exception: OVERVIEW role may show all weekly items).

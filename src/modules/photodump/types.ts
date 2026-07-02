@@ -878,6 +878,14 @@ export interface PhotodumpDebugData {
   compositionVarietyMap?:         WeeklyCompositionVarietyMap;
   tooManyGenericFullBodyShots?:   boolean;
   redundantShotNotReplaced?:      boolean;
+  // Reference tag resolution (patch v4)
+  referenceTaggingUsed?:          boolean;
+  referenceTagResolution?:        ReferenceTagResolutionResult;
+  // Avatar base clothing policy (patch v4)
+  avatarBaseClothingPolicyApplied?:     boolean;
+  avatarBaseClothingFingerprint?:       AvatarBaseClothingFingerprint;
+  avatarBaseClothingNegativePromptApplied?: boolean;
+  avatarBaseClothingLeakCheck?:         AvatarBaseClothingLeakCheck;
   // Accessory coverage map — detalle por accesorio/joya/calzado
   accessoryCoverageMap?: Record<string, {
     kind:             string;
@@ -1065,6 +1073,14 @@ export type WeeklySetDominantType =
   | 'makeup'        // mayoría son productos de maquillaje
   | 'mixed';        // mix variado
 
+export interface WeeklyItemSemanticIntent {
+  userLabel?:       string;    // alias del usuario ("look de cena")
+  mood?:            string;    // "casual", "arreglado", "cómodo", "vibrante"
+  destination?:     string;    // "salir a la tarde", "cena", "día"
+  priority?:        'required' | 'normal' | 'optional';
+  explicitFromBrief: boolean;
+}
+
 export interface WeeklyItem {
   id:                       string;         // 'outfit_0', 'outfit_1', 'acc_0', etc.
   sourceIndex:              number;         // índice en el array de refs
@@ -1077,6 +1093,11 @@ export interface WeeklyItem {
   accessoryEligible:        boolean;        // es accesorio / joyería / bolso
   canBeIntegratedWithOutfit: boolean;       // puede combinarse con otro outfit
   compatibleWith?:          string[];       // ids de ítems compatibles para integración
+  // Semantic intent desde el brief (patch v4)
+  semanticIntent?:          WeeklyItemSemanticIntent;
+  explicitlyTaggedInBrief?: boolean;
+  tagsUsed?:                string[];
+  coverageRequiredBecauseTagged?: boolean;
 }
 
 export interface WeeklyCompatibilityPair {
@@ -1182,6 +1203,11 @@ export interface WeeklyShotPlan {
   fallbackUsed?:    boolean;
   fallbackRole?:    WeeklyShotRole;
   retryCount?:      number;
+  // Reference tag enrichment (patch v4)
+  resolvedTagsUsed?:        string[];           // e.g. ["@outfit3", "@accessory2"]
+  semanticIntentFromBrief?: WeeklyItemSemanticIntent;
+  tagDrivenPairing?:        boolean;           // true si la integración fue forzada por tags
+  avatarBaseClothingForbidden?: boolean;        // true si el fingerprint se inyectó en este shot
 }
 
 export interface WeeklyManifest {
@@ -1215,4 +1241,90 @@ export interface WeeklyManifest {
   accessoryIntegrationUsed: boolean;
   unsafeHpiSuppressed:      boolean;
   brandRiskDetected:        boolean;
+  // Reference tag resolution (patch v4)
+  referenceTagResolution?: ReferenceTagResolutionResult;
+  // Avatar base clothing policy applied (patch v4)
+  avatarBaseClothingPolicyApplied?: boolean;
+  avatarBaseClothingFingerprint?:   AvatarBaseClothingFingerprint;
+}
+
+// ── Reference Tag Resolver — Global (patch v4) ────────────────────────────────
+
+export type RefTagSlotType =
+  | 'outfit'
+  | 'accessory'
+  | 'bag'
+  | 'shoe'
+  | 'makeup'
+  | 'product'
+  | 'scene'
+  | 'avatar'
+  | 'body'
+  | 'unknown';
+
+export interface ResolvedReferenceTag {
+  rawTag:            string;         // "@outfit3"
+  normalizedTag:     string;         // "outfit3"
+  slotType:          RefTagSlotType;
+  slotIndex?:        number;         // 0-based internamente
+  humanIndex?:       number;         // 1-based desde el tag (@outfit3 → 3, @outfit → 1)
+  resolvedItemId?:   string;         // id del WeeklyItem / HaulItem / etc.
+  resolvedRefUrl?:   string;         // URL exacta resuelta
+  confidence:        'high' | 'medium' | 'low';
+  usedInTextContext: string;         // fragmento del brief donde apareció el tag
+  semanticRole?:     string;         // "casual", "dinner", "comfortable", "vibrant"
+  semanticDest?:     string;         // "salir a la tarde", "cena", "día"
+  warning?:          string;
+}
+
+export interface ReferenceTagDuplicateUse {
+  rawTag:    string;
+  count:     number;
+  contexts:  string[];
+  warning:   string;
+}
+
+export interface ItemSemanticAssignment {
+  itemId:              string;
+  sourceTag:           string;
+  roleFromBrief?:      string;   // "casual", "arreglado", "cómodo", "vibrante"
+  destinationFromBrief?: string; // "salir a la tarde", "cena", "día"
+  usageInstruction?:   string;
+}
+
+export interface ExplicitItemPairing {
+  sourceItemId:  string;   // accesorio
+  targetItemId:  string;   // outfit con el que se usó
+  reason:        string;
+  rawText:       string;
+}
+
+export interface ReferenceTagResolutionResult {
+  tags:                      ResolvedReferenceTag[];
+  unresolvedTags:            ResolvedReferenceTag[];
+  duplicateTagUses:          ReferenceTagDuplicateUse[];
+  itemSemanticAssignments:   ItemSemanticAssignment[];
+  explicitPairings:          ExplicitItemPairing[];
+  briefWithoutTags?:         string;
+  referenceTaggingUsed:      boolean;
+  declaredCountDoesNotMatchUniqueTaggedItems?: boolean;
+  warnings:                  string[];
+}
+
+// ── Avatar Base Clothing Policy — Global (patch v4) ───────────────────────────
+
+export interface AvatarBaseClothingFingerprint {
+  topColor:    string;     // e.g. "black"
+  topType:     string;     // e.g. "fitted bodysuit / long sleeve top"
+  bottomColor: string;     // e.g. "light blue"
+  bottomType:  string;     // e.g. "wide leg jeans"
+  shoes?:      string;     // e.g. "white sneakers"
+  summary:     string;     // texto compacto para inyectar en prompt
+}
+
+export interface AvatarBaseClothingLeakCheck {
+  checked:            boolean;
+  suspiciousShotIds:  string[];
+  correctedShotIds:   string[];
+  remainingRisk:      'low' | 'medium' | 'high';
 }
