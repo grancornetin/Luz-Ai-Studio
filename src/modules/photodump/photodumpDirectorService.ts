@@ -29,6 +29,7 @@ import {
   getStorySupportFamilies, initPhotodumpIntelligence, StorySupportFamily,
 } from './photodumpIntelligence';
 import { buildHpiBlock, getHpiNegatives, initHpiService } from '../../services/hpiService';
+import { parseTag as parseCatalogTag, SLOT_CATALOG } from './slotCatalog';
 
 initHpiService();
 
@@ -7632,7 +7633,7 @@ interface BriefTagSlotInfo {
   url:      string;
   label:    string;   // "outfit slot 2"
   tagRaw:   string;   // "@outfit2"
-  type:     'outfit' | 'accesorio' | 'producto' | 'escena';
+  type:     string;  // SlotType del catálogo
   briefCtx: string;   // 60 chars de contexto semántico alrededor del tag
   charPos:  number;   // posición en el brief (para detectar cercanía)
 }
@@ -7663,19 +7664,15 @@ const SEQUENCE_WORDS = [
   'first', 'then', 'second', 'third', 'next', 'after',
 ];
 
-function resolveTagType(base: string): 'outfit' | 'accesorio' | 'producto' | 'escena' | null {
-  if (base === 'outfit' || base === 'look') return 'outfit';
-  if (base === 'accesorio' || base === 'aro' || base === 'aros' || base === 'bag' || base === 'bolso' || base === 'zapato' || base === 'shoes') return 'accesorio';
-  if (base === 'producto' || base === 'product') return 'producto';
-  if (base === 'escena' || base === 'scene') return 'escena';
-  return null;
-}
-
-function getUrlArrayForType(type: 'outfit' | 'accesorio' | 'producto' | 'escena', refs: PhotodumpRefs): string[] {
+function getUrlArrayForType(type: string, refs: PhotodumpRefs): string[] {
   if (type === 'outfit')    return [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
   if (type === 'accesorio') return (refs.accesorioRefs ?? []).filter(Boolean) as string[];
   if (type === 'producto')  return [refs.productRef, ...(refs.productRefs ?? [])].filter(Boolean) as string[];
+  if (type === 'packaging') return [refs.packagingRef, ...(refs.packagingRefs ?? [])].filter(Boolean) as string[];
   if (type === 'escena')    return [refs.sceneRef, ...(refs.sceneRefs ?? [])].filter(Boolean) as string[];
+  // persona, prop, textura, moodboard, pose, expresion: no tienen array en PhotodumpRefs aún
+  // → devolver avatarRef para persona, vacío para el resto
+  if (type === 'persona')   return [refs.avatarRef].filter(Boolean) as string[];
   return [];
 }
 
@@ -7685,32 +7682,33 @@ function buildBriefTagRefMap(brief: string, refs: PhotodumpRefs): BriefTagRefMap
   const allProductoUrls = getUrlArrayForType('producto',  refs);
   const allEscenaUrls   = getUrlArrayForType('escena',    refs);
 
-  const tagMatches = [...brief.matchAll(/@([a-záéíóúüñA-ZÁÉÍÓÚÜÑ]+)(\d*)/gi)];
+  const tagMatches = [...brief.matchAll(/@([a-záéíóúüñA-ZÁÉÍÓÚÜÑA-Za-z_]+\d*)/gi)];
 
   // Paso 1: construir info completa de cada tag encontrado en el brief
   const allSlotInfos: BriefTagSlotInfo[] = [];
 
   for (const m of tagMatches) {
-    const base   = m[1].toLowerCase();
-    const numStr = m[2];
-    const humanN = numStr ? parseInt(numStr, 10) : 1;
+    const rawTag  = m[0];  // "@outfit3"
+    const parsed  = parseCatalogTag(rawTag);
+    if (!parsed) continue;  // tag no reconocido por el catálogo → ignorar
+
+    const { type, index: humanN } = parsed;
     const idx    = humanN - 1;
-    const type   = resolveTagType(base);
-    if (!type) continue;
 
     const urlArr = getUrlArrayForType(type, refs);
     if (!urlArr[idx]) continue;  // slot no tiene imagen → ignorar
 
     const tagPos   = m.index ?? 0;
-    const window   = brief.slice(Math.max(0, tagPos - 80), tagPos + 60);
-    const briefCtx = window.replace(/@[a-záéíóúüñA-ZÁÉÍÓÚÜÑ]+\d*/gi, '').replace(/\s+/g, ' ').trim().slice(0, 100);
+    const briefWin = brief.slice(Math.max(0, tagPos - 80), tagPos + 60);
+    const briefCtx = briefWin.replace(/@[a-záéíóúüñA-ZÁÉÍÓÚÜÑA-Za-z_]+\d*/gi, '').replace(/\s+/g, ' ').trim().slice(0, 100);
+    const slotDef  = SLOT_CATALOG[type as keyof typeof SLOT_CATALOG];
 
     allSlotInfos.push({
       idx,
       url:      urlArr[idx],
-      label:    `${type} slot ${humanN}`,
-      tagRaw:   `@${m[1]}${m[2]}`,
-      type,
+      label:    `${slotDef?.label ?? type} slot ${humanN}`,
+      tagRaw:   rawTag,
+      type:     type as BriefTagSlotInfo['type'],
       briefCtx,
       charPos:  tagPos,
     });

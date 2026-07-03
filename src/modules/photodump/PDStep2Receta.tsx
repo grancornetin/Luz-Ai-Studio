@@ -9,6 +9,7 @@ import {
   PhotodumpRecipe, PhotodumpRefs, PhotodumpOutfitMode, HaulRefKind,
   RECIPE_META, isRefRequired,
 } from './types';
+import { SLOT_CATALOG, buildTag } from './slotCatalog';
 import HaulReferenceTypeSelector from './HaulReferenceTypeSelector';
 
 // Colores por slot
@@ -107,26 +108,28 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
 
   const allTagDefs: TagDef[] = [];
 
+  // Helper para construir el color de chip desde el catálogo
+  const chipColor = (cat: typeof SLOT_CATALOG[keyof typeof SLOT_CATALOG]) =>
+    `${cat.color.text} ${cat.color.bg} ${cat.color.border}`;
+
   // @persona / @cuerpo
   if (refs.avatarRef) allTagDefs.push({
-    tag: '@persona', label: 'persona', slotKey: 'avatar', slotIdx: 0, preview: refs.avatarRef,
-    color: 'text-indigo-600 bg-indigo-50 border-indigo-200',
+    tag: buildTag('persona', 1), label: 'persona', slotKey: 'avatar', slotIdx: 0,
+    preview: refs.avatarRef, color: chipColor(SLOT_CATALOG.persona),
   });
   if (refs.bodyRef) allTagDefs.push({
-    tag: '@cuerpo', label: 'cuerpo', slotKey: 'avatar', slotIdx: 1, preview: refs.bodyRef,
-    color: 'text-indigo-500 bg-indigo-50 border-indigo-200',
+    tag: '@cuerpo', label: 'cuerpo', slotKey: 'avatar', slotIdx: 1,
+    preview: refs.bodyRef, color: chipColor(SLOT_CATALOG.persona),
   });
 
-  // @outfit, @outfit2… (outfit_week / haul: cada slot es un outfit numerado desde 1)
+  // @outfit1, @outfit2… (siempre numerados — el catálogo dicta la convención)
   const outfitAll = [refs.outfitRef, ...(refs.outfitRefs ?? [])];
-  const outfitTagIsNumbered = recipe === 'outfit_week' || recipe === 'outfit_haul';
   outfitAll.forEach((r, i) => {
     if (!r) return;
-    const tag = i === 0 && !outfitTagIsNumbered ? '@outfit' : `@outfit${i + 1}`;
     allTagDefs.push({
-      tag, label: i === 0 && !outfitTagIsNumbered ? 'outfit' : `outfit ${i + 1}`,
+      tag: buildTag('outfit', i + 1), label: `outfit ${i + 1}`,
       slotKey: 'outfit', slotIdx: i, preview: r,
-      color: 'text-purple-600 bg-purple-50 border-purple-200',
+      color: chipColor(SLOT_CATALOG.outfit),
     });
   });
 
@@ -134,42 +137,51 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   (refs.accesorioRefs ?? []).forEach((r, i) => {
     if (!r) return;
     allTagDefs.push({
-      tag: `@accesorio${i + 1}`, label: `accesorio ${i + 1}`,
+      tag: buildTag('accesorio', i + 1), label: `accesorio ${i + 1}`,
       slotKey: 'accesorios', slotIdx: i, preview: r,
-      color: 'text-pink-600 bg-pink-50 border-pink-200',
+      color: chipColor(SLOT_CATALOG.accesorio),
     });
   });
 
-  // @producto, @producto2…
+  // @producto1, @producto2…
   const productoAll = [refs.productRef, ...(refs.productRefs ?? [])];
   productoAll.forEach((r, i) => {
     if (!r) return;
-    const tag = i === 0 ? '@producto' : `@producto${i + 1}`;
     allTagDefs.push({
-      tag, label: i === 0 ? 'producto' : `producto ${i + 1}`,
+      tag: buildTag('producto', i + 1), label: `producto ${i + 1}`,
       slotKey: 'producto', slotIdx: i, preview: r,
-      color: 'text-emerald-600 bg-emerald-50 border-emerald-200',
+      color: chipColor(SLOT_CATALOG.producto),
     });
   });
 
-  // @empaque
-  if (refs.packagingRef) allTagDefs.push({
-    tag: '@empaque', label: 'empaque', slotKey: 'empaque', slotIdx: 0, preview: refs.packagingRef,
-    color: 'text-amber-600 bg-amber-50 border-amber-200',
+  // @packaging1
+  const packagingAll = [refs.packagingRef, ...(refs.packagingRefs ?? [])];
+  packagingAll.forEach((r, i) => {
+    if (!r) return;
+    allTagDefs.push({
+      tag: buildTag('packaging', i + 1), label: `packaging ${i + 1}`,
+      slotKey: 'empaque', slotIdx: i, preview: r,
+      color: chipColor(SLOT_CATALOG.packaging),
+    });
   });
 
-  // @escena, @escena_prueba, @escena_destino
-  if (refs.sceneRef) allTagDefs.push({
-    tag: '@escena', label: 'escena', slotKey: 'escena', slotIdx: 0, preview: refs.sceneRef,
-    color: 'text-blue-600 bg-blue-50 border-blue-200',
+  // @escena1 / @escena_prueba / @escena_destino
+  const escenaAll = [refs.sceneRef, ...(refs.sceneRefs ?? [])];
+  escenaAll.forEach((r, i) => {
+    if (!r) return;
+    allTagDefs.push({
+      tag: buildTag('escena', i + 1), label: `escena ${i + 1}`,
+      slotKey: 'escena', slotIdx: i, preview: r,
+      color: chipColor(SLOT_CATALOG.escena),
+    });
   });
   if (refs.scenePruebaRef) allTagDefs.push({
-    tag: '@escena_prueba', label: 'escena prueba', slotKey: 'escena_prueba', slotIdx: 0, preview: refs.scenePruebaRef,
-    color: 'text-cyan-600 bg-cyan-50 border-cyan-200',
+    tag: '@escena_prueba', label: 'escena prueba', slotKey: 'escena_prueba', slotIdx: 0,
+    preview: refs.scenePruebaRef, color: chipColor(SLOT_CATALOG.escena),
   });
   if (refs.sceneDestinoRef) allTagDefs.push({
-    tag: '@escena_destino', label: 'escena destino', slotKey: 'escena_destino', slotIdx: 0, preview: refs.sceneDestinoRef,
-    color: 'text-violet-600 bg-violet-50 border-violet-200',
+    tag: '@escena_destino', label: 'escena destino', slotKey: 'escena_destino', slotIdx: 0,
+    preview: refs.sceneDestinoRef, color: chipColor(SLOT_CATALOG.escena),
   });
 
   // Tags activos (mencionados en el brief)
