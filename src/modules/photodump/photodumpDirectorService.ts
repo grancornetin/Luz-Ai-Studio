@@ -5585,38 +5585,117 @@ function detectExplicitPairing(
   allItems:     import('./types').WeeklyItem[],
 ): import('./types').ExplicitItemPairing[] {
   const pairings: import('./types').ExplicitItemPairing[] = [];
+  const seenPairs = new Set<string>();
   const lowerBrief = brief.toLowerCase();
 
+  // ── Estrategia 1: tags directos en la misma oración ──────────
+  // Detecta pairings cuando dos tags distintos (@accesorio1 + @outfit3) aparecen
+  // en la misma cláusula (separados por ≤120 chars sin punto ni punto y coma duro).
+  const tagPattern = /@([a-záéíóúüñA-ZÁÉÍÓÚÜÑ]+\d*)/gi;
+  const allTagMatches: { rawTag: string; pos: number; itemId?: string; type: string }[] = [];
+
+  let m: RegExpExecArray | null;
+  while ((m = tagPattern.exec(brief)) !== null) {
+    const resolved = taggedItems.find(t => t.rawTag.toLowerCase() === m![0].toLowerCase());
+    if (!resolved?.resolvedItemId) continue;
+    const baseKey = m[1].toLowerCase().replace(/\d+$/, '');
+    const tagType = TAG_SLOT_ALIASES[baseKey] ?? 'unknown';
+    allTagMatches.push({ rawTag: m[0], pos: m.index, itemId: resolved.resolvedItemId, type: tagType });
+  }
+
+  for (let i = 0; i < allTagMatches.length; i++) {
+    for (let j = i + 1; j < allTagMatches.length; j++) {
+      const a = allTagMatches[i];
+      const b = allTagMatches[j];
+      if (!a.itemId || !b.itemId || a.itemId === b.itemId) continue;
+      if (a.type === b.type) continue;  // mismo tipo → no es un pairing útil
+
+      const gap     = Math.abs(b.pos - a.pos);
+      if (gap > 150) continue;  // demasiado separados
+
+      // ¿Hay separador duro entre ellos?
+      const between = lowerBrief.slice(Math.min(a.pos, b.pos), Math.max(a.pos, b.pos));
+      const hasSeparator = /[.;]\s/.test(between.replace(/@\w+\d*/g, ''));
+      if (hasSeparator && gap > 60) continue;
+
+      // ¿Hay conector explícito o están en la misma cláusula?
+      const hasConnector = PAIRING_CONNECTORS.some(c => between.includes(c)) ||
+                           PAIRING_VERBS.some(v => between.includes(v));
+      const sameClause   = !hasSeparator && gap < 100;
+
+      if (!hasConnector && !sameClause) continue;
+
+      // Identificar cuál es accesorio/item y cuál es outfit/destino del pairing
+      const isAAccessory = a.type === 'accessory' || a.type === 'bag' || a.type === 'shoe';
+      const isBOutfit    = b.type === 'outfit';
+      const isAOutfit    = a.type === 'outfit';
+      const isBAccessory = b.type === 'accessory' || b.type === 'bag' || b.type === 'shoe';
+
+      let sourceId: string | undefined;
+      let targetId: string | undefined;
+
+      if (isAAccessory && isBOutfit) {
+        sourceId = a.itemId; targetId = b.itemId;
+      } else if (isBAccessory && isAOutfit) {
+        sourceId = b.itemId; targetId = a.itemId;
+      } else {
+        // Pairing no estándar (outfit + producto, etc.) — igualmente útil
+        sourceId = a.itemId; targetId = b.itemId;
+      }
+
+      const pairKey = [sourceId, targetId].sort().join('::');
+      if (seenPairs.has(pairKey)) continue;
+      seenPairs.add(pairKey);
+
+      const ctxStart = Math.max(0, Math.min(a.pos, b.pos) - 30);
+      const ctxEnd   = Math.min(brief.length, Math.max(a.pos, b.pos) + 50);
+      const rawText  = brief.slice(ctxStart, ctxEnd).trim();
+
+      pairings.push({
+        sourceItemId: sourceId!,
+        targetItemId: targetId!,
+        reason:       `Direct tag pairing detected: ${a.rawTag} + ${b.rawTag} in same clause`,
+        rawText,
+      });
+    }
+  }
+
+  // ── Estrategia 2: verbos de pairing con tags (compatible con legado) ─────────
   for (const verb of PAIRING_VERBS) {
     const verbIdx = lowerBrief.indexOf(verb);
     if (verbIdx === -1) continue;
 
-    // Buscar el tag de outfit más cercano después del verbo
-    const afterVerb = brief.slice(verbIdx);
-    const outfitTagMatch = afterVerb.match(/@(outfit\d*|look\d*)\b/i);
-    if (!outfitTagMatch) continue;
+    // Buscar cualquier tag DESPUÉS del verbo (no solo outfit)
+    const afterVerb = brief.slice(verbIdx, verbIdx + 120);
+    const targetTagMatch = afterVerb.match(/@([a-záéíóúüñA-ZÁÉÍÓÚÜÑ]+\d*)/i);
+    if (!targetTagMatch) continue;
 
-    const targetTag = taggedItems.find(t =>
-      t.rawTag.toLowerCase() === outfitTagMatch[0].toLowerCase()
+    const targetResolved = taggedItems.find(t =>
+      t.rawTag.toLowerCase() === targetTagMatch[0].toLowerCase()
     );
-    if (!targetTag?.resolvedItemId) continue;
+    if (!targetResolved?.resolvedItemId) continue;
 
-    // Buscar el accesorio mencionado antes del verbo
-    const beforeVerb = brief.slice(Math.max(0, verbIdx - 80), verbIdx).toLowerCase();
-    const accCandidates = allItems.filter(it => it.accessoryEligible || it.kind === 'jewelry' || it.kind === 'bag');
-    const sourceItem = accCandidates.find(acc => {
-      const lbl = acc.label.toLowerCase();
-      return beforeVerb.includes(lbl) || (acc.kind === 'jewelry' && beforeVerb.includes('aros')) || (acc.kind === 'jewelry' && beforeVerb.includes('aritos'));
+    // Buscar cualquier tag ANTES del verbo
+    const beforeVerb = brief.slice(Math.max(0, verbIdx - 100), verbIdx);
+    const sourceTagMatch = beforeVerb.match(/@([a-záéíóúüñA-ZÁÉÍÓÚÜÑ]+\d*)/i);
+    if (!sourceTagMatch) continue;
+
+    const sourceResolved = taggedItems.find(t =>
+      t.rawTag.toLowerCase() === sourceTagMatch[0].toLowerCase()
+    );
+    if (!sourceResolved?.resolvedItemId) continue;
+    if (sourceResolved.resolvedItemId === targetResolved.resolvedItemId) continue;
+
+    const pairKey = [sourceResolved.resolvedItemId, targetResolved.resolvedItemId].sort().join('::');
+    if (seenPairs.has(pairKey)) continue;
+    seenPairs.add(pairKey);
+
+    pairings.push({
+      sourceItemId: sourceResolved.resolvedItemId,
+      targetItemId: targetResolved.resolvedItemId,
+      reason:       `Pairing verb "${verb}" between ${sourceResolved.rawTag} and ${targetResolved.rawTag}`,
+      rawText:      brief.slice(Math.max(0, verbIdx - 40), verbIdx + 80).trim(),
     });
-
-    if (sourceItem) {
-      pairings.push({
-        sourceItemId: sourceItem.id,
-        targetItemId: targetTag.resolvedItemId,
-        reason:       `User said "${sourceItem.label}" was used with ${targetTag.rawTag}`,
-        rawText:      brief.slice(Math.max(0, verbIdx - 40), verbIdx + 40).trim(),
-      });
-    }
   }
 
   return pairings;
@@ -6670,6 +6749,22 @@ export function buildWeeklyManifest(
       }
       if (usedTags.length > 0) sp.resolvedTagsUsed = [...new Set(usedTags)];
       sp.avatarBaseClothingForbidden = true;
+
+      // Inyectar pairings del brief que involucren a ítems de este shot
+      // El Visual Reference Contract los usa para generar instrucciones de integración
+      if (referenceTagResolution.explicitPairings.length > 0) {
+        const shotItemIds = new Set([...sp.primaryItemIds, ...sp.secondaryItemIds]);
+        const relevantPairings = referenceTagResolution.explicitPairings.filter(
+          p => shotItemIds.has(p.sourceItemId) || shotItemIds.has(p.targetItemId)
+        );
+        if (relevantPairings.length > 0) {
+          sp.explicitPairingsFromBrief = relevantPairings.map(p => ({
+            sourceItemId: p.sourceItemId,
+            targetItemId: p.targetItemId,
+            rawText:      p.rawText,
+          }));
+        }
+      }
     }
   }
 
@@ -6714,6 +6809,47 @@ export function buildWeeklyManifest(
   const redundantShotNotReplaced    = redundancyDebug.some(r => r.redundantShotNotReplaced === true);
   const weeklyStructure             = buildWeeklyStructureDescription(shotPlan, dominantType);
 
+  // ── Debug: distribución de ítems primarios por shot ──────────
+  const shotPrimaryItemDistribution: Record<string, number> = {};
+  for (const sp of shotPlan) {
+    for (const id of sp.primaryItemIds) {
+      shotPrimaryItemDistribution[id] = (shotPrimaryItemDistribution[id] ?? 0) + 1;
+    }
+  }
+
+  // ítems sobreusados: aparecen como primary más veces de lo razonable
+  const fairShare = requestedCount / Math.max(allItems.length, 1);
+  const overusedPrimaryItems = Object.entries(shotPrimaryItemDistribution)
+    .filter(([, count]) => count > Math.ceil(fairShare * 1.5) && allItems.length > 1)
+    .map(([id]) => id);
+
+  // ── Brief binding compliance ──────────────────────────────────
+  const briefBindingCompliance = referenceTagResolution ? (() => {
+    const taggedItemIds = new Set(
+      referenceTagResolution.itemSemanticAssignments
+        .filter(a => a.itemId)
+        .map(a => a.itemId)
+    );
+    const missingTaggedRefs = [...taggedItemIds].filter(id => !coveredItemIds.includes(id));
+
+    const explicitPairingIds = referenceTagResolution.explicitPairings.map(
+      p => [p.sourceItemId, p.targetItemId].sort().join('::')
+    );
+    const coveredPairingIds = shotPlan
+      .filter(sp => sp.explicitPairingsFromBrief && sp.explicitPairingsFromBrief.length > 0)
+      .flatMap(sp => (sp.explicitPairingsFromBrief ?? []).map(
+        p => [p.sourceItemId, p.targetItemId].sort().join('::')
+      ));
+    const missingPairings = explicitPairingIds.filter(pid => !coveredPairingIds.includes(pid));
+
+    return {
+      allMentionedTagsCovered:    missingTaggedRefs.length === 0,
+      allExplicitPairingsCovered: missingPairings.length === 0,
+      missingTaggedRefs,
+      missingPairings,
+    };
+  })() : undefined;
+
   return {
     totalItems:         allItems.length,
     dominantType,
@@ -6746,6 +6882,13 @@ export function buildWeeklyManifest(
     referenceTagResolution,
     avatarBaseClothingPolicyApplied:    true,
     avatarBaseClothingFingerprint,
+    // Patch v5 — Visual Reference Contract debug
+    visualSlotBindingUsed:            !!(referenceTagResolution?.referenceTaggingUsed),
+    avatarBaseClothingSuppressedGlobally: true,
+    ref0UsedAsWardrobeSource:         false,
+    briefBindingCompliance,
+    shotPrimaryItemDistribution,
+    overusedPrimaryItems,
   };
 }
 
@@ -7818,6 +7961,226 @@ The image order passed to you in the references matches the slot numbers above.
   };
 }
 
+// ── Visual Reference Contract ─────────────────────────────────────────────────
+//
+// Genera un bloque de texto que mapea EXPLÍCITAMENTE cada ítem del shot
+// a su posición 1-based en el array de refs que se pasa al modelo.
+// El modelo no sabe que "outfit_2" = imagen #6 del array — este bloque se lo dice.
+//
+// Diseñado para cualquier receta que use index routing (outfit_week, outfit_haul, futuras).
+// NO hardcodea descripciones visuales — usa posición de la imagen como fuente de verdad.
+
+interface VisualRefContractEntry {
+  refPosition: number;   // 1-based index en el array de refs
+  role:        string;   // 'IDENTITY' | 'BODY' | 'WORLD' | 'OUTFIT_SLOT_N' | 'ACCESSORY_SLOT_N' | etc.
+  instruction: string;   // qué debe hacer el modelo con esta imagen
+  itemId?:     string;   // ID interno (outfit_2, acc_0)
+  isForbiddenSource?: boolean;  // si es true, el modelo no puede tomar ropa de aquí
+}
+
+interface VisualReferenceContract {
+  entries:            VisualRefContractEntry[];
+  primarySlotNames:   string[];   // 'OUTFIT_SLOT_3', 'ACCESSORY_SLOT_1', etc.
+  secondarySlotNames: string[];
+  forbiddenSlotNames: string[];
+  avatarClothingForbidden: boolean;
+  ref0ClothingForbidden:   boolean;
+  contractBlock:      string;     // bloque de texto listo para insertar en prompt
+}
+
+function buildVisualReferenceContract(
+  refsToPass:        string[],
+  weekPlan:          import('./types').WeeklyShotPlan | undefined,
+  allOutfitUrls:     string[],
+  allAccUrls:        string[],
+  avatarRef?:        string,
+  bodyRef?:          string,
+  ref0Url?:          string,
+  pairingsFromBrief?: { primaryItemId: string; secondaryItemId: string; context?: string }[],
+): VisualReferenceContract {
+  const entries: VisualRefContractEntry[] = [];
+
+  // Mapear cada posición en el array de refs
+  for (let i = 0; i < refsToPass.length; i++) {
+    const url      = refsToPass[i];
+    const pos      = i + 1;   // 1-based para el modelo
+
+    // Identificar qué es esta imagen
+    if (avatarRef && url === avatarRef) {
+      entries.push({
+        refPosition: pos,
+        role:        'IDENTITY',
+        instruction: 'Use for identity only: face, hair, skin tone, bone structure. DO NOT use the clothing in this image as a wardrobe item.',
+        isForbiddenSource: true,
+      });
+      continue;
+    }
+    if (bodyRef && url === bodyRef) {
+      entries.push({
+        refPosition: pos,
+        role:        'BODY',
+        instruction: 'Use for body proportions only. DO NOT copy or use the clothing in this image.',
+        isForbiddenSource: true,
+      });
+      continue;
+    }
+    if (ref0Url && url === ref0Url) {
+      entries.push({
+        refPosition: pos,
+        role:        'WORLD_ANCHOR',
+        instruction: 'Use for room, environment, light quality, and color temperature only. DO NOT use clothing from this image as a wardrobe item.',
+        isForbiddenSource: true,
+      });
+      continue;
+    }
+
+    // Buscar en outfits
+    const outfitIdx = allOutfitUrls.indexOf(url);
+    if (outfitIdx >= 0) {
+      const slotName = `OUTFIT_SLOT_${outfitIdx + 1}`;
+      const isPrimary   = weekPlan?.primaryItemIds.includes(`outfit_${outfitIdx}`) ?? false;
+      const isSecondary = weekPlan?.secondaryItemIds.includes(`outfit_${outfitIdx}`) ?? false;
+      const isForbidden = weekPlan?.forbiddenItemIds?.includes(`outfit_${outfitIdx}`) ?? false;
+      entries.push({
+        refPosition: pos,
+        role:        slotName,
+        itemId:      `outfit_${outfitIdx}`,
+        instruction: isPrimary
+          ? `PRIMARY GARMENT: The person in this shot MUST wear exactly the clothing shown in this image. Preserve all colors, cuts, patterns, and visible details. This is the SOLE wardrobe protagonist for this shot.`
+          : isSecondary
+          ? `SECONDARY ITEM: This item appears alongside the primary item. Show it naturally integrated — do not invent styling not shown in the reference.`
+          : isForbidden
+          ? `⛔ FORBIDDEN: Do NOT show this outfit in this shot. It belongs to a different moment in the story.`
+          : `CONTEXT ITEM: Present but not the shot protagonist.`,
+        isForbiddenSource: isForbidden,
+      });
+      continue;
+    }
+
+    // Buscar en accesorios
+    const accIdx = allAccUrls.indexOf(url);
+    if (accIdx >= 0) {
+      const slotName  = `ACCESSORY_SLOT_${accIdx + 1}`;
+      const isPrimary   = weekPlan?.primaryItemIds.includes(`acc_${accIdx}`) ?? false;
+      const isSecondary = weekPlan?.secondaryItemIds.includes(`acc_${accIdx}`) ?? false;
+
+      // ¿Este accesorio está explícitamente pareado con algún outfit en este shot?
+      const pairing = pairingsFromBrief?.find(
+        p => p.secondaryItemId === `acc_${accIdx}` || p.primaryItemId === `acc_${accIdx}`
+      );
+      const pairedWithOutfitId   = pairing
+        ? (pairing.primaryItemId.startsWith('outfit_') ? pairing.primaryItemId : pairing.secondaryItemId)
+        : undefined;
+      const pairedOutfitIdx      = pairedWithOutfitId
+        ? parseInt(pairedWithOutfitId.replace('outfit_', ''), 10)
+        : -1;
+      const pairedOutfitSlotName = pairedOutfitIdx >= 0
+        ? `OUTFIT_SLOT_${pairedOutfitIdx + 1}`
+        : undefined;
+
+      entries.push({
+        refPosition: pos,
+        role:        slotName,
+        itemId:      `acc_${accIdx}`,
+        instruction: isPrimary
+          ? `PRIMARY ACCESSORY: This exact piece must appear clearly visible in the shot. Preserve its shape, material, color, and details exactly. Do NOT substitute another piece.`
+          : isSecondary && pairedOutfitSlotName
+          ? `INTEGRATED ACCESSORY (paired with ${pairedOutfitSlotName} per user's brief): This accessory must appear worn TOGETHER with ${pairedOutfitSlotName} in this shot — not as an isolated macro. Show it naturally worn as part of that look.`
+          : isSecondary
+          ? `INTEGRATED ACCESSORY: This piece appears alongside the primary outfit. Show it naturally worn or held — not as a macro close-up.`
+          : `ACCESSORY CONTEXT: Present if space allows.`,
+      });
+      continue;
+    }
+
+    // Otras refs (escena, etc.) — marcar como world context
+    entries.push({
+      refPosition: pos,
+      role:        'SCENE_CONTEXT',
+      instruction: 'Use for scene environment and background reference only.',
+    });
+  }
+
+  // Construir listas de nombres de slot para los summaries
+  const primarySlotNames: string[] = [];
+  const secondarySlotNames: string[] = [];
+  const forbiddenSlotNames: string[] = [];
+
+  for (const e of entries) {
+    if (!e.role.includes('_SLOT_')) continue;
+    if (e.instruction.startsWith('PRIMARY'))   primarySlotNames.push(e.role);
+    if (e.instruction.startsWith('SECONDARY') || e.instruction.startsWith('INTEGRATED')) secondarySlotNames.push(e.role);
+    if (e.isForbiddenSource && e.role.includes('OUTFIT_SLOT')) forbiddenSlotNames.push(e.role);
+  }
+
+  const identityEntries  = entries.filter(e => e.role === 'IDENTITY');
+  const bodyEntry        = entries.find(e => e.role === 'BODY');
+  const worldEntry       = entries.find(e => e.role === 'WORLD_ANCHOR');
+  const primaryEntries   = entries.filter(e => e.instruction.startsWith('PRIMARY'));
+  const secondaryEntries = entries.filter(e => e.instruction.startsWith('SECONDARY') || e.instruction.startsWith('INTEGRATED'));
+  const forbiddenEntries = entries.filter(e => e.isForbiddenSource && e.role.includes('SLOT'));
+
+  // Construir el bloque de texto completo
+  const lines: string[] = [
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    '🎯 VISUAL REFERENCE CONTRACT FOR THIS SHOT (BINDING — OBEY EXACTLY)',
+    '',
+  ];
+
+  if (identityEntries.length > 0) {
+    lines.push(`IDENTITY (image${identityEntries.length > 1 ? 's' : ''} #${identityEntries.map(e => e.refPosition).join(', #')}): Face, hair, skin tone, bone structure — identity anchor only. The clothing in these images is NOT a wardrobe item for this story.`);
+  }
+  if (bodyEntry) {
+    lines.push(`BODY (image #${bodyEntry.refPosition}): Body proportions only. The clothing in this image is NOT a wardrobe item.`);
+  }
+  if (worldEntry) {
+    lines.push(`WORLD ANCHOR (image #${worldEntry.refPosition}): Room, environment, light quality, color temperature. Do NOT extract clothing from this image as a wardrobe reference.`);
+  }
+  lines.push('');
+
+  if (primaryEntries.length > 0) {
+    lines.push('PRIMARY VISUAL ITEM(S) — THE WARDROBE SOURCE FOR THIS SHOT:');
+    for (const e of primaryEntries) {
+      lines.push(`  → Image #${e.refPosition} = ${e.role}: ${e.instruction}`);
+    }
+  }
+
+  if (secondaryEntries.length > 0) {
+    lines.push('');
+    lines.push('SECONDARY / INTEGRATED ITEM(S):');
+    for (const e of secondaryEntries) {
+      lines.push(`  → Image #${e.refPosition} = ${e.role}: ${e.instruction}`);
+    }
+  }
+
+  if (forbiddenEntries.length > 0) {
+    lines.push('');
+    lines.push('⛔ FORBIDDEN IN THIS SHOT — DO NOT SHOW:');
+    for (const e of forbiddenEntries) {
+      lines.push(`  ❌ Image #${e.refPosition} = ${e.role}: ${e.instruction}`);
+    }
+  }
+
+  lines.push('');
+  lines.push('⛔ GLOBAL WARDROBE RULES (ALL SHOTS):');
+  lines.push('  • NEVER use clothing visible in IDENTITY or BODY references as a weekly outfit or story item.');
+  lines.push('  • NEVER use clothing from the WORLD ANCHOR (REF0) as a wardrobe item.');
+  lines.push('  • If a PRIMARY GARMENT is assigned, the person MUST wear exactly that — no substitutions.');
+  lines.push('  • If multiple outfit slots are uploaded, use ONLY the assigned slot for this shot.');
+  lines.push('  • Do NOT generate any visible text, labels, numbers, watermarks, or UI overlays in the output image.');
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+  return {
+    entries,
+    primarySlotNames,
+    secondarySlotNames,
+    forbiddenSlotNames,
+    avatarClothingForbidden: true,
+    ref0ClothingForbidden:   true,
+    contractBlock: lines.join('\n'),
+  };
+}
+
 export async function generatePhotodumpShot(
   shot:               PhotodumpShotDirective,
   refs:               PhotodumpRefs,
@@ -8171,6 +8534,33 @@ export async function generatePhotodumpShot(
   const extraProducts = (refs.productRefs ?? []).filter(Boolean) as string[];
   const extraPackaging = (refs.packagingRefs ?? []).filter(Boolean) as string[];
   const sceneForShot  = getSceneRefForShot(refs, shot.arcPosition - 1, totalShots);
+
+  // ── Visual Reference Contract — para outfit_week (y futuras recetas con index routing) ──
+  // Se construye DESPUÉS de que refsToPass está completo, así los números de posición son exactos.
+  const weeklyVisualContract: VisualReferenceContract | null = (() => {
+    if (recipe !== 'outfit_week') return null;
+    const weekPlan = shot.weeklyItemPlan as import('./types').WeeklyShotPlan | undefined;
+    const allOutfitUrls = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
+    const allAccUrls    = (refs.accesorioRefs ?? []).filter(Boolean) as string[];
+
+    // Pairings del brief para el contrato visual
+    const pairingsForContract = weekPlan?.explicitPairingsFromBrief?.map(p => ({
+      primaryItemId:   p.targetItemId,   // el outfit
+      secondaryItemId: p.sourceItemId,   // el accesorio
+      context:         p.rawText,
+    })) ?? [];
+
+    return buildVisualReferenceContract(
+      refsToPass,
+      weekPlan,
+      allOutfitUrls,
+      allAccUrls,
+      refs.avatarRef,
+      refs.bodyRef,
+      ref0Url,
+      pairingsForContract,
+    );
+  })();
 
   const momentLabel = {
     candid:     '📱 CANDID — Captura espontánea sin pose ni artificio.',
@@ -8593,51 +8983,50 @@ NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${shot.rol
       ? (() => {
           const weekPlan: import('./types').WeeklyShotPlan | undefined = shot.weeklyItemPlan;
           const roleLabel        = weekPlan?.role ?? shot.role ?? 'WEEKLY SHOT';
-          const primaryIds       = weekPlan?.primaryItemIds.join(', ')   ?? 'first outfit';
-          const secondaryIds     = weekPlan?.secondaryItemIds?.length ? weekPlan.secondaryItemIds.join(', ') : 'none';
-          const forbiddenIds     = weekPlan?.forbiddenItemIds?.length  ? weekPlan.forbiddenItemIds.join(', ')  : '';
           const visualIntent     = weekPlan?.visualWeightIntent ?? '';
           const compositionMode  = weekPlan?.compositionMode    ?? '';
           const isOverview       = roleLabel.includes('OVERVIEW');
           const isDetail         = roleLabel.includes('DETAIL') || roleLabel.includes('ACCESSORY_DETAIL');
           const isAccessory      = roleLabel.includes('ACCESSORY');
           const isHero           = roleLabel === 'WEEK_LOOK_HERO' || roleLabel === 'WEEK_MIRROR_LOOK';
-          // Semantic intent from tag resolver
           const semIntent        = weekPlan?.semanticIntentFromBrief;
           const resolvedTags     = weekPlan?.resolvedTagsUsed?.length ? weekPlan.resolvedTagsUsed.join(', ') : '';
           const moodLine         = semIntent?.mood || semIntent?.destination
             ? `MOOD / CONTEXT FROM BRIEF: "${[semIntent.mood, semIntent.destination].filter(Boolean).join(' — ')}"`
             : '';
-          // Avatar base clothing fingerprint
+          // El Visual Reference Contract ya construido arriba
+          const contractBlock    = weeklyVisualContract?.contractBlock ?? '';
+          const primarySlots     = weeklyVisualContract?.primarySlotNames.join(', ') ?? '';
           const fingerprint      = buildAvatarBaseClothingFingerprint();
           return `SHOT IDENTITY — WEEKLY EDIT:
-- Face reference (appears 3 times): EXACT identity — same bone structure, same hair, same skin tone. No beautification.
-${refs.bodyRef ? '- Body reference: establishes physique (build, proportions). Do NOT make the person heavier or slimmer than shown.' : ''}
-- REF0: establishes the visual world — same light quality, same ambient mood, same color temperature.
+- Face reference images: EXACT identity anchor — same bone structure, same hair, same skin tone. No beautification.
+${refs.bodyRef ? '- Body reference: establishes physique (build, proportions) ONLY. The clothing in this image is NOT a wardrobe item.' : ''}
+- World anchor image: establishes room, light quality, ambient mood, color temperature ONLY. Clothing from this image is NOT a wardrobe item.
 
 WEEKLY ROLE: ${roleLabel}
-PRIMARY ITEM(S) FOR THIS SHOT: ${primaryIds}
-SECONDARY / INTEGRATED ITEM(S): ${secondaryIds}
-VISUAL INTENT: ${visualIntent || `Show ${primaryIds} as the protagonist of this shot.`}
+VISUAL INTENT: ${visualIntent || `The primary wardrobe item for this shot is ${primarySlots || 'the assigned outfit'}.`}
 COMPOSITION MODE: ${compositionMode || 'authentic_natural'}
 ${resolvedTags ? `TAGS FROM BRIEF: ${resolvedTags}` : ''}
 ${moodLine}
-${forbiddenIds ? `FORBIDDEN ITEMS IN FRAME — DO NOT SHOW: ${forbiddenIds}` : ''}
+
+${contractBlock}
 
 ${isHero ? `HERO SHOT RULES:
-- The person wears the ASSIGNED outfit (${primaryIds}) fully — head to toe readable.
-- DO NOT mix in elements from other uploaded outfits.
-- This specific outfit is the SOLE visual protagonist.
-- Do NOT show other uploaded outfits in the background.${semIntent?.destination ? `\n- The vibe of this look is "${semIntent.destination}" — reflect this in the environment, body language, and mood.` : ''}` : ''}
+- The person wears EXACTLY the garment assigned as PRIMARY in the contract above.
+- Look for the PRIMARY GARMENT image in the contract — that is the SOLE source of wardrobe truth.
+- DO NOT use clothing from identity/body/world images as the garment.
+- DO NOT mix in elements from other uploaded outfit images.
+- The garment in the PRIMARY slot is the ONLY outfit for this shot.${semIntent?.destination ? `\n- The vibe of this look is "${semIntent.destination}" — reflect this in the environment, body language, and mood.` : ''}` : ''}
 ${isOverview ? `OVERVIEW RULES:
 - Show ALL weekly items arranged naturally together on a surface (bed, rack, chair, floor, table).
 - Person may appear partially (hands organizing) or not at all.
 - This is NOT a worn look. The person should NOT be modeling the outfit in this shot.
 - Arrange items in an editorial, organized but real way — NOT a catalog grid, NOT a collage.` : ''}
 ${(isDetail || isAccessory) ? `ACCESSORY / DETAIL RULES:
-- The reference image shows the EXACT piece. Reproduce faithfully — do NOT invent variants or fuse with other pieces.
-- Do NOT substitute another piece for the specified accessory.
-${weekPlan?.integratedWithOutfitId ? `- This accessory appears WITH a compatible outfit (${secondaryIds}) — show both naturally together.` : ''}` : ''}
+- The reference image shown in the contract is the EXACT piece. Reproduce faithfully — same shape, material, color.
+- Do NOT substitute another piece.
+- Do NOT invent a different accessory or combine it with another piece.
+${weekPlan?.integratedWithOutfitId ? `- This accessory must appear TOGETHER with the associated outfit in the contract — show both naturally worn, not as an isolated macro.` : ''}` : ''}
 
 ⛔ FORBIDDEN WARDROBE — AVATAR BASE CLOTHING MUST NOT BE A STORY OUTFIT:
 The avatar/body reference photos are IDENTITY REFERENCES ONLY.

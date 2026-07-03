@@ -1208,6 +1208,12 @@ export interface WeeklyShotPlan {
   semanticIntentFromBrief?: WeeklyItemSemanticIntent;
   tagDrivenPairing?:        boolean;           // true si la integración fue forzada por tags
   avatarBaseClothingForbidden?: boolean;        // true si el fingerprint se inyectó en este shot
+  // Visual Reference Contract (patch v5) — pairings del brief para el contrato visual
+  explicitPairingsFromBrief?: Array<{
+    sourceItemId: string;   // e.g. "acc_0" (el accesorio)
+    targetItemId: string;   // e.g. "outfit_2" (el outfit)
+    rawText?: string;
+  }>;
 }
 
 export interface WeeklyManifest {
@@ -1246,6 +1252,18 @@ export interface WeeklyManifest {
   // Avatar base clothing policy applied (patch v4)
   avatarBaseClothingPolicyApplied?: boolean;
   avatarBaseClothingFingerprint?:   AvatarBaseClothingFingerprint;
+  // Visual Reference Contract debug (patch v5)
+  visualSlotBindingUsed:            boolean;
+  avatarBaseClothingSuppressedGlobally: boolean;
+  ref0UsedAsWardrobeSource:         false;   // always false — enforced by contract
+  briefBindingCompliance?: {
+    allMentionedTagsCovered:    boolean;
+    allExplicitPairingsCovered: boolean;
+    missingTaggedRefs:          string[];
+    missingPairings:            string[];
+  };
+  shotPrimaryItemDistribution: Record<string, number>;  // itemId → count de shots donde es primary
+  overusedPrimaryItems:        string[];                // ítems con count > (totalShots / totalItems) * 1.5
 }
 
 // ── Reference Tag Resolver — Global (patch v4) ────────────────────────────────
