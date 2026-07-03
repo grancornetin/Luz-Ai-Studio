@@ -7613,95 +7613,209 @@ After this opening shot, the person appears wearing the outfit — posing, check
 }
 
 // ── Global Brief Tag → Ref Map ────────────────────────────────
-// Parsea el brief y construye un mapa de slot → URLs ordenadas por orden de aparición de tags.
-// Usado por todas las recetas para enriquecer el routing de refs y el bloque de contexto del prompt.
+// Parsea el brief y construye:
+//   1. Orden de aparición de cada slot en el brief → reordena refs
+//   2. Pairings explícitos: dos tags en la misma oración semántica → van juntos en el mismo shot
+//   3. Orden secuencial: "primero @producto1, luego @producto4" → shots en ese orden
+//   4. tagContext: bloque de texto para el prompt con el contexto semántico completo
+
+interface BriefTagPairing {
+  urlA:     string;   // URL de la ref A
+  urlB:     string;   // URL de la ref B (va junto a A en el mismo shot)
+  labelA:   string;   // e.g. "outfit slot 3"
+  labelB:   string;   // e.g. "accessory slot 2"
+  context:  string;   // fragmento del brief que establece el pairing
+}
+
+interface BriefTagSlotInfo {
+  idx:      number;   // 0-based index en el array de URLs de ese tipo
+  url:      string;
+  label:    string;   // "outfit slot 2"
+  tagRaw:   string;   // "@outfit2"
+  type:     'outfit' | 'accesorio' | 'producto' | 'escena';
+  briefCtx: string;   // 60 chars de contexto semántico alrededor del tag
+  charPos:  number;   // posición en el brief (para detectar cercanía)
+}
+
 interface BriefTagRefMap {
-  outfit:     string[];   // outfitRef + outfitRefs[], reordenados según orden de @outfitN en el brief
-  accesorio:  string[];   // accesorioRefs[], reordenados según orden de @accesorioN
-  producto:   string[];   // productRef + productRefs[], reordenados según orden de @productoN
-  escena:     string[];   // sceneRef + sceneRefs[], reordenados según orden de @escenaN
-  tagContext: string;     // bloque de texto para el prompt que explica qué slot = qué tag semántico
+  outfit:     string[];         // reordenados según orden de @outfitN en el brief
+  accesorio:  string[];         // reordenados según orden de @accesorioN
+  producto:   string[];         // reordenados según orden de @productoN
+  escena:     string[];         // reordenados según orden de @escenaN
+  tagContext: string;           // bloque de texto para el prompt
+  pairings:   BriefTagPairing[]; // pares de refs que deben ir juntos en el mismo shot
+  sequence:   BriefTagSlotInfo[]; // todos los tags en orden de aparición en el brief
   hasAnyTag:  boolean;
 }
 
-function buildBriefTagRefMap(brief: string, refs: PhotodumpRefs): BriefTagRefMap {
-  const allOutfitUrls    = [refs.outfitRef,     ...(refs.outfitRefs    ?? [])].filter(Boolean) as string[];
-  const allAccUrls       = (refs.accesorioRefs  ?? []).filter(Boolean) as string[];
-  const allProductoUrls  = [refs.productRef,    ...(refs.productRefs   ?? [])].filter(Boolean) as string[];
-  const allEscenaUrls    = [refs.sceneRef,       ...(refs.sceneRefs    ?? [])].filter(Boolean) as string[];
+// Verbos y conectores que indican pairing entre dos items
+const PAIRING_CONNECTORS = [
+  'van con', 'va con', 'combina con', 'combino con', 'lo usé con', 'la usé con',
+  'los usé con', 'las usé con', 'use con', 'usé con', 'lo uso con', 'la uso con',
+  'lo llevé con', 'la llevé con', 'lo puse con', 'la puse con',
+  'junto con', 'juntos con', 'acompañé con', 'acompañan', 'acompaña',
+  'pair with', 'goes with', 'combined with', 'wore with',
+];
 
-  // Tags con el orden de aparición en el brief
+// Palabras que indican orden secuencial
+const SEQUENCE_WORDS = [
+  'primero', 'después', 'luego', 'segundo', 'tercero', 'cuarto', 'quinto',
+  'first', 'then', 'second', 'third', 'next', 'after',
+];
+
+function resolveTagType(base: string): 'outfit' | 'accesorio' | 'producto' | 'escena' | null {
+  if (base === 'outfit' || base === 'look') return 'outfit';
+  if (base === 'accesorio' || base === 'aro' || base === 'aros' || base === 'bag' || base === 'bolso' || base === 'zapato' || base === 'shoes') return 'accesorio';
+  if (base === 'producto' || base === 'product') return 'producto';
+  if (base === 'escena' || base === 'scene') return 'escena';
+  return null;
+}
+
+function getUrlArrayForType(type: 'outfit' | 'accesorio' | 'producto' | 'escena', refs: PhotodumpRefs): string[] {
+  if (type === 'outfit')    return [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
+  if (type === 'accesorio') return (refs.accesorioRefs ?? []).filter(Boolean) as string[];
+  if (type === 'producto')  return [refs.productRef, ...(refs.productRefs ?? [])].filter(Boolean) as string[];
+  if (type === 'escena')    return [refs.sceneRef, ...(refs.sceneRefs ?? [])].filter(Boolean) as string[];
+  return [];
+}
+
+function buildBriefTagRefMap(brief: string, refs: PhotodumpRefs): BriefTagRefMap {
+  const allOutfitUrls   = getUrlArrayForType('outfit',    refs);
+  const allAccUrls      = getUrlArrayForType('accesorio', refs);
+  const allProductoUrls = getUrlArrayForType('producto',  refs);
+  const allEscenaUrls   = getUrlArrayForType('escena',    refs);
+
   const tagMatches = [...brief.matchAll(/@([a-záéíóúüñA-ZÁÉÍÓÚÜÑ]+)(\d*)/gi)];
 
-  // Índices de cada slot que aparecen en el brief, en orden de aparición
-  const outfitOrder:   number[] = [];
-  const accesorioOrder: number[] = [];
-  const productoOrder: number[] = [];
-  const escenaOrder:   number[] = [];
-  const seenOutfit    = new Set<number>();
-  const seenAccesorio = new Set<number>();
-  const seenProducto  = new Set<number>();
-  const seenEscena    = new Set<number>();
-
-  const tagContextLines: string[] = [];
+  // Paso 1: construir info completa de cada tag encontrado en el brief
+  const allSlotInfos: BriefTagSlotInfo[] = [];
 
   for (const m of tagMatches) {
-    const base    = m[1].toLowerCase();
-    const numStr  = m[2];
-    const humanN  = numStr ? parseInt(numStr, 10) : 1;
-    const idx     = humanN - 1;  // 0-based
+    const base   = m[1].toLowerCase();
+    const numStr = m[2];
+    const humanN = numStr ? parseInt(numStr, 10) : 1;
+    const idx    = humanN - 1;
+    const type   = resolveTagType(base);
+    if (!type) continue;
 
-    if ((base === 'outfit' || base === 'look') && allOutfitUrls[idx] !== undefined) {
-      if (!seenOutfit.has(idx)) { outfitOrder.push(idx); seenOutfit.add(idx); }
-      // Buscar contexto semántico 60 chars antes del tag
-      const tagPos = m.index ?? 0;
-      const ctx    = brief.slice(Math.max(0, tagPos - 60), tagPos + 40).replace(/@\w+\d*/g, '').trim();
-      const ctxShort = ctx.slice(0, 60).replace(/\s+/g, ' ').trim();
-      if (ctxShort) tagContextLines.push(`  • Reference image ${idx + 1} (outfit slot ${humanN}): "${ctxShort}"`);
-    } else if ((base === 'accesorio' || base === 'aro' || base === 'aros' || base === 'bag' || base === 'bolso') && allAccUrls[idx] !== undefined) {
-      if (!seenAccesorio.has(idx)) { accesorioOrder.push(idx); seenAccesorio.add(idx); }
-      const tagPos  = m.index ?? 0;
-      const ctx     = brief.slice(Math.max(0, tagPos - 60), tagPos + 40).replace(/@\w+\d*/g, '').trim();
-      const ctxShort = ctx.slice(0, 60).replace(/\s+/g, ' ').trim();
-      if (ctxShort) tagContextLines.push(`  • Reference image (accessory slot ${humanN}): "${ctxShort}"`);
-    } else if (base === 'producto' && allProductoUrls[idx] !== undefined) {
-      if (!seenProducto.has(idx)) { productoOrder.push(idx); seenProducto.add(idx); }
-      const tagPos  = m.index ?? 0;
-      const ctx     = brief.slice(Math.max(0, tagPos - 60), tagPos + 40).replace(/@\w+\d*/g, '').trim();
-      const ctxShort = ctx.slice(0, 60).replace(/\s+/g, ' ').trim();
-      if (ctxShort) tagContextLines.push(`  • Reference image (product slot ${humanN}): "${ctxShort}"`);
-    } else if ((base === 'escena' || base === 'scene') && allEscenaUrls[idx] !== undefined) {
-      if (!seenEscena.has(idx)) { escenaOrder.push(idx); seenEscena.add(idx); }
-      const tagPos  = m.index ?? 0;
-      const ctx     = brief.slice(Math.max(0, tagPos - 60), tagPos + 40).replace(/@\w+\d*/g, '').trim();
-      const ctxShort = ctx.slice(0, 60).replace(/\s+/g, ' ').trim();
-      if (ctxShort) tagContextLines.push(`  • Reference image (scene slot ${humanN}): "${ctxShort}"`);
+    const urlArr = getUrlArrayForType(type, refs);
+    if (!urlArr[idx]) continue;  // slot no tiene imagen → ignorar
+
+    const tagPos   = m.index ?? 0;
+    const window   = brief.slice(Math.max(0, tagPos - 80), tagPos + 60);
+    const briefCtx = window.replace(/@[a-záéíóúüñA-ZÁÉÍÓÚÜÑ]+\d*/gi, '').replace(/\s+/g, ' ').trim().slice(0, 100);
+
+    allSlotInfos.push({
+      idx,
+      url:      urlArr[idx],
+      label:    `${type} slot ${humanN}`,
+      tagRaw:   `@${m[1]}${m[2]}`,
+      type,
+      briefCtx,
+      charPos:  tagPos,
+    });
+  }
+
+  // Paso 2: detectar pairings — dos tags separados por ≤120 chars con conector de pairing,
+  // O dos tags en la misma oración (separados por punto/punto y coma = nueva oración)
+  const pairings: BriefTagPairing[] = [];
+  const briefLower = brief.toLowerCase();
+
+  for (let i = 0; i < allSlotInfos.length; i++) {
+    for (let j = i + 1; j < allSlotInfos.length; j++) {
+      const a = allSlotInfos[i];
+      const b = allSlotInfos[j];
+      if (a.url === b.url) continue;  // mismo slot, no es pairing
+
+      const posMin = Math.min(a.charPos, b.charPos);
+      const posMax = Math.max(a.charPos, b.charPos);
+      const gap    = posMax - posMin;
+      if (gap > 150) continue;  // demasiado separados
+
+      // Texto entre los dos tags
+      const between = briefLower.slice(posMin, posMax);
+
+      // ¿Hay un separador duro entre ellos? (punto, punto y coma, guión largo)
+      const hardSeparator = /[.;]\s/.test(between.replace(/@\w+\d*/g, ''));
+      if (hardSeparator && gap > 50) continue;
+
+      // ¿Hay un conector de pairing entre ellos?
+      const hasConnector = PAIRING_CONNECTORS.some(c => between.includes(c));
+
+      // ¿Están en la misma oración Y son de tipos distintos? → pairing implícito
+      const differentTypes = a.type !== b.type;
+      const sameClause     = !hardSeparator && gap < 80;
+
+      if (hasConnector || (differentTypes && sameClause)) {
+        // Contexto del pairing: texto alrededor de ambos tags
+        const ctxStart = Math.max(0, posMin - 30);
+        const ctxEnd   = Math.min(brief.length, posMax + 40);
+        const ctx      = brief.slice(ctxStart, ctxEnd).replace(/\s+/g, ' ').trim().slice(0, 120);
+
+        pairings.push({ urlA: a.url, urlB: b.url, labelA: a.label, labelB: b.label, context: ctx });
+      }
     }
   }
 
-  // Reordenar: primero los que aparecen en el brief (en orden de aparición), luego el resto
+  // Paso 3: orden de aparición por tipo (para reordenar arrays de refs)
+  const seenByType: Record<string, Set<number>> = { outfit: new Set(), accesorio: new Set(), producto: new Set(), escena: new Set() };
+  const orderByType: Record<string, number[]>   = { outfit: [], accesorio: [], producto: [], escena: [] };
+
+  for (const info of allSlotInfos) {
+    if (!seenByType[info.type].has(info.idx)) {
+      seenByType[info.type].add(info.idx);
+      orderByType[info.type].push(info.idx);
+    }
+  }
+
   const reorder = (all: string[], order: number[]) => {
     const rest = all.map((_, i) => i).filter(i => !order.includes(i));
     return [...order, ...rest].map(i => all[i]).filter(Boolean) as string[];
   };
 
-  const hasAnyTag = outfitOrder.length > 0 || accesorioOrder.length > 0 || productoOrder.length > 0 || escenaOrder.length > 0;
+  // Paso 4: construir bloque de contexto para el prompt
+  const hasAnyTag = allSlotInfos.length > 0;
 
-  const tagContext = hasAnyTag && tagContextLines.length > 0
+  // Agrupar context lines por slot (deduplicar si el mismo slot aparece varias veces)
+  const seenLabels = new Set<string>();
+  const contextLines: string[] = [];
+  for (const info of allSlotInfos) {
+    if (seenLabels.has(info.label)) continue;
+    seenLabels.add(info.label);
+    if (info.briefCtx) contextLines.push(`  • ${info.tagRaw} → ${info.label}: "${info.briefCtx}"`);
+  }
+
+  const pairingLines = pairings.map(p =>
+    `  ⟷ PAIR: ${p.labelA} + ${p.labelB} must appear TOGETHER in the same shot — "${p.context}"`
+  );
+
+  // Detectar secuencia explícita (primero X, luego Y)
+  const sequenceLines: string[] = [];
+  const hasSqWord = SEQUENCE_WORDS.some(w => briefLower.includes(w));
+  if (hasSqWord && allSlotInfos.length > 1) {
+    sequenceLines.push(`  📋 SEQUENCE: The user described items in this order: ${allSlotInfos.map(s => s.tagRaw).join(' → ')}. Respect this order across shots when possible.`);
+  }
+
+  const tagContext = hasAnyTag
     ? `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🏷️ REFERENCE SLOT CONTEXT (from user's brief):
-The user tagged specific reference images with semantic context. Each uploaded reference image corresponds to:
-${tagContextLines.join('\n')}
-Use this context to understand the ROLE and OCCASION of each reference image. The image order in the references matches the slot numbers above.
+🏷️ REFERENCE SLOT DIRECTIVE (from user's brief — BINDING):
+The user tagged reference images with semantic intent. Treat these as creative directions:
+${contextLines.join('\n')}
+${pairingLines.length > 0 ? '\n' + pairingLines.join('\n') : ''}
+${sequenceLines.length > 0 ? '\n' + sequenceLines.join('\n') : ''}
+When a PAIR is specified: both reference images MUST appear in the SAME shot — one worn/held/displayed alongside the other.
+The image order passed to you in the references matches the slot numbers above.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
     : '';
 
   return {
-    outfit:    reorder(allOutfitUrls, outfitOrder),
-    accesorio: reorder(allAccUrls,    accesorioOrder),
-    producto:  reorder(allProductoUrls, productoOrder),
-    escena:    reorder(allEscenaUrls, escenaOrder),
+    outfit:    reorder(allOutfitUrls,   orderByType['outfit']),
+    accesorio: reorder(allAccUrls,      orderByType['accesorio']),
+    producto:  reorder(allProductoUrls, orderByType['producto']),
+    escena:    reorder(allEscenaUrls,   orderByType['escena']),
     tagContext,
+    pairings,
+    sequence:  allSlotInfos,
     hasAnyTag,
   };
 }
@@ -8004,19 +8118,53 @@ export async function generatePhotodumpShot(
     refsToPass.push(ref0Url);
 
     if (briefTagMap?.hasAnyTag) {
-      // Usar refs reordenadas por brief: outfit rotado ya en outfitForThisShot,
-      // productos y escenas en el orden marcado con @tags
+      // ── Tag-driven routing ─────────────────────────────────────
+      // outfitForThisShot ya viene reordenado por brief (via outfitRefsForRotation)
       if (outfitForThisShot) refsToPass.push(outfitForThisShot);
-      briefTagMap.producto.slice(0, 2).forEach(r => refsToPass.push(r));
-      const sceneTagged = briefTagMap.escena[0]
-        ?? getSceneRefForShot(refs, shot.arcPosition - 1, totalShots);
-      if (sceneTagged) refsToPass.push(sceneTagged);
+
+      // Si hay pairings que incluyen el outfit de este shot, agregar sus pares
+      const pairedWithCurrentOutfit = briefTagMap.pairings.filter(p =>
+        p.urlA === outfitForThisShot || p.urlB === outfitForThisShot
+      );
+      for (const pair of pairedWithCurrentOutfit) {
+        const companion = pair.urlA === outfitForThisShot ? pair.urlB : pair.urlA;
+        if (!refsToPass.includes(companion)) refsToPass.push(companion);
+      }
+
+      // Productos: en orden del brief, con sus pairings
+      const arcIdx   = shot.arcPosition - 1;
+      const prodUrl  = briefTagMap.producto[arcIdx % Math.max(briefTagMap.producto.length, 1)];
+      if (prodUrl) {
+        refsToPass.push(prodUrl);
+        // Pairing de este producto con otros items
+        const pairedWithProd = briefTagMap.pairings.filter(p => p.urlA === prodUrl || p.urlB === prodUrl);
+        for (const pair of pairedWithProd) {
+          const companion = pair.urlA === prodUrl ? pair.urlB : pair.urlA;
+          if (!refsToPass.includes(companion)) refsToPass.push(companion);
+        }
+      } else {
+        // Fallback: productos en orden original
+        if (refs.productRef) refsToPass.push(refs.productRef);
+        (refs.productRefs ?? []).filter(Boolean).slice(0, 1).forEach(r => refsToPass.push(r as string));
+      }
+
+      // Accesorios taggeados que no están ya en pairings
+      const accNotPaired = briefTagMap.accesorio.filter(a =>
+        !refsToPass.includes(a) &&
+        !briefTagMap.pairings.some(p => p.urlA === a || p.urlB === a)
+      );
+      accNotPaired.slice(0, 1).forEach(a => refsToPass.push(a));
+
+      // Escena: la taggeada en el brief o fallback
+      const sceneTagged = briefTagMap.escena[0] ?? getSceneRefForShot(refs, arcIdx, totalShots);
+      if (sceneTagged && !refsToPass.includes(sceneTagged)) refsToPass.push(sceneTagged);
+
     } else {
       // Comportamiento original sin tags
       if (outfitForThisShot) refsToPass.push(outfitForThisShot);
       if (refs.productRef) refsToPass.push(refs.productRef);
       const extraProducts = (refs.productRefs ?? []).filter(Boolean) as string[];
-      extraProducts.forEach(r => refsToPass.push(r));
+      extraProducts.forEach(r => refsToPass.push(r as string));
       const sceneForShot = getSceneRefForShot(refs, shot.arcPosition - 1, totalShots);
       if (sceneForShot) refsToPass.push(sceneForShot);
     }
