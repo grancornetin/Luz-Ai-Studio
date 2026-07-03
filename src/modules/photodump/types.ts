@@ -733,6 +733,31 @@ export interface PhotodumpShotDebug {
   retryCount?:              number;
   failureReason?:           string;
 
+  // Global Stability Debug (patch v5) — uno por shot
+  globalStabilityBlocks?: {
+    sceneWorldPlanApplied:                boolean;
+    sceneFingerprintLockApplied:          boolean;
+    avatarBaseClothingSuppressedGlobally: boolean;
+    avatarBaseClothingSuppressedInStoryShots: boolean;
+    wardrobePhysicalIntegrationApplied:   boolean;
+    longFootwearIntegrationChecked:       boolean;
+    layeringConsistencyChecked:           boolean;
+    anatomySafetyApplied:                 boolean;
+    mirrorConsistencyApplied:             boolean;
+    visualItemFidelityApplied:            boolean;
+    externalBrandingForbiddenApplied:     boolean;
+    readableTextForbiddenApplied:         boolean;
+    // Riesgos detectados estáticamente
+    avatarBaseClothingContaminationRisk:  boolean;
+    ref0UsedAsWardrobeSource:             boolean;
+    extraLimbRisk:                        boolean;
+    mirrorReflectionRisk:                 boolean;
+    externalBrandTextRisk:                boolean;
+    primaryItemFidelityRisk:              boolean;
+    colorMaterialDriftRisk:               boolean;
+    wardrobeIntegrationRisk:              boolean;
+  };
+
   status:       'ok' | 'failed';
 }
 
@@ -915,6 +940,42 @@ export interface PhotodumpDebugData {
   uncoveredAccessories?: string[];
   // Análisis visual de referencias (outfit_haul) — resultado de la llamada Gemini previa
   visualRefsAnalysis?:               VisualRefsAnalysisResult;
+
+  // ── Global Stability Debug (patch v5) — resumen de sesión ────
+  globalStabilityApplied?: {
+    // Qué bloques se inyectaron en esta sesión
+    sceneFingerprintLockApplied:          boolean;
+    avatarBaseClothingSuppressedGlobally: boolean;
+    wardrobePhysicalIntegrationApplied:   boolean;
+    anatomySafetyApplied:                 boolean;
+    visualItemFidelityApplied:            boolean;
+    externalBrandingForbiddenApplied:     boolean;
+    readableTextForbiddenApplied:         boolean;
+    // Conteo de shots con cada bloque activo
+    shotsWithSceneLock:          number;
+    shotsWithAvatarSuppression:  number;
+    shotsWithWardrobePhysics:    number;
+    shotsWithAnatomySafety:      number;
+    shotsWithVisualFidelity:     number;
+    // Flags de escena
+    sceneViolationWarnings:  string[];
+    propBudgetWarnings:      string[];
+    // Brief compliance
+    briefBindingCompliance?: {
+      allMentionedTagsCovered:    boolean;
+      allExplicitPairingsCovered: boolean;
+      missingTaggedRefs:          string[];
+      missingPairings:            string[];
+    };
+    // Diversidad narrativa
+    narrativeDiversityPlannerApplied: boolean;
+    overRepeatedPrimaryItems:         string[];
+    redundantLastShotReplaced:        boolean;
+    // Accesorio integration
+    accessoryIntegrationApplied: boolean;
+    accessoryOnlyMacroRisk:      boolean;
+  };
+
   count:        number;
   plan:         any;
   shots:        PhotodumpShotDebug[];

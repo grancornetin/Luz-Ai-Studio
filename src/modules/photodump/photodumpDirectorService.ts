@@ -312,6 +312,188 @@ WHAT MAKES GREAT FACELESS CONTENT:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
 
+// ── Global Stability Blocks (patch v5) ───────────────────────
+//
+// Seis bloques de texto reutilizables que se inyectan en TODOS los shots
+// de todas las recetas visuales. Son reglas universales, no parches por receta.
+// Están diseñados para coexistir con LOCK_SYSTEM y NEGATIVE_SHORT sin
+// duplicar instrucciones — cada bloque cubre un dominio distinto.
+
+// 1. SCENE FINGERPRINT LOCK — Continuidad del mundo visual entre shots
+const GLOBAL_SCENE_LOCK = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏠 SCENE FINGERPRINT LOCK (BINDING — ALL SHOTS):
+
+The physical world established by REF0 is the ONLY permitted environment for this session.
+
+ARCHITECTURE IS FROZEN — these elements must NOT change between shots:
+  • Same room type (bedroom, studio, living room, etc.)
+  • Same walls — color, texture, paint, panels
+  • Same floor material — same tiles, wood, carpet, or surface
+  • Same window position — same side, same size, same light direction
+  • Same ceiling height impression
+  • Same dominant furniture arrangement — do NOT move large pieces between shots
+
+LARGE PROPS — inventory from REF0 only:
+  • Beds, sofas, and chairs: same count, same position. Do NOT add a second bed or second sofa.
+  • Racks: allowed ONLY if REF0 shows a rack. Do NOT invent a rack.
+  • Full-length mirrors: allowed ONLY if REF0 shows a mirror. Do NOT invent a mirror.
+  • Desks, tables: only if present in REF0.
+  • Do NOT add office furniture, store shelving, lobbies, or commercial environments.
+
+SMALL PROPS — controlled evolution:
+  • Small items (cups, books, candles) may appear or disappear naturally between shots.
+  • Maximum 1–3 small neutral props per shot unless the shot role explicitly requires more.
+  • Clothing from the uploaded item set may move around naturally.
+
+STRICT PROHIBITIONS (all shots, no exceptions):
+  ❌ Do NOT invent a new room or new architectural space.
+  ❌ Do NOT add a second bed that wasn't in REF0.
+  ❌ Do NOT add a full-length mirror that wasn't in REF0.
+  ❌ Do NOT add a clothing rack that wasn't in REF0.
+  ❌ Do NOT add office, coworking, lobby, store, or street elements.
+  ❌ Do NOT change the wall color or architecture between shots.
+  ❌ Do NOT redesign the room to look bigger, cleaner, or more aspirational.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
+// 2. AVATAR BASE CLOTHING SUPPRESSION — Ropa del avatar nunca es contenido
+const GLOBAL_AVATAR_SUPPRESSION = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚫 AVATAR BASE CLOTHING SUPPRESSION (GLOBAL RULE — ALL SHOTS):
+
+The avatar/body/identity reference images are IDENTITY ANCHORS ONLY.
+Their purpose: face, skin tone, hair, bone structure, body proportions.
+
+THE CLOTHING VISIBLE ON AVATAR OR BODY REFERENCES IS NOT A CONTENT ITEM:
+  • Any bodysuit, catsuit, base shirt, base jeans, tights, or base garment on the avatar reference is identity context — NOT a weekly outfit, haul item, or styling option.
+  • Do NOT use avatar base clothing as a fallback when no primary garment is assigned.
+  • Do NOT let avatar base clothing become the dominant wardrobe in any story shot.
+  • Do NOT recolor, restyle, or present avatar base clothing as a new look.
+  • REF0 clothing is also NOT a wardrobe item — use REF0 only for room, light, and environment.
+
+WHEN A PRIMARY SLOT ITEM IS ASSIGNED:
+  • The person MUST wear the assigned slot item — not the avatar's base clothes.
+  • The slot reference fully controls the wardrobe. Avatar base clothing is invisible.
+
+WHEN NO PRIMARY SLOT ITEM IS ASSIGNED (overview, detail, or no-person shot):
+  • Do NOT fall back to avatar base clothing as a fashion statement.
+  • Use a simple neutral base (plain fitted top + simple pants/shorts) invented by the system,
+    OR show hands only, OR show a flatlay/product shot without a person.
+  • A neutral system-invented base is NOT a content item and must not be promoted as one.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
+// 3. WARDROBE PHYSICAL INTEGRATION — La ropa se porta como objetos físicos reales
+const GLOBAL_WARDROBE_PHYSICS = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👗 WARDROBE PHYSICAL INTEGRATION (ALL SHOTS WITH GARMENTS):
+
+Treat all clothing as real physical objects worn on a real body — not painted textures.
+
+LAYER ORDER:
+  • Outerwear goes OVER inner layers. Jackets over shirts. Coats over sweaters.
+  • Do NOT fuse garments at collar, waist, or sleeve — each layer must be distinct.
+  • Do NOT swap a jacket for a top or a dress for a catsuit.
+  • Do NOT transform a skirt into pants or vice versa.
+
+FOOTWEAR + LEGWEAR INTEGRATION (symmetry is mandatory):
+  • Both legs must follow the same physical logic — left and right must be identical.
+  • If pants are tucked into boots → BOTH legs tucked, same depth, same coverage.
+  • If boots are over pants → BOTH legs show the same overlap and drape.
+  • If wearing heels with a skirt → BOTH feet at the same angle, consistent heel visibility.
+  • If wearing tights/pantyhose → continuous layer, no cuts, no phantom legs, same sheen both sides.
+  • No half-tuck / half-outside aberrations. No boot shaft piercing through solid fabric.
+  • No floating straps. No mismatched ankle coverage left vs. right.
+  • Choose ONE plausible real-world configuration for the footwear/legwear interaction and apply it perfectly to both sides.
+
+STRAPS, TIES, AND THIN ELEMENTS:
+  • Thin straps (heels, bikini tops, crossbody bags) must connect to the body in an anatomically plausible way.
+  • No duplicate straps, no straps fused to skin, no floating attachment points.
+
+TRANSPARENCY AND LAYERING:
+  • If a garment is sheer/translucent, preserve that quality — do NOT replace it with an opaque layer.
+  • Do NOT invent a prominent undergarment that was not in the slot reference.
+  • A modest render is acceptable, but do NOT change the garment category.
+
+GARMENT CONTINUITY BELOW THE FRAME:
+  • Do NOT invent hem lines, shoe types, or pant lengths that conflict with the reference.
+  • If the reference is cropped and you cannot verify the bottom, choose the most plausible continuation.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
+// 4. ANATOMY SAFETY — Una persona, dos brazos, dos manos, sin aberraciones
+const GLOBAL_ANATOMY_SAFETY = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🫀 HUMAN ANATOMY SAFETY (ALL SHOTS WITH A PERSON):
+
+PERSON COUNT: Exactly ONE main person unless this shot's role explicitly requires more.
+
+LIMBS AND BODY PARTS (hard limits):
+  • The subject has exactly TWO arms, TWO hands, TWO legs, TWO feet, ONE head.
+  • Hands must be anatomically connected to wrists — no floating hands, no phantom hands.
+  • No extra fingers beyond the natural count.
+  • No duplicated arms, detached limbs, warped feet, or partial phantom people.
+  • No ghost silhouettes in background, doorways, or reflections.
+
+MIRROR SHOTS (apply only when framing requires a mirror):
+  • Use a mirror ONLY if REF0 or the scene fingerprint established a mirror.
+  • If a mirror appears, the reflection must show the SAME person, SAME outfit, SAME room.
+  • The reflection must NOT show a different outfit, a second room, or a different bed.
+  • The reflection must NOT be treated as an independent second person.
+  • Mirror and direct view must have consistent light direction.
+
+REFLECTION SAFETY:
+  • A mirror reflection of the protagonist is still the same protagonist — NOT a second person.
+  • Background figures visible through windows, in blurred backgrounds, or in reflections are FORBIDDEN.
+  • Any second person appearing in the frame is a hard generation error.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
+// 5. VISUAL ITEM FIDELITY — La referencia visual manda, sin recolorear ni reemplazar
+const GLOBAL_VISUAL_FIDELITY = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎨 VISUAL ITEM FIDELITY (BINDING — ALL SHOTS WITH A SLOT ITEM):
+
+The uploaded slot reference is the sole source of truth for any item.
+Do NOT describe, imagine, or invent the item — use what the image shows.
+
+PRESERVE EXACTLY:
+  • Garment category (dress stays a dress, pants stay pants, jacket stays a jacket)
+  • Dominant color and any secondary colors or color blocking
+  • Material impression (matte, shiny, knit, denim, satin, leather, etc.)
+  • Surface pattern (solid, striped, plaid, floral, printed, textured)
+  • Silhouette and fit (oversized, fitted, wide-leg, A-line, etc.)
+  • Hemline length
+  • Visible hardware, buttons, zippers, lace, embroidery, or embellishments
+
+PROHIBITED MODIFICATIONS:
+  ❌ Do NOT recolor the item — not even slightly.
+  ❌ Do NOT simplify a complex pattern to a solid color.
+  ❌ Do NOT replace the item with a visually similar generic garment.
+  ❌ Do NOT merge the item with avatar base clothing.
+  ❌ Do NOT upgrade the item to a luxury or editorial version.
+  ❌ Do NOT downgrade the item to a simpler everyday version.
+  ❌ If the shot cannot show the full item, show the most distinctive visible portion faithfully — do not alter what IS visible.
+
+This rule applies to ALL slot types: outfits, accessories, bags, shoes, jewelry, makeup, products, packaging.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
+// 6. NO EXTERNAL BRANDING — Ninguna marca externa en ningún output
+const GLOBAL_NO_BRANDING = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚷 NO EXTERNAL BRANDING OR READABLE TEXT (ABSOLUTE — ALL SHOTS):
+
+FORBIDDEN in every generated image:
+  ❌ Readable brand names on clothing, bags, boxes, packaging, or surfaces
+  ❌ Store logos: ZARA, H&M, Shein, Pull&Bear, Nike, Adidas, Chanel, Louis Vuitton, Amazon, MercadoLibre, or ANY retail or luxury brand
+  ❌ Price tags, hang tags, or receipts with readable text
+  ❌ Shopping bags with brand logos or store names
+  ❌ Promotional text, discount stickers, QR codes, or barcodes
+  ❌ Watermarks, UI overlays, caption text, or labels on the image
+  ❌ Any readable text on walls, furniture, or clothing unless explicitly uploaded by the user
+
+ALL PACKAGING AND BAGS MUST BE:
+  ✓ Plain, generic, and unbranded
+  ✓ Solid color or simple texture — no logo, no wordmark, no emblem
+  ✓ Neutral paper bags, plain boxes, or non-branded containers
+
+EXCEPTION: Only if the user explicitly uploaded a branded item as a slot reference AND the recipe requires showing it — reproduce that specific item faithfully. Do not magnify or feature incidental logos in the background.
+
+This rule protects content creators who are building their own brand.
+Inventing external brands damages their credibility and undermines their business.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
 // ── Helpers ───────────────────────────────────────────────────
 
 // Router semántico completo para outfit_check.
@@ -9224,6 +9406,26 @@ The haul ALWAYS stays in a home / personal / dressing environment unless the use
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
   })();
 
+  // ── Global Stability Blocks — selección condicional por receta y contexto ─────
+  //
+  // GLOBAL_SCENE_LOCK: todas las recetas excepto outfit_check (ya tiene ref0HardLock/sceneContinuity)
+  // GLOBAL_AVATAR_SUPPRESSION: todas las recetas con persona (no faceless)
+  // GLOBAL_WARDROBE_PHYSICS: todos los shots con garment — omitir en overview/product-only
+  // GLOBAL_ANATOMY_SAFETY: todos los shots con persona
+  // GLOBAL_VISUAL_FIDELITY: todos los shots con slot item
+  // GLOBAL_NO_BRANDING: todas las recetas sin excepción
+
+  const hasPersonInShot = !isFacelessShot;
+  const isOverviewShot  = (shot.key ?? '').includes('OVERVIEW') || (shot.key ?? '').includes('ANCHOR') || (shot.key ?? '').includes('INTRO');
+  const hasGarmentSlot  = !isOverviewShot || recipe === 'outfit_haul';  // overview de haul también tiene refs de prendas
+
+  const globalSceneLock        = (recipe !== 'outfit_check') ? GLOBAL_SCENE_LOCK : '';
+  const globalAvatarSuppression = hasPersonInShot ? GLOBAL_AVATAR_SUPPRESSION : '';
+  const globalWardrobePhysics   = (hasPersonInShot && hasGarmentSlot) ? GLOBAL_WARDROBE_PHYSICS : '';
+  const globalAnatomySafety     = hasPersonInShot ? GLOBAL_ANATOMY_SAFETY : '';
+  const globalVisualFidelity    = hasGarmentSlot ? GLOBAL_VISUAL_FIDELITY : '';
+  const globalNoBranding        = GLOBAL_NO_BRANDING;  // siempre
+
   const prompt = `${LOCK_SYSTEM}
 
 ${PARADIGM_RULE}
@@ -9290,6 +9492,18 @@ ${shotIdentityBlock}
 
 ${ugcRealismBlock}
 
+${globalSceneLock}
+
+${globalAvatarSuppression}
+
+${globalWardrobePhysics}
+
+${globalAnatomySafety}
+
+${globalVisualFidelity}
+
+${globalNoBranding}
+
 🚫 ONE SINGLE IMAGE:
 Generate ONE photo. No collage. No grid. No side by side. No reference board.
 Do NOT paste reference images into the output. Use them only as visual constraints.
@@ -9326,6 +9540,30 @@ ${NEGATIVE_SHORT}`;
     continuityMode: shot.continuityMode,
     environmentAffordances: shot.environmentAffordances,
     closureReason:  shot.closureReason,
+    // ── Global Stability Debug (patch v5) ──
+    globalStabilityBlocks: {
+      sceneWorldPlanApplied:              true,
+      sceneFingerprintLockApplied:        globalSceneLock !== '',
+      avatarBaseClothingSuppressedGlobally:   globalAvatarSuppression !== '',
+      avatarBaseClothingSuppressedInStoryShots: hasPersonInShot,
+      wardrobePhysicalIntegrationApplied: globalWardrobePhysics !== '',
+      longFootwearIntegrationChecked:     globalWardrobePhysics !== '',
+      layeringConsistencyChecked:         globalWardrobePhysics !== '',
+      anatomySafetyApplied:               globalAnatomySafety !== '',
+      mirrorConsistencyApplied:           globalAnatomySafety !== '',
+      visualItemFidelityApplied:          globalVisualFidelity !== '',
+      externalBrandingForbiddenApplied:   true,
+      readableTextForbiddenApplied:       true,
+      // Riesgos detectados (estimados estáticamente — sin análisis semántico del output)
+      avatarBaseClothingContaminationRisk: false,
+      ref0UsedAsWardrobeSource:            false,
+      extraLimbRisk:                       false,
+      mirrorReflectionRisk:                false,
+      externalBrandTextRisk:               false,
+      primaryItemFidelityRisk:             false,
+      colorMaterialDriftRisk:              false,
+      wardrobeIntegrationRisk:             false,
+    },
   } as any;
 }
 

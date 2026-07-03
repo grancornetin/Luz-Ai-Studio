@@ -1252,6 +1252,36 @@ const PhotodumpModule: React.FC = () => {
             })
             .map(it => it.id);
         })() : undefined,
+        // Global Stability Applied (patch v5) — resumen de qué bloques se inyectaron
+        globalStabilityApplied: (() => {
+          const stabShots = debugShots;
+          return {
+            sceneFingerprintLockApplied:          recipe !== 'outfit_check',
+            avatarBaseClothingSuppressedGlobally: true,
+            wardrobePhysicalIntegrationApplied:   true,
+            anatomySafetyApplied:                 true,
+            visualItemFidelityApplied:            true,
+            externalBrandingForbiddenApplied:     true,
+            readableTextForbiddenApplied:         true,
+            shotsWithSceneLock:          stabShots.filter(s => s.globalStabilityBlocks?.sceneFingerprintLockApplied).length,
+            shotsWithAvatarSuppression:  stabShots.filter(s => s.globalStabilityBlocks?.avatarBaseClothingSuppressedGlobally).length,
+            shotsWithWardrobePhysics:    stabShots.filter(s => s.globalStabilityBlocks?.wardrobePhysicalIntegrationApplied).length,
+            shotsWithAnatomySafety:      stabShots.filter(s => s.globalStabilityBlocks?.anatomySafetyApplied).length,
+            shotsWithVisualFidelity:     stabShots.filter(s => s.globalStabilityBlocks?.visualItemFidelityApplied).length,
+            sceneViolationWarnings:      [] as string[],
+            propBudgetWarnings:          [] as string[],
+            briefBindingCompliance:      undefined as any,
+            narrativeDiversityPlannerApplied: recipe === 'outfit_week' || recipe === 'outfit_haul',
+            overRepeatedPrimaryItems:    [] as string[],
+            redundantLastShotReplaced:   false,
+            accessoryIntegrationApplied: recipe === 'outfit_week'
+              ? stabShots.some(s => s.role?.includes('ACCESSORY_INTEGRATED') || s.role?.includes('ACCESSORY_WORN'))
+              : recipe === 'outfit_haul'
+                ? stabShots.some(s => s.key?.includes('ACCESSORY') || s.key?.includes('JEWELRY'))
+                : false,
+            accessoryOnlyMacroRisk: false,
+          };
+        })(),
         plan,
         shots:               debugShots,
       } : undefined;
