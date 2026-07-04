@@ -9,7 +9,7 @@ import { ResultCard } from '../../components/shared/ResultCard';
 import { ResultLibraryGrid } from '../../components/shared/ResultLibraryGrid';
 import {
   Images, Download, Check, Sparkles, Library, Trash2, Copy,
-  Plus, Hash, RefreshCw, AlertTriangle,
+  Plus, Hash, RefreshCw, AlertTriangle, BookMarked,
   Image as ImageIcon,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -56,6 +56,9 @@ import PDStep1 from './PDStep1';
 import PDStep2Receta from './PDStep2Receta';
 import PDLibreEditor, { newFreeScene } from './PDLibreEditor';
 import { useModelSelection } from '../../hooks/useModelSelection';
+import { useModulePresets } from '../../shared/presets/useModulePresets';
+import { photodumpPresetAdapter, type PhotodumpPresetState } from './photodumpPresetAdapter';
+import { PresetManagerPanel } from '../../components/presets/PresetManagerPanel';
 
 // ── Wizard steps ──────────────────────────────────────────────
 // Modo recetas: 1 Tipo · 2 Brief · 3 Generando · 4 Resultado
@@ -185,6 +188,25 @@ const PhotodumpModule: React.FC = () => {
   const [lightboxOpen,   setLightboxOpen]   = useState(false);
   const [lightboxIndex,  setLightboxIndex]  = useState(0);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
+
+  // ── Presets ───────────────────────────────────────────────
+  const [showPresets, setShowPresets] = useState(false);
+  const currentPresetState: PhotodumpPresetState = {
+    recipe, count, destino, basePrompt, outfitMode, refs, modelId,
+  };
+  const presetManager = useModulePresets(photodumpPresetAdapter, currentPresetState);
+
+  const handleLoadPreset = (partialState: Partial<PhotodumpPresetState>) => {
+    if (partialState.recipe    !== undefined) setRecipe(partialState.recipe);
+    if (partialState.count     !== undefined) setCount(partialState.count);
+    if (partialState.destino   !== undefined) setDestino(partialState.destino);
+    if (partialState.basePrompt !== undefined) setBasePrompt(partialState.basePrompt);
+    if (partialState.outfitMode !== undefined) setOutfitMode(partialState.outfitMode);
+    if (partialState.refs      !== undefined) setRefs(partialState.refs);
+    if (partialState.modelId   !== undefined) setModelId(partialState.modelId as any);
+    setShowPresets(false);
+    setStep(2); // ir directo al brief con la configuración restaurada
+  };
 
   // ── Costos modo recetas ───────────────────────────────────
   const imageCreditCost = (count + 1) * CREDITS_PER_IMAGE;
@@ -1507,12 +1529,37 @@ const PhotodumpModule: React.FC = () => {
 
               {/* ── PASO 1: TIPO DE CONTENIDO ───────────── */}
               {step === 1 && (
-                <PDStep1
-                  recipe={recipe}
-                  destino={destino}
-                  onRecipe={r => { setRecipe(r); }}
-                  onDestino={setDestino}
-                />
+                <>
+                  <PDStep1
+                    recipe={recipe}
+                    destino={destino}
+                    onRecipe={r => { setRecipe(r); }}
+                    onDestino={setDestino}
+                  />
+                  {/* Botón para abrir presets */}
+                  <div className="px-4 md:px-8 pb-4">
+                    <button
+                      onClick={() => setShowPresets(o => !o)}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl
+                                 border border-slate-200 hover:border-brand-300 hover:bg-brand-50
+                                 text-slate-500 hover:text-brand-700 text-xs font-black uppercase
+                                 tracking-widest transition-all"
+                    >
+                      <BookMarked className="w-4 h-4" />
+                      {showPresets ? 'Ocultar presets' : `Presets guardados${presetManager.presets.length > 0 ? ` (${presetManager.presets.length})` : ''}`}
+                    </button>
+                    {showPresets && (
+                      <div className="mt-4">
+                        <PresetManagerPanel
+                          manager={presetManager}
+                          onLoad={handleLoadPreset}
+                          suggestedName={photodumpPresetAdapter.defaultName!(currentPresetState)}
+                          emptyLabel="No tenés presets de Photodump guardados"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
 
               {/* ── PASO 2: BRIEF + REFS (modo recetas) ─── */}
