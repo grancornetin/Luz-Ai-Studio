@@ -82,7 +82,9 @@ export function useModulePresets<TState>(
       setPresets(prev => [preset, ...prev]);
       return preset;
     } catch (e) {
-      setError('Error al guardar el preset');
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[presets] savePreset error:', msg, e);
+      setError(`Error al guardar: ${msg}`);
       return null;
     } finally {
       setSaving(false);

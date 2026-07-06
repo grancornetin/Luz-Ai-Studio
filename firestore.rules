@@ -206,6 +206,11 @@ service cloud.firestore {
                           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']));
         allow delete: if isOwner(userId) || isAdmin();
       }
+
+      // Module Preset System — presets de configuración por módulo
+      match /modulePresets/{presetId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
     }
 
     // ═══════════════════════════════════════════════════════════

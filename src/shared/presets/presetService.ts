@@ -3,8 +3,8 @@
 // Colección: users/{uid}/modulePresets
 
 import {
-  collection, doc, addDoc, setDoc, getDoc, getDocs,
-  deleteDoc, query, where, orderBy, serverTimestamp, Timestamp,
+  collection, doc, setDoc, getDoc, getDocs,
+  deleteDoc, query, where, serverTimestamp, Timestamp,
 } from 'firebase/firestore';
 import {
   ref as storageRef,
@@ -76,14 +76,16 @@ function fromDoc(id: string, data: Record<string, unknown>): ModulePreset {
 export const presetService = {
 
   // Listar todos los presets de un módulo para un usuario
+  // Nota: orderBy('updatedAt') en combinación con where() requiere índice compuesto en Firestore.
+  // Para evitar tener que crearlo manualmente, filtramos y ordenamos en cliente.
   async list(uid: string, moduleId: ModuleId): Promise<ModulePreset[]> {
     const q = query(
       presetsCol(uid),
       where('moduleId', '==', moduleId),
-      orderBy('updatedAt', 'desc'),
     );
     const snap = await getDocs(q);
-    return snap.docs.map(d => fromDoc(d.id, d.data() as Record<string, unknown>));
+    const docs = snap.docs.map(d => fromDoc(d.id, d.data() as Record<string, unknown>));
+    return docs.sort((a, b) => b.updatedAt - a.updatedAt);
   },
 
   // Obtener un preset específico
@@ -99,8 +101,8 @@ export const presetService = {
     input: ModulePresetInput,
     assetInputs: PresetAssetInput[] = [],
   ): Promise<ModulePreset> {
-    // Crear doc vacío para obtener el ID
-    const docRef = await addDoc(presetsCol(uid), { _placeholder: true });
+    // Generar ID sin escribir nada en Firestore todavía
+    const docRef = doc(presetsCol(uid));
     const presetId = docRef.id;
 
     // Subir assets con el ID ya conocido
