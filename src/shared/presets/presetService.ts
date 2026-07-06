@@ -21,6 +21,16 @@ import type {
   PresetAssetInput,
 } from './types';
 
+// Convierte recursivamente undefined → null para que Firestore no rechace el documento
+function sanitizeForFirestore(obj: unknown): unknown {
+  if (obj === undefined) return null;
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(sanitizeForFirestore);
+  return Object.fromEntries(
+    Object.entries(obj as Record<string, unknown>).map(([k, v]) => [k, sanitizeForFirestore(v)])
+  );
+}
+
 const presetsCol = (uid: string) =>
   collection(db, 'users', uid, 'modulePresets');
 
@@ -114,13 +124,18 @@ export const presetService = {
       ?? assets[0]?.url
       ?? input.thumbnail;
 
+    // Firestore no acepta undefined — todos los campos opcionales van como null o string vacío
     const payload = {
       moduleId:    input.moduleId,
       name:        input.name,
       description: input.description ?? '',
       thumbnail:   thumbnail ?? null,
-      config:      input.config,
-      assets,
+      config:      sanitizeForFirestore(input.config),
+      assets:      assets.map(a => ({
+        key:      a.key,
+        url:      a.url,
+        mimeType: a.mimeType ?? null,
+      })),
       version:     input.version ?? 1,
       createdAt:   serverTimestamp(),
       updatedAt:   serverTimestamp(),
@@ -156,9 +171,9 @@ export const presetService = {
       updatedAt: serverTimestamp(),
     };
     if (changes.name        !== undefined) payload.name        = changes.name;
-    if (changes.description !== undefined) payload.description = changes.description;
-    if (changes.config      !== undefined) payload.config      = changes.config;
-    if (changes.thumbnail   !== undefined) payload.thumbnail   = changes.thumbnail;
+    if (changes.description !== undefined) payload.description = changes.description ?? '';
+    if (changes.config      !== undefined) payload.config      = sanitizeForFirestore(changes.config);
+    if (changes.thumbnail   !== undefined) payload.thumbnail   = changes.thumbnail ?? null;
     if (changes.assets      !== undefined) payload.assets      = changes.assets;
     if (newAssets.length > 0)             payload.assets      = newAssets;
 
