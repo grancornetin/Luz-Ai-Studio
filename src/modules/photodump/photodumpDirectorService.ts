@@ -648,33 +648,39 @@ export function parseOutfitBriefContext(basePrompt: string): OutfitBriefContext 
   }
 
   // ── wearingContextOnly: distingue "para X" (uso del outfit) de "en X" (locación de captura) ──
-  // Aplica solo a office_meeting por ahora — es el caso que más se presta a confusión.
-  // "para la oficina / para el trabajo / para trabajar / para ir a la oficina" → ropa de trabajo, haul en casa
-  // "en la oficina / en mi oficina / grabado en / fondo de oficina / filmado en" → puede ser locación real
+  // Regla GLOBAL: para TODOS los destinos.
+  // "para la cena / para ir a cenar / look de cena" → ropa de cena, captura en casa/habitación
+  // "en el restaurante / grabado en / filmado en" → puede ser locación real
   let wearingContextOnly: boolean | undefined;
   let wearingContextStyleLabel: string | undefined;
-  if (destinationClass === 'office_meeting') {
-    const hasForUsage =
-      /para (la |el |mi |ir a )?ofic/i.test(basePrompt) ||
-      /para (el |mi )?trabajo/i.test(basePrompt) ||
-      /para trabajar/i.test(basePrompt) ||
-      /para (la |una )?reunión/i.test(basePrompt) ||
-      /ropa (de|para) (la |el )?ofic/i.test(basePrompt) ||
-      /outfits? (de|para) (la |el )?ofic/i.test(basePrompt) ||
-      /looks? (de|para) (la |el )?ofic/i.test(basePrompt) ||
-      /prendas? (de|para) (la |el )?ofic/i.test(basePrompt);
+
+  if (destinationClass !== 'none') {
+    // Señales explícitas de "filmado en esa locación"
     const hasAtLocation =
-      /en (la |mi |una )?ofic/i.test(basePrompt) ||
+      /\ben (la |el |mi |un |una |este )?(ofic|restauran|caf[eé]|playa|aeropuerto|hotel|gala|evento)/i.test(basePrompt) ||
       /grabad[ao] en/i.test(basePrompt) ||
       /filmad[ao] en/i.test(basePrompt) ||
-      /fondo (de )?ofic/i.test(basePrompt) ||
-      /haz.*en (la |mi )?ofic/i.test(basePrompt) ||
-      /haul en (la |mi |una )?ofic/i.test(basePrompt);
-    // Si hay señal de "para uso" pero NO hay señal de "en locación" → wearingContextOnly
-    if (hasForUsage && !hasAtLocation) {
+      /fondo de/i.test(basePrompt) ||
+      /haz.*en (la |el |mi )/i.test(basePrompt) ||
+      /haul en (la |el |mi )/i.test(basePrompt);
+
+    // Si NO hay señal explícita de "filmado en esa locación" → asumir wearingContextOnly
+    // La ausencia de señal de locación explícita es la regla por defecto para outfit_week/haul
+    if (!hasAtLocation) {
       wearingContextOnly = true;
-      wearingContextStyleLabel = 'office / workwear inspired';
-    } else if (hasAtLocation) {
+      const labelMap: Partial<Record<string, string>> = {
+        restaurant_dinner:   'dinner / evening out',
+        office_meeting:      'office / workwear',
+        formal_event:        'formal event / gala',
+        opera_theatre:       'opera / theatre',
+        country_club_brunch: 'brunch / social occasion',
+        beach_day:           'beach / outdoor casual',
+        travel_airport:      'travel / airport',
+        urban_social_outing: 'night out / social event',
+        generic_outing:      'social outing',
+      };
+      wearingContextStyleLabel = labelMap[destinationClass] ?? destinationClass;
+    } else {
       wearingContextOnly = false;
     }
   }
@@ -9173,8 +9179,10 @@ NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${shot.rol
           const isHero           = roleLabel === 'WEEK_LOOK_HERO' || roleLabel === 'WEEK_MIRROR_LOOK';
           const semIntent        = weekPlan?.semanticIntentFromBrief;
           const resolvedTags     = weekPlan?.resolvedTagsUsed?.length ? weekPlan.resolvedTagsUsed.join(', ') : '';
+          // IMPORTANTE: destination describe el uso del outfit (cena, oficina) — NO la locación de captura.
+          // Solo se inyecta como mood de vestimenta, nunca como locación física del shot.
           const moodLine         = semIntent?.mood || semIntent?.destination
-            ? `MOOD / CONTEXT FROM BRIEF: "${[semIntent.mood, semIntent.destination].filter(Boolean).join(' — ')}"`
+            ? `OUTFIT MOOD / INTENDED OCCASION (describes the CLOTHES, NOT the capture location): "${[semIntent.mood, semIntent.destination].filter(Boolean).join(' — ')}"`
             : '';
           // El Visual Reference Contract ya construido arriba
           const contractBlock    = weeklyVisualContract?.contractBlock ?? '';
@@ -9198,7 +9206,7 @@ ${isHero ? `HERO SHOT RULES:
 - Look for the PRIMARY GARMENT image in the contract — that is the SOLE source of wardrobe truth.
 - DO NOT use clothing from identity/body/world images as the garment.
 - DO NOT mix in elements from other uploaded outfit images.
-- The garment in the PRIMARY slot is the ONLY outfit for this shot.${semIntent?.destination ? `\n- The vibe of this look is "${semIntent.destination}" — reflect this in the environment, body language, and mood.` : ''}` : ''}
+- The garment in the PRIMARY slot is the ONLY outfit for this shot.${semIntent?.destination ? `\n- The style intention of this look is "${semIntent.destination}" — reflect this in body language, attitude, and styling ONLY. Do NOT change the capture environment or move to a ${semIntent.destination} location. The room stays as anchored by REF0.` : ''}` : ''}
 ${isOverview ? `OVERVIEW RULES:
 - Show ALL weekly items arranged naturally together on a surface (bed, rack, chair, floor, table).
 - Person may appear partially (hands organizing) or not at all.
@@ -9371,38 +9379,38 @@ Organic, imperfect, lived-in. NOT editorial. NOT advertising. NOT staged.`;
     );
   })();
 
-  // ── HAUL LOCATION SEMANTICS — solo para outfit_haul ──────────────────────────
-  // Evita que términos de ocasión ("para la oficina") contaminen el fondo de captura.
+  // ── WEARING CONTEXT SEMANTICS — outfit_haul y outfit_week ────────────────────
+  // Evita que términos de ocasión ("cena", "oficina") contaminen el fondo de captura.
   const haulLocationSemanticsBlock = (() => {
-    if (recipe !== 'outfit_haul') return '';
+    if (recipe !== 'outfit_haul' && recipe !== 'outfit_week') return '';
     const ctx = parseOutfitBriefContext(basePrompt);
     const isWearingOnly = ctx.wearingContextOnly === true;
     // Siempre inyectar el bloque de semántica de locación en haul.
     // Si wearingContextOnly=true, añadir advertencia explícita + forbidden list.
     // Si wearingContextOnly=false/undefined, solo el recordatorio base.
+    const sessionType = recipe === 'outfit_week' ? 'weekly outfit edit' : 'clothing haul';
     const wearingOnlyWarning = isWearingOnly
       ? `
-⚠️ CRITICAL — OCCASION ≠ LOCATION:
-The brief says "${ctx.wearingContextStyleLabel ?? 'this occasion'}". This describes what the CLOTHES are for — NOT where the haul is filmed.
-The user is doing a haul at HOME and these clothes happen to be workwear / occasion-appropriate.
-DO NOT move the haul into an office, coworking space, corporate corridor, or workplace.
-DO NOT generate: office lobby, building entrance, elevator, meeting room, coworking lounge, business corridor, reception desk, corporate interior.
-The clothes may look polished and professional — the ROOM is still a bedroom / dressing room / home space.`
+⚠️ CRITICAL — OCCASION ≠ CAPTURE LOCATION:
+The brief mentions "${ctx.wearingContextStyleLabel ?? 'this occasion'}". This describes what the CLOTHES are for — NOT where this ${sessionType} is filmed.
+The user is shooting their ${sessionType} at HOME. The clothes happen to be ${ctx.wearingContextStyleLabel ?? 'occasion-appropriate'}.
+DO NOT move the session into a ${ctx.wearingContextStyleLabel ?? 'specific venue'}.
+DO NOT generate: restaurant interior, candlelit table, office lobby, event venue, airport terminal, beach, or any destination-specific environment.
+The clothes evoke an occasion — the ROOM is still a bedroom / dressing area / home space anchored by REF0.`
       : '';
     return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🏠 HAUL LOCATION SEMANTICS (BINDING — DO NOT IGNORE):
-A clothing haul is filmed in a HOME PREPARATION SPACE: bedroom, dressing room, closet room, or personal room.
-The brief may mention an occasion (office, church, dinner, travel) — this describes WHERE THE CLOTHES WILL BE WORN, not where the haul is filmed.
+🏠 CAPTURE LOCATION LOCK (BINDING — DO NOT IGNORE):
+This ${sessionType} is filmed in a HOME / PERSONAL SPACE: bedroom, dressing room, mirror area, or closet.
+The brief may mention occasions (dinner, office, beach, travel) — these describe WHERE THE CLOTHES WILL BE WORN, not where this session is filmed.
 ${wearingOnlyWarning}
-FORBIDDEN HAUL BACKGROUNDS (unless user explicitly requests them):
-❌ office lobby or reception area
-❌ coworking space or open-plan office
-❌ corporate corridor or business hallway
-❌ meeting room or boardroom
-❌ building entrance or elevator lobby
-❌ commercial showroom or retail space
-❌ workplace lounge or office pantry
-The haul ALWAYS stays in a home / personal / dressing environment unless the user says "film it in my office" or "at the office" explicitly.
+FORBIDDEN BACKGROUNDS (unless the user explicitly says "film it at X"):
+❌ restaurant interior, candlelit dining room, bar, or any dining venue
+❌ office lobby, coworking, corporate corridor, or workplace
+❌ event venue, gala hall, cocktail reception space
+❌ airport terminal or travel setting
+❌ beach, pool, or outdoor destination
+❌ any location invented from the brief's occasion keywords
+ALWAYS stay in the REF0 environment — that is the ONLY allowed capture location.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
   })();
 
