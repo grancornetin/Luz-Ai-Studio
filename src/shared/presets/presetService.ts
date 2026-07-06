@@ -1,18 +1,7 @@
-// ── Module Preset Service ──────────────────────────────────────────────────
-// CRUD de presets en Firestore + subida de assets a Firebase Storage
-// Colección: users/{uid}/modulePresets
+// ── Module Preset Service — localStorage backend ───────────────────────────
+// Guarda presets en localStorage por usuario. Misma API que la versión Firestore.
+// Clave: modulePresets_{uid}_{moduleId}
 
-import {
-  collection, doc, setDoc, getDoc, getDocs,
-  deleteDoc, query, where, serverTimestamp, Timestamp,
-} from 'firebase/firestore';
-import {
-  ref as storageRef,
-  uploadBytes,
-  getDownloadURL,
-  deleteObject,
-} from 'firebase/storage';
-import { db, storage } from '../../firebase';
 import type {
   ModulePreset,
   ModulePresetInput,
@@ -21,197 +10,104 @@ import type {
   PresetAssetInput,
 } from './types';
 
-// Convierte recursivamente undefined → null para que Firestore no rechace el documento
-function sanitizeForFirestore(obj: unknown): unknown {
-  if (obj === undefined) return null;
-  if (obj === null || typeof obj !== 'object') return obj;
-  if (Array.isArray(obj)) return obj.map(sanitizeForFirestore);
-  return Object.fromEntries(
-    Object.entries(obj as Record<string, unknown>).map(([k, v]) => [k, sanitizeForFirestore(v)])
-  );
+function storageKey(uid: string, moduleId: ModuleId) {
+  return `modulePresets_${uid}_${moduleId}`;
 }
 
-const presetsCol = (uid: string) =>
-  collection(db, 'users', uid, 'modulePresets');
-
-const presetDoc = (uid: string, presetId: string) =>
-  doc(db, 'users', uid, 'modulePresets', presetId);
-
-// ── Subir un asset a Storage ───────────────────────────────────────────────
-async function uploadPresetAsset(
-  uid: string,
-  presetId: string,
-  asset: PresetAssetInput,
-): Promise<PresetAsset> {
-  if (asset.existingUrl && !asset.file) {
-    return { key: asset.key, url: asset.existingUrl, mimeType: asset.mimeType };
+function readAll(uid: string, moduleId: ModuleId): ModulePreset[] {
+  try {
+    const raw = localStorage.getItem(storageKey(uid, moduleId));
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
   }
-  if (!asset.file) throw new Error(`Asset "${asset.key}" no tiene archivo ni URL`);
-
-  const path = `modulePresets/${uid}/${presetId}/${asset.key}`;
-  const sRef = storageRef(storage, path);
-  await uploadBytes(sRef, asset.file, { contentType: asset.mimeType ?? asset.file.type });
-  const url = await getDownloadURL(sRef);
-  return { key: asset.key, url, mimeType: asset.mimeType ?? asset.file.type };
 }
 
-// ── Borrar todos los assets de un preset ──────────────────────────────────
-async function deletePresetAssets(uid: string, presetId: string, assets: PresetAsset[]) {
-  await Promise.allSettled(
-    assets.map(a => {
-      const path = `modulePresets/${uid}/${presetId}/${a.key}`;
-      return deleteObject(storageRef(storage, path));
-    }),
-  );
+function writeAll(uid: string, moduleId: ModuleId, presets: ModulePreset[]) {
+  localStorage.setItem(storageKey(uid, moduleId), JSON.stringify(presets));
 }
 
-// ── Convertir doc Firestore → ModulePreset ────────────────────────────────
-function fromDoc(id: string, data: Record<string, unknown>): ModulePreset {
-  return {
-    id,
-    moduleId: data.moduleId as string,
-    name: data.name as string,
-    description: data.description as string | undefined,
-    thumbnail: data.thumbnail as string | undefined,
-    createdAt: (data.createdAt as Timestamp)?.toMillis?.() ?? Date.now(),
-    updatedAt: (data.updatedAt as Timestamp)?.toMillis?.() ?? Date.now(),
-    config: (data.config as Record<string, unknown>) ?? {},
-    assets: (data.assets as PresetAsset[]) ?? [],
-    version: (data.version as number) ?? 1,
-  };
+function newId() {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
-
-// ── API pública ────────────────────────────────────────────────────────────
 
 export const presetService = {
 
-  // Listar todos los presets de un módulo para un usuario
-  // Nota: orderBy('updatedAt') en combinación con where() requiere índice compuesto en Firestore.
-  // Para evitar tener que crearlo manualmente, filtramos y ordenamos en cliente.
   async list(uid: string, moduleId: ModuleId): Promise<ModulePreset[]> {
-    const q = query(
-      presetsCol(uid),
-      where('moduleId', '==', moduleId),
-    );
-    const snap = await getDocs(q);
-    const docs = snap.docs.map(d => fromDoc(d.id, d.data() as Record<string, unknown>));
-    return docs.sort((a, b) => b.updatedAt - a.updatedAt);
+    return readAll(uid, moduleId).sort((a, b) => b.updatedAt - a.updatedAt);
   },
 
-  // Obtener un preset específico
   async get(uid: string, presetId: string): Promise<ModulePreset | null> {
-    const snap = await getDoc(presetDoc(uid, presetId));
-    if (!snap.exists()) return null;
-    return fromDoc(snap.id, snap.data() as Record<string, unknown>);
+    // Busca en todas las claves del usuario
+    const keys = Object.keys(localStorage).filter(k => k.startsWith(`modulePresets_${uid}_`));
+    for (const key of keys) {
+      try {
+        const list: ModulePreset[] = JSON.parse(localStorage.getItem(key) ?? '[]');
+        const found = list.find(p => p.id === presetId);
+        if (found) return found;
+      } catch { /* continúa */ }
+    }
+    return null;
   },
 
-  // Crear un nuevo preset (sube assets primero, luego guarda en Firestore)
   async create(
     uid: string,
     input: ModulePresetInput,
-    assetInputs: PresetAssetInput[] = [],
+    _assetInputs: PresetAssetInput[] = [],
   ): Promise<ModulePreset> {
-    // Generar ID sin escribir nada en Firestore todavía
-    const docRef = doc(presetsCol(uid));
-    const presetId = docRef.id;
-
-    // Subir assets con el ID ya conocido
-    const assets = await Promise.all(
-      assetInputs.map(a => uploadPresetAsset(uid, presetId, a)),
-    );
-
-    const thumbnail = assets.find(a => a.key === 'thumbnail')?.url
-      ?? assets[0]?.url
-      ?? input.thumbnail;
-
-    // Firestore no acepta undefined — todos los campos opcionales van como null o string vacío
-    const payload = {
+    const now = Date.now();
+    const preset: ModulePreset = {
+      id:          newId(),
       moduleId:    input.moduleId,
       name:        input.name,
       description: input.description ?? '',
-      thumbnail:   thumbnail ?? null,
-      config:      sanitizeForFirestore(input.config),
-      assets:      assets.map(a => ({
-        key:      a.key,
-        url:      a.url,
-        mimeType: a.mimeType ?? null,
-      })),
+      thumbnail:   input.thumbnail ?? null,
+      config:      input.config,
+      assets:      [] as PresetAsset[],
       version:     input.version ?? 1,
-      createdAt:   serverTimestamp(),
-      updatedAt:   serverTimestamp(),
+      createdAt:   now,
+      updatedAt:   now,
     };
-
-    await setDoc(docRef, payload);
-
-    return {
-      id: presetId,
-      ...input,
-      assets,
-      thumbnail,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
+    const list = readAll(uid, input.moduleId);
+    list.unshift(preset);
+    writeAll(uid, input.moduleId, list);
+    return preset;
   },
 
-  // Actualizar nombre/descripción/config de un preset existente
   async update(
     uid: string,
     presetId: string,
     changes: Partial<Pick<ModulePreset, 'name' | 'description' | 'config' | 'thumbnail' | 'assets'>>,
-    newAssetInputs: PresetAssetInput[] = [],
   ): Promise<void> {
-    let newAssets: PresetAsset[] = [];
-    if (newAssetInputs.length > 0) {
-      newAssets = await Promise.all(
-        newAssetInputs.map(a => uploadPresetAsset(uid, presetId, a)),
-      );
-    }
-
-    const payload: Record<string, unknown> = {
-      updatedAt: serverTimestamp(),
+    const preset = await presetService.get(uid, presetId);
+    if (!preset) return;
+    const updated: ModulePreset = {
+      ...preset,
+      ...changes,
+      updatedAt: Date.now(),
     };
-    if (changes.name        !== undefined) payload.name        = changes.name;
-    if (changes.description !== undefined) payload.description = changes.description ?? '';
-    if (changes.config      !== undefined) payload.config      = sanitizeForFirestore(changes.config);
-    if (changes.thumbnail   !== undefined) payload.thumbnail   = changes.thumbnail ?? null;
-    if (changes.assets      !== undefined) payload.assets      = changes.assets;
-    if (newAssets.length > 0)             payload.assets      = newAssets;
-
-    await setDoc(presetDoc(uid, presetId), payload, { merge: true });
+    const list = readAll(uid, preset.moduleId);
+    writeAll(uid, preset.moduleId, list.map(p => p.id === presetId ? updated : p));
   },
 
-  // Eliminar preset y sus assets en Storage
   async delete(uid: string, presetId: string): Promise<void> {
     const preset = await presetService.get(uid, presetId);
-    if (preset?.assets?.length) {
-      await deletePresetAssets(uid, presetId, preset.assets);
-    }
-    await deleteDoc(presetDoc(uid, presetId));
+    if (!preset) return;
+    const list = readAll(uid, preset.moduleId);
+    writeAll(uid, preset.moduleId, list.filter(p => p.id !== presetId));
   },
 
-  // Duplicar un preset (copia config + assets existentes por URL)
   async duplicate(uid: string, presetId: string): Promise<ModulePreset> {
     const original = await presetService.get(uid, presetId);
     if (!original) throw new Error('Preset no encontrado');
-
-    const assetInputs: PresetAssetInput[] = original.assets.map(a => ({
-      key: a.key,
-      existingUrl: a.url,
-      mimeType: a.mimeType,
-    }));
-
-    return presetService.create(
-      uid,
-      {
-        moduleId:    original.moduleId,
-        name:        `${original.name} (copia)`,
-        description: original.description,
-        thumbnail:   original.thumbnail,
-        config:      original.config,
-        assets:      original.assets,
-        version:     original.version,
-      },
-      assetInputs,
-    );
+    return presetService.create(uid, {
+      moduleId:    original.moduleId,
+      name:        `${original.name} (copia)`,
+      description: original.description,
+      thumbnail:   original.thumbnail,
+      config:      original.config,
+      assets:      [],
+      version:     original.version,
+    });
   },
 };
