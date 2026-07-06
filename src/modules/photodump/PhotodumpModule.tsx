@@ -1529,37 +1529,42 @@ const PhotodumpModule: React.FC = () => {
 
               {/* ── PASO 1: TIPO DE CONTENIDO ───────────── */}
               {step === 1 && (
-                <>
-                  <PDStep1
-                    recipe={recipe}
-                    destino={destino}
-                    onRecipe={r => { setRecipe(r); }}
-                    onDestino={setDestino}
-                  />
-                  {/* Botón para abrir presets */}
-                  <div className="px-4 md:px-8 pb-4">
-                    <button
-                      onClick={() => setShowPresets(o => !o)}
-                      className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl
-                                 border border-slate-200 hover:border-brand-300 hover:bg-brand-50
-                                 text-slate-500 hover:text-brand-700 text-xs font-black uppercase
-                                 tracking-widest transition-all"
-                    >
-                      <BookMarked className="w-4 h-4" />
-                      {showPresets ? 'Ocultar presets' : `Presets guardados${presetManager.presets.length > 0 ? ` (${presetManager.presets.length})` : ''}`}
-                    </button>
-                    {showPresets && (
-                      <div className="mt-4">
-                        <PresetManagerPanel
-                          manager={presetManager}
-                          onLoad={handleLoadPreset}
-                          suggestedName={photodumpPresetAdapter.defaultName!(currentPresetState)}
-                          emptyLabel="No tenés presets de Photodump guardados"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </>
+                <PDStep1
+                  recipe={recipe}
+                  destino={destino}
+                  onRecipe={r => { setRecipe(r); }}
+                  onDestino={setDestino}
+                />
+              )}
+
+              {/* ── PASO 2: PRESETS (barra siempre visible) ─ */}
+              {step === 2 && !isFree && (
+                <div className="px-4 md:px-8 pt-4">
+                  <button
+                    onClick={() => setShowPresets(o => !o)}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl
+                               border border-slate-200 hover:border-brand-300 hover:bg-brand-50
+                               text-slate-500 hover:text-brand-700 text-xs font-black uppercase
+                               tracking-widest transition-all"
+                  >
+                    <BookMarked className="w-3.5 h-3.5" />
+                    {showPresets
+                      ? 'Ocultar presets'
+                      : presetManager.presets.length > 0
+                        ? `Cargar preset (${presetManager.presets.length})`
+                        : 'Guardar / cargar preset'}
+                  </button>
+                  {showPresets && (
+                    <div className="mt-3 mb-1">
+                      <PresetManagerPanel
+                        manager={presetManager}
+                        onLoad={handleLoadPreset}
+                        suggestedName={photodumpPresetAdapter.defaultName!(currentPresetState)}
+                        emptyLabel="No tenés presets de Photodump guardados"
+                      />
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* ── PASO 2: BRIEF + REFS (modo recetas) ─── */}
