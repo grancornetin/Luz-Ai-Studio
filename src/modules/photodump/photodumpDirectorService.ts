@@ -494,6 +494,78 @@ This rule protects content creators who are building their own brand.
 Inventing external brands damages their credibility and undermines their business.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
+// ── WeeklySlotCoverageMode — bloque de autoridad para outfit_week ─────────────
+//
+// outfit_week NO es una campaña narrativa con destino y arco de personaje.
+// Es un sistema de cobertura visual de ítems seleccionados.
+// Este bloque se inyecta como PRIMERA directiva de modo en cada prompt de outfit_week.
+// Establece la jerarquía de autoridad y desactiva el destination inference a nivel de escena.
+const WEEKLY_SLOT_COVERAGE_MODE = `╔═══════════════════════════════════════════════════════════════════╗
+║           WEEKLY SLOT COVERAGE MODE — OUTFIT WEEK                ║
+║       (OVERRIDES narrative arc, destination, story logic)        ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+🎯 MODE: SLOT COVERAGE — NOT A NARRATIVE CAMPAIGN
+
+This is a weekly outfit edit: the user uploaded N looks / items for this week.
+Your ONLY job is to show each look faithfully, one per shot, in the environment established by REF0.
+
+AUTHORITY HIERARCHY (non-negotiable — highest priority first):
+
+  1. SLOT COVERAGE: Every uploaded outfit must be shown. Coverage is the primary success metric.
+     A shot that shows the wrong outfit, a duplicate, or an invented outfit = HARD FAILURE.
+
+  2. VISUAL SLOT FIDELITY: The garment reference image is the sole source of truth.
+     Color, silhouette, material, cut — all locked to the reference. No upgrades, no simplifications.
+
+  3. BRIEF TAG ASSOCIATIONS: If the brief links items (@outfit3 + @accesorio2 together),
+     those items appear together in the same shot. No other pairing is invented.
+
+  4. IDENTITY CONSISTENCY: Same face, same skin, same hair across all shots. REF0 anchors the room.
+
+  5. UGC REALISM: Simple, authentic, real-life iPhone feel. Real room. Real light.
+
+  6. NARRATIVE DIVERSITY (lowest priority): Vary framing and angle between shots for visual interest.
+     This is a secondary nice-to-have — NEVER override any of the above.
+
+⛔ WHAT THIS MODE DISABLES — HARD OFF FOR outfit_week:
+
+  ❌ Destination inference as capture location
+     — "cena", "dinner", "oficina", "playa", "viaje" describe the CLOTHES' intended use, NOT the filming location.
+     — The user is always shooting at HOME in the REF0 environment.
+     — Never move the scene to a restaurant, office, airport, beach, event venue, or any other destination.
+
+  ❌ Creative story arc and narrative protagonist logic
+     — There is NO character journey. There is NO first-act / second-act / closing structure.
+     — Each shot is independent — it shows one look from the weekly selection. Full stop.
+
+  ❌ HPI that overrides slot coverage
+     — Poses must serve the garment visibility, not the other way around.
+     — No HPI suggestion may cause the wrong outfit to appear, the garment to be cropped out, or the scene to shift.
+
+  ❌ Family blocks that import props, locations, or narrative layers
+     — No prop, color palette, or ambient element from a narrative family overrides REF0.
+
+  ❌ Outfit mood reinterpretation
+     — "casual", "arreglado", "vibrante", "de cena" describe the CHARACTER of the clothes.
+     — They do NOT license the model to change the outfit, invent a different garment, or relocate the scene.
+
+  ❌ Invented garments as fallback
+     — If a slot has no reference image, the person holds a neutral garment or the shot is a detail/overview.
+     — Never invent a look to fill a gap.
+
+✅ WHAT THE BRIEF IS ALLOWED TO DO:
+
+  ✓ Provide mood adjectives for the clothes: "casual", "elegante", "colorido", "minimalista".
+  ✓ Define order: "empieza con @outfit2".
+  ✓ Specify pairings: "@outfit3 con @accesorio2 juntos en el mismo shot".
+  ✓ Add soft narrative tone: "una semana cargada / outfits de diario + uno especial".
+  ✓ Adjust composition notes: "empezamos con un flat lay de todo".
+
+  ✗ The brief CANNOT: change the filming location, invent outfits, replace slots, or trigger destination shots.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
 // ── Helpers ───────────────────────────────────────────────────
 
 // Router semántico completo para outfit_check.
@@ -2009,9 +2081,17 @@ export function detectContradictions(
 function extractBriefContextBlock(basePrompt: string, recipe?: string): string {
   const { timeSignal, venueSignal } = parseBriefContext(basePrompt);
 
-  // Para haul: detectar si la mención de destino es solo contexto de uso (no locación de captura)
+  // Para haul y outfit_week: suprimir venueSignal como locación de captura.
+  // En outfit_week es SIEMPRE suprimido — la receta opera en modo de cobertura de slots,
+  // no en modo de campaña narrativa. El destination solo aplica como metadata de ropa.
   let effectiveVenueSignal = venueSignal;
-  if (recipe === 'outfit_haul' && venueSignal) {
+  if (recipe === 'outfit_week' && venueSignal) {
+    const ctx = parseOutfitBriefContext(basePrompt);
+    // outfit_week: siempre suprimir venue como locación — solo nota de estilo si hay ocasión
+    effectiveVenueSignal = ctx.wearingContextStyleLabel
+      ? `GARMENT STYLE CONTEXT: ${ctx.wearingContextStyleLabel} (describes the clothes' occasion — NOT the filming location)`
+      : '';
+  } else if (recipe === 'outfit_haul' && venueSignal) {
     const ctx = parseOutfitBriefContext(basePrompt);
     if (ctx.wearingContextOnly === true) {
       // Suprimir venueSignal de locación — reemplazar por nota de estilo solamente
@@ -7153,7 +7233,7 @@ function weeklyRoleToDirective(
       framing: 'WIDE', composition: 'FLATLAY_OR_RACK_EDITORIAL', angle: 'SLIGHTLY_HIGH_OR_OVERHEAD',
     },
     WEEK_LOOK_HERO: {
-      purpose: `Weekly look hero for ${primaryLabel}${semanticMoodLabel}. ${visualIntent}. Full body shot — outfit clearly readable head to toe. THIS outfit only — do NOT include elements from other uploaded outfits. Framing: ${compositionMode || rot.composition}. Angle: ${rot.angle}. Real environment, authentic attitude.${semanticIntent?.destination ? ` The mood of this look is "${semanticIntent.destination}" — reflect this in the environment and attitude.` : ''} NOT a catalog. NOT mannequin pose.`,
+      purpose: `Weekly look hero for ${primaryLabel}${semanticMoodLabel}. ${visualIntent}. Full body shot — outfit clearly readable head to toe. THIS outfit only — do NOT include elements from other uploaded outfits. Framing: ${compositionMode || rot.composition}. Angle: ${rot.angle}. Real environment anchored by REF0, authentic attitude.${semanticIntent?.destination ? ` The mood of this look is "${semanticIntent.destination}" — express this through the garment styling, body language, and attitude ONLY. Do NOT change the capture environment. The room stays exactly as REF0 established it.` : ''} NOT a catalog. NOT mannequin pose.`,
       required: ['full_body_visible', 'assigned_outfit_readable_head_to_toe', 'real_environment', 'authentic_attitude', 'only_assigned_outfit_visible'],
       forbidden: [...baseForbidden, 'identical_framing_as_prior_hero_shot', ...(forbiddenLabels.length > 0 ? [`do_not_show: ${forbiddenLabels.join(', ')}`] : [])],
       beat: 'context',
@@ -8762,7 +8842,13 @@ export async function generatePhotodumpShot(
   }[shot.beat] ?? `📸 ${shot.beat.toUpperCase()}`;
 
   const isFacelessShot = narrative === 'faceless';
-  const shotModeBlock  = isFacelessShot ? STORY_MODE_FACELESS : STORY_MODE_DOMINANCE;
+  // outfit_week usa WEEKLY_SLOT_COVERAGE_MODE en lugar del bloque narrativo genérico.
+  // El modo de cobertura de slots es la autoridad máxima y reemplaza la lógica de campaña.
+  const shotModeBlock  = recipe === 'outfit_week'
+    ? WEEKLY_SLOT_COVERAGE_MODE
+    : isFacelessShot
+      ? STORY_MODE_FACELESS
+      : STORY_MODE_DOMINANCE;
 
   const selectedFamily = pickFamilyForShot(
     shot.beat, shot.key, shot.arcPosition - 1, sessionFamilies, protagonist,
@@ -9572,6 +9658,12 @@ ${NEGATIVE_SHORT}`;
       colorMaterialDriftRisk:              false,
       wardrobeIntegrationRisk:             false,
     },
+    // ── WeeklySlotCoverageMode debug (outfit_week only) ──
+    weeklySlotCoverageMode:                      recipe === 'outfit_week',
+    creativePlannerReducedForOutfitWeek:         recipe === 'outfit_week',
+    destinationInferenceDisabledForOutfitWeek:   recipe === 'outfit_week',
+    hpiCannotOverrideSlotCoverage:               recipe === 'outfit_week',
+    briefContextVenueSignalSuppressedForWeek:    recipe === 'outfit_week',
   } as any;
 }
 
