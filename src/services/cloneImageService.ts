@@ -1,7 +1,7 @@
 // src/services/cloneImageService.ts
 // ─────────────────────────────────────────────────────────────────────────────
 // Clone de escena con sustitución de identidad + reemplazo de outfits/productos.
-// V3.2: scene-lighting lock + identity-only references + smartphone-faithful stabilization
+// V3.3: placeholder-lighting donor relight + identity-only references + smartphone-faithful stabilization
 //
 // CAMBIO CLAVE:
 // - La imagen target se trata como plantilla de escena / pose / composición / iluminación.
@@ -222,6 +222,29 @@ ${hasSecondSubject ? `- Do not import studio lighting, frontal beauty lighting, 
 `.trim();
 }
 
+function getPlaceholderLightingDonorBlock(refs: BuiltRefs): string {
+  const sceneRef = refs.refMap.scene;
+  const s1FaceRef = refs.refMap.subject1Face;
+  const s1BodyRef = refs.refMap.subject1Body;
+  const s2FaceRef = refs.refMap.subject2Face;
+  const s2BodyRef = refs.refMap.subject2Body;
+  const hasSecondSubject = !!s2FaceRef && !!s2BodyRef;
+
+  return `
+[PLACEHOLDER LIGHTING DONOR — FACE/BODY RELIGHT]
+- The original person visible in ${sceneRef} is NOT an identity source, but IS the exact lighting donor for the replacement subject.
+- Before applying Subject 1 identity, read the original placeholder person's local face/body lighting from ${sceneRef}: facial exposure, forehead brightness, cheek highlights, nose shadow, nostril shadow, lip shadow, chin shadow, neck shadow, under-jaw shadow, eye socket darkness, catchlight strength, skin contrast, skin saturation, ambient color cast, bounce light, and blur/noise/compression level.
+- Transfer that local lighting map onto Subject 1 after identity replacement.
+- Subject 1 must look like the same person from ${s1FaceRef} photographed at the exact place, moment, lens, exposure, and lighting conditions of the placeholder person in ${sceneRef}.
+- Do not paste the face appearance from ${s1FaceRef}. Do not keep the studio/external reference light from ${s1FaceRef} or ${s1BodyRef}.
+- The face identity comes from ${s1FaceRef}; the visible face illumination, shadow map, exposure, skin finish, sharpness, color cast, and photographic degradation come from the corresponding placeholder person in ${sceneRef}.
+${hasSecondSubject ? `- For Subject 2, use the corresponding second placeholder person in ${sceneRef} as the exact lighting donor. Identity comes from ${s2FaceRef}; visible face/body lighting, exposure, skin finish, sharpness, color cast, and photographic degradation come from the matching placeholder person in ${sceneRef}.` : ''}
+- If the placeholder face in ${sceneRef} is soft, slightly blurred, low contrast, warm, overexposed, underexposed, shadowed, noisy, compressed, or imperfect, the replacement face must preserve those same local imperfections.
+- Do not make the replacement face clearer, cleaner, sharper, smoother, more symmetrical, more glamorous, or more studio-lit than the placeholder face in ${sceneRef}.
+`.trim();
+}
+
+
 function getSceneMatchedOutputQualityBlock(sceneRef: string): string {
   return `
 [OUTPUT QUALITY]
@@ -308,6 +331,8 @@ ${hasSecondSubject && s2SlotRef ? `- ${s2SlotRef} is the positional slot anchor 
 
 ${getSceneLightingTransferLock(refs)}
 
+${getPlaceholderLightingDonorBlock(refs)}
+
 [FACIAL EXPRESSION LOCK]
 - The facial expression of each subject in the output MUST match the facial expression of the corresponding person in ${sceneRef}.
 - Do NOT default to a neutral face — copy the emotional state from ${sceneRef}.
@@ -328,14 +353,14 @@ ${getSceneLightingTransferLock(refs)}
 - Never blend Subject 1 and Subject 2 into a hybrid identity.
 
 [SUBJECT 1 IDENTITY]
-- Subject 1 face must clearly and recognizably match ${s1FaceRef}.
+- Subject 1 identity must be recognizable from ${s1FaceRef}, but the visible face lighting, exposure, shadow map, skin finish, sharpness, expression, and photographic quality must come from the corresponding placeholder person in ${sceneRef}.
 - Subject 1 body structure should follow ${s1BodyRef} for body proportions, visible anatomy, skin tone range, and general hair length only.
 - Final visible skin color must be adapted to the exposure, white balance, shadows, highlights, and color grading of ${sceneRef}.
 - Subject 1 must remain a distinct identity.
 
 ${hasSecondSubject && s2FaceRef && s2BodyRef ? `
 [SUBJECT 2 IDENTITY]
-- Subject 2 face must clearly and recognizably match ${s2FaceRef}.
+- Subject 2 identity must be recognizable from ${s2FaceRef}, but the visible face lighting, exposure, shadow map, skin finish, sharpness, expression, and photographic quality must come from the corresponding placeholder person in ${sceneRef}.
 - Subject 2 body structure should follow ${s2BodyRef} for body proportions, visible anatomy, skin tone range, and general hair length only.
 - Final visible skin color must be adapted to the exposure, white balance, shadows, highlights, and color grading of ${sceneRef}.
 - Subject 2 must remain a distinct identity.
@@ -362,7 +387,7 @@ ${getTechnicalStabilizationBlock(sceneRef)}
 - No leaving the original anchor identity unchanged.
 - No body deformation. No extra limbs. No extra fingers.
 - No scene drift. No background drift. No composition drift.
-- No global beautification. No editorial upgrade. No studio-lighting contamination from identity, outfit, or product references.
+- No global beautification. No editorial upgrade. No studio-lighting contamination from identity, outfit, or product references. Placeholder lighting donor from the scene has priority over all identity/outfit/product reference aesthetics.
 - Technical stabilization is allowed only as subtle smartphone-faithful cleanup, not aesthetic restyling.
 - The final image must look like the same scene, but with the anchor people replaced by the requested subjects.
 `.trim();
@@ -420,6 +445,8 @@ ${getSubjectPlacementBlock(params.subject1Selector, hasSecondSubject)}
 
 ${getSceneLightingTransferLock(refs)}
 
+${getPlaceholderLightingDonorBlock(refs)}
+
 [IDENTITY LOCK]
 - Subject 1 identity must still match ${s1FaceRef}.
 - Subject 1 body proportions and visible anatomy must remain coherent with ${s1BodyRef}, but visible skin must stay adapted to ${sceneRef} lighting and color grading.
@@ -465,7 +492,7 @@ ${getTechnicalStabilizationBlock(sceneRef)}
 - No body deformation. No extra limbs. No extra fingers.
 - No scene drift. No background drift. No composition drift.
 - No wardrobe contamination between Subject 1 and Subject 2.
-- No global beautification. No editorial upgrade. No studio-lighting contamination from identity references.
+- No global beautification. No editorial upgrade. No studio-lighting contamination from identity references. Placeholder lighting donor from the scene has priority over all identity reference aesthetics.
 - The final result must look like one coherent original photo.
 `.trim();
 }
@@ -506,6 +533,8 @@ ${getSubjectPlacementBlock(params.subject1Selector, hasSecondSubject)}
 
 ${getSceneLightingTransferLock(refs)}
 
+${getPlaceholderLightingDonorBlock(refs)}
+
 [IDENTITY REPLACEMENT RULES]
 - Replace every visible person identity from the scene anchor.
 - Never return the original target people unchanged.
@@ -516,9 +545,9 @@ ${getSceneLightingTransferLock(refs)}
 - Never blend both identities together.
 
 [SUBJECT IDENTITIES]
-- Subject 1 face must clearly match ${s1FaceRef}.
+- Subject 1 identity must be recognizable from ${s1FaceRef}, but the visible face lighting, exposure, shadow map, skin finish, sharpness, expression, and photographic quality must come from the corresponding placeholder person in ${sceneRef}.
 - Subject 1 body proportions and skin tone range must follow ${s1BodyRef}, but final visible skin color must adapt to ${sceneRef} exposure, shadows, highlights, white balance, and color grading.
-${hasSecondSubject && s2FaceRef ? `- Subject 2 face must clearly match ${s2FaceRef}.` : ''}
+${hasSecondSubject && s2FaceRef ? `- Subject 2 identity must be recognizable from ${s2FaceRef}, but the visible face lighting, exposure, shadow map, skin finish, sharpness, expression, and photographic quality must come from the corresponding placeholder person in ${sceneRef}.` : ''}
 ${hasSecondSubject && s2BodyRef ? `- Subject 2 body proportions and skin tone range must follow ${s2BodyRef}, but final visible skin color must adapt to ${sceneRef} exposure, shadows, highlights, white balance, and color grading.` : ''}
 
 ${getCameraStylePrompt(params.cameraStyle)}
@@ -533,7 +562,7 @@ ${getTechnicalStabilizationBlock(sceneRef)}
 - No face drift, identity swap, or identity blending.
 - No scene drift.
 - No body deformation.
-- No global beautification. No editorial upgrade. No studio-lighting contamination from identity references.
+- No global beautification. No editorial upgrade. No studio-lighting contamination from identity references. Placeholder lighting donor from the scene has priority over all identity reference aesthetics.
 - The final result must look like the same scene, but with the anchor people replaced by the requested subjects.
 `.trim();
 }
@@ -581,6 +610,8 @@ ${getSubjectPlacementBlock(params.subject1Selector, hasSecondSubject)}
 
 ${getSceneLightingTransferLock(refs)}
 
+${getPlaceholderLightingDonorBlock(refs)}
+
 [IDENTITY RULES]
 - Subject 1 must still match ${refs.refMap.subject1Face}.
 ${hasSecondSubject && refs.refMap.subject2Face ? `- Subject 2 must still match ${refs.refMap.subject2Face}.` : ''}
@@ -619,7 +650,7 @@ ${getTechnicalStabilizationBlock(sceneRef)}
 - No identity swaps.
 - No body deformation.
 - No collage look.
-- No global beautification. No editorial upgrade. No studio-lighting contamination from identity, outfit, or product references.
+- No global beautification. No editorial upgrade. No studio-lighting contamination from identity, outfit, or product references. Placeholder lighting donor from the scene has priority over all identity/outfit/product reference aesthetics.
 - Technical stabilization is allowed only as subtle smartphone-faithful cleanup, not aesthetic restyling.
 - Final result must look like one coherent original photo.
 `.trim();
@@ -672,6 +703,12 @@ export const cloneImageService = {
       'glossy skin',
       'overly smooth skin',
       'beauty retouching',
+      'retouched face',
+      'pasted face',
+      'face pasted from reference',
+      'reference face lighting copied',
+      'identity reference lighting',
+      'studio portrait face',
       'over-sharpened face',
       'perfect catchlights',
       'scene drift',
