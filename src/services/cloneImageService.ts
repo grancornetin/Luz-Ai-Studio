@@ -8,6 +8,7 @@
 // - Las referencias de rostro/cuerpo se usan SOLO para identidad/anatomía, no para look fotográfico.
 // - Se elimina el sesgo de “high-end editorial / crisp beauty render” que contaminaba la integración.
 // - Se agrega estabilización técnica automática en el mismo paso: limpia levemente blur/ruido/compresión sin convertir la foto en editorial.
+// - Se bloquea la herencia accidental de cabello, tatuajes, lunares, maquillaje, uñas y accesorios del personaje original.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { imageApiService, extractImageRef, type GenerateImageParams } from './imageApiService';
@@ -245,6 +246,79 @@ ${hasSecondSubject ? `- For Subject 2, use the corresponding second placeholder 
 }
 
 
+
+function getOriginalPersonAttributeDiscardBlock(refs: BuiltRefs): string {
+  const sceneRef = refs.refMap.scene;
+  const s1FaceRef = refs.refMap.subject1Face;
+  const s1BodyRef = refs.refMap.subject1Body;
+  const s2FaceRef = refs.refMap.subject2Face;
+  const s2BodyRef = refs.refMap.subject2Body;
+  const hasSecondSubject = !!s2FaceRef && !!s2BodyRef;
+
+  return `
+[ORIGINAL PERSON ATTRIBUTE DISCARD — STRICT IDENTITY SOURCE OF TRUTH]
+- The original person in ${sceneRef} is a disposable placeholder for pose, position, crop, interaction, occlusion, and lighting only.
+- Completely discard every biological/identity attribute of the original person before rendering the replacement subject.
+- Preserve from the original person ONLY: pose, body placement, scale, camera perspective, crop, gesture, facial expression, object contact, occlusion, and the local lighting map.
+- NEVER preserve from the original person: face, facial structure, skin identity, skin texture identity, skin tone identity, hair, hairstyle, hair color, hairline, eyebrows, eyelashes, lips, ears, tattoos, piercings, freckles, moles, birthmarks, scars, fingernails, nail color, makeup, facial hair, body hair, jewelry, earrings, rings, necklaces, bracelets, watches, hair accessories, glasses, or personal marks.
+- All identity attributes above must come from Subject 1 references (${s1FaceRef} and ${s1BodyRef}), then be relit and degraded to match ${sceneRef}.
+${hasSecondSubject ? `- For Subject 2, all identity attributes above must come from Subject 2 references (${s2FaceRef} and ${s2BodyRef}), then be relit and degraded to match ${sceneRef}.` : ''}
+- If an identity detail is visible in ${sceneRef} but absent from the relevant subject references, remove it unless it is part of an explicitly requested outfit/product replacement.
+- Do not average, merge, or hybridize identity attributes between the original person and the replacement subject.
+`.trim();
+}
+
+function getHairIdentityAuthorityBlock(refs: BuiltRefs): string {
+  const sceneRef = refs.refMap.scene;
+  const s1FaceRef = refs.refMap.subject1Face;
+  const s1BodyRef = refs.refMap.subject1Body;
+  const s2FaceRef = refs.refMap.subject2Face;
+  const s2BodyRef = refs.refMap.subject2Body;
+  const hasSecondSubject = !!s2FaceRef && !!s2BodyRef;
+
+  return `
+[HAIR IDENTITY AUTHORITY]
+- Hair is NOT part of the pose and must NOT be inherited from the original person in ${sceneRef}.
+- Subject 1 hair identity must come from ${s1FaceRef} and ${s1BodyRef}: hair color, approximate length, hairline, parting, density, texture, curl/wave/straight pattern, layers, bangs, volume, and overall hairstyle family.
+- Only adapt the replacement hair to the scene physics: gravity, wind, occlusion, crop, pose, contact with shoulders/clothing, and ${sceneRef} lighting.
+- Do not preserve the original person's hair color, hairstyle, hair volume, bangs, parting, curls, loose strands, dyed sections, roots, or hairline from ${sceneRef}.
+${hasSecondSubject ? `- Subject 2 hair identity must come from ${s2FaceRef} and ${s2BodyRef}; never inherit hair from the second original placeholder person in ${sceneRef}.` : ''}
+- If the scene placeholder has black hair and the subject reference has blonde hair, the final subject must have blonde hair adapted to the scene lighting, not black hair.
+- If the scene placeholder has dyed hair, bangs, curls, short hair, extensions, or a different hairstyle that is not present in the subject references, remove that placeholder hair identity.
+`.trim();
+}
+
+function getTattoosMarksAccessoriesAuthorityBlock(refs: BuiltRefs): string {
+  const sceneRef = refs.refMap.scene;
+  const s1FaceRef = refs.refMap.subject1Face;
+  const s1BodyRef = refs.refMap.subject1Body;
+  const s2FaceRef = refs.refMap.subject2Face;
+  const s2BodyRef = refs.refMap.subject2Body;
+  const hasSecondSubject = !!s2FaceRef && !!s2BodyRef;
+
+  return `
+[TATTOOS / MARKS / ACCESSORIES AUTHORITY]
+- Tattoos, freckles, moles, scars, piercings, makeup, nail color, jewelry, and personal accessories are identity/style attributes, not pose attributes.
+- Never preserve tattoos, freckles, moles, scars, piercings, makeup style, nail color, earrings, rings, necklaces, bracelets, watches, glasses, or hair accessories from the original person in ${sceneRef}.
+- Subject 1 may show only tattoos/marks/accessories that are visible in ${s1FaceRef} or ${s1BodyRef}, or explicitly requested by an outfit/product replacement.
+${hasSecondSubject ? `- Subject 2 may show only tattoos/marks/accessories that are visible in ${s2FaceRef} or ${s2BodyRef}, or explicitly requested by an outfit/product replacement.` : ''}
+- If the original placeholder has tattoos or accessories that are absent from the replacement subject references, remove them cleanly while preserving the same skin lighting, shadows, compression, and texture softness from ${sceneRef}.
+- Do not invent new tattoos, jewelry, piercings, nail art, makeup, freckles, scars, or personal marks unless they are visible in the relevant subject references.
+`.trim();
+}
+
+function getAuthorityStackBlock(refs: BuiltRefs): string {
+  const sceneRef = refs.refMap.scene;
+  return `
+[AUTHORITY STACK — NO AMBIGUOUS INHERITANCE]
+- ${sceneRef} is the only authority for scene, background, camera, crop, pose, expression, physical interaction, occlusion, lighting, exposure, shadows, reflections, blur, noise, compression, and color grading.
+- Identity references are the only authority for face identity, body identity, hair identity, skin tone range, tattoos/marks that actually belong to the subject, and personal accessories.
+- Outfit references are the only authority for replacement clothing identity when outfit replacement is enabled.
+- Product references are the only authority for replacement product identity when product replacement is enabled.
+- When two references conflict, do not blend them. Use the correct authority for that attribute.
+`.trim();
+}
+
 function getSceneMatchedOutputQualityBlock(sceneRef: string): string {
   return `
 [OUTPUT QUALITY]
@@ -333,6 +407,14 @@ ${getSceneLightingTransferLock(refs)}
 
 ${getPlaceholderLightingDonorBlock(refs)}
 
+${getOriginalPersonAttributeDiscardBlock(refs)}
+
+${getHairIdentityAuthorityBlock(refs)}
+
+${getTattoosMarksAccessoriesAuthorityBlock(refs)}
+
+${getAuthorityStackBlock(refs)}
+
 [FACIAL EXPRESSION LOCK]
 - The facial expression of each subject in the output MUST match the facial expression of the corresponding person in ${sceneRef}.
 - Do NOT default to a neutral face — copy the emotional state from ${sceneRef}.
@@ -345,23 +427,24 @@ ${getPlaceholderLightingDonorBlock(refs)}
 - If the anchor contains 1 person, replace that person with Subject 1.
 - If the anchor contains 2 people, replace BOTH people: one with Subject 1 and the other with Subject 2, according to the mapping rules.
 - Never keep the original face of any visible anchor person.
-- Never keep the original hair identity of any visible anchor person.
+- Never keep the original hair identity of any visible anchor person: no original hair color, hairstyle, hairline, parting, curls, bangs, dyed strands, volume, or loose-strand pattern.
 - Never return the unmodified target image.
 - Never output only one replaced subject if two are required.
 - Never duplicate Subject 1 onto both people.
 - Never duplicate Subject 2 onto both people.
 - Never blend Subject 1 and Subject 2 into a hybrid identity.
+- Never blend the replacement subject with the original placeholder identity.
 
 [SUBJECT 1 IDENTITY]
 - Subject 1 identity must be recognizable from ${s1FaceRef}, but the visible face lighting, exposure, shadow map, skin finish, sharpness, expression, and photographic quality must come from the corresponding placeholder person in ${sceneRef}.
-- Subject 1 body structure should follow ${s1BodyRef} for body proportions, visible anatomy, skin tone range, and general hair length only.
+- Subject 1 body structure should follow ${s1BodyRef} for body proportions, visible anatomy, skin tone range, and hair identity cues including color, approximate length, density, and texture. Final hair must be relit to ${sceneRef}.
 - Final visible skin color must be adapted to the exposure, white balance, shadows, highlights, and color grading of ${sceneRef}.
 - Subject 1 must remain a distinct identity.
 
 ${hasSecondSubject && s2FaceRef && s2BodyRef ? `
 [SUBJECT 2 IDENTITY]
 - Subject 2 identity must be recognizable from ${s2FaceRef}, but the visible face lighting, exposure, shadow map, skin finish, sharpness, expression, and photographic quality must come from the corresponding placeholder person in ${sceneRef}.
-- Subject 2 body structure should follow ${s2BodyRef} for body proportions, visible anatomy, skin tone range, and general hair length only.
+- Subject 2 body structure should follow ${s2BodyRef} for body proportions, visible anatomy, skin tone range, and hair identity cues including color, approximate length, density, and texture. Final hair must be relit to ${sceneRef}.
 - Final visible skin color must be adapted to the exposure, white balance, shadows, highlights, and color grading of ${sceneRef}.
 - Subject 2 must remain a distinct identity.
 - Subject 2 must not be confused with Subject 1.
@@ -384,8 +467,9 @@ ${getTechnicalStabilizationBlock(sceneRef)}
 - No face drift.
 - No identity swap.
 - No identity blending.
+- No inherited placeholder hair color, hairstyle, tattoos, freckles, moles, makeup, nails, jewelry, piercings, or personal accessories.
 - No leaving the original anchor identity unchanged.
-- No body deformation. No extra limbs. No extra fingers.
+- No body deformation. No inherited placeholder hair color, hairstyle, tattoos, freckles, moles, makeup, nails, jewelry, piercings, or personal accessories. No extra limbs. No extra fingers.
 - No scene drift. No background drift. No composition drift.
 - No global beautification. No editorial upgrade. No studio-lighting contamination from identity, outfit, or product references. Placeholder lighting donor from the scene has priority over all identity/outfit/product reference aesthetics.
 - Technical stabilization is allowed only as subtle smartphone-faithful cleanup, not aesthetic restyling.
@@ -447,10 +531,18 @@ ${getSceneLightingTransferLock(refs)}
 
 ${getPlaceholderLightingDonorBlock(refs)}
 
+${getOriginalPersonAttributeDiscardBlock(refs)}
+
+${getHairIdentityAuthorityBlock(refs)}
+
+${getTattoosMarksAccessoriesAuthorityBlock(refs)}
+
+${getAuthorityStackBlock(refs)}
+
 [IDENTITY LOCK]
-- Subject 1 identity must still match ${s1FaceRef}.
+- Subject 1 identity, hair identity, marks, tattoos, and personal accessories must still match ${s1FaceRef} / ${s1BodyRef}, not the original placeholder person.
 - Subject 1 body proportions and visible anatomy must remain coherent with ${s1BodyRef}, but visible skin must stay adapted to ${sceneRef} lighting and color grading.
-${hasSecondSubject && s2FaceRef ? `- Subject 2 identity must still match ${s2FaceRef}.` : ''}
+${hasSecondSubject && s2FaceRef ? `- Subject 2 identity, hair identity, marks, tattoos, and personal accessories must still match ${s2FaceRef} / ${s2BodyRef}, not the original placeholder person.` : ''}
 ${hasSecondSubject && s2BodyRef ? `- Subject 2 body proportions and visible anatomy must remain coherent with ${s2BodyRef}, but visible skin must stay adapted to ${sceneRef} lighting and color grading.` : ''}
 - Never change the identity of any already-correct subject while applying outfits/products.
 - Never re-interpret the image globally.
@@ -488,8 +580,8 @@ ${getTechnicalStabilizationBlock(sceneRef)}
 - No text. No watermark.
 - No face drift.
 - No identity swaps.
-- No hairstyle drift.
-- No body deformation. No extra limbs. No extra fingers.
+- No hairstyle drift. No inherited placeholder hair color, hairstyle, tattoos, freckles, moles, makeup, nails, jewelry, piercings, or personal accessories.
+- No body deformation. No inherited placeholder hair color, hairstyle, tattoos, freckles, moles, makeup, nails, jewelry, piercings, or personal accessories. No extra limbs. No extra fingers.
 - No scene drift. No background drift. No composition drift.
 - No wardrobe contamination between Subject 1 and Subject 2.
 - No global beautification. No editorial upgrade. No studio-lighting contamination from identity references. Placeholder lighting donor from the scene has priority over all identity reference aesthetics.
@@ -535,6 +627,14 @@ ${getSceneLightingTransferLock(refs)}
 
 ${getPlaceholderLightingDonorBlock(refs)}
 
+${getOriginalPersonAttributeDiscardBlock(refs)}
+
+${getHairIdentityAuthorityBlock(refs)}
+
+${getTattoosMarksAccessoriesAuthorityBlock(refs)}
+
+${getAuthorityStackBlock(refs)}
+
 [IDENTITY REPLACEMENT RULES]
 - Replace every visible person identity from the scene anchor.
 - Never return the original target people unchanged.
@@ -546,9 +646,9 @@ ${getPlaceholderLightingDonorBlock(refs)}
 
 [SUBJECT IDENTITIES]
 - Subject 1 identity must be recognizable from ${s1FaceRef}, but the visible face lighting, exposure, shadow map, skin finish, sharpness, expression, and photographic quality must come from the corresponding placeholder person in ${sceneRef}.
-- Subject 1 body proportions and skin tone range must follow ${s1BodyRef}, but final visible skin color must adapt to ${sceneRef} exposure, shadows, highlights, white balance, and color grading.
+- Subject 1 body proportions, skin tone range, and hair identity cues must follow ${s1BodyRef}, but final visible skin/hair color must adapt to ${sceneRef} exposure, shadows, highlights, white balance, and color grading.
 ${hasSecondSubject && s2FaceRef ? `- Subject 2 identity must be recognizable from ${s2FaceRef}, but the visible face lighting, exposure, shadow map, skin finish, sharpness, expression, and photographic quality must come from the corresponding placeholder person in ${sceneRef}.` : ''}
-${hasSecondSubject && s2BodyRef ? `- Subject 2 body proportions and skin tone range must follow ${s2BodyRef}, but final visible skin color must adapt to ${sceneRef} exposure, shadows, highlights, white balance, and color grading.` : ''}
+${hasSecondSubject && s2BodyRef ? `- Subject 2 body proportions, skin tone range, and hair identity cues must follow ${s2BodyRef}, but final visible skin/hair color must adapt to ${sceneRef} exposure, shadows, highlights, white balance, and color grading.` : ''}
 
 ${getCameraStylePrompt(params.cameraStyle)}
 
@@ -561,7 +661,7 @@ ${getTechnicalStabilizationBlock(sceneRef)}
 - No text or watermark.
 - No face drift, identity swap, or identity blending.
 - No scene drift.
-- No body deformation.
+- No body deformation. No inherited placeholder hair color, hairstyle, tattoos, freckles, moles, makeup, nails, jewelry, piercings, or personal accessories.
 - No global beautification. No editorial upgrade. No studio-lighting contamination from identity references. Placeholder lighting donor from the scene has priority over all identity reference aesthetics.
 - The final result must look like the same scene, but with the anchor people replaced by the requested subjects.
 `.trim();
@@ -612,6 +712,14 @@ ${getSceneLightingTransferLock(refs)}
 
 ${getPlaceholderLightingDonorBlock(refs)}
 
+${getOriginalPersonAttributeDiscardBlock(refs)}
+
+${getHairIdentityAuthorityBlock(refs)}
+
+${getTattoosMarksAccessoriesAuthorityBlock(refs)}
+
+${getAuthorityStackBlock(refs)}
+
 [IDENTITY RULES]
 - Subject 1 must still match ${refs.refMap.subject1Face}.
 ${hasSecondSubject && refs.refMap.subject2Face ? `- Subject 2 must still match ${refs.refMap.subject2Face}.` : ''}
@@ -648,7 +756,7 @@ ${getTechnicalStabilizationBlock(sceneRef)}
 - No scene drift.
 - No face drift.
 - No identity swaps.
-- No body deformation.
+- No body deformation. No inherited placeholder hair color, hairstyle, tattoos, freckles, moles, makeup, nails, jewelry, piercings, or personal accessories.
 - No collage look.
 - No global beautification. No editorial upgrade. No studio-lighting contamination from identity, outfit, or product references. Placeholder lighting donor from the scene has priority over all identity/outfit/product reference aesthetics.
 - Technical stabilization is allowed only as subtle smartphone-faithful cleanup, not aesthetic restyling.
@@ -721,6 +829,17 @@ export const cloneImageService = {
       'hybrid face',
       'original target face preserved',
       'original anchor identity left unchanged',
+      'original placeholder hair preserved',
+      'original hair color preserved',
+      'wrong hair color',
+      'wrong hairstyle',
+      'placeholder tattoos preserved',
+      'placeholder freckles preserved',
+      'placeholder moles preserved',
+      'placeholder makeup preserved',
+      'placeholder nail color preserved',
+      'placeholder jewelry preserved',
+      'placeholder accessories preserved',
       'missing person',
       'one person only',
       'duplicated person',
