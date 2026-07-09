@@ -348,7 +348,7 @@ export const RECIPE_META: Record<PhotodumpRecipe, {
     protagonist: 'person',
   },
   outfit_week: {
-    label:       'Weekly Favorites',
+    label:       'Favoritos de la semana',
     description: 'Mostrás outfits, accesorios, beauty products o favoritos de la semana.',
     icon:        'CalendarDays',
     refs:        { avatar: 'required', outfit: 'optional', accesorios: 'optional', producto: 'optional', empaque: 'optional', escena: 'optional', escena_prueba: 'none', escena_destino: 'none' },

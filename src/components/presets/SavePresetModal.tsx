@@ -46,7 +46,7 @@ export const SavePresetModal: React.FC<SavePresetModalProps> = ({
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="Ej: Outfit week verano con 4 looks"
+              placeholder="Ej: Favoritos de la semana verano — 4 looks"
               className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900
                          placeholder:text-slate-400 focus:outline-none focus:border-brand-400 transition-colors"
               maxLength={60}
