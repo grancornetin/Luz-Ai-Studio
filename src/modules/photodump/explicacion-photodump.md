@@ -8,7 +8,7 @@
 > 5. El objetivo es que otra IA pueda leer este archivo y entender completamente qué hace el módulo, cómo funciona, y en qué estado está, sin necesidad de leer el código.
 > 6. **INSTRUCCIÓN DE CONTINUIDAD:** Al final del documento siempre debe existir la sección "Estado de trabajo actual" con el estado exacto de qué se está haciendo, en qué receta se está, y qué quedó pendiente. Cuando una receta se cierra, moverla a "Recetas cerradas". Esto permite retomar el trabajo en un nuevo chat sin perder contexto.
 
-**Última actualización:** Julio 2026 (outfit_haul cerrada 9/10. outfit_week patch v3 implementado — pendiente prueba en app.)
+**Última actualización:** 2026-07-09 (outfit_haul cerrada 9/10. outfit_week patch v3 implementado — pendiente prueba en app. `photodumpDirectorService.ts` dividido por receta en `recipes/` — ver "Archivos principales".)
 **Propósito:** Generar series fotográficas con narrativa visual coherente. Un "photodump" es una colección de fotos que cuentan una historia o transmiten un mood, muy popular en Instagram y TikTok.
 
 ---
@@ -36,10 +36,17 @@ El flujo completo es:
 | `PhotodumpModule.tsx` | Componente principal. Wizard 4 pasos + galería de sets guardados. Maneja generación, debug para admins, retry automático con safe-retry para haul |
 | `PDStep2Receta.tsx` | Paso 2: selección de receta + carga de referencias por slot. Para haul: slots outfit hasta 10 ítems, accesorios hasta 5, sublabels dinámicos por tipo |
 | `HaulReferenceTypeSelector.tsx` | Selector de tipo de referencia para haul. 14 opciones (auto / look_completo / varios_items / top / bottom / vestido / enterizo / chaqueta / calzado / pantys / bolso / joyeria / accesorio). El valor viaja al pipeline y condiciona el planner y los prompts |
-| `photodumpDirectorService.ts` | Lógica de generación: plan narrativo, REF0, shots, captions. Contiene `buildHaulManifest`, `buildHaulShotPlan`, `computeFinalHaulCoverageFromShots` y todos los builders de shots por tipo (try-on, adjusting, footwear, bag, jewelry, accessory, overview, recap) |
+| `photodumpDirectorService.ts` | Orquestador (~3850 líneas, antes 10047). Tipos genéricos, `generatePhotodumpShot`/`generatePhotodumpREF0`/`buildPhotodumpSessionPlan`/`generatePhotodumpCaptions` (compartidos entre recetas), y el pool orgánico de `day_in_life`/`launch`/`bts`/`travel` (recetas aún sin implementar, sin archivo propio todavía) |
+| `recipes/shared.ts` | Núcleo compartido: tipos de shot, bloques de prompt globales (`LOCK_SYSTEM`, `GLOBAL_*`), wear state, camera mode, scene fingerprint, brief parsing legado |
+| `recipes/outfitHaul.ts` | Receta `outfit_haul` completa: manifest, styling graph, scoring de compatibilidad, world map, shot planner, coverage y los 13 shot builders |
+| `recipes/outfitWeek.ts` | Receta `outfit_week` completa: `WEEKLY_SLOT_COVERAGE_MODE`, HPI seguro, manifest, role templates, shot planner, coverage map, dominance check |
+| `recipes/outfitCheck.ts` | Receta `outfit_check` completa: router semántico de brief, directivas de prep space, HPI específico, detección de contradicciones, pool de shots |
+| `recipes/unboxing.ts` | Receta `unboxing` completa: pool lineal fijo de shots y su compresión por cantidad |
 | `photodumpIntelligence.ts` | Lee banco UGC de familias visuales (story_support, creator_aesthetic). **Independiente de recetas.** |
 | `types.ts` | Todos los tipos: PhotodumpSet, RecipeRefConfig, PhotodumpRefs, HaulItem, HaulManifest, HaulRefKind, HaulResolvedKind, VisualRefsAnalysisResult, etc. |
 | `photodumpStorage.ts` | IndexedDB (`app_photodump_module`). Guarda sets completos |
+
+**División por receta (Julio 2026):** `photodumpDirectorService.ts` tenía 10047 líneas mezclando el motor de todas las recetas. Se dividió en 4 fases (núcleo compartido → outfit_haul → outfit_week → outfit_check + unboxing), cada una verificada con `tsc --noEmit` y build real antes de mergear. Para editar una receta ya implementada, abrir directamente su archivo en `recipes/` en vez de buscar en el orquestador. La función `generatePhotodumpShot` (ensamblador final de prompt) sigue en el archivo principal porque mezcla ramas condicionales de las 3 recetas outfit (check/haul/week) de forma entrelazada — separarla se evaluará si vuelve a crecer demasiado.
 
 ### Infraestructura de generación
 
