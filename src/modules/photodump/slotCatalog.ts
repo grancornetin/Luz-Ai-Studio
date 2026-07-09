@@ -323,8 +323,10 @@ export const RECIPE_SLOT_MAPS: Record<string, RecipeSlotMap> = {
 
   outfit_week: [
     { type: 'persona',   count: 1, required: true  },
-    { type: 'outfit',    count: 7, required: true  },
-    { type: 'accesorio', count: 3, required: false, closeup: true },
+    { type: 'outfit',    count: 7, required: false },
+    { type: 'accesorio', count: 4, required: false, closeup: true },
+    { type: 'producto',  count: 4, required: false },
+    { type: 'packaging', count: 2, required: false },
     { type: 'escena',    count: 1, required: false },
   ],
 

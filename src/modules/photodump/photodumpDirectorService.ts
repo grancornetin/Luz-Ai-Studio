@@ -2317,7 +2317,7 @@ function buildStoryDirectives(
 
   if (recipe === 'outfit_week') {
     // Construir manifest completo con roles narrativos, cobertura y routing
-    const weekManifest = buildWeeklyManifest((refs ?? {}) as PhotodumpRefs, count);
+    const weekManifest = buildWeeklyManifest((refs ?? {}) as PhotodumpRefs, count, basePrompt ?? '');
     const plan = weekManifest.shotPlan;
     // Convertir cada WeeklyShotPlan en un PhotodumpShotDirective con metadata de routing
     const directives = plan.slice(0, count).map((sp, i) =>
@@ -6184,6 +6184,71 @@ If a shot has an explicit primary outfit item, use THAT item's clothing — not 
 // Planificación basada en roles narrativos + manifest de ítems con cobertura REAL garantizada.
 
 // Clasifica un ítem por su posición en el array (outfit slots vs accesorio slots)
+// Clasificador extendido por slot + selector manual — soporta categorías reales
+function classifyWeeklyItemFromSlot(
+  refUrl:      string,
+  sourceIndex: number,
+  slotType:    'outfit' | 'accesorio' | 'producto',
+  manualKind:  import('./types').HaulRefKind,
+  slotIndex:   number,
+): import('./types').WeeklyItem {
+  // Derivar WeeklyItemKind desde el slotType y el selector manual
+  let kind: import('./types').WeeklyItemKind;
+  let id: string;
+  let label: string;
+  let tryOnEligible = false;
+  let accessoryEligible = false;
+  let canBeIntegratedWithOutfit = false;
+
+  if (slotType === 'outfit') {
+    id    = `outfit_${slotIndex}`;
+    label = `Outfit ${slotIndex + 1}`;
+    // Derivar kind según selector
+    switch (manualKind) {
+      case 'vestido':    kind = 'dress';       tryOnEligible = true; break;
+      case 'enterizo':   kind = 'onepiece';    tryOnEligible = true; break;
+      case 'top':        kind = 'top';         tryOnEligible = true; break;
+      case 'bottom':     kind = 'bottom';      tryOnEligible = true; break;
+      case 'chaqueta':   kind = 'outerwear';   tryOnEligible = true; break;
+      case 'calzado':    kind = 'footwear';    break;
+      case 'bolso':      kind = 'bag';         accessoryEligible = true; canBeIntegratedWithOutfit = true; break;
+      case 'joyeria':    kind = 'jewelry';     accessoryEligible = true; canBeIntegratedWithOutfit = true; break;
+      case 'accesorio':  kind = 'accessory';   accessoryEligible = true; canBeIntegratedWithOutfit = true; break;
+      case 'varios_items': kind = 'outfit_set'; tryOnEligible = true; break;
+      default:           kind = 'outfit_set';  tryOnEligible = true;
+    }
+  } else if (slotType === 'accesorio') {
+    id    = `acc_${slotIndex}`;
+    accessoryEligible = true;
+    canBeIntegratedWithOutfit = true;
+    switch (manualKind) {
+      case 'bolso':      kind = 'bag';      label = `Bolso ${slotIndex + 1}`;    break;
+      case 'calzado':    kind = 'footwear'; label = `Calzado ${slotIndex + 1}`;  break;
+      case 'joyeria':    kind = 'jewelry';  label = `Joyería ${slotIndex + 1}`;  break;
+      default:           kind = 'accessory'; label = `Accesorio ${slotIndex + 1}`;
+    }
+  } else {
+    // producto
+    id    = `producto_${slotIndex}`;
+    label = `Producto ${slotIndex + 1}`;
+    kind  = 'product';
+  }
+
+  return {
+    id,
+    sourceIndex,
+    refUrl,
+    kind,
+    label,
+    priority:                 'required',
+    tryOnEligible,
+    detailEligible:           true,
+    accessoryEligible,
+    canBeIntegratedWithOutfit,
+    compatibleWith:           [],
+  };
+}
+
 function classifyWeeklyItem(
   refUrl: string,
   sourceIndex: number,
@@ -6208,14 +6273,33 @@ function classifyWeeklyItem(
 
 // Detecta el tipo dominante del set para adaptar los roles narrativos
 function detectWeeklyDominantType(
-  outfitItems: import('./types').WeeklyItem[],
-  accItems: import('./types').WeeklyItem[],
+  allItems: import('./types').WeeklyItem[],
 ): import('./types').WeeklySetDominantType {
-  const total = outfitItems.length + accItems.length;
+  const total = allItems.length;
   if (total === 0) return 'mixed';
-  if (outfitItems.length === 0 && accItems.length > 0) return 'accessories';
-  if (outfitItems.length >= accItems.length * 2) return 'outfits';
-  if (accItems.length > outfitItems.length) return 'accessories';
+
+  // Contar por categoría
+  const outfitCount   = allItems.filter(it => ['outfit_set', 'dress', 'onepiece', 'garment', 'top', 'bottom', 'outerwear'].includes(it.kind)).length;
+  const bagCount      = allItems.filter(it => it.kind === 'bag').length;
+  const footwearCount = allItems.filter(it => ['footwear', 'shoes', 'boots'].includes(it.kind)).length;
+  const jewelryCount  = allItems.filter(it => it.kind === 'jewelry').length;
+  const makeupCount   = allItems.filter(it => ['makeup', 'lipstick', 'makeup_color', 'beauty_product'].includes(it.kind)).length;
+  const skincareCount = allItems.filter(it => it.kind === 'skincare').length;
+  const productCount  = allItems.filter(it => ['product', 'tech'].includes(it.kind)).length;
+  const accCount      = allItems.filter(it => it.kind === 'accessory').length;
+
+  const threshold = Math.ceil(total * 0.5);
+
+  if (outfitCount >= threshold) return 'outfits';
+  if (bagCount >= threshold) return 'bags';
+  if (footwearCount >= threshold) return 'footwear';
+  if (jewelryCount >= threshold) return 'jewelry';
+  if (makeupCount >= threshold) return 'beauty';
+  if (skincareCount >= threshold) return 'skincare';
+  if (productCount >= threshold) return 'products';
+  // Fallback por categoría dominante individual
+  if (outfitCount > 0 && outfitCount >= Math.max(bagCount, footwearCount, jewelryCount, makeupCount, skincareCount, productCount, accCount)) return 'outfits';
+  if (makeupCount + skincareCount > 0 && (makeupCount + skincareCount) >= Math.max(outfitCount, bagCount, footwearCount)) return 'beauty';
   return 'mixed';
 }
 
@@ -6905,25 +6989,32 @@ export function buildWeeklyManifest(
   requestedCount: number,
   basePrompt?:    string,
 ): import('./types').WeeklyManifest {
-  const allOutfitUrls  = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
-  const allAccUrls     = (refs.accesorioRefs ?? []).filter(Boolean) as string[];
-  const accCloseup     = refs.accesorioCloseup ?? [];
+  const allOutfitUrls   = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
+  const allAccUrls      = (refs.accesorioRefs ?? []).filter(Boolean) as string[];
+  const allProductUrls  = [refs.productRef, ...(refs.productRefs ?? [])].filter(Boolean) as string[];
+  const accCloseup      = refs.accesorioCloseup ?? [];
+  // Resolver kinds manuales del selector (haulOutfitKinds también cubre outfit_week)
+  const outfitKinds: import('./types').HaulRefKind[] = refs.haulOutfitKinds ?? [];
+  const accKinds:    import('./types').HaulRefKind[] = refs.haulAccKinds    ?? [];
 
   const outfitItems: import('./types').WeeklyItem[] = allOutfitUrls.map((url, i) =>
-    classifyWeeklyItem(url, i, true, i)
+    classifyWeeklyItemFromSlot(url, i, 'outfit', outfitKinds[i] ?? 'auto', i)
   );
   const accessoryItems: import('./types').WeeklyItem[] = allAccUrls.map((url, i) =>
-    classifyWeeklyItem(url, outfitItems.length + i, false, i)
+    classifyWeeklyItemFromSlot(url, outfitItems.length + i, 'accesorio', accKinds[i] ?? 'auto', i)
+  );
+  const productItems: import('./types').WeeklyItem[] = allProductUrls.map((url, i) =>
+    classifyWeeklyItemFromSlot(url, outfitItems.length + accessoryItems.length + i, 'producto', 'auto', i)
   );
 
-  const allItems      = [...outfitItems, ...accessoryItems];
+  const allItems      = [...outfitItems, ...accessoryItems, ...productItems];
 
   // ── Reference Tag Resolution (patch v4) ──────────────────────
   // Si el brief contiene tags @outfit1, @outfit2, etc., resolverlos y enriquecer los ítems
   let referenceTagResolution: import('./types').ReferenceTagResolutionResult | undefined;
 
   if (basePrompt && basePrompt.includes('@')) {
-    referenceTagResolution = resolveReferenceTagsFromBrief(basePrompt, outfitItems, accessoryItems, allItems);
+    referenceTagResolution = resolveReferenceTagsFromBrief(basePrompt, outfitItems, [...accessoryItems, ...productItems], allItems);
 
     // Aplicar semantic intent a cada ítem taggeado
     for (const assignment of referenceTagResolution.itemSemanticAssignments) {
@@ -6952,22 +7043,24 @@ export function buildWeeklyManifest(
     }
   }
 
-  const outfitSets         = outfitItems;
-  const standaloneGarments: import('./types').WeeklyItem[] = [];
-  const shoes:     import('./types').WeeklyItem[] = [];
-  const bags:      import('./types').WeeklyItem[] = [];
-  const jewelry:   import('./types').WeeklyItem[] = [];
-  const accessories = accessoryItems;
-  const makeup:    import('./types').WeeklyItem[] = [];
-  const products:  import('./types').WeeklyItem[] = [];
+  // Clasificar ítems en buckets por kind para el manifest y el planner
+  const outfitSets         = allItems.filter(it => it.kind === 'outfit_set');
+  const standaloneGarments = allItems.filter(it => ['garment', 'top', 'bottom', 'outerwear', 'dress', 'onepiece'].includes(it.kind));
+  const shoes              = allItems.filter(it => ['footwear', 'shoes', 'boots'].includes(it.kind));
+  const bags               = allItems.filter(it => it.kind === 'bag');
+  const jewelry            = allItems.filter(it => it.kind === 'jewelry');
+  const accessories        = allItems.filter(it => it.kind === 'accessory');
+  const makeup             = allItems.filter(it => ['makeup', 'lipstick', 'makeup_color', 'beauty_product'].includes(it.kind));
+  const products           = allItems.filter(it => ['product', 'skincare', 'tech', 'beauty_product'].includes(it.kind) && !makeup.includes(it));
 
   const requiredItems = allItems;
 
-  const dominantType = detectWeeklyDominantType(outfitItems, accessoryItems);
+  const dominantType = detectWeeklyDominantType(allItems);
 
-  // Compatibilidad cruzada — todos los pares accesorio × outfit
+  // Compatibilidad cruzada — todos los pares accesorio/producto × outfit
   const compatibilityPairs: import('./types').WeeklyCompatibilityPair[] = [];
-  for (const acc of accessoryItems) {
+  const nonOutfitItems = [...accessoryItems, ...productItems];
+  for (const acc of nonOutfitItems) {
     for (const outfit of outfitItems) {
       const { score, reason, integrationMode } = scoreWeeklyCompatibility(acc, outfit);
       if (score >= 65) {
@@ -6988,7 +7081,7 @@ export function buildWeeklyManifest(
     }
   }
   const accIntPlan = buildWeeklyAccessoryIntegrationPlan(
-    accessoryItems, outfitItems, compatibilityPairs, accCloseup, explicitPairingsMap,
+    nonOutfitItems, outfitItems, compatibilityPairs, accCloseup, explicitPairingsMap,
   );
 
   // Plan de shots con roles narrativos
@@ -6999,9 +7092,18 @@ export function buildWeeklyManifest(
         .map(a => a.itemId)
     : [];
 
+  // Para el shot planner, tratar productos como accesorios adicionales
+  // (cobertura real — aparecen como hero shots, not combined with outfits by default)
+  const allNonOutfitItems = [...accessoryItems, ...productItems];
   const { shotPlan, redundancyDebug, compositionMap } = buildWeeklyShotPlan(
-    outfitItems, accessoryItems, compatibilityPairs, accIntPlan, accCloseup,
-    requestedCount, dominantType, taggedOutfitOrder,
+    outfitItems.length > 0 ? outfitItems : [],
+    allNonOutfitItems,
+    compatibilityPairs,
+    accIntPlan,
+    accCloseup,
+    requestedCount,
+    dominantType,
+    taggedOutfitOrder,
   );
 
   // Inyectar tags usados y semantic intent en cada shot del plan
@@ -7226,14 +7328,14 @@ function weeklyRoleToDirective(
       framing: 'WIDE_FULL_BODY', composition: 'FULL_BODY_NATURAL', angle: 'EYE_LEVEL',
     },
     WEEK_OVERVIEW: {
-      purpose: `Weekly selection overview. ALL WEEKLY ITEMS arranged naturally together — ${primaryLabel}${secondaryLabel ? ` and ${secondaryLabel}` : ''}. MUST show all items in one frame on a real surface (bed, rack, chair, floor). ${visualIntent}. The person may appear partially (hands, arms organizing) or not at all. NOT a worn look. NOT a collage. A real editorial photo of the week's picks together.`,
-      required: ['all_primary_items_visible_and_readable', 'organized_natural_arrangement', 'real_surface', 'no_person_wearing_final_look'],
-      forbidden: [...baseForbidden, 'collage_layout', 'catalog_grid', 'floating_items', 'person_already_dressed_in_final_outfit'],
+      purpose: `Weekly favorites overview — ITEM-ONLY SHOT. ALL WEEKLY ITEMS arranged naturally together: ${primaryLabel}${secondaryLabel ? ` and ${secondaryLabel}` : ''}. MUST show all items in one frame on a real surface (bed, rack, chair, floor, vanity). ${visualIntent}. NO PERSON, NO HANDS, NO FACE, NO PHONE, NO BODY PARTS — items only. NOT a worn look. NOT a collage. A real editorial flat-lay or arrangement photo of the week's picks together.`,
+      required: ['all_primary_items_visible_and_readable', 'organized_natural_arrangement', 'real_surface', 'no_person_in_frame', 'no_hands_no_body_parts'],
+      forbidden: [...baseForbidden, 'collage_layout', 'catalog_grid', 'floating_items', 'person_in_frame', 'hands_in_frame', 'body_parts_in_frame', 'person_wearing_any_item'],
       beat: 'context',
-      framing: 'WIDE', composition: 'FLATLAY_OR_RACK_EDITORIAL', angle: 'SLIGHTLY_HIGH_OR_OVERHEAD',
+      framing: 'WIDE', composition: 'FLATLAY_ITEM_ONLY_EDITORIAL', angle: 'SLIGHTLY_HIGH_OR_OVERHEAD',
     },
     WEEK_LOOK_HERO: {
-      purpose: `Weekly look hero for ${primaryLabel}${semanticMoodLabel}. ${visualIntent}. Full body shot — outfit clearly readable head to toe. THIS outfit only — do NOT include elements from other uploaded outfits. Framing: ${compositionMode || rot.composition}. Angle: ${rot.angle}. Real environment anchored by REF0, authentic attitude.${semanticIntent?.destination ? ` The mood of this look is "${semanticIntent.destination}" — express this through the garment styling, body language, and attitude ONLY. Do NOT change the capture environment. The room stays exactly as REF0 established it.` : ''} NOT a catalog. NOT mannequin pose.`,
+      purpose: `Weekly look hero for ${primaryLabel}${semanticMoodLabel}. ${visualIntent}. Full body shot — outfit clearly readable head to toe. THIS outfit only — do NOT include elements from other uploaded outfits. Framing: ${compositionMode || rot.composition}. Angle: ${rot.angle}. Real environment anchored by REF0, authentic attitude.${semanticIntent?.destination ? ` The mood of this look is "${semanticIntent.destination}" — express this through the garment styling, body language, and attitude ONLY. Do NOT change the capture environment. The room stays exactly as REF0 established it.` : ''} NOT a catalog. NOT mannequin pose.${sp.replaceBaseOutfit ? ' ACTIVE OUTFIT REPLACES BASE: The uploaded outfit reference is the complete look — do NOT use clothing from REF0.' : ''}`,
       required: ['full_body_visible', 'assigned_outfit_readable_head_to_toe', 'real_environment', 'authentic_attitude', 'only_assigned_outfit_visible'],
       forbidden: [...baseForbidden, 'identical_framing_as_prior_hero_shot', ...(forbiddenLabels.length > 0 ? [`do_not_show: ${forbiddenLabels.join(', ')}`] : [])],
       beat: 'context',
@@ -7254,7 +7356,7 @@ function weeklyRoleToDirective(
       framing: 'MEDIUM', composition: 'ACTION_CANDID_DETAIL', angle: 'EYE_LEVEL',
     },
     WEEK_ACCESSORY_INTEGRATED: {
-      purpose: `Accessory integrated shot: ${primaryLabel} worn/held WITH ${secondaryLabel || 'compatible outfit'}. ${visualIntent}. The accessory is clearly visible and readable as PART of the look — NOT isolated or floating. The outfit provides context. Show both items naturally together. Mode: ${compositionMode || 'worn_with_outfit'}.`,
+      purpose: `Accessory integrated shot: ${primaryLabel} worn/held WITH ${secondaryLabel || 'compatible outfit'}. ${visualIntent}. The accessory is clearly visible and readable as PART of the look — NOT isolated or floating. The outfit provides context. Show both items naturally together. Mode: ${compositionMode || 'worn_with_outfit'}.${sp.inheritBaseOutfit ? ' BASE OUTFIT CONTINUITY: Use REF0 for the base outfit styling — same clothing, same room. Only add or feature the accessory as the active item.' : ''}`,
       required: ['accessory_clearly_visible', 'outfit_context_present', 'natural_integration_not_floating', 'both_items_readable'],
       forbidden: [...baseForbidden, 'accessory_isolated_without_outfit_context', 'invented_outfit_not_from_refs', 'product_catalog_background'],
       beat: 'detail',

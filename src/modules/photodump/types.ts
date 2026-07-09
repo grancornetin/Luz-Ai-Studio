@@ -348,10 +348,10 @@ export const RECIPE_META: Record<PhotodumpRecipe, {
     protagonist: 'person',
   },
   outfit_week: {
-    label:       'Outfits de la semana',
-    description: 'Mostrás varios outfits completos: tus looks de la semana, del mes o de una ocasión.',
+    label:       'Weekly Favorites',
+    description: 'Mostrás outfits, accesorios, beauty products o favoritos de la semana.',
     icon:        'CalendarDays',
-    refs:        { avatar: 'required', outfit: 'required', accesorios: 'optional', producto: 'none', empaque: 'none', escena: 'optional', escena_prueba: 'none', escena_destino: 'none' },
+    refs:        { avatar: 'required', outfit: 'optional', accesorios: 'optional', producto: 'optional', empaque: 'optional', escena: 'optional', escena_prueba: 'none', escena_destino: 'none' },
     narrative:   'character',
     protagonist: 'person',
   },
@@ -1030,7 +1030,8 @@ export function recipeRefsValid(recipe: PhotodumpRecipe, refs: PhotodumpRefs): b
   if (cfg.avatar   === 'required' && !refs.avatarRef)   return false;
   if (cfg.producto === 'required' && !refs.productRef)  return false;
   if (cfg.escena   === 'required' && !refs.sceneRef)    return false;
-  if (cfg.outfit   === 'required' && !(refs.outfitRef || (refs.outfitRefs ?? []).some(Boolean))) return false;
+  // outfit_week: outfit es optional — con productos o accesorios alcanza
+  if (cfg.outfit === 'required' && !(refs.outfitRef || (refs.outfitRefs ?? []).some(Boolean))) return false;
   // empaque y accesorios nunca son required — siempre optional o none
   return true;
 }
@@ -1112,18 +1113,26 @@ export type WeeklyShotRole =
 
 // Tipo de ítem semanal — más granular que HaulItemKind para detectar tipo dominante
 export type WeeklyItemKind =
-  | 'outfit_set'    // look completo para probar
+  | 'outfit_set'        // look completo para probar
+  | 'garment'           // prenda individual (top, bottom, outerwear)
   | 'top'
   | 'bottom'
   | 'outerwear'
   | 'dress'
+  | 'onepiece'
+  | 'footwear'          // calzado (unifica shoes/boots)
   | 'shoes'
   | 'boots'
   | 'bag'
   | 'jewelry'
   | 'accessory'
-  | 'makeup'
-  | 'product'
+  | 'lipstick'          // labial / color específico
+  | 'makeup'            // maquillaje general
+  | 'makeup_color'      // color/swatch de maquillaje
+  | 'skincare'          // skincare / serum / crema
+  | 'beauty_product'    // beauty product genérico
+  | 'product'           // producto físico genérico
+  | 'tech'              // producto tech
   | 'unknown';
 
 // Tipo dominante detectado en el set — adapta los roles
@@ -1131,6 +1140,12 @@ export type WeeklySetDominantType =
   | 'outfits'       // mayoría son outfits completos / prendas wearables
   | 'accessories'   // mayoría son accesorios / joyería / bolsos
   | 'bags'          // mayoría son bolsos
+  | 'footwear'      // mayoría son calzado
+  | 'jewelry'       // mayoría son joyería
+  | 'beauty'        // mayoría son beauty products (maquillaje, skincare)
+  | 'skincare'      // mayoría son productos skincare
+  | 'products'      // mayoría son productos físicos genéricos
+  | 'tech'          // mayoría son productos tech
   | 'makeup'        // mayoría son productos de maquillaje
   | 'mixed';        // mix variado
 
@@ -1275,6 +1290,21 @@ export interface WeeklyShotPlan {
     targetItemId: string;   // e.g. "outfit_2" (el outfit)
     rawText?: string;
   }>;
+  // Weekly Favorites — outfit inheritance y routing condicional
+  // true = este shot hereda el outfit base de REF0 (no tiene outfit activo propio)
+  inheritBaseOutfit?: boolean;
+  // true = este shot tiene un outfit activo que reemplaza el look base de REF0
+  replaceBaseOutfit?: boolean;
+  // Qué componente reemplaza el activo item: full_outfit, footwear, makeup, none
+  activeItemReplaces?: 'full_outfit' | 'footwear' | 'makeup' | 'none';
+  // true = REF0 puede aportar base styling (outfit base) además de mundo/luz
+  useRef0AsBaseStyling?: boolean;
+  // true = incluir el set shot como referencia extra para este shot (solo casos específicos)
+  useSetShotReference?: boolean;
+  // Categoría activa del ítem primario de este shot
+  activeCategory?: WeeklyItemKind;
+  // Tipo de comportamiento del ítem activo para routing de refs
+  behaviorType?: 'outfit' | 'garment' | 'footwear' | 'bag' | 'jewelry' | 'makeup_color' | 'makeup_product' | 'skincare_product' | 'beauty_product' | 'product' | 'unknown';
 }
 
 export interface WeeklyManifest {

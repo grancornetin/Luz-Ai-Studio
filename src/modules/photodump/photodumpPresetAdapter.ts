@@ -55,9 +55,12 @@ export const photodumpPresetAdapter: ModulePresetAdapter<PhotodumpPresetState> =
         bodyRef:          state.refs.bodyRef          ?? null,
         productRef:       state.refs.productRef       ?? null,
         productRefs:      state.refs.productRefs      ?? [],
+        packagingRef:     state.refs.packagingRef     ?? null,
+        packagingRefs:    state.refs.packagingRefs    ?? [],
         outfitRef:        state.refs.outfitRef        ?? null,
         outfitRefs:       state.refs.outfitRefs       ?? [],
         accesorioRefs:    state.refs.accesorioRefs    ?? [],
+        accesorioCloseup: state.refs.accesorioCloseup ?? [],
         sceneRef:         state.refs.sceneRef         ?? null,
         sceneRefs:        state.refs.sceneRefs        ?? [],
         sceneText:        state.refs.sceneText        ?? '',
@@ -85,9 +88,12 @@ export const photodumpPresetAdapter: ModulePresetAdapter<PhotodumpPresetState> =
         bodyRef:          refs.bodyRef          ?? null,
         productRef:       refs.productRef       ?? null,
         productRefs:      refs.productRefs      ?? [],
+        packagingRef:     refs.packagingRef     ?? null,
+        packagingRefs:    refs.packagingRefs    ?? [],
         outfitRef:        refs.outfitRef        ?? null,
         outfitRefs:       refs.outfitRefs       ?? [],
         accesorioRefs:    refs.accesorioRefs    ?? [],
+        accesorioCloseup: refs.accesorioCloseup ?? [],
         sceneRef:         refs.sceneRef         ?? null,
         sceneRefs:        refs.sceneRefs        ?? [],
         sceneText:        refs.sceneText        ?? '',
@@ -122,6 +128,12 @@ export const photodumpPresetAdapter: ModulePresetAdapter<PhotodumpPresetState> =
     });
     (state.refs.accesorioRefs ?? []).forEach((url, i) => {
       const a = urlToKey(url, `accesorioRefs_${i}`);
+      if (a) assets.push(a);
+    });
+    const packagingAsset = urlToKey(state.refs.packagingRef ?? null, 'packagingRef');
+    if (packagingAsset) assets.push(packagingAsset);
+    (state.refs.packagingRefs ?? []).forEach((url, i) => {
+      const a = urlToKey(url, `packagingRefs_${i}`);
       if (a) assets.push(a);
     });
     (state.refs.sceneRefs ?? []).forEach((url, i) => {
