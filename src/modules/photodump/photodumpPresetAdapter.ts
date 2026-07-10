@@ -29,6 +29,8 @@ const REF_ASSET_KEYS: Array<{ key: string; field: keyof PhotodumpRefs }> = [
   { key: 'productRef',  field: 'productRef'  },
   { key: 'outfitRef',   field: 'outfitRef'   },
   { key: 'sceneRef',    field: 'sceneRef'    },
+  { key: 'scenePruebaRef',  field: 'scenePruebaRef'  },
+  { key: 'sceneDestinoRef', field: 'sceneDestinoRef' },
 ];
 
 function urlToKey(url: string | null | undefined, key: string): PresetAssetInput | null {
