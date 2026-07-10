@@ -999,20 +999,83 @@ function buildWeeklyShotPlan(
     plan.push(shotPlan);
   }
 
-  // ── Relleno: si quedan slots sin cubrir por el template ───
-  while (plan.length < count) {
-    const fallbackOutfit = orderedOutfitItems[outfitCursor % Math.max(orderedOutfitItems.length, 1)];
-    if (outfitCursor < orderedOutfitItems.length) outfitCursor++;
-    plan.push({
-      role:             'WEEK_STYLING_PROCESS',
-      primaryItemIds:   fallbackOutfit ? [fallbackOutfit.id] : [],
-      secondaryItemIds: [],
-      refsToRoute:      [],
-      redundancyScore:  4,
-      replacedBecauseRedundant: false,
-      compositionMode:  'process_or_candid',
-      visualWeightIntent: 'Filler styling moment',
-    });
+  // ── Relleno: si quedan slots sin cubrir por el template (patch post-refactor Fase 8) ──
+  // Antes: siempre WEEK_STYLING_PROCESS sobre orderedOutfitItems (vacío si el set no tiene
+  // outfits, y ciclando el mismo ítem con la misma composición si requestedCount > itemCount).
+  // Ahora: allocator que rota por categoría (kind del ítem) y por rol de variación dentro de
+  // esa categoría, priorizando el ítem con menor visualWeight acumulado hasta el momento —
+  // evita dominancia de un solo ítem y evita repetir la misma composición sin propósito.
+  if (plan.length < count && allItems.length > 0) {
+    // Rondas de variación de composición por categoría — distintas de los roles "hero" ya
+    // usados en el template, para que el relleno aporte variedad real, no un duplicado.
+    const fillerRolesByKind: Record<string, import('../types').WeeklyShotRole[]> = {
+      outfit_set: ['WEEK_STYLING_PROCESS', 'WEEK_DETAIL', 'WEEK_ON_THE_GO', 'WEEK_FAVORITE'],
+      dress:      ['WEEK_STYLING_PROCESS', 'WEEK_DETAIL', 'WEEK_ON_THE_GO', 'WEEK_FAVORITE'],
+      onepiece:   ['WEEK_STYLING_PROCESS', 'WEEK_DETAIL', 'WEEK_ON_THE_GO', 'WEEK_FAVORITE'],
+      top:        ['WEEK_STYLING_PROCESS', 'WEEK_DETAIL', 'WEEK_FAVORITE'],
+      bottom:     ['WEEK_STYLING_PROCESS', 'WEEK_DETAIL', 'WEEK_FAVORITE'],
+      outerwear:  ['WEEK_STYLING_PROCESS', 'WEEK_DETAIL', 'WEEK_FAVORITE'],
+      footwear:   ['WEEK_ACCESSORY_WORN', 'WEEK_ACCESSORY_DETAIL', 'WEEK_ON_THE_GO', 'WEEK_ACCESSORY_HELD'],
+      shoes:      ['WEEK_ACCESSORY_WORN', 'WEEK_ACCESSORY_DETAIL', 'WEEK_ON_THE_GO', 'WEEK_ACCESSORY_HELD'],
+      boots:      ['WEEK_ACCESSORY_WORN', 'WEEK_ACCESSORY_DETAIL', 'WEEK_ON_THE_GO', 'WEEK_ACCESSORY_HELD'],
+      bag:        ['WEEK_ACCESSORY_HELD', 'WEEK_ACCESSORY_DETAIL', 'WEEK_DETAIL'],
+      jewelry:    ['WEEK_ACCESSORY_WORN', 'WEEK_ACCESSORY_DETAIL', 'WEEK_ACCESSORY_HELD'],
+      accessory:  ['WEEK_ACCESSORY_HELD', 'WEEK_ACCESSORY_DETAIL', 'WEEK_ACCESSORY_WORN'],
+      lipstick:   ['WEEK_DETAIL', 'WEEK_STYLING_PROCESS', 'WEEK_ACCESSORY_DETAIL'],
+      makeup:     ['WEEK_DETAIL', 'WEEK_STYLING_PROCESS', 'WEEK_ACCESSORY_DETAIL'],
+      makeup_color: ['WEEK_DETAIL', 'WEEK_STYLING_PROCESS', 'WEEK_ACCESSORY_DETAIL'],
+      skincare:   ['WEEK_ACCESSORY_HELD', 'WEEK_DETAIL', 'WEEK_STYLING_PROCESS'],
+      beauty_product: ['WEEK_ACCESSORY_HELD', 'WEEK_DETAIL', 'WEEK_STYLING_PROCESS'],
+      product:    ['WEEK_ACCESSORY_HELD', 'WEEK_DETAIL', 'WEEK_FAVORITE'],
+      tech:       ['WEEK_ACCESSORY_HELD', 'WEEK_DETAIL', 'WEEK_FAVORITE'],
+      unknown:    ['WEEK_STYLING_PROCESS', 'WEEK_DETAIL'],
+    };
+
+    // Cuántas veces aparece cada ítem como primary en el plan ya construido (coverage real).
+    const usageCount: Record<string, number> = {};
+    for (const it of allItems) usageCount[it.id] = 0;
+    for (const sp of plan) for (const id of sp.primaryItemIds) if (id in usageCount) usageCount[id]++;
+    // Cuántas veces se usó cada rol de filler, para rotar dentro de la categoría elegida.
+    const fillerRoleCursor: Record<string, number> = {};
+
+    while (plan.length < count) {
+      // Elegir el ítem con menor uso acumulado (anti-dominancia) — empate se rompe por orden.
+      let target = allItems[0];
+      for (const it of allItems) {
+        if ((usageCount[it.id] ?? 0) < (usageCount[target.id] ?? 0)) target = it;
+      }
+      usageCount[target.id] = (usageCount[target.id] ?? 0) + 1;
+
+      const roles = fillerRolesByKind[target.kind] ?? fillerRolesByKind.unknown;
+      const cursor = fillerRoleCursor[target.kind] ?? 0;
+      const role = roles[cursor % roles.length];
+      fillerRoleCursor[target.kind] = cursor + 1;
+
+      plan.push({
+        role,
+        primaryItemIds:   [target.id],
+        secondaryItemIds: [],
+        refsToRoute:      [],
+        redundancyScore:  usageCount[target.id] > 1 ? 5 : 2,
+        replacedBecauseRedundant: false,
+        compositionMode:  `variation_${role.toLowerCase()}`,
+        visualWeightIntent: `${target.label} — coverage variation (${usageCount[target.id]}${usageCount[target.id] > 1 ? 'x, anti-dominance rotation' : ''})`,
+      });
+    }
+  } else {
+    // Sin ítems en absoluto (caso degenerado) — mantener comportamiento previo como fallback.
+    while (plan.length < count) {
+      plan.push({
+        role:             'WEEK_STYLING_PROCESS',
+        primaryItemIds:   [],
+        secondaryItemIds: [],
+        refsToRoute:      [],
+        redundancyScore:  4,
+        replacedBecauseRedundant: false,
+        compositionMode:  'process_or_candid',
+        visualWeightIntent: 'Filler styling moment',
+      });
+    }
   }
 
   // Asignar inheritBaseOutfit/replaceBaseOutfit/activeItemReplaces/useRef0AsBaseStyling/
