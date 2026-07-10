@@ -579,6 +579,116 @@ function getNonRedundantCloserRole(
   return { role: 'WEEK_CLOSER', reason: 'Default closer' };
 }
 
+// ── Weekly Favorites — routing condicional de outfit base (patch post-refactor Fase 6) ──
+// Deriva inheritBaseOutfit/replaceBaseOutfit/activeItemReplaces/useRef0AsBaseStyling/
+// activeCategory/behaviorType/technicalReferenceOnly a partir del rol del shot y la
+// categoría (kind) del ítem primario. Estos campos ya eran leídos por
+// weeklyRoleToDirective() y buildVisualReferenceContract() pero nunca se asignaban —
+// quedaban siempre undefined y sus ramas de prompt nunca se activaban.
+function deriveWeeklyRoutingFields(
+  shotPlan: import('../types').WeeklyShotPlan,
+  allItems: import('../types').WeeklyItem[],
+): void {
+  // WEEK_OVERVIEW es item-only por contrato (Fase 3) — REF0 no aporta nada, no hay "activo".
+  if (shotPlan.role === 'WEEK_OVERVIEW') {
+    shotPlan.inheritBaseOutfit    = false;
+    shotPlan.replaceBaseOutfit    = false;
+    shotPlan.useRef0AsBaseStyling = false;
+    shotPlan.useSetShotReference  = false;
+    return;
+  }
+
+  const primaryId = shotPlan.primaryItemIds[0];
+  const primaryItem = primaryId ? allItems.find(it => it.id === primaryId) : undefined;
+  const kind = primaryItem?.kind;
+  shotPlan.activeCategory = kind;
+
+  // Un look hero de outfit/vestido/enterizo/set reemplaza el look completo — REF0 no
+  // debe aportar ropa para ese shot, la referencia subida es la fuente única de verdad.
+  const isFullOutfitKind = kind === 'outfit_set' || kind === 'dress' || kind === 'onepiece'
+    || kind === 'top' || kind === 'bottom' || kind === 'outerwear' || kind === undefined;
+
+  if (shotPlan.role === 'WEEK_LOOK_HERO' || shotPlan.role === 'WEEK_MIRROR_LOOK') {
+    shotPlan.inheritBaseOutfit    = false;
+    shotPlan.replaceBaseOutfit    = true;
+    shotPlan.activeItemReplaces   = 'full_outfit';
+    shotPlan.useRef0AsBaseStyling = false;
+    shotPlan.behaviorType         = 'outfit';
+    return;
+  }
+
+  if (kind === 'footwear' || kind === 'shoes' || kind === 'boots') {
+    // Calzado activo: REF0 aporta el resto del look, solo el calzado se destaca/reemplaza.
+    shotPlan.inheritBaseOutfit    = true;
+    shotPlan.replaceBaseOutfit    = false;
+    shotPlan.activeItemReplaces   = 'footwear';
+    shotPlan.useRef0AsBaseStyling = true;
+    shotPlan.behaviorType         = 'footwear';
+    return;
+  }
+
+  if (kind === 'bag') {
+    shotPlan.inheritBaseOutfit    = true;
+    shotPlan.replaceBaseOutfit    = false;
+    shotPlan.activeItemReplaces   = 'none';
+    shotPlan.useRef0AsBaseStyling = true;
+    shotPlan.behaviorType         = 'bag';
+    return;
+  }
+
+  if (kind === 'jewelry' || kind === 'accessory') {
+    shotPlan.inheritBaseOutfit    = true;
+    shotPlan.replaceBaseOutfit    = false;
+    shotPlan.activeItemReplaces   = 'none';
+    shotPlan.useRef0AsBaseStyling = true;
+    shotPlan.behaviorType         = kind === 'jewelry' ? 'jewelry' : 'garment';
+    return;
+  }
+
+  if (kind === 'lipstick' || kind === 'makeup' || kind === 'makeup_color') {
+    // Maquillaje activo: REF0 aporta el rostro/look base, solo cambia color/aplicación.
+    shotPlan.inheritBaseOutfit    = true;
+    shotPlan.replaceBaseOutfit    = false;
+    shotPlan.activeItemReplaces   = 'makeup';
+    shotPlan.useRef0AsBaseStyling = true;
+    shotPlan.behaviorType         = kind === 'lipstick' ? 'makeup_color' : 'makeup_product';
+    return;
+  }
+
+  if (kind === 'skincare' || kind === 'beauty_product') {
+    // Skincare/beauty: hereda el mundo/look de REF0 salvo que sea un detail puramente
+    // técnico (packaging/swatch), en cuyo caso la ref del producto es solo fidelidad visual.
+    const isProductOnlyDetail = shotPlan.role === 'WEEK_DETAIL' || shotPlan.role === 'WEEK_ACCESSORY_DETAIL';
+    shotPlan.inheritBaseOutfit     = !isProductOnlyDetail;
+    shotPlan.replaceBaseOutfit     = false;
+    shotPlan.activeItemReplaces    = 'none';
+    shotPlan.useRef0AsBaseStyling  = !isProductOnlyDetail;
+    shotPlan.technicalReferenceOnly = isProductOnlyDetail;
+    shotPlan.behaviorType          = kind === 'skincare' ? 'skincare_product' : 'beauty_product';
+    return;
+  }
+
+  if (kind === 'product' || kind === 'tech') {
+    const isProductOnlyDetail = shotPlan.role === 'WEEK_DETAIL' || shotPlan.role === 'WEEK_ACCESSORY_DETAIL';
+    shotPlan.inheritBaseOutfit     = !isProductOnlyDetail;
+    shotPlan.replaceBaseOutfit     = false;
+    shotPlan.activeItemReplaces    = 'none';
+    shotPlan.useRef0AsBaseStyling  = !isProductOnlyDetail;
+    shotPlan.technicalReferenceOnly = isProductOnlyDetail;
+    shotPlan.behaviorType          = 'product';
+    return;
+  }
+
+  // Fallback: roles que no son WEEK_LOOK_HERO/WEEK_MIRROR_LOOK (ya resueltos arriba) con
+  // un ítem primario de kind desconocido o de tipo outfit/garment genérico (top/bottom/etc.
+  // en un WEEK_STYLING_PROCESS, WEEK_DETAIL, WEEK_CLOSER, WEEK_FAVORITE, WEEK_ON_THE_GO).
+  // El look base de REF0 sigue aplicando — no hay reemplazo total de outfit en estos roles.
+  shotPlan.inheritBaseOutfit    = true;
+  shotPlan.replaceBaseOutfit    = false;
+  shotPlan.useRef0AsBaseStyling = true;
+  shotPlan.behaviorType         = isFullOutfitKind ? 'garment' : 'unknown';
+}
+
 // ── Planificador de roles narrativos — núcleo del patch v3 ──
 function buildWeeklyShotPlan(
   outfitItems:      import('../types').WeeklyItem[],
@@ -596,6 +706,7 @@ function buildWeeklyShotPlan(
 } {
   const plan: import('../types').WeeklyShotPlan[] = [];
   const redundancyDebug: import('../types').WeeklyRedundancyDebugEntry[] = [];
+  const allItems = [...outfitItems, ...accessoryItems];
 
   // Obtener template de roles para este dominantType
   const roleTemplate = getWeeklyRoleTemplate(dominant, outfitItems.length, accessoryItems.length, count);
@@ -902,6 +1013,15 @@ function buildWeeklyShotPlan(
       compositionMode:  'process_or_candid',
       visualWeightIntent: 'Filler styling moment',
     });
+  }
+
+  // Asignar inheritBaseOutfit/replaceBaseOutfit/activeItemReplaces/useRef0AsBaseStyling/
+  // activeCategory/behaviorType/technicalReferenceOnly a cada shot del plan final
+  // (patch post-refactor Fase 6) — centralizado acá para cubrir todas las ramas de
+  // construcción de shotPlan de arriba (incluido el closeup extra y el relleno) sin
+  // duplicar la lógica de derivación en cada una.
+  for (const shotPlan of plan) {
+    deriveWeeklyRoutingFields(shotPlan, allItems);
   }
 
   // ── Composition variety map ──
