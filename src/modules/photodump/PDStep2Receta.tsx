@@ -323,6 +323,16 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   const getAccKind = (i: number): HaulRefKind =>
     (refs.haulAccKinds ?? [])[i] ?? 'auto';
 
+  const handleProductKindChange = (slotIndex: number, kind: HaulRefKind) => {
+    const max = getSlotMax('producto');
+    const arr = [...(refs.haulProductKinds ?? Array(max).fill('auto' as HaulRefKind))];
+    arr[slotIndex] = kind;
+    onRefs({ ...refs, haulProductKinds: arr });
+  };
+
+  const getProductKind = (i: number): HaulRefKind =>
+    (refs.haulProductKinds ?? [])[i] ?? 'auto';
+
   const getSlotFilled = (key: string): number =>
     getSlotImages(key).filter(Boolean).length;
 
@@ -650,6 +660,12 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                                   <HaulReferenceTypeSelector
                                     value={getAccKind(i)}
                                     onChange={kind => handleAccKindChange(i, kind)}
+                                  />
+                                )}
+                                {recipe === 'outfit_week' && hasImage && key === 'producto' && (
+                                  <HaulReferenceTypeSelector
+                                    value={getProductKind(i)}
+                                    onChange={kind => handleProductKindChange(i, kind)}
                                   />
                                 )}
                                 {isAccesorios && isCloseup && hasImage && (

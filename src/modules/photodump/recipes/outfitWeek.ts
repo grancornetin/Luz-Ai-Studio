@@ -224,7 +224,11 @@ function classifyWeeklyItemFromSlot(
     // producto
     id    = `producto_${slotIndex}`;
     label = `Producto ${slotIndex + 1}`;
-    kind  = 'product';
+    switch (manualKind) {
+      case 'maquillaje': kind = 'makeup';   accessoryEligible = true; canBeIntegratedWithOutfit = true; label = `Maquillaje ${slotIndex + 1}`; break;
+      case 'skincare':   kind = 'skincare'; accessoryEligible = true; canBeIntegratedWithOutfit = true; label = `Skincare ${slotIndex + 1}`;   break;
+      default:           kind = 'product';
+    }
   }
 
   return {
@@ -1233,8 +1237,9 @@ export function buildWeeklyManifest(
   const allProductUrls  = [refs.productRef, ...(refs.productRefs ?? [])].filter(Boolean) as string[];
   const accCloseup      = refs.accesorioCloseup ?? [];
   // Resolver kinds manuales del selector (haulOutfitKinds también cubre outfit_week)
-  const outfitKinds: import('../types').HaulRefKind[] = refs.haulOutfitKinds ?? [];
-  const accKinds:    import('../types').HaulRefKind[] = refs.haulAccKinds    ?? [];
+  const outfitKinds:  import('../types').HaulRefKind[] = refs.haulOutfitKinds  ?? [];
+  const accKinds:     import('../types').HaulRefKind[] = refs.haulAccKinds     ?? [];
+  const productKinds: import('../types').HaulRefKind[] = refs.haulProductKinds ?? [];
 
   const outfitItems: import('../types').WeeklyItem[] = allOutfitUrls.map((url, i) =>
     classifyWeeklyItemFromSlot(url, i, 'outfit', outfitKinds[i] ?? 'auto', i)
@@ -1243,7 +1248,7 @@ export function buildWeeklyManifest(
     classifyWeeklyItemFromSlot(url, outfitItems.length + i, 'accesorio', accKinds[i] ?? 'auto', i)
   );
   const productItems: import('../types').WeeklyItem[] = allProductUrls.map((url, i) =>
-    classifyWeeklyItemFromSlot(url, outfitItems.length + accessoryItems.length + i, 'producto', 'auto', i)
+    classifyWeeklyItemFromSlot(url, outfitItems.length + accessoryItems.length + i, 'producto', productKinds[i] ?? 'auto', i)
   );
 
   const allItems      = [...outfitItems, ...accessoryItems, ...productItems];

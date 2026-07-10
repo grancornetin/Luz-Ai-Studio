@@ -445,6 +445,10 @@ export interface PhotodumpRefs {
   // Para accesorios: índice 0..M corresponde a accesorioRefs[]
   haulOutfitKinds?:    HaulRefKind[];   // kinds para slots de outfit en haul
   haulAccKinds?:       HaulRefKind[];   // kinds para slots de accesorio en haul
+  // outfit_week: tipo de referencia por slot de producto (índice 0..N corresponde a
+  // [productRef, productRefs[0], productRefs[1], ...]) — permite distinguir maquillaje/
+  // skincare/producto genérico subido por el slot producto en vez del slot outfit/accesorio.
+  haulProductKinds?:   HaulRefKind[];
 }
 
 // ── Tipos modo libre ───────────────────────────────────────────
