@@ -720,6 +720,21 @@ const PhotodumpModule: React.FC = () => {
                 itemsAlreadyShown: haulManifestDebug?.outfitItems.slice(0, i).map(x => x.id) ?? [],
                 itemsNotYetShown:  haulManifestDebug?.outfitItems.slice(i).map(x => x.id) ?? [],
               } : undefined,
+              // Weekly-specific debug (patch post-refactor Fase 10) — refleja los campos
+              // condicionales asignados por deriveWeeklyRoutingFields en outfitWeek.ts.
+              weeklyRoutingDebug: recipe === 'outfit_week' && sh.weeklyItemPlan ? {
+                activeCategory:         sh.weeklyItemPlan.activeCategory,
+                behaviorType:           sh.weeklyItemPlan.behaviorType,
+                inheritBaseOutfit:      sh.weeklyItemPlan.inheritBaseOutfit,
+                replaceBaseOutfit:      sh.weeklyItemPlan.replaceBaseOutfit,
+                activeItemReplaces:     sh.weeklyItemPlan.activeItemReplaces,
+                useRef0AsBaseStyling:   sh.weeklyItemPlan.useRef0AsBaseStyling,
+                useSetShotReference:    sh.weeklyItemPlan.useSetShotReference,
+                technicalReferenceOnly: sh.weeklyItemPlan.technicalReferenceOnly,
+              } : undefined,
+              resolvedRefsForShot: recipe === 'outfit_week' && sh.weeklyItemPlan
+                ? [...sh.weeklyItemPlan.primaryItemIds, ...sh.weeklyItemPlan.secondaryItemIds]
+                : undefined,
               possibleContradictions: contradictions.length > 0 ? contradictions : undefined,
               status:       'ok',
             });
@@ -1066,8 +1081,10 @@ const PhotodumpModule: React.FC = () => {
             };
           });
         })(),
-        // Resolved refs per shot — qué URLs pasaron al modelo
-        resolvedRefsPerShot: undefined, // populated below if admin
+        // Resolved refs per shot (nivel de sesión) — nunca se pobló. El equivalente útil
+        // real vive por shot en PhotodumpShotDebug.resolvedRefsForShot (patch Fase 10,
+        // ver debugShots.push más abajo), que sí se llena para outfit_week.
+        resolvedRefsPerShot: undefined,
         // Warnings semánticos del haul
         uncoveredRequiredItemsWarnings: (() => {
           const base = finalCoverage?.uncoveredRequiredItems ?? haulManifestDebug?.coveragePlan.uncoveredRequiredItems ?? [];

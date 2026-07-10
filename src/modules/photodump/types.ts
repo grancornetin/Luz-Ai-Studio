@@ -760,6 +760,24 @@ export interface PhotodumpShotDebug {
     wardrobeIntegrationRisk:              boolean;
   };
 
+  // Weekly-specific debug (patch post-refactor Fase 10) — solo outfit_week.
+  // Refleja los campos condicionales de WeeklyShotPlan (ver deriveWeeklyRoutingFields
+  // en recipes/outfitWeek.ts) para que se pueda auditar por shot: qué item es
+  // protagonista, si REF0 aporta o no el outfit base, y qué refs viajaron realmente.
+  weeklyRoutingDebug?: {
+    activeCategory?:         string;   // WeeklyItemKind del ítem primario
+    behaviorType?:           string;
+    inheritBaseOutfit?:      boolean;
+    replaceBaseOutfit?:      boolean;
+    activeItemReplaces?:     'full_outfit' | 'footwear' | 'makeup' | 'none';
+    useRef0AsBaseStyling?:   boolean;
+    useSetShotReference?:    boolean;
+    technicalReferenceOnly?: boolean;
+  };
+  // URLs exactas (o ids semánticos) que se pasaron al modelo para este shot —
+  // permite auditar routing faltante sin tener que reconstruir el prompt completo.
+  resolvedRefsForShot?: string[];
+
   status:       'ok' | 'failed';
 }
 
