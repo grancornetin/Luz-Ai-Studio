@@ -1790,11 +1790,17 @@ function buildVisualReferenceContract(
       continue;
     }
     if (ref0Url && url === ref0Url) {
+      // REF0 contract condicional (patch Fase 2): por defecto es world_only (mundo/luz,
+      // sin ropa), pero si el shot hereda el outfit base (useRef0AsBaseStyling), REF0
+      // también aporta el look base — no es "forbidden source" para ese caso.
+      const ref0ProvidesBaseOutfit = !!weekPlan?.useRef0AsBaseStyling;
       entries.push({
         refPosition: pos,
         role:        'WORLD_ANCHOR',
-        instruction: 'Use for room, environment, light quality, and color temperature only. DO NOT use clothing from this image as a wardrobe item.',
-        isForbiddenSource: true,
+        instruction: ref0ProvidesBaseOutfit
+          ? 'Use for room, environment, light quality, color temperature, AND the base outfit/styling the person is wearing — unless a primary item in this shot explicitly replaces part of that look.'
+          : 'Use for room, environment, light quality, and color temperature only. DO NOT use clothing from this image as a wardrobe item.',
+        isForbiddenSource: !ref0ProvidesBaseOutfit,
       });
       continue;
     }
@@ -1811,7 +1817,9 @@ function buildVisualReferenceContract(
         role:        slotName,
         itemId:      `outfit_${outfitIdx}`,
         instruction: isPrimary
-          ? `PRIMARY GARMENT: The person in this shot MUST wear exactly the clothing shown in this image. Preserve all colors, cuts, patterns, and visible details. This is the SOLE wardrobe protagonist for this shot.`
+          ? (weekPlan?.replaceBaseOutfit
+              ? `PRIMARY GARMENT — REPLACES ACTIVE ITEM (${weekPlan.activeItemReplaces ?? 'full_outfit'}): The person in this shot MUST wear exactly the clothing shown in this image, replacing the corresponding part of the REF0 base look. Preserve all colors, cuts, patterns, and visible details. This is the SOLE wardrobe protagonist for this shot.`
+              : `PRIMARY GARMENT: The person in this shot MUST wear exactly the clothing shown in this image. Preserve all colors, cuts, patterns, and visible details. This is the SOLE wardrobe protagonist for this shot.`)
           : isSecondary
           ? `SECONDARY ITEM: This item appears alongside the primary item. Show it naturally integrated — do not invent styling not shown in the reference.`
           : isForbidden
@@ -1848,7 +1856,11 @@ function buildVisualReferenceContract(
         role:        slotName,
         itemId:      `acc_${accIdx}`,
         instruction: isPrimary
-          ? `PRIMARY ACCESSORY: This exact piece must appear clearly visible in the shot. Preserve its shape, material, color, and details exactly. Do NOT substitute another piece.`
+          ? (weekPlan?.useRef0AsBaseStyling && weekPlan?.activeItemReplaces && weekPlan.activeItemReplaces !== 'none'
+              ? `PRIMARY ACCESSORY — REPLACES ${weekPlan.activeItemReplaces.toUpperCase()} FROM BASE LOOK: The REF0 base outfit/styling applies to the rest of the look, but this piece replaces or is the featured ${weekPlan.activeItemReplaces} in this shot. This exact piece must appear clearly visible. Preserve its shape, material, color, and details exactly. Do NOT substitute another piece.`
+              : weekPlan?.useRef0AsBaseStyling
+              ? `PRIMARY ACCESSORY — INTEGRATED WITH BASE LOOK: The REF0 base outfit/styling applies. This exact piece must appear clearly visible, worn or held naturally with that look. Preserve its shape, material, color, and details exactly. Do NOT substitute another piece.`
+              : `PRIMARY ACCESSORY: This exact piece must appear clearly visible in the shot. Preserve its shape, material, color, and details exactly. Do NOT substitute another piece.`)
           : isSecondary && pairedOutfitSlotName
           ? `INTEGRATED ACCESSORY (paired with ${pairedOutfitSlotName} per user's brief): This accessory must appear worn TOGETHER with ${pairedOutfitSlotName} in this shot — not as an isolated macro. Show it naturally worn as part of that look.`
           : isSecondary
@@ -1899,7 +1911,7 @@ function buildVisualReferenceContract(
     lines.push(`BODY (image #${bodyEntry.refPosition}): Body proportions only. The clothing in this image is NOT a wardrobe item.`);
   }
   if (worldEntry) {
-    lines.push(`WORLD ANCHOR (image #${worldEntry.refPosition}): Room, environment, light quality, color temperature. Do NOT extract clothing from this image as a wardrobe reference.`);
+    lines.push(`WORLD ANCHOR (image #${worldEntry.refPosition}): ${worldEntry.instruction}`);
   }
   lines.push('');
 
@@ -1926,10 +1938,14 @@ function buildVisualReferenceContract(
     }
   }
 
+  const ref0ProvidesBaseOutfit = !!weekPlan?.useRef0AsBaseStyling;
+
   lines.push('');
   lines.push('⛔ GLOBAL WARDROBE RULES (ALL SHOTS):');
   lines.push('  • NEVER use clothing visible in IDENTITY or BODY references as a weekly outfit or story item.');
-  lines.push('  • NEVER use clothing from the WORLD ANCHOR (REF0) as a wardrobe item.');
+  lines.push(ref0ProvidesBaseOutfit
+    ? '  • The WORLD ANCHOR (REF0) base outfit applies UNLESS a PRIMARY GARMENT explicitly replaces it — see REPLACES ACTIVE ITEM instructions above.'
+    : '  • NEVER use clothing from the WORLD ANCHOR (REF0) as a wardrobe item.');
   lines.push('  • If a PRIMARY GARMENT is assigned, the person MUST wear exactly that — no substitutions.');
   lines.push('  • If multiple outfit slots are uploaded, use ONLY the assigned slot for this shot.');
   lines.push('  • Do NOT generate any visible text, labels, numbers, watermarks, or UI overlays in the output image.');
@@ -1941,7 +1957,7 @@ function buildVisualReferenceContract(
     secondarySlotNames,
     forbiddenSlotNames,
     avatarClothingForbidden: true,
-    ref0ClothingForbidden:   true,
+    ref0ClothingForbidden:   !ref0ProvidesBaseOutfit,
     contractBlock: lines.join('\n'),
   };
 }
