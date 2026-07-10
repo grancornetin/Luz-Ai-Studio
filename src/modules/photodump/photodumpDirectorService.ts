@@ -2667,136 +2667,31 @@ NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${shot.rol
 - Face reference (appears TWICE): EXACT identity — same bone structure, same hair, same skin tone. No beautification.
 ${refs.bodyRef ? '- Body reference: establishes physique and proportions ONLY. Do NOT alter them.' : ''}
 - REF0: establishes the haul space — same room, same light, same real environment. NOT a studio.
-
-⛔ AVATAR CLOTHING FORBIDDEN POLICY — HARD RULE — NO EXCEPTIONS:
-The avatar/body reference photos exist ONLY to establish face identity and body proportions.
-ANY clothing visible on the avatar or body reference is FORBIDDEN as haul wardrobe.
-  • The avatar's black catsuit, bodysuit, base shirt, pants, or any default clothing is NOT a haul item.
-  • Do NOT use avatar base clothing as a fallback when the garment reference is ambiguous.
-  • Do NOT transform, recolor, or restyle avatar base clothing into a haul piece.
-  • Do NOT let avatar base clothing appear as the dominant garment in any shot.
-Only the GARMENT REFERENCE image provided for THIS SPECIFIC SHOT defines what the person wears.
-If the garment reference is insufficient, show the person holding/arranging the item — do NOT fall back to avatar clothing.
+- Avatar/body/REF0 clothing is identity context only, never haul wardrobe (see global avatar-suppression rule).
 
 ⛔ SUPPORT SHOT WEAR POLICY — BINDING:
 For non-try-on haul shots (setup, overview, recap, adjusting), the person must be in EXACTLY ONE of:
   A) Wearing one of the already-established haul looks from a previous try-on.
-  B) Wearing a neutral non-product base: simple fitted tee/tank + simple jeans/shorts/leggings.
-     This neutral base must be INVENTED BY THE SYSTEM — NOT derived from anything visible in the avatar reference.
+  B) Wearing a neutral non-product base: simple fitted tee/tank + simple jeans/shorts/leggings, INVENTED BY THE SYSTEM.
 Never leave the wear state unconstrained. Never fall back to avatar reference clothing.
 
-⛔ DO NOT CLONE REF0:
-REF0 is a world anchor — use it for room, light, and environment.
-Do NOT recreate the same pose, same camera distance, same crop, or same arrangement as REF0.
-This shot MUST have a different action, framing, or focus than REF0.
+⛔ DO NOT CLONE REF0: use it for room/light/environment only — different pose, distance, crop, or focus than REF0 every shot.
 ${shotOutfitInstruction}
 
-🔒 SCENE FINGERPRINT LOCK — HAUL SPACE (HARD LOCK):
-REF0 defines the physical world of this haul. Every shot in this set must feel captured in that SAME REAL ROOM.
-MANDATORY to preserve across ALL shots:
-  • Same bedroom / dressing area — exact same walls, same floor material, same dominant furniture
-  • Same bed (size, headboard style, sheets color/pattern) — do NOT replace with different bed
-  • Same rack, chair, dresser, or mirror if visible in REF0 — do NOT remove or replace them
-  • Same window position and natural light direction — same warm/cool balance, same source angle
-  • Same spatial layout — do NOT rearrange furniture between shots
-  • Same shopping bags, boxes, and haul clutter family established in REF0
-
-🪞 SCENE PROP ALLOWLIST — STRICT LOCK TO REF0:
-Only props CLEARLY VISIBLE in REF0 are allowed. Everything else is FORBIDDEN, even if plausible.
-
-ALWAYS ALLOWED (organic haul clutter that evolves naturally):
-  ✓ Shopping bags (opened or closed)
-  ✓ Cardboard boxes (opened or closed)
-  ✓ Clothing pieces lying on bed, chair, or floor
-  ✓ Items from the haul draped or folded in background
-  ✓ Any specific furniture already shown in REF0
-
-FORBIDDEN UNLESS EXPLICITLY IN REF0:
-  ✗ Clothing rack or garment rack — do NOT add if not in REF0
-  ✗ Full-length mirror or wall mirror — do NOT add if not in REF0
-  ✗ Desk, writing table, or office-style furniture
-  ✗ Office chair or ergonomic chair
-  ✗ Lamp, floor lamp, or desk lamp not in REF0
-  ✗ Dresser or wardrobe not in REF0
-  ✗ New shelving or storage units
-  ✗ Extra seating not in REF0
-  ✗ Any large decor object not established in REF0
-  ✗ Architectural changes (different walls, ceiling, floor material)
-Do NOT invent plausible props. If REF0 does not show it, it does not exist in this haul space.
-
-⛔ NO EXTERNAL BRANDING — HARD RULE:
-Do NOT generate bags, boxes, or packaging with visible brand names or logos.
-Do NOT invent retail store branding: ZARA, H&M, Shein, Zara, Forever21, Topshop, or any other brand name.
-Do NOT show price tags, hang tags with external brand logos, or retail chain shopping bags with visible text.
-If packaging or shopping bags appear: they must be PLAIN, UNBRANDED, GENERIC (solid color, no logo).
-Exception: only if the user explicitly uploaded a branded asset as a reference — reproduce that faithfully.
-
-🛍️ CONTROLLED HAUL CLUTTER — WHAT IS AND IS NOT ALLOWED IN SCENE:
-Allowed background elements (organic haul mess from the user's actual items):
-  ✓ Clothing pieces that ARE part of the uploaded haul — lying on bed, chair, or floor
-  ✓ Plain shopping bags (no logos) or plain cardboard boxes
-  ✓ The specific accessories from the haul references (bags, shoes, jewelry)
-  ✓ Natural fabric movement, open zippers, hangers from actual haul pieces
-
-Forbidden clutter — DO NOT invent these:
-  ✗ Generic clothing not matching any uploaded reference
-  ✗ Extra garments on bed/floor that were not uploaded by the user
-  ✗ Multiple bags with retail branding
-  ✗ Unrelated props, food, drink, phone (unless REF0 established it)
-  ✗ Overloaded surfaces with many random items
-The scene should feel like a real person's room with THEIR actual haul — not a set with invented props.
+🔒 HAUL SPACE CONTINUITY: same room as REF0 across all shots — walls, floor, furniture, window, light direction, and shopping bags/boxes family. Only props visible in REF0 are allowed (see global scene-lock rule for the full prop allowlist).
 
 📦 CONTROLLED ITEM MOVEMENT — HAUL SESSION ARC:
-The haul space evolves naturally as items are tried on — but it stays CONTROLLED at every stage.
 Shot ${shot.arcPosition} of ${totalShots}:
 ${shot.arcPosition <= Math.ceil(totalShots * 0.33)
-  ? '  EARLY (controlled_tidy): Space is fresh. 1–2 haul items visible nearby. Maximum 1 plain unbranded bag or closed box. No clothing piles yet.'
+  ? '  EARLY (controlled_tidy): fresh space, 1–2 haul items visible nearby, max 1 plain unbranded bag/box, no piles yet.'
   : shot.arcPosition <= Math.ceil(totalShots * 0.66)
-  ? '  MIDDLE (lightly_used): 2–4 items from the uploaded haul set aside on bed or chair. Room is naturally used but not chaotic. Maximum 2 plain unbranded packages visible.'
-  : '  LATE (organized_haul): Tried haul items draped/folded in background. Room feels actively used. STILL tidy enough to see clearly. Maximum 2 plain unbranded packages. No random clothing piles.'}
-ALLOWED: haul clothes from the uploaded set move and shift naturally. Opened boxes. Tried items set aside.
-STRICTLY FORBIDDEN — DO NOT GENERATE:
-  ✗ Generic clothing piles not matching any uploaded haul reference
-  ✗ Branded packaging (ZARA, H&M, Shein, any retail brand)
-  ✗ More than 2 bags or boxes visible at once
-  ✗ New props, new mirrors, new furniture not in REF0
-  ✗ Room redesign between shots — same room, same light direction
+  ? '  MIDDLE (lightly_used): 2–4 haul items set aside on bed/chair, naturally used but not chaotic, max 2 plain packages.'
+  : '  LATE (organized_haul): tried items draped/folded in background, actively used but still tidy, max 2 plain packages.'}
+Haul clothes from the uploaded set only — do NOT invent generic clothing piles or extra garments not uploaded by the user.
 
-⚠️ FOOTWEAR + LEGWEAR ANATOMICAL INTEGRATION (GLOBAL RULE — ALL HAUL SHOTS):
-Any time the person's visible look includes BOTH legwear AND footwear, apply this rule:
+⚠️ SAFE HAUL FALLBACK (only if try-on fails): do not redesign the garment — show it held toward camera, arranged on the bed, or as a detail close-up, preserving its exact shape/color/material.
 
-LEGWEAR includes: pants, jeans, trousers, leggings, skirt, dress hem, tights, hosiery, shorts.
-FOOTWEAR includes: boots (any shaft height), sneakers, heels, sandals, loafers, flats, any shoes.
-
-MANDATORY SYMMETRY — both legs/feet must look IDENTICAL in how they integrate:
-  — If legwear is tucked into footwear → BOTH legs tucked, same depth
-  — If footwear is worn over legwear → BOTH legs show the same drape/overlap
-  — If footwear is under legwear hem → BOTH sides show consistent coverage
-  — If wearing heels with a skirt → BOTH feet at same angle, same heel height visible consistently
-  — If wearing sandals with tights → BOTH feet show the same tights texture at the toe
-
-FORBIDDEN anatomical errors — these are hard generation failures:
-  ✗ One leg tucked into boot/shaft, the other leg hanging outside
-  ✗ One boot shaft piercing through the pants fabric, the other sitting on top
-  ✗ Left foot appears to wear one style of integration, right foot a different one
-  ✗ Footwear geometry that is physically impossible (shaft passing through solid fabric)
-  ✗ Half-tuck, half-drape — inconsistent on same person in same shot
-  ✗ One leg floating or disconnected from the body due to footwear clipping
-  ✗ Different apparent heel height between left and right shoe
-  ✗ One sandal strap visible, matching strap missing on the other foot
-
-EXCEPTION — intentional asymmetry: only if the reference explicitly shows it (e.g., one boot folded down). Match the reference exactly in that case.
-
-⚠️ SAFE HAUL FALLBACK (only if try-on fails):
-If wearing this garment causes a content policy issue, do NOT redesign the garment.
-Instead generate: the person holding the item toward the camera, arranging it on the bed, or showing it as a detail close-up.
-Preserve the garment's exact shape, color, material, and design. The garment must still be the hero.
-
-⚠️ REFERENCE ROLE — HAUL RULES:
-Garment references are photos of the SPECIFIC GARMENT for this shot — not a person wearing it.
-Use the reference to understand the piece exactly, then show the person wearing it naturally.
-One garment ref = one shot's piece. Do not mix garment refs across shots.
-ONE person maximum in any frame. Any background figure is a generation error.
+⚠️ REFERENCE ROLE: garment references show the SPECIFIC GARMENT for this shot, not a person wearing it. One garment ref = one shot's piece — do not mix refs across shots. ONE person maximum in any frame.
 HAUL CONTEXT: ${shot.purpose}
 
 ${haulWorldMapBlock}
@@ -3076,46 +2971,6 @@ ALWAYS stay in the REF0 environment — that is the ONLY allowed capture locatio
   const globalAnatomySafety     = hasPersonInShot ? GLOBAL_ANATOMY_SAFETY : '';
   const globalVisualFidelity    = hasGarmentSlot ? GLOBAL_VISUAL_FIDELITY : '';
   const globalNoBranding        = GLOBAL_NO_BRANDING;  // siempre
-
-  // ── DEBUG TEMPORAL — instrumentado para diagnosticar overflow de 32k chars ──
-  // Ver comentario en el bloque de arriba: mide cada pieza del prompt final para
-  // identificar cuál crece de forma anómala. Quitar una vez resuelto el bug.
-  if (recipe === 'outfit_haul') {
-    const blockSizes: Record<string, number> = {
-      LOCK_SYSTEM: LOCK_SYSTEM.length,
-      PARADIGM_RULE: PARADIGM_RULE.length,
-      shotModeBlock: (shotModeBlock ?? '').length,
-      briefContextBlock: (briefContextBlock ?? '').length,
-      prepContextBlock: (prepContextBlock ?? '').length,
-      shotLocationOverride: (shotLocationOverride ?? '').length,
-      ref0HardLock: (ref0HardLock ?? '').length,
-      sceneContinuityBlock: (sceneContinuityBlock ?? '').length,
-      adaptiveClosureBlock: (adaptiveClosureBlock ?? '').length,
-      haulLocationSemanticsBlock: (haulLocationSemanticsBlock ?? '').length,
-      styleCoherenceBlock: (styleCoherenceBlock ?? '').length,
-      wearStateBlock: (wearStateBlock ?? '').length,
-      itemStatePlanBlock: (itemStatePlanBlock ?? '').length,
-      cameraModeBlock: (cameraModeBlock ?? '').length,
-      hpiBlockOff: (hpiBlockOff ?? '').length,
-      ref0AnalysisBlock: injectREF0Analysis(ref0Analysis, shot.narrativeStage).length,
-      basePrompt: (basePrompt ?? '').length,
-      briefTagContext: (briefTagMap?.tagContext ?? '').length,
-      familyBlock: (familyBlock ?? '').length,
-      hpiBlock: (hpiBlock ?? '').length,
-      shotIdentityBlock: (shotIdentityBlock ?? '').length,
-      ugcRealismBlock: (ugcRealismBlock ?? '').length,
-      globalSceneLock: (globalSceneLock ?? '').length,
-      globalAvatarSuppression: (globalAvatarSuppression ?? '').length,
-      globalWardrobePhysics: (globalWardrobePhysics ?? '').length,
-      globalAnatomySafety: (globalAnatomySafety ?? '').length,
-      globalVisualFidelity: (globalVisualFidelity ?? '').length,
-      globalNoBranding: (globalNoBranding ?? '').length,
-    };
-    const sorted = Object.entries(blockSizes).sort((a, b) => b[1] - a[1]);
-    const total = Object.values(blockSizes).reduce((a, b) => a + b, 0);
-    // eslint-disable-next-line no-console
-    console.log(`[PROMPT DEBUG][outfit_haul][${shot.key}] TOTAL≈${total} chars`, sorted);
-  }
 
   const prompt = `${LOCK_SYSTEM}
 

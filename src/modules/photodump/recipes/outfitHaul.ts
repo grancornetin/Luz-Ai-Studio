@@ -243,7 +243,6 @@ export function buildHaulShotItemPlanBlock(plan: HaulShotItemPlan, manifest: Hau
   const primStr    = resolveLabels(plan.primaryItems);
 
   const lines: string[] = [
-    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
     '📋 SHOT ITEM INVENTORY CONTRACT (exact — do not deviate):',
     `  PRIMARY FOCUS:   ${primStr}`,
     `  WORN on body:    ${wornStr}`,
@@ -272,7 +271,6 @@ export function buildHaulShotItemPlanBlock(plan: HaulShotItemPlan, manifest: Hau
   }
 
   lines.push('  STRICT: only the items listed above should be visible as featured elements. Do NOT add invented garments, random accessories, or unlisted haul items as prominent elements.');
-  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
   return lines.join('\n');
 }
@@ -348,25 +346,12 @@ export function buildHaulWorldMap(ref0Analysis: any): HaulWorldMap {
     const allowedLines = allowedLargeFurniture.length > 0
       ? `ALLOWED furniture (present in REF0): ${allowedLargeFurniture.join(', ')}.`
       : 'ALLOWED furniture: only what is already established in REF0.';
-    const forbiddenLines = forbiddenInventions.map(f => `  ✗ ${f}`).join('\n');
     const surfaceLines = `Haul items may be placed on: ${allowedSurfaces.join(', ')}.`;
     const packageLine  = packageMaxVisible > 0
       ? `Max ${packageMaxVisible} unbranded plain bag(s)/box(es) visible — NO logos, NO retail brand names.`
       : `NO shopping bags or cardboard boxes — they were NOT in REF0. Do NOT invent packaging.`;
 
-    const worldLockSummary = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🏠 ROOM WORLD LOCK — REF0 PHYSICAL MAP (strict — do NOT redesign this space):
-${allowedLines}
-${surfaceLines}
-PACKAGING: ${packageLine}
-FORBIDDEN — do NOT invent or add any of these:
-${forbiddenLines}
-  ✗ clothing or garments NOT uploaded by the user
-  ✗ external brand logos (ZARA, H&M, Shein, Bershka, Pull&Bear, etc.)
-  ✗ new architectural elements (new walls, windows, doorways not in REF0)
-Lighting: ${lightSource === 'natural_window' ? 'natural window light — preserve direction and warmth' : lightSource}.
-RULE: Do NOT add, redesign, rearrange, or invent any element of this physical space between shots. What REF0 shows is the maximum — not the minimum.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+    const worldLockSummary = `🏠 ROOM WORLD LOCK — REF0 PHYSICAL MAP: ${allowedLines} ${surfaceLines} PACKAGING: ${packageLine} Also forbidden: ${forbiddenInventions.join(', ')}, clothing not uploaded by the user. Lighting: ${lightSource === 'natural_window' ? 'natural window light — preserve direction and warmth' : lightSource}. What REF0 shows is the maximum — not the minimum.`;
 
     return {
       hasBed, bedCount, hasWindow, hasRack, hasMirror, hasChair, hasDresser,
@@ -402,115 +387,31 @@ export function buildHaulItemRoleLockBlock(item: HaulItem): string {
   const tag = isManual ? `MANUAL TAG: ${item.manualKind.toUpperCase()}` : `AUTO-DETECTED: ${rk.toUpperCase()}`;
 
   const rules: Record<HaulResolvedKind, string> = {
-    full_outfit: `ITEM ROLE LOCK — FULL LOOK:
-${tag}
-This reference IS a complete coordinated look. Show it exactly as designed — all pieces together.
-✓ ALLOWED: worn as a complete outfit (all visible pieces on body simultaneously)
-✓ ALLOWED: held up or displayed showing the complete composition
-✗ FORBIDDEN: breaking it apart into individual pieces and wearing only one
-✗ FORBIDDEN: adding unrelated garments to "complete" the look
-✗ FORBIDDEN: transforming it into a different garment type (e.g., treating a look as just a top)`,
+    full_outfit: `ITEM ROLE LOCK — FULL LOOK (${tag}): complete coordinated look, all pieces together. Allowed: worn complete, or held/displayed as the full composition. Forbidden: breaking it into separate pieces, adding unrelated garments, or treating it as just one item type.`,
 
-    mixed_set: `ITEM ROLE LOCK — MULTI-ITEM SET:
-${tag}
-This reference shows multiple products together. They may or may not form a single outfit.
-✓ ALLOWED: showing the person interacting with one or more pieces naturally
-✓ ALLOWED: displaying them as a group on a surface
-✗ FORBIDDEN: assuming all pieces must be worn simultaneously if they don't form a cohesive look
-✗ FORBIDDEN: inventing new pieces to "complete" any sub-look`,
+    mixed_set: `ITEM ROLE LOCK — MULTI-ITEM SET (${tag}): multiple products shown together, not necessarily one outfit. Allowed: natural interaction with one or more pieces, or displayed as a group. Forbidden: assuming all pieces must be worn simultaneously, or inventing pieces to "complete" a sub-look.`,
 
-    top: `ITEM ROLE LOCK — INDIVIDUAL TOP:
-${tag}
-This is a SINGLE TOP PIECE (blouse, shirt, t-shirt, corset, camisole).
-✓ ALLOWED: worn as the featured top with a neutral bottom for context
-✓ ALLOWED: held up toward camera, laid flat, or shown as a detail
-✗ FORBIDDEN: transforming this top into a dress or full outfit
-✗ FORBIDDEN: wearing it as a skirt, bottom, or outer layer unless the reference explicitly shows it
-✗ FORBIDDEN: treating it as a complete coordinated look`,
+    top: `ITEM ROLE LOCK — INDIVIDUAL TOP (${tag}): single top (blouse/shirt/tee/corset/camisole). Allowed: worn as featured top with neutral bottom for context, or held/flat/detail. Forbidden: turning it into a dress or full outfit, wearing it as bottom/outerwear, or treating it as a complete look.`,
 
-    bottom: `ITEM ROLE LOCK — INDIVIDUAL BOTTOM:
-${tag}
-This is a SINGLE BOTTOM PIECE (pants, skirt, shorts, jeans, trousers).
-✓ ALLOWED: worn as the featured bottom with a simple neutral top for context
-✓ ALLOWED: held, laid flat, or shown as detail
-✗ FORBIDDEN: transforming this bottom into a dress or top
-✗ FORBIDDEN: treating it as a complete outfit
-✗ FORBIDDEN: letting the neutral context top become the visual hero`,
+    bottom: `ITEM ROLE LOCK — INDIVIDUAL BOTTOM (${tag}): single bottom (pants/skirt/shorts/jeans). Allowed: worn as featured bottom with simple neutral top for context, or held/flat/detail. Forbidden: turning it into a dress or top, treating it as a complete outfit, or letting the context top become the hero.`,
 
-    dress: `ITEM ROLE LOCK — DRESS:
-${tag}
-This is a DRESS — a single main garment from shoulder (or neckline) to hem.
-✓ ALLOWED: worn as the complete garment — full silhouette visible
-✓ ALLOWED: held up or shown full length
-✗ FORBIDDEN: treating this dress as a top or combining it with another skirt/bottom
-✗ FORBIDDEN: transforming it into a different dress design
-✗ FORBIDDEN: losing the hem or skirt portion — full silhouette required`,
+    dress: `ITEM ROLE LOCK — DRESS (${tag}): single main garment shoulder/neckline to hem. Allowed: worn complete with full silhouette visible, or held/shown full length. Forbidden: treating it as a top or pairing with another bottom, redesigning it, or losing the hem/skirt portion.`,
 
-    onepiece: `ITEM ROLE LOCK — ONE-PIECE / JUMPSUIT:
-${tag}
-This is a JUMPSUIT, BODYSUIT, or ONE-PIECE GARMENT — covers body as a single continuous piece.
-✓ ALLOWED: worn as the complete piece — top-to-bottom silhouette visible
-✓ ALLOWED: shown being put on or adjusted
-✗ FORBIDDEN: splitting it visually into top + bottom
-✗ FORBIDDEN: treating the body/torso portion as a standalone top`,
+    onepiece: `ITEM ROLE LOCK — ONE-PIECE/JUMPSUIT (${tag}): single continuous garment top-to-bottom. Allowed: worn complete, or shown being put on/adjusted. Forbidden: splitting it visually into top+bottom, or treating the torso portion as a standalone top.`,
 
-    outerwear: `ITEM ROLE LOCK — OUTERWEAR / JACKET / BLAZER:
-${tag}
-This is OUTERWEAR — a jacket, blazer, coat, or cardigan worn as an outer layer.
-✓ ALLOWED: worn open over a simple neutral base
-✓ ALLOWED: worn closed, being put on, or held up
-✗ FORBIDDEN: treating this outerwear as the bottom or dress
-✗ FORBIDDEN: inventing specific garments underneath — any simple neutral base is fine
-✗ FORBIDDEN: losing the outer layer nature of this piece`,
+    outerwear: `ITEM ROLE LOCK — OUTERWEAR/JACKET/BLAZER (${tag}): outer layer (jacket/blazer/coat/cardigan). Allowed: worn open over simple neutral base, worn closed, being put on, or held. Forbidden: treating it as bottom or dress, inventing specific garments underneath, or losing its outer-layer nature.`,
 
-    footwear: `ITEM ROLE LOCK — STANDALONE FOOTWEAR:
-${tag}
-This is a SHOE, BOOT, SANDAL, or SNEAKER — a standalone footwear item.
-✓ ALLOWED: shown at foot level being tried on, placed on surface, held by hands, or as a close-up detail
-✗ FORBIDDEN: building a complete outfit from this shoe reference alone
-✗ FORBIDDEN: this footwear reference being treated as clothing
-✗ FORBIDDEN: inventing pants, dresses, or any garment from this shoe image`,
+    footwear: `ITEM ROLE LOCK — STANDALONE FOOTWEAR (${tag}): shoe/boot/sandal/sneaker only. Allowed: foot-level try-on, on a surface, held, or close-up detail. Forbidden: building a full outfit from this reference alone, treating it as clothing, or inventing garments from the shoe image.`,
 
-    hosiery: `ITEM ROLE LOCK — HOSIERY / PANTYHOSE / STYLING LAYER:
-${tag}
-This is a HOSIERY or LAYERING PIECE (tights, pantyhose, leggings as underlay, stockings).
-✓ ALLOWED: shown as a styling layer on legs, visible under or with another garment
-✓ ALLOWED: shown being pulled up or adjusted at leg level
-✗ FORBIDDEN: treating hosiery as thick pants or standalone bottom
-✗ FORBIDDEN: making hosiery the dominant garment — it is a layering piece
-✗ FORBIDDEN: losing the transparent or semi-transparent leg quality if the reference shows it`,
+    hosiery: `ITEM ROLE LOCK — HOSIERY/PANTYHOSE (${tag}): styling layer (tights/pantyhose/underlay leggings/stockings). Allowed: shown as leg layer under/with another garment, or being adjusted. Forbidden: treating it as thick pants or standalone bottom, making it the dominant garment, or losing its sheer quality if shown.`,
 
-    bag: `ITEM ROLE LOCK — STANDALONE BAG / PURSE:
-${tag}
-This is a BAG — handbag, tote, clutch, crossbody, or shoulder bag.
-✓ ALLOWED: held in hand, worn on shoulder/arm, resting on surface, or shown as hardware detail
-✗ FORBIDDEN: building a full outfit around this bag reference
-✗ FORBIDDEN: treating the bag as a clothing item
-✗ FORBIDDEN: inventing garments from the bag image`,
+    bag: `ITEM ROLE LOCK — STANDALONE BAG/PURSE (${tag}): handbag/tote/clutch/crossbody/shoulder bag. Allowed: held, worn on shoulder/arm, resting on surface, or hardware detail. Forbidden: building a full outfit around it, treating it as clothing, or inventing garments from the bag image.`,
 
-    jewelry: `ITEM ROLE LOCK — JEWELRY PIECE:
-${tag}
-This is a JEWELRY PIECE (earrings, necklace, bracelet, ring, anklet).
-✓ ALLOWED: worn on body (ear, neck, wrist, finger), held between fingers, or resting on fabric
-✓ ALLOWED: macro or semi-macro framing that makes the jewelry clearly readable
-✗ FORBIDDEN: generating a full outfit context for this shot
-✗ FORBIDDEN: replacing this jewelry with generic/invented jewelry
-✗ FORBIDDEN: the jewelry disappearing into the background
-SIZE AND SCALE: Reproduce the EXACT size, proportion, and scale shown in the reference. Do NOT upsize or downsize.`,
+    jewelry: `ITEM ROLE LOCK — JEWELRY (${tag}): earrings/necklace/bracelet/ring/anklet. Allowed: worn on body (ear/neck/wrist/finger), held, or resting on fabric, macro or semi-macro framing. Forbidden: generating a full outfit context, replacing it with generic jewelry, or letting it disappear into the background. Reproduce EXACT size/scale — do not upsize or downsize.`,
 
-    accessory: `ITEM ROLE LOCK — GENERIC ACCESSORY:
-${tag}
-This is a GENERIC ACCESSORY (belt, hat, glasses, scarf, cap, or similar).
-✓ ALLOWED: worn as an accessory in its natural position, or shown as a detail
-✓ ALLOWED: displayed/held clearly so it is the visual focus
-✗ FORBIDDEN: treating this accessory as a main garment
-✗ FORBIDDEN: losing the accessory behind other elements`,
+    accessory: `ITEM ROLE LOCK — GENERIC ACCESSORY (${tag}): belt/hat/glasses/scarf/cap or similar. Allowed: worn in natural position, or displayed/held as visual focus. Forbidden: treating it as a main garment, or losing it behind other elements.`,
 
-    unknown_visual_item: `ITEM ROLE LOCK — VISUAL ITEM (AUTO-DETECTED):
-${tag}
-The exact type was auto-detected. Inspect the reference carefully before generating.
-✓ Show it in a way consistent with what it actually IS in the reference.
-✗ FORBIDDEN: assuming it is clothing if it appears to be an accessory or product.`,
+    unknown_visual_item: `ITEM ROLE LOCK — AUTO-DETECTED (${tag}): type was auto-detected — inspect the reference carefully. Show it consistent with what it actually IS. Forbidden: assuming it is clothing if it appears to be an accessory or product.`,
   };
 
   return rules[rk] ?? `ITEM ROLE LOCK: Show this item faithfully as the type indicated — do not transform it into a different category of object.`;
@@ -519,20 +420,7 @@ The exact type was auto-detected. Inspect the reference carefully before generat
 // ── Haul Anatomy Block — reglas globales de anatomía ─────────────────────────
 // Se inyecta en TODOS los story shots del haul. Previene errores de manos, pies, dedos.
 export function buildHaulAnatomyBlock(): string {
-  return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🫀 ANATOMY INTEGRITY — GLOBAL HARD RULES (apply to every haul shot):
-
-ONE PERSON ONLY. Do not generate background figures.
-HANDS:   Exactly 2 hands. 5 fingers per hand. No extra hand. No fused fingers. No floating hand.
-ARMS:    Exactly 2 arms. No third arm. No extra limb.
-LEGS:    Exactly 2 legs. Both must be grounded and connected to the body.
-FEET:    Exactly 2 feet. No floating shoe. Both feet must show the same footwear type and integration.
-
-FINGER RULE: All 5 fingers must be individually distinguishable. No blob hands. No extra fingers. No missing finger.
-FOOT/BOOT RULE: If legwear meets footwear, BOTH legs must show identical integration — no half-tuck, no shaft-through-fabric.
-EARRING RULE: If earrings appear, both ears must show the SAME earring design. No mismatched earrings. No deformed ear.
-BODY PROPORTIONS: Do not elongate, compress, or distort any body part. Maintain natural human proportions.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+  return `🫀 ANATOMY: exactly 2 hands (5 fingers each, no fused/floating), 2 arms, 2 legs, 2 feet. No extra limbs, no phantom body parts, no elongation/distortion. Matching earrings on both ears if present.`;
 }
 
 // ── Haul Progress State — estado lógico de los ítems en este shot ────────────
