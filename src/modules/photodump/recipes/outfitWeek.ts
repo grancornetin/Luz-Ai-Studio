@@ -195,6 +195,16 @@ This is a real person sharing their weekly looks — not a brand shoot.
 sexy, revealing, bodycon catsuit, sensual, seductive, skin-tight, sheer body.
 USE INSTEAD: fashion outfit, weekly look, natural fit, casual lifestyle.`;
 }
+// Labels específicos por pieza — patch UI: joyería/accesorios desglosados (aros, collar,
+// anillo, pulsera, cinturón, pañoleta, scrunchie, sombrero, gafas) en vez de categorías
+// genéricas "Joyería"/"Accesorio" que no distinguían el tipo real de la pieza.
+const JEWELRY_PIECE_LABEL: Partial<Record<import('../types').HaulRefKind, string>> = {
+  aros: 'Aros', collar: 'Collar', anillo: 'Anillo', pulsera: 'Pulsera',
+};
+const ACCESSORY_PIECE_LABEL: Partial<Record<import('../types').HaulRefKind, string>> = {
+  cinturon: 'Cinturón', panoleta: 'Pañoleta', scrunchie: 'Scrunchie', sombrero: 'Sombrero', gafas: 'Gafas',
+};
+
 function classifyWeeklyItemFromSlot(
   refUrl:      string,
   sourceIndex: number,
@@ -222,32 +232,52 @@ function classifyWeeklyItemFromSlot(
       case 'chaqueta':   kind = 'outerwear';   tryOnEligible = true; break;
       case 'calzado':    kind = 'footwear';    break;
       case 'bolso':      kind = 'bag';         accessoryEligible = true; canBeIntegratedWithOutfit = true; break;
-      case 'joyeria':    kind = 'jewelry';     accessoryEligible = true; canBeIntegratedWithOutfit = true; break;
-      case 'accesorio':  kind = 'accessory';   accessoryEligible = true; canBeIntegratedWithOutfit = true; break;
-      case 'maquillaje': kind = 'makeup';      accessoryEligible = true; canBeIntegratedWithOutfit = true; label = `Maquillaje ${slotIndex + 1}`; break;
-      case 'skincare':   kind = 'skincare';    accessoryEligible = true; canBeIntegratedWithOutfit = true; label = `Skincare ${slotIndex + 1}`; break;
+      case 'joyeria': case 'aros': case 'collar': case 'anillo': case 'pulsera':
+        kind = 'jewelry';   accessoryEligible = true; canBeIntegratedWithOutfit = true;
+        label = JEWELRY_PIECE_LABEL[manualKind] ? `${JEWELRY_PIECE_LABEL[manualKind]} ${slotIndex + 1}` : label;
+        break;
+      case 'accesorio': case 'cinturon': case 'panoleta': case 'scrunchie': case 'sombrero': case 'gafas':
+        kind = 'accessory'; accessoryEligible = true; canBeIntegratedWithOutfit = true;
+        label = ACCESSORY_PIECE_LABEL[manualKind] ? `${ACCESSORY_PIECE_LABEL[manualKind]} ${slotIndex + 1}` : label;
+        break;
+      // maquillaje/skincare son producto, no accesorio (patch Problema 2/6) — sin flags de accesorio.
+      case 'maquillaje': kind = 'makeup';      label = `Maquillaje ${slotIndex + 1}`; break;
+      case 'skincare':   kind = 'skincare';    label = `Skincare ${slotIndex + 1}`; break;
       case 'varios_items': kind = 'outfit_set'; tryOnEligible = true; break;
       default:           kind = 'outfit_set';  tryOnEligible = true;
     }
   } else if (slotType === 'accesorio') {
     id    = `acc_${slotIndex}`;
-    accessoryEligible = true;
-    canBeIntegratedWithOutfit = true;
+    // accessoryEligible/canBeIntegratedWithOutfit dependen del kind real, no del slot donde
+    // se subió la imagen (patch quirúrgico Problema 6) — calzado y producto/beauty subidos
+    // en el slot "accesorio" NO deben quedar marcados como accesorio genérico: el calzado
+    // tiene su propia gramática (behaviorType='footwear' en deriveWeeklyRoutingFields) y el
+    // maquillaje/skincare son producto, no accesorio (Problema 2).
     switch (manualKind) {
-      case 'bolso':      kind = 'bag';      label = `Bolso ${slotIndex + 1}`;    break;
+      case 'bolso':      kind = 'bag';      label = `Bolso ${slotIndex + 1}`;    accessoryEligible = true; canBeIntegratedWithOutfit = true; break;
       case 'calzado':    kind = 'footwear'; label = `Calzado ${slotIndex + 1}`;  break;
-      case 'joyeria':    kind = 'jewelry';  label = `Joyería ${slotIndex + 1}`;  break;
+      case 'joyeria': case 'aros': case 'collar': case 'anillo': case 'pulsera':
+        kind = 'jewelry';
+        label = `${JEWELRY_PIECE_LABEL[manualKind] ?? 'Joyería'} ${slotIndex + 1}`;
+        accessoryEligible = true; canBeIntegratedWithOutfit = true;
+        break;
       case 'maquillaje': kind = 'makeup';   label = `Maquillaje ${slotIndex + 1}`; break;
       case 'skincare':   kind = 'skincare'; label = `Skincare ${slotIndex + 1}`; break;
-      default:           kind = 'accessory'; label = `Accesorio ${slotIndex + 1}`;
+      case 'accesorio': case 'cinturon': case 'panoleta': case 'scrunchie': case 'sombrero': case 'gafas':
+        kind = 'accessory';
+        label = `${ACCESSORY_PIECE_LABEL[manualKind] ?? 'Accesorio'} ${slotIndex + 1}`;
+        accessoryEligible = true; canBeIntegratedWithOutfit = true;
+        break;
+      default:           kind = 'accessory'; label = `Accesorio ${slotIndex + 1}`; accessoryEligible = true; canBeIntegratedWithOutfit = true;
     }
   } else {
     // producto
     id    = `producto_${slotIndex}`;
     label = `Producto ${slotIndex + 1}`;
     switch (manualKind) {
-      case 'maquillaje': kind = 'makeup';   accessoryEligible = true; canBeIntegratedWithOutfit = true; label = `Maquillaje ${slotIndex + 1}`; break;
-      case 'skincare':   kind = 'skincare'; accessoryEligible = true; canBeIntegratedWithOutfit = true; label = `Skincare ${slotIndex + 1}`;   break;
+      // maquillaje/skincare son producto, no accesorio (patch Problema 2/6) — sin flags de accesorio.
+      case 'maquillaje': kind = 'makeup';   label = `Maquillaje ${slotIndex + 1}`; break;
+      case 'skincare':   kind = 'skincare'; label = `Skincare ${slotIndex + 1}`;   break;
       default:           kind = 'product';
     }
   }
@@ -398,15 +428,16 @@ function getWeeklyRoleTemplate(
   }
 
   if (dominant === 'makeup') {
+    // Makeup es producto, no accesorio — gramática dedicada (patch quirúrgico Problema 2).
     return [
-      'WEEK_OVERVIEW',
-      'WEEK_DETAIL',
-      'WEEK_STYLING_PROCESS',
-      'WEEK_DETAIL',
-      'WEEK_ACCESSORY_DETAIL',
-      'WEEK_STYLING_PROCESS',
-      'WEEK_DETAIL',
-      'WEEK_CLOSER',
+      'WEEK_PRODUCT_OVERVIEW',
+      'WEEK_PRODUCT_TEXTURE',
+      'WEEK_PRODUCT_ROUTINE_STEP',
+      'WEEK_PRODUCT_DETAIL',
+      'WEEK_PRODUCT_IN_USE',
+      'WEEK_PRODUCT_ROUTINE_STEP',
+      'WEEK_PRODUCT_DETAIL',
+      'WEEK_PRODUCT_CLOSER',
     ].slice(0, count) as import('../types').WeeklyShotRole[];
   }
 
@@ -439,31 +470,32 @@ function getWeeklyRoleTemplate(
   }
 
   if (dominant === 'beauty' || dominant === 'skincare') {
-    // Template: beauty/skincare de la semana — overview → held (hero) → detail → en uso → closer
+    // Template: beauty/skincare de la semana — producto, no accesorio (patch Problema 2).
+    // overview → held (hero) → textura/detail → paso de rutina → closer.
     return [
-      'WEEK_OVERVIEW',
-      'WEEK_ACCESSORY_HELD',
-      'WEEK_DETAIL',
-      'WEEK_STYLING_PROCESS',
-      'WEEK_ACCESSORY_HELD',
-      'WEEK_DETAIL',
-      'WEEK_STYLING_PROCESS',
-      'WEEK_CLOSER',
+      'WEEK_PRODUCT_OVERVIEW',
+      'WEEK_PRODUCT_HELD',
+      'WEEK_PRODUCT_TEXTURE',
+      'WEEK_PRODUCT_ROUTINE_STEP',
+      'WEEK_PRODUCT_HELD',
+      'WEEK_PRODUCT_DETAIL',
+      'WEEK_PRODUCT_ROUTINE_STEP',
+      'WEEK_PRODUCT_CLOSER',
     ].slice(0, count) as import('../types').WeeklyShotRole[];
   }
 
   if (dominant === 'products' || dominant === 'tech') {
-    // Template: productos genéricos/tech de la semana — overview → held (hero) → detail → contexto → closer
-    // Scaffold mínimo — sin gramática de "en uso" (no aplica a productos genéricos como sí a beauty).
+    // Template: productos genéricos/tech de la semana — producto, no accesorio (patch Problema 2).
+    // Sin gramática de "en uso/rutina" propia de skincare — usa held/detail/contexto.
     return [
-      'WEEK_OVERVIEW',
-      'WEEK_ACCESSORY_HELD',
-      'WEEK_DETAIL',
-      'WEEK_ACCESSORY_HELD',
+      'WEEK_PRODUCT_OVERVIEW',
+      'WEEK_PRODUCT_HELD',
+      'WEEK_PRODUCT_DETAIL',
+      'WEEK_PRODUCT_HELD',
       'WEEK_FAVORITE',
-      'WEEK_ACCESSORY_HELD',
-      'WEEK_DETAIL',
-      'WEEK_CLOSER',
+      'WEEK_PRODUCT_HELD',
+      'WEEK_PRODUCT_DETAIL',
+      'WEEK_PRODUCT_CLOSER',
     ].slice(0, count) as import('../types').WeeklyShotRole[];
   }
 
@@ -592,14 +624,11 @@ function getNonRedundantCloserRole(
   if (dominant === 'bags') {
     return { role: 'WEEK_DETAIL', reason: 'Bag interior or texture detail as closer' };
   }
-  if (dominant === 'makeup') {
-    return { role: 'WEEK_DETAIL', reason: 'Product detail as closer' };
-  }
   if (dominant === 'footwear' || dominant === 'jewelry') {
     return { role: 'WEEK_ACCESSORY_DETAIL', reason: 'Detail macro as closer' };
   }
-  if (dominant === 'beauty' || dominant === 'skincare' || dominant === 'products' || dominant === 'tech') {
-    return { role: 'WEEK_DETAIL', reason: 'Product detail as closer' };
+  if (dominant === 'makeup' || dominant === 'beauty' || dominant === 'skincare' || dominant === 'products' || dominant === 'tech') {
+    return { role: 'WEEK_PRODUCT_DETAIL', reason: 'Product detail as closer' };
   }
   return { role: 'WEEK_CLOSER', reason: 'Default closer' };
 }
@@ -681,9 +710,11 @@ function deriveWeeklyRoutingFields(
   }
 
   if (kind === 'skincare' || kind === 'beauty_product') {
-    // Skincare/beauty: hereda el mundo/look de REF0 salvo que sea un detail puramente
-    // técnico (packaging/swatch), en cuyo caso la ref del producto es solo fidelidad visual.
-    const isProductOnlyDetail = shotPlan.role === 'WEEK_DETAIL' || shotPlan.role === 'WEEK_ACCESSORY_DETAIL';
+    // Skincare/beauty como producto (patch Problema 2): hereda el mundo/look de REF0
+    // salvo que sea un detail puramente técnico (packaging/swatch/textura), en cuyo caso
+    // la ref del producto es solo fidelidad visual.
+    const isProductOnlyDetail = shotPlan.role === 'WEEK_DETAIL' || shotPlan.role === 'WEEK_ACCESSORY_DETAIL'
+      || shotPlan.role === 'WEEK_PRODUCT_DETAIL' || shotPlan.role === 'WEEK_PRODUCT_TEXTURE';
     shotPlan.inheritBaseOutfit     = !isProductOnlyDetail;
     shotPlan.replaceBaseOutfit     = false;
     shotPlan.activeItemReplaces    = 'none';
@@ -694,7 +725,8 @@ function deriveWeeklyRoutingFields(
   }
 
   if (kind === 'product' || kind === 'tech') {
-    const isProductOnlyDetail = shotPlan.role === 'WEEK_DETAIL' || shotPlan.role === 'WEEK_ACCESSORY_DETAIL';
+    const isProductOnlyDetail = shotPlan.role === 'WEEK_DETAIL' || shotPlan.role === 'WEEK_ACCESSORY_DETAIL'
+      || shotPlan.role === 'WEEK_PRODUCT_DETAIL' || shotPlan.role === 'WEEK_PRODUCT_TEXTURE';
     shotPlan.inheritBaseOutfit     = !isProductOnlyDetail;
     shotPlan.replaceBaseOutfit     = false;
     shotPlan.activeItemReplaces    = 'none';
@@ -974,7 +1006,49 @@ function buildWeeklyShotPlan(
       });
     }
 
-    // ── ROLES ESPECÍFICOS de accesorios / makeup / bags ──────
+    // ── ROLES ESPECÍFICOS de producto/skincare/beauty/tech (patch quirúrgico Problema 2) ──
+    // accessoryItems en este scope es allNonOutfitItems (accesorios reales + productos
+    // mezclados por el caller) — filtrar por kind real para no tratar un producto como
+    // un accesorio genérico. Nunca usar WEEK_ACCESSORY_* aquí.
+    else if (
+      role === 'WEEK_PRODUCT_OVERVIEW' ||
+      role === 'WEEK_PRODUCT_HELD' ||
+      role === 'WEEK_PRODUCT_DETAIL' ||
+      role === 'WEEK_PRODUCT_IN_USE' ||
+      role === 'WEEK_PRODUCT_TEXTURE' ||
+      role === 'WEEK_PRODUCT_ROUTINE_STEP' ||
+      role === 'WEEK_PRODUCT_CLOSER'
+    ) {
+      const PRODUCT_KINDS = new Set(['product', 'tech', 'skincare', 'makeup', 'makeup_color', 'lipstick', 'beauty_product']);
+      const productPool = accessoryItems.filter(it => PRODUCT_KINDS.has(it.kind));
+      const pool = productPool.length > 0 ? productPool : accessoryItems;
+      const targetProduct = pool.length > 0 ? pool[accCursor % pool.length] : null;
+      if (targetProduct) accCursor++;
+
+      const compositionByRole: Record<string, string> = {
+        WEEK_PRODUCT_OVERVIEW:     'flatlay_or_surface_all_products',
+        WEEK_PRODUCT_HELD:         'held_toward_camera_product',
+        WEEK_PRODUCT_DETAIL:       'macro_detail_packaging_label',
+        WEEK_PRODUCT_IN_USE:       'applied_in_routine',
+        WEEK_PRODUCT_TEXTURE:      'texture_swatch_or_formula',
+        WEEK_PRODUCT_ROUTINE_STEP: 'routine_sequence_step',
+        WEEK_PRODUCT_CLOSER:       'favorite_product_closer',
+      };
+
+      shotPlan = {
+        role,
+        primaryItemIds:   targetProduct ? [targetProduct.id] : [],
+        secondaryItemIds: [],
+        accessoryId:      targetProduct?.id,
+        refsToRoute:      [],
+        redundancyScore:  0,
+        replacedBecauseRedundant: false,
+        compositionMode:  compositionByRole[role] ?? 'product_detail_shot',
+        visualWeightIntent: targetProduct ? `${targetProduct.label} as the active product for this shot` : 'Product detail shot',
+      };
+    }
+
+    // ── ROLES ESPECÍFICOS de accesorios / bags (no producto) ──
     else if (
       role === 'WEEK_ACCESSORY_WORN' ||
       role === 'WEEK_ACCESSORY_HELD' ||
@@ -1046,13 +1120,13 @@ function buildWeeklyShotPlan(
       bag:        ['WEEK_ACCESSORY_HELD', 'WEEK_ACCESSORY_DETAIL', 'WEEK_DETAIL'],
       jewelry:    ['WEEK_ACCESSORY_WORN', 'WEEK_ACCESSORY_DETAIL', 'WEEK_ACCESSORY_HELD'],
       accessory:  ['WEEK_ACCESSORY_HELD', 'WEEK_ACCESSORY_DETAIL', 'WEEK_ACCESSORY_WORN'],
-      lipstick:   ['WEEK_DETAIL', 'WEEK_STYLING_PROCESS', 'WEEK_ACCESSORY_DETAIL'],
-      makeup:     ['WEEK_DETAIL', 'WEEK_STYLING_PROCESS', 'WEEK_ACCESSORY_DETAIL'],
-      makeup_color: ['WEEK_DETAIL', 'WEEK_STYLING_PROCESS', 'WEEK_ACCESSORY_DETAIL'],
-      skincare:   ['WEEK_ACCESSORY_HELD', 'WEEK_DETAIL', 'WEEK_STYLING_PROCESS'],
-      beauty_product: ['WEEK_ACCESSORY_HELD', 'WEEK_DETAIL', 'WEEK_STYLING_PROCESS'],
-      product:    ['WEEK_ACCESSORY_HELD', 'WEEK_DETAIL', 'WEEK_FAVORITE'],
-      tech:       ['WEEK_ACCESSORY_HELD', 'WEEK_DETAIL', 'WEEK_FAVORITE'],
+      lipstick:   ['WEEK_PRODUCT_TEXTURE', 'WEEK_PRODUCT_ROUTINE_STEP', 'WEEK_PRODUCT_DETAIL'],
+      makeup:     ['WEEK_PRODUCT_TEXTURE', 'WEEK_PRODUCT_ROUTINE_STEP', 'WEEK_PRODUCT_DETAIL'],
+      makeup_color: ['WEEK_PRODUCT_TEXTURE', 'WEEK_PRODUCT_ROUTINE_STEP', 'WEEK_PRODUCT_DETAIL'],
+      skincare:   ['WEEK_PRODUCT_HELD', 'WEEK_PRODUCT_DETAIL', 'WEEK_PRODUCT_ROUTINE_STEP'],
+      beauty_product: ['WEEK_PRODUCT_HELD', 'WEEK_PRODUCT_DETAIL', 'WEEK_PRODUCT_ROUTINE_STEP'],
+      product:    ['WEEK_PRODUCT_HELD', 'WEEK_PRODUCT_DETAIL', 'WEEK_PRODUCT_CLOSER'],
+      tech:       ['WEEK_PRODUCT_HELD', 'WEEK_PRODUCT_DETAIL', 'WEEK_PRODUCT_CLOSER'],
       unknown:    ['WEEK_STYLING_PROCESS', 'WEEK_DETAIL'],
     };
 
@@ -1158,11 +1232,19 @@ function buildWeeklyCoverageMap(
   const WEIGHT_SECONDARY = 10;
   const WEIGHT_OVERVIEW  = 3;
 
+  // Kinds cuya gramática visual es "producto" — un rol de accesorio asignado a uno de
+  // estos kinds (o viceversa) es wrong_role_for_category (patch quirúrgico Problema 5/6).
+  const PRODUCT_KINDS = new Set<import('../types').WeeklyItemKind>(['product', 'tech', 'skincare', 'makeup', 'makeup_color', 'lipstick', 'beauty_product']);
+  const PRODUCT_ROLES = new Set(['WEEK_PRODUCT_OVERVIEW', 'WEEK_PRODUCT_HELD', 'WEEK_PRODUCT_DETAIL', 'WEEK_PRODUCT_IN_USE', 'WEEK_PRODUCT_TEXTURE', 'WEEK_PRODUCT_ROUTINE_STEP', 'WEEK_PRODUCT_CLOSER']);
+  const ACCESSORY_ONLY_ROLES = new Set(['WEEK_ACCESSORY_WORN', 'WEEK_ACCESSORY_HELD', 'WEEK_ACCESSORY_DETAIL', 'WEEK_ACCESSORY_INTEGRATED']);
+  const hasWrongRoleForCategory: Record<string, boolean> = {};
+
   for (const shot of shotPlan) {
-    const isHeroRole   = ['WEEK_LOOK_HERO', 'WEEK_MIRROR_LOOK', 'WEEK_ANCHOR'].includes(shot.role);
-    const isDetailRole = ['WEEK_DETAIL', 'WEEK_ACCESSORY_DETAIL', 'WEEK_ACCESSORY_WORN', 'WEEK_ACCESSORY_HELD'].includes(shot.role);
-    const isIntRole    = shot.role === 'WEEK_ACCESSORY_INTEGRATED';
-    const isOverview   = shot.role === 'WEEK_OVERVIEW';
+    const isHeroRole    = ['WEEK_LOOK_HERO', 'WEEK_MIRROR_LOOK', 'WEEK_ANCHOR'].includes(shot.role);
+    const isDetailRole  = ['WEEK_DETAIL', 'WEEK_ACCESSORY_DETAIL', 'WEEK_ACCESSORY_WORN', 'WEEK_ACCESSORY_HELD', 'WEEK_PRODUCT_DETAIL', 'WEEK_PRODUCT_HELD', 'WEEK_PRODUCT_TEXTURE'].includes(shot.role);
+    const isIntRole     = shot.role === 'WEEK_ACCESSORY_INTEGRATED';
+    const isOverview    = shot.role === 'WEEK_OVERVIEW' || shot.role === 'WEEK_PRODUCT_OVERVIEW';
+    const isProductRole = PRODUCT_ROLES.has(shot.role);
 
     for (const id of shot.primaryItemIds) {
       const cov = map[id];
@@ -1171,6 +1253,12 @@ function buildWeeklyCoverageMap(
       cov.isPrimaryInAnyShot = true;
       cov.isOnlyBackground   = false;
       if (!isOverview) cov.isOnlyInOverview = false;
+
+      // Rol asignado a este ítem, pero de la gramática equivocada (accesorio↔producto).
+      const isProductKind = PRODUCT_KINDS.has(cov.itemKind);
+      if ((isProductKind && ACCESSORY_ONLY_ROLES.has(shot.role)) || (!isProductKind && isProductRole)) {
+        hasWrongRoleForCategory[id] = true;
+      }
 
       if (isHeroRole)   { cov.heroAppearances++; cov.visualWeight += WEIGHT_HERO; }
       if (isDetailRole) { cov.detailAppearances++; cov.visualWeight += WEIGHT_DETAIL; }
@@ -1193,14 +1281,32 @@ function buildWeeklyCoverageMap(
     }
   }
 
-  // Determinar cobertura real (no solo presencia superficial)
+  // Determinar cobertura real (no solo presencia superficial) — patch quirúrgico Problema 5.
+  // realCoverage exige las 4 condiciones pedidas:
+  //   1. el ítem fue asignado como primary o secondary intencional en algún shot
+  //   2. (routing real) — por construcción, todo WeeklyItem en el manifest tiene refUrl
+  //      válida, así que "asignado como primary/secondary" ya implica que la referencia
+  //      SÍ viaja a refsToPass (ver routeWeeklyItemId en generateOutfitWeekShot) — el gap
+  //      real está en (3) y (4), verificados abajo.
+  //   3. el visual contract lo declara (buildVisualReferenceContract resuelve por
+  //      membership en allOutfitUrls/allAccUrls/allProductUrls — mismo criterio que (2))
+  //   4. el rol del shot es compatible con la categoría del ítem (no wrong_role_for_category)
   const MINIMUM_WEIGHT = 10; // al menos un secondary appearance real
   for (const cov of Object.values(map)) {
-    cov.realCoverage = (
-      cov.isPrimaryInAnyShot &&
-      !cov.isOnlyInOverview &&
-      cov.visualWeight >= MINIMUM_WEIGHT
-    );
+    const meetsWeight = cov.isPrimaryInAnyShot && !cov.isOnlyInOverview && cov.visualWeight >= MINIMUM_WEIGHT;
+    if (!cov.isPrimaryInAnyShot || cov.isOnlyInOverview) {
+      cov.realCoverage   = false;
+      cov.coverageReason = 'planned_but_not_routed';
+    } else if (hasWrongRoleForCategory[cov.itemId]) {
+      cov.realCoverage   = false;
+      cov.coverageReason = 'wrong_role_for_category';
+    } else if (!meetsWeight) {
+      cov.realCoverage   = false;
+      cov.coverageReason = 'planned_but_not_routed';
+    } else {
+      cov.realCoverage   = true;
+      cov.coverageReason = undefined;
+    }
   }
 
   return map;
@@ -1676,6 +1782,57 @@ export function weeklyRoleToDirective(
       beat: 'atmosphere',
       framing: 'MEDIUM', composition: 'CLOSING_NON_REDUNDANT', angle: 'EYE_LEVEL_OR_SLIGHTLY_HIGH',
     },
+    // ── Roles dedicados a producto/skincare/beauty (patch quirúrgico Problema 2) ──
+    // Nunca reusar lenguaje de "worn on body" / "accessory" — gramática de producto propia.
+    WEEK_PRODUCT_OVERVIEW: {
+      purpose: `Weekly products overview — ITEM-ONLY SHOT. ALL WEEKLY PRODUCTS arranged naturally together: ${primaryLabel}${secondaryLabel ? ` and ${secondaryLabel}` : ''}. MUST show all products in one frame on a real surface (vanity, bathroom counter, desk, tray). ${visualIntent}. NO PERSON, NO HANDS, NO FACE, NO BODY PARTS — products only. NOT a worn look. NOT a collage. A real editorial flat-lay of the week's product picks together.`,
+      required: ['all_primary_products_visible_and_readable', 'organized_natural_arrangement', 'real_surface', 'no_person_in_frame', 'no_hands_no_body_parts'],
+      forbidden: [...baseForbidden, 'collage_layout', 'catalog_grid', 'floating_items', 'person_in_frame', 'hands_in_frame', 'body_parts_in_frame', 'product_worn_on_body'],
+      beat: 'context',
+      framing: 'WIDE', composition: 'FLATLAY_PRODUCT_ONLY_EDITORIAL', angle: 'SLIGHTLY_HIGH_OR_OVERHEAD',
+    },
+    WEEK_PRODUCT_HELD: {
+      purpose: `Product held: ${primaryLabel} held by hand or displayed naturally. ${visualIntent}. Person holds the product toward camera or at their side. Product packaging is clear and readable — label, cap, container faithful to the reference. NOT jewelry, NOT a bag — product photography grammar. Mode: ${compositionMode || 'held_toward_camera_product'}.`,
+      required: ['product_held_and_readable', 'hands_or_person_present', 'faithful_to_reference_packaging'],
+      forbidden: [...baseForbidden, 'floating_object_without_hands', 'invented_branding', 'catalog_background', 'treated_as_jewelry_or_bag'],
+      beat: 'reveal',
+      framing: 'MEDIUM', composition: 'HELD_TOWARD_CAMERA_PRODUCT', angle: 'EYE_LEVEL',
+    },
+    WEEK_PRODUCT_DETAIL: {
+      purpose: `Product detail / macro: ${primaryLabel}. ${visualIntent}. Close-up on packaging — label, cap/dropper/pump, material, container shape fills most of the frame. Real surface. Natural light. Faithful to the uploaded reference — do NOT invent the design or brand.`,
+      required: ['product_fills_frame', 'faithful_to_reference_packaging', 'real_natural_light', 'no_invented_design'],
+      forbidden: [...baseForbidden, 'catalog_surface', 'invented_design', 'full_body_shot', 'treated_as_jewelry_or_bag'],
+      beat: 'detail',
+      framing: 'CLOSE_UP', composition: 'MACRO_DETAIL_PACKAGING', angle: 'SLIGHTLY_HIGH',
+    },
+    WEEK_PRODUCT_IN_USE: {
+      purpose: `Product in use: ${primaryLabel} actively being applied/used. ${visualIntent}. Natural real gesture — applying cream, dispensing serum, opening a jar, pressing product onto skin. NOT a posed ad. Authentic routine moment, real bathroom/vanity light.`,
+      required: ['product_actively_applied_or_used', 'authentic_not_posed', 'product_identity_preserved'],
+      forbidden: [...baseForbidden, 'static_product_only_no_use', 'studio_ad_pose'],
+      beat: 'action',
+      framing: 'MEDIUM', composition: 'APPLIED_IN_ROUTINE', angle: 'EYE_LEVEL',
+    },
+    WEEK_PRODUCT_TEXTURE: {
+      purpose: `Product texture / formula: ${primaryLabel}. ${visualIntent}. Macro shot of the formula itself — swatch, drop, smear, or dispensed amount. Faithful color and consistency to the reference. Real light, real surface (skin, glass, or applicator).`,
+      required: ['formula_texture_visible', 'faithful_color_and_consistency', 'macro_framing'],
+      forbidden: [...baseForbidden, 'packaging_only_no_texture', 'invented_color'],
+      beat: 'detail',
+      framing: 'CLOSE_UP', composition: 'TEXTURE_SWATCH_MACRO', angle: 'SLIGHTLY_HIGH',
+    },
+    WEEK_PRODUCT_ROUTINE_STEP: {
+      purpose: `Routine step: ${primaryLabel} as one step in a sequence. ${visualIntent}. Natural bathroom/vanity/desk context — not a studio product shot. Person interacting with the product as part of a real routine moment. Candid energy.`,
+      required: ['product_in_routine_context', 'real_natural_setting', 'authentic_not_posed'],
+      forbidden: [...baseForbidden, 'studio_product_shot', 'catalog_pose'],
+      beat: 'action',
+      framing: 'MEDIUM', composition: 'ROUTINE_SEQUENCE_STEP', angle: 'EYE_LEVEL',
+    },
+    WEEK_PRODUCT_CLOSER: {
+      purpose: `Closing shot — favorite product of the week: ${primaryLabel || 'the week\'s favorite product'}. ${visualIntent}. Final summary mood — MUST be visually different from previous product shots. Options: product held with a satisfied expression, flat lay of favorite products, texture detail. Mode: ${compositionMode || 'favorite_product_closer'}.`,
+      required: ['visually_different_from_prior_product_shots', 'closing_mood', 'product_identity_preserved'],
+      forbidden: [...baseForbidden, 'another_identical_product_shot', 'copy_of_previous_shot'],
+      beat: 'atmosphere',
+      framing: 'MEDIUM', composition: 'CLOSING_NON_REDUNDANT_PRODUCT', angle: 'EYE_LEVEL_OR_SLIGHTLY_HIGH',
+    },
   };
 
   const desc = roleDescriptions[sp.role];
@@ -1861,8 +2018,9 @@ If the person appears partially, their posture is incidental — not the subject
   const visualIntent     = weekPlan?.visualWeightIntent ?? '';
   const compositionMode  = weekPlan?.compositionMode    ?? '';
   const isOverview       = roleLabel.includes('OVERVIEW');
-  const isDetail         = roleLabel.includes('DETAIL') || roleLabel.includes('ACCESSORY_DETAIL');
-  const isAccessory      = roleLabel.includes('ACCESSORY');
+  const isProduct        = roleLabel.startsWith('WEEK_PRODUCT_');
+  const isDetail         = !isProduct && (roleLabel.includes('DETAIL') || roleLabel.includes('ACCESSORY_DETAIL'));
+  const isAccessory      = !isProduct && roleLabel.includes('ACCESSORY');
   const isHero           = roleLabel === 'WEEK_LOOK_HERO' || roleLabel === 'WEEK_MIRROR_LOOK';
   const semIntent        = weekPlan?.semanticIntentFromBrief;
   const resolvedTags     = weekPlan?.resolvedTagsUsed?.length ? weekPlan.resolvedTagsUsed.join(', ') : '';
@@ -1904,6 +2062,14 @@ ${(isDetail || isAccessory) ? `ACCESSORY / DETAIL RULES:
 - Do NOT substitute another piece.
 - Do NOT invent a different accessory or combine it with another piece.
 ${weekPlan?.integratedWithOutfitId ? `- This accessory must appear TOGETHER with the associated outfit in the contract — show both naturally worn, not as an isolated macro.` : ''}` : ''}
+${isProduct ? `PRODUCT / SKINCARE / BEAUTY RULES — THIS IS A PRODUCT, NOT AN ACCESSORY:
+- The reference image shown in the contract as PRIMARY PRODUCT is the EXACT product for this shot.
+- Preserve bottle/tube/jar/packaging shape, cap/dropper/pump, colors, label layout, material, proportions, and formula identity exactly.
+- Do NOT substitute another product. Do NOT invent extra products not shown in the references.
+- Do NOT treat this as jewelry, a bag, or a wearable accessory — it is a product/skincare/beauty item with product photography grammar (held, on a surface, applied, texture/swatch, or routine step — never "worn on body" like jewelry).
+${roleLabel === 'WEEK_PRODUCT_IN_USE' ? '- Show the product actively being applied/used (e.g. applying cream, dispensing serum, opening a jar) — natural, real gesture, not a posed ad.' : ''}
+${roleLabel === 'WEEK_PRODUCT_TEXTURE' ? '- Show the product formula/texture itself (swatch, drop, smear, or dispensed amount) — macro, real light, faithful color to the reference.' : ''}
+${roleLabel === 'WEEK_PRODUCT_ROUTINE_STEP' ? '- Show this product as one step in a routine sequence — natural bathroom/vanity/desk context, not a studio product shot.' : ''}` : ''}
 
 ⛔ FORBIDDEN WARDROBE — AVATAR BASE CLOTHING MUST NOT BE A STORY OUTFIT:
 The avatar/body reference photos are IDENTITY REFERENCES ONLY.

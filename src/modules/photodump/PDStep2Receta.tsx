@@ -336,6 +336,24 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   const getSlotFilled = (key: string): number =>
     getSlotImages(key).filter(Boolean).length;
 
+  // Slots de crecimiento progresivo: outfit/accesorios/producto arrancan mostrando 1
+  // casillero y agregan uno más automáticamente cada vez que se llena el último — en vez
+  // de precargar todos los casilleros vacíos de entrada (7 outfits, 4 accesorios, etc.
+  // en Weekly Favorites eran abrumadores). avatar/empaque/escena NO usan esta lógica —
+  // siguen con su cantidad fija de siempre.
+  const PROGRESSIVE_SLOT_KEYS = new Set(['outfit', 'accesorios', 'producto']);
+  const getSlotVisibleCount = (key: string): number => {
+    const max = getSlotMax(key);
+    if (!PROGRESSIVE_SLOT_KEYS.has(key)) return max;
+    const images = getSlotImages(key);
+    // Último índice ocupado + 1 casillero vacío para seguir cargando, con tope en max
+    // (límite técnico real de refs que soporta la API — no se muestra como límite en la UI,
+    // simplemente deja de agregar casilleros nuevos al llegar ahí).
+    let lastFilled = -1;
+    for (let i = 0; i < images.length; i++) if (images[i]) lastFilled = i;
+    return Math.min(max, Math.max(1, lastFilled + 2));
+  };
+
   const slotSubLabels: Record<string, string[]> = {
     avatar:         ['Cara / identidad', 'Cuerpo (opcional)'],
     outfit:         recipe === 'outfit_haul'
@@ -511,6 +529,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                 const isOpen    = openSlot === key;
                 const filled    = getSlotFilled(key);
                 const max       = getSlotMax(key);
+                const visibleCount = getSlotVisibleCount(key);
                 const subLabels = slotSubLabels[key] ?? [];
                 const slotType  = key === 'avatar' ? 'person'
                   : (key === 'outfit' || key === 'accesorios') ? 'outfit'
@@ -595,8 +614,8 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                     {/* Contenido expandido */}
                     {isOpen && (
                       <div className="px-3.5 pb-3.5 space-y-3">
-                        <div className={`grid gap-2 ${max <= 2 ? 'grid-cols-2' : max <= 3 ? 'grid-cols-3' : 'grid-cols-3 md:grid-cols-4'}`}>
-                          {Array.from({ length: max }).map((_, i) => {
+                        <div className={`grid gap-2 ${visibleCount <= 2 ? 'grid-cols-2' : visibleCount <= 3 ? 'grid-cols-3' : 'grid-cols-3 md:grid-cols-4'}`}>
+                          {Array.from({ length: visibleCount }).map((_, i) => {
                             const isFirst    = i === 0;
                             const isDisabled = i > 0 && !images[0];
                             const hasImage   = !!images[i];
@@ -649,23 +668,28 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                                   disabled={isDisabled}
                                   iconless
                                 />
-                                {/* Selector de tipo — haul y weekly favorites, cuando hay imagen */}
+                                {/* Selector de tipo — haul y weekly favorites, cuando hay imagen.
+                                    category filtra las opciones mostradas: outfit nunca ve
+                                    tipos que no aplican, accesorios ya no muestra ropa. */}
                                 {(recipe === 'outfit_haul' || recipe === 'outfit_week') && hasImage && key === 'outfit' && (
                                   <HaulReferenceTypeSelector
                                     value={getOutfitKind(i)}
                                     onChange={kind => handleOutfitKindChange(i, kind)}
+                                    category="outfit"
                                   />
                                 )}
                                 {(recipe === 'outfit_haul' || recipe === 'outfit_week') && hasImage && isAccesorios && (
                                   <HaulReferenceTypeSelector
                                     value={getAccKind(i)}
                                     onChange={kind => handleAccKindChange(i, kind)}
+                                    category="accesorio"
                                   />
                                 )}
                                 {recipe === 'outfit_week' && hasImage && key === 'producto' && (
                                   <HaulReferenceTypeSelector
                                     value={getProductKind(i)}
                                     onChange={kind => handleProductKindChange(i, kind)}
+                                    category="producto"
                                   />
                                 )}
                                 {isAccesorios && isCloseup && hasImage && (

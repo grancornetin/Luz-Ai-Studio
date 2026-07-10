@@ -994,6 +994,29 @@ export async function generatePhotodumpREF0(
 
   const isOutfitRecipe = recipe === 'outfit_check' || recipe === 'outfit_haul' || recipe === 'outfit_week';
 
+  // ── outfit_week: REF0 debe ser un anchor neutral de sesión, no un "primer outfit" ──
+  // Patch quirúrgico (Problema 1): REF0 en Weekly Favorites NO debe consumir un weekly
+  // item como si fuera el look de la semana — eso contamina la receta (compite con los
+  // heroes reales y le dice al modelo "usa este outfit" cuando el usuario subió varios).
+  // Se calcula el dominantType con el mismo manifest liviano que usa el planner, sin
+  // tocar la firma de buildPhotodumpSessionPlan ni el pipeline que llama a esta función.
+  const weekRef0Info = recipe === 'outfit_week' ? (() => {
+    try {
+      const manifest = buildWeeklyManifest(refs, 6, basePrompt);
+      // "Base outfit explícito" = el usuario marcó manualmente al menos un outfit como
+      // look_completo (no 'auto') — señal de que ese outfit es la base de REF0, no un
+      // item más a rotar. Sin esa señal manual, mixed nunca usa outfit en REF0.
+      const hasExplicitBaseOutfit = (refs.haulOutfitKinds ?? []).some(k => k === 'look_completo');
+      const mode: 'no_outfit' | 'no_product' | 'world_and_base_outfit' =
+        manifest.dominantType === 'outfits' ? 'no_outfit'
+        : (manifest.dominantType === 'mixed' && hasExplicitBaseOutfit) ? 'world_and_base_outfit'
+        : 'no_outfit'; // products/skincare/beauty/tech/makeup/bags/footwear/jewelry/mixed-sin-base → nunca visten REF0 con un weekly item
+      return { dominantType: manifest.dominantType, mode };
+    } catch {
+      return { dominantType: 'mixed' as import('./types').WeeklySetDominantType, mode: 'no_outfit' as const };
+    }
+  })() : undefined;
+
   if (isUnboxing) {
     // Unboxing REF0: si hay avatar → ancla con persona sosteniendo/interactuando con el producto.
     // El avatar se pasa x2 (identidad suficiente sin dominar el presupuesto).
@@ -1016,8 +1039,14 @@ export async function generatePhotodumpREF0(
     if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
     if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
     // Prendas: primera prenda + hasta 2 adicionales para que el modelo entienda el look completo
-    const allOutfitRefs = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
-    allOutfitRefs.slice(0, 3).forEach(r => refsToPass.push(r));
+    // outfit_week: SOLO si mode === 'world_and_base_outfit' (mixed con base explícita marcada
+    // por el usuario). Para 'outfits'/'products'/'skincare'/etc. REF0 no debe recibir ningún
+    // weekly item — ver weekRef0Info arriba (Problema 1 del patch).
+    const skipOutfitRefsForWeek = recipe === 'outfit_week' && weekRef0Info?.mode !== 'world_and_base_outfit';
+    if (!skipOutfitRefsForWeek) {
+      const allOutfitRefs = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
+      allOutfitRefs.slice(0, 3).forEach(r => refsToPass.push(r));
+    }
     // Escena: outfit_check usa scenePruebaRef primero, las demás usan sceneRef
     const sceneForRef0 = recipe === 'outfit_check'
       ? (refs.scenePruebaRef ?? refs.sceneRef)
@@ -1135,17 +1164,19 @@ It must NOT be mistaken for a haul product or reappear as a haul item in story s
 iPhone UGC realism: natural window light, slight handheld imperfection, real room texture, real skin.
 No beauty filter. No editorial grade. No fashion campaign lighting. No studio polish.
 This REF0 establishes: the person's identity, the real haul space, the iPhone UGC aesthetic, and the mood of the session.`,
-    outfit_week: `SHOT: Full body of the person in a natural, real environment — this is the visual anchor for the entire weekly set.
-The person wears the FIRST WEEKLY OUTFIT. Full body visible and readable head to toe.
+    // outfit_week: REF0 es un anchor neutral de sesión — NUNCA "el primer outfit de la
+    // semana" (patch quirúrgico Problema 1). El modo se decide arriba en weekRef0Info,
+    // calculado desde el dominantType real del set antes de construir refsToPass.
+    outfit_week: weekRef0Info?.mode === 'world_and_base_outfit'
+      ? `SHOT: Full body of the person in a natural, real environment — this is the visual anchor for the entire weekly set.
+The person wears a BASE OUTFIT that anchors the session styling (marked explicitly by the user as the base look — "world_and_base_outfit" mode). Full body visible and readable head to toe.
 Real environment, authentic light — same room, same light direction, same ambient mood will anchor all subsequent shots.
 iPhone photo quality. NOT a catalog. NOT a studio. NOT a white background.
 
 ⚠️ AVATAR BASE CLOTHING — HARD RULE:
 The clothing visible in the avatar/body reference is ONLY for identity and body proportions.
-Do NOT treat avatar base clothing as the first weekly outfit or as any item of the week.
-Do NOT carry over avatar reference clothing into this shot as the visible look.
-The person must wear the ACTUAL FIRST WEEKLY OUTFIT uploaded by the user — not the avatar's base clothes.
-If the first outfit reference is a dress, the person wears the dress. If it is a top + bottom, the person wears those pieces.
+Do NOT treat avatar base clothing as the base outfit or as any item of the week.
+The person must wear the BASE OUTFIT reference explicitly marked by the user — not the avatar's base clothes.
 
 ⛔ NO EXTERNAL BRANDING:
 Do NOT generate bags, boxes, or props with visible brand names.
@@ -1156,7 +1187,29 @@ If props appear, they must be plain, generic, unbranded.
 Maximum 1–2 neutral props in the scene. No clutter. No boxes or bags unless organic and unbranded.
 The space should feel real, tidy, and editorial — not a warehouse or a store.
 
-This REF0 establishes: identity, first weekly look, visual world (light, color, room mood) for the entire weekly set.`,
+REF0 establishes: identity, body proportions, lighting, room/world, session mood, AND the base outfit/styling for the week (explicitly marked by the user).`
+      : `SHOT: Full body of the person in a natural, real environment — this is the visual anchor for the entire weekly set.
+REF0 is NOT a weekly item shot. Do NOT use any uploaded weekly item (outfit, product, skincare, beauty, accessory) in this shot unless explicitly marked as base outfit.
+${weekRef0Info?.dominantType === 'outfits' ? 'This set is dominated by weekly outfits — REF0 must NOT wear or reference any of the uploaded weekly outfits. It establishes the neutral session anchor only, not a "first look".' : ''}
+${(weekRef0Info?.dominantType === 'products' || weekRef0Info?.dominantType === 'skincare' || weekRef0Info?.dominantType === 'beauty' || weekRef0Info?.dominantType === 'makeup' || weekRef0Info?.dominantType === 'tech') ? 'This set is dominated by products/skincare/beauty — REF0 must NOT show or hold any uploaded product. Clean room/world anchor only, no product in frame.' : ''}
+If the avatar reference shows the person in simple neutral clothing, that is acceptable ONLY to dress the avatar for the shot — it is NOT a weekly item and must NOT compete with or resemble any uploaded weekly item.
+Real environment, authentic light — same room, same light direction, same ambient mood will anchor all subsequent shots.
+iPhone photo quality. NOT a catalog. NOT a studio. NOT a white background.
+
+⚠️ AVATAR BASE CLOTHING — HARD RULE:
+The clothing visible in the avatar/body reference is ONLY for identity and body proportions.
+Do NOT treat avatar base clothing as a weekly item. Do NOT carry it over into other shots as a featured look.
+
+⛔ NO EXTERNAL BRANDING:
+Do NOT generate bags, boxes, or props with visible brand names.
+Do NOT invent Zara, H&M, Shein, Topshop or any retail brand.
+If props appear, they must be plain, generic, unbranded.
+
+🛍️ SCENE PROP BUDGET:
+Maximum 1–2 neutral props in the scene. No clutter. No boxes or bags unless organic and unbranded.
+The space should feel real, tidy, and editorial — not a warehouse or a store.
+
+REF0 establishes identity, body proportions, lighting, room/world, and session mood. REF0 is not a weekly item shot.`,
   };
 
   const anchorShotDesc = isUnboxing
@@ -1883,9 +1936,9 @@ export function buildVisualReferenceContract(
         role:        slotName,
         itemId:      `producto_${productIdx}`,
         instruction: isTechnicalOnly
-          ? `TECHNICAL REFERENCE: This image shows the product's packaging/texture/color for fidelity only — it is NOT a composition instruction. Reproduce the product faithfully (label, color, container shape) wherever it appears in the shot.`
+          ? `TECHNICAL REFERENCE: This image shows the product's packaging/texture/color for fidelity only — it is NOT a composition instruction. Reproduce the product faithfully (bottle/tube/jar shape, cap/dropper/pump, label, color, material, proportions, and formula identity) wherever it appears in the shot.`
           : isPrimary
-          ? `PRIMARY PRODUCT: This exact product must appear clearly visible and be the featured item in this shot. Preserve its packaging, label, color, and container shape exactly. Do NOT substitute another product.`
+          ? `PRIMARY PRODUCT — ACTIVE PRODUCT FOR THIS SHOT: This exact product is the active product for this shot. Preserve bottle/tube/jar shape, cap/dropper/pump, colors, label layout, material, proportions, and formula identity. Do NOT substitute another product. Do NOT invent extra products. Treat as product/skincare/beauty photography — never as jewelry or a wearable accessory.`
           : isSecondary
           ? `SECONDARY PRODUCT: This product appears alongside the primary item, naturally integrated — do not make it the focal point.`
           : `PRODUCT CONTEXT: Present if space allows, faithful to the reference.`,

@@ -15,8 +15,17 @@ export type HaulRefKind =
   | 'calzado'           // Calzado suelto (zapato, botín, sandalia, zapatilla)
   | 'pantys'            // Pantys / medias / leggings
   | 'bolso'             // Bolso / cartera / tote
-  | 'joyeria'           // Joyería (aros, collar, anillo, pulsera)
-  | 'accesorio'         // Accesorio genérico (cinturón, sombrero, gafas, etc.)
+  | 'joyeria'           // Joyería genérica (legacy — preferir los tipos desglosados de abajo)
+  | 'aros'              // Aros / pendientes
+  | 'collar'            // Collar / cadena
+  | 'anillo'            // Anillo
+  | 'pulsera'           // Pulsera / tobillera
+  | 'accesorio'         // Accesorio genérico (legacy — preferir los tipos desglosados de abajo)
+  | 'cinturon'          // Cinturón
+  | 'panoleta'          // Pañoleta / bufanda / pañuelo
+  | 'scrunchie'         // Scrunchie / cintillo / accesorio de pelo
+  | 'sombrero'          // Sombrero / gorra
+  | 'gafas'             // Gafas / lentes de sol
   | 'maquillaje'        // Maquillaje / labial / color-swatch (usado hoy solo por outfit_week)
   | 'skincare'          // Skincare / sérum / crema / producto de cuidado (usado hoy solo por outfit_week)
   | 'auto';             // Sin selección manual — usar heurística automática
@@ -1133,7 +1142,17 @@ export type WeeklyShotRole =
   | 'WEEK_DETAIL'                 // detalle de prenda / textura / cierre / bordado
   | 'WEEK_ON_THE_GO'              // en movimiento — caminando, saliendo
   | 'WEEK_FAVORITE'               // favorito de la semana — objeto o look
-  | 'WEEK_CLOSER';                // cierre del carrusel
+  | 'WEEK_CLOSER'                 // cierre del carrusel
+  // ── Roles dedicados a producto/skincare/beauty (patch quirúrgico) ──
+  // Nunca usar WEEK_ACCESSORY_* para dominantType products/skincare/beauty/tech/makeup —
+  // el producto no es un accesorio de outfit, tiene su propia gramática visual.
+  | 'WEEK_PRODUCT_OVERVIEW'       // todos los productos juntos — item-only
+  | 'WEEK_PRODUCT_HELD'           // producto sostenido frente a cámara
+  | 'WEEK_PRODUCT_DETAIL'         // detalle macro de envase/etiqueta/textura
+  | 'WEEK_PRODUCT_IN_USE'         // producto siendo aplicado/usado en la rutina
+  | 'WEEK_PRODUCT_TEXTURE'        // textura/formula del producto — swatch, gota, crema
+  | 'WEEK_PRODUCT_ROUTINE_STEP'   // paso de rutina — varios productos en secuencia
+  | 'WEEK_PRODUCT_CLOSER';        // cierre del carrusel — producto favorito
 
 // Tipo de ítem semanal — más granular que HaulItemKind para detectar tipo dominante
 export type WeeklyItemKind =
@@ -1232,6 +1251,10 @@ export interface WeeklyItemCoverage {
   isOnlyBackground:             boolean;
   isOnlyInOverview:             boolean;       // nunca hero, nunca detail, nunca integrado
   realCoverage:                 boolean;       // true solo si tiene al menos 1 aparición real no-background
+  // Patch quirúrgico Problema 5: por qué realCoverage quedó en false, cuando aplica.
+  // 'planned_but_not_routed'  → el shot plan lo asigna, pero su referencia nunca viajó a refsToPass.
+  // 'wrong_role_for_category' → el rol asignado no es compatible con el behaviorType del ítem.
+  coverageReason?:              'planned_but_not_routed' | 'wrong_role_for_category';
 }
 
 // Guardrail de dominancia visual — detecta si un ítem monopoliza la secuencia

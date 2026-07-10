@@ -127,8 +127,17 @@ function resolveHaulKind(manualKind: HaulRefKind, heuristicKind?: HaulItemKind):
     case 'calzado':        return 'footwear';
     case 'pantys':         return 'hosiery';
     case 'bolso':          return 'bag';
-    case 'joyeria':        return 'jewelry';
-    case 'accesorio':      return 'accessory';
+    case 'joyeria':
+    case 'aros':
+    case 'collar':
+    case 'anillo':
+    case 'pulsera':        return 'jewelry';
+    case 'accesorio':
+    case 'cinturon':
+    case 'panoleta':
+    case 'scrunchie':
+    case 'sombrero':
+    case 'gafas':          return 'accessory';
     case 'auto':
     default:
       // fallback a heurística si existe
@@ -160,6 +169,25 @@ function resolvedKindToPromptLabel(rk: HaulResolvedKind): string {
     unknown_visual_item: 'VISUAL ITEM (type auto-detected — inspect reference carefully)',
   };
   return labels[rk] ?? 'VISUAL ITEM';
+}
+
+// Refina el label genérico (jewelry/accessory) con la pieza específica que el usuario marcó
+// manualmente — patch UI: joyería/accesorios desglosados por pieza (aros, collar, anillo,
+// pulsera, cinturón, pañoleta, scrunchie, sombrero, gafas) en vez de categorías genéricas.
+const SPECIFIC_PIECE_LABEL: Partial<Record<HaulRefKind, string>> = {
+  aros:      'EARRINGS (specific piece — intimate framing on the ear)',
+  collar:    'NECKLACE / CHAIN (specific piece — intimate framing on the neck)',
+  anillo:    'RING (specific piece — intimate framing on the finger/hand)',
+  pulsera:   'BRACELET / ANKLET (specific piece — intimate framing on the wrist/ankle)',
+  cinturon:  'BELT (specific piece — worn at the waist or held as detail)',
+  panoleta:  'SCARF / PAÑOLETA (specific piece — worn around neck/head or held as detail)',
+  scrunchie: 'SCRUNCHIE / HAIR TIE (specific piece — worn on hair or wrist)',
+  sombrero:  'HAT / CAP (specific piece — worn on head or held as detail)',
+  gafas:     'SUNGLASSES / GLASSES (specific piece — worn on face or held as detail)',
+};
+
+function resolvedKindToPromptLabelForManualKind(rk: HaulResolvedKind, manualKind: HaulRefKind): string {
+  return SPECIFIC_PIECE_LABEL[manualKind] ?? resolvedKindToPromptLabel(rk);
 }
 
 // ── Descomposición semántica de look_completo ─────────────────
@@ -601,8 +629,17 @@ function haulRefKindToItemKind(refKind: HaulRefKind): HaulItemKind {
     case 'pantys':         return 'garment';
     case 'calzado':        return 'footwear';
     case 'bolso':          return 'bag';
-    case 'joyeria':        return 'jewelry';
-    case 'accesorio':      return 'accessory';
+    case 'joyeria':
+    case 'aros':
+    case 'collar':
+    case 'anillo':
+    case 'pulsera':        return 'jewelry';
+    case 'accesorio':
+    case 'cinturon':
+    case 'panoleta':
+    case 'scrunchie':
+    case 'sombrero':
+    case 'gafas':          return 'accessory';
     case 'auto':
     default:               return 'garment'; // fallback — será sobreescrito por heurística si es 'auto'
   }
@@ -684,7 +721,7 @@ export function buildHaulManifest(
     })();
 
     const resolvedKind = resolveHaulKind(manualKind, kind);
-    const promptKindLabel = resolvedKindToPromptLabel(resolvedKind);
+    const promptKindLabel = resolvedKindToPromptLabelForManualKind(resolvedKind, manualKind);
 
     // Etiqueta descriptiva según el tipo elegido
     const kindLabel: Record<HaulItemKind, string> = {
@@ -756,7 +793,7 @@ export function buildHaulManifest(
     // Prioridad: selector manual > análisis Gemini > heurística
     const accKind: HaulItemKind = (() => {
       if (manualKind === 'bolso')   return 'bag';
-      if (manualKind === 'joyeria') return 'jewelry';
+      if (manualKind === 'joyeria' || manualKind === 'aros' || manualKind === 'collar' || manualKind === 'anillo' || manualKind === 'pulsera') return 'jewelry';
       if (manualKind === 'calzado') return 'footwear';
       if (manualKind !== 'auto')    return 'accessory';
       if (visualAccRef && (visualAccRef.confidence === 'high' || visualAccRef.confidence === 'medium')) {
@@ -769,7 +806,7 @@ export function buildHaulManifest(
     })();
 
     const resolvedKind = resolveHaulKind(manualKind, accKind);
-    const promptKindLabel = resolvedKindToPromptLabel(resolvedKind);
+    const promptKindLabel = resolvedKindToPromptLabelForManualKind(resolvedKind, manualKind);
     const baseLabel = `Accesorio ${i + 1}`;
     const label = visualAccRef?.visualDescription
       ? `${baseLabel} — ${visualAccRef.visualDescription}`
