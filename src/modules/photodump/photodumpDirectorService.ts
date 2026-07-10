@@ -2189,8 +2189,15 @@ export async function generatePhotodumpShot(
   } else if (recipe === 'outfit_week') {
     // outfit_week: INDEX ROUTING OBLIGATORIO — cada shot recibe solo sus refs específicas
     // El plan está en shot.weeklyItemPlan (inyectado por weeklyRoleToDirective)
-    if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
-    if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
+    // WEEK_OVERVIEW es item-only por contrato (patch Fase 3): no debe recibir avatar/body
+    // como referencia de identidad, para no contradecir "NO PERSON, NO HANDS, NO FACE" del
+    // prompt. REF0 sí viaja (misma superficie/luz que el resto del set), pero el contrato
+    // visual (buildVisualReferenceContract) ya la marca como world-only por defecto.
+    const isItemOnlyOverview = shot.key === 'WEEK_OVERVIEW';
+    if (!isItemOnlyOverview) {
+      if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
+      if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
+    }
     refsToPass.push(ref0Url);
 
     const weekPlan: import('./types').WeeklyShotPlan | undefined = shot.weeklyItemPlan;
