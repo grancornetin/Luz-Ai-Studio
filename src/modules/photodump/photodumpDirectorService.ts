@@ -54,7 +54,7 @@ import {
 } from './recipes/outfitHaul';
 import {
   WEEKLY_SLOT_COVERAGE_MODE, buildWeeklySafeHpiBlock,
-  buildWeeklyManifest, weeklyRoleToDirective,
+  buildWeeklyManifest, weeklyRoleToDirective, generateOutfitWeekShot,
 } from './recipes/outfitWeek';
 import {
   parseOutfitBriefContext, buildPrepEnvironmentDirective, buildPrepContextOnlyBlock,
@@ -163,7 +163,7 @@ export function inferDestinationFromBrief(basePrompt: string): InferredDestinati
 
 // ── Item state plan → bloque de prompt ───────────────────────
 // Convierte el plan de estado por pieza en instrucciones para el modelo.
-function buildItemStatePlanBlock(plan: OutfitItemPlan[] | undefined, wearState: WearState): string {
+export function buildItemStatePlanBlock(plan: OutfitItemPlan[] | undefined, wearState: WearState): string {
   if (!plan || plan.length === 0) return '';
   const lines = ['🔒 OUTFIT ITEM STATE RULES (per-piece — binding):'];
   for (const p of plan) {
@@ -236,7 +236,7 @@ FORBIDDEN in this shot:
 // ── Bloque de contexto global del brief — inyectado en REF0 y shots de destino.
 // Para shots de preparación (ARRIVING, MIRROR, DETAIL, READY), usar extractShotLocationOverride.
 // Para outfit_haul: si wearingContextOnly=true, NO inyectar venueSignal (evita contaminar la locación).
-function extractBriefContextBlock(basePrompt: string, recipe?: string): string {
+export function extractBriefContextBlock(basePrompt: string, recipe?: string): string {
   const { timeSignal, venueSignal } = parseBriefContext(basePrompt);
 
   // Para haul y outfit_week: suprimir venueSignal como locación de captura.
@@ -273,7 +273,7 @@ function extractBriefContextBlock(basePrompt: string, recipe?: string): string {
   return lines.join('\n');
 }
 
-function extractShotLocationOverride(
+export function extractShotLocationOverride(
   basePrompt:       string,
   shotKey:          string,
   hasUserSceneRef:  boolean,  // true si el usuario subió scenePruebaRef o sceneRef
@@ -923,7 +923,7 @@ Maintain visual consistency with the overall set once established.`;
 
 // ── Asignar escena por posición en el arco narrativo ─────────
 // shot 0-indexed; sceneRefs[0] es la escena principal, [1] y [2] son alternativas
-function getSceneRefForShot(refs: PhotodumpRefs, shotIndex: number, totalShots: number): string | null {
+export function getSceneRefForShot(refs: PhotodumpRefs, shotIndex: number, totalShots: number): string | null {
   const extras = (refs.sceneRefs ?? []).filter(Boolean) as string[];
   if (extras.length === 0) return refs.sceneRef;
   // Dividir el arco en tramos iguales según cuántas escenas haya (máx 3 en total)
@@ -1276,7 +1276,7 @@ ${NEGATIVE_FULL}`;
 // Inyecta el análisis de REF0 con control de alcance.
 // sceneRole: 'prep' (anclar escena), 'destination' (anclar solo identidad, no escena/luz),
 //            undefined (comportamiento por defecto — full anchor)
-function injectREF0Analysis(ref0Analysis: any, sceneRole?: 'prep' | 'destination' | string): string {
+export function injectREF0Analysis(ref0Analysis: any, sceneRole?: 'prep' | 'destination' | string): string {
   if (!ref0Analysis) return '';
   try {
     const l = ref0Analysis.lighting ?? {};
@@ -1347,7 +1347,7 @@ IMPORTANT: Lock the WORLD STYLE, not the exact arrangement.
 //   emotion / candid / action    → story_support rotando por índice, priorizando face si person
 //
 // La rotación es por índice global del shot para que sea determinista por sesión.
-function pickFamilyForShot(
+export function pickFamilyForShot(
   beat:            MomentType,
   shotKey:         string,
   shotIndex:       number,
@@ -1437,7 +1437,7 @@ function pickFamilyForShot(
 //
 // storyDirective se omite: contiene texto de sistema ("Familia Story Support — alto valor...")
 // que no aporta guía creativa al modelo de imagen.
-function buildFamilyInjectBlock(family: StorySupportFamily): string {
+export function buildFamilyInjectBlock(family: StorySupportFamily): string {
   const lines: string[] = [
     '─────────────────────────────────────────────────────',
     '🎨 VISUAL FAMILY REFERENCE (use as creative direction — NOT as literal copy):',
@@ -1486,7 +1486,7 @@ export interface PhotodumpShotResult {
 // person_holding  → solo ARRIVING con persona sosteniendo; el resto evoluciona normalmente
 //
 // El bloque se inyecta solo en los shots donde el estilo sigue siendo relevante.
-function buildStyleCoherenceBlock(
+export function buildStyleCoherenceBlock(
   style:   OutfitPresentationStyle | undefined,
   shotKey: string,
 ): string {
@@ -1555,7 +1555,7 @@ interface BriefTagSlotInfo {
   charPos:  number;   // posición en el brief (para detectar cercanía)
 }
 
-interface BriefTagRefMap {
+export interface BriefTagRefMap {
   outfit:     string[];         // reordenados según orden de @outfitN en el brief
   accesorio:  string[];         // reordenados según orden de @accesorioN
   producto:   string[];         // reordenados según orden de @productoN
@@ -1584,7 +1584,7 @@ function getUrlArrayForType(type: string, refs: PhotodumpRefs): string[] {
   return [];
 }
 
-function buildBriefTagRefMap(brief: string, refs: PhotodumpRefs): BriefTagRefMap {
+export function buildBriefTagRefMap(brief: string, refs: PhotodumpRefs): BriefTagRefMap {
   const allOutfitUrls   = getUrlArrayForType('outfit',    refs);
   const allAccUrls      = getUrlArrayForType('accesorio', refs);
   const allProductoUrls = getUrlArrayForType('producto',  refs);
@@ -1735,7 +1735,7 @@ The image order passed to you in the references matches the slot numbers above.
 // Diseñado para cualquier receta que use index routing (outfit_week, outfit_haul, futuras).
 // NO hardcodea descripciones visuales — usa posición de la imagen como fuente de verdad.
 
-interface VisualRefContractEntry {
+export interface VisualRefContractEntry {
   refPosition: number;   // 1-based index en el array de refs
   role:        string;   // 'IDENTITY' | 'BODY' | 'WORLD' | 'OUTFIT_SLOT_N' | 'ACCESSORY_SLOT_N' | etc.
   instruction: string;   // qué debe hacer el modelo con esta imagen
@@ -1743,7 +1743,7 @@ interface VisualRefContractEntry {
   isForbiddenSource?: boolean;  // si es true, el modelo no puede tomar ropa de aquí
 }
 
-interface VisualReferenceContract {
+export interface VisualReferenceContract {
   entries:            VisualRefContractEntry[];
   primarySlotNames:   string[];   // 'OUTFIT_SLOT_3', 'ACCESSORY_SLOT_1', etc.
   secondarySlotNames: string[];
@@ -1753,7 +1753,7 @@ interface VisualReferenceContract {
   contractBlock:      string;     // bloque de texto listo para insertar en prompt
 }
 
-function buildVisualReferenceContract(
+export function buildVisualReferenceContract(
   refsToPass:        string[],
   weekPlan:          import('./types').WeeklyShotPlan | undefined,
   allOutfitUrls:     string[],
@@ -2002,6 +2002,18 @@ export async function generatePhotodumpShot(
   presentationStyle?: OutfitPresentationStyle,
   haulManifest?:      HaulManifest,
 ): Promise<PhotodumpShotResult> {
+
+  // ── Despacho a implementación dedicada por receta ──────────────────────────
+  // outfit_week tiene su propia copia (generateOutfitWeekShot en recipes/outfitWeek.ts),
+  // extraída y podada de este mismo cuerpo, con la contradicción de WEEK_OVERVIEW
+  // corregida. El cuerpo original de abajo queda intacto como fallback hasta validar
+  // en la app — no se ejecuta para outfit_week mientras este return esté activo.
+  if (recipe === 'outfit_week') {
+    return generateOutfitWeekShot(
+      shot, refs, ref0Url, ref0Analysis, basePrompt, narrative, destino,
+      sessionParams, sessionFamilies, totalShots, protagonist, presentationStyle,
+    );
+  }
 
   const aspectInstr = getAspectInstruction(destino);
   const isUnboxing  = recipe === 'unboxing';

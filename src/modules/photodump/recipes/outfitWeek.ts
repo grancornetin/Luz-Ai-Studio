@@ -12,8 +12,29 @@
  * (compartidos con outfit_check y outfit_haul) permanece en el archivo principal
  * por ahora — se separará cuando esas recetas también tengan su propio archivo.
  */
-import { MomentType, PhotodumpShotDirective, buildAvatarBaseClothingFingerprint } from './shared';
+import { imageApiService } from '../../../services/imageApiService';
+import {
+  PhotodumpRefs, PhotodumpNarrative, PhotodumpDestino, PhotodumpProtagonist,
+  NARRATIVE_META,
+} from '../types';
+import {
+  MomentType, PhotodumpShotDirective, buildAvatarBaseClothingFingerprint,
+  LOCK_SYSTEM, PARADIGM_RULE, NEGATIVE_SHORT,
+  GLOBAL_SCENE_LOCK, GLOBAL_AVATAR_SUPPRESSION, GLOBAL_WARDROBE_PHYSICS,
+  GLOBAL_ANATOMY_SAFETY, GLOBAL_VISUAL_FIDELITY, GLOBAL_NO_BRANDING,
+  injectWearStateBlock, injectCameraModeBlock,
+  getAspectRatio, getAspectInstruction, prepareRefs, getDestinationDescription,
+  OutfitPresentationStyle,
+} from './shared';
 import { resolveReferenceTagsFromBrief } from './briefTags';
+import { buildSafeOutfitFamilyStyleHint } from './outfitCheck';
+import {
+  PhotodumpShotResult, SessionFamilies,
+  buildBriefTagRefMap, buildVisualReferenceContract, pickFamilyForShot,
+  buildItemStatePlanBlock, extractBriefContextBlock, extractShotLocationOverride,
+  buildStyleCoherenceBlock, parseOutfitBriefContext, injectREF0Analysis,
+  inferDestinationFromBrief,
+} from '../photodumpDirectorService';
 
 // ── WeeklySlotCoverageMode — bloque de autoridad para outfit_week ─────────────
 //
@@ -1672,4 +1693,459 @@ export function weeklyRoleToDirective(
     cameraAngle:      desc.angle    ?? rot.angle,
     weeklyItemPlan:   sp,
   };
+}
+
+// ── generateOutfitWeekShot — copia dedicada de generatePhotodumpShot para outfit_week ──
+//
+// Extraído del cuerpo de generatePhotodumpShot (photodumpDirectorService.ts), podado a
+// solo lo que aplica a outfit_week (rutas de outfit_haul/outfit_check eliminadas — nunca
+// se ejecutaban aquí porque recipe siempre es 'outfit_week' en esta función).
+//
+// El original en photodumpDirectorService.ts queda intacto como fallback: el Director
+// despacha aquí primero (if recipe === 'outfit_week'), y solo cae al cuerpo genérico si
+// esta función no existiera. Cuando se valide en la app, el cuerpo original se desconecta.
+//
+// Corrección aplicada acá (no presente en el original): el bloque OVERVIEW RULES decía
+// "Person may appear partially (hands organizing) or not at all" — contradice el contrato
+// item-only de WEEK_OVERVIEW (ver más arriba en este archivo y el fix de routing de refs
+// en photodumpDirectorService.ts, patch Fase 3). Corregido a "NO person, no hands, no face".
+export async function generateOutfitWeekShot(
+  shot:               PhotodumpShotDirective,
+  refs:               PhotodumpRefs,
+  ref0Url:            string,
+  ref0Analysis:       any,
+  basePrompt:         string,
+  narrative:          PhotodumpNarrative,
+  destino:            PhotodumpDestino,
+  sessionParams:      { uid?: string; sessionId?: string },
+  sessionFamilies:    SessionFamilies = { storySupport: [], creatorAesthetic: [] },
+  totalShots:         number = 4,
+  protagonist:        PhotodumpProtagonist = 'person',
+  presentationStyle?: OutfitPresentationStyle,
+): Promise<PhotodumpShotResult> {
+
+  const aspectInstr = getAspectInstruction(destino);
+
+  // ── Brief tag → ref map ────────────────────────────────────────
+  // Solo se usa para el tagContext del prompt final (el routing real de refs de
+  // outfit_week usa weekPlan, no briefTagMap — ver más abajo).
+  const briefTagMap = basePrompt.includes('@') ? buildBriefTagRefMap(basePrompt, refs) : null;
+
+  // ── Budget de referencias por shot ───────────────────────────
+  const refsToPass: string[] = [];
+
+  // outfit_week: INDEX ROUTING OBLIGATORIO — cada shot recibe solo sus refs específicas
+  // El plan está en shot.weeklyItemPlan (inyectado por weeklyRoleToDirective)
+  // WEEK_OVERVIEW es item-only por contrato: no debe recibir avatar/body como referencia
+  // de identidad, para no contradecir "NO PERSON, NO HANDS, NO FACE" del prompt. REF0 sí
+  // viaja (misma superficie/luz que el resto del set), pero el contrato visual
+  // (buildVisualReferenceContract) ya la marca como world-only por defecto.
+  const isItemOnlyOverview = shot.key === 'WEEK_OVERVIEW';
+  if (!isItemOnlyOverview) {
+    if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
+    if (refs.bodyRef)   refsToPass.push(refs.bodyRef);
+  }
+  refsToPass.push(ref0Url);
+
+  const weekPlan: import('../types').WeeklyShotPlan | undefined = shot.weeklyItemPlan;
+  const allOutfitUrls  = [refs.outfitRef, ...(refs.outfitRefs  ?? [])].filter(Boolean) as string[];
+  const allAccUrls     = (refs.accesorioRefs ?? []).filter(Boolean) as string[];
+  // producto_N: buildWeeklyManifest() clasifica refs.productRef/productRefs con este
+  // prefijo (skincare/beauty/producto genérico que no cabe en el slot outfit/accesorio).
+  const allProductUrls = [refs.productRef, ...(refs.productRefs ?? [])].filter(Boolean) as string[];
+
+  const routeWeeklyItemId = (itemId: string) => {
+    if (itemId.startsWith('outfit_')) {
+      const idx = parseInt(itemId.replace('outfit_', ''), 10);
+      if (allOutfitUrls[idx]) refsToPass.push(allOutfitUrls[idx]);
+    } else if (itemId.startsWith('acc_')) {
+      const idx = parseInt(itemId.replace('acc_', ''), 10);
+      if (allAccUrls[idx]) refsToPass.push(allAccUrls[idx]);
+    } else if (itemId.startsWith('producto_')) {
+      const idx = parseInt(itemId.replace('producto_', ''), 10);
+      if (allProductUrls[idx]) refsToPass.push(allProductUrls[idx]);
+    }
+  };
+
+  if (weekPlan) {
+    // Routing explícito desde el plan: primary → urls de outfit/acc/producto
+    for (const itemId of weekPlan.primaryItemIds) routeWeeklyItemId(itemId);
+    for (const itemId of weekPlan.secondaryItemIds) routeWeeklyItemId(itemId);
+  } else {
+    // Fallback: primer outfit disponible (no debería ocurrir con el nuevo planner)
+    if (allOutfitUrls[0]) refsToPass.push(allOutfitUrls[0]);
+  }
+
+  // Escena opcional — solo si el usuario la subió
+  if (refs.sceneRef) refsToPass.push(refs.sceneRef);
+
+  // ── Visual Reference Contract ──────────────────────────────────
+  // Se construye DESPUÉS de que refsToPass está completo, así los números de posición son exactos.
+  const pairingsForContract = weekPlan?.explicitPairingsFromBrief?.map(p => ({
+    primaryItemId:   p.targetItemId,   // el outfit
+    secondaryItemId: p.sourceItemId,   // el accesorio
+    context:         p.rawText,
+  })) ?? [];
+
+  const weeklyVisualContract = buildVisualReferenceContract(
+    refsToPass,
+    weekPlan,
+    allOutfitUrls,
+    allAccUrls,
+    refs.avatarRef,
+    refs.bodyRef,
+    ref0Url,
+    pairingsForContract,
+    allProductUrls,
+  );
+
+  const momentLabel = {
+    candid:     '📱 CANDID — Captura espontánea sin pose ni artificio.',
+    context:    '🌍 CONTEXT — El mundo y ambiente de esta historia.',
+    emotion:    '💫 EMOTION — Una expresión o reacción genuina.',
+    detail:     '🔍 DETAIL — Un fragmento íntimo del mundo visible.',
+    texture:    '🧵 TEXTURE — Material, superficie, profundidad.',
+    action:     '⚡ ACTION — Alguien haciendo algo, en movimiento.',
+    atmosphere: '🌫 ATMOSPHERE — El mood: luz, espacio, silencio.',
+    reveal:     '👁 REVEAL — Un ángulo que muestra algo nuevo.',
+  }[shot.beat] ?? `📸 ${shot.beat.toUpperCase()}`;
+
+  const isFacelessShot = narrative === 'faceless';
+  // outfit_week usa WEEKLY_SLOT_COVERAGE_MODE en lugar del bloque narrativo genérico.
+  const shotModeBlock = WEEKLY_SLOT_COVERAGE_MODE;
+
+  // Family blocks: outfit_week usa safe hint filtrado, no el block narrativo completo.
+  const selectedFamily = pickFamilyForShot(
+    shot.beat, shot.key, shot.arcPosition - 1, sessionFamilies, protagonist,
+  );
+  const familyBlock = selectedFamily
+    ? buildSafeOutfitFamilyStyleHint(selectedFamily, shot.key ?? '', shot.cameraMode)
+    : '';
+
+  // HPI: outfit_week usa buildWeeklySafeHpiBlock — poses naturales de lifestyle,
+  // sin poses de fitness ni editorial extremo.
+  const shotHpiAllowed = shot.hpiAllowed;
+  const globalHpiBlock = !isFacelessShot
+    && !!refs.avatarRef
+    && shot.key !== 'OUTFIT_ARRIVING'
+    && shot.key !== 'OUTFIT_DETAIL'
+    && shot.key !== 'OUTFIT_DETAIL_WORN'
+    && shot.key !== 'ACCESSORY_CLOSEUP';
+
+  const hpiEligible = typeof shotHpiAllowed === 'boolean'
+    ? shotHpiAllowed && !!refs.avatarRef && !isFacelessShot
+    : globalHpiBlock;
+
+  let hpiBlock = '';
+  let hpiSource: 'disabled' | 'filtered_outfit_hpi' | 'raw_hpi_not_allowed' = 'disabled';
+  if (hpiEligible) {
+    hpiBlock  = buildWeeklySafeHpiBlock(shot.key ?? '', refs.gender ?? 'female');
+    hpiSource = hpiBlock ? 'filtered_outfit_hpi' : 'disabled';
+  }
+
+  // Bloque HPI de restricción activa cuando el modo NO admite poses corporales
+  const hpiBlockOff = !hpiEligible && !!refs.avatarRef && !isFacelessShot
+    ? `⚠️ HPI DISABLED FOR THIS SHOT:
+This shot format (${shot.cameraMode ?? shot.key}) does NOT involve a full-body person posing.
+Do NOT inject body poses, athletic gestures, or performance stances.
+If the person appears partially, their posture is incidental — not the subject of the shot.`
+    : '';
+
+  // Bloques estructurales de WearState y CameraMode
+  const wearStateBlock  = shot.wearState  ? injectWearStateBlock(shot.wearState)   : '';
+  const cameraModeBlock = shot.cameraMode ? injectCameraModeBlock(shot.cameraMode) : '';
+  const itemStatePlanBlock = buildItemStatePlanBlock(shot.itemStatePlan, shot.wearState ?? 'wearing_full_outfit');
+
+  // ── Shot identity block — WEEKLY EDIT ──────────────────────────
+  const roleLabel        = weekPlan?.role ?? shot.role ?? 'WEEKLY SHOT';
+  const visualIntent     = weekPlan?.visualWeightIntent ?? '';
+  const compositionMode  = weekPlan?.compositionMode    ?? '';
+  const isOverview       = roleLabel.includes('OVERVIEW');
+  const isDetail         = roleLabel.includes('DETAIL') || roleLabel.includes('ACCESSORY_DETAIL');
+  const isAccessory      = roleLabel.includes('ACCESSORY');
+  const isHero           = roleLabel === 'WEEK_LOOK_HERO' || roleLabel === 'WEEK_MIRROR_LOOK';
+  const semIntent        = weekPlan?.semanticIntentFromBrief;
+  const resolvedTags     = weekPlan?.resolvedTagsUsed?.length ? weekPlan.resolvedTagsUsed.join(', ') : '';
+  // IMPORTANTE: destination describe el uso del outfit (cena, oficina) — NO la locación de captura.
+  // Solo se inyecta como mood de vestimenta, nunca como locación física del shot.
+  const moodLine = semIntent?.mood || semIntent?.destination
+    ? `OUTFIT MOOD / INTENDED OCCASION (describes the CLOTHES, NOT the capture location): "${[semIntent.mood, semIntent.destination].filter(Boolean).join(' — ')}"`
+    : '';
+  const contractBlock = weeklyVisualContract?.contractBlock ?? '';
+  const primarySlots  = weeklyVisualContract?.primarySlotNames.join(', ') ?? '';
+  const fingerprint    = buildAvatarBaseClothingFingerprint();
+
+  const shotIdentityBlock = `SHOT IDENTITY — WEEKLY EDIT:
+- Face reference images: EXACT identity anchor — same bone structure, same hair, same skin tone. No beautification.
+${refs.bodyRef ? '- Body reference: establishes physique (build, proportions) ONLY. The clothing in this image is NOT a wardrobe item.' : ''}
+- World anchor image: establishes room, light quality, ambient mood, color temperature ONLY. Clothing from this image is NOT a wardrobe item.
+
+WEEKLY ROLE: ${roleLabel}
+VISUAL INTENT: ${visualIntent || `The primary wardrobe item for this shot is ${primarySlots || 'the assigned outfit'}.`}
+COMPOSITION MODE: ${compositionMode || 'authentic_natural'}
+${resolvedTags ? `TAGS FROM BRIEF: ${resolvedTags}` : ''}
+${moodLine}
+
+${contractBlock}
+
+${isHero ? `HERO SHOT RULES:
+- The person wears EXACTLY the garment assigned as PRIMARY in the contract above.
+- Look for the PRIMARY GARMENT image in the contract — that is the SOLE source of wardrobe truth.
+- DO NOT use clothing from identity/body/world images as the garment.
+- DO NOT mix in elements from other uploaded outfit images.
+- The garment in the PRIMARY slot is the ONLY outfit for this shot.${semIntent?.destination ? `\n- The style intention of this look is "${semIntent.destination}" — reflect this in body language, attitude, and styling ONLY. Do NOT change the capture environment or move to a ${semIntent.destination} location. The room stays as anchored by REF0.` : ''}` : ''}
+${isOverview ? `OVERVIEW RULES:
+- Show ALL weekly items arranged naturally together on a surface (bed, rack, chair, floor, table).
+- NO PERSON, NO HANDS, NO FACE, NO BODY PARTS visible in this shot — items only.
+- This is NOT a worn look. The person must NOT appear, even partially.
+- Arrange items in an editorial, organized but real way — NOT a catalog grid, NOT a collage.` : ''}
+${(isDetail || isAccessory) ? `ACCESSORY / DETAIL RULES:
+- The reference image shown in the contract is the EXACT piece. Reproduce faithfully — same shape, material, color.
+- Do NOT substitute another piece.
+- Do NOT invent a different accessory or combine it with another piece.
+${weekPlan?.integratedWithOutfitId ? `- This accessory must appear TOGETHER with the associated outfit in the contract — show both naturally worn, not as an isolated macro.` : ''}` : ''}
+
+⛔ FORBIDDEN WARDROBE — AVATAR BASE CLOTHING MUST NOT BE A STORY OUTFIT:
+The avatar/body reference photos are IDENTITY REFERENCES ONLY.
+The clothing on those photos (${fingerprint.summary}) is background data — NOT a content item.
+  • Do NOT dress the person in: ${fingerprint.topColor} ${fingerprint.topType} + ${fingerprint.bottomColor} ${fingerprint.bottomType}
+  • If this shot has an assigned primary outfit, the person MUST wear THAT uploaded outfit exclusively.
+  • The avatar's base wardrobe must NEVER substitute for a missing or unassigned outfit.
+  • Neutral footwear (${fingerprint.shoes}) is allowed ONLY if no footwear item was uploaded.
+
+⛔ NO EXTERNAL BRANDING — HARD RULE:
+Do NOT generate bags, boxes, or props with visible brand names or logos.
+If props appear: PLAIN, UNBRANDED, GENERIC only.
+
+🛍️ SCENE PROP BUDGET — WEEKLY:
+Maximum 1–3 neutral unbranded props per scene (exception: OVERVIEW role may show all weekly items).
+Space must feel clean, real, editorial — not a cluttered store room.
+Do NOT invent large props or furniture not established in REF0.
+
+⚠️ REFERENCE ROLE:
+Weekly outfit/accessory references are photos of the ITEMS — not a person wearing them.
+Use them to understand the piece; show the person wearing it naturally in this shot.
+References = identity constraints, NOT a visual checklist.
+ONE person maximum in any frame.
+
+NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${roleLabel}.`;
+
+  const ugcRealismBlock = `📱 iPhone WEEKLY EDIT REALISM (NON-NEGOTIABLE):
+You are capturing a real weekly fashion edit on an iPhone — "my outfits / favorites of the week."
+REQUIRED: natural window light, slight handheld imperfection, real room texture, real skin tone.
+REQUIRED: the space feels lived-in and real — a real room or real environment, not a studio set.
+
+FORBIDDEN:
+- editorial fashion shoot aesthetics
+- high fashion campaign lighting
+- beauty filters or skin retouching
+- studio backdrop or artificial softbox
+- catalog or brand-shoot composition
+- generic white background
+- external brand logos (Zara, H&M, Nike, etc.)
+- invented retail packaging or shopping bags with brand names
+- props not established in REF0 (unless the shot role requires a neutral surface)
+
+This is a real creator sharing their weekly looks and favorites on social media.
+The image should feel authentic, lived-in, and carouseable — not an ad.`;
+
+  const briefContextBlock = extractBriefContextBlock(basePrompt, 'outfit_week');
+  const hasUserSceneRef = !!(refs.scenePruebaRef || refs.sceneRef);
+  const destDescForShot = getDestinationDescription(inferDestinationFromBrief(basePrompt));
+  // outfit_week no setea shot.sceneLockPolicy (eso es de outfit_check), así que en el
+  // original siempre cae en la rama extractShotLocationOverride — que a su vez usa
+  // PREP_SHOT_KEYS (claves OUTFIT_*, exclusivas de outfit_check) y por lo tanto siempre
+  // devuelve '' para shotKeys WEEK_*. Calculado explícito para no depender de esa
+  // suposición si PREP_SHOT_KEYS cambia en el futuro.
+  const shotLocationOverride = extractShotLocationOverride(basePrompt, shot.key ?? '', hasUserSceneRef);
+  const styleCoherenceBlock  = buildStyleCoherenceBlock(presentationStyle, shot.key);
+
+  // outfit_check-only blocks — vacíos para outfit_week
+  const prepContextBlock      = '';
+  const ref0HardLock          = '';
+  const sceneContinuityBlock  = '';
+  const adaptiveClosureBlock  = '';
+
+  // ── WEARING CONTEXT SEMANTICS — outfit_week ────────────────────────────────
+  // Evita que términos de ocasión ("cena", "oficina") contaminen el fondo de captura.
+  const haulLocationSemanticsBlock = (() => {
+    const ctx = parseOutfitBriefContext(basePrompt);
+    const isWearingOnly = ctx.wearingContextOnly === true;
+    const sessionType = 'weekly outfit edit';
+    const wearingOnlyWarning = isWearingOnly
+      ? `
+⚠️ CRITICAL — OCCASION ≠ CAPTURE LOCATION:
+The brief mentions "${ctx.wearingContextStyleLabel ?? 'this occasion'}". This describes what the CLOTHES are for — NOT where this ${sessionType} is filmed.
+The user is shooting their ${sessionType} at HOME. The clothes happen to be ${ctx.wearingContextStyleLabel ?? 'occasion-appropriate'}.
+DO NOT move the session into a ${ctx.wearingContextStyleLabel ?? 'specific venue'}.
+DO NOT generate: restaurant interior, candlelit table, office lobby, event venue, airport terminal, beach, or any destination-specific environment.
+The clothes evoke an occasion — the ROOM is still a bedroom / dressing area / home space anchored by REF0.`
+      : '';
+    return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏠 CAPTURE LOCATION LOCK (BINDING — DO NOT IGNORE):
+This ${sessionType} is filmed in a HOME / PERSONAL SPACE: bedroom, dressing room, mirror area, or closet.
+The brief may mention occasions (dinner, office, beach, travel) — these describe WHERE THE CLOTHES WILL BE WORN, not where this session is filmed.
+${wearingOnlyWarning}
+FORBIDDEN BACKGROUNDS (unless the user explicitly says "film it at X"):
+❌ restaurant interior, candlelit dining room, bar, or any dining venue
+❌ office lobby, coworking, corporate corridor, or workplace
+❌ event venue, gala hall, cocktail reception space
+❌ airport terminal or travel setting
+❌ beach, pool, or outdoor destination
+❌ any location invented from the brief's occasion keywords
+ALWAYS stay in the REF0 environment — that is the ONLY allowed capture location.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+  })();
+
+  // ── Global Stability Blocks ─────────────────────────────────────
+  const hasPersonInShot = !isFacelessShot;
+  const isOverviewShotFlag = (shot.key ?? '').includes('OVERVIEW') || (shot.key ?? '').includes('ANCHOR') || (shot.key ?? '').includes('INTRO');
+  const hasGarmentSlot  = !isOverviewShotFlag;
+
+  const globalSceneLock: string = GLOBAL_SCENE_LOCK;
+  const globalAvatarSuppression = hasPersonInShot ? GLOBAL_AVATAR_SUPPRESSION : '';
+  const globalWardrobePhysics   = (hasPersonInShot && hasGarmentSlot) ? GLOBAL_WARDROBE_PHYSICS : '';
+  const globalAnatomySafety     = hasPersonInShot ? GLOBAL_ANATOMY_SAFETY : '';
+  const globalVisualFidelity    = hasGarmentSlot ? GLOBAL_VISUAL_FIDELITY : '';
+  const globalNoBranding        = GLOBAL_NO_BRANDING;
+
+  const prompt = `${LOCK_SYSTEM}
+
+${PARADIGM_RULE}
+
+${shotModeBlock}
+
+${briefContextBlock}
+
+${prepContextBlock}
+
+${shotLocationOverride}
+
+${ref0HardLock}
+
+${sceneContinuityBlock}
+
+${adaptiveClosureBlock}
+
+${haulLocationSemanticsBlock}
+
+${styleCoherenceBlock}
+
+${wearStateBlock}
+
+${itemStatePlanBlock}
+
+${cameraModeBlock}
+
+${hpiBlockOff}
+
+${injectREF0Analysis(ref0Analysis, shot.narrativeStage)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📸 IMAGE ${shot.arcPosition} · ${momentLabel}
+
+STORY CONTEXT: "${basePrompt}"
+NARRATIVE: ${NARRATIVE_META[narrative].label}
+FORMAT: ${aspectInstr}
+
+${briefTagMap?.tagContext ?? ''}
+
+${familyBlock}
+
+${hpiBlock}
+
+SHOT ROLE: ${shot.role}
+SHOT PURPOSE: ${shot.purpose}
+
+FRAMING: ${shot.framing}
+COMPOSITION: ${shot.composition}
+CAMERA ANGLE: ${shot.cameraAngle}
+
+REQUIRED ELEMENTS (must be present):
+${shot.requiredElements.map(e => `- ${e}`).join('\n')}
+
+FORBIDDEN (automatic failure if present):
+${shot.forbiddenElements.map(e => `❌ ${e}`).join('\n')}
+
+VISUAL VARIATION OPTIONS (choose the most fitting for this scene):
+${shot.variationSpace.map((v, i) => `${i + 1}. ${v}`).join('\n')}
+
+${shotIdentityBlock}
+- This shot is part of a STORY — it must connect to the same narrative world established in REF0.
+
+${ugcRealismBlock}
+
+${globalSceneLock}
+
+${globalAvatarSuppression}
+
+${globalWardrobePhysics}
+
+${globalAnatomySafety}
+
+${globalVisualFidelity}
+
+${globalNoBranding}
+
+🚫 ONE SINGLE IMAGE:
+Generate ONE photo. No collage. No grid. No side by side. No reference board.
+Do NOT paste reference images into the output. Use them only as visual constraints.
+
+${NEGATIVE_SHORT}`;
+
+  const preparedRefs = await prepareRefs(refsToPass);
+  const imageUrl = await imageApiService.generateImage({
+    prompt,
+    negative:        NEGATIVE_SHORT,
+    referenceImages: preparedRefs,
+    aspectRatio:     getAspectRatio(destino),
+    modelId:         'gemini',
+    uid:             sessionParams.uid,
+    sessionId:       sessionParams.sessionId,
+    module:          'photodump',
+    moduleLabel:     'Photodump Mode',
+    shotIndex:       shot.arcPosition,
+    totalShots:      6,
+    metadata:        { role: shot.role, beat: shot.beat, narrative },
+  });
+
+  return {
+    imageUrl,
+    prompt,
+    refsCount:      preparedRefs.length,
+    hpiSource,
+    familyBlockMode: familyBlock ? 'literal_prompt_block' : 'disabled',
+    poseIntent:     shot.poseIntent,
+    detailKind:     shot.detailKind,
+    continuityMode: shot.continuityMode,
+    environmentAffordances: shot.environmentAffordances,
+    closureReason:  shot.closureReason,
+    globalStabilityBlocks: {
+      sceneWorldPlanApplied:              true,
+      sceneFingerprintLockApplied:        globalSceneLock !== '',
+      avatarBaseClothingSuppressedGlobally:   globalAvatarSuppression !== '',
+      avatarBaseClothingSuppressedInStoryShots: hasPersonInShot,
+      wardrobePhysicalIntegrationApplied: globalWardrobePhysics !== '',
+      longFootwearIntegrationChecked:     globalWardrobePhysics !== '',
+      layeringConsistencyChecked:         globalWardrobePhysics !== '',
+      anatomySafetyApplied:               globalAnatomySafety !== '',
+      mirrorConsistencyApplied:           globalAnatomySafety !== '',
+      visualItemFidelityApplied:          globalVisualFidelity !== '',
+      externalBrandingForbiddenApplied:   true,
+      readableTextForbiddenApplied:       true,
+      avatarBaseClothingContaminationRisk: false,
+      ref0UsedAsWardrobeSource:            false,
+      extraLimbRisk:                       false,
+      mirrorReflectionRisk:                false,
+      externalBrandTextRisk:               false,
+      primaryItemFidelityRisk:             false,
+      colorMaterialDriftRisk:              false,
+      wardrobeIntegrationRisk:             false,
+    },
+    weeklySlotCoverageMode:                      true,
+    creativePlannerReducedForOutfitWeek:         true,
+    destinationInferenceDisabledForOutfitWeek:   true,
+    hpiCannotOverrideSlotCoverage:                true,
+    briefContextVenueSignalSuppressedForWeek:    true,
+  } as any;
 }
