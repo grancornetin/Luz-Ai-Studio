@@ -17,6 +17,8 @@ export type HaulRefKind =
   | 'bolso'             // Bolso / cartera / tote
   | 'joyeria'           // Joyería (aros, collar, anillo, pulsera)
   | 'accesorio'         // Accesorio genérico (cinturón, sombrero, gafas, etc.)
+  | 'maquillaje'        // Maquillaje / labial / color-swatch (usado hoy solo por outfit_week)
+  | 'skincare'          // Skincare / sérum / crema / producto de cuidado (usado hoy solo por outfit_week)
   | 'auto';             // Sin selección manual — usar heurística automática
 
 export type HaulItemKind =
@@ -1305,6 +1307,9 @@ export interface WeeklyShotPlan {
   activeCategory?: WeeklyItemKind;
   // Tipo de comportamiento del ítem activo para routing de refs
   behaviorType?: 'outfit' | 'garment' | 'footwear' | 'bag' | 'jewelry' | 'makeup_color' | 'makeup_product' | 'skincare_product' | 'beauty_product' | 'product' | 'unknown';
+  // true = la ref del ítem primario es packaging/textura/swatch — usarla solo para fidelidad
+  // visual (color, forma de envase, label), no como instrucción de composición del shot
+  technicalReferenceOnly?: boolean;
 }
 
 export interface WeeklyManifest {

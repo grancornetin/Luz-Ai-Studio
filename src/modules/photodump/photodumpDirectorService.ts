@@ -1762,6 +1762,7 @@ function buildVisualReferenceContract(
   bodyRef?:          string,
   ref0Url?:          string,
   pairingsFromBrief?: { primaryItemId: string; secondaryItemId: string; context?: string }[],
+  allProductUrls?:   string[],
 ): VisualReferenceContract {
   const entries: VisualRefContractEntry[] = [];
 
@@ -1866,6 +1867,28 @@ function buildVisualReferenceContract(
           : isSecondary
           ? `INTEGRATED ACCESSORY: This piece appears alongside the primary outfit. Show it naturally worn or held — not as a macro close-up.`
           : `ACCESSORY CONTEXT: Present if space allows.`,
+      });
+      continue;
+    }
+
+    // Buscar en productos (skincare/beauty/producto genérico — patch Fase 4)
+    const productIdx = (allProductUrls ?? []).indexOf(url);
+    if (productIdx >= 0) {
+      const slotName    = `PRODUCT_SLOT_${productIdx + 1}`;
+      const isPrimary   = weekPlan?.primaryItemIds.includes(`producto_${productIdx}`) ?? false;
+      const isSecondary = weekPlan?.secondaryItemIds.includes(`producto_${productIdx}`) ?? false;
+      const isTechnicalOnly = !!weekPlan?.technicalReferenceOnly && isPrimary;
+      entries.push({
+        refPosition: pos,
+        role:        slotName,
+        itemId:      `producto_${productIdx}`,
+        instruction: isTechnicalOnly
+          ? `TECHNICAL REFERENCE: This image shows the product's packaging/texture/color for fidelity only — it is NOT a composition instruction. Reproduce the product faithfully (label, color, container shape) wherever it appears in the shot.`
+          : isPrimary
+          ? `PRIMARY PRODUCT: This exact product must appear clearly visible and be the featured item in this shot. Preserve its packaging, label, color, and container shape exactly. Do NOT substitute another product.`
+          : isSecondary
+          ? `SECONDARY PRODUCT: This product appears alongside the primary item, naturally integrated — do not make it the focal point.`
+          : `PRODUCT CONTEXT: Present if space allows, faithful to the reference.`,
       });
       continue;
     }
@@ -2203,29 +2226,29 @@ export async function generatePhotodumpShot(
     const weekPlan: import('./types').WeeklyShotPlan | undefined = shot.weeklyItemPlan;
     const allOutfitUrls  = [refs.outfitRef, ...(refs.outfitRefs  ?? [])].filter(Boolean) as string[];
     const allAccUrls     = (refs.accesorioRefs ?? []).filter(Boolean) as string[];
+    // producto_N: buildWeeklyManifest() clasifica refs.productRef/productRefs con este
+    // prefijo (skincare/beauty/producto genérico que no cabe en el slot outfit/accesorio).
+    const allProductUrls = [refs.productRef, ...(refs.productRefs ?? [])].filter(Boolean) as string[];
+
+    const routeWeeklyItemId = (itemId: string) => {
+      if (itemId.startsWith('outfit_')) {
+        const idx = parseInt(itemId.replace('outfit_', ''), 10);
+        if (allOutfitUrls[idx]) refsToPass.push(allOutfitUrls[idx]);
+      } else if (itemId.startsWith('acc_')) {
+        const idx = parseInt(itemId.replace('acc_', ''), 10);
+        if (allAccUrls[idx]) refsToPass.push(allAccUrls[idx]);
+      } else if (itemId.startsWith('producto_')) {
+        const idx = parseInt(itemId.replace('producto_', ''), 10);
+        if (allProductUrls[idx]) refsToPass.push(allProductUrls[idx]);
+      }
+    };
 
     if (weekPlan) {
-      // Routing explícito desde el plan: primary → urls de outfit/acc
+      // Routing explícito desde el plan: primary → urls de outfit/acc/producto
       // Primaries: ítems protagonistas del shot
-      for (const itemId of weekPlan.primaryItemIds) {
-        if (itemId.startsWith('outfit_')) {
-          const idx = parseInt(itemId.replace('outfit_', ''), 10);
-          if (allOutfitUrls[idx]) refsToPass.push(allOutfitUrls[idx]);
-        } else if (itemId.startsWith('acc_')) {
-          const idx = parseInt(itemId.replace('acc_', ''), 10);
-          if (allAccUrls[idx]) refsToPass.push(allAccUrls[idx]);
-        }
-      }
+      for (const itemId of weekPlan.primaryItemIds) routeWeeklyItemId(itemId);
       // Secondaries: ítems de integración (accesorio + outfit compatible)
-      for (const itemId of weekPlan.secondaryItemIds) {
-        if (itemId.startsWith('outfit_')) {
-          const idx = parseInt(itemId.replace('outfit_', ''), 10);
-          if (allOutfitUrls[idx]) refsToPass.push(allOutfitUrls[idx]);
-        } else if (itemId.startsWith('acc_')) {
-          const idx = parseInt(itemId.replace('acc_', ''), 10);
-          if (allAccUrls[idx]) refsToPass.push(allAccUrls[idx]);
-        }
-      }
+      for (const itemId of weekPlan.secondaryItemIds) routeWeeklyItemId(itemId);
     } else {
       // Fallback: primer outfit disponible (no debería ocurrir con el nuevo planner)
       if (allOutfitUrls[0]) refsToPass.push(allOutfitUrls[0]);
@@ -2328,8 +2351,9 @@ export async function generatePhotodumpShot(
   const weeklyVisualContract: VisualReferenceContract | null = (() => {
     if (recipe !== 'outfit_week') return null;
     const weekPlan = shot.weeklyItemPlan as import('./types').WeeklyShotPlan | undefined;
-    const allOutfitUrls = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
-    const allAccUrls    = (refs.accesorioRefs ?? []).filter(Boolean) as string[];
+    const allOutfitUrls  = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
+    const allAccUrls     = (refs.accesorioRefs ?? []).filter(Boolean) as string[];
+    const allProductUrls = [refs.productRef, ...(refs.productRefs ?? [])].filter(Boolean) as string[];
 
     // Pairings del brief para el contrato visual
     const pairingsForContract = weekPlan?.explicitPairingsFromBrief?.map(p => ({
@@ -2347,6 +2371,7 @@ export async function generatePhotodumpShot(
       refs.bodyRef,
       ref0Url,
       pairingsForContract,
+      allProductUrls,
     );
   })();
 

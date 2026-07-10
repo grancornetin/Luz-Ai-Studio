@@ -96,6 +96,18 @@ export const HAUL_REF_OPTIONS: HaulRefOption[] = [
     emoji:       '🕶',
     description: 'Accesorio genérico: cinturón, sombrero, gorra, gafas, bufanda, pañuelo.',
   },
+  {
+    value:       'maquillaje',
+    label:       'Maquillaje',
+    emoji:       '💄',
+    description: 'Labial, sombra, base u otro producto de maquillaje.',
+  },
+  {
+    value:       'skincare',
+    label:       'Skincare',
+    emoji:       '🧴',
+    description: 'Sérum, crema u otro producto de cuidado de la piel.',
+  },
 ];
 
 // Mapa rápido para lookup

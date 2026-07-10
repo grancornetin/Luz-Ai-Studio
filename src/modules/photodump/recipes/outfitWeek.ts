@@ -203,6 +203,8 @@ function classifyWeeklyItemFromSlot(
       case 'bolso':      kind = 'bag';         accessoryEligible = true; canBeIntegratedWithOutfit = true; break;
       case 'joyeria':    kind = 'jewelry';     accessoryEligible = true; canBeIntegratedWithOutfit = true; break;
       case 'accesorio':  kind = 'accessory';   accessoryEligible = true; canBeIntegratedWithOutfit = true; break;
+      case 'maquillaje': kind = 'makeup';      accessoryEligible = true; canBeIntegratedWithOutfit = true; label = `Maquillaje ${slotIndex + 1}`; break;
+      case 'skincare':   kind = 'skincare';    accessoryEligible = true; canBeIntegratedWithOutfit = true; label = `Skincare ${slotIndex + 1}`; break;
       case 'varios_items': kind = 'outfit_set'; tryOnEligible = true; break;
       default:           kind = 'outfit_set';  tryOnEligible = true;
     }
@@ -214,6 +216,8 @@ function classifyWeeklyItemFromSlot(
       case 'bolso':      kind = 'bag';      label = `Bolso ${slotIndex + 1}`;    break;
       case 'calzado':    kind = 'footwear'; label = `Calzado ${slotIndex + 1}`;  break;
       case 'joyeria':    kind = 'jewelry';  label = `Joyería ${slotIndex + 1}`;  break;
+      case 'maquillaje': kind = 'makeup';   label = `Maquillaje ${slotIndex + 1}`; break;
+      case 'skincare':   kind = 'skincare'; label = `Skincare ${slotIndex + 1}`; break;
       default:           kind = 'accessory'; label = `Accesorio ${slotIndex + 1}`;
     }
   } else {
