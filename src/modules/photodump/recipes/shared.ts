@@ -14,7 +14,7 @@ import {
   PhotodumpNarrative, PhotodumpProtagonist, PhotodumpDestino,
   WearState, CameraMode,
   OutfitItemPlan, SceneLockPolicy,
-  OutfitComposition,
+  OutfitComposition, InferredDestination,
   PoseIntent, EnvironmentAffordance, SceneContinuityMode,
 } from '../types';
 import { StorySupportFamily } from '../photodumpIntelligence';
@@ -996,4 +996,65 @@ export function getAspectInstruction(destino: PhotodumpDestino): string {
   if (destino === 'feed')    return 'Compose for 4:5 portrait (Instagram feed). Subject fills 70-80% of frame.';
   if (destino === 'stories') return 'Compose for 9:16 full vertical (Stories/TikTok). Centered with breathing room top/bottom.';
   return 'Compose for 9:16 full vertical (TikTok). Bold framing, strong visual impact.';
+}
+
+// ── Avatar Base Clothing Fingerprint — Global (patch v4) ──────
+// Genera un fingerprint textual de la ropa del avatar para usarlo como negative constraint.
+// Se llama antes de generar prompts en cualquier receta donde avatarRef existe.
+// El fingerprint se inyecta en cada story shot como "FORBIDDEN WARDROBE".
+
+export function buildAvatarBaseClothingFingerprint(
+  avatarDescription?: string,
+): import('../types').AvatarBaseClothingFingerprint {
+  // Sin análisis visual — generamos un fingerprint estándar conservador
+  // que cubre el caso más común: bodysuit/top negro + jeans + zapatillas.
+  // Cuando tengamos análisis visual del avatar, se puede enriquecer aquí.
+  const topColor    = 'black';
+  const topType     = 'fitted bodysuit, long sleeve top, or base shirt';
+  const bottomColor = 'light blue or mid-tone';
+  const bottomType  = 'wide leg jeans or casual pants';
+  const shoes       = 'white sneakers or generic neutral footwear';
+
+  const summary = [
+    `black fitted bodysuit/top`,
+    `${bottomColor} ${bottomType}`,
+    shoes ? shoes : '',
+  ].filter(Boolean).join(' + ');
+
+  return { topColor, topType, bottomColor, bottomType, shoes, summary };
+}
+
+// Construye el bloque de texto "FORBIDDEN WARDROBE" para inyectar en prompts de story shots.
+export function buildAvatarBaseClothingNegativeBlock(
+  fingerprint: import('../types').AvatarBaseClothingFingerprint,
+): string {
+  return `
+⛔ FORBIDDEN WARDROBE — AVATAR BASE CLOTHING MUST NOT APPEAR AS A STORY OUTFIT:
+The avatar/body reference photos show the person wearing their own base clothing.
+That base clothing is IDENTITY DATA ONLY — it is NOT a content item, NOT a weekly look, NOT a haul piece.
+
+DO NOT dress the avatar in this base clothing as any story outfit:
+  • Do NOT use: ${fingerprint.summary}
+  • Do NOT carry over the avatar's base top (${fingerprint.topColor} ${fingerprint.topType}) as a story outfit
+  • Do NOT carry over the avatar's base bottoms (${fingerprint.bottomColor} ${fingerprint.bottomType}) as a story look
+  • If ${fingerprint.shoes} appears as shoes, it is acceptable as neutral footwear ONLY if no footwear item was uploaded
+
+The story outfit MUST come from the uploaded outfit/garment references.
+If a shot has an explicit primary outfit item, use THAT item's clothing — not the avatar's base wardrobe.
+`.trim();
+}
+
+// Descripción textual del destino inferido para inyectar en el prompt del DESTINATION shot.
+// Usada como fallback legado por el ensamblador compartido para cualquier receta que no
+// use el router semántico completo de outfit_check (parseOutfitBriefContext).
+export function getDestinationDescription(dest: InferredDestination): string {
+  switch (dest) {
+    case 'opera_theatre':   return 'opera house or theatre — grand foyer, marble floors, ornate chandeliers, velvet curtains, formal elegance';
+    case 'cocktail_gala':   return 'upscale event venue — elegant space, soft golden lighting, formal gathering atmosphere';
+    case 'restaurant_dinner': return 'elegant restaurant — warm candlelight, intimate ambiance, beautifully set table, evening atmosphere';
+    case 'beach_outdoor':   return 'beach or outdoor setting — natural light, sand or open sky, relaxed and open atmosphere';
+    case 'travel_transit':  return 'airport terminal or travel setting — architectural space, natural light, sense of movement and departure';
+    case 'generic_outing':  return 'urban evening setting — warm city lights, street or venue exterior, nightlife ambiance';
+    default:                return 'lifestyle setting appropriate for the outfit and brief context';
+  }
 }

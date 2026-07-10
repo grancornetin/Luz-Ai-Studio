@@ -20,9 +20,13 @@ import {
 import { StorySupportFamily } from '../photodumpIntelligence';
 import {
   PhotodumpShotDirective, MomentType, OutfitPresentationStyle, SceneFingerprint,
-  resolveWearState, resolveCameraMode,
+  resolveWearState, resolveCameraMode, getDestinationDescription,
 } from './shared';
-import { getDestinationDescription, PREP_SHOT_KEYS } from '../photodumpDirectorService';
+
+// Para shots de PREPARACIÓN en outfit_check: ancla la locación del shot
+// al espacio de REF0 (nunca al venue del brief).
+// La ópera/gala/restaurante es el destino — no donde la persona se prueba el outfit.
+export const PREP_SHOT_KEYS = new Set(['OUTFIT_ARRIVING', 'OUTFIT_MIRROR_CHECK', 'OUTFIT_DETAIL', 'OUTFIT_DETAIL_WORN', 'OUTFIT_READY', 'OUTFIT_SECOND_ANGLE']);
 
 export function parseOutfitBriefContext(basePrompt: string): OutfitBriefContext {
   const lower = basePrompt.toLowerCase();

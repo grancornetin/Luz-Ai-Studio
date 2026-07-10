@@ -12,10 +12,8 @@
  * (compartidos con outfit_check y outfit_haul) permanece en el archivo principal
  * por ahora — se separará cuando esas recetas también tengan su propio archivo.
  */
-import { MomentType, PhotodumpShotDirective } from './shared';
-import {
-  resolveReferenceTagsFromBrief, buildAvatarBaseClothingFingerprint,
-} from '../photodumpDirectorService';
+import { MomentType, PhotodumpShotDirective, buildAvatarBaseClothingFingerprint } from './shared';
+import { resolveReferenceTagsFromBrief } from './briefTags';
 
 // ── WeeklySlotCoverageMode — bloque de autoridad para outfit_week ─────────────
 //
