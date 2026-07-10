@@ -385,6 +385,63 @@ function getWeeklyRoleTemplate(
     ].slice(0, count) as import('../types').WeeklyShotRole[];
   }
 
+  if (dominant === 'footwear') {
+    // Template: calzado de la semana — overview → held (POV/worn) → detail → on the go → closer
+    return [
+      'WEEK_OVERVIEW',
+      'WEEK_ACCESSORY_WORN',
+      'WEEK_ACCESSORY_DETAIL',
+      'WEEK_ACCESSORY_HELD',
+      'WEEK_ON_THE_GO',
+      'WEEK_ACCESSORY_WORN',
+      'WEEK_ACCESSORY_DETAIL',
+      'WEEK_CLOSER',
+    ].slice(0, count) as import('../types').WeeklyShotRole[];
+  }
+
+  if (dominant === 'jewelry') {
+    // Template: joyería de la semana — overview → worn → detail macro → held → closer
+    return [
+      'WEEK_OVERVIEW',
+      'WEEK_ACCESSORY_WORN',
+      'WEEK_ACCESSORY_DETAIL',
+      'WEEK_ACCESSORY_WORN',
+      'WEEK_ACCESSORY_HELD',
+      'WEEK_ACCESSORY_DETAIL',
+      'WEEK_ACCESSORY_WORN',
+      'WEEK_CLOSER',
+    ].slice(0, count) as import('../types').WeeklyShotRole[];
+  }
+
+  if (dominant === 'beauty' || dominant === 'skincare') {
+    // Template: beauty/skincare de la semana — overview → held (hero) → detail → en uso → closer
+    return [
+      'WEEK_OVERVIEW',
+      'WEEK_ACCESSORY_HELD',
+      'WEEK_DETAIL',
+      'WEEK_STYLING_PROCESS',
+      'WEEK_ACCESSORY_HELD',
+      'WEEK_DETAIL',
+      'WEEK_STYLING_PROCESS',
+      'WEEK_CLOSER',
+    ].slice(0, count) as import('../types').WeeklyShotRole[];
+  }
+
+  if (dominant === 'products' || dominant === 'tech') {
+    // Template: productos genéricos/tech de la semana — overview → held (hero) → detail → contexto → closer
+    // Scaffold mínimo — sin gramática de "en uso" (no aplica a productos genéricos como sí a beauty).
+    return [
+      'WEEK_OVERVIEW',
+      'WEEK_ACCESSORY_HELD',
+      'WEEK_DETAIL',
+      'WEEK_ACCESSORY_HELD',
+      'WEEK_FAVORITE',
+      'WEEK_ACCESSORY_HELD',
+      'WEEK_DETAIL',
+      'WEEK_CLOSER',
+    ].slice(0, count) as import('../types').WeeklyShotRole[];
+  }
+
   // mixed — balance
   const roles: import('../types').WeeklyShotRole[] = ['WEEK_OVERVIEW'];
   if (outfitCount > 0) roles.push('WEEK_LOOK_HERO');
@@ -511,6 +568,12 @@ function getNonRedundantCloserRole(
     return { role: 'WEEK_DETAIL', reason: 'Bag interior or texture detail as closer' };
   }
   if (dominant === 'makeup') {
+    return { role: 'WEEK_DETAIL', reason: 'Product detail as closer' };
+  }
+  if (dominant === 'footwear' || dominant === 'jewelry') {
+    return { role: 'WEEK_ACCESSORY_DETAIL', reason: 'Detail macro as closer' };
+  }
+  if (dominant === 'beauty' || dominant === 'skincare' || dominant === 'products' || dominant === 'tech') {
     return { role: 'WEEK_DETAIL', reason: 'Product detail as closer' };
   }
   return { role: 'WEEK_CLOSER', reason: 'Default closer' };
