@@ -3077,6 +3077,46 @@ ALWAYS stay in the REF0 environment — that is the ONLY allowed capture locatio
   const globalVisualFidelity    = hasGarmentSlot ? GLOBAL_VISUAL_FIDELITY : '';
   const globalNoBranding        = GLOBAL_NO_BRANDING;  // siempre
 
+  // ── DEBUG TEMPORAL — instrumentado para diagnosticar overflow de 32k chars ──
+  // Ver comentario en el bloque de arriba: mide cada pieza del prompt final para
+  // identificar cuál crece de forma anómala. Quitar una vez resuelto el bug.
+  if (recipe === 'outfit_haul') {
+    const blockSizes: Record<string, number> = {
+      LOCK_SYSTEM: LOCK_SYSTEM.length,
+      PARADIGM_RULE: PARADIGM_RULE.length,
+      shotModeBlock: (shotModeBlock ?? '').length,
+      briefContextBlock: (briefContextBlock ?? '').length,
+      prepContextBlock: (prepContextBlock ?? '').length,
+      shotLocationOverride: (shotLocationOverride ?? '').length,
+      ref0HardLock: (ref0HardLock ?? '').length,
+      sceneContinuityBlock: (sceneContinuityBlock ?? '').length,
+      adaptiveClosureBlock: (adaptiveClosureBlock ?? '').length,
+      haulLocationSemanticsBlock: (haulLocationSemanticsBlock ?? '').length,
+      styleCoherenceBlock: (styleCoherenceBlock ?? '').length,
+      wearStateBlock: (wearStateBlock ?? '').length,
+      itemStatePlanBlock: (itemStatePlanBlock ?? '').length,
+      cameraModeBlock: (cameraModeBlock ?? '').length,
+      hpiBlockOff: (hpiBlockOff ?? '').length,
+      ref0AnalysisBlock: injectREF0Analysis(ref0Analysis, shot.narrativeStage).length,
+      basePrompt: (basePrompt ?? '').length,
+      briefTagContext: (briefTagMap?.tagContext ?? '').length,
+      familyBlock: (familyBlock ?? '').length,
+      hpiBlock: (hpiBlock ?? '').length,
+      shotIdentityBlock: (shotIdentityBlock ?? '').length,
+      ugcRealismBlock: (ugcRealismBlock ?? '').length,
+      globalSceneLock: (globalSceneLock ?? '').length,
+      globalAvatarSuppression: (globalAvatarSuppression ?? '').length,
+      globalWardrobePhysics: (globalWardrobePhysics ?? '').length,
+      globalAnatomySafety: (globalAnatomySafety ?? '').length,
+      globalVisualFidelity: (globalVisualFidelity ?? '').length,
+      globalNoBranding: (globalNoBranding ?? '').length,
+    };
+    const sorted = Object.entries(blockSizes).sort((a, b) => b[1] - a[1]);
+    const total = Object.values(blockSizes).reduce((a, b) => a + b, 0);
+    // eslint-disable-next-line no-console
+    console.log(`[PROMPT DEBUG][outfit_haul][${shot.key}] TOTAL≈${total} chars`, sorted);
+  }
+
   const prompt = `${LOCK_SYSTEM}
 
 ${PARADIGM_RULE}
