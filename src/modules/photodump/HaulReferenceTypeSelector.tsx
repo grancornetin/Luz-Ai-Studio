@@ -215,6 +215,36 @@ const PRODUCTO_OPTIONS: HaulRefOption[] = [
     emoji:       '🧴',
     description: 'Sérum, crema u otro producto de cuidado de la piel.',
   },
+  {
+    value:       'gadget_tech',
+    label:       'Gadget / Tech',
+    emoji:       '📱',
+    description: 'Dispositivo o gadget tecnológico — se sostiene y se usa activamente.',
+  },
+  {
+    value:       'food_drink',
+    label:       'Comida / Bebida',
+    emoji:       '🥤',
+    description: 'Alimento o bebida — se sostiene o se consume naturalmente.',
+  },
+  {
+    value:       'wellness_item',
+    label:       'Bienestar / Suplemento',
+    emoji:       '💊',
+    description: 'Suplemento, vitamina u otro producto de bienestar — se sostiene o exhibe.',
+  },
+  {
+    value:       'producto_generico',
+    label:       'Producto genérico',
+    emoji:       '📦',
+    description: 'Producto sin categoría específica — se sostiene o exhibe naturalmente.',
+  },
+  {
+    value:       'acompanante',
+    label:       'Acompañante',
+    emoji:       '🧑‍🤝‍🧑',
+    description: 'Foto de la persona que te acompaña — activa shots grupales en el set.',
+  },
 ];
 
 // Todas las opciones existentes (para lookup por valor, sin importar la categoría del slot)

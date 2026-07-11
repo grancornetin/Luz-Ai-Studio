@@ -45,6 +45,8 @@ import {
   getAllowedUseModes,
   computeFinalHaulCoverageFromShots,
   buildWeeklyManifest,
+  buildProductHaulManifest,
+  buildProductHaulShotPlan,
   type PhotodumpShotResult,
 } from './photodumpDirectorService';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
@@ -441,13 +443,14 @@ const PhotodumpModule: React.FC = () => {
       // Count policy:
       //   outfit_check : máximo 8 visibles, REF0 ocupa 1 slot
       //   outfit_haul  : hasta 20 story shots, REF0 siempre aparte (no ocupa slot)
+      //   product_haul : hasta 20 story shots, mismo tratamiento que outfit_haul
       //   otras recetas: count directo
       const visibleCount = recipe === 'outfit_check'
         ? Math.min(count, 8)
         : count;
       const storyShotCount = recipe === 'outfit_check'
         ? Math.max(2, visibleCount - 1)
-        : recipe === 'outfit_haul'
+        : (recipe === 'outfit_haul' || recipe === 'product_haul')
           ? Math.min(count, 20)
           : count;
       const plan  = await buildPhotodumpSessionPlan(narrative, protagonist, destino, basePrompt, recipe, refsWithMode, storyShotCount);
@@ -479,6 +482,15 @@ const PhotodumpModule: React.FC = () => {
       })();
       // Para debug solo se usa cuando isAdmin — mismo objeto, sin coste extra
       const haulManifestDebug = isAdmin ? haulManifestForGen : undefined;
+
+      // Manifest de product_haul — mismo patrón que haul, sin visualAnalysis (no aplica)
+      const productHaulManifestForGen = (() => {
+        if (recipe !== 'product_haul') return undefined;
+        const m = buildProductHaulManifest(refsWithMode, storyShotCount);
+        buildProductHaulShotPlan(m); // side-effect: escribe ledger en m.coveragePlan
+        return m;
+      })();
+      const productHaulManifestDebug = isAdmin ? productHaulManifestForGen : undefined;
       const briefCtxDebug = isAdmin && recipe === 'outfit_check' ? parseOutfitBriefContext(basePrompt) : undefined;
       const outfitCompositionDebug = isAdmin && recipe === 'outfit_check'
         ? inferOutfitComposition(refsWithMode, basePrompt) : undefined;
@@ -892,6 +904,9 @@ const PhotodumpModule: React.FC = () => {
         destinationClass:    briefCtxDebug?.destinationClass,
         prepEnvironmentClass: briefCtxDebug?.prepEnvironmentClass,
         haulManifest:        haulManifestDebug,
+        productHaulManifest: productHaulManifestDebug,
+        productHaulCoverageLedger: productHaulManifestDebug?.coveragePlan.ledger,
+        uncoveredRequiredItems_productHaul: productHaulManifestDebug?.coveragePlan.uncoveredRequiredItems,
         visualRefsAnalysis:  recipe === 'outfit_haul' ? visualAnalysis : undefined,
         // Detectar si el selector manual se perdió en el pipeline
         manualKindLostWarning: (() => {

@@ -65,6 +65,30 @@ import {
 } from './recipes/outfitCheck';
 import { buildUnboxingShotPool, distributeUnboxingShots } from './recipes/unboxing';
 import { resolveReferenceTagsFromBrief, PAIRING_CONNECTORS } from './recipes/briefTags';
+import {
+  buildProductHaulManifest, buildProductHaulShotPlan,
+  buildProductInteractionBlock, buildProductHaulItemTypeBlock,
+  buildProductHaulShotItemPlanBlock, buildProductHaulAnatomyBlock,
+  buildProductHaulSafeHpiBlock,
+} from './recipes/productHaul';
+// weeklyFavoritesV2 — motor nuevo de outfit_week (reescritura completa, sin
+// reutilizar lógica de recipes/outfitWeek.ts). El Director despacha
+// 'outfit_week' hacia aquí; outfitWeek.ts queda importado más arriba solo
+// para no romper símbolos re-exportados (buildWeeklyManifest) que
+// PhotodumpModule.tsx todavía pueda usar en otro lugar, pero su lógica de
+// generación ya no se ejecuta para esta receta.
+import {
+  buildWeeklyFavoritesV2Directives, generateWeeklyFavoritesV2REF0, generateWeeklyFavoritesV2Shot,
+  type WeeklyFavoritesV2Plan,
+} from './recipes/weeklyFavoritesV2';
+import type { AnchorContract as WeeklyFavoritesV2AnchorContract } from './recipes/weeklyFavoritesV2/types';
+// day_in_life — receta multi-mundo, misma forma de despacho que weeklyFavoritesV2:
+// 3 funciones autónomas que no pasan por buildStoryDirectives/generatePhotodumpREF0/
+// generatePhotodumpShot genéricos. Ver recipes/dayInLife.ts para el detalle.
+import {
+  buildDayInLifeManifest, buildDayInLifeShotPlan, generateDayInLifeRef0Chain,
+  buildDayBlockLockBlock, buildDayInLifeCoverageDebug, getCachedDayInLifeRef0Chain,
+} from './recipes/dayInLife';
 
 initHpiService();
 
@@ -104,6 +128,11 @@ export {
 // Símbolos de outfit_week movidos a ./recipes/outfitWeek.ts (Fase 3) — re-exportados
 // para no romper a PhotodumpModule.tsx, que los importa desde este archivo.
 export { buildWeeklyManifest };
+
+// Símbolos de product_haul — re-exportados para PhotodumpModule.tsx.
+export {
+  buildProductHaulManifest, buildProductHaulShotPlan,
+};
 
 // Símbolos de outfit_check movidos a ./recipes/outfitCheck.ts (Fase 4) — re-exportados
 // para no romper a PhotodumpModule.tsx, que los importa desde este archivo.
@@ -422,6 +451,14 @@ function buildStoryDirectives(
     const haulShots = buildHaulShotPlan(manifest);
     // Asegurar que no excedemos el count pedido (ya garantizado por el plan, pero por seguridad)
     const finalShots = haulShots.slice(0, manifest.maxStoryShots);
+    return finalShots.map((shot, i) => ({ ...shot, arcPosition: i + 1, aspectRatio: ar }));
+  }
+
+  if (recipe === 'product_haul') {
+    // El arco del product haul se basa en los productos subidos, no en un arco fijo.
+    const productManifest = buildProductHaulManifest((refs ?? {}) as PhotodumpRefs, count);
+    const productShots    = buildProductHaulShotPlan(productManifest);
+    const finalShots      = productShots.slice(0, productManifest.maxStoryShots);
     return finalShots.map((shot, i) => ({ ...shot, arcPosition: i + 1, aspectRatio: ar }));
   }
 
@@ -846,6 +883,55 @@ export async function buildPhotodumpSessionPlan(
   count:       number = 6,
 ): Promise<PhotodumpSessionPlan> {
   initPhotodumpIntelligence();
+
+  // weeklyFavoritesV2 — motor nuevo, no pasa por buildStoryDirectives ni por
+  // ninguna lógica de outfitWeek.ts. El plan de fotos aquí es preliminar
+  // (usa un ancla neutra de referencia): la política de referencias real y
+  // definitiva de cada foto se recalcula en generatePhotodumpShot, una vez
+  // que la foto ancla ya se generó y su modo real (identidad neutra / con
+  // outfit definitivo / con outfit por estilo) está resuelto.
+  if (recipe === 'outfit_week' && refs) {
+    const provisionalAnchor: WeeklyFavoritesV2AnchorContract = { mode: 'world_only' };
+    const { directives } = buildWeeklyFavoritesV2Directives(refs, count, provisionalAnchor);
+    const shots: PhotodumpShotDirective[] = directives.map((d, i) => ({
+      ...d,
+      arcPosition: i + 1,
+      aspectRatio: getAspectRatio(destino),
+    }));
+    const sessionFamilies = { storySupport: [], creatorAesthetic: [] };
+    return {
+      narrative,
+      protagonist,
+      destino,
+      storyTheme: `${NARRATIVE_META[narrative].label} · ${basePrompt.slice(0, 50)}`,
+      shots,
+      assignedFamilies: [],
+      sessionFamilies,
+    };
+  }
+
+  // day_in_life — multi-mundo: manifest de bloques + shot plan propio, sin pasar
+  // por buildStoryDirectives (que asume un único mundo/REF0 para todo el set).
+  if (recipe === 'day_in_life' && refs) {
+    const manifest = buildDayInLifeManifest(refs, count, basePrompt);
+    const plannedShots = buildDayInLifeShotPlan(manifest);
+    const shots: PhotodumpShotDirective[] = plannedShots.map((d, i) => ({
+      ...d,
+      arcPosition: i + 1,
+      aspectRatio: getAspectRatio(destino),
+    }));
+    const sessionFamilies = { storySupport: [], creatorAesthetic: [] };
+    return {
+      narrative,
+      protagonist,
+      destino,
+      storyTheme: `${NARRATIVE_META[narrative].label} · ${basePrompt.slice(0, 50)}`,
+      shots,
+      assignedFamilies: [],
+      sessionFamilies,
+    };
+  }
+
   const isOutfitRecipe = recipe === 'outfit_check' || recipe === 'outfit_haul' || recipe === 'outfit_week';
   const presentationStyle = isOutfitRecipe
     ? resolveOutfitPresentationStyle(basePrompt, refs)
@@ -978,6 +1064,27 @@ export async function generatePhotodumpREF0(
   sessionParams: { uid?: string; sessionId?: string },
   recipe?:     string,
 ): Promise<PhotodumpREF0Result> {
+
+  // weeklyFavoritesV2 — motor nuevo, foto ancla resuelta por completo en su
+  // propio archivo (identidad neutra / outfit definitivo / outfit por
+  // estilo detectado). No pasa por ninguna lógica de outfitWeek.ts.
+  // day_in_life — multi-mundo: genera una cadena de N REF0 (uno por bloque
+  // detectado en el brief) en vez de un único ancla. El resultado completo se
+  // cachea en recipes/dayInLife.ts; aquí solo se devuelve el REF0 del primer
+  // bloque para no romper el contrato PhotodumpREF0Result que espera el resto
+  // del pipeline (PhotodumpModule.tsx guarda ref0Url/ref0Analysis del retorno).
+  if (recipe === 'day_in_life' && refs) {
+    const manifest = buildDayInLifeManifest(refs, 6, basePrompt);
+    const chainResult = await generateDayInLifeRef0Chain(
+      manifest, refs, narrative, protagonist, destino, basePrompt, sessionParams,
+    );
+    return chainResult.primaryResult;
+  }
+
+  if (recipe === 'outfit_week') {
+    const result = await generateWeeklyFavoritesV2REF0(refs, narrative, protagonist, destino, basePrompt, sessionParams);
+    return { imageUrl: result.imageUrl, ref0Analysis: result.ref0Analysis, prompt: result.prompt, refsCount: result.refsCount };
+  }
 
   const aspectInstr = getAspectInstruction(destino);
   const narrativeCtx = NARRATIVE_META[narrative].label;
@@ -2057,15 +2164,71 @@ export async function generatePhotodumpShot(
 ): Promise<PhotodumpShotResult> {
 
   // ── Despacho a implementación dedicada por receta ──────────────────────────
-  // outfit_week tiene su propia copia (generateOutfitWeekShot en recipes/outfitWeek.ts),
-  // extraída y podada de este mismo cuerpo, con la contradicción de WEEK_OVERVIEW
-  // corregida. El cuerpo original de abajo queda intacto como fallback hasta validar
-  // en la app — no se ejecuta para outfit_week mientras este return esté activo.
+  // outfit_week → weeklyFavoritesV2 (motor nuevo, reescritura completa, ver
+  // recipes/weeklyFavoritesV2/). recipes/outfitWeek.ts (generateOutfitWeekShot)
+  // queda importado más arriba pero desconectado — no se ejecuta para esta
+  // receta mientras este return esté activo.
   if (recipe === 'outfit_week') {
-    return generateOutfitWeekShot(
-      shot, refs, ref0Url, ref0Analysis, basePrompt, narrative, destino,
-      sessionParams, sessionFamilies, totalShots, protagonist, presentationStyle,
+    const result = await generateWeeklyFavoritesV2Shot(
+      shot, refs, destino, sessionParams, shot.arcPosition - 1, totalShots, totalShots,
     );
+    return { imageUrl: result.imageUrl, prompt: result.prompt, refsCount: result.refsCount };
+  }
+
+  // day_in_life — multi-mundo: cada shot se ancla al REF0 de SU bloque (no al
+  // ref0Url/ref0Analysis genéricos que recibe esta función), recuperado de la
+  // cadena cacheada al generar REF0. shot.key trae el blockId embebido
+  // (ej. "ESTABLISH_BLOCK_1") por buildDayBlockShot en recipes/dayInLife.ts.
+  if (recipe === 'day_in_life') {
+    const manifest = buildDayInLifeManifest(refs, totalShots, basePrompt);
+    const chainResult = getCachedDayInLifeRef0Chain(refs, basePrompt);
+    const matchedBlock = manifest.blocks.find(b => (shot.key ?? '').toUpperCase().includes(b.id.toUpperCase()));
+    const chainEntry = chainResult?.chain.find(c => c.blockId === (matchedBlock?.id ?? manifest.blocks[0].id));
+    const blockRef0Url = chainEntry?.imageUrl ?? ref0Url;
+
+    const avatarRefs = [refs.avatarRef, refs.bodyRef].filter(Boolean) as string[];
+    const isCompanionShot = (shot as any).role === 'BLOCK_COMPANION' || (shot.key ?? '').startsWith('COMPANION_');
+    const companionRef = manifest.companionRefs[0] ?? null;
+
+    const refsToPass: string[] = [
+      blockRef0Url,
+      ...avatarRefs,
+      ...manifest.sharedOutfitRefs.slice(0, 2),
+      ...(isCompanionShot && companionRef ? [companionRef] : []),
+    ].filter(Boolean) as string[];
+
+    const lockBlock = chainEntry ? buildDayBlockLockBlock(chainEntry.fingerprint, matchedBlock?.label ?? '') : '';
+
+    const promptParts = [
+      LOCK_SYSTEM,
+      lockBlock,
+      PARADIGM_RULE,
+      STORY_MODE_DOMINANCE,
+      `SHOT PURPOSE: ${shot.purpose}`,
+      `VARIATION: ${shot.variationSpace[Math.floor(Math.random() * shot.variationSpace.length)] ?? shot.variationSpace[0] ?? ''}`,
+      shot.requiredElements.length ? `REQUIRED: ${shot.requiredElements.join(', ')}` : '',
+      shot.forbiddenElements.length ? `FORBIDDEN: ${shot.forbiddenElements.join(', ')}` : '',
+      isCompanionShot && !companionRef ? '⚠️ No companion reference was uploaded — do NOT invent a second person. Show the protagonist alone in a social-feeling moment instead.' : '',
+    ].filter(Boolean);
+
+    const prompt = promptParts.join('\n\n');
+    const preparedRefs = await prepareRefs(refsToPass);
+    const imageUrl = await imageApiService.generateImage({
+      prompt,
+      negative:        NEGATIVE_FULL,
+      referenceImages: preparedRefs,
+      aspectRatio:     getAspectRatio(destino),
+      modelId:         'gemini',
+      uid:             sessionParams.uid,
+      sessionId:       sessionParams.sessionId,
+      module:          'photodump',
+      moduleLabel:     'Photodump Mode',
+      shotIndex:       shot.arcPosition,
+      totalShots,
+      metadata:        { role: shot.role, blockId: matchedBlock?.id, shotKey: shot.key },
+    });
+
+    return { imageUrl, prompt, refsCount: preparedRefs.length };
   }
 
   const aspectInstr = getAspectInstruction(destino);
@@ -2322,6 +2485,35 @@ export async function generatePhotodumpShot(
     // Escena opcional — solo si el usuario la subió
     if (refs.sceneRef) refsToPass.push(refs.sceneRef);
 
+  } else if (recipe === 'product_haul') {
+    // ── Product Haul: routing de referencias por ítem del shot ──
+    // Cada shot recibe SOLO el producto (o empaque) que le corresponde según
+    // productHaulItemPlan.primaryItems — sin scoring, sin styling graph.
+    refsToPass.push(ref0Url);
+    if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef);
+
+    const allProductUrls   = [refs.productRef, ...(refs.productRefs ?? [])].filter(Boolean) as string[];
+    const allPackagingUrls = [refs.packagingRef, ...(refs.packagingRefs ?? [])].filter(Boolean) as string[];
+
+    const routeProductHaulItemId = (itemId: string) => {
+      if (itemId.startsWith('product_')) {
+        const idx = parseInt(itemId.replace('product_', ''), 10);
+        if (allProductUrls[idx]) refsToPass.push(allProductUrls[idx]);
+      } else if (itemId.startsWith('packaging_')) {
+        const idx = parseInt(itemId.replace('packaging_', ''), 10);
+        if (allPackagingUrls[idx]) refsToPass.push(allPackagingUrls[idx]);
+      }
+    };
+
+    const productPlan = shot.productHaulItemPlan;
+    if (productPlan) {
+      for (const itemId of productPlan.primaryItems) routeProductHaulItemId(itemId);
+    } else if (allProductUrls[0]) {
+      refsToPass.push(allProductUrls[0]);
+    }
+
+    if (refs.sceneRef) refsToPass.push(refs.sceneRef);
+
   } else if (recipe === 'outfit_check') {
     // outfit_check: avatar x3 + ref0 + prenda(s) + escena
     if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef, refs.avatarRef);
@@ -2466,10 +2658,11 @@ export async function generatePhotodumpShot(
   // Family blocks:
   //   outfit_check: desactivados completamente (lighting hints incompatibles)
   //   outfit_haul:  desactivados para MVP — family blocks pueden meter props/locaciones no pedidas
+  //   product_haul: desactivados por la misma razón que outfit_haul
   //   outfit_week:  safe hint filtrado
   //   otras:        block completo
-  const isOutfitCheckRecipe = recipe === 'outfit_check' || recipe === 'outfit_haul';
-  const familyBlock = (recipe === 'outfit_check' || recipe === 'outfit_haul')
+  const isOutfitCheckRecipe = recipe === 'outfit_check' || recipe === 'outfit_haul' || recipe === 'product_haul';
+  const familyBlock = (recipe === 'outfit_check' || recipe === 'outfit_haul' || recipe === 'product_haul')
     ? ''  // disabled_for_outfit_check_and_haul_mvp
     : recipe === 'outfit_week'
       ? (selectedFamily ? buildSafeOutfitFamilyStyleHint(selectedFamily, shot.key ?? '', shot.cameraMode) : '')
@@ -2522,6 +2715,15 @@ export async function generatePhotodumpShot(
     // weekly_safe HPI — poses naturales de lifestyle, sin poses de fitness ni editorial extremo
     if (hpiEligible) {
       hpiBlock  = buildWeeklySafeHpiBlock(shot.key ?? '', refs.gender ?? 'female');
+      hpiSource = hpiBlock ? 'filtered_outfit_hpi' : 'disabled';
+    }
+  } else if (recipe === 'product_haul') {
+    if (hpiEligible) {
+      const primaryId = shot.productHaulItemPlan?.primaryItems[0];
+      const activeInteractionMode = primaryId
+        ? buildProductHaulManifest(refs, 20).allItems.find(it => it.id === primaryId)?.interactionMode ?? 'held_or_displayed'
+        : 'held_or_displayed';
+      hpiBlock  = buildProductHaulSafeHpiBlock(shot.key ?? '', activeInteractionMode, refs.gender ?? 'female');
       hpiSource = hpiBlock ? 'filtered_outfit_hpi' : 'disabled';
     }
   } else {
@@ -2621,6 +2823,22 @@ This shot showcases the piece itself as part of the haul/outfit story.`
   // Bloque de plan de ítems por shot — qué aparece exactamente en este shot
   const haulShotItemPlanBlock = recipe === 'outfit_haul' && shot.haulItemPlan && haulManifest
     ? buildHaulShotItemPlanBlock(shot.haulItemPlan, haulManifest)
+    : '';
+
+  // ── Product Haul: bloques específicos de la receta ────────────
+  // Reconstruye el manifest para resolver el ítem activo del shot (mismo patrón que haul,
+  // sin caching entre llamadas — buildProductHaulManifest es barato, sin scoring/graph).
+  const productHaulManifest = recipe === 'product_haul' ? buildProductHaulManifest(refs, 20) : undefined;
+  let productHaulActiveItem: import('./types').ProductHaulItem | undefined;
+  if (productHaulManifest && shot.productHaulItemPlan?.primaryItems.length) {
+    const primaryId = shot.productHaulItemPlan.primaryItems[0];
+    productHaulActiveItem = productHaulManifest.allItems.find(it => it.id === primaryId);
+  }
+  const productHaulInteractionBlock = productHaulActiveItem ? buildProductInteractionBlock(productHaulActiveItem) : '';
+  const productHaulItemTypeBlock    = productHaulActiveItem ? buildProductHaulItemTypeBlock(productHaulActiveItem) : '';
+  const productHaulAnatomyBlockText = recipe === 'product_haul' ? buildProductHaulAnatomyBlock() : '';
+  const productHaulShotItemPlanBlock = recipe === 'product_haul' && shot.productHaulItemPlan && productHaulManifest
+    ? buildProductHaulShotItemPlanBlock(shot.productHaulItemPlan, productHaulManifest)
     : '';
 
   // Instrucción de outfit específica para este shot
@@ -2756,6 +2974,27 @@ ${haulItemRoleLockBlock}
 ${haulProgressBlock}
 
 ${haulAnatomyBlock}
+
+NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${shot.role}.`
+      : recipe === 'product_haul'
+      ? `SHOT IDENTITY — PRODUCT HAUL SESSION:
+- Face reference (appears twice): EXACT identity — same bone structure, same hair, same skin tone. No beautification.
+- REF0: establishes the haul space — same room, same light, same real environment. NOT a studio.
+- Avatar clothing is identity context only, never a haul product.
+
+⛔ DO NOT CLONE REF0: use it for room/light/environment only — different pose, distance, crop, or focus than REF0 every shot.
+
+${productHaulItemTypeBlock}
+
+${productHaulInteractionBlock}
+
+PRODUCT HAUL CONTEXT: ${shot.purpose}
+
+${productHaulShotItemPlanBlock}
+
+${productHaulAnatomyBlockText}
+
+⚠️ REFERENCE ROLE: product references show the SPECIFIC PRODUCT for this shot. One product ref = one shot's item — do not mix refs across shots. ONE person maximum in any frame.
 
 NARRATIVE ARC POSITION: Shot ${shot.arcPosition} of ${totalShots} — ${shot.role}.`
       : recipe === 'outfit_week'
@@ -2905,6 +3144,23 @@ FORBIDDEN:
 
 This is a real creator sharing their weekly looks and favorites on social media.
 The image should feel authentic, lived-in, and carouseable — not an ad.`
+      : recipe === 'product_haul'
+      ? `📱 iPhone PRODUCT HAUL REALISM (NON-NEGOTIABLE):
+You are capturing a real product haul session on an iPhone — "look what arrived" / "my new set."
+REQUIRED: natural window light, slight handheld imperfection, real room texture, real skin tone.
+REQUIRED: the space feels lived-in and real — a real room, desk, or table, not a studio set.
+
+FORBIDDEN:
+- studio product-ad lighting or softbox setups
+- glossy commercial/catalog composition
+- beauty filters or skin retouching
+- generic white background
+- external brand logos not visible in the uploaded references
+- invented packaging or products not uploaded by the user
+- interaction mismatched with the product type (e.g. "applying" a gadget, "operating" a skincare jar)
+
+This is a real person sharing a new product set on social media.
+The image should feel authentic and lived-in — not an ad.`
       : `📱 iPhone UGC REALISM (NON-NEGOTIABLE):
 You are taking a new iPhone-style photo inside the same existing moment as REF0.
 Natural light, handheld imperfection, real skin texture, no studio polish.
@@ -3016,7 +3272,7 @@ ALWAYS stay in the REF0 environment — that is the ONLY allowed capture locatio
 
   const hasPersonInShot = !isFacelessShot;
   const isOverviewShot  = (shot.key ?? '').includes('OVERVIEW') || (shot.key ?? '').includes('ANCHOR') || (shot.key ?? '').includes('INTRO');
-  const hasGarmentSlot  = !isOverviewShot || recipe === 'outfit_haul';  // overview de haul también tiene refs de prendas
+  const hasGarmentSlot  = !isOverviewShot || recipe === 'outfit_haul' || recipe === 'product_haul';  // overview de haul/product haul también tiene refs de ítems
 
   const globalSceneLock        = (recipe !== 'outfit_check') ? GLOBAL_SCENE_LOCK : '';
   const globalAvatarSuppression = hasPersonInShot ? GLOBAL_AVATAR_SUPPRESSION : '';

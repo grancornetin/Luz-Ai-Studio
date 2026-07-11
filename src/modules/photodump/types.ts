@@ -28,6 +28,13 @@ export type HaulRefKind =
   | 'gafas'             // Gafas / lentes de sol
   | 'maquillaje'        // Maquillaje / labial / color-swatch (usado hoy solo por outfit_week)
   | 'skincare'          // Skincare / sérum / crema / producto de cuidado (usado hoy solo por outfit_week)
+  // ── Tipos de producto genérico (receta product_haul) ──
+  | 'gadget_tech'       // Gadget / dispositivo tech — se sostiene y usa
+  | 'food_drink'        // Comida / bebida — se sostiene o consume
+  | 'wellness_item'     // Producto de bienestar / suplemento — se sostiene o exhibe
+  | 'producto_generico' // Producto genérico sin categoría específica — se sostiene o exhibe
+  // ── Tipo de acompañante (receta day_in_life) ──
+  | 'acompanante'       // Persona acompañante subida por el slot producto — activa shots grupales
   | 'auto';             // Sin selección manual — usar heurística automática
 
 export type HaulItemKind =
@@ -287,6 +294,152 @@ export interface HaulProgressState {
   remainingCount:       number;
 }
 
+// ── Product Haul Types (receta product_haul) ──────────────────
+// Análogos a los tipos Haul de arriba pero para productos genéricos en vez de
+// ropa. Sin styling graph ni scoring de compatibilidad — cada producto es
+// independiente, no se combina con otros como una prenda con un outfit.
+
+// Tipo normalizado del ítem para prompt y planner — deriva de HaulRefKind
+export type ProductHaulResolvedKind =
+  | 'skincare'
+  | 'makeup'
+  | 'gadget'
+  | 'food_drink'
+  | 'wellness'
+  | 'generic_product'
+  | 'unknown_product';
+
+// Cómo interactúa el avatar con el producto — condiciona el shot builder
+export type ProductInteractionMode =
+  | 'applied_to_face_or_body'  // skincare/makeup: se aplica sobre rostro/cuerpo
+  | 'held_and_used'            // gadget/tech: se sostiene y se usa activamente
+  | 'held_or_consumed'         // food/drink: se sostiene o se consume
+  | 'held_or_displayed';       // wellness/genérico: se sostiene o se exhibe
+
+export interface ProductHaulItem {
+  id:                  string;   // 'product_0', 'product_1', 'packaging_0', etc.
+  sourceIndex:         number;   // índice original en el array de refs
+  refUrl:              string;
+  manualKind:          HaulRefKind;              // valor elegido por el usuario ('auto' = no eligió)
+  resolvedKind:        ProductHaulResolvedKind;   // kind normalizado para prompt y planner
+  interactionMode:     ProductInteractionMode;
+  promptKindLabel:     string;   // etiqueta en inglés para el prompt
+  label:               string;   // 'Producto 1', 'Producto 2', etc.
+  isPackaging:         boolean;  // true = viene del slot empaque, no del slot producto
+  priority:            'required' | 'normal' | 'optional';
+}
+
+export interface ProductHaulCoverageLedgerItem {
+  itemId:                      string;
+  manualKind:                  HaulRefKind;
+  resolvedKind:                ProductHaulResolvedKind;
+  label:                       string;
+  required:                    boolean;
+  plannedHeroShots:            number;
+  plannedSupportShots:         number;
+  actualPromptedHeroShots:     number;
+  actualPromptedSupportShots:  number;
+  coverageStatus:              'uncovered' | 'support_only' | 'covered' | 'overexposed' | 'planned_not_routed';
+  shotIds:                     string[];
+}
+
+export interface ProductHaulCoveragePlan {
+  requiredFeatureItemIds: string[];  // todos los productos del slot producto
+  optionalItemIds:        string[];  // empaque sin cobertura obligatoria propia
+  plannedCoverage:        Record<string, number>;  // itemId → shots planificados
+  missingCoverage:        string[];
+  ledger:                 ProductHaulCoverageLedgerItem[];
+  uncoveredRequiredItems: string[];
+  supportOnlyItems:       string[];
+  overexposedItems:       string[];
+  coverageWarnings:       string[];
+}
+
+// Qué aparece (y qué NO) en cada shot — mismo rol que HaulShotItemPlan
+export interface ProductHaulShotItemPlan {
+  primaryItems:      string[];   // ítems protagonistas del shot
+  heldItems:         string[];   // ítems sostenidos en mano
+  surfaceItems:       string[];  // ítems sobre mesa/superficie
+  backgroundItems:   string[];   // ítems secundarios visibles de fondo
+  forbiddenItems:    string[];   // ítems que NO deben aparecer
+  integrationNote?:  string;     // descripción de la integración para el prompt
+}
+
+export interface ProductHaulManifest {
+  totalItems:          number;
+  featuredItems:       ProductHaulItem[];  // productos del slot producto (todos required)
+  packagingItems:      ProductHaulItem[];  // ítems del slot empaque (opcionales)
+  allItems:            ProductHaulItem[];  // lista plana completa (excluye avatarRef)
+  requestedCount:      number;      // shots de historia pedidos por el usuario
+  maxStoryShots:       number;      // min(requestedCount, 20)
+  coveragePlan:        ProductHaulCoveragePlan;
+}
+
+// ── Day In Life Types (receta day_in_life) ────────────────────
+// "Un día en mi vida" — a diferencia de todas las demás recetas, soporta
+// MULTI-MUNDO: el brief puede describir varios momentos/lugares del día
+// (ej: "gym en la mañana, oficina, cena con amigas"), cada uno con su propia
+// escena y su propio REF0 encadenado — no un único mundo físico compartido.
+
+// Rol narrativo de cada shot dentro de un bloque del día — mapea los 4
+// ingredientes identificados en referencias reales de photodump: retrato
+// protagonista, detalle que ancla el lugar, ambiente sin persona, y momento
+// social con acompañante (si hay referencia de acompañante subida).
+export type DayBlockShotRole =
+  | 'BLOCK_ESTABLISH'   // retrato/selfie protagonista con el outfit/mood del bloque
+  | 'BLOCK_DETAIL'      // el objeto/comida/producto que ancla el lugar
+  | 'BLOCK_AMBIENCE'    // toma de ambiente/lugar sin la persona
+  | 'BLOCK_COMPANION';  // momento social con acompañante — solo si hay companionRef
+
+export interface DayBlock {
+  id:          string;      // 'block_0', 'block_1', 'block_2'
+  label:       string;      // "Gym", "Oficina", "Cena con amigas"
+  timeSignal:  OutfitBriefContext['timeSignal'];
+  sceneHint:   string;      // descripción corta para generar la escena de este bloque
+  order:       number;
+}
+
+export interface DayBlockCoverageLedgerItem {
+  blockId:                     string;
+  label:                       string;
+  required:                    boolean;   // siempre true — todo bloque detectado necesita cobertura
+  plannedHeroShots:            number;
+  plannedSupportShots:         number;
+  actualPromptedHeroShots:     number;
+  actualPromptedSupportShots:  number;
+  coverageStatus:              'uncovered' | 'support_only' | 'covered' | 'overexposed' | 'planned_not_routed';
+  shotIds:                     string[];
+}
+
+export interface DayInLifeCoveragePlan {
+  requiredBlockIds:       string[];  // todos los bloques detectados — todos required
+  plannedCoverage:        Record<string, number>;  // blockId → shots planificados
+  missingCoverage:        string[];
+  ledger:                 DayBlockCoverageLedgerItem[];
+  uncoveredRequiredItems: string[];  // blockIds sin cobertura — nombre compartido con otras recetas para reuso de UI de debug
+  supportOnlyItems:       string[];
+  overexposedItems:       string[];
+  coverageWarnings:       string[];
+}
+
+export interface DayInLifeManifest {
+  blocks:           DayBlock[];
+  companionRefs:    string[];   // refs de acompañante subidas (vía slot producto + tipo 'acompanante')
+  sharedOutfitRefs: string[];   // outfit/producto sin bloque asignado — aplican a todos los bloques
+  requestedCount:   number;
+  maxStoryShots:    number;     // min(requestedCount, 20)
+  coveragePlan:     DayInLifeCoveragePlan;
+}
+
+// Resultado de un REF0 individual dentro de la cadena multi-bloque
+export interface DayInLifeRef0ChainEntry {
+  blockId:       string;
+  imageUrl:      string;
+  ref0Analysis:  any;
+  fingerprint:   import('./recipes/shared').SceneFingerprint;
+  chainedFromPreviousBlock: boolean;  // true para bloque 1+ — usó el REF0 anterior como referencia
+}
+
 export type PhotodumpDestino   = 'feed' | 'stories' | 'tiktok';
 export type PhotodumpNarrative = 'day' | 'journey' | 'brand' | 'character' | 'product_hero' | 'faceless' | 'custom';
 export type PhotodumpProtagonist = 'person' | 'product' | 'both';
@@ -300,7 +453,7 @@ export type PhotodumpRecipe =
   | 'outfit_haul'   // Persona + N prendas separadas — se prueban una por una con progresión
   | 'outfit_week'   // Persona + N outfits completos — variedad semanal o temática
   | 'day_in_life'   // Persona + escena + producto
-  | 'launch'        // Producto + escena
+  | 'product_haul'  // Persona + N productos — se prueban/usan uno por uno, con empaque opcional
   | 'bts'           // Producto/workspace + escena, nunca avatar
   | 'travel'        // Persona + escena del lugar + producto
   | 'free';         // Modo libre — editor de escenas individuales
@@ -368,19 +521,19 @@ export const RECIPE_META: Record<PhotodumpRecipe, {
   },
   day_in_life: {
     label:       'Un día en mi vida',
-    description: 'Vos como protagonista con el producto como compañero del día.',
+    description: 'Contá tu día — un momento o varios (mañana, tarde, noche). Cada momento puede tener su propia escena.',
     icon:        'Sun',
     refs:        { avatar: 'required', outfit: 'optional', accesorios: 'none', producto: 'optional', empaque: 'none', escena: 'optional', escena_prueba: 'none', escena_destino: 'none' },
     narrative:   'day',
     protagonist: 'both',
   },
-  launch: {
-    label:       'Lanzamiento de producto',
-    description: 'El producto en primer plano. Podés agregar tu persona para una presentación más personal.',
-    icon:        'Megaphone',
-    refs:        { avatar: 'optional', outfit: 'none', accesorios: 'none', producto: 'required', empaque: 'none', escena: 'optional', escena_prueba: 'none', escena_destino: 'none' },
+  product_haul: {
+    label:       'Haul de productos',
+    description: 'Mostrás/probás un set de productos, uno por uno. "Miren lo que me llegó" o "mis esenciales para X".',
+    icon:        'ShoppingBag',
+    refs:        { avatar: 'required', outfit: 'none', accesorios: 'none', producto: 'required', empaque: 'optional', escena: 'optional', escena_prueba: 'none', escena_destino: 'none' },
     narrative:   'product_hero',
-    protagonist: 'product',
+    protagonist: 'both',
   },
   bts: {
     label:       'Detrás de escena / Faceless',
@@ -458,6 +611,14 @@ export interface PhotodumpRefs {
   // [productRef, productRefs[0], productRefs[1], ...]) — permite distinguir maquillaje/
   // skincare/producto genérico subido por el slot producto en vez del slot outfit/accesorio.
   haulProductKinds?:   HaulRefKind[];
+  // weeklyFavoritesV2: casillero junto al slot de cuerpo/avatar — true si el usuario
+  // marcó que el avatar subido ya trae puesto su outfit definitivo (no reemplazar,
+  // no generar uno nuevo por estilo). Ausente/false = tratar el avatar como neutro.
+  avatarHasDefinitiveOutfit?: boolean;
+  // day_in_life: acompañante opcional para shots grupales — subido por el slot
+  // producto con haulProductKinds[i] === 'acompanante'. Se resuelve en el manifest,
+  // no vive como slot propio en RecipeRefConfig (evita tocar el tipo compartido).
+  companionRef?: string | null;
 }
 
 // ── Tipos modo libre ───────────────────────────────────────────
@@ -791,6 +952,23 @@ export interface PhotodumpShotDebug {
   // permite auditar routing faltante sin tener que reconstruir el prompt completo.
   resolvedRefsForShot?: string[];
 
+  // Product Haul-specific debug — solo product_haul.
+  productHaulRoutingDebug?: {
+    primaryItemId?:      string;
+    resolvedKind?:       ProductHaulResolvedKind;
+    interactionMode?:    ProductInteractionMode;
+    isPackagingShot?:    boolean;
+  };
+  productHaulItemPlan?: ProductHaulShotItemPlan;
+
+  // Day In Life-specific debug — solo day_in_life (multi-mundo).
+  dayInLifeRoutingDebug?: {
+    blockId?:            string;
+    blockLabel?:         string;
+    role?:                DayBlockShotRole;
+    usedCompanionRef?:   boolean;
+  };
+
   status:       'ok' | 'failed';
 }
 
@@ -917,6 +1095,17 @@ export interface PhotodumpDebugData {
   avatarBaseClothingUsedForAccessoryIntegration?:  boolean;
   avatarBaseClothingLeakRisk?:                     string;
   avatarBaseClothingUsedAsWeeklyItem?:             boolean;
+  // Product Haul manifest (solo product_haul)
+  productHaulManifest?:           ProductHaulManifest;
+  productHaulCoverageLedger?:     ProductHaulCoverageLedgerItem[];
+  uncoveredRequiredItems_productHaul?: string[];
+  // Day In Life manifest (solo day_in_life) — multi-mundo
+  dayInLifeManifest?:             DayInLifeManifest;
+  blocksDetected?:                DayBlock[];
+  coverageByBlock?:               DayBlockCoverageLedgerItem[];
+  uncoveredRequiredItems_dayInLife?: string[];
+  ref0ChainUsed?:                 boolean;
+  ref0ChainLength?:               number;
   // Weekly manifest (solo outfit_week)
   weeklyManifest?:                WeeklyManifest;
   weeklyStructure?:               string;

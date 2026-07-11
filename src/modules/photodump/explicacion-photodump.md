@@ -8,7 +8,7 @@
 > 5. El objetivo es que otra IA pueda leer este archivo y entender completamente qué hace el módulo, cómo funciona, y en qué estado está, sin necesidad de leer el código.
 > 6. **INSTRUCCIÓN DE CONTINUIDAD:** Al final del documento siempre debe existir la sección "Estado de trabajo actual" con el estado exacto de qué se está haciendo, en qué receta se está, y qué quedó pendiente. Cuando una receta se cierra, moverla a "Recetas cerradas". Esto permite retomar el trabajo en un nuevo chat sin perder contexto.
 
-**Última actualización:** 2026-07-09 (outfit_haul cerrada 9/10. outfit_week patch v3 implementado — pendiente prueba en app. `photodumpDirectorService.ts` dividido por receta en `recipes/` — ver "Archivos principales".)
+**Última actualización:** 2026-07-10 (nueva receta `day_in_life` implementada — primera receta MULTI-MUNDO del módulo, con REF0 encadenado por bloque. Pendiente prueba en app. También se corrigió esta guía: `outfit_week` dejó de usar `recipes/outfitWeek.ts`/`generateOutfitWeekShot` hace tiempo — el motor activo es `recipes/weeklyFavoritesV2/`, no documentado hasta ahora. Ver "Recetas cerradas — Day In Life" y "Estado de trabajo actual".)
 **Propósito:** Generar series fotográficas con narrativa visual coherente. Un "photodump" es una colección de fotos que cuentan una historia o transmiten un mood, muy popular en Instagram y TikTok.
 
 ---
@@ -18,7 +18,7 @@
 Photodump genera entre 3 y 6 imágenes que cuentan una historia visual juntas. No son fotos sueltas — tienen un hilo conductor narrativo que las conecta: un día completo, un viaje, un unboxing, una sesión editorial.
 
 El flujo completo es:
-1. El usuario elige una **receta** (unboxing, outfit, day_in_life, launch, bts, travel, libre)
+1. El usuario elige una **receta** (unboxing, outfit, day_in_life, product_haul, bts, travel, libre)
 2. Sube **referencias visuales** según lo que pide la receta (avatar, producto, empaque, outfit, escena)
 3. Escribe un **brief** describiendo lo que quiere contar
 4. Se genera un **REF0** — imagen ancla que establece la identidad visual del set completo (paleta, luz, mundo)
@@ -36,17 +36,20 @@ El flujo completo es:
 | `PhotodumpModule.tsx` | Componente principal. Wizard 4 pasos + galería de sets guardados. Maneja generación, debug para admins, retry automático con safe-retry para haul |
 | `PDStep2Receta.tsx` | Paso 2: selección de receta + carga de referencias por slot. Para haul: slots outfit hasta 10 ítems, accesorios hasta 5, sublabels dinámicos por tipo |
 | `HaulReferenceTypeSelector.tsx` | Selector de tipo de referencia compartido por `outfit_haul` y `outfit_week`. 16 opciones (auto / look_completo / varios_items / top / bottom / vestido / enterizo / chaqueta / calzado / pantys / bolso / joyeria / accesorio / maquillaje / skincare). El valor viaja al pipeline y condiciona el planner y los prompts. **Puente temporal:** `outfit_week` reutiliza `refs.haulOutfitKinds`/`refs.haulAccKinds` (nombrados "haul" por origen histórico) para los slots `outfit`/`accesorios` — no hay campos `weeklyOutfitKinds` separados. El slot `producto` (usado por skincare/beauty subido aparte) no tiene selector de tipo propio todavía; solo se distingue maquillaje/skincare si el usuario los sube por el slot outfit o accesorio. |
-| `photodumpDirectorService.ts` | Orquestador (~3850 líneas, antes 10047). Tipos genéricos, `generatePhotodumpShot`/`generatePhotodumpREF0`/`buildPhotodumpSessionPlan`/`generatePhotodumpCaptions` (compartidos entre recetas), y el pool orgánico de `day_in_life`/`launch`/`bts`/`travel` (recetas aún sin implementar, sin archivo propio todavía) |
+| `photodumpDirectorService.ts` | Orquestador. Tipos genéricos, `generatePhotodumpShot`/`generatePhotodumpREF0`/`buildPhotodumpSessionPlan`/`generatePhotodumpCaptions` (compartidos entre recetas), dispatch temprano hacia los archivos dedicados de cada receta ya implementada, y el pool orgánico genérico para `bts`/`travel` (aún sin archivo propio) |
 | `recipes/shared.ts` | Núcleo compartido: tipos de shot, bloques de prompt globales (`LOCK_SYSTEM`, `GLOBAL_*`), wear state, camera mode, scene fingerprint, brief parsing legado |
 | `recipes/outfitHaul.ts` | Receta `outfit_haul` completa: manifest, styling graph, scoring de compatibilidad, world map, shot planner, coverage y los 13 shot builders |
-| `recipes/outfitWeek.ts` | Receta `outfit_week` completa: `WEEKLY_SLOT_COVERAGE_MODE`, HPI seguro, manifest, role templates, shot planner, coverage map, dominance check |
+| `recipes/outfitWeek.ts` | **Legado/desconectado.** Contenía la implementación original de `outfit_week` (`WEEKLY_SLOT_COVERAGE_MODE`, `generateOutfitWeekShot`, etc). El Director ya no despacha aquí — sigue importado solo para no romper símbolos re-exportados (`buildWeeklyManifest`) que otro código pueda usar. Ver `recipes/weeklyFavoritesV2/` para la implementación activa. |
+| `recipes/weeklyFavoritesV2/` | **Motor activo de `outfit_week`** (10 archivos: `manifest.ts`, `anchor.ts`, `styleDetector.ts`, `allocator.ts`, `contracts.ts`, `contractValidator.ts`, `referenceRouter.ts`, `routingValidator.ts`, `promptBuilder.ts`, `debug.ts`, `index.ts`). Reescritura completa, no reutiliza lógica de `outfitWeek.ts`. Expone 3 funciones (`buildWeeklyFavoritesV2Directives`, `generateWeeklyFavoritesV2REF0`, `generateWeeklyFavoritesV2Shot`) con la misma forma que el resto de recetas para que el Director despache sin cambiar su contrato hacia `PhotodumpModule.tsx`. Usa un `anchorCache` en memoria (Map keyed por refs) para no recalcular la detección de estilo en cada shot. **Este documento no tenía esta arquitectura registrada — corregido 2026-07-10.** |
 | `recipes/outfitCheck.ts` | Receta `outfit_check` completa: router semántico de brief, directivas de prep space, HPI específico, detección de contradicciones, pool de shots |
 | `recipes/unboxing.ts` | Receta `unboxing` completa: pool lineal fijo de shots y su compresión por cantidad |
+| `recipes/productHaul.ts` | Receta `product_haul` completa: manifest sin scoring/styling graph, interaction block por tipo de producto, shot planner de 3 fases (coverage → budget narrativo → interleaving de empaque), shot builders y HPI seguro |
+| `recipes/dayInLife.ts` | Receta `day_in_life` completa: única receta **multi-mundo** del módulo. `parseDayBlocks` (heurística de texto local, sin LLM) segmenta el brief en 1-3 bloques/momentos, `generateDayInLifeRef0Chain` genera un REF0 por bloque encadenado al anterior, `buildDayInLifeShotPlan` reparte roles narrativos (`BLOCK_ESTABLISH`/`BLOCK_DETAIL`/`BLOCK_AMBIENCE`/`BLOCK_COMPANION`) por bloque |
 | `photodumpIntelligence.ts` | Lee banco UGC de familias visuales (story_support, creator_aesthetic). **Independiente de recetas.** |
-| `types.ts` | Todos los tipos: PhotodumpSet, RecipeRefConfig, PhotodumpRefs, HaulItem, HaulManifest, HaulRefKind, HaulResolvedKind, VisualRefsAnalysisResult, etc. |
+| `types.ts` | Todos los tipos: PhotodumpSet, RecipeRefConfig, PhotodumpRefs, HaulItem, HaulManifest, HaulRefKind, HaulResolvedKind, DayBlock, DayInLifeManifest, VisualRefsAnalysisResult, etc. |
 | `photodumpStorage.ts` | IndexedDB (`app_photodump_module`). Guarda sets completos |
 
-**División por receta (Julio 2026):** `photodumpDirectorService.ts` tenía 10047 líneas mezclando el motor de todas las recetas. Se dividió en 4 fases (núcleo compartido → outfit_haul → outfit_week → outfit_check + unboxing), cada una verificada con `tsc --noEmit` y build real antes de mergear. Para editar una receta ya implementada, abrir directamente su archivo en `recipes/` en vez de buscar en el orquestador. La función `generatePhotodumpShot` (ensamblador final de prompt) sigue en el archivo principal porque mezcla ramas condicionales de las 3 recetas outfit (check/haul/week) de forma entrelazada — separarla se evaluará si vuelve a crecer demasiado.
+**División por receta (Julio 2026):** `photodumpDirectorService.ts` tenía 10047 líneas mezclando el motor de todas las recetas. Se dividió en fases (núcleo compartido → outfit_haul → outfit_week → outfit_check + unboxing → product_haul → day_in_life), cada una verificada con `tsc --noEmit` y build real antes de mergear. Para editar una receta ya implementada, abrir directamente su archivo (o carpeta, en el caso de weeklyFavoritesV2) en `recipes/` en vez de buscar en el orquestador. La función `generatePhotodumpShot` (ensamblador final de prompt) sigue en el archivo principal para las ramas de outfit_check/outfit_haul/product_haul/genérica porque mezcla condicionales entrelazadas — pero `outfit_week` y `day_in_life` despachan temprano hacia sus propios archivos, sin pasar por ese ensamblador compartido en absoluto (mismo patrón que weeklyFavoritesV2: 3 funciones autónomas que llaman directo a `imageApiService`).
 
 ### Infraestructura de generación
 
@@ -74,8 +77,9 @@ Cada receta define:
 |--------|-------------|------|--------|
 | `unboxing` | Producto + packaging | **Lineal** (packaging cerrado → apertura → reveal → detalle → en uso → atmósfera) | Opcional (x2, secundario) |
 | `outfit` | Persona + prendas | Orgánico rotacional | Requerido (x3, dominante) |
-| `day_in_life` | Persona + producto | Orgánico rotacional | Requerido (x3, dominante) |
-| `launch` | Producto | Orgánico rotacional | Opcional |
+| `outfit_week` | Persona + N ítems (outfits/accesorios/bolsos/beauty) | Motor `weeklyFavoritesV2`: ancla + reparto + contratos por shot | Requerido |
+| `day_in_life` | Persona + hasta 3 momentos del día | **Multi-mundo**: 1 REF0 por bloque, roles ESTABLISH/DETAIL/AMBIENCE/COMPANION | Requerido (x2, dominante) |
+| `product_haul` | Persona + N productos | **3 fases** (coverage → budget narrativo → interleaving de empaque) | Requerido (x2, dominante) |
 | `bts` | Producto/workspace | Orgánico rotacional | Opcional |
 | `travel` | Persona + escena | Orgánico rotacional | Requerido (x3, dominante) |
 | `free` | Libre | Manual por escena | Opcional |
@@ -366,11 +370,120 @@ hpiProfileUsed: 'weekly_safe'
 
 ---
 
+## Recetas cerradas — Product Haul
+
+### 🔄 `product_haul` — IMPLEMENTADA, pendiente prueba (Julio 2026)
+
+**Historia:** "miren lo que me llegó" / "acompáñenme a probar mi set nuevo" / "mis esenciales para X"
+
+Reemplaza por completo a la receta `launch` ("Lanzamiento de producto"), que nunca tuvo lógica propia — caía al pool orgánico genérico compartido con `day_in_life`/`bts`/`travel`. Es la versión producto de `outfit_haul`: mismo esqueleto de 3 fases, pero **sin scoring de compatibilidad ni styling graph** — cada producto es independiente, no se combina con otro como una prenda con un outfit.
+
+**Slots:**
+- `avatar` (requerido): cara/identidad
+- `producto` (requerido): hasta 10 productos — con selector de tipo (mismo componente `HaulReferenceTypeSelector`, categoría `producto`, opciones ampliadas: maquillaje, skincare, gadget/tech, comida/bebida, bienestar/suplemento, producto genérico)
+- `empaque` (opcional): caja o packaging en la que llegaron los productos — mismo slot ámbar que `unboxing`. Si se sube, genera shots de unboxing intercalados
+
+**Tipos de producto y modo de interacción del avatar** (`ProductHaulResolvedKind` → `ProductInteractionMode`):
+- `skincare` / `makeup` → `applied_to_face_or_body` (se aplica sobre rostro/piel)
+- `gadget` → `held_and_used` (se sostiene y se usa activamente)
+- `food_drink` → `held_or_consumed` (se sostiene o se consume)
+- `wellness` / `generic_product` → `held_or_displayed` (se sostiene o se exhibe)
+
+`buildProductInteractionBlock()` (en `recipes/productHaul.ts`) genera el bloque de prompt que fuerza esta correspondencia — evita cruces como "aplicar" un gadget o "operar" un sérum.
+
+**Arquitectura de 3 fases (`buildProductHaulShotPlan`):**
+1. **Coverage obligatoria:** cada producto subido → 1 `PRODUCT_FEATURE_N` (hero shot garantizado)
+2. **Budget narrativo:** `PRODUCT_OVERVIEW` (apertura, flat-lay de todo el set, siempre primero si hay budget), `PRODUCT_UNBOXING_N` por cada ítem de empaque (si el usuario subió), `PRODUCT_RECAP` (cierre — solo si ≥2 productos y hay budget)
+3. **Interleaving:** los shots de unboxing se reparten uniformemente entre los `PRODUCT_FEATURE_N`, no se agrupan al principio ni al final
+
+**Sin styling graph, sin scoring de compatibilidad** — a diferencia de `outfit_haul`, no existe `buildProductHaulStylingGraph` ni `scoreProductCompatibility`. Cada producto tiene su propio hero shot sin intentar combinarlo con otros.
+
+**Debug disponible:** `productHaulManifest`, `productHaulCoverageLedger`, `uncoveredRequiredItems_productHaul`, y por shot `productHaulRoutingDebug` (primaryItemId, resolvedKind, interactionMode, isPackagingShot) + `productHaulItemPlan`.
+
+**Decisión de arquitectura:** se descubrió que `outfit_week` ya tiene roles `WEEK_PRODUCT_*` y tipos de ítem producto (skincare/makeup/tech/beauty_product), pero viven entrelazados dentro de `buildWeeklyShotPlan()` (~1000 líneas, mezclado con lógica exclusiva de outfits ya validada en producción). Se decidió **no tocar `outfitWeek.ts`** — `product_haul` es 100% independiente, sin dependencias cruzadas con week. Se puede unificar vocabulario más adelante si hace falta, una vez validada en la app.
+
+**Próxima acción:** Probar en app. Evaluar:
+1. ¿Cada producto subido tiene al menos 1 `PRODUCT_FEATURE` shot?
+2. ¿El tipo de interacción coincide con la categoría (skincare se aplica, gadget se sostiene y usa)?
+3. ¿El empaque (si se subió) aparece intercalado, no agrupado al final?
+4. ¿El overview aparece primero, el recap al final?
+5. ¿Hay contaminación de vocabulario de "outfit" (wearing/look/outfit) en los prompts? — no debería haber ninguna
+
+---
+
+## Recetas cerradas — Day In Life
+
+### 🔄 `day_in_life` — IMPLEMENTADA, pendiente prueba (Julio 2026)
+
+**Historia:** "un día en mi vida" — puede ser UN evento/salida (cena, tienda, festival) o un día con varios momentos distintos (gym en la mañana, oficina, cena con amigas).
+
+**Única receta multi-mundo del módulo.** Todas las demás recetas (`outfit_check`, `outfit_haul`, `outfit_week`, `product_haul`, `unboxing`) asumen un único REF0 que ancla un único mundo físico para todo el set. `day_in_life` rompe esa asunción: el brief puede describir hasta 3 momentos/lugares distintos, cada uno con su propia escena.
+
+**Diseño validado con el usuario antes de implementar** (a partir de 6 series de referencia analizadas: tienda de accesorios, cena elegante, viaje, cumpleaños, noche de amigas, festival — el patrón común identificado fue: retrato protagonista + detalle que ancla el lugar + toma de ambiente + momento social):
+- Multi-mundo desde v1 (no era la opción por defecto — se evaluó primero limitar a un solo evento, pero el usuario pidió soporte multi-mundo real)
+- Input de bloques: solo texto libre en el brief, sin slot de referencia visual por bloque — la IA inventa cada escena
+- Refs de outfit/producto sin bloque asignado se aplican a todos los bloques (mismo outfit todo el día, salvo que el brief diga lo contrario)
+- Continuidad de identidad: cada REF0 de bloque 2+ se genera con el avatar original + el REF0 del bloque anterior como referencia (encadenado tipo posta) — misma persona, escena distinta
+- Acompañante: rol narrativo opcional, activado solo si se sube una referencia — nunca se inventa un segundo personaje
+
+**Slots:**
+- `avatar` (requerido): cara/identidad
+- `outfit` (opcional): hasta 4 prendas — se aplican a todos los bloques
+- `producto` (opcional): hasta 3 — con selector de tipo `HaulReferenceTypeSelector` (categoría `producto`). Nueva opción `acompanante`: si el usuario marca una imagen como acompañante en vez de producto, esa referencia activa shots `BLOCK_COMPANION`. No se agregó un slot dedicado nuevo en `RecipeRefConfig` — se reusó el slot `producto` con selector de tipo para no tocar el tipo compartido por todas las recetas.
+- `escena` (opcional): ambiente general — usado solo si el brief no describe bloques separables (colapsa a 1 bloque)
+
+**Detección de bloques (`parseDayBlocks`, sin LLM):**
+Heurística de texto local, mismo enfoque que `recipes/briefTags.ts` (que resuelve tags `@item` sin backend): segmenta el brief por separadores de lista (comas, " y ", saltos de línea) y solo trata un segmento como bloque si menciona una palabra reconocible de momento/lugar (`gym`, `oficina`, `cena`, `café`, etc. — lista en `MOMENT_HINT_WORDS`). Si hay menos de 2 segmentos reconocibles, colapsa a 1 solo bloque usando el brief completo — el pipeline no necesita rama especial para el caso single-world, es simplemente N=1. Máximo 3 bloques.
+
+**REF0 encadenado (`generateDayInLifeRef0Chain`):**
+Genera un REF0 por bloque, no uno solo para todo el set:
+- Bloque 0: REF0 estándar — avatar + outfit/producto compartidos + `sceneHint` del bloque.
+- Bloque N≥1: nueva generación que recibe avatar original + REF0 del bloque N-1 como referencias. El prompt instruye explícitamente "misma persona, ambiente distinto — no reutilices el lugar anterior".
+- Cada REF0 se analiza individualmente con `ugcApiService.analyzeREF0()` → `SceneFingerprint` propio por bloque (reusa `buildSceneFingerprint` de `recipes/shared.ts` sin modificarlo, llamado N veces).
+- La cadena completa se cachea en memoria (`ref0ChainCache`, mismo patrón que `anchorCache` de weeklyFavoritesV2) para que `generatePhotodumpShot` pueda recuperar el fingerprint del bloque correcto por shot sin volver a generar imágenes.
+
+**Scene-lock por bloque activo (`buildDayBlockLockBlock`):**
+Análogo a `buildREF0HardLockBlock`/`buildSceneContinuityBlock` de `outfitCheck.ts`, pero parametrizado por el fingerprint del bloque al que pertenece el shot actual — no un fingerprint global de sesión. Cada shot se ancla al mundo de SU bloque; el prompt prohíbe explícitamente mezclar muebles/luz/props entre bloques distintos.
+
+**Shot planner (`buildDayInLifeShotPlan`) — coverage + roles narrativos:**
+- **Fase 1 — coverage obligatoria:** cada bloque detectado recibe 1 `BLOCK_ESTABLISH` garantizado (retrato/selfie protagonista del momento).
+- **Fase 2 — budget narrativo:** con el resto del budget, reparte `BLOCK_DETAIL` (objeto/comida que ancla el lugar) → `BLOCK_COMPANION` (si hay acompañante) → `BLOCK_AMBIENCE` (toma sin persona), alternando bloques en vez de agotar uno antes de pasar al siguiente.
+- **Interleaving:** el arco final alterna `ESTABLISH` de cada bloque con sus extras correspondientes, en vez de agrupar todos los shots de un bloque de forma consecutiva.
+
+**Wiring — 3 funciones autónomas (mismo patrón que weeklyFavoritesV2):**
+`buildPhotodumpSessionPlan`, `generatePhotodumpREF0` y `generatePhotodumpShot` en el Director tienen un dispatch temprano `if (recipe === 'day_in_life')` que delega a `recipes/dayInLife.ts` sin pasar por `buildStoryDirectives` (asume mundo único) ni por el ensamblador de prompt compartido. `generatePhotodumpShot` resuelve a qué bloque pertenece cada shot leyendo el `blockId` embebido en `shot.key` (ej. `ESTABLISH_BLOCK_1`), recupera el REF0 y fingerprint de ESE bloque desde la caché, y arma el prompt con `buildDayBlockLockBlock` + los bloques globales estándar (`LOCK_SYSTEM`, `PARADIGM_RULE`, `STORY_MODE_DOMINANCE`).
+
+**Debug disponible:** `dayInLifeManifest`, `blocksDetected[]`, `coverageByBlock`, `uncoveredRequiredItems_dayInLife`, `ref0ChainUsed`, `ref0ChainLength`, y por shot `dayInLifeRoutingDebug` (blockId, blockLabel, role, usedCompanionRef).
+
+**Decisiones tomadas sin el usuario durante la implementación (revisar):**
+1. **Slot de acompañante vía selector de tipo, no slot dedicado:** se agregó la opción `acompanante` a `HaulRefKind`/`HaulReferenceTypeSelector` (categoría producto) en vez de agregar un campo `acompanante: 'optional'` a `RecipeRefConfig`. Motivo: evitar tocar un tipo compartido por las 8 recetas y evitar UI nueva — el patrón de selector de tipo ya existía y estaba disponible para el slot producto. Si en la prueba se ve confuso mezclar "producto del día" con "acompañante" en el mismo slot, se puede separar en un slot propio después.
+2. **Family blocks (UGC style hints) dejados activos** para day_in_life (no desactivados como en outfit_check/outfit_haul/product_haul). Motivo: es la receta con más variedad de mundos y podría beneficiarse de esa variedad de mood — pero no se probó, podría meter ruido/inconsistencia igual que le pasó a outfit_check antes de desactivarlos ahí.
+3. **`parseDayBlocks` es heurística de texto local (regex + keywords), no una llamada a LLM.** Motivo: el patrón existente para resolver tags `@item` (`recipes/briefTags.ts`) tampoco usa LLM, y agregar una acción nueva al backend (`ugcApiService`) hubiera requerido tocar infraestructura fuera del alcance de este cambio. Riesgo: la detección de bloques puede fallar con briefs fraseados de forma no estándar (la lista `MOMENT_HINT_WORDS` es finita). A ajustar según lo que se vea en la prueba real.
+4. **Máximo 3 bloques, budget mínimo 1 shot por bloque** — implementado tal como se acordó, pero no se probó qué pasa si el usuario pide `count: 3` con 3 bloques detectados (quedaría exactamente 1 `BLOCK_ESTABLISH` por bloque, sin ningún `BLOCK_DETAIL`/`BLOCK_AMBIENCE`). Puede sentirse muy plano — evaluar en la prueba si conviene un piso más alto de `count` cuando hay 3 bloques.
+
+**Próxima acción:** Probar en app. Evaluar:
+1. ¿`parseDayBlocks` detecta correctamente los bloques en un brief tipo "gym en la mañana, oficina, cena con amigas"? ¿Colapsa bien a 1 bloque con un brief de un solo evento?
+2. ¿Los REF0 de bloques 2 y 3 mantienen la misma identidad facial que el bloque 1?
+3. ¿Las escenas de cada bloque NO se mezclan entre sí (ropa/props de un bloque apareciendo en otro)?
+4. ¿El acompañante (si se sube) aparece solo en shots `BLOCK_COMPANION`, sin inventarse en otros shots?
+5. ¿El arco se siente natural o muy mecánico con el interleaving actual?
+6. ¿Vale la pena separar el slot de acompañante del slot de producto? (ver decisión #1 arriba)
+
+---
+
 ## Estado de trabajo actual
 
-**Receta activa: `outfit_week`**
+**Receta activa: `day_in_life`**
 
-Estado: patch v3 implementado, pendiente prueba en app.
+Estado: implementación completa (tipos, recipe `recipes/dayInLife.ts`, wiring en director service — 3 dispatch points — y en `PDStep2Receta.tsx`/`HaulReferenceTypeSelector.tsx` para el slot de acompañante), `tsc --noEmit` y build limpios. Pendiente prueba en app real. Ver "Recetas cerradas — Day In Life" arriba para las decisiones tomadas sin el usuario que necesitan su revisión.
+
+**Receta anterior: `product_haul`**
+
+Estado: implementación completa, pendiente prueba en app (sin cambios desde la última sesión).
+
+**Receta anterior a esa: `outfit_week`**
+
+Estado: el patch v3 documentado abajo describe la arquitectura de `recipes/outfitWeek.ts`, que **ya no está conectada** — fue reemplazada por el motor `recipes/weeklyFavoritesV2/` (ver tabla de archivos arriba). Esta sección se conserva como referencia histórica de diseño pero no describe el comportamiento actual del código. Pendiente: documentar `weeklyFavoritesV2` en detalle cuando se retome esa receta.
 
 **Qué cambió en patch v3 (Julio 2026) sobre v2:**
 - **Orden narrativo fijo:** OVERVIEW siempre primero, luego LOOK_HERO × N, luego ACCESSORY_INTEGRATED, luego CLOSER. Ya no hay anchor hero antes que el overview.
@@ -393,9 +506,9 @@ Estado: patch v3 implementado, pendiente prueba en app.
 
 ## Recetas pendientes (en orden)
 
-1. `outfit_week` — **prueba en app** (patch v2 listo)
-2. `day_in_life`
-3. `launch`
+1. `day_in_life` — **prueba en app** (implementación completa, ver "Recetas cerradas — Day In Life")
+2. `product_haul` — **prueba en app** (implementación completa, ver "Recetas cerradas — Product Haul")
+3. `outfit_week` — **prueba en app**, pero primero documentar el motor real `weeklyFavoritesV2` (el patch v3 abajo describe la versión legado desconectada)
 4. `bts` — **IMPORTANTE: el avatar puede aparecer, NO es obligatoriamente faceless. Evaluar caso a caso.**
 5. `travel`
 

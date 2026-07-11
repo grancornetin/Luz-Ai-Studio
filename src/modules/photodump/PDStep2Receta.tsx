@@ -221,7 +221,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
       return 4;                                // outfit_check: hasta 4 prendas del mismo look
     }
     if (key === 'accesorios')     return recipe === 'outfit_haul' ? 5 : recipe === 'outfit_week' ? 4 : 3;
-    if (key === 'producto')       return 3;
+    if (key === 'producto')       return recipe === 'product_haul' ? 10 : 3;
     if (key === 'empaque')        return 3;
     if (key === 'escena')         return 3;
     if (key === 'escena_prueba')  return 1;
@@ -366,7 +366,9 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
       : recipe === 'outfit_week'
         ? ['Accesorio 1', 'Accesorio 2', 'Accesorio 3', 'Accesorio 4']
         : ['Accesorio 1', 'Accesorio 2', 'Accesorio 3'],
-    producto:       ['Producto (dentro)', 'Ángulo 2', 'Ángulo 3'],
+    producto:       recipe === 'product_haul'
+      ? ['Producto 1', 'Producto 2', 'Producto 3', 'Producto 4', 'Producto 5', 'Producto 6', 'Producto 7', 'Producto 8', 'Producto 9', 'Producto 10']
+      : ['Producto (dentro)', 'Ángulo 2', 'Ángulo 3'],
     empaque:        ['Empaque principal', 'Ángulo 2', 'Ángulo 3'],
     escena:         ['Principal', 'Lugar 2', 'Lugar 3'],
     escena_prueba:  ['Dormitorio / espejo / probador'],
@@ -391,8 +393,15 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
       if (recipe === 'outfit_week') return 'Accesorios, bolsos, joyería o calzado que forman parte de tus favoritos. Usá el selector para indicar el tipo. Marcá ⭐ para close-up dedicado de ese ítem.';
       return 'Subí accesorios que quieras destacar. Marcá el ⭐ de cada accesorio que quieras con una toma de close-up dedicada — se generará como imagen extra.';
     }
-    if (key === 'producto') return recipe === 'unboxing' ? 'El producto dentro del empaque: lo que el cliente recibe. Subí hasta 3 ángulos.' : 'Subí hasta 3 ángulos del mismo producto para mayor fidelidad visual.';
-    if (key === 'empaque') return 'El empaque, caja o packaging del producto. Si no subís fotos, la IA generará un empaque — la consistencia puede variar.';
+    if (key === 'producto') {
+      if (recipe === 'unboxing') return 'El producto dentro del empaque: lo que el cliente recibe. Subí hasta 3 ángulos.';
+      if (recipe === 'product_haul') return 'Subí cada producto del set — una imagen por slot. Usá el selector debajo de cada imagen para indicar qué tipo de producto es (skincare, maquillaje, gadget, comida/bebida, bienestar o genérico): eso define cómo interactúa con el producto en cada foto.';
+      if (recipe === 'day_in_life') return 'Producto del día (opcional) o foto de tu acompañante — usá el selector debajo de cada imagen y elegí "Acompañante" para que el sistema genere momentos grupales en el set. Los distintos momentos del día (mañana, tarde, noche) se describen en el brief de texto, no acá.';
+      return 'Subí hasta 3 ángulos del mismo producto para mayor fidelidad visual.';
+    }
+    if (key === 'empaque') return recipe === 'product_haul'
+      ? 'Opcional: la caja o packaging en la que llegaron los productos. Si lo subís, se genera un momento de unboxing intercalado en el set.'
+      : 'El empaque, caja o packaging del producto. Si no subís fotos, la IA generará un empaque — la consistencia puede variar.';
     if (key === 'escena') return 'La escena principal define la ambientación del set completo.';
     if (key === 'escena_prueba') return 'Escena de prueba: lugar donde te preparás o revisás el look. Opcional. Si no subís foto, se genera un espacio coherente con el contexto del brief.';
     if (key === 'escena_destino') return 'Escena destino: lugar al que vas con el outfit puesto. Opcional. Si no subís foto, Luz IA intenta inferir el destino desde el brief.';
@@ -466,7 +475,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                 recipe === 'outfit'       ? 'Ej: @persona hace un haul de otoño luciendo @outfit en Palermo...' :
                 recipe === 'unboxing'     ? 'Ej: Caja de mi nueva crema de vitamina C, @persona hace el unboxing de @producto...' :
                 recipe === 'day_in_life'  ? 'Ej: @persona en una mañana de domingo tranquila en casa con @producto...' :
-                recipe === 'launch'       ? 'Ej: Primer lanzamiento de @producto, edición limitada, packaging artesanal...' :
+                recipe === 'product_haul' ? 'Ej: Miren lo que me llegó — mi nuevo set de skincare coreano, @persona probando cada producto...' :
                 recipe === 'bts'          ? 'Ej: Preparando los pedidos de la semana con @producto, papel de seda rosado...' :
                 recipe === 'travel'       ? 'Ej: @persona en Montevideo, el puerto, los cafés y la rambla al atardecer...' :
                 'Describí el contexto central del set...'
@@ -685,7 +694,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                                     category="accesorio"
                                   />
                                 )}
-                                {recipe === 'outfit_week' && hasImage && key === 'producto' && (
+                                {(recipe === 'outfit_week' || recipe === 'product_haul' || recipe === 'day_in_life') && hasImage && key === 'producto' && (
                                   <HaulReferenceTypeSelector
                                     value={getProductKind(i)}
                                     onChange={kind => handleProductKindChange(i, kind)}

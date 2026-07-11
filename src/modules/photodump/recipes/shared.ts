@@ -72,6 +72,11 @@ export interface PhotodumpShotDirective {
   haulItemPlan?:             import('../types').HaulShotItemPlan;
   // Weekly edit: plan de rol narrativo + routing de ítems por shot
   weeklyItemPlan?:           import('../types').WeeklyShotPlan;
+  // Product Haul: plan de ítems por shot — qué aparece, se sostiene, está prohibido
+  productHaulItemPlan?:      import('../types').ProductHaulShotItemPlan;
+  // weeklyFavoritesV2: plan de rol + routing de ítems por shot (receta nueva,
+  // no comparte estructura con weeklyItemPlan)
+  weeklyFavoritesV2Plan?:    import('./weeklyFavoritesV2/types').WeeklyFavoritesV2ShotPlan;
 }
 
 // Estilo visual de presentación para recetas outfit.
