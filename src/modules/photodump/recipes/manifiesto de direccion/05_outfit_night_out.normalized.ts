@@ -10,7 +10,7 @@ import type {
   AnchorTemplate,
   PhotodumpRecipeDefinition,
   RecipeShotTemplate,
-} from './recipe.contract';
+} from './05_recipe_contract';
 
 const identityRefs = ['avatarFace', 'avatarBody'];
 const outfitRef = ['outfitNight'];
@@ -404,6 +404,7 @@ export const OUTFIT_NIGHT_OUT_RECIPE: PhotodumpRecipeDefinition = {
   anchor,
   shots,
   compression,
+  renderProfile: 'iphone_camera_roll',
   knownLimitations: [
     'A second-reference visual test is still required before INTEGRATION_READY.',
     'Maximum is intentionally seven visible shots; interpolation beyond seven is not yet validated.',
