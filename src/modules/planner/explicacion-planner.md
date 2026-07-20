@@ -7,8 +7,33 @@
 > 4. No borrar secciones — si algo fue eliminado, marcarlo como "Eliminado en [fecha]" y explicar por qué.
 > 5. El objetivo es que otra IA pueda leer este archivo y entender completamente qué hace el módulo, cómo funciona, y en qué estado está, sin necesidad de leer el código.
 
-**Última actualización:** Mayo 2026 (rediseño completo — onboarding + vista semanal + burbuja flotante)  
+**Última actualización:** Julio 2026 (Planner V3 — ciclo semanal con resultados reales)
 **Propósito:** Asistente de contenido que diseña la semana de publicaciones de la emprendedora, le dice exactamente qué crear, con qué caption, en qué plataforma, y la acompaña mientras lo genera.
+
+## Estado actual: Planner V3
+
+Las pantallas y motores descritos más abajo como `PlannerList`, `PlannerOnboarding`,
+`PlannerDetail`, `PlannerWeek` y `growthPlanner/engineV2` corresponden al V2 y
+quedaron archivados en `_archived_v2/` en julio de 2026. Ya no se montan en rutas.
+
+El V3 usa **Mis Marcas** como fuente principal y guarda cada semana en
+`/users/{uid}/contentPlans/{planId}`. El flujo activo es:
+
+1. `PlannerV3Home`: semana activa, progreso, aviso de cierre e historial.
+2. `PlannerV3Wizard`: marca, meta mensual, ritmo y redes; Gemini genera la semana.
+3. `PlannerV3Week`: estrategia y las siete respuestas de cada publicación.
+4. `PlannerV3Closing`: publicaciones reales, métricas, informe y semana siguiente.
+
+La burbuja conserva los eventos `planner:task:activate` y `planner:task:complete`.
+En V3 actualiza `contentPlans` mediante `contentPlanService`, usando `planId` en el
+campo histórico `projectId`. Las capturas se envían a Gemini y no se almacenan:
+solo se guardan los números que la usuaria confirma.
+
+Desde julio de 2026, Mis Marcas puede guardar estadísticas separadas para
+Instagram, TikTok y Facebook. El prompt del Planner recibe cada red identificada
+y usa el mejor horario de la red correspondiente a cada tarea. En el cierre
+semanal, `MetricsCapture` muestra la guía específica de la plataforma y permite
+combinar varias capturas del mismo post antes de confirmar los números.
 
 ---
 

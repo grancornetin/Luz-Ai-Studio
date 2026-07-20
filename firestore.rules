@@ -183,6 +183,11 @@ service cloud.firestore {
         allow read, write: if isOwner(userId) || isAdmin();
       }
 
+      // Planes de contenido (Planner V3)
+      match /contentPlans/{planId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
       // Flags internos (ej: migración)
       match /meta/{docId} {
         allow read, write: if isOwner(userId) || isAdmin();

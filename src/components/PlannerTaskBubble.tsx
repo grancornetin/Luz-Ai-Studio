@@ -13,7 +13,7 @@ import {
   X, ChevronUp, ChevronDown, Copy, Check,
   CheckCircle2, Zap, TrendingUp, CalendarDays,
 } from 'lucide-react';
-import { updateCalendarEntryStatus } from '../services/projectService';
+import { contentPlanService } from '../modules/planner/v3/contentPlanService';
 
 // ── Tipos ─────────────────────────────────────────────────────
 
@@ -31,6 +31,7 @@ interface TaskPayload {
   whatToUpload: string[];
   howToConfigure: string[];
   engagementHook: string;
+  whyThisContent?: string;
 }
 
 const MODULE_META: Record<string, { label: string; color: string; bg: string }> = {
@@ -92,7 +93,7 @@ const PlannerTaskBubble: React.FC = () => {
     if (!task || marking) return;
     setMarking(true);
     try {
-      await updateCalendarEntryStatus(task.projectId, task.id, 'done');
+      await contentPlanService.updateTaskStatus(task.projectId, task.id, 'done');
       window.dispatchEvent(new CustomEvent('planner:task:complete', {
         detail: { taskId: task.id, projectId: task.projectId },
       }));
@@ -177,6 +178,14 @@ const PlannerTaskBubble: React.FC = () => {
           >
             {meta.label}
           </span>
+
+          {/* Prompt */}
+          {task.whyThisContent && (
+            <details className="rounded-xl bg-rose-50 p-3">
+              <summary className="cursor-pointer text-[9px] font-black uppercase tracking-widest text-[#F72C5B]">Por qué este contenido</summary>
+              <p className="mt-2 text-xs leading-relaxed text-slate-600">{task.whyThisContent}</p>
+            </details>
+          )}
 
           {/* Prompt */}
           {task.prompt && (

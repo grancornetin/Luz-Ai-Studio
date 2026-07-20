@@ -1,0 +1,317 @@
+import type {
+  GrowthBrand,
+  GrowthContentModule,
+  GrowthCtaTarget,
+  GrowthEstimatedEffort,
+  GrowthFunnelRole,
+  GrowthInstagramMetrics,
+  GrowthPlanDuration,
+  GrowthPlatform,
+  GrowthProduct,
+  GrowthRoadmapItem,
+  GrowthTask,
+} from '../../growthPlannerTypes';
+
+export type Channel = GrowthPlatform;
+export type ContentModule = GrowthContentModule;
+export type FunnelRole = GrowthFunnelRole;
+export type TaskPriority = 'primary' | 'support';
+export type EstimatedEffort = GrowthEstimatedEffort;
+export type SalesAggressiveness = 'soft' | 'balanced' | 'direct';
+export type PlanningDepth = 'guided' | 'advanced';
+export type PlanQualityStatus = 'ready' | 'needs_review' | 'failed_validation';
+export type ResearchMode = 'grounded' | 'gemini_without_grounding' | 'fallback' | 'skipped';
+export type PromptPolicy = 'required_primary' | 'optional_primary' | 'required_support' | 'optional_support' | 'none';
+
+export type BusinessArchetype =
+  | 'ecommerce_product'
+  | 'fashion_accessories'
+  | 'fashion_clothing'
+  | 'beauty_cosmetics'
+  | 'food_beverage'
+  | 'service_business'
+  | 'local_retail'
+  | 'education_course'
+  | 'events_experiences'
+  | 'handmade_crafts'
+  | 'generic_business'
+  | 'physical_product'
+  | 'digital_product'
+  | 'local_service'
+  | 'professional_service'
+  | 'saas_subscription'
+  | 'personal_brand'
+  | 'food_business'
+  | 'event_experience'
+  | 'marketplace_catalog'
+  | 'prelaunch'
+  | 'stock_clearance'
+  | 'course_education'
+  | 'other';
+
+export type CampaignAngle =
+  | 'estilo_diario'
+  | 'versatilidad_producto'
+  | 'regalo_detalle'
+  | 'antes_despues_outfit'
+  | 'prueba_social_producto'
+  | 'guia_de_estilo'
+  | 'producto_destacado'
+  | 'temporada_ocasion'
+  | 'comparativa_productos'
+  | 'confianza_compra'
+  | 'impulso_whatsapp'
+  | 'dolor_visual'
+  | 'ahorro_tiempo'
+  | 'comparacion_planes'
+  | 'prueba_social'
+  | 'educacion_creditos'
+  | 'objeciones_compra'
+  | 'lanzamiento_producto'
+  | 'reactivacion_audiencia'
+  | 'decision_plan_correcto'
+  | 'producto_en_uso'
+  | 'antes_despues'
+  | 'autoridad'
+  | 'comunidad'
+  | 'temporada'
+  | 'stock_limitado';
+
+export interface PlannerEngineV2Input {
+  duration: GrowthPlanDuration;
+  brand: GrowthBrand;
+  products: GrowthProduct[];
+  instagramMetrics: GrowthInstagramMetrics;
+  businessStage: string;
+  mainGoal: string;
+  commercialFocus: string;
+  planningDepth?: PlanningDepth;
+}
+
+export interface TaskBlueprint {
+  id: string;
+  name: string;
+  platform: Channel;
+  contentType: string;
+  funnelRole: FunnelRole;
+  defaultModule: ContentModule;
+  allowedModules: ContentModule[];
+  defaultSupportModule?: ContentModule;
+  allowedSupportModules?: ContentModule[];
+  ctaTargets: GrowthCtaTarget[];
+  estimatedEffort: EstimatedEffort;
+  taskPriority: TaskPriority;
+  promptPolicy: PromptPolicy;
+  requiresPrompt: boolean;
+  allowsSupportPrompt: boolean;
+  requiredSlots: string[];
+  forbiddenTerms: string[];
+  requiredTerms: string[];
+  businessArchetypes: BusinessArchetype[];
+  campaignAngles: CampaignAngle[];
+  objectiveTags: string[];
+  outputContract: {
+    mustUsePlatformLanguage: boolean;
+    mustHaveActionableHook: boolean;
+    mustNotMentionOtherPlatforms: boolean;
+    mustRespectModuleRules: boolean;
+    mustRespectCTA: boolean;
+  };
+}
+
+export interface PlanSkeletonTask {
+  id: string;
+  week: number;
+  date: string;
+  dayLabel: string;
+  blueprintId: string;
+  campaignAngle: CampaignAngle;
+  platform: Channel;
+  contentType: string;
+  funnelRole: FunnelRole;
+  module: ContentModule;
+  supportModule?: ContentModule;
+  ctaTarget: GrowthCtaTarget;
+  estimatedEffort: EstimatedEffort;
+  taskPriority: TaskPriority;
+  productId?: string;
+  variationReason: string;
+}
+
+export interface GeneratedTaskV2 extends GrowthTask {
+  blueprintId: string;
+  campaignAngle: CampaignAngle;
+  variationReason: string;
+  needsManualReview: boolean;
+  validationErrors: string[];
+  regenerationAttempts: number;
+}
+
+export interface PreviousPlanMemory {
+  brandId: string;
+  brandName?: string;
+  businessArchetype?: BusinessArchetype;
+  adapterId?: string;
+  objectiveSignature: string;
+  productSignature: string;
+  previousCampaignAngles: CampaignAngle[];
+  previousBlueprintsUsed: string[];
+  previousCaptions: string[];
+  previousTaskConcepts: string[];
+  previousCTAs: string[];
+  previousProductsHighlighted: string[];
+  previousTaskSignatures?: string[];
+  planSignature?: string;
+  lastGeneratedAt: string;
+}
+
+export interface CampaignAngleSelection {
+  campaignAngle: CampaignAngle;
+  campaignAngleReason: string;
+  creativeSeed: string;
+}
+
+export interface ArchetypeDetection {
+  businessArchetype: BusinessArchetype;
+  confidence: 'high' | 'medium' | 'low';
+  warnings: string[];
+}
+
+export interface NicheAdapter {
+  id: string;
+  archetypes: BusinessArchetype[];
+  keywords: string[];
+  examples: string[];
+  typicalObjections: string[];
+  usefulProof: string[];
+  visualStyle: string[];
+  suggestedAssets: string[];
+  allowedBlueprints: string[];
+  forbiddenBlueprints: string[];
+  allowedCampaignAngles: CampaignAngle[];
+  forbiddenCampaignAngles: CampaignAngle[];
+  allowedVocabulary: string[];
+  forbiddenVocabulary: string[];
+  slotRegistry: string[];
+  ctaRules: string[];
+  formatRules: string[];
+  moduleRules: string[];
+  captionRules: string[];
+  weakPhraseRules: string[];
+}
+
+export interface SkeletonResult {
+  tasks: PlanSkeletonTask[];
+  roadmap: GrowthRoadmapItem[];
+  blueprintsUsed: string[];
+  variationDecisions: string[];
+  noveltyScore: number;
+}
+
+export interface BlueprintValidationResult {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface WeakPhraseOccurrence {
+  taskId?: string;
+  field: string;
+  phrase: string;
+  snippet: string;
+}
+
+export interface ReleaseGateResult {
+  canPublishToUser: boolean;
+  planQualityStatus: PlanQualityStatus;
+  hardFailures: string[];
+  softWarnings: string[];
+  blockingReasons: string[];
+  releaseNotes: string[];
+}
+
+export interface FinalValidationSummary {
+  status: PlanQualityStatus;
+  checks: Record<string, boolean>;
+  criticalErrors: string[];
+  reviewWarnings: string[];
+  releaseGate?: ReleaseGateResult;
+}
+
+export interface EngineV2Metadata {
+  plannerEngineVersion: 'v2-blueprint';
+  planningDepth: PlanningDepth;
+  planQualityStatus: PlanQualityStatus;
+  campaignAngle: CampaignAngle;
+  campaignAngleReason: string;
+  creativeSeed: string;
+  noveltyScore: number;
+  blueprintsUsed: string[];
+  blueprintValidation: Record<string, BlueprintValidationResult>;
+  taskRegenerationAttempts: Record<string, number>;
+  tasksNeedingManualReview: string[];
+  previousPlanComparison: string;
+  repeatedBlueprintsDetected: string[];
+  repeatedCaptionsDetected: string[];
+  variationDecisions: string[];
+  finalValidationSummary: FinalValidationSummary;
+  businessArchetype: BusinessArchetype;
+  nicheAdapterUsed: string;
+  previousAdapter?: string | null;
+  adapterLeakageDetected?: boolean;
+  adapterIsolation?: {
+    valid: boolean;
+    forbiddenBlueprintsDetected: string[];
+    forbiddenVocabularyDetected: string[];
+    forbiddenSlotsDetected: string[];
+  };
+  salesAggressiveness: SalesAggressiveness;
+  researchMode: ResearchMode;
+  researchConfidence: 'high' | 'medium' | 'low';
+  researchedInsights: string[];
+  inferredInsights: string[];
+  fallbackInsights: string[];
+  legacyNormalizersSkipped: string[];
+  v2ValidatorsApplied: string[];
+  contractLockedFields: string[];
+  tasksRegenerated: number;
+  tasksMarkedForReview: number;
+  fallbackCompletion: {
+    blueprintsWithFallback: number;
+    blueprintsMissingFallback: string[];
+    tasksCompletedByFallback: string[];
+    tasksCompletedByGemini: string[];
+    tasksWhereGeminiRejectedButFallbackUsed: string[];
+  };
+  slotNormalizationSummary: {
+    aliasesNormalized: string[];
+    missingInstructionsAdded: string[];
+    unresolvedSlots: string[];
+  };
+  hookValidationSummary: {
+    hooksBuiltByFactory: string[];
+    hooksAcceptedFromGemini: string[];
+    hooksRejectedAndRebuilt: string[];
+  };
+  weakPhraseSummary: {
+    inputPhrasesSanitized: string[];
+    outputPhrasesRemoved: string[];
+    remainingWeakPhrases: string[];
+    occurrences?: WeakPhraseOccurrence[];
+  };
+  antiRepetitionSummary: {
+    noveltyScore: number;
+    repeatedBlueprintsAllowed: string[];
+    repeatedTaskSignaturesRejected: string[];
+    captionsIgnoredBecausePlaceholder: string[];
+    sameBlueprintSequenceRepeated: boolean;
+    sameCampaignAngleRepeatedThreeTimes: boolean;
+    similarTaskSignatureRatio: number;
+  };
+  validationConsistency: {
+    valid: boolean;
+    contradictions: string[];
+    correctedChecks: string[];
+  };
+  releaseGate: ReleaseGateResult;
+}

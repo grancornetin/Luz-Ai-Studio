@@ -18,7 +18,42 @@ export interface BrandAsset {
   notes?: string;
 }
 
+// ── NUEVO (Mis Marcas 2.0): estadísticas por red social ─────────────
+// Cada red guarda sus propios datos. Los campos planos de
+// BrandSocialInsights se conservan como espejo de Instagram para que
+// todo el código existente (Planner, informes) siga funcionando.
+
+export type SocialNetworkKey = 'instagram' | 'tiktok' | 'facebook';
+
+export const SOCIAL_NETWORK_LABELS: Record<SocialNetworkKey, string> = {
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  facebook: 'Facebook',
+};
+
+export interface NetworkInsights {
+  handle: string;         // nombre de usuario, sin @
+  followers: string;      // "1240" como texto para mostrar
+  reachDiagnosis: string; // "Alcanzaste 4.200 cuentas en los últimos 30 días"
+  videoInsight: string;   // qué dicen los datos de reels / tiktoks / videos
+  postInsight: string;    // qué dicen los datos de publicaciones / carruseles
+  bestTime: string;       // "19:00–21:00" o "Domingos 20:00"
+  notes: string;
+  updatedAt: number;
+}
+
+export const EMPTY_NETWORK_INSIGHTS: Omit<NetworkInsights, 'updatedAt'> = {
+  handle: '',
+  followers: '',
+  reachDiagnosis: '',
+  videoInsight: '',
+  postInsight: '',
+  bestTime: '',
+  notes: '',
+};
+
 export interface BrandSocialInsights {
+  // Campos originales (se conservan; espejo de Instagram)
   instagramHandle: string;
   followers: string;
   reachDiagnosis: string;
@@ -27,6 +62,9 @@ export interface BrandSocialInsights {
   bestTime: string;
   notes: string;
   updatedAt: number;
+
+  // NUEVO: datos por red. Opcional para no romper perfiles existentes.
+  networks?: Partial<Record<SocialNetworkKey, NetworkInsights>>;
 }
 
 export type BusinessModel =

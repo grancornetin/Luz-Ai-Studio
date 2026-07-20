@@ -14,7 +14,8 @@ function isColorDark(hex: string): boolean {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useBrandProfiles } from '../../hooks/useBrandProfiles';
-import { BrandProfileEditor } from './BrandProfileEditor';
+import { BrandCoreWizard } from './BrandCoreWizard';
+import { BrandLivingProfile } from './BrandLivingProfile';
 import type { BrandProfile } from './types';
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────────
@@ -83,7 +84,7 @@ function BrandCard({ profile, onEdit, onDelete, onSetDefault, deleting }: BrandC
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight truncate">{profile.brandName}</h3>
+              <h3 className="text-sm font-bold text-slate-800 truncate">{profile.brandName}</h3>
               {profile.isDefault && (
                 <Star size={12} className="flex-shrink-0" style={{ color: '#F72C5B', fill: '#F72C5B' }} />
               )}
@@ -94,7 +95,7 @@ function BrandCard({ profile, onEdit, onDelete, onSetDefault, deleting }: BrandC
             </div>
           </div>
           <span
-            className="flex-shrink-0 text-[10px] font-black px-2 py-1 rounded-xl uppercase tracking-wider"
+            className="flex-shrink-0 text-xs font-semibold px-2 py-1 rounded-xl"
             style={{ color: st.color, background: st.bg }}
           >
             {st.label}
@@ -116,11 +117,14 @@ function BrandCard({ profile, onEdit, onDelete, onSetDefault, deleting }: BrandC
         )}
 
         {/* Score */}
-        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold">
             <Clock size={11} />
             {formatDate(profile.updatedAt)}
           </div>
+          <p className="mb-3 text-xs text-slate-500">
+            {isComplete ? 'Tus planes ya salen a tu medida.' : 'Complétala y tus captions mejorarán.'}
+          </p>
           <div className="flex items-center gap-1.5 text-[10px]">
             {!isComplete && (
               <span className="font-black" style={{ color: '#F72C5B' }}>{profile.completionScore}% completo</span>
@@ -161,7 +165,7 @@ function BrandCard({ profile, onEdit, onDelete, onSetDefault, deleting }: BrandC
                   onClick={onEdit}
                   className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-black bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all"
                 >
-                  <Edit3 size={13} /> Editar
+                  <Edit3 size={13} /> Abrir perfil
                 </button>
                 <button
                   onClick={() => navigate('/planner')}
@@ -177,7 +181,7 @@ function BrandCard({ profile, onEdit, onDelete, onSetDefault, deleting }: BrandC
                 className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-black text-white transition-all shadow-sm"
                 style={{ background: '#F72C5B' }}
               >
-                Continuar configuración →
+                Seguir completando (2 min)
               </button>
             )}
 
@@ -222,16 +226,16 @@ function EmptyState({ onNew }: { onNew: () => void }) {
       >
         <Palette size={32} style={{ color: '#F72C5B' }} />
       </div>
-      <h2 className="text-2xl font-black text-slate-800 mb-3">Aún no tenés marcas creadas</h2>
+      <h2 className="text-2xl font-bold text-slate-800 mb-3">Tu marca merece un cerebro propio</h2>
       <p className="text-sm text-slate-400 leading-relaxed max-w-md mx-auto mb-6">
-        Crea tu primera marca para que Luz IA pueda ayudarte con mejores planes, captions, campañas y contenido visual.
+        Cuéntale a Luz quién eres una sola vez. Tus planes, captions e imágenes saldrán hechos a tu medida.
       </p>
       <button
         onClick={onNew}
-        className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-white text-sm font-black uppercase tracking-wider transition-all shadow-lg"
+        className="inline-flex min-h-11 items-center gap-2 px-6 py-3 rounded-[14px] text-white text-sm font-bold transition-all shadow-lg"
         style={{ background: '#F72C5B', boxShadow: '0 8px 24px rgba(247,44,91,0.3)' }}
       >
-        <Plus size={16} /> Crear mi primera marca
+        <Plus size={16} /> Crear mi marca (4 min)
       </button>
     </div>
   );
@@ -239,7 +243,7 @@ function EmptyState({ onNew }: { onNew: () => void }) {
 
 // ── MODULE PRINCIPAL ──────────────────────────────────────────────────────────────
 
-type View = 'list' | 'editor';
+type View = 'list' | 'wizard' | 'profile';
 
 export const BrandProfilesModule: React.FC = () => {
   const { user } = useAuth();
@@ -251,17 +255,16 @@ export const BrandProfilesModule: React.FC = () => {
 
   const startCreate = () => {
     setEditingProfile(undefined);
-    setView('editor');
+    setView('wizard');
   };
 
   const startEdit = (profile: BrandProfile) => {
     setEditingProfile(profile);
-    setView('editor');
+    setView('profile');
   };
 
-  const handleSaved = async (saved: BrandProfile) => {
+  const handleSaved = async (_saved: BrandProfile) => {
     await reload();
-    setView('list');
   };
 
   const handleDelete = async (profileId: string) => {
@@ -293,18 +296,19 @@ export const BrandProfilesModule: React.FC = () => {
     );
   }
 
-  // Vista editor
-  if (view === 'editor') {
+  if (view === 'wizard') {
     return (
       <div className="-m-4 md:-m-10 min-h-screen">
-        <BrandProfileEditor
+        <BrandCoreWizard
           userId={user.uid}
-          existingProfile={editingProfile}
-          onSaved={handleSaved}
+          onDone={handleSaved}
           onBack={() => setView('list')}
         />
       </div>
     );
+  }
+  if (view === 'profile' && editingProfile) {
+    return <div className="-m-4 md:-m-10 min-h-screen"><BrandLivingProfile userId={user.uid} profile={editingProfile} onBack={() => setView('list')} onUpdated={handleSaved}/></div>;
   }
 
   // Vista lista
@@ -313,18 +317,18 @@ export const BrandProfilesModule: React.FC = () => {
       {/* Hero */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
-          <p className="text-[10px] font-black text-[#F72C5B] uppercase tracking-widest mb-2">Mis Marcas · v1.0</p>
+          <p className="text-[11px] font-bold text-[#F72C5B] uppercase tracking-widest mb-2">Mis Marcas · v2.0</p>
           <h1 className="text-3xl font-black text-slate-800 leading-tight">
-            Tus marcas, <span style={{ color: '#F72C5B' }}>en un solo lugar</span>
+            El cerebro de <span style={{ color: '#F72C5B' }}>tu marca</span>
           </h1>
           <p className="text-sm text-slate-400 mt-2 max-w-lg leading-relaxed">
-            Configura la identidad de cada marca para que Luz IA pueda crear contenido más coherente para tu negocio.
+            Una identidad viva que mejora tus planes, captions e imágenes.
           </p>
         </div>
         {profiles.length > 0 && (
           <button
             onClick={startCreate}
-            className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-white text-sm font-black uppercase tracking-wider shadow-sm flex-shrink-0 transition-all"
+            className="inline-flex min-h-11 items-center gap-2 px-5 py-3 rounded-[14px] text-white text-sm font-bold shadow-sm flex-shrink-0 transition-all"
             style={{ background: '#F72C5B', boxShadow: '0 4px 16px rgba(247,44,91,0.3)' }}
           >
             <Plus size={16} /> Crear nueva marca
@@ -366,7 +370,8 @@ export const BrandProfilesModule: React.FC = () => {
             />
           ))}
           {/* Card "Crear nueva" */}
-          <div
+          <button
+            type="button"
             onClick={startCreate}
             className="bg-white rounded-2xl border-2 border-dashed border-slate-200 p-8 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-[#F72C5B] hover:bg-rose-50/20 transition-all group"
           >
@@ -375,9 +380,9 @@ export const BrandProfilesModule: React.FC = () => {
             </div>
             <div className="text-center">
               <p className="text-sm font-black text-slate-600 group-hover:text-[#F72C5B] transition-colors">Crear nueva marca</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">Te guiamos paso a paso. ~5 min.</p>
+              <p className="text-xs text-slate-500 mt-0.5">Tu núcleo de marca en 4 min.</p>
             </div>
-          </div>
+          </button>
         </div>
       )}
 
@@ -386,25 +391,6 @@ export const BrandProfilesModule: React.FC = () => {
         <EmptyState onNew={startCreate} />
       )}
 
-      {/* Info módulos */}
-      {!loading && profiles.length > 0 && (
-        <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
-          <p className="text-xs font-black text-slate-600 uppercase tracking-widest mb-3">Tus marcas mejoran estos módulos:</p>
-          <div className="flex flex-wrap gap-2">
-            {[
-              { name: 'Planner',        icon: '📅' },
-              { name: 'Campaign',       icon: '📣' },
-              { name: 'Product Studio', icon: '🛍️' },
-              { name: 'UGC Studio',     icon: '📱' },
-              { name: 'Prompt Studio',  icon: '✨' },
-            ].map(m => (
-              <div key={m.name} className="flex items-center gap-1.5 bg-slate-50 rounded-xl px-3 py-2 text-xs font-bold text-slate-600 border border-slate-100">
-                <span>{m.icon}</span> {m.name}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

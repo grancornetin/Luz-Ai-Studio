@@ -49,9 +49,10 @@ import { AvatarProfile, ProductProfile } from './types';
 const NotificationsPanel = lazy(() => import('./views/NotificationsPanel'));
 const CampaignModule   = lazy(() => import('./modules/campaign/CampaignModule'));
 const PhotodumpModule  = lazy(() => import('./modules/photodump/PhotodumpModule'));
-const PlannerList      = lazy(() => import('./modules/planner/PlannerList'));
-const PlannerDetail    = lazy(() => import('./modules/planner/PlannerDetail'));
-const PlannerOnboarding = lazy(() => import('./modules/planner/PlannerOnboarding'));
+const PlannerV3Home = lazy(() => import('./modules/planner/v3/PlannerV3Home'));
+const PlannerV3Week = lazy(() => import('./modules/planner/v3/PlannerV3Week'));
+const PlannerV3Wizard = lazy(() => import('./modules/planner/v3/PlannerV3Wizard'));
+const PlannerV3Closing = lazy(() => import('./modules/planner/v3/PlannerV3Closing'));
 const BrandProfilesModule = lazy(() => import('./modules/brandProfiles/BrandProfilesModule'));
 
 const PLAN_STYLES: Record<string, { label: string; className: string }> = {
@@ -94,7 +95,7 @@ const MENU_GROUPS = [
     label: 'Planes de contenido',
     icon: 'fa-calendar-days',
     items: [
-      { path: '/planner',     label: 'Planes de contenido', sublabel: 'Qué publicar cada día', icon: 'fa-calendar-days' },
+      { path: '/planner',     label: 'Planes de contenido', sublabel: 'Tu estrategia semanal', icon: 'fa-calendar-days' },
       { path: '/projects',    label: 'Proyectos',  sublabel: 'Biblioteca',             icon: 'fa-folder-open' },
       { path: '/mis-marcas',  label: 'Mis Marcas', sublabel: 'Perfiles de marca',      icon: 'fa-palette' },
     ]
@@ -442,9 +443,10 @@ const AppContent: React.FC = () => {
                   <Route path="/pricing"        element={<Pricing />} />
                   <Route path="/buy-credits"    element={<BuyCredits />} />
                   <Route path="/cuenta"         element={<AccountSettings />} />
-                  <Route path="/planner"         element={<PlannerList />} />
-                  <Route path="/planner/nuevo"  element={<PlannerOnboarding />} />
-                  <Route path="/planner/:id"    element={<PlannerDetail />} />
+                  <Route path="/planner"         element={<PlannerV3Home />} />
+                  <Route path="/planner/nuevo"  element={<PlannerV3Wizard />} />
+                  <Route path="/planner/:id"    element={<PlannerV3Week />} />
+                  <Route path="/planner/:id/cierre" element={<PlannerV3Closing />} />
                   <Route path="/projects"        element={<Navigate to="/planner" replace />} />
                   <Route path="/projects/:id"   element={<Navigate to="/planner" replace />} />
                   <Route path="/mis-marcas"     element={<BrandProfilesModule />} />
