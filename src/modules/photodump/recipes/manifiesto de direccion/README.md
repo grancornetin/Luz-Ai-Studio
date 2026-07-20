@@ -4,9 +4,7 @@ Este paquete convierte la investigación visual y psicológica en una base de pr
 
 ## Empezar acá si es una conversación nueva
 
-Leer primero **`09_session_log_outfit_night_out_validation.md`** — es la bitácora de la primera validación manual completa (outfit_night_out, Test A, 7/7 shots aprobados), con el proceso paso a paso para replicarlo en la siguiente receta, los 5 hallazgos de arquitectura que salieron de esa validación, el estado del banco SeaDream, y qué falta. El resto de los documentos son la referencia de fondo; ese es el mapa de dónde se quedó el trabajo.
-
-Después leer **`10_experimental_findings_001.md`** — 4 hallazgos experimentales adicionales (validados con comparativas reales en Higgsfield) sobre el límite entre razonamiento del Director y prompt final, y sobre el render fotográfico como capa independiente de la escena. Ya están incorporados a `03_photodump_recipe_architecture.md` (sección 4.3, 4.8 y la nueva sección 19) y al contrato de receta (`05_recipe_contract.ts`).
+Leer primero **`09_session_log_outfit_night_out_validation.md`** (proceso completo, 5 hallazgos de arquitectura, estado del banco SeaDream), después **`10_session_log_outfit_reveal_basic_validation.md`** (segunda receta validada, con el hallazgo sobre posición de citas de Elements) y **`11_session_log_outfit_weekly_recap_validation.md`** (tercera receta — nace como "weekly recap" y termina fusionada en `outfit_multi_look`, la receta base que sirve a 5 historias distintas con un solo motor técnico: weekly, then_vs_now, rate_check, trip_recap, curated_ideas). **La sección 6quater de ese último documento tiene la tabla de "qué receta usar para qué historia" — es el punto de entrada más rápido si ya conocés el manifiesto y solo necesitás decidir qué receta corresponde a una historia nueva.** El resto de los documentos son la referencia de fondo; esos tres son el mapa de dónde se quedó el trabajo.
 
 ## Contenido
 
@@ -22,13 +20,14 @@ Después leer **`10_experimental_findings_001.md`** — 4 hallazgos experimental
 10. `07_revalidation_queue.md`
 11. `08_knowledge_bank_query_design.md`
 12. `09_session_log_outfit_night_out_validation.md`
-13. `10_experimental_findings_001.md`
-14. `SOURCES_AND_METHOD.md`
+13. `10_session_log_outfit_reveal_basic_validation.md`
+14. `11_session_log_outfit_weekly_recap_validation.md`
+15. `SOURCES_AND_METHOD.md`
 
 ## Estado
 
 - Fases 1–6: desarrolladas en este paquete.
-- Fase 7: **en curso, ya no bloqueada.** `outfit_night_out` tiene su Test A completo (7 shots visibles + REF0, todos aprobados manualmente en Higgsfield) — ver `09_session_log_outfit_night_out_validation.md`. Faltan Test B y C de esta receta, y arrancar R2 (`outfit_check`) de la cola.
+- Fase 7: **en curso, ya no bloqueada.** `outfit_night_out` tiene su Test A completo (set de prueba de 7 shots visibles + REF0 — no es un número fijo, ver hallazgo de "beats como pool") — ver `09_session_log_outfit_night_out_validation.md`. `outfit_reveal_basic` (3/3 shots) tiene Test A completo — ver `10_session_log...md`. `outfit_multi_look` (receta base que fusiona weekly/then_vs_now/rate_check/trip_recap/curated_ideas — ver `06_repository_audit.md`) tiene 3 de 5 intenciones con set de prueba (`weekly` completo, `then_vs_now` completo, `trip_recap` funcionalmente completo); faltan `rate_check` y `curated_ideas` — ver `11_session_log...md` sección 6-6quater. Faltan Test B/C de todas.
 - Banco de conocimiento transversal SeaDream (428 entradas, `categoryFit` por 6 categorías de producto) normalizado y depurado — ver sección 6 de `09_session_log_outfit_night_out_validation.md`. Diseño de consulta conceptual en `08_knowledge_bank_query_design.md`, implementación pendiente.
 - Fase 8, integración: deliberadamente no incluida, porque debe ocurrir después de la revalidación visual.
 

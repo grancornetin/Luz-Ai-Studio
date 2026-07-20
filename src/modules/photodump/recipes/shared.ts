@@ -77,6 +77,8 @@ export interface PhotodumpShotDirective {
   // weeklyFavoritesV2: plan de rol + routing de ítems por shot (receta nueva,
   // no comparte estructura con weeklyItemPlan)
   weeklyFavoritesV2Plan?:    import('./weeklyFavoritesV2/types').WeeklyFavoritesV2ShotPlan;
+  // outfit_multi_look: qué look corresponde a este shot + qué intención de la receta
+  outfitMultiLookPlan?:      import('./outfitMultiLook/types').OutfitMultiLookShotPlan;
 }
 
 // Estilo visual de presentación para recetas outfit.

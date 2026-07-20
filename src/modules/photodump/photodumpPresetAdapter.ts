@@ -73,6 +73,9 @@ export const photodumpPresetAdapter: ModulePresetAdapter<PhotodumpPresetState> =
         haulProductKinds: state.refs.haulProductKinds ?? [],
         scenePruebaRef:   state.refs.scenePruebaRef   ?? null,
         sceneDestinoRef:  state.refs.sceneDestinoRef  ?? null,
+        multiLookIntent:  state.refs.multiLookIntent  ?? null,
+        multiLookEras:    state.refs.multiLookEras    ?? [],
+        multiLookPlaces:  state.refs.multiLookPlaces  ?? [],
       },
     };
   },
@@ -107,6 +110,9 @@ export const photodumpPresetAdapter: ModulePresetAdapter<PhotodumpPresetState> =
         haulProductKinds: refs.haulProductKinds ?? [],
         scenePruebaRef:   refs.scenePruebaRef   ?? null,
         sceneDestinoRef:  refs.sceneDestinoRef  ?? null,
+        multiLookIntent:  refs.multiLookIntent  ?? undefined,
+        multiLookEras:    refs.multiLookEras    ?? [],
+        multiLookPlaces:  refs.multiLookPlaces  ?? [],
       },
     };
   },
@@ -159,6 +165,7 @@ export const photodumpPresetAdapter: ModulePresetAdapter<PhotodumpPresetState> =
       outfit_check: 'Outfit check',
       outfit_haul:  'Outfit haul',
       outfit_week:  'Favoritos de la semana',
+      outfit_multi_look: 'Varios looks',
       unboxing:     'Unboxing',
       product_haul: 'Haul de productos',
       bts:          'BTS',

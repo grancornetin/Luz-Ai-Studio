@@ -1,5 +1,5 @@
 # Photodump Recipe Architecture
-Version 1.1 — incorpora `10_experimental_findings_001.md` (razonamiento interno del Director, capa de Photographic Rendering)
+Version 1.0
 
 ## 1. Objetivo
 
@@ -291,13 +291,10 @@ interface PhotodumpRecipe {
   shotTemplates: ShotTemplate[];
   compressionPolicy: CompressionPolicy;
   referencePolicy: ReferencePolicy;
-  renderProfile: RenderProfileId;
   validationPolicy: ValidationPolicy;
   knownLimitations: KnownLimitation[];
 }
 ```
-
-`renderProfile` es el default de la receta (ver sección 19, Photographic Rendering Layer). Un shot individual puede sobreescribirlo en su propio `ShotTemplate` cuando la escena lo exija (ej. una receta `iphone_camera_roll` con un shot puntual en `editorial`), pero nunca mezclar lenguaje de render dentro de `promptBlocks` — el render siempre se resuelve como su propio bloque, nunca como texto libre incrustado en la descripción de escena.
 
 ## 8. Input Contract
 
@@ -382,11 +379,8 @@ interface ShotTemplate {
   required: string[];
   forbidden: string[];
   referenceRoute: ReferenceRoute;
-  renderProfileOverride?: RenderProfileId;
 }
 ```
-
-`renderProfileOverride` es opcional. Cuando no está presente, el shot hereda el `renderProfile` de la receta (sección 7). Solo se declara cuando ese shot puntual necesita un perfil distinto al default.
 
 ## 12. Diversity control
 
@@ -501,39 +495,3 @@ Una receta solo se integra cuando:
 - define límites;
 - supera fidelidad, organicidad y continuidad;
 - no depende de una capacidad ausente en producción.
-
-## 19. Photographic Rendering Layer
-
-Validado en `10_experimental_findings_001.md`, Findings 002, 003 y 004.
-
-El render fotográfico es una capa independiente de la escena. No es narrativa, no es psicología, no es descripción de producto — es cómo luce técnicamente la captura. Vive en su propio bloque de prompt (ver orden en 4.8), nunca mezclado con `promptBlocks` de escena.
-
-### 19.1 Por qué es una capa separada
-
-Un experimento con escena, pose, outfit y prompt idénticos, variando solo el bloque de render, cambió por completo la apariencia visual del resultado — el acabado editorial desapareció y la escena se volvió creíble como captura real de celular. El render domina la percepción final más que la redacción narrativa.
-
-### 19.2 Nombrar el dispositivo no alcanza
-
-`"Photographed on an iPhone"` no es suficiente — el resultado sigue leyéndose editorial. Hay que describir los artefactos visibles de esa forma de captura (encuadre casual, exposición imperfecta, ausencia de retoque), no nombrar el dispositivo que la produjo.
-
-### 19.3 Catálogo de perfiles
-
-Cada perfil es un bloque reutilizable de lenguaje de render, no un prompt completo. Se selecciona por receta (`renderProfile`, sección 7) o por shot (`renderProfileOverride`, sección 11).
-
-| `RenderProfileId` | Uso | Lenguaje base |
-|---|---|---|
-| `iphone_camera_roll` | Default recomendado para Photodump | camera roll, unedited photo, casual handheld, everyday smartphone, no catalogue finish, no beauty retouching |
-| `instagram_story` | Contenido efímero, vertical, texto/sticker implícito | framing casual de story, ligera compresión, look de captura rápida |
-| `whatsapp` | Envío informal, compresión visible | compresión de mensajería, iluminación disponible sin ajustar |
-| `editorial` | Campañas, catálogo, moda | luz controlada, composición deliberada, acabado pulido |
-| `fashion_campaign` | Hero shots de marca | dirección de arte visible, retoque sutil permitido |
-| `dslr` | Fotografía "profesional" amateur | profundidad de campo marcada, nitidez alta, sin artefactos de compresión de celular |
-| `security_camera` | CCTV, vigilancia | ángulo elevado, gran angular, timestamp implícito, baja fidelidad de color |
-| `vintage_camera` | Analógico, grano, nostalgia | grano de película, viñeteado, balance de color de época |
-| `disposable_camera` | Cámara desechable, flash directo | flash duro frontal, saturación alterada, grano alto |
-
-Este catálogo crece por evidencia, igual que el resto del banco de conocimiento (ver `08_knowledge_bank_query_design.md`). Solo `iphone_camera_roll` está validado con experimentos comparativos reales (Finding 004); el resto son perfiles previstos por la arquitectura, pendientes de su propia validación manual antes de usarse en producción.
-
-### 19.4 Regla de redacción
-
-Describir características fotográficas observables (artefactos, encuadre, exposición, acabado), no nombrar el equipo o la marca. Un perfil de render nunca declara narrativa, emoción ni intención — solo cómo luce técnicamente la captura.

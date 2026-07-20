@@ -89,6 +89,12 @@ import {
   buildDayInLifeManifest, buildDayInLifeShotPlan, generateDayInLifeRef0Chain,
   buildDayBlockLockBlock, buildDayInLifeCoverageDebug, getCachedDayInLifeRef0Chain,
 } from './recipes/dayInLife';
+// outfit_multi_look — receta propia, 5 intenciones (weekly/then_vs_now/
+// rate_check/trip_recap/curated_ideas), misma forma de despacho que
+// weeklyFavoritesV2. Ver recipes/outfitMultiLook/index.ts.
+import {
+  buildOutfitMultiLookDirectives, generateOutfitMultiLookREF0, generateOutfitMultiLookShot,
+} from './recipes/outfitMultiLook';
 
 initHpiService();
 
@@ -910,6 +916,31 @@ export async function buildPhotodumpSessionPlan(
     };
   }
 
+  // outfit_multi_look — motor propio, no pasa por buildStoryDirectives. Una
+  // sola receta, 5 intenciones (weekly/then_vs_now/rate_check/trip_recap/
+  // curated_ideas) resueltas dentro de recipes/outfitMultiLook/. No necesita
+  // un ancla provisional acá (a diferencia de outfit_week) porque el modo de
+  // ancla (fija vs. cadena) se deriva directamente de la intención, sin
+  // detección de estilo por IA de por medio.
+  if (recipe === 'outfit_multi_look' && refs) {
+    const { directives } = buildOutfitMultiLookDirectives(refs, count);
+    const shots: PhotodumpShotDirective[] = directives.map((d, i) => ({
+      ...d,
+      arcPosition: i + 1,
+      aspectRatio: getAspectRatio(destino),
+    }));
+    const sessionFamilies = { storySupport: [], creatorAesthetic: [] };
+    return {
+      narrative,
+      protagonist,
+      destino,
+      storyTheme: `${NARRATIVE_META[narrative].label} · ${basePrompt.slice(0, 50)}`,
+      shots,
+      assignedFamilies: [],
+      sessionFamilies,
+    };
+  }
+
   // day_in_life — multi-mundo: manifest de bloques + shot plan propio, sin pasar
   // por buildStoryDirectives (que asume un único mundo/REF0 para todo el set).
   if (recipe === 'day_in_life' && refs) {
@@ -1083,6 +1114,11 @@ export async function generatePhotodumpREF0(
 
   if (recipe === 'outfit_week') {
     const result = await generateWeeklyFavoritesV2REF0(refs, narrative, protagonist, destino, basePrompt, sessionParams);
+    return { imageUrl: result.imageUrl, ref0Analysis: result.ref0Analysis, prompt: result.prompt, refsCount: result.refsCount };
+  }
+
+  if (recipe === 'outfit_multi_look') {
+    const result = await generateOutfitMultiLookREF0(refs, narrative, protagonist, destino, basePrompt, 6, sessionParams);
     return { imageUrl: result.imageUrl, ref0Analysis: result.ref0Analysis, prompt: result.prompt, refsCount: result.refsCount };
   }
 
@@ -2171,6 +2207,15 @@ export async function generatePhotodumpShot(
   if (recipe === 'outfit_week') {
     const result = await generateWeeklyFavoritesV2Shot(
       shot, refs, destino, sessionParams, shot.arcPosition - 1, totalShots, totalShots,
+    );
+    return { imageUrl: result.imageUrl, prompt: result.prompt, refsCount: result.refsCount };
+  }
+
+  // outfit_multi_look — motor propio (ver recipes/outfitMultiLook/). Cada
+  // shot corresponde a un look identificado en shot.outfitMultiLookPlan.
+  if (recipe === 'outfit_multi_look') {
+    const result = await generateOutfitMultiLookShot(
+      shot, refs, destino, sessionParams, shot.arcPosition - 1, totalShots, totalShots, basePrompt, narrative, protagonist,
     );
     return { imageUrl: result.imageUrl, prompt: result.prompt, refsCount: result.refsCount };
   }

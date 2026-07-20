@@ -113,3 +113,26 @@ Apariencia consistente de foto de iPhone real, preservando fidelidad de identida
 Este es el lenguaje base del perfil `iphone_camera_roll` en la Photographic Rendering Layer (`03_photodump_recipe_architecture.md`, sección 19).
 
 Estado: Validado.
+
+---
+
+## Finding 005
+### El lenguaje de Camera Roll (Finding 004) arregla la textura, no la composición.
+
+**Contexto** (validación de `outfit_multi_look`, intención de recap de viaje/ocasión con lugares icónicos de fondo, julio 2026).
+
+Un prompt con el bloque de render `iphone_camera_roll` completo (camera roll, unedited, casual handheld, no catalogue finish, no beauty retouching) sobre una escena de calle/rooftop de Nueva York, con la pose descrita con detalle (contrapposto, distribución de peso, ángulo de torso), siguió produciendo un resultado con apariencia de campaña editorial de moda (Dior/marca de lujo), no de foto UGC — a pesar de que la textura/grano ya se veía correcta.
+
+**Diagnóstico (con evidencia visual real aportada por el usuario, 8 ejemplos comparativos):** el problema no era textura, era **composición**. Las fotos UGC reales de "outfit + lugar icónico de fondo" comparten patrones de encuadre que el lenguaje de camera-roll no cubre:
+
+- El sujeto casi nunca está centrado en el cuadro — suele estar hacia un lado, con espacio vacío del otro.
+- La mirada casi nunca está directamente a cámara/posada — mira hacia el lugar, de perfil, o fuera de cuadro, como si estuviera "viviendo el momento" y de casualidad la cámara la captó.
+- El elemento icónico de fondo (monumento, skyline, torre) se asoma en el encuadre, parcialmente cortado o descentrado — nunca perfectamente simétrico detrás de la cabeza del sujeto, que es la firma visual de una foto de campaña dirigida.
+- El encuadre tiene imperfecciones reales: horizonte levemente inclinado, espacio de más o de menos arriba de la cabeza, pies a veces cortados — no el encuadre "perfecto" de cuerpo completo con margen parejo.
+- La altura de cámara es la de alguien sosteniendo el celular a la altura del pecho/hombro, no una altura de tripod nivelada.
+
+**Conclusión:** la Photographic Rendering Layer necesita, además del bloque de textura (Finding 004), un bloque de **composición casual** cuando la receta involucra un elemento de fondo llamativo (monumento, skyline, lugar icónico) — de lo contrario el modelo, aunque tenga la textura correcta, sigue componiendo la imagen como si friera una campaña de moda: sujeto centrado, mirada a cámara, fondo perfectamente enmarcado. Lenguaje que funcionó: sujeto posicionado fuera de centro, mirada dirigida lejos de la cámara (no posada), el elemento icónico "glimpsed"/parcialmente en cuadro en vez de centrado, y una instrucción explícita de imperfección de encuadre (horizonte inclinado, recorte de pies, espacio asimétrico).
+
+Este bloque de composición es candidato a agregarse como parte fija del perfil `iphone_camera_roll` (o como su propio sub-bloque) en `03_photodump_recipe_architecture.md` sección 19 — pendiente de formalizar ahí, hoy solo validado como prompt suelto en `11_session_log_outfit_weekly_recap_validation.md`.
+
+Estado: Validado.

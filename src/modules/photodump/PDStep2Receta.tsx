@@ -6,7 +6,7 @@ import React, { useState, useRef } from 'react';
 import { ChevronDown, User, Package, Shirt, Layers, AlertCircle, AtSign, Star } from 'lucide-react';
 import { ImageSlot } from '../../components/shared/ImageSlot';
 import {
-  PhotodumpRecipe, PhotodumpRefs, PhotodumpOutfitMode, HaulRefKind,
+  PhotodumpRecipe, PhotodumpRefs, PhotodumpOutfitMode, HaulRefKind, MultiLookIntent,
   RECIPE_META, isRefRequired,
 } from './types';
 import { SLOT_CATALOG, buildTag } from './slotCatalog';
@@ -217,7 +217,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
     if (key === 'avatar')         return 2;
     if (key === 'outfit') {
       if (recipe === 'outfit_haul') return 10; // hasta 10 prendas (MAX_REFS - avatar slots)
-      if (recipe === 'outfit_week') return 7;  // hasta 7 outfits
+      if (recipe === 'outfit_week' || recipe === 'outfit_multi_look') return 7;  // hasta 7 outfits/looks
       return 4;                                // outfit_check: hasta 4 prendas del mismo look
     }
     if (key === 'accesorios')     return recipe === 'outfit_haul' ? 5 : recipe === 'outfit_week' ? 4 : 3;
@@ -293,6 +293,33 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
     if (key === 'escena_destino') {
       onRefs({ ...refs, sceneDestinoRef: value });
     }
+  };
+
+  // ── Handlers de outfit_multi_look ─────────────────────────────
+  const MULTI_LOOK_INTENT_OPTIONS: { value: MultiLookIntent; label: string; hint: string }[] = [
+    { value: 'weekly',        label: 'Mi semana en looks',      hint: 'Mostrás varios outfits, uno por día — sin que ninguno sea "el mejor".' },
+    { value: 'then_vs_now',   label: 'Antes vs. ahora',         hint: 'Marcá qué look es "antes" y cuál es "ahora" — el segundo se ve con más onda.' },
+    { value: 'rate_check',    label: 'Calificá mi look',        hint: 'Un solo outfit, para pedir feedback.' },
+    { value: 'trip_recap',    label: 'Los looks de mi viaje',   hint: 'Cada foto en un lugar distinto — decinos qué lugares usar.' },
+    { value: 'curated_ideas', label: 'Ideas para una ocasión',  hint: 'Varias opciones del mismo estilo — ej. "3 vestidos para invitada a boda".' },
+  ];
+
+  const handleMultiLookIntentChange = (intent: MultiLookIntent) => {
+    onRefs({ ...refs, multiLookIntent: intent });
+  };
+
+  const handleMultiLookEraChange = (slotIndex: number, era: 'before' | 'after' | null) => {
+    const max = getSlotMax('outfit');
+    const arr = [...(refs.multiLookEras ?? Array(max).fill(null))];
+    arr[slotIndex] = era;
+    onRefs({ ...refs, multiLookEras: arr });
+  };
+
+  const handleMultiLookPlaceChange = (slotIndex: number, place: string) => {
+    const max = getSlotMax('outfit');
+    const arr = [...(refs.multiLookPlaces ?? Array(max).fill(null))];
+    arr[slotIndex] = place;
+    onRefs({ ...refs, multiLookPlaces: arr });
   };
 
   const handleCloseupToggle = (accIndex: number) => {
@@ -386,6 +413,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
       if (recipe === 'outfit_check') return 'Subí las prendas del look por separado — una foto clara de cada pieza sola. Podés usar el módulo Outfit Extractor o Foto de Producto de la app para mejores resultados. ⚠️ Evitá subir fotos con personas vistiéndolas — el modelo puede confundir identidades.';
       if (recipe === 'outfit_haul') return 'Subí cada ítem del haul — una imagen por slot. Podés subir prendas, calzado, bolsos, joyería o accesorios. Usá el selector debajo de cada imagen para indicar qué tipo de ítem es: eso mejora mucho la planificación de shots. ⚠️ Evitá fotos con personas — podría confundir identidades.';
       if (recipe === 'outfit_week') return 'Subí una imagen por ítem: outfits, prendas sueltas, bolsos, calzado, joyería o beauty products. El orden es el orden de aparición. Usá el selector para indicar el tipo de cada ítem. ⚠️ Evitá fotos con personas — podría confundir identidades.';
+      if (recipe === 'outfit_multi_look') return 'Subí una foto por look — el orden de aparición es el orden en que aparecen en el set. ⚠️ Evitá fotos con personas — podría confundir identidades.';
       return 'Subí hasta 4 prendas. Podés usar el módulo Outfit Extractor o Foto de Producto para mejores resultados.';
     }
     if (key === 'accesorios') {
@@ -472,6 +500,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                 recipe === 'outfit_check' ? 'Ej: @persona hace su outfit check para una cena romántica — look elegante casual en @escena_prueba...' :
                 recipe === 'outfit_haul'  ? 'Ej: @persona se prueba 5 blusas distintas para ver cuál se queda — haul de primavera en su dormitorio...' :
                 recipe === 'outfit_week'  ? 'Ej: Estos fueron los outfits de @persona de la semana: del gym al restaurante, todo en uno...' :
+                recipe === 'outfit_multi_look' ? 'Ej: Los outfits que usé en mi semana de trabajo, todos con el mismo espejo de mi cuarto...' :
                 recipe === 'outfit'       ? 'Ej: @persona hace un haul de otoño luciendo @outfit en Palermo...' :
                 recipe === 'unboxing'     ? 'Ej: Caja de mi nueva crema de vitamina C, @persona hace el unboxing de @producto...' :
                 recipe === 'day_in_life'  ? 'Ej: @persona en una mañana de domingo tranquila en casa con @producto...' :
@@ -524,6 +553,33 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
               </p>
             )}
           </div>
+
+          {/* outfit_multi_look: selector de intención */}
+          {recipe === 'outfit_multi_look' && (
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-2">
+                ¿Qué querés contar? <span className="text-brand-600">*</span>
+              </label>
+              <div className="grid grid-cols-1 gap-2">
+                {MULTI_LOOK_INTENT_OPTIONS.map(opt => {
+                  const sel = (refs.multiLookIntent ?? 'weekly') === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => handleMultiLookIntentChange(opt.value)}
+                      className={`text-left px-4 py-2.5 rounded-xl border transition-all ${
+                        sel ? 'border-brand-500 bg-brand-50/60 ring-2 ring-brand-100' : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="text-sm font-bold text-slate-900">{opt.label}</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">{opt.hint}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Referencias dinámicas */}
           <div>
@@ -699,6 +755,35 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                                     value={getProductKind(i)}
                                     onChange={kind => handleProductKindChange(i, kind)}
                                     category="producto"
+                                  />
+                                )}
+                                {recipe === 'outfit_multi_look' && hasImage && key === 'outfit' && refs.multiLookIntent === 'then_vs_now' && (
+                                  <div className="flex gap-1">
+                                    {(['before', 'after'] as const).map(era => {
+                                      const current = (refs.multiLookEras ?? [])[i] ?? null;
+                                      const sel = current === era;
+                                      return (
+                                        <button
+                                          key={era}
+                                          type="button"
+                                          onClick={() => handleMultiLookEraChange(i, sel ? null : era)}
+                                          className={`flex-1 text-[9px] font-bold px-1 py-0.5 rounded-full border transition-all ${
+                                            sel ? 'bg-brand-500 border-brand-500 text-white' : 'bg-white border-slate-300 text-slate-400 hover:border-brand-400'
+                                          }`}
+                                        >
+                                          {era === 'before' ? 'Antes' : 'Ahora'}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                                {recipe === 'outfit_multi_look' && hasImage && key === 'outfit' && refs.multiLookIntent === 'trip_recap' && (
+                                  <input
+                                    type="text"
+                                    value={(refs.multiLookPlaces ?? [])[i] ?? ''}
+                                    onChange={e => handleMultiLookPlaceChange(i, e.target.value)}
+                                    placeholder="Ej: Cerro San Cristóbal"
+                                    className="w-full text-[9px] px-1.5 py-1 rounded-full border border-slate-300 outline-none focus:border-brand-500 text-slate-700"
                                   />
                                 )}
                                 {isAccesorios && isCloseup && hasImage && (

@@ -78,10 +78,13 @@ Esto crea deuda de transición: hay nombres de receta estables, pero contratos y
 - reemplazar `outfit_check` por recetas:
   - outfit_reveal_basic;
   - outfit_night_out;
-  - outfit_day_out;
-  - outfit_workday;
-  - outfit_event;
-  - outfit_travel.
+  - outfit_multi_look (receta base con 4 intenciones: weekly, then_vs_now, rate_check, choose_for_occasion — ver nota abajo).
+
+**Nota julio 2026 (primera revisión):** la división original de este apartado usaba variantes de lugar/ocasión (`outfit_day_out`, `outfit_workday`, `outfit_event`, `outfit_travel`). Se descartaron porque no son historias distintas — son la misma receta de "salida" con el nombre del destino cambiado, sin lógica narrativa propia. Se reemplazaron por 4 formatos reales de contenido de moda en redes (weekly recap, rate my outfit, then vs now, choose-for-me), cada uno con estructura, gancho y mecanismo de interacción propios en su forma nativa de video.
+
+**Nota julio 2026 (segunda revisión, tras validar el caso weekly):** esos 4 formatos, aunque narrativamente distintos en video, comparten exactamente el mismo motor de generación de imagen fija — misma persona, mismo fondo fijo (una sola imagen ancla), N outfits distintos, N poses distintas. Lo único que cambia entre ellos es cantidad de looks y el copy/overlay sugerido, no el prompt de imagen. Se fusionaron en una sola receta base, `outfit_multi_look`, con las 4 historias como intenciones/variantes (campo `intent`), no como recetas con contrato propio. Ver `11_session_log_outfit_weekly_recap_validation.md` sección 6 para el detalle completo y la tabla de intenciones.
+
+**Nota julio 2026 (tercera revisión, tras validar `choose_for_occasion`):** esa 4ta intención resultó ser, con evidencia visual real, algo distinto de lo que su nombre sugería — no es un mecanismo de voto/elección, es un recap de viaje/ocasión ("outfits que usé en mi viaje a X") donde el fondo cambia en cada shot (a diferencia de las otras 3 intenciones, que mantienen un fondo fijo). Se renombró a `trip_recap`. Ver `11_session_log_outfit_weekly_recap_validation.md` sección 6ter.
 
 ### `outfitHaul.ts`
 

@@ -452,6 +452,7 @@ export type PhotodumpRecipe =
   | 'outfit_check'  // Persona + outfit completo — historia de un look para una ocasión
   | 'outfit_haul'   // Persona + N prendas separadas — se prueban una por una con progresión
   | 'outfit_week'   // Persona + N outfits completos — variedad semanal o temática
+  | 'outfit_multi_look' // Persona + N looks completos — semana, antes/ahora, calificar, viaje o ideas curadas
   | 'day_in_life'   // Persona + escena + producto
   | 'product_haul'  // Persona + N productos — se prueban/usan uno por uno, con empaque opcional
   | 'bts'           // Producto/workspace + escena, nunca avatar
@@ -468,6 +469,25 @@ export interface RecipeRefConfig {
   escena:         'required' | 'optional' | 'none';
   escena_prueba:  'required' | 'optional' | 'none';   // outfit_check: lugar de prueba
   escena_destino: 'required' | 'optional' | 'none';   // outfit_check: lugar final
+}
+
+// ── outfit_multi_look: intenciones ─────────────────────────────
+// Una sola receta, 5 historias distintas — solo cambia cantidad de looks,
+// jerarquía entre ellos, y si el fondo es fijo o varía por shot.
+export type MultiLookIntent = 'weekly' | 'then_vs_now' | 'rate_check' | 'trip_recap' | 'curated_ideas';
+
+// Derivado de intent, no se pide aparte al usuario:
+//   weekly | then_vs_now | rate_check | curated_ideas → 'fixed_single_anchor'
+//   trip_recap                                         → 'variable_per_shot'
+export type MultiLookBackgroundMode = 'fixed_single_anchor' | 'variable_per_shot';
+
+export interface MultiLookLookItem {
+  id:          string;    // 'look_0', 'look_1'...
+  sourceIndex: number;    // índice en [outfitRef, ...outfitRefs]
+  refUrl:      string;
+  label:       string;
+  era?:        'before' | 'after';  // solo then_vs_now
+  placeLabel?: string;              // solo trip_recap, declarado por el usuario, nunca inventado
 }
 
 export const RECIPE_META: Record<PhotodumpRecipe, {
@@ -516,6 +536,14 @@ export const RECIPE_META: Record<PhotodumpRecipe, {
     description: 'Mostrás outfits, accesorios, beauty products o favoritos de la semana.',
     icon:        'CalendarDays',
     refs:        { avatar: 'required', outfit: 'optional', accesorios: 'optional', producto: 'optional', empaque: 'optional', escena: 'optional', escena_prueba: 'none', escena_destino: 'none' },
+    narrative:   'character',
+    protagonist: 'person',
+  },
+  outfit_multi_look: {
+    label:       'Varios looks',
+    description: 'Mostrás varios looks en una sola tanda: tu semana, un antes/ahora, ideas para una ocasión, los outfits de tu viaje, o pedís que califiquen uno.',
+    icon:        'Images',
+    refs:        { avatar: 'required', outfit: 'required', accesorios: 'none', producto: 'none', empaque: 'none', escena: 'optional', escena_prueba: 'none', escena_destino: 'none' },
     narrative:   'character',
     protagonist: 'person',
   },
@@ -619,6 +647,12 @@ export interface PhotodumpRefs {
   // producto con haulProductKinds[i] === 'acompanante'. Se resuelve en el manifest,
   // no vive como slot propio en RecipeRefConfig (evita tocar el tipo compartido).
   companionRef?: string | null;
+  // outfit_multi_look: intención elegida por el usuario, determina el motor de fondo/pose.
+  multiLookIntent?: MultiLookIntent;
+  // Arrays paralelos indexados igual que haulOutfitKinds: índice 0..N corresponde
+  // a [outfitRef, outfitRefs[0], outfitRefs[1], ...]
+  multiLookEras?:   ('before' | 'after' | null)[];   // solo then_vs_now
+  multiLookPlaces?: (string | null)[];               // solo trip_recap, texto declarado por el usuario
 }
 
 // ── Tipos modo libre ───────────────────────────────────────────
