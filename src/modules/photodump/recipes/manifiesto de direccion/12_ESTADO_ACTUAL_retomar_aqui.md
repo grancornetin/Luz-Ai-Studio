@@ -228,15 +228,57 @@ escapar del look de estudio — eso es lo que generó el pasillo caótico.
   who dresses with intention and care. Not a blank staged set, but not a
   messy or cluttered space either."
 
+**Confirmado por el usuario 2026-07-21**: "muchísimo mejor" — pose variada
+y fondo prolijo en el set nuevo. Bug 4 resuelto.
+
+Al probarlo, el usuario notó 2 problemas más, de la capa de UI/créditos (no
+del motor de prompts) — documentados como Bug 5.
+
+### Bug 5 — Ancla duplicada en pantalla y sobrecobro de créditos (RESUELTO)
+
+**Síntoma**: tras el fix del Bug 3 (REF0 fusionado con el look 1), el
+usuario notó que la UI seguía mostrando un recuadro "Ancla" separado — la
+imagen del look 1 aparecía dos veces en pantalla (una en el recuadro
+violeta "Ancla", otra en su slot normal del grid de shots), aunque fuera la
+misma URL sin generación extra. También preguntó si se estaban cobrando
+créditos por esa imagen "de más".
+
+**Causa 1 (UI duplicada)**: `PhotodumpModule.tsx` tiene un recuadro fijo
+para `partialImages[0]` (el ancla) que se muestra SIEMPRE, separado del
+grid de `count` shots — diseñado para recetas donde el ancla es una imagen
+extra real (`outfit_week`, `day_in_life`, etc). Nunca se actualizó para
+`outfit_multi_look`, donde el ancla y el shot del look 1 son la misma
+imagen.
+
+**Causa 2 (sobrecobro confirmado, real)**: `imageCreditCost = (count + 1) *
+CREDITS_PER_IMAGE` — el "+1" asume que el REF0 siempre implica una llamada
+extra a Gemini (cierto para la mayoría de recetas). Para `outfit_multi_look`
+eso es falso desde el fix del Bug 3: el ancla no genera una imagen aparte.
+Se estaba cobrando 1 imagen de más (2 créditos) por cada sesión de esta
+receta sin ninguna generación real detrás.
+
+**Fix aplicado** (commit `a5a832c`, 2026-07-21):
+- `imageCreditCost`: para `recipe === 'outfit_multi_look'` se cobra `count *
+  CREDITS_PER_IMAGE` (sin el +1). El resto de recetas no cambia.
+- El recuadro "Ancla" en la vista de generación (`step === 3`) se oculta
+  cuando `recipe === 'outfit_multi_look'` — el look 1 ya se ve en su slot
+  normal del grid.
+- `finalizarSet`: ya no antepone `anchorImage` al array de imágenes del set
+  guardado para esta receta (antes duplicaba la imagen del look 1 con
+  `order: 0` Y `order: 1` en el set final/biblioteca).
+
 **Estado**: código corregido y deployado. Falta que el usuario confirme
-visualmente que el nuevo set de `weekly` tiene pose variada por shot y
-fondo prolijo (no vacío de estudio, no desordenado).
+visualmente (ya no debería verse el recuadro "Ancla" aparte, ni la imagen
+del look 1 duplicada en biblioteca) y que el costo de la sesión sea `count`
+imágenes, no `count + 1`.
 
 ## 6. Qué falta (pendientes explícitos)
 
-1. **Confirmar visualmente el Bug 4** — generar un nuevo set de `weekly` y
-   revisar: (a) cada shot tiene una pose distinta con intención real, no
-   plana/repetida, (b) el fondo se ve cuidado/ordenado, no vacío de estudio
+1. **Confirmar visualmente el Bug 5** — generar un set de `outfit_multi_look`
+   y revisar: (a) no aparece el recuadro "Ancla" separado, (b) el costo
+   mostrado antes de generar es `count` créditos de imagen, no `count + 1`,
+   (c) el set guardado en biblioteca no tiene la imagen del look 1
+   duplicada. (Bugs 1, 2, 3 y 4 ya confirmados resueltos.)
    ni caótico. (Bugs 1, 2 y 3 ya confirmados resueltos.)
 2. Probar las 5 intenciones de `outfit_multi_look` en la app real y reportar
    resultados — hasta ahora solo se probaron manualmente en Higgsfield
