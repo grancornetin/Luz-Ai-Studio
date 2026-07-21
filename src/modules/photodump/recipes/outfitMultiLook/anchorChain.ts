@@ -47,13 +47,25 @@ export async function generateAnchorChain(
     throw new Error('Se necesita al menos una referencia de identidad o cuerpo para generar los looks de este viaje.');
   }
 
+  // Regla de negocio (ver manifiesto 6ter, contractValidator.ts): el lugar
+  // de cada look lo declara el usuario, el sistema nunca lo inventa. Esta
+  // función no pasaba antes por ningún validador — un look sin lugar caía
+  // silenciosamente en un texto genérico ("a recognizable place from this
+  // trip"), dejando que el modelo eligiera libremente qué mostrar.
+  const looksWithoutPlace = looks.filter(l => !l.placeLabel);
+  if (looksWithoutPlace.length > 0) {
+    const labels = looksWithoutPlace.map(l => l.label).join(', ');
+    throw new Error(`Falta indicar el lugar de: ${labels}. Completá el campo "lugar" debajo de cada foto de outfit antes de generar el viaje.`);
+  }
+
   const aspectRatio = getAspectRatio(destino);
   const chain: AnchorChainResult['chain'] = [];
   let previousImageUrl: string | null = null;
 
   for (const look of looks) {
     const isFirstLook = previousImageUrl === null;
-    const placeLabel = look.placeLabel || 'a recognizable place from this trip';
+    // Siempre presente acá — validado arriba, antes de empezar el loop.
+    const placeLabel = look.placeLabel as string;
 
     const refsToPass = isFirstLook
       ? [...identityRefs, look.refUrl]
