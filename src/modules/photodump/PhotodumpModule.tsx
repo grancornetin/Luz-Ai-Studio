@@ -211,7 +211,13 @@ const PhotodumpModule: React.FC = () => {
   };
 
   // ── Costos modo recetas ───────────────────────────────────
-  const imageCreditCost = (count + 1) * CREDITS_PER_IMAGE;
+  // El "+1" cubre el REF0/ancla como llamada extra a Gemini — pero en
+  // outfit_multi_look el ancla ES la foto del primer look (misma llamada,
+  // ver recipes/outfitMultiLook/anchorFixed.ts), así que no hay imagen
+  // extra que cobrar: son exactamente `count` generaciones reales.
+  const imageCreditCost = recipe === 'outfit_multi_look'
+    ? count * CREDITS_PER_IMAGE
+    : (count + 1) * CREDITS_PER_IMAGE;
   const insufficient    = !isAdmin && (credits?.available ?? 0) < imageCreditCost;
   const hasProCredits   = isAdmin || proCredits > 0;
   const creditsAfter    = Math.max(0, (credits?.available ?? 0) - imageCreditCost);
@@ -1455,7 +1461,10 @@ const PhotodumpModule: React.FC = () => {
   const finalizarSet = async (shotUrls: string[], shots: any[], captions: { caption: string; hashtags: string } | null, ref0Url?: string, debugData?: PhotodumpDebugData) => {
     const recipeMeta  = RECIPE_META[recipe];
     const anchorUrl   = ref0Url ?? savedRef0Url;
-    const anchorImage = anchorUrl ? [{
+    // outfit_multi_look: el ancla ES shotUrls[0] (el primer look, misma
+    // imagen, ver recipes/outfitMultiLook/anchorFixed.ts) — no se agrega
+    // aparte para no duplicarla en el set guardado.
+    const anchorImage = (anchorUrl && recipe !== 'outfit_multi_look') ? [{
       imageUrl: anchorUrl,
       moment:   'Imagen ancla',
       caption:  '',
@@ -1725,8 +1734,10 @@ const PhotodumpModule: React.FC = () => {
                         </div>
                       </div>
                       <div className={`grid gap-3 ${count <= 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3'}`}>
-                        {/* Imagen ancla (REF0) */}
-                        {partialImages[0] && (
+                        {/* Imagen ancla (REF0) — outfit_multi_look no la muestra aparte:
+                            el ancla ES el primer look, ya visible en su propio slot del
+                            grid de abajo (misma imagen, sin generación extra). */}
+                        {recipe !== 'outfit_multi_look' && partialImages[0] && (
                           <div
                             style={{ aspectRatio: DESTINO_META[destino].aspectRatio }}
                             className="relative rounded-2xl overflow-hidden fade-in shadow-md border-2 border-violet-300"
@@ -1738,7 +1749,7 @@ const PhotodumpModule: React.FC = () => {
                             </div>
                           </div>
                         )}
-                        {!partialImages[0] && progressStepIndex >= 1 && (
+                        {recipe !== 'outfit_multi_look' && !partialImages[0] && progressStepIndex >= 1 && (
                           <div
                             style={{ aspectRatio: DESTINO_META[destino].aspectRatio }}
                             className="relative rounded-2xl overflow-hidden border-2 border-violet-300 bg-violet-50 animate-pulse"
