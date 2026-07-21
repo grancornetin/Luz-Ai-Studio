@@ -17,6 +17,7 @@ import type { PhotodumpRefs, PhotodumpNarrative, PhotodumpProtagonist, Photodump
 import type { PhotodumpREF0Result } from '../shared';
 import type { LookItem } from './types';
 import { IPHONE_CAMERA_ROLL_LINE, NO_STUDIO_BACKDROP_LINE, AVOID_EDITORIAL_LINE } from './renderProfile';
+import { applyIntelligence } from './intelligenceLayer';
 
 export async function generateFixedAnchor(
   firstLook:     LookItem,
@@ -36,17 +37,31 @@ export async function generateFixedAnchor(
 
   const refsToPass = [identityRefUrl, bodyRefUrl, sceneRefUrl, firstLook.refUrl].filter(Boolean) as string[];
 
+  // Misma capa de dirección de pose/HPI que el resto de los shots del set
+  // (ver intelligenceLayer.ts) — antes el ancla no la usaba y salía como la
+  // única foto con pose real, mientras el resto quedaba plano.
+  const intelligence = applyIntelligence(
+    { shotId: 'anchor', look: firstLook, referencePolicy: { useIdentityRef: true, useBodyRef: true, useAnchorRef: false, activeLookRef: firstLook.refUrl }, cameraGrammar: { framing: 'MEDIUM_FULL', angle: 'eye_level', composition: 'mirror_selfie' }, poseIntensity: 'neutral' },
+    refs.gender ?? 'female',
+  );
+
   const prompt = `ANCHOR SHOT — establishes identity, body, room, and lighting for the entire set. Every following photo reuses this exact background.
 A full-body mirror selfie. She is wearing the outfit shown in the reference, fully put on and complete — this is a real look, not a placeholder.
 No mirror frame needs to be visible; the raised arm holding the phone, partially covering part of her face, is what reads clearly as a self-taken mirror photo.
+${intelligence.poseLine}
+${intelligence.hpiBlock}
 ${NO_STUDIO_BACKDROP_LINE}
 ${IPHONE_CAMERA_ROLL_LINE}
 ${AVOID_EDITORIAL_LINE}`;
 
+  const negative = intelligence.hpiNegatives.length > 0
+    ? `${NEGATIVE_SHORT}\n${intelligence.hpiNegatives.join(', ')}`
+    : NEGATIVE_SHORT;
+
   const preparedRefs = await prepareRefs(refsToPass);
   const imageUrl = await imageApiService.generateImage({
     prompt,
-    negative:        NEGATIVE_SHORT,
+    negative,
     referenceImages: preparedRefs,
     aspectRatio:     getAspectRatio(destino),
     modelId:         'gemini',

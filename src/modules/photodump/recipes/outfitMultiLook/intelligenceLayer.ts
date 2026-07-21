@@ -14,6 +14,16 @@
  * outfits ceñidos — ese fue el patrón asociado a mayor tasa de fallo de
  * moderación sin causa textual clara identificada; se prioriza apertura de
  * pecho/hombros y altura de postura en su lugar.
+ *
+ * Bug real reportado en producción (piloto Fase 8, ronda 2): weekly/
+ * rate_check/curated_ideas caían siempre en poseIntensity 'neutral', y
+ * 'neutral' era UNA sola frase fija — los 4 shots de un mismo set salían con
+ * la misma pose plana (de frente, brazos pegados al cuerpo), sin la
+ * variación orgánica que el resto de los bancos de la app sí tiene. Se
+ * agrega un banco pequeño de variantes neutrales, rotado de forma
+ * determinística por la posición del look en el set (look.sourceIndex) —
+ * así cada shot del mismo set pide una postura distinta sin depender de
+ * aleatoriedad no reproducible.
  */
 import { buildHpiBlock, getHpiNegatives, type HpiConfig, type HpiGender } from '../../../../services/hpiService';
 import type { ShotContract, LookPoseIntensity } from './types';
@@ -34,7 +44,22 @@ function hpiConfigFor(intensity: LookPoseIntensity, gender: HpiGender): HpiConfi
   };
 }
 
-function poseLineFor(intensity: LookPoseIntensity): string {
+// Variantes de pose neutral con intención real (peso del cuerpo, ángulo de
+// cabeza, gesto de la mano libre, mirada) — cada una es una postura distinta
+// de "pararse frente al espejo", no una repetición de la misma con otras
+// palabras.
+const NEUTRAL_POSE_VARIANTS = [
+  'Natural standing pose with soft contrapposto: weight shifted onto one leg, the hip on that side slightly lifted, the other knee relaxed and bent. ' +
+    'Head tilted slightly to one side, gaze glancing down toward the phone screen. Free hand rests loosely near the waist or in a pocket. A relaxed, unforced everyday moment.',
+  'Natural standing pose with weight shifted back onto one leg, shoulders slightly angled away from the mirror rather than square to it, creating a soft three-quarter body angle. ' +
+    'Chin tilted down a little, gaze toward the phone. Free arm relaxed, elbow slightly bent, hand resting near the hip or the hem of the outfit.',
+  'Natural standing pose facing the mirror at a slight angle, one foot placed slightly ahead of the other (still standing still, weight settled), spine long but relaxed, shoulders soft. ' +
+    'Head tilted slightly, gaze directed at her own reflection rather than the phone. Free hand grazes her hair or the edge of the outfit, a small unconscious gesture.',
+  'Natural standing pose with a slight lean of the upper body to one side, hip counter-balanced on the opposite side, creating a relaxed S-curve silhouette. ' +
+    'Gaze directed slightly downward and to the side, soft unposed expression. Free hand tucked loosely into a pocket or resting against the opposite arm.',
+];
+
+function poseLineFor(intensity: LookPoseIntensity, variantIndex: number): string {
   switch (intensity) {
     case 'low_presence':
       return 'Low-presence, unconfident pose: shoulders rounded slightly forward and inward, not open, chest slightly caved rather than lifted. ' +
@@ -46,14 +71,16 @@ function poseLineFor(intensity: LookPoseIntensity): string {
         'Gaze directed at her own reflection in the mirror, not at the camera lens — a self-observing, satisfied glance, calm and self-assured. ' +
         'Free hand rests loosely on the hip, without pushing it out or angling it — a relaxed, natural hand placement, not an exaggerated pose. Slight head tilt, chin level, a small confident smile.';
     case 'neutral':
-    default:
-      return 'Natural, relaxed standing pose — a quick everyday moment, not posed for an audience.';
+    default: {
+      const idx = ((variantIndex % NEUTRAL_POSE_VARIANTS.length) + NEUTRAL_POSE_VARIANTS.length) % NEUTRAL_POSE_VARIANTS.length;
+      return NEUTRAL_POSE_VARIANTS[idx];
+    }
   }
 }
 
 export function applyIntelligence(contract: ShotContract, gender: HpiGender): AppliedIntelligence {
   const hpiBlock     = buildHpiBlock(hpiConfigFor(contract.poseIntensity, gender));
   const hpiNegatives = getHpiNegatives(gender);
-  const poseLine     = poseLineFor(contract.poseIntensity);
+  const poseLine     = poseLineFor(contract.poseIntensity, contract.look.sourceIndex);
   return { hpiBlock, hpiNegatives, poseLine };
 }

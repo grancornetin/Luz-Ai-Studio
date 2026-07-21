@@ -45,5 +45,12 @@ export const AVOID_EDITORIAL_LINE =
 // outfit dump; el espacio real es siempre doméstico u orgánico (dormitorio,
 // baño, pasillo, frente a un espejo o vitrina de la calle). Se agrega en
 // TODO shot con encuadre mirror-selfie, no solo en el ancla.
+//
+// Segundo bug real (piloto Fase 8, ronda 2): la primera versión de esta
+// línea pedía "clutter" para escapar del look de estudio, y el resultado se
+// leyó como un pasillo desordenado — en contradicción con looks elegantes y
+// cuidados. El espacio debe leerse "vivido" (objetos reales, textura, no
+// vacío) pero ORDENADO — la misma persona que cuida su outfit cuida su casa.
 export const NO_STUDIO_BACKDROP_LINE =
-  'The background is a real, lived-in domestic or everyday space — a bedroom, a bathroom, a hallway, a closet, or a street-level shop window reflection — never a photography studio, never a seamless backdrop, never a plain concrete or cyclorama floor. It must look like an ordinary room or place someone actually lives in or walks through, full of small real details (furniture, wall texture, clutter, decor), not a blank staged set.';
+  'The background is a real, lived-in domestic or everyday space — a bedroom, a bathroom, a well-kept hallway, a closet, or a street-level shop window reflection — never a photography studio, never a seamless backdrop, never a plain concrete or cyclorama floor. ' +
+  'It must look like an ordinary room or place someone actually lives in, with a few real, natural details (furniture, wall texture, a mirror frame, soft ambient light) — but tidy and well cared for, matching someone who dresses with intention and care. Not a blank staged set, but not a messy or cluttered space either.';
