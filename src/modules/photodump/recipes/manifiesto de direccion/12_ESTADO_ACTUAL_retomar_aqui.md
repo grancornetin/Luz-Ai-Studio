@@ -145,8 +145,8 @@ cambió el nombre del modelo en todo el código de `gemini-3.1-flash-image-previ
 `-preview`). Archivos tocados: `api/gemini/image-worker.ts`,
 `api/gemini/image.ts`, `api/gemini/ugc.ts`, `api/gemini/ugc-worker.ts`,
 `api/avatar/clone-worker.ts`, `src/services/creditConfig.ts` (fuente única
-de verdad, `MODELS.FLASH`), y `PRICING_BRIEF.md`. **Falta confirmar con una
-prueba real** que ya genera exitosamente.
+de verdad, `MODELS.FLASH`), y `PRICING_BRIEF.md`. **Confirmado por el usuario
+2026-07-21: ya genera exitosamente en producción.**
 
 **Importante para el futuro**: si vuelve a aparecer un error de "model not
 found / no access" en cualquier receta (no solo `outfit_multi_look`), primero
@@ -160,25 +160,24 @@ que tocar los 6 lugares.
 ## 6. Qué falta (pendientes explícitos)
 
 1. **Confirmar visualmente** que el Bug 1 (fondo de estudio) quedó resuelto
-   — generar un set nuevo de `weekly` en la app y revisar el fondo.
-2. **Confirmar** que el Bug 2 (acceso al modelo) quedó resuelto — reintentar
-   `rate_check` y cualquier otra receta.
-3. Probar las 5 intenciones de `outfit_multi_look` en la app real y reportar
+   — generar un set nuevo de `weekly` en la app y revisar el fondo. (Bug 2,
+   el modelo, ya confirmado resuelto 2026-07-21.)
+2. Probar las 5 intenciones de `outfit_multi_look` en la app real y reportar
    resultados — hasta ahora solo se probaron manualmente en Higgsfield
    (excepto lo que ya se generó en este piloto). En particular, `rate_check`
    y `curated_ideas` **nunca se generaron visualmente en ningún lado**, ni a
    mano ni en la app.
-4. Integrar las otras 2 recetas Fashion (`outfit_night_out`,
+3. Integrar las otras 2 recetas Fashion (`outfit_night_out`,
    `outfit_reveal_basic`) a la app real — mismo patrón que este piloto,
    diferido a después de que `outfit_multi_look` esté validado en producción.
-5. Agrupar recetas por categoría (Fashion/Shoes/Beauty) en `PDStep1.tsx` —
+4. Agrupar recetas por categoría (Fashion/Shoes/Beauty) en `PDStep1.tsx` —
    explícitamente diferido, no tocar hasta que las 3 recetas Fashion estén
    integradas.
-6. Formalizar el bloque de composición UGC casual (Finding 005) en
+5. Formalizar el bloque de composición UGC casual (Finding 005) en
    `03_photodump_recipe_architecture.md` sección 19, como parte oficial del
    perfil `iphone_camera_roll` — mencionado en la bitácora pero nunca
    escrito ahí.
-7. Test B y C (sin avatar / con escenas cargadas) de las recetas Fashion ya
+6. Test B y C (sin avatar / con escenas cargadas) de las recetas Fashion ya
    validadas — no iniciados.
 
 ## 7. Cómo seguir si este documento se está leyendo desde un chat nuevo
