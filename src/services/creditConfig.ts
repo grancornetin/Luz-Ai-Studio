@@ -10,7 +10,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const MODELS = {
-  FLASH: 'gemini-3.1-flash-image-preview',  // único modelo de imagen permitido
+  FLASH: 'gemini-3.1-flash-image',  // único modelo de imagen permitido (version oficial, sin -preview)
   TEXT:  'gemini-2.5-flash',                // análisis y texto (us-central1)
 } as const;
 

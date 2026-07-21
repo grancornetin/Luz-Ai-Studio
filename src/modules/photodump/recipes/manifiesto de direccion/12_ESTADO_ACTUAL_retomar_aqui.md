@@ -137,15 +137,25 @@ oficial de todo el sistema (ver `api/gemini/image-worker.ts` línea 151,
 documentado a propósito, con `gemini-2.5-flash-image` explícitamente
 excluido por decisión de diseño).
 
-**Estado**: el usuario ya configuró la 2FA y en teoría el acceso está
-restaurado. **Falta confirmar con una prueba real** que ya generó
-exitosamente después del fix.
+**Estado**: el usuario configuró la 2FA, pero además Google deshabilitó del
+todo la versión `-preview` de este modelo (no solo un tema de acceso de la
+cuenta). **Fix adicional aplicado 2026-07-21** (commit posterior a este): se
+cambió el nombre del modelo en todo el código de `gemini-3.1-flash-image-preview`
+→ `gemini-3.1-flash-image` (versión oficial, mismo precio/rendimiento, sin
+`-preview`). Archivos tocados: `api/gemini/image-worker.ts`,
+`api/gemini/image.ts`, `api/gemini/ugc.ts`, `api/gemini/ugc-worker.ts`,
+`api/avatar/clone-worker.ts`, `src/services/creditConfig.ts` (fuente única
+de verdad, `MODELS.FLASH`), y `PRICING_BRIEF.md`. **Falta confirmar con una
+prueba real** que ya genera exitosamente.
 
 **Importante para el futuro**: si vuelve a aparecer un error de "model not
-found / no access" en cualquier receta (no solo `outfit_multi_look`), la
-primera sospecha debe ser configuración/acceso de la cuenta de Google Cloud
-(Vertex AI), no el código — el modelo está hardcodeado correctamente en
-`image-worker.ts` y no ha cambiado.
+found / no access" en cualquier receta (no solo `outfit_multi_look`), primero
+revisar si Google volvió a renombrar/deprecar el modelo de imagen (ya pasó
+una vez, de `-preview` a la versión estable) antes de sospechar solo de
+2FA/acceso de cuenta. El nombre vigente vive en `src/services/creditConfig.ts`
+→ `MODELS.FLASH`, y se referencia también (hardcodeado, no importado desde
+ahí) en los 5 archivos de `api/` listados arriba — si cambia de nuevo, hay
+que tocar los 6 lugares.
 
 ## 6. Qué falta (pendientes explícitos)
 

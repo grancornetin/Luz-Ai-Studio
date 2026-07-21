@@ -32,7 +32,7 @@ El fundador es un desarrollador independiente con operación desde Chile, aún s
 
 | Modelo | Nombre interno | Uso | Ubicación |
 |---|---|---|---|
-| `gemini-3.1-flash-image-preview` | MODELS.FLASH | Generación de imágenes (default) | global |
+| `gemini-3.1-flash-image` | MODELS.FLASH | Generación de imágenes (default) | global |
 | `gemini-2.5-flash` | MODELS.TEXT | Análisis de texto, outfits, productos, asistente, Planner | us-central1 |
 
 **Nota importante:** `gemini-3-pro-image-preview` ya no se usa como fallback. `gemini-2.5-flash-image` fue eliminado por problemas de drift de identidad. El único modelo de imagen activo es Gemini 3.1 Flash Image (alias "Nano Banana 2" en la app). Seedream 4.5 y GPT Image 2 son modelos alternativos opcionales con costo 1 crédito/imagen.

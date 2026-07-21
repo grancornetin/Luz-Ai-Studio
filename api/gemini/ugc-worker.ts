@@ -130,8 +130,8 @@ async function processGenerationJob(jobId: string, parts: any[]): Promise<void> 
   await saveJob(job);
 
   const MODELS = [
-    { name: 'gemini-3.1-flash-image-preview', location: 'global' },
-    { name: 'gemini-3-pro-image-preview',      location: 'global' },
+    { name: 'gemini-3.1-flash-image',      location: 'global' },
+    { name: 'gemini-3-pro-image-preview',  location: 'global' },
   ];
 
   let lastError = 'Unknown error';

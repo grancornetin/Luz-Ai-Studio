@@ -89,8 +89,8 @@ async function processGenerationJob(
     // If all Gemini 3 attempts fail, the job fails cleanly and the client-side
     // auto-retry system (3 silent retries) handles the recovery.
     const models = [
-      { name: 'gemini-3.1-flash-image-preview', location: 'global' },
-      { name: 'gemini-3-pro-image-preview',      location: 'global' },
+      { name: 'gemini-3.1-flash-image',      location: 'global' },
+      { name: 'gemini-3-pro-image-preview',  location: 'global' },
     ];
 
     for (const model of models) {

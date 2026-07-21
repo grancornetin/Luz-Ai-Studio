@@ -4,7 +4,8 @@
 // El cliente hace polling a getJobStatus cada 2 s (ver imageApiService.ts).
 //
 // ─── MODELOS PERMITIDOS ───────────────────────────────────────────────────────
-//   gemini-3.1-flash-image-preview  @ global  ← primario
+//   gemini-3.1-flash-image          @ global  ← primario (la versión -preview
+//                                                quedó deshabilitada, no usar)
 //   gemini-3-pro-image-preview       @ global  ← fallback
 //
 // gemini-2.5-flash-image está EXCLUIDO: región us-central1 incompatible

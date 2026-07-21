@@ -3,7 +3,8 @@
 // Llamado exclusivamente por QStash — nunca por el cliente directamente.
 //
 // MODELOS PERMITIDOS: solo Gemini 3 @ global
-//   1. gemini-3.1-flash-image-preview  (primario — más rápido)
+//   1. gemini-3.1-flash-image  (primario — más rápido; la versión -preview
+//      quedó deshabilitada del lado de Google, no usar)
 //   2. gemini-3-pro-image-preview       (fallback — mayor fidelidad)
 //
 // gemini-2.5-flash-image está EXCLUIDO: no disponible en `global`
@@ -136,7 +137,7 @@ async function persistJobOutcome(job: ImageJob, success: boolean): Promise<void>
 }
 
 // ─── Lógica de generación ─────────────────────────────────────────────────────
-// Solo usa gemini-3.1-flash-image-preview. Sin fallback a Pro para controlar costos.
+// Solo usa gemini-3.1-flash-image. Sin fallback a Pro para controlar costos.
 async function processJob(jobId: string, parts: any[]): Promise<void> {
   const job = await getJob(jobId);
   if (!job) {
@@ -148,7 +149,7 @@ async function processJob(jobId: string, parts: any[]): Promise<void> {
   job.updatedAt = Date.now();
   await saveJob(job);
 
-  const MODEL = 'gemini-3.1-flash-image-preview';
+  const MODEL = 'gemini-3.1-flash-image';
   const ai    = getGenAIClient();
 
   // Timeout de 110s — deja 10s de margen antes del límite de 120s de Vercel
