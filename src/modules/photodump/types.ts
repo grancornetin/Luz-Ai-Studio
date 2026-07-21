@@ -472,13 +472,17 @@ export interface RecipeRefConfig {
 }
 
 // ── outfit_multi_look: intenciones ─────────────────────────────
-// Una sola receta, 5 historias distintas — solo cambia cantidad de looks,
+// Una sola receta, 4 historias distintas — solo cambia cantidad de looks,
 // jerarquía entre ellos, y si el fondo es fijo o varía por shot.
-export type MultiLookIntent = 'weekly' | 'then_vs_now' | 'rate_check' | 'trip_recap' | 'curated_ideas';
+// (rate_check se eliminó julio 2026: 1 sola foto de espejo no aportaba
+// suficiente riqueza visual como intención propia — esa historia ya la
+// cubre mejor outfit_reveal_basic, con 3 ángulos deliberados del mismo look.
+// Ver manifiesto 11_session_log..., sección 6/6quater actualizadas.)
+export type MultiLookIntent = 'weekly' | 'then_vs_now' | 'trip_recap' | 'curated_ideas';
 
 // Derivado de intent, no se pide aparte al usuario:
-//   weekly | then_vs_now | rate_check | curated_ideas → 'fixed_single_anchor'
-//   trip_recap                                         → 'variable_per_shot'
+//   weekly | then_vs_now | curated_ideas → 'fixed_single_anchor'
+//   trip_recap                            → 'variable_per_shot'
 export type MultiLookBackgroundMode = 'fixed_single_anchor' | 'variable_per_shot';
 
 export interface MultiLookLookItem {
@@ -541,7 +545,7 @@ export const RECIPE_META: Record<PhotodumpRecipe, {
   },
   outfit_multi_look: {
     label:       'Varios looks',
-    description: 'Mostrás varios looks en una sola tanda: tu semana, un antes/ahora, ideas para una ocasión, los outfits de tu viaje, o pedís que califiquen uno.',
+    description: 'Mostrás varios looks en una sola tanda: tu semana, un antes/ahora, ideas para una ocasión, o los outfits de tu viaje.',
     icon:        'Images',
     refs:        { avatar: 'required', outfit: 'required', accesorios: 'none', producto: 'none', empaque: 'none', escena: 'optional', escena_prueba: 'none', escena_destino: 'none' },
     narrative:   'character',

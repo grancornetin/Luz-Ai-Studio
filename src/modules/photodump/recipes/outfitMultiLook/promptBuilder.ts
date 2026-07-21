@@ -4,7 +4,7 @@
  * Arma el texto de instrucciones para el generador de imágenes, a partir
  * únicamente del contrato del shot y sus referencias ya resueltas.
  *
- * weekly / then_vs_now / rate_check / curated_ideas: mirror-selfie con la
+ * weekly / then_vs_now / curated_ideas: mirror-selfie con la
  * MISMA ancla citada en cada shot — instrucción explícita de qué SÍ copiar
  * del ancla (el fondo) y qué NO (pose/outfit), porque sin esa distinción el
  * ancla puede arrastrar su propia pose al resultado nuevo (validado
@@ -45,8 +45,6 @@ function outfitLine(intent: MultiLookIntent): string {
       return 'She is wearing the outfit shown in the reference, fully put on and complete.';
     case 'curated_ideas':
       return 'She is wearing the outfit shown in the reference, fully put on and complete — one of several outfit ideas for the same occasion or theme.';
-    case 'rate_check':
-      return 'She is wearing the outfit shown in the reference, fully put on and complete — the full look, clearly legible.';
     case 'weekly':
     default:
       return 'She is wearing the outfit shown in the reference, fully put on and complete — a different look from any previous day.';

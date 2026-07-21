@@ -7,7 +7,7 @@
  *
  * Encuadre fijo por diseño (validado manualmente, ver manifiesto sección 3):
  * "full-body mirror selfie" idéntico en todos los shots de weekly/then_vs_now/
- * rate_check/curated_ideas. trip_recap usa un encuadre de tercera persona
+ * curated_ideas. trip_recap usa un encuadre de tercera persona
  * candid (no es mirror-selfie — cada shot está en un lugar público distinto).
  */
 import type { LookItem, MultiLookIntent, ShotContract, ReferencePolicy, CameraGrammarRef, LookPoseIntensity } from './types';

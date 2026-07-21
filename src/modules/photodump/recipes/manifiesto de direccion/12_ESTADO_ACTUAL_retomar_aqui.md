@@ -35,15 +35,17 @@ documentación pura en esta carpeta, sin código en `src/`.
 
 ### Qué es `outfit_multi_look`
 
-Una sola receta con 5 intenciones (el usuario elige una en la UI):
+Una sola receta con 4 intenciones (el usuario elige una en la UI):
 
 | Intención | Qué cuenta | Fondo |
 |---|---|---|
 | `weekly` | Mi semana en looks | Fijo, una sola ancla |
 | `then_vs_now` | Antes vs. ahora | Fijo, una sola ancla (jerarquía vive en `era` por look, no en 2 anclas) |
-| `rate_check` | Califica mi outfit (1 solo look) | Fijo, una sola ancla |
 | `curated_ideas` | Ideas para [ocasión/tendencia] | Fijo, una sola ancla |
 | `trip_recap` | Los looks de mi viaje | Variable — un lugar distinto por shot, declarado por el usuario |
+
+**`rate_check` (calificá mi look) se eliminó el 2026-07-21** — ver sección
+"Decisiones de diseño" más abajo.
 
 Motor completo en `src/modules/photodump/recipes/outfitMultiLook/` (13
 archivos: types, manifest, anchorFixed, anchorChain, allocator, contracts,
@@ -297,19 +299,60 @@ aviso de por qué el número no coincidía con lo seleccionado.
 que al subir/quitar looks el número de "fotos" se actualiza solo y que ya
 no puede quedar desalineado.
 
+## Decisión de diseño — eliminación de `rate_check` (2026-07-21)
+
+Al probar `then_vs_now`, el usuario preguntó por qué "calificá mi look"
+(`rate_check`) generaba 1 sola foto sin variación de ángulo — esperaba
+close-ups, laterales, vista trasera, como para poder evaluar el outfit de
+verdad. Se revisó el manifiesto (`11_session_log...md` línea 67): el diseño
+original SIEMPRE fue 1 sola foto de espejo, sin variación — imitando el
+formato real de "rate my outfit" en redes (una sola foto de espejo pidiendo
+nota 1-10), y **nunca se generó ni un solo shot de prueba de esta
+intención**, ni a mano ni en la app.
+
+Comparando con `outfit_reveal_basic` (receta ya validada en el manifiesto,
+`10_session_log_outfit_reveal_basic_validation.md`, **todavía no integrada
+a la app**): esa receta sí es exactamente "1 outfit, varios ángulos
+deliberados" — mirror check de cuerpo completo, POV mirando hacia abajo,
+close-up de rostro/torso. Es más rica visualmente y puede contar la misma
+historia ("calificá este look") con mejor copy, sin necesidad de mantener
+una versión más pobre de lo mismo como intención aparte.
+
+**Decisión del usuario**: eliminar `rate_check` de `outfit_multi_look` —
+"no es lo suficientemente bueno para ser una receta sola". La historia de
+"calificá mi look" pasa a resolverse con `outfit_reveal_basic` cuando esa
+reciba su propia integración a la app (ver pendiente 3 abajo) — no con
+`outfit_multi_look`.
+
+**Cambios de código** (commit pendiente de push al momento de escribir esto):
+`MultiLookIntent` en `types.ts` pasó de 5 a 4 valores; se quitó el caso
+`rate_check` de `promptBuilder.ts` (outfitLine) y de la UI
+(`MULTI_LOOK_INTENT_OPTIONS` en `PDStep2Receta.tsx`); comentarios
+actualizados en `anchorFixed.ts`, `contracts.ts`, `intelligenceLayer.ts`,
+`index.ts`, `photodumpDirectorService.ts`. `npm run lint` limpio — ningún
+switch/objeto exhaustivo dependía de ese caso.
+
+**Nota para el futuro**: si alguien pide reintroducir "calificar mi look"
+como historia dentro de `outfit_multi_look`, la respuesta correcta es
+señalar `outfit_reveal_basic` en vez de recrear `rate_check` — ya existe
+diseño validado y con más riqueza visual para esa historia exacta, solo
+falta integrarlo a la app (mismo patrón que este piloto).
+
 ## 6. Qué falta (pendientes explícitos)
 
 1. **Confirmar visualmente el Bug 6** — subir/quitar looks en
    `outfit_multi_look` y revisar que el contador de "fotos" se ajusta solo,
    sin poder editarlo manualmente. (Bugs 1 a 5 ya confirmados resueltos.)
-2. Probar las 5 intenciones de `outfit_multi_look` en la app real y reportar
-   resultados — hasta ahora solo se probaron manualmente en Higgsfield
-   (excepto lo que ya se generó en este piloto). En particular, `rate_check`
-   y `curated_ideas` **nunca se generaron visualmente en ningún lado**, ni a
-   mano ni en la app.
+2. Probar las 4 intenciones vigentes de `outfit_multi_look` en la app real y
+   reportar resultados — hasta ahora solo se probaron manualmente en
+   Higgsfield (excepto lo que ya se generó en este piloto). En particular,
+   `curated_ideas` **nunca se generó visualmente en ningún lado**, ni a mano
+   ni en la app. (`rate_check` ya no existe — ver decisión de diseño arriba.)
 3. Integrar las otras 2 recetas Fashion (`outfit_night_out`,
    `outfit_reveal_basic`) a la app real — mismo patrón que este piloto,
-   diferido a después de que `outfit_multi_look` esté validado en producción.
+   diferido a después de que `outfit_multi_look` esté validado en
+   producción. `outfit_reveal_basic` ahora también es el destino sugerido
+   para la historia de "calificar mi look".
 4. Agrupar recetas por categoría (Fashion/Shoes/Beauty) en `PDStep1.tsx` —
    explícitamente diferido, no tocar hasta que las 3 recetas Fashion estén
    integradas.

@@ -30,7 +30,7 @@ export interface MultiLookManifest {
   looks:          LookItem[];
 }
 
-// ── Anchor (fondo fijo — weekly / then_vs_now / rate_check / curated_ideas) ──
+// ── Anchor (fondo fijo — weekly / then_vs_now / curated_ideas) ──
 
 export interface FixedAnchorResult {
   identityRefUrl?: string;

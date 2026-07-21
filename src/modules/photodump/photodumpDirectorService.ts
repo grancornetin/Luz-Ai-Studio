@@ -89,8 +89,8 @@ import {
   buildDayInLifeManifest, buildDayInLifeShotPlan, generateDayInLifeRef0Chain,
   buildDayBlockLockBlock, buildDayInLifeCoverageDebug, getCachedDayInLifeRef0Chain,
 } from './recipes/dayInLife';
-// outfit_multi_look — receta propia, 5 intenciones (weekly/then_vs_now/
-// rate_check/trip_recap/curated_ideas), misma forma de despacho que
+// outfit_multi_look — receta propia, 4 intenciones (weekly/then_vs_now/
+// trip_recap/curated_ideas), misma forma de despacho que
 // weeklyFavoritesV2. Ver recipes/outfitMultiLook/index.ts.
 import {
   buildOutfitMultiLookDirectives, generateOutfitMultiLookREF0, generateOutfitMultiLookShot,
@@ -917,7 +917,7 @@ export async function buildPhotodumpSessionPlan(
   }
 
   // outfit_multi_look — motor propio, no pasa por buildStoryDirectives. Una
-  // sola receta, 5 intenciones (weekly/then_vs_now/rate_check/trip_recap/
+  // sola receta, 4 intenciones (weekly/then_vs_now/trip_recap/
   // curated_ideas) resueltas dentro de recipes/outfitMultiLook/. No necesita
   // un ancla provisional acá (a diferencia de outfit_week) porque el modo de
   // ancla (fija vs. cadena) se deriva directamente de la intención, sin

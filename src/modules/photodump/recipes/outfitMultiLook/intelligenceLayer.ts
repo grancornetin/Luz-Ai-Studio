@@ -16,7 +16,7 @@
  * pecho/hombros y altura de postura en su lugar.
  *
  * Bug real reportado en producción (piloto Fase 8, ronda 2): weekly/
- * rate_check/curated_ideas caían siempre en poseIntensity 'neutral', y
+ * curated_ideas caían siempre en poseIntensity 'neutral', y
  * 'neutral' era UNA sola frase fija — los 4 shots de un mismo set salían con
  * la misma pose plana (de frente, brazos pegados al cuerpo), sin la
  * variación orgánica que el resto de los bancos de la app sí tiene. Se

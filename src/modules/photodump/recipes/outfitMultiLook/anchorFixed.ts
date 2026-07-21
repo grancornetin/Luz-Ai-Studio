@@ -1,7 +1,7 @@
 /**
  * recipes/outfitMultiLook/anchorFixed.ts
  *
- * Genera la foto ancla única (REF0) para weekly / then_vs_now / rate_check /
+ * Genera la foto ancla única (REF0) para weekly / then_vs_now /
  * curated_ideas — el mismo fondo se reutiliza en todos los shots del set.
  *
  * Validado manualmente (ver manifiesto sección 3, "Día 1 — ancla de escena,

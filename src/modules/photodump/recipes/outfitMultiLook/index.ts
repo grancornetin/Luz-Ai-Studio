@@ -6,10 +6,11 @@
  * forma que weeklyFavoritesV2/index.ts para que el Director pueda despachar
  * a esta receta sin cambiar su propio contrato hacia PhotodumpModule.tsx.
  *
- * Una sola receta, 5 intenciones (weekly, then_vs_now, rate_check,
- * trip_recap, curated_ideas) — todas comparten el mismo motor salvo
+ * Una sola receta, 4 intenciones (weekly, then_vs_now, trip_recap,
+ * curated_ideas) — todas comparten el mismo motor salvo
  * trip_recap, que activa un modo de fondo variable (cadena de anclas) en vez
  * de una sola ancla fija reutilizada. Ver manifiesto sección 6/6bis/6ter.
+ * (rate_check se eliminó julio 2026 — ver types.ts para el detalle.)
  */
 import { prepareRefs, getAspectRatio } from '../shared';
 import type {

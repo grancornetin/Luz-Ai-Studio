@@ -311,7 +311,6 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   const MULTI_LOOK_INTENT_OPTIONS: { value: MultiLookIntent; label: string; hint: string }[] = [
     { value: 'weekly',        label: 'Mi semana en looks',      hint: 'Mostrás varios outfits, uno por día — sin que ninguno sea "el mejor".' },
     { value: 'then_vs_now',   label: 'Antes vs. ahora',         hint: 'Marcá qué look es "antes" y cuál es "ahora" — el segundo se ve con más onda.' },
-    { value: 'rate_check',    label: 'Calificá mi look',        hint: 'Un solo outfit, para pedir feedback.' },
     { value: 'trip_recap',    label: 'Los looks de mi viaje',   hint: 'Cada foto en un lugar distinto — decinos qué lugares usar.' },
     { value: 'curated_ideas', label: 'Ideas para una ocasión',  hint: 'Varias opciones del mismo estilo — ej. "3 vestidos para invitada a boda".' },
   ];
