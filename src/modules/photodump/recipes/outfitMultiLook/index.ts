@@ -43,6 +43,16 @@ function fixedAnchorCacheKey(refs: PhotodumpRefs): string {
   return urls.join('|');
 }
 
+// El ancla ES la foto del primer look (fondo + outfit puesto en la misma
+// generación) — se cachea aparte para que el shot del primer look, cuando
+// llegue por generateOutfitMultiLookShot, devuelva esta imagen en vez de
+// generar una segunda foto redundante del mismo look.
+const firstLookImageCache = new Map<string, { lookId: string; imageUrl: string }>();
+
+function firstLookImageCacheKey(refs: PhotodumpRefs): string {
+  return fixedAnchorCacheKey(refs);
+}
+
 // ── Plan de sesión ──────────────────────────────────────────────────────
 
 export interface OutfitMultiLookPlan {
@@ -116,8 +126,15 @@ export async function generateOutfitMultiLookREF0(
     };
   }
 
-  const result = await generateFixedAnchor(refs, narrative, protagonist, destino, sessionParams);
+  const allocation = allocateLookShots(manifest.looks, requestedCount);
+  const firstLook = allocation.looksToShoot[0];
+  if (!firstLook) {
+    throw new Error('Se necesita al menos un look para generar esta sesión.');
+  }
+
+  const result = await generateFixedAnchor(firstLook, refs, narrative, protagonist, destino, sessionParams);
   fixedAnchorCache.set(fixedAnchorCacheKey(refs), result.imageUrl);
+  firstLookImageCache.set(firstLookImageCacheKey(refs), { lookId: firstLook.id, imageUrl: result.imageUrl });
   return result;
 }
 
@@ -155,13 +172,37 @@ export async function generateOutfitMultiLookShot(
   let anchorImageUrl: string | undefined;
 
   if (hasAnchor) {
+    // El ancla YA es la foto del primer look (fondo + outfit puesto,
+    // generados juntos en generateFixedAnchor) — si este shot es ese mismo
+    // look, se devuelve la imagen ya generada en vez de duplicarla.
+    const cachedFirstLook = firstLookImageCache.get(firstLookImageCacheKey(refs));
+    if (cachedFirstLook && cachedFirstLook.lookId === look.id) {
+      const debug = buildShotDebug(
+        { shotId: shot.key, look, referencePolicy: { useIdentityRef: true, useBodyRef: true, useAnchorRef: false, activeLookRef: look.refUrl }, cameraGrammar: { framing: 'MEDIUM_FULL', angle: 'eye_level', composition: 'mirror_selfie' }, poseIntensity: 'neutral' },
+        { orderedUrls: [cachedFirstLook.imageUrl], breakdown: { look: [cachedFirstLook.imageUrl] } },
+        'first look (already generated as the set anchor)',
+        { passed: true, errors: [] },
+        { passed: true, errors: [] },
+      );
+      return { imageUrl: cachedFirstLook.imageUrl, prompt: 'multi_look anchor (first look)', refsCount: 1, debug };
+    }
+
     anchorImageUrl = fixedAnchorCache.get(fixedAnchorCacheKey(refs));
     if (!anchorImageUrl) {
       // Red de seguridad: si por algún motivo el REF0 no se generó antes
       // (llamada fuera de orden), se genera acá.
-      const result = await generateFixedAnchor(refs, narrative, protagonist, destino, sessionParams);
+      const result = await generateFixedAnchor(look, refs, narrative, protagonist, destino, sessionParams);
       anchorImageUrl = result.imageUrl;
       fixedAnchorCache.set(fixedAnchorCacheKey(refs), anchorImageUrl);
+      firstLookImageCache.set(firstLookImageCacheKey(refs), { lookId: look.id, imageUrl: anchorImageUrl });
+      const debug = buildShotDebug(
+        { shotId: shot.key, look, referencePolicy: { useIdentityRef: true, useBodyRef: true, useAnchorRef: false, activeLookRef: look.refUrl }, cameraGrammar: { framing: 'MEDIUM_FULL', angle: 'eye_level', composition: 'mirror_selfie' }, poseIntensity: 'neutral' },
+        { orderedUrls: [anchorImageUrl], breakdown: { look: [anchorImageUrl] } },
+        result.prompt,
+        { passed: true, errors: [] },
+        { passed: true, errors: [] },
+      );
+      return { imageUrl: anchorImageUrl, prompt: result.prompt, refsCount: result.refsCount, debug };
     }
   } else {
     let chain = getCachedAnchorChain(refs, basePrompt);
