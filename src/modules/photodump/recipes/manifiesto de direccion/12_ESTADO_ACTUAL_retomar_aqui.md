@@ -272,14 +272,36 @@ visualmente (ya no debería verse el recuadro "Ancla" aparte, ni la imagen
 del look 1 duplicada en biblioteca) y que el costo de la sesión sea `count`
 imágenes, no `count + 1`.
 
+### Bug 6 — Cantidad de fotos desconectada del número real de looks (RESUELTO)
+
+**Síntoma**: el usuario probó `then_vs_now` con 2 outfits subidos, pero el
+selector de "cantidad de imágenes" (otro control del mismo paso 2) tenía 4
+— preguntó qué debía esperar.
+
+**Causa**: en `outfit_multi_look`, el número de fotos SIEMPRE es 1 por look
+subido (`allocator.ts`) — el selector de "cantidad" (`count`), pensado para
+recetas donde de verdad se elige cuántas fotos generar, no tiene ningún
+efecto real acá salvo capar hacia abajo. Con 2 looks y `count=4`, el
+resultado real son 2 fotos — correcto según el diseño, pero sin ningún
+aviso de por qué el número no coincidía con lo seleccionado.
+
+**Fix aplicado** (commit `d1289fb`, 2026-07-21), en `PDStep2Receta.tsx`:
+- Se agregó sincronización automática: `count` se ajusta en tiempo real a
+  la cantidad de looks subidos (`outfitRef` + `outfitRefs`) cada vez que
+  cambian, vía `useEffect`.
+- El selector +/- de cantidad se reemplaza, solo para esta receta, por un
+  número informativo no editable, con el texto "Se genera 1 foto por look
+  que subas abajo — no hace falta elegir cantidad."
+
+**Estado**: código corregido y deployado. Falta que el usuario confirme
+que al subir/quitar looks el número de "fotos" se actualiza solo y que ya
+no puede quedar desalineado.
+
 ## 6. Qué falta (pendientes explícitos)
 
-1. **Confirmar visualmente el Bug 5** — generar un set de `outfit_multi_look`
-   y revisar: (a) no aparece el recuadro "Ancla" separado, (b) el costo
-   mostrado antes de generar es `count` créditos de imagen, no `count + 1`,
-   (c) el set guardado en biblioteca no tiene la imagen del look 1
-   duplicada. (Bugs 1, 2, 3 y 4 ya confirmados resueltos.)
-   ni caótico. (Bugs 1, 2 y 3 ya confirmados resueltos.)
+1. **Confirmar visualmente el Bug 6** — subir/quitar looks en
+   `outfit_multi_look` y revisar que el contador de "fotos" se ajusta solo,
+   sin poder editarlo manualmente. (Bugs 1 a 5 ya confirmados resueltos.)
 2. Probar las 5 intenciones de `outfit_multi_look` en la app real y reportar
    resultados — hasta ahora solo se probaron manualmente en Higgsfield
    (excepto lo que ya se generó en este piloto). En particular, `rate_check`
