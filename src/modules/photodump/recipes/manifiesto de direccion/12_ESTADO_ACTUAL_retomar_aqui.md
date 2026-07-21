@@ -23,6 +23,42 @@ criterio de estilista sin inventar marca/objeto imposible.
 Deploy `2ae3585` / `dpl_9Q6NYZ6i9ieXhEEgbyQEi4D4L5X2`, pendiente de
 confirmación visual del usuario.
 
+## Cambio reciente — trip_recap: el lugar ahora es una FOTO, no texto
+
+Bug de UX real: el usuario probó `trip_recap` con 3 outfits + lugares
+escritos en el brief general ("Santiago - Parque O'Higgins @outfit") y no
+funcionó — el motor real leía el lugar de un input de texto separado,
+puesto debajo de cada outfit en la UI, que **se veía como un slot de imagen
+vacío** (confuso) y encima era redundante con el slot `@escena` que ya
+existe en toda la app (`SLOT_CATALOG.escena`, "SCENE/LOCATION REFERENCE").
+
+**Fix** (commit `1e1c6e3`, deploy `dpl_FwUqKVHmSqhgV798cgzp3zaCMNf5`): se
+eliminó `multiLookPlaces` (texto) por completo. Ahora el lugar de cada look
+se sube como **foto real** en el slot Escena, asociada por posición (Escena
+1 ↔ Look 1, Escena 2 ↔ Look 2...) — mismo mecanismo que ya usa
+`multiLookEras` para `then_vs_now`. `anchorChain.ts` cita esa imagen como
+referencia visual directa en el prompt ("SCENE / LOCATION REFERENCE:
+replicate the environment...") en vez de nombrar el lugar de memoria. La
+regla de "nunca inventar el lugar" se mantiene — si un look no tiene foto
+de escena asociada, `generateAnchorChain` bloquea con error claro.
+
+`LookItem.placeLabel: string` pasó a `placeSceneUrl: string` (y
+`MultiLookLookItem` en `types.ts` raíz igual). El límite de slots de escena
+ahora iguala al de outfit cuando `intent === 'trip_recap'` (antes tope
+genérico de 3, insuficiente para más de 3 looks).
+
+**Nota importante para el futuro**: el modelo de generación de imágenes
+(Gemini) **no navega internet ni busca fotos reales del lugar** — cuando el
+usuario sube una foto de referencia, el modelo usa esa imagen como guía
+visual directa (mejor fidelidad); si en cambio solo se nombra un lugar por
+texto (como pasaba antes), el modelo dibuja de memoria/entrenamiento, sin
+verificar cómo se ve ese lugar hoy. Por eso ahora se prioriza la foto real
+sobre el texto — no es solo una mejora de UX, es mejor fidelidad visual.
+
+**Pendiente**: confirmación visual del usuario con un caso real (3 looks +
+3 fotos de escena: Parque O'Higgins, Dunas de Concón, Costanera Río
+Calle-Calle).
+
 ## 1. Qué es esto
 
 Luz IA Studio es una app de generación de contenido con IA para creadoras de
