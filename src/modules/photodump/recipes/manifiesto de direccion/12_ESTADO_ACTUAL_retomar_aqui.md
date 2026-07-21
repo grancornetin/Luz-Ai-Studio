@@ -9,6 +9,20 @@
 
 Última actualización: 2026-07-21.
 
+## Cambio reciente — curated_ideas ahora genera 2 shots por look
+
+`curated_ideas` (una de las 4 intenciones vigentes) dejó de ser "1 foto por
+look" — ahora cada look produce **2 fotos**: la frontal (igual que antes) +
+una de variación (trasera / lateral / close-up de tela, rotada por
+`look.sourceIndex`, ver `contracts.ts`). También se agregó un pool opcional
+de calzado/accesorios (`curatedIdeasAccessoryRefs`/`-Links` en
+`PhotodumpRefs`) con enlace many-to-many a looks vía chips en la UI — si un
+accesorio está enlazado se cita fielmente, si no, el modelo elige con
+criterio de estilista sin inventar marca/objeto imposible.
+`weekly`/`then_vs_now`/`trip_recap` NO cambiaron, siguen 1 foto por look.
+Deploy `2ae3585` / `dpl_9Q6NYZ6i9ieXhEEgbyQEi4D4L5X2`, pendiente de
+confirmación visual del usuario.
+
 ## 1. Qué es esto
 
 Luz IA Studio es una app de generación de contenido con IA para creadoras de
