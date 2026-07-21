@@ -186,12 +186,58 @@ visualmente que ahora un set de `weekly` de N looks produce exactamente N
 fotos (no N+1), y que la primera foto del set muestra el primer outfit
 puesto (no ropa genérica).
 
+**Confirmado por el usuario 2026-07-21**: generó un set de `weekly` real (4
+fotos, sin contar REF0 aparte — Bug 3 resuelto: fondo consistente y
+doméstico real en las 4, Bug 1 resuelto). Pero detectó 2 bugs nuevos en el
+mismo set, documentados abajo como Bug 4.
+
+### Bug 4 — Pose plana repetida y fondo desordenado (RESUELTO)
+
+**Síntoma**: de las 4 fotos del set, la primera (el ancla/look 1) tenía una
+pose orgánica con intención real (contrapposto, mirada con carácter). Las
+otras 3 eran casi idénticas entre sí: de frente a cámara, brazos pegados al
+cuerpo, sin variación — planas. Además, el fondo (pasillo con perchero,
+espejo, mesa auxiliar) se veía desordenado/caótico, en contradicción con
+looks elegantes y cuidados ("parece una contradicción que alguien se vista
+tan bien y sea desordenada").
+
+**Causa 1 (pose)**: `contracts.ts` → `poseIntensityFor` devuelve `'neutral'`
+para las 4 intenciones sin jerarquía (weekly, rate_check, curated_ideas, y
+el "before"/"after" de then_vs_now son las únicas con variantes reales). Y
+`poseLineFor('neutral')` en `intelligenceLayer.ts` era **una sola frase fija
+idéntica** para todos los shots del set — sin variación entre looks. El
+ancla, además, ni siquiera pasaba por `intelligenceLayer.ts` (no tenía
+`applyIntelligence` conectado en absoluto), por eso fue la única foto con
+dirección de pose real (el modelo improvisó libremente sin instrucción).
+
+**Causa 2 (fondo)**: `NO_STUDIO_BACKDROP_LINE` en `renderProfile.ts` pedía
+literalmente `"clutter"` (desorden) como parte de "detalles reales" para
+escapar del look de estudio — eso es lo que generó el pasillo caótico.
+
+**Fix aplicado** (commit `b427f59`, 2026-07-21):
+- `intelligenceLayer.ts`: se agregó `NEUTRAL_POSE_VARIANTS`, un banco de 4
+  posturas neutrales distintas (peso del cuerpo, ángulo de cabeza, gesto de
+  mano libre, mirada), rotadas determinísticamente por `look.sourceIndex` —
+  cada shot del mismo set ahora pide una pose distinta, sin depender de
+  aleatoriedad no reproducible.
+- `anchorFixed.ts`: se conectó `applyIntelligence` (pose + HPI + negativos)
+  al ancla, que antes no la tenía — ahora usa la misma capa de dirección de
+  pose que el resto de los shots, en vez de generar "a ciegas".
+- `renderProfile.ts`: `NO_STUDIO_BACKDROP_LINE` corregida — ya no pide
+  "clutter", ahora pide explícitamente "tidy and well cared for... someone
+  who dresses with intention and care. Not a blank staged set, but not a
+  messy or cluttered space either."
+
+**Estado**: código corregido y deployado. Falta que el usuario confirme
+visualmente que el nuevo set de `weekly` tiene pose variada por shot y
+fondo prolijo (no vacío de estudio, no desordenado).
+
 ## 6. Qué falta (pendientes explícitos)
 
-1. **Confirmar visualmente** que el Bug 1 (fondo de estudio) y el Bug 3
-   (REF0 fusionado con el look 1, ahora N fotos exactas) quedaron resueltos
-   — generar un set nuevo de `weekly` en la app y revisar fondo + conteo de
-   fotos. (Bug 2, el modelo, ya confirmado resuelto 2026-07-21.)
+1. **Confirmar visualmente el Bug 4** — generar un nuevo set de `weekly` y
+   revisar: (a) cada shot tiene una pose distinta con intención real, no
+   plana/repetida, (b) el fondo se ve cuidado/ordenado, no vacío de estudio
+   ni caótico. (Bugs 1, 2 y 3 ya confirmados resueltos.)
 2. Probar las 5 intenciones de `outfit_multi_look` en la app real y reportar
    resultados — hasta ahora solo se probaron manualmente en Higgsfield
    (excepto lo que ya se generó en este piloto). En particular, `rate_check`
