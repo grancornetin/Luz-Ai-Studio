@@ -157,11 +157,41 @@ una vez, de `-preview` a la versión estable) antes de sospechar solo de
 ahí) en los 5 archivos de `api/` listados arriba — si cambia de nuevo, hay
 que tocar los 6 lugares.
 
+### Bug 3 — REF0 generaba una foto extra sin outfit, en vez de ser el look 1 (RESUELTO)
+
+**Síntoma reportado por el usuario**: al generar un set de `weekly`, notó
+que se generaba un REF0 y le pareció recordar que el diseño original iba
+directo al primer outfit, sin una foto de ancla separada.
+
+**Causa confirmada**: el diseño validado a mano (manifiesto sección 3,
+"Día 1 — ancla de escena... outfit puesto, aprobado en 1 iteración") siempre
+generó el ancla **con el primer outfit ya puesto** — la foto del ancla y la
+foto del look 1 son la misma imagen. El código implementado en el piloto
+(`anchorFixed.ts` original) generaba en cambio una foto de ancla separada
+con "ropa neutral, no el look real" y LUEGO generaba una foto aparte para el
+look 1 — resultando en N+1 fotos (1 ancla vacía + N looks) en vez de las N
+fotos que el diseño manual siempre produjo.
+
+**Fix aplicado** (commit `cd870f1`, 2026-07-21): `generateFixedAnchor` en
+`anchorFixed.ts` ahora recibe el primer look y lo cita directamente en el
+prompt del ancla — la foto generada ya lleva el outfit puesto. En
+`index.ts`, se agregó `firstLookImageCache` para que cuando
+`generateOutfitMultiLookShot` reciba el shot correspondiente a ese primer
+look, devuelva la imagen ya generada en vez de crear una segunda foto
+redundante — mismo patrón que ya usaba `trip_recap` (cada eslabón de la
+cadena ya es el resultado final, no se regenera).
+
+**Estado**: código corregido y deployado. Falta que el usuario confirme
+visualmente que ahora un set de `weekly` de N looks produce exactamente N
+fotos (no N+1), y que la primera foto del set muestra el primer outfit
+puesto (no ropa genérica).
+
 ## 6. Qué falta (pendientes explícitos)
 
-1. **Confirmar visualmente** que el Bug 1 (fondo de estudio) quedó resuelto
-   — generar un set nuevo de `weekly` en la app y revisar el fondo. (Bug 2,
-   el modelo, ya confirmado resuelto 2026-07-21.)
+1. **Confirmar visualmente** que el Bug 1 (fondo de estudio) y el Bug 3
+   (REF0 fusionado con el look 1, ahora N fotos exactas) quedaron resueltos
+   — generar un set nuevo de `weekly` en la app y revisar fondo + conteo de
+   fotos. (Bug 2, el modelo, ya confirmado resuelto 2026-07-21.)
 2. Probar las 5 intenciones de `outfit_multi_look` en la app real y reportar
    resultados — hasta ahora solo se probaron manualmente en Higgsfield
    (excepto lo que ya se generó en este piloto). En particular, `rate_check`
