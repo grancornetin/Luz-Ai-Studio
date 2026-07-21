@@ -22,7 +22,7 @@
 import { NEGATIVE_SHORT } from '../shared';
 import type { ShotContract, MultiLookIntent } from './types';
 import type { AppliedIntelligence } from './intelligenceLayer';
-import { IPHONE_CAMERA_ROLL_LINE, AVOID_EDITORIAL_LINE } from './renderProfile';
+import { IPHONE_CAMERA_ROLL_LINE, AVOID_EDITORIAL_LINE, NO_STUDIO_BACKDROP_LINE } from './renderProfile';
 
 export interface BuiltPrompt {
   prompt:   string;
@@ -31,11 +31,12 @@ export interface BuiltPrompt {
 
 function mirrorSelfieBlock(hasAnchor: boolean): string {
   if (!hasAnchor) {
-    return 'A full-body mirror selfie. No mirror frame needs to be visible; the raised arm holding the phone, partially covering part of her face, is what reads clearly as a self-taken mirror photo.';
+    return `A full-body mirror selfie. No mirror frame needs to be visible; the raised arm holding the phone, partially covering part of her face, is what reads clearly as a self-taken mirror photo.\n${NO_STUDIO_BACKDROP_LINE}`;
   }
   return 'A full-body mirror selfie in the same space as the anchor reference image. Use the anchor only as the background reference — the exact same room, flooring, and furniture must appear identically. ' +
     'Do not copy the pose, outfit, or body language from the anchor — this is a completely different look and pose. ' +
-    'No mirror frame needs to be visible; the raised arm holding the phone, partially covering part of her face, is what reads clearly as a self-taken mirror photo.';
+    'No mirror frame needs to be visible; the raised arm holding the phone, partially covering part of her face, is what reads clearly as a self-taken mirror photo.\n' +
+    NO_STUDIO_BACKDROP_LINE;
 }
 
 function outfitLine(intent: MultiLookIntent): string {

@@ -37,3 +37,13 @@ export const NO_WALKING_LINE =
 
 export const AVOID_EDITORIAL_LINE =
   'Avoid: editorial or catalog-like finish, overly polished or retouched skin, perfectly centered symmetric composition, walking or mid-stride pose, legs in a walking stance.';
+
+// Bug real reportado en producción (piloto Fase 8): sin esta instrucción,
+// un "full-body mirror selfie" tiende a generarse contra un fondo de estudio
+// fotográfico (backdrop liso, piso de concreto/ciclorama) — el prior más
+// fuerte del modelo para esa composición. Nadie se fotografía así para un
+// outfit dump; el espacio real es siempre doméstico u orgánico (dormitorio,
+// baño, pasillo, frente a un espejo o vitrina de la calle). Se agrega en
+// TODO shot con encuadre mirror-selfie, no solo en el ancla.
+export const NO_STUDIO_BACKDROP_LINE =
+  'The background is a real, lived-in domestic or everyday space — a bedroom, a bathroom, a hallway, a closet, or a street-level shop window reflection — never a photography studio, never a seamless backdrop, never a plain concrete or cyclorama floor. It must look like an ordinary room or place someone actually lives in or walks through, full of small real details (furniture, wall texture, clutter, decor), not a blank staged set.';

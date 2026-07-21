@@ -14,7 +14,7 @@ import { imageApiService } from '../../../../services/imageApiService';
 import { prepareRefs, getAspectRatio, NEGATIVE_SHORT } from '../shared';
 import type { PhotodumpRefs, PhotodumpNarrative, PhotodumpProtagonist, PhotodumpDestino } from '../../types';
 import type { PhotodumpREF0Result } from '../shared';
-import { IPHONE_CAMERA_ROLL_LINE } from './renderProfile';
+import { IPHONE_CAMERA_ROLL_LINE, NO_STUDIO_BACKDROP_LINE } from './renderProfile';
 
 export async function generateFixedAnchor(
   refs:          PhotodumpRefs,
@@ -35,6 +35,7 @@ export async function generateFixedAnchor(
 
   const prompt = `ANCHOR SHOT — establishes identity, body, room, and lighting for the entire set. Every following photo reuses this exact background.
 A full-body mirror selfie. No specific outfit called out here — simple, neutral everyday clothing, not the look that will be shown in the following photos.
+${NO_STUDIO_BACKDROP_LINE}
 ${IPHONE_CAMERA_ROLL_LINE}`;
 
   const preparedRefs = await prepareRefs(refsToPass);
