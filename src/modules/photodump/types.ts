@@ -491,7 +491,12 @@ export interface MultiLookLookItem {
   refUrl:      string;
   label:       string;
   era?:        'before' | 'after';  // solo then_vs_now
-  placeLabel?: string;              // solo trip_recap, declarado por el usuario, nunca inventado
+  // solo trip_recap — imagen real del lugar (slot @escenaN, asociada por
+  // posición al look correspondiente). Nunca texto libre ni inventado: el
+  // usuario sube una foto real del lugar (propia o encontrada), el modelo
+  // la usa como referencia visual directa — más fiel que describir el
+  // nombre de memoria, y consistente con cómo el resto de la app usa @escena.
+  placeSceneUrl?: string;
 }
 
 // curated_ideas: pool general de calzado/accesorios opcional, con enlace
@@ -672,7 +677,9 @@ export interface PhotodumpRefs {
   // Arrays paralelos indexados igual que haulOutfitKinds: índice 0..N corresponde
   // a [outfitRef, outfitRefs[0], outfitRefs[1], ...]
   multiLookEras?:   ('before' | 'after' | null)[];   // solo then_vs_now
-  multiLookPlaces?: (string | null)[];               // solo trip_recap, texto declarado por el usuario
+  // trip_recap: el lugar de cada look ahora usa el slot @escenaN (imagen
+  // real, sceneRefs) asociado por posición al look correspondiente — ver
+  // manifest.ts. No hay campo propio acá, se reusa sceneRefs directamente.
   // curated_ideas: pool de accesorios (calzado/joyas) subido por el slot
   // accesorios — separado de accesorioRefs porque ese campo ya tiene
   // semántica propia en outfit_haul/outfit_week (shape distinto).

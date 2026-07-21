@@ -5,8 +5,15 @@
  * imagen subida en esos slots es un look completo, no un ítem clasificado
  * por categoría (a diferencia de weeklyFavoritesV2).
  *
- * Los campos era/placeLabel vienen de arrays paralelos indexados igual que
- * haulOutfitKinds — nunca se infieren ni se inventan acá.
+ * El campo era viene de un array paralelo indexado igual que
+ * haulOutfitKinds — nunca se infiere ni se inventa acá.
+ *
+ * trip_recap: el lugar de cada look se asocia por posición desde el slot
+ * @escenaN (sceneRefs) — imagen real del lugar, no texto. Look 0 ↔ Escena 0,
+ * Look 1 ↔ Escena 1, etc. Corrección de diseño (julio 2026): la primera
+ * versión pedía escribir el nombre del lugar en un input de texto debajo de
+ * cada outfit, confuso visualmente (parecía un slot de imagen vacío) y
+ * redundante con el slot @escena ya existente en toda la app.
  */
 import type { PhotodumpRefs, MultiLookIntent, MultiLookBackgroundMode } from '../../types';
 import type { MultiLookManifest, LookItem, MultiLookAccessory } from './types';
@@ -41,7 +48,7 @@ export function buildMultiLookManifest(refs: PhotodumpRefs): MultiLookManifest {
   const intent: MultiLookIntent = refs.multiLookIntent ?? 'weekly';
   const urls = [refs.outfitRef, ...(refs.outfitRefs ?? [])];
   const eras = refs.multiLookEras ?? [];
-  const places = refs.multiLookPlaces ?? [];
+  const scenes = [refs.sceneRef, ...(refs.sceneRefs ?? [])];
 
   const looks: LookItem[] = [];
   urls.forEach((url, i) => {
@@ -57,8 +64,8 @@ export function buildMultiLookManifest(refs: PhotodumpRefs): MultiLookManifest {
       if (era === 'before' || era === 'after') look.era = era;
     }
     if (intent === 'trip_recap') {
-      const place = places[i];
-      if (place && place.trim().length > 0) look.placeLabel = place.trim();
+      const scene = scenes[i];
+      if (scene) look.placeSceneUrl = scene;
     }
     looks.push(look);
   });

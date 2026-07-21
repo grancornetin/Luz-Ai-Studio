@@ -238,7 +238,12 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
     if (key === 'accesorios')     return recipe === 'outfit_haul' ? 5 : recipe === 'outfit_week' ? 4 : 3;
     if (key === 'producto')       return recipe === 'product_haul' ? 10 : 3;
     if (key === 'empaque')        return 3;
-    if (key === 'escena')         return 3;
+    if (key === 'escena') {
+      // trip_recap: 1 escena por look (mismo tope que el slot de outfit),
+      // no el tope genérico de 3 — cada look necesita su propia foto de lugar.
+      if (recipe === 'outfit_multi_look' && refs.multiLookIntent === 'trip_recap') return getSlotMax('outfit');
+      return 3;
+    }
     if (key === 'escena_prueba')  return 1;
     if (key === 'escena_destino') return 1;
     return 1;
@@ -314,7 +319,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   const MULTI_LOOK_INTENT_OPTIONS: { value: MultiLookIntent; label: string; hint: string }[] = [
     { value: 'weekly',        label: 'Mi semana en looks',      hint: 'Mostrás varios outfits, uno por día — sin que ninguno sea "el mejor".' },
     { value: 'then_vs_now',   label: 'Antes vs. ahora',         hint: 'Marcá qué look es "antes" y cuál es "ahora" — el segundo se ve con más onda.' },
-    { value: 'trip_recap',    label: 'Los looks de mi viaje',   hint: 'Cada foto en un lugar distinto — decinos qué lugares usar.' },
+    { value: 'trip_recap',    label: 'Los looks de mi viaje',   hint: 'Cada foto en un lugar distinto — subí una foto real de cada lugar.' },
     { value: 'curated_ideas', label: 'Ideas para una ocasión',  hint: 'Varias opciones del mismo estilo — ej. "3 vestidos para invitada a boda".' },
   ];
 
@@ -329,12 +334,10 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
     onRefs({ ...refs, multiLookEras: arr });
   };
 
-  const handleMultiLookPlaceChange = (slotIndex: number, place: string) => {
-    const max = getSlotMax('outfit');
-    const arr = [...(refs.multiLookPlaces ?? Array(max).fill(null))];
-    arr[slotIndex] = place;
-    onRefs({ ...refs, multiLookPlaces: arr });
-  };
+  // trip_recap: el lugar de cada look ya no es texto — se sube como foto
+  // real en el slot "Escena" (misma posición que el outfit correspondiente,
+  // ver manifest.ts). No hace falta un handler propio acá, se usa el
+  // handleSlotChange('escena', ...) genérico que ya existe más abajo.
 
   const handleCloseupToggle = (accIndex: number) => {
     const slots = recipe === 'outfit_haul' ? 5 : recipe === 'outfit_week' ? 4 : 3;
@@ -477,7 +480,12 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
     if (key === 'empaque') return recipe === 'product_haul'
       ? 'Opcional: la caja o packaging en la que llegaron los productos. Si lo subís, se genera un momento de unboxing intercalado en el set.'
       : 'El empaque, caja o packaging del producto. Si no subís fotos, la IA generará un empaque — la consistencia puede variar.';
-    if (key === 'escena') return 'La escena principal define la ambientación del set completo.';
+    if (key === 'escena') {
+      if (recipe === 'outfit_multi_look' && refs.multiLookIntent === 'trip_recap') {
+        return 'Subí una foto del lugar por cada look — Escena 1 va con Look 1, Escena 2 con Look 2, y así. El sistema nunca inventa el lugar, siempre usa la foto real que subas acá.';
+      }
+      return 'La escena principal define la ambientación del set completo.';
+    }
     if (key === 'escena_prueba') return 'Escena de prueba: lugar donde te preparás o revisás el look. Opcional. Si no subís foto, se genera un espacio coherente con el contexto del brief.';
     if (key === 'escena_destino') return 'Escena destino: lugar al que vas con el outfit puesto. Opcional. Si no subís foto, Luz IA intenta inferir el destino desde el brief.';
     return '';
@@ -643,6 +651,11 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                   );
                 })}
               </div>
+              {refs.multiLookIntent === 'trip_recap' && (
+                <p className="text-[10px] text-slate-400 mt-2 leading-snug">
+                  El lugar de cada look se sube como foto en el slot <b>Escena</b> más abajo — Escena 1 va con Look 1, Escena 2 con Look 2, y así. Subí una foto real del lugar (tuya o encontrada), no hace falta escribir el nombre.
+                </p>
+              )}
             </div>
           )}
 
@@ -841,15 +854,6 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                                       );
                                     })}
                                   </div>
-                                )}
-                                {recipe === 'outfit_multi_look' && hasImage && key === 'outfit' && refs.multiLookIntent === 'trip_recap' && (
-                                  <input
-                                    type="text"
-                                    value={(refs.multiLookPlaces ?? [])[i] ?? ''}
-                                    onChange={e => handleMultiLookPlaceChange(i, e.target.value)}
-                                    placeholder="Ej: Cerro San Cristóbal"
-                                    className="w-full text-[9px] px-1.5 py-1 rounded-full border border-slate-300 outline-none focus:border-brand-500 text-slate-700"
-                                  />
                                 )}
                                 {isAccesorios && isCloseup && hasImage && (
                                   <p className="text-[8px] text-pink-500 font-bold text-center">

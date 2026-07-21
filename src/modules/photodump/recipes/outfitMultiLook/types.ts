@@ -20,8 +20,8 @@ export interface LookItem {
   sourceIndex: number;    // índice en [outfitRef, ...outfitRefs]
   refUrl:      string;
   label:       string;
-  era?:        'before' | 'after';  // solo then_vs_now
-  placeLabel?: string;              // solo trip_recap, declarado por el usuario
+  era?:           'before' | 'after';  // solo then_vs_now
+  placeSceneUrl?: string;              // solo trip_recap, imagen real del lugar (@escenaN)
 }
 
 export interface MultiLookManifest {
@@ -45,9 +45,9 @@ export interface FixedAnchorResult {
 // ── Anchor chain (fondo variable — trip_recap) ───────────────────────────
 
 export interface AnchorChainLink {
-  lookId:    string;
-  placeLabel: string;
-  imageUrl:  string;
+  lookId:        string;
+  placeSceneUrl: string;
+  imageUrl:      string;
 }
 
 export interface AnchorChainResult {
