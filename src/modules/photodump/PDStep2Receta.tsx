@@ -2,7 +2,7 @@
  * PDStep2Receta.tsx — Paso 2 modo recetas
  * Brief · Referencias dinámicas según la receta elegida
  */
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, User, Package, Shirt, Layers, AlertCircle, AtSign, Star } from 'lucide-react';
 import { ImageSlot } from '../../components/shared/ImageSlot';
 import {
@@ -71,6 +71,18 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
 
   const isOutfitRecipe = recipe === 'outfit_check' || recipe === 'outfit_haul' || recipe === 'outfit_week';
   const maxCount = recipe === 'outfit_check' ? OUTFIT_CHECK_MAX_COUNT : MAX_COUNT;
+
+  // outfit_multi_look: la cantidad de fotos SIEMPRE es igual a la cantidad
+  // de looks subidos (1 shot por look, ver recipes/outfitMultiLook/allocator.ts)
+  // — el selector manual de cantidad no aplica acá. Sin esto, alguien podía
+  // pedir "4 fotos" con solo 2 outfits cargados y terminar con 2 fotos sin
+  // ningún aviso de por qué.
+  const multiLookLookCount = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean).length;
+  useEffect(() => {
+    if (recipe === 'outfit_multi_look' && multiLookLookCount > 0 && multiLookLookCount !== count) {
+      onCount(multiLookLookCount);
+    }
+  }, [recipe, multiLookLookCount, count, onCount]);
 
   // Insertar @tag en la posición del cursor del textarea
   const insertTag = (tag: string) => {
@@ -458,33 +470,49 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
             <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-2">
               Cantidad de imágenes
             </label>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => onCount(Math.max(MIN_COUNT, count - 1))}
-                disabled={count <= MIN_COUNT}
-                className="w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold text-lg flex items-center justify-center hover:border-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-all"
-              >
-                −
-              </button>
-              <div className="flex flex-col items-center min-w-[48px]">
-                <span className="text-2xl font-black text-slate-900 leading-none">{count}</span>
-                <span className="text-[9px] text-slate-400 font-medium">fotos</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => onCount(Math.min(maxCount, count + 1))}
-                disabled={count >= maxCount}
-                className="w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold text-lg flex items-center justify-center hover:border-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-all"
-              >
-                +
-              </button>
-            </div>
-            <p className="text-[9px] text-slate-400 mt-1.5">
-              {recipe === 'outfit_check'
-                ? 'Outfit check permite hasta 8 imágenes para mantener coherencia de look y escena.'
-                : 'Mínimo 3 · El género del avatar se detecta automáticamente'}
-            </p>
+            {recipe === 'outfit_multi_look' ? (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="flex flex-col items-center min-w-[48px]">
+                    <span className="text-2xl font-black text-slate-900 leading-none">{count}</span>
+                    <span className="text-[9px] text-slate-400 font-medium">fotos</span>
+                  </div>
+                </div>
+                <p className="text-[9px] text-slate-400 mt-1.5">
+                  Se genera 1 foto por look que subas abajo — no hace falta elegir cantidad.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => onCount(Math.max(MIN_COUNT, count - 1))}
+                    disabled={count <= MIN_COUNT}
+                    className="w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold text-lg flex items-center justify-center hover:border-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                  >
+                    −
+                  </button>
+                  <div className="flex flex-col items-center min-w-[48px]">
+                    <span className="text-2xl font-black text-slate-900 leading-none">{count}</span>
+                    <span className="text-[9px] text-slate-400 font-medium">fotos</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onCount(Math.min(maxCount, count + 1))}
+                    disabled={count >= maxCount}
+                    className="w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold text-lg flex items-center justify-center hover:border-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                  >
+                    +
+                  </button>
+                </div>
+                <p className="text-[9px] text-slate-400 mt-1.5">
+                  {recipe === 'outfit_check'
+                    ? 'Outfit check permite hasta 8 imágenes para mantener coherencia de look y escena.'
+                    : 'Mínimo 3 · El género del avatar se detecta automáticamente'}
+                </p>
+              </>
+            )}
           </div>
 
           {/* Brief */}
