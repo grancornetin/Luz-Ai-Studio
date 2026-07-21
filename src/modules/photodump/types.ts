@@ -494,6 +494,18 @@ export interface MultiLookLookItem {
   placeLabel?: string;              // solo trip_recap, declarado por el usuario, nunca inventado
 }
 
+// curated_ideas: pool general de calzado/accesorios opcional, con enlace
+// many-to-many a looks (un accesorio puede combinar con más de un look).
+// El usuario declara el enlace explícitamente con chips en la UI — no hay
+// scoring automático de compatibilidad (eso es de outfit_haul, un problema
+// distinto: ahí N accesorios sueltos se emparejan solos entre sí).
+export interface MultiLookAccessory {
+  id:            string;    // 'acc_0', 'acc_1'...
+  sourceIndex:   number;    // índice en curatedIdeasAccessoryRefs
+  refUrl:        string;
+  linkedLookIds: string[];  // ids de MultiLookLookItem con los que combina
+}
+
 export const RECIPE_META: Record<PhotodumpRecipe, {
   label:       string;
   description: string;
@@ -547,6 +559,10 @@ export const RECIPE_META: Record<PhotodumpRecipe, {
     label:       'Varios looks',
     description: 'Mostrás varios looks en una sola tanda: tu semana, un antes/ahora, ideas para una ocasión, o los outfits de tu viaje.',
     icon:        'Images',
+    // accesorios queda en 'none': el pool de calzado/joyas de curated_ideas
+    // usa su propio bloque de UI (curatedIdeasAccessoryRefs/-Links, con chips
+    // de enlace many-to-many), no el slot genérico accesorioRefs/-Closeup
+    // que tiene shape y semántica distintos en outfit_haul/outfit_week.
     refs:        { avatar: 'required', outfit: 'required', accesorios: 'none', producto: 'none', empaque: 'none', escena: 'optional', escena_prueba: 'none', escena_destino: 'none' },
     narrative:   'character',
     protagonist: 'person',
@@ -657,6 +673,13 @@ export interface PhotodumpRefs {
   // a [outfitRef, outfitRefs[0], outfitRefs[1], ...]
   multiLookEras?:   ('before' | 'after' | null)[];   // solo then_vs_now
   multiLookPlaces?: (string | null)[];               // solo trip_recap, texto declarado por el usuario
+  // curated_ideas: pool de accesorios (calzado/joyas) subido por el slot
+  // accesorios — separado de accesorioRefs porque ese campo ya tiene
+  // semántica propia en outfit_haul/outfit_week (shape distinto).
+  curatedIdeasAccessoryRefs?:  (string | null)[];
+  // Paralelo al array de arriba — ids de MultiLookLookItem con los que cada
+  // accesorio combina (many-to-many, declarado por el usuario con chips).
+  curatedIdeasAccessoryLinks?: (string[] | null)[];
 }
 
 // ── Tipos modo libre ───────────────────────────────────────────

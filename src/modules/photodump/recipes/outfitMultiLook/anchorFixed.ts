@@ -41,7 +41,7 @@ export async function generateFixedAnchor(
   // (ver intelligenceLayer.ts) — antes el ancla no la usaba y salía como la
   // única foto con pose real, mientras el resto quedaba plano.
   const intelligence = applyIntelligence(
-    { shotId: 'anchor', look: firstLook, referencePolicy: { useIdentityRef: true, useBodyRef: true, useAnchorRef: false, activeLookRef: firstLook.refUrl }, cameraGrammar: { framing: 'MEDIUM_FULL', angle: 'eye_level', composition: 'mirror_selfie' }, poseIntensity: 'neutral' },
+    { shotId: 'anchor', look: firstLook, referencePolicy: { useIdentityRef: true, useBodyRef: true, useAnchorRef: false, activeLookRef: firstLook.refUrl }, cameraGrammar: { framing: 'MEDIUM_FULL', angle: 'eye_level', composition: 'mirror_selfie' }, poseIntensity: 'neutral', angle: 'frontal' },
     refs.gender ?? 'female',
   );
 

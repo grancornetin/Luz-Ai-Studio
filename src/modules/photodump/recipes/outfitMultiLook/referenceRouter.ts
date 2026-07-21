@@ -9,6 +9,10 @@
  *  - fixed_single_anchor: la imagen REF0 generada una sola vez para toda la sesión.
  *  - variable_per_shot (trip_recap): el eslabón de cadena de ESTE shot puntual
  *    (contract.chainAnchorUrl), no una imagen compartida entre todos los shots.
+ *
+ * curated_ideas: si el contrato trae linkedAccessoryUrls (calzado/joyas
+ * enlazados a este look, ver contracts.ts), se agregan al final del array
+ * ordenado — respetando MAX_REFS en routingValidator.ts.
  */
 import type { PhotodumpRefs } from '../../types';
 import type { ShotContract, RoutedReferences } from './types';
@@ -31,6 +35,9 @@ export function routeReferences(
   }
   if (contract.referencePolicy.activeLookRef) {
     breakdown.look = [contract.referencePolicy.activeLookRef];
+  }
+  if (contract.referencePolicy.linkedAccessoryUrls && contract.referencePolicy.linkedAccessoryUrls.length > 0) {
+    breakdown.look = [...breakdown.look, ...contract.referencePolicy.linkedAccessoryUrls];
   }
 
   const orderedUrls = [

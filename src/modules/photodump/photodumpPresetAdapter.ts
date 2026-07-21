@@ -76,6 +76,8 @@ export const photodumpPresetAdapter: ModulePresetAdapter<PhotodumpPresetState> =
         multiLookIntent:  state.refs.multiLookIntent  ?? null,
         multiLookEras:    state.refs.multiLookEras    ?? [],
         multiLookPlaces:  state.refs.multiLookPlaces  ?? [],
+        curatedIdeasAccessoryRefs:  state.refs.curatedIdeasAccessoryRefs  ?? [],
+        curatedIdeasAccessoryLinks: state.refs.curatedIdeasAccessoryLinks ?? [],
       },
     };
   },
@@ -113,6 +115,8 @@ export const photodumpPresetAdapter: ModulePresetAdapter<PhotodumpPresetState> =
         multiLookIntent:  refs.multiLookIntent  ?? undefined,
         multiLookEras:    refs.multiLookEras    ?? [],
         multiLookPlaces:  refs.multiLookPlaces  ?? [],
+        curatedIdeasAccessoryRefs:  refs.curatedIdeasAccessoryRefs  ?? [],
+        curatedIdeasAccessoryLinks: refs.curatedIdeasAccessoryLinks ?? [],
       },
     };
   },

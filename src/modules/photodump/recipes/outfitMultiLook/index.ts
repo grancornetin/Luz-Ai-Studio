@@ -21,7 +21,7 @@ import { buildMultiLookManifest } from './manifest';
 import { generateFixedAnchor } from './anchorFixed';
 import { generateAnchorChain, getCachedAnchorChain } from './anchorChain';
 import { allocateLookShots } from './allocator';
-import { buildShotContracts } from './contracts';
+import { buildShotContract, buildShotContracts } from './contracts';
 import { validateShotContract } from './contractValidator';
 import { routeReferences } from './referenceRouter';
 import { validateRouting } from './routingValidator';
@@ -67,13 +67,14 @@ export function buildOutfitMultiLookDirectives(
 ): { directives: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[]; plan: OutfitMultiLookPlan } {
   const manifest = buildMultiLookManifest(refs);
   const allocation = allocateLookShots(manifest.looks, requestedCount);
-  const shotContracts = buildShotContracts(allocation.looksToShoot, manifest.intent);
+  const shotContracts = buildShotContracts(allocation.looksToShoot, manifest.intent, undefined, manifest.accessories);
 
   const directives = shotContracts.map((contract): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> => {
     const plan: OutfitMultiLookShotPlan = {
       shotId: contract.shotId,
       lookId: contract.look.id,
       intent: manifest.intent,
+      angle:  contract.angle,
     };
     return {
       key:                contract.shotId,
@@ -164,6 +165,7 @@ export async function generateOutfitMultiLookShot(
   const allocation = allocateLookShots(manifest.looks, requestedCount);
 
   const lookId = shot.outfitMultiLookPlan?.lookId;
+  const angle  = shot.outfitMultiLookPlan?.angle ?? 'frontal';
   const look = allocation.looksToShoot.find(l => l.id === lookId);
   if (!look) {
     throw new Error(`No se encontró el look para el shot "${shot.key}". No se puede generar sin un look válido.`);
@@ -179,7 +181,7 @@ export async function generateOutfitMultiLookShot(
     const cachedFirstLook = firstLookImageCache.get(firstLookImageCacheKey(refs));
     if (cachedFirstLook && cachedFirstLook.lookId === look.id) {
       const debug = buildShotDebug(
-        { shotId: shot.key, look, referencePolicy: { useIdentityRef: true, useBodyRef: true, useAnchorRef: false, activeLookRef: look.refUrl }, cameraGrammar: { framing: 'MEDIUM_FULL', angle: 'eye_level', composition: 'mirror_selfie' }, poseIntensity: 'neutral' },
+        { shotId: shot.key, look, referencePolicy: { useIdentityRef: true, useBodyRef: true, useAnchorRef: false, activeLookRef: look.refUrl }, cameraGrammar: { framing: 'MEDIUM_FULL', angle: 'eye_level', composition: 'mirror_selfie' }, poseIntensity: 'neutral', angle: 'frontal' },
         { orderedUrls: [cachedFirstLook.imageUrl], breakdown: { look: [cachedFirstLook.imageUrl] } },
         'first look (already generated as the set anchor)',
         { passed: true, errors: [] },
@@ -197,7 +199,7 @@ export async function generateOutfitMultiLookShot(
       fixedAnchorCache.set(fixedAnchorCacheKey(refs), anchorImageUrl);
       firstLookImageCache.set(firstLookImageCacheKey(refs), { lookId: look.id, imageUrl: anchorImageUrl });
       const debug = buildShotDebug(
-        { shotId: shot.key, look, referencePolicy: { useIdentityRef: true, useBodyRef: true, useAnchorRef: false, activeLookRef: look.refUrl }, cameraGrammar: { framing: 'MEDIUM_FULL', angle: 'eye_level', composition: 'mirror_selfie' }, poseIntensity: 'neutral' },
+        { shotId: shot.key, look, referencePolicy: { useIdentityRef: true, useBodyRef: true, useAnchorRef: false, activeLookRef: look.refUrl }, cameraGrammar: { framing: 'MEDIUM_FULL', angle: 'eye_level', composition: 'mirror_selfie' }, poseIntensity: 'neutral', angle: 'frontal' },
         { orderedUrls: [anchorImageUrl], breakdown: { look: [anchorImageUrl] } },
         result.prompt,
         { passed: true, errors: [] },
@@ -219,7 +221,7 @@ export async function generateOutfitMultiLookShot(
     // (se generó con el outfit puesto en anchorChain.ts) — no hace falta
     // volver a generar, se devuelve directamente.
     const debug = buildShotDebug(
-      { shotId: shot.key, look, referencePolicy: { useIdentityRef: true, useBodyRef: true, useAnchorRef: false, activeLookRef: look.refUrl }, cameraGrammar: { framing: 'MEDIUM_FULL', angle: 'eye_level', composition: 'candid_off_center' }, poseIntensity: 'neutral' },
+      { shotId: shot.key, look, referencePolicy: { useIdentityRef: true, useBodyRef: true, useAnchorRef: false, activeLookRef: look.refUrl }, cameraGrammar: { framing: 'MEDIUM_FULL', angle: 'eye_level', composition: 'candid_off_center' }, poseIntensity: 'neutral', angle: 'frontal' },
       { orderedUrls: [anchorImageUrl], breakdown: { look: [anchorImageUrl] } },
       'trip_recap link (already generated in chain)',
       { passed: true, errors: [] },
@@ -228,7 +230,7 @@ export async function generateOutfitMultiLookShot(
     return { imageUrl: anchorImageUrl, prompt: 'trip_recap chain link', refsCount: 1, debug };
   }
 
-  const contract = buildShotContracts([look], manifest.intent)[0];
+  const contract = buildShotContract(look, manifest.intent, angle, undefined, manifest.accessories);
 
   const contractValidation = validateShotContract(contract, manifest.intent);
   if (!contractValidation.passed) {

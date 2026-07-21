@@ -9,9 +9,9 @@
  * completo con, opcionalmente, una era (then_vs_now) o un lugar (trip_recap).
  * No hay "categorías de producto" que clasificar.
  */
-import type { MultiLookIntent, MultiLookBackgroundMode } from '../../types';
+import type { MultiLookIntent, MultiLookBackgroundMode, MultiLookAccessory } from '../../types';
 
-export type { MultiLookIntent, MultiLookBackgroundMode };
+export type { MultiLookIntent, MultiLookBackgroundMode, MultiLookAccessory };
 
 // ── Manifest ────────────────────────────────────────────────────────────
 
@@ -28,6 +28,8 @@ export interface MultiLookManifest {
   intent:         MultiLookIntent;
   backgroundMode: MultiLookBackgroundMode;
   looks:          LookItem[];
+  // Solo poblado si intent === 'curated_ideas' y el usuario cargó accesorios.
+  accessories:    MultiLookAccessory[];
 }
 
 // ── Anchor (fondo fijo — weekly / then_vs_now / curated_ideas) ──
@@ -61,6 +63,9 @@ export interface ReferencePolicy {
   useBodyRef:     boolean;
   useAnchorRef:   boolean;
   activeLookRef:  string | null;
+  // Solo curated_ideas: URLs de accesorios enlazados a este look (calzado/joyas
+  // subidos por el usuario, ver MultiLookAccessory.linkedLookIds).
+  linkedAccessoryUrls?: string[];
 }
 
 export interface CameraGrammarRef {
@@ -69,12 +74,19 @@ export interface CameraGrammarRef {
   composition: string;
 }
 
+// Solo relevante en curated_ideas: cada look produce 2 shots — 'frontal'
+// (el mismo mirror-selfie orgánico que las demás intenciones) y 'variation'
+// (ángulo distinto — trasera/lateral/close-up de tela, rotado por posición
+// del look en el set). El resto de las intenciones siempre usa 'frontal'.
+export type MultiLookShotAngle = 'frontal' | 'variation';
+
 export interface ShotContract {
   shotId:          string;
   look:            LookItem;
   referencePolicy: ReferencePolicy;
   cameraGrammar:   CameraGrammarRef;
   poseIntensity:   LookPoseIntensity;
+  angle:           MultiLookShotAngle;
   // Solo poblado para trip_recap — la imagen de ancla de ESTE eslabón de la cadena.
   chainAnchorUrl?: string;
 }
@@ -104,6 +116,7 @@ export interface OutfitMultiLookShotPlan {
   shotId: string;
   lookId: string;
   intent: MultiLookIntent;
+  angle:  MultiLookShotAngle;
 }
 
 // ── Debug ─────────────────────────────────────────────────────────────────

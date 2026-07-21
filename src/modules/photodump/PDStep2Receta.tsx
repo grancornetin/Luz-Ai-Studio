@@ -72,17 +72,20 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   const isOutfitRecipe = recipe === 'outfit_check' || recipe === 'outfit_haul' || recipe === 'outfit_week';
   const maxCount = recipe === 'outfit_check' ? OUTFIT_CHECK_MAX_COUNT : MAX_COUNT;
 
-  // outfit_multi_look: la cantidad de fotos SIEMPRE es igual a la cantidad
-  // de looks subidos (1 shot por look, ver recipes/outfitMultiLook/allocator.ts)
-  // — el selector manual de cantidad no aplica acá. Sin esto, alguien podía
-  // pedir "4 fotos" con solo 2 outfits cargados y terminar con 2 fotos sin
-  // ningún aviso de por qué.
+  // outfit_multi_look: la cantidad de fotos SIEMPRE se deriva de la cantidad
+  // de looks subidos (ver recipes/outfitMultiLook/), nunca del selector
+  // manual. weekly/then_vs_now/trip_recap: 1 shot por look. curated_ideas:
+  // 2 shots por look (frontal + variación de ángulo, ver contracts.ts) — sin
+  // esto, alguien podía pedir "4 fotos" con 2 outfits cargados y terminar
+  // con un número de fotos sin ningún aviso de por qué.
   const multiLookLookCount = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean).length;
+  const multiLookShotsPerLook = refs.multiLookIntent === 'curated_ideas' ? 2 : 1;
+  const multiLookExpectedCount = multiLookLookCount * multiLookShotsPerLook;
   useEffect(() => {
-    if (recipe === 'outfit_multi_look' && multiLookLookCount > 0 && multiLookLookCount !== count) {
-      onCount(multiLookLookCount);
+    if (recipe === 'outfit_multi_look' && multiLookExpectedCount > 0 && multiLookExpectedCount !== count) {
+      onCount(multiLookExpectedCount);
     }
-  }, [recipe, multiLookLookCount, count, onCount]);
+  }, [recipe, multiLookExpectedCount, count, onCount]);
 
   // Insertar @tag en la posición del cursor del textarea
   const insertTag = (tag: string) => {
@@ -340,6 +343,39 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
     onRefs({ ...refs, accesorioCloseup: closeups });
   };
 
+  // ── curated_ideas: pool de calzado/accesorios con enlace many-to-many ──
+  const MAX_CURATED_ACCESSORIES = 5;
+  const curatedAccessoryRefs  = refs.curatedIdeasAccessoryRefs  ?? [];
+  const curatedAccessoryLinks = refs.curatedIdeasAccessoryLinks ?? [];
+  const curatedLookIds = [refs.outfitRef, ...(refs.outfitRefs ?? [])]
+    .map((url, i) => (url ? { id: `look_${i}`, label: `Look ${i + 1}` } : null))
+    .filter((l): l is { id: string; label: string } => l !== null)
+    // Los ids deben re-indexarse igual que buildMultiLookManifest (solo cuenta looks con imagen)
+    .map((l, i) => ({ id: `look_${i}`, label: l.label }));
+
+  const handleCuratedAccessoryChange = (accIndex: number, value: string | null) => {
+    const arr = [...curatedAccessoryRefs];
+    while (arr.length <= accIndex) arr.push(null);
+    arr[accIndex] = value;
+    const links = [...curatedAccessoryLinks];
+    while (links.length <= accIndex) links.push(null);
+    if (!value) links[accIndex] = null;
+    onRefs({ ...refs, curatedIdeasAccessoryRefs: arr, curatedIdeasAccessoryLinks: links });
+  };
+
+  const handleCuratedAccessoryLinkToggle = (accIndex: number, lookId: string) => {
+    const links = [...curatedAccessoryLinks];
+    while (links.length <= accIndex) links.push(null);
+    const current = links[accIndex] ?? [];
+    links[accIndex] = current.includes(lookId)
+      ? current.filter(id => id !== lookId)
+      : [...current, lookId];
+    onRefs({ ...refs, curatedIdeasAccessoryLinks: links });
+  };
+
+  const curatedAccessoriesFilledCount = curatedAccessoryRefs.filter(Boolean).length;
+  const [curatedAccessoriesEnabled, setCuratedAccessoriesEnabled] = useState(curatedAccessoriesFilledCount > 0);
+
   // ── Handlers de tipo de referencia Haul ───────────────────────
   const handleOutfitKindChange = (slotIndex: number, kind: HaulRefKind) => {
     const max = getSlotMax('outfit');
@@ -478,7 +514,9 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                   </div>
                 </div>
                 <p className="text-[9px] text-slate-400 mt-1.5">
-                  Se genera 1 foto por look que subas abajo — no hace falta elegir cantidad.
+                  {refs.multiLookIntent === 'curated_ideas'
+                    ? 'Se generan 2 fotos por look (frontal + otro ángulo) — no hace falta elegir cantidad.'
+                    : 'Se genera 1 foto por look que subas abajo — no hace falta elegir cantidad.'}
                 </p>
               </>
             ) : (
@@ -842,6 +880,84 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
               })}
             </div>
           </div>
+
+          {/* curated_ideas: calzado/accesorios opcionales, con enlace a looks */}
+          {recipe === 'outfit_multi_look' && refs.multiLookIntent === 'curated_ideas' && (
+            <div>
+              {!curatedAccessoriesEnabled ? (
+                <button
+                  type="button"
+                  onClick={() => setCuratedAccessoriesEnabled(true)}
+                  className="w-full text-left px-4 py-3 rounded-xl border border-dashed border-slate-300 bg-slate-50/60 hover:border-brand-300 hover:bg-brand-50/40 transition-all"
+                >
+                  <p className="text-[13px] font-bold text-slate-700">¿Querés agregar calzado o accesorios para complementar tus looks?</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Subí zapatos, carteras o joyas y decinos con qué looks combinan.</p>
+                </button>
+              ) : (
+                <div className="border border-pink-200 bg-pink-50/30 rounded-2xl p-3.5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[11px] font-bold text-pink-600 uppercase tracking-[0.12em]">
+                      Calzado / Accesorios
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setCuratedAccessoriesEnabled(false)}
+                      className="text-[10px] text-slate-400 hover:text-slate-600"
+                    >
+                      Ocultar
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-500 leading-snug">
+                    Opcional. Si no subís nada para un look, el resultado igual incluye calzado/accesorios coherentes con el outfit.
+                  </p>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    {Array.from({ length: Math.min(curatedAccessoryRefs.filter(Boolean).length + 1, MAX_CURATED_ACCESSORIES) }).map((_, i) => (
+                      <ImageSlot
+                        key={i}
+                        value={curatedAccessoryRefs[i] ?? null}
+                        onChange={(v) => handleCuratedAccessoryChange(i, v)}
+                        slotType="outfit"
+                        aspectRatio="square"
+                        className="!aspect-square"
+                      />
+                    ))}
+                  </div>
+
+                  {curatedLookIds.length > 0 && curatedAccessoryRefs.some(Boolean) && (
+                    <div className="space-y-2 pt-1">
+                      {curatedAccessoryRefs.map((url, i) => {
+                        if (!url) return null;
+                        const links = curatedAccessoryLinks[i] ?? [];
+                        return (
+                          <div key={i} className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] font-bold text-slate-500">Combina con:</span>
+                            {curatedLookIds.map(look => {
+                              const active = links.includes(look.id);
+                              return (
+                                <button
+                                  key={look.id}
+                                  type="button"
+                                  onClick={() => handleCuratedAccessoryLinkToggle(i, look.id)}
+                                  className={`text-[10px] font-bold px-2 py-1 rounded-full border transition-all ${
+                                    active
+                                      ? 'border-pink-500 bg-pink-500 text-white'
+                                      : 'border-slate-200 bg-white text-slate-500 hover:border-pink-300'
+                                  }`}
+                                >
+                                  {look.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── Panel lateral ─────────────────────────────────── */}
