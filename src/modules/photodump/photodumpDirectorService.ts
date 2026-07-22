@@ -95,6 +95,11 @@ import {
 import {
   buildOutfitMultiLookDirectives, generateOutfitMultiLookREF0, generateOutfitMultiLookShot,
 } from './recipes/outfitMultiLook';
+// outfit_reveal_basic — receta propia, 3 shots fijos (mirror_check, self_pov,
+// close_detail), sin looks múltiples ni intenciones. Ver recipes/outfitRevealBasic/index.ts.
+import {
+  buildOutfitRevealBasicDirectives, generateOutfitRevealBasicREF0, generateOutfitRevealBasicShot,
+} from './recipes/outfitRevealBasic';
 
 initHpiService();
 
@@ -963,6 +968,28 @@ export async function buildPhotodumpSessionPlan(
     };
   }
 
+  // outfit_reveal_basic — motor propio, siempre los mismos 3 shots fijos
+  // (mirror_check, self_pov, close_detail), sin importar count ni looks —
+  // no pasa por buildStoryDirectives.
+  if (recipe === 'outfit_reveal_basic' && refs) {
+    const directives = buildOutfitRevealBasicDirectives();
+    const shots: PhotodumpShotDirective[] = directives.map((d, i) => ({
+      ...d,
+      arcPosition: i + 1,
+      aspectRatio: getAspectRatio(destino),
+    }));
+    const sessionFamilies = { storySupport: [], creatorAesthetic: [] };
+    return {
+      narrative,
+      protagonist,
+      destino,
+      storyTheme: `${NARRATIVE_META[narrative].label} · ${basePrompt.slice(0, 50)}`,
+      shots,
+      assignedFamilies: [],
+      sessionFamilies,
+    };
+  }
+
   const isOutfitRecipe = recipe === 'outfit_check' || recipe === 'outfit_haul' || recipe === 'outfit_week';
   const presentationStyle = isOutfitRecipe
     ? resolveOutfitPresentationStyle(basePrompt, refs)
@@ -1120,6 +1147,10 @@ export async function generatePhotodumpREF0(
   if (recipe === 'outfit_multi_look') {
     const result = await generateOutfitMultiLookREF0(refs, narrative, protagonist, destino, basePrompt, 6, sessionParams);
     return { imageUrl: result.imageUrl, ref0Analysis: result.ref0Analysis, prompt: result.prompt, refsCount: result.refsCount };
+  }
+
+  if (recipe === 'outfit_reveal_basic') {
+    return generateOutfitRevealBasicREF0(refs, destino, sessionParams);
   }
 
   const aspectInstr = getAspectInstruction(destino);
@@ -2216,6 +2247,15 @@ export async function generatePhotodumpShot(
   if (recipe === 'outfit_multi_look') {
     const result = await generateOutfitMultiLookShot(
       shot, refs, destino, sessionParams, shot.arcPosition - 1, totalShots, totalShots, basePrompt, narrative, protagonist,
+    );
+    return { imageUrl: result.imageUrl, prompt: result.prompt, refsCount: result.refsCount };
+  }
+
+  // outfit_reveal_basic — motor propio (ver recipes/outfitRevealBasic/). Los
+  // 3 shots son siempre los mismos, identificados en shot.outfitRevealBasicPlan.
+  if (recipe === 'outfit_reveal_basic') {
+    const result = await generateOutfitRevealBasicShot(
+      shot, refs, destino, sessionParams, shot.arcPosition - 1, totalShots,
     );
     return { imageUrl: result.imageUrl, prompt: result.prompt, refsCount: result.refsCount };
   }

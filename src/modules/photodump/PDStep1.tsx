@@ -4,7 +4,7 @@
  */
 import React from 'react';
 import {
-  Package, Shirt, Sun, ShoppingBag, Clapperboard, Plane, Wand2, Check, Images,
+  Package, Shirt, Sun, ShoppingBag, Clapperboard, Plane, Wand2, Check, Images, Sparkles,
 } from 'lucide-react';
 import {
   PhotodumpRecipe, PhotodumpDestino, RECIPE_META, DESTINO_META,
@@ -17,6 +17,7 @@ const RECIPE_ICONS: Partial<Record<PhotodumpRecipe, React.ReactNode>> = {
   outfit_haul:  <Shirt      size={20} strokeWidth={1.5} />,
   outfit_week:  <Shirt      size={20} strokeWidth={1.5} />,
   outfit_multi_look: <Images size={20} strokeWidth={1.5} />,
+  outfit_reveal_basic: <Sparkles size={20} strokeWidth={1.5} />,
   day_in_life:  <Sun        size={20} strokeWidth={1.5} />,
   product_haul: <ShoppingBag size={20} strokeWidth={1.5} />,
   bts:          <Clapperboard size={20} strokeWidth={1.5} />,

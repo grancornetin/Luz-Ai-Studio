@@ -453,6 +453,7 @@ export type PhotodumpRecipe =
   | 'outfit_haul'   // Persona + N prendas separadas — se prueban una por una con progresión
   | 'outfit_week'   // Persona + N outfits completos — variedad semanal o temática
   | 'outfit_multi_look' // Persona + N looks completos — semana, antes/ahora, calificar, viaje o ideas curadas
+  | 'outfit_reveal_basic' // Persona + 1 outfit (N prendas combinadas) — 3 ángulos fijos: mirror check, POV, close-up
   | 'day_in_life'   // Persona + escena + producto
   | 'product_haul'  // Persona + N productos — se prueban/usan uno por uno, con empaque opcional
   | 'bts'           // Producto/workspace + escena, nunca avatar
@@ -568,6 +569,14 @@ export const RECIPE_META: Record<PhotodumpRecipe, {
     // usa su propio bloque de UI (curatedIdeasAccessoryRefs/-Links, con chips
     // de enlace many-to-many), no el slot genérico accesorioRefs/-Closeup
     // que tiene shape y semántica distintos en outfit_haul/outfit_week.
+    refs:        { avatar: 'required', outfit: 'required', accesorios: 'none', producto: 'none', empaque: 'none', escena: 'optional', escena_prueba: 'none', escena_destino: 'none' },
+    narrative:   'character',
+    protagonist: 'person',
+  },
+  outfit_reveal_basic: {
+    label:       'Así quedó este look',
+    description: 'Mostrás un outfit desde 3 ángulos: mirror check completo, tu propia vista, y un close-up.',
+    icon:        'Sparkles',
     refs:        { avatar: 'required', outfit: 'required', accesorios: 'none', producto: 'none', empaque: 'none', escena: 'optional', escena_prueba: 'none', escena_destino: 'none' },
     narrative:   'character',
     protagonist: 'person',

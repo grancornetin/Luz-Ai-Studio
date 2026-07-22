@@ -90,6 +90,16 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
     }
   }, [recipe, multiLookMaxCount, count, onCount]);
 
+  // outfit_reveal_basic: siempre son los mismos 3 shots fijos (mirror check,
+  // POV, close-up), sin importar cuántas prendas se suban — no hay selector
+  // de cantidad para esta receta.
+  const REVEAL_BASIC_SHOT_COUNT = 3;
+  useEffect(() => {
+    if (recipe === 'outfit_reveal_basic' && count !== REVEAL_BASIC_SHOT_COUNT) {
+      onCount(REVEAL_BASIC_SHOT_COUNT);
+    }
+  }, [recipe, count, onCount]);
+
   // Insertar @tag en la posición del cursor del textarea
   const insertTag = (tag: string) => {
     const el = textareaRef.current;
@@ -516,7 +526,19 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
             <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-2">
               Cantidad de imágenes
             </label>
-            {recipe === 'outfit_multi_look' ? (
+            {recipe === 'outfit_reveal_basic' ? (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="flex flex-col items-center min-w-[48px]">
+                    <span className="text-2xl font-black text-slate-900 leading-none">3</span>
+                    <span className="text-[9px] text-slate-400 font-medium">fotos</span>
+                  </div>
+                </div>
+                <p className="text-[9px] text-slate-400 mt-1.5">
+                  Siempre 3 ángulos: mirror check completo, tu propia vista, y un close-up — no hace falta elegir cantidad.
+                </p>
+              </>
+            ) : recipe === 'outfit_multi_look' ? (
               <>
                 <div className="flex items-center gap-3">
                   <button
@@ -595,6 +617,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                 recipe === 'outfit_haul'  ? 'Ej: @persona se prueba 5 blusas distintas para ver cuál se queda — haul de primavera en su dormitorio...' :
                 recipe === 'outfit_week'  ? 'Ej: Estos fueron los outfits de @persona de la semana: del gym al restaurante, todo en uno...' :
                 recipe === 'outfit_multi_look' ? 'Ej: Los outfits que usé en mi semana de trabajo, todos con el mismo espejo de mi cuarto...' :
+                recipe === 'outfit_reveal_basic' ? 'Ej: Así me quedó el vestido que compré para el cumpleaños de mi amiga...' :
                 recipe === 'outfit'       ? 'Ej: @persona hace un haul de otoño luciendo @outfit en Palermo...' :
                 recipe === 'unboxing'     ? 'Ej: Caja de mi nueva crema de vitamina C, @persona hace el unboxing de @producto...' :
                 recipe === 'day_in_life'  ? 'Ej: @persona en una mañana de domingo tranquila en casa con @producto...' :
