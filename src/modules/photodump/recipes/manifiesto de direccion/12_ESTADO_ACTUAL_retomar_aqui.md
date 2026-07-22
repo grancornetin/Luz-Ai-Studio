@@ -9,6 +9,52 @@
 
 Última actualización: 2026-07-22.
 
+## Cambio reciente — outfit_reveal_basic: shots de variación, no textos fijos
+
+Primera tanda de prueba real de `outfit_reveal_basic` (3 fotos: top blanco +
+short rosa) reveló 3 bugs, corregidos y deployados (commit `4456a7d`, deploy
+`dpl_3LvAEsPSp86BSkjWLNkq9M7vPfzF`):
+
+1. **UI**: el recuadro "Ancla" seguía mostrándose aparte (duplicaba la
+   imagen del `mirror_check`) — mismo bug ya resuelto para
+   `outfit_multi_look`, nunca propagado a esta receta. Corregido en
+   `PhotodumpModule.tsx` (vista de generación, costo en créditos —
+   `imageCreditCost` cobraba `count+1` de más —, y `finalizarSet`).
+2. **Poca variedad / drift de outfit**: los shots 2 y 3 (antes conceptos
+   fijos `self_pov`/`close_detail`, un solo texto cada uno) salían
+   repetitivos entre generaciones, y el POV en particular recortaba el
+   calzado del encuadre sin avisarlo en el prompt — el modelo "olvidaba" las
+   zapatillas en ese shot.
+
+**Fix**: se eliminó el concepto fijo de `self_pov`/`close_detail`. Ahora:
+- Shot 1 (`mirror_check`) sigue siendo fijo — full-body, ancla del mundo.
+- Shots 2 y 3 toman **2 variantes distintas** de un banco de 6
+  (`recipes/outfitRevealBasic/renderVariants.ts`): lateral, 3/4, vista
+  trasera, over-the-shoulder, POV genuino, close-up de pelo — cada una con
+  su propia familia HPI real, verificada contra el banco JSON que el
+  usuario enriqueció (9→28 `poseBanks`). La elección es determinística por
+  seed de sesión (nunca se repite dentro del mismo set de 3, pero varía
+  entre sesiones distintas) y se fija **una sola vez** en el plan
+  (`OutfitRevealBasicShotPlan.variantIndex`) — nunca se recalcula al
+  generar, para que plan y generación real siempre coincidan.
+- Fidelidad de outfit reforzada: cada variante declara `footwearVisible` —
+  si el encuadre no llega a los pies (POV, close-up), el prompt ahora dice
+  explícitamente que el calzado puede quedar fuera de cuadro pero el resto
+  del outfit debe ser exactamente el de la referencia, en vez de dejarlo
+  implícito.
+
+**Pendiente**: confirmación visual del usuario con una nueva tanda —
+revisar que los shots 2/3 ya no sean siempre los mismos 2 conceptos, y que
+el calzado no desaparezca cuando sí debería verse (mirror_check y variantes
+con `footwearVisible: true`).
+
+**Nota — otro agente trabajando en paralelo**: durante esta sesión se
+confirmó que hay un agente de QA visual (`tools/photodump-qa-agent/`)
+desarrollándose en la rama `feat/photodump-qa-agent`, ya fusionado a `main`
+(commit `ae36337`, "agente privado de QA visual para Photodump (Etapa 1)").
+Este hilo de trabajo (integración de recetas) sigue siempre en `main`; no
+tocar esa carpeta ni asumir que sus archivos son parte de este trabajo.
+
 ## ✅ Segunda receta Fashion integrada — `outfit_reveal_basic` (2026-07-22)
 
 Tras aprobar `outfit_multi_look`, se integró `outfit_reveal_basic` a la app
