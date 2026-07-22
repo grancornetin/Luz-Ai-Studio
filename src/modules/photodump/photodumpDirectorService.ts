@@ -968,11 +968,11 @@ export async function buildPhotodumpSessionPlan(
     };
   }
 
-  // outfit_reveal_basic — motor propio, siempre los mismos 3 shots fijos
-  // (mirror_check, self_pov, close_detail), sin importar count ni looks —
-  // no pasa por buildStoryDirectives.
+  // outfit_reveal_basic — motor propio, siempre 3 shots (mirror_check fijo +
+  // 2 variaciones elegidas del banco de renderVariants.ts), sin importar
+  // count ni looks — no pasa por buildStoryDirectives.
   if (recipe === 'outfit_reveal_basic' && refs) {
-    const directives = buildOutfitRevealBasicDirectives();
+    const directives = buildOutfitRevealBasicDirectives(refs);
     const shots: PhotodumpShotDirective[] = directives.map((d, i) => ({
       ...d,
       arcPosition: i + 1,

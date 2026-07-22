@@ -1,50 +1,58 @@
 /**
  * recipes/outfitRevealBasic/intelligenceLayer.ts
  *
- * Conecta HPI real por shot, cada uno con su propia familia validada a mano
- * (ver manifiesto sección 3):
- *  - mirror_check: HPI STANDING_ASYMMETRIC_FASHION_POSE (mirror-selfie de
- *    cuerpo completo, de pie) + MIRROR_SELFIE_REFLECTION (cámara). Mismas
- *    familias ya verificadas y filtradas para outfit_multi_look — confirmado
- *    que existen en el banco real (03_reglas_director_hpi_mujer_151.json).
- *  - self_pov: SIN HPI. El manifiesto confirma que no existe una familia real
- *    para "POV puro de ojos sin cámara visible" (HPI está construido sobre
- *    fotos de persona-visible sosteniendo cámara) — describir de memoria una
- *    familia inexistente sería peor que no usar HPI en absoluto.
- *  - close_detail: HPI UPPER_BODY_SELFIE_POSE (selfie de cerca, rostro/torso).
- *
- * Mismo principio ya corregido en outfit_multi_look (allowedFamilies en
- * hpiService.ts): no dejar que pickFamily elija al azar entre las 9 familias
- * de poseBanks, varias de las cuales (sentada/reclinada/gimnasio) contradicen
- * la postura ya fijada por el diseño de este shot.
+ * Conecta HPI real por shot:
+ *  - mirror_check (standing_anchor): HPI STANDING_ASYMMETRIC_FASHION_POSE +
+ *    MIRROR_SELFIE_REFLECTION — mismas familias ya verificadas y filtradas
+ *    para outfit_multi_look.
+ *  - variation shots: la familia HPI viene de la variante elegida en
+ *    renderVariants.ts (RevealVariant.hpiPoseFamily/hpiCameraFamily) — cada
+ *    variante ya trae su propia familia real, verificada contra el banco
+ *    JSON antes de escribirse ahí. Si la variante no tiene familia de pose
+ *    (ej. genuine_pov, sin equivalente real en el banco), se deshabilita el
+ *    HPI para ese shot en vez de dejar que pickFamily elija al azar entre
+ *    familias incompatibles (bug ya corregido una vez para outfit_multi_look,
+ *    y que rompió el shot self_pov original de esta receta — el HPI
+ *    describía "seated on floor" sobre un prompt de pie).
  */
 import { buildHpiBlock, getHpiNegatives, type HpiConfig, type HpiGender } from '../../../../services/hpiService';
 import type { RevealPoseFamilies } from './types';
+import { REVEAL_VARIANTS } from './renderVariants';
 
 export interface AppliedIntelligence {
   hpiBlock:     string;
   hpiNegatives: string[];
 }
 
-function hpiConfigFor(poseFamily: RevealPoseFamilies, gender: HpiGender): HpiConfig {
-  if (poseFamily === 'pov_no_hpi') {
-    return { enabled: false, gender, modoVisual: 'ugc', includeGesture: false, includePerformance: false };
-  }
-  if (poseFamily === 'standing') {
+function hpiConfigFor(poseFamily: RevealPoseFamilies, variantIndex: number | undefined, gender: HpiGender): HpiConfig {
+  if (poseFamily === 'standing_anchor') {
     return {
       enabled: true, gender, modoVisual: 'ugc', includeGesture: true, includePerformance: false,
       allowedFamilies: { pose: ['STANDING_ASYMMETRIC_FASHION_POSE'], camera: ['MIRROR_SELFIE_REFLECTION'] },
     };
   }
-  // upper_body (close_detail)
+
+  // variation
+  const variant = REVEAL_VARIANTS[variantIndex ?? 0];
+  if (!variant?.hpiPoseFamily) {
+    return { enabled: false, gender, modoVisual: 'ugc', includeGesture: false, includePerformance: false };
+  }
   return {
     enabled: true, gender, modoVisual: 'ugc', includeGesture: true, includePerformance: false,
-    allowedFamilies: { pose: ['UPPER_BODY_SELFIE_POSE'] },
+    allowedFamilies: {
+      pose:   [variant.hpiPoseFamily],
+      camera: variant.hpiCameraFamily ? [variant.hpiCameraFamily] : undefined,
+    },
   };
 }
 
-export function applyIntelligence(poseFamily: RevealPoseFamilies, gender: HpiGender): AppliedIntelligence {
-  const hpiBlock     = buildHpiBlock(hpiConfigFor(poseFamily, gender));
-  const hpiNegatives = poseFamily === 'pov_no_hpi' ? [] : getHpiNegatives(gender);
+export function applyIntelligence(
+  poseFamily:   RevealPoseFamilies,
+  variantIndex: number | undefined,
+  gender:       HpiGender,
+): AppliedIntelligence {
+  const config = hpiConfigFor(poseFamily, variantIndex, gender);
+  const hpiBlock     = buildHpiBlock(config);
+  const hpiNegatives = config.enabled ? getHpiNegatives(gender) : [];
   return { hpiBlock, hpiNegatives };
 }

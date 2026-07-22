@@ -5,25 +5,26 @@
  * del sistema (photodumpDirectorService.ts). Expone 3 funciones con la misma
  * forma que outfitMultiLook/index.ts.
  *
- * A diferencia de outfit_multi_look, acá SIEMPRE son los mismos 3 shots fijos
- * (mirror_check, self_pov, close_detail) — no hay looks que repartir ni
- * intenciones que elegir. El shot mirror_check cumple doble función: ancla
- * (identidad/cuerpo/cuarto) y primer shot publicable — se genera una sola vez
- * y se reusa como REF0 "legado" para el resto del pipeline.
+ * Shot 1 (mirror_check) es fijo: cumple doble función de ancla
+ * (identidad/cuerpo/cuarto) y primer shot publicable — se genera una sola
+ * vez y se reusa como REF0 "legado" para el resto del pipeline. Shots 2 y 3
+ * son variaciones elegidas del banco de renderVariants.ts, fijadas UNA VEZ
+ * en buildOutfitRevealBasicDirectives() y transportadas en el plan — nunca
+ * recalculadas, para que el plan y la generación real siempre coincidan.
  */
 import { prepareRefs, getAspectRatio } from '../shared';
 import type {
   PhotodumpRefs, PhotodumpDestino,
 } from '../../types';
 import type { PhotodumpShotDirective, PhotodumpREF0Result } from '../shared';
-import { buildShotContracts, buildShotContract } from './contracts';
+import { buildShotContracts, buildMirrorCheckContract, buildVariationContract } from './contracts';
 import { routeReferences } from './referenceRouter';
 import { validateRouting } from './routingValidator';
 import { buildShotPrompt } from './promptBuilder';
 import { buildShotDebug } from './debug';
 import { applyIntelligence } from './intelligenceLayer';
 import { imageApiService } from '../../../../services/imageApiService';
-import type { OutfitRevealBasicShotPlan, OutfitRevealBasicShotDebug, RevealShotId } from './types';
+import type { OutfitRevealBasicShotPlan, OutfitRevealBasicShotDebug, ShotContract } from './types';
 
 // ── Caché en memoria del shot mirror_check por sesión ───────────────────
 // Mismo motivo que outfitMultiLook: generatePhotodumpREF0 y
@@ -40,23 +41,22 @@ function garmentCountFor(refs: PhotodumpRefs): number {
   return [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean).length;
 }
 
-async function generateShotImage(
-  shotId:        RevealShotId,
+async function generateFromContract(
+  contract:      ShotContract,
   refs:          PhotodumpRefs,
   destino:       PhotodumpDestino,
   sessionParams: { uid?: string; sessionId?: string },
   shotIndex:     number,
   totalShots:    number,
 ): Promise<{ imageUrl: string; prompt: string; refsCount: number; debug: OutfitRevealBasicShotDebug }> {
-  const contract = buildShotContract(shotId);
   const routed   = routeReferences(contract, refs);
   const routingValidation = validateRouting(contract, routed);
   if (!routingValidation.passed) {
-    throw new Error(`El shot "${shotId}" no pasó la validación de referencias: ${routingValidation.errors.join(' | ')}`);
+    throw new Error(`El shot "${contract.shotId}" no pasó la validación de referencias: ${routingValidation.errors.join(' | ')}`);
   }
 
-  const intelligence = applyIntelligence(contract.poseFamily, refs.gender ?? 'female');
-  const { prompt, negative } = buildShotPrompt(shotId, garmentCountFor(refs), intelligence);
+  const intelligence = applyIntelligence(contract.poseFamily, contract.variantIndex, refs.gender ?? 'female');
+  const { prompt, negative } = buildShotPrompt(contract.shotId, contract.variantIndex, garmentCountFor(refs), intelligence);
   const preparedRefs = await prepareRefs(routed.orderedUrls);
 
   const imageUrl = await imageApiService.generateImage({
@@ -71,7 +71,7 @@ async function generateShotImage(
     moduleLabel:     'Photodump Mode',
     shotIndex,
     totalShots,
-    metadata:        { role: 'OUTFIT_REVEAL_BASIC_SHOT', shotId },
+    metadata:        { role: 'OUTFIT_REVEAL_BASIC_SHOT', shotId: contract.shotId, variantIndex: contract.variantIndex },
   });
 
   const debug = buildShotDebug(contract, routed, prompt, routingValidation);
@@ -80,10 +80,14 @@ async function generateShotImage(
 
 // ── Plan de sesión ──────────────────────────────────────────────────────
 
-export function buildOutfitRevealBasicDirectives(): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
-  const contracts = buildShotContracts();
+function seedFor(refs: PhotodumpRefs): string {
+  return cacheKey(refs);
+}
+
+export function buildOutfitRevealBasicDirectives(refs: PhotodumpRefs): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
+  const contracts = buildShotContracts(seedFor(refs));
   return contracts.map((contract): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> => {
-    const plan: OutfitRevealBasicShotPlan = { shotId: contract.shotId };
+    const plan: OutfitRevealBasicShotPlan = { shotId: contract.shotId, variantIndex: contract.variantIndex };
     return {
       key:                contract.shotId,
       beat:               'reveal',
@@ -107,7 +111,7 @@ export async function generateOutfitRevealBasicREF0(
   destino:        PhotodumpDestino,
   sessionParams:  { uid?: string; sessionId?: string },
 ): Promise<PhotodumpREF0Result> {
-  const result = await generateShotImage('mirror_check', refs, destino, sessionParams, 0, 3);
+  const result = await generateFromContract(buildMirrorCheckContract(), refs, destino, sessionParams, 0, 3);
   mirrorCheckCache.set(cacheKey(refs), result);
   return { imageUrl: result.imageUrl, ref0Analysis: null, prompt: result.prompt, refsCount: result.refsCount };
 }
@@ -137,9 +141,8 @@ export async function generateOutfitRevealBasicShot(
   if (shotId === 'mirror_check') {
     const cached = mirrorCheckCache.get(cacheKey(refs));
     if (cached) {
-      const contract = buildShotContract('mirror_check');
       const debug = buildShotDebug(
-        contract,
+        buildMirrorCheckContract(),
         { orderedUrls: [], breakdown: { outfits: [] } },
         'mirror_check (already generated as the anchor)',
         { passed: true, errors: [] },
@@ -147,10 +150,12 @@ export async function generateOutfitRevealBasicShot(
       return { imageUrl: cached.imageUrl, prompt: cached.prompt, refsCount: cached.refsCount, debug };
     }
     // Red de seguridad: si por algún motivo el REF0 no se generó antes.
-    const result = await generateShotImage('mirror_check', refs, destino, sessionParams, shotIndex, totalShots);
+    const result = await generateFromContract(buildMirrorCheckContract(), refs, destino, sessionParams, shotIndex, totalShots);
     mirrorCheckCache.set(cacheKey(refs), result);
     return result;
   }
 
-  return generateShotImage(shotId, refs, destino, sessionParams, shotIndex, totalShots);
+  const variantIndex = shot.outfitRevealBasicPlan?.variantIndex ?? 0;
+  const contract = buildVariationContract(shotId, variantIndex);
+  return generateFromContract(contract, refs, destino, sessionParams, shotIndex, totalShots);
 }

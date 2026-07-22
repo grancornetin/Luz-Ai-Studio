@@ -226,10 +226,12 @@ const PhotodumpModule: React.FC = () => {
 
   // ── Costos modo recetas ───────────────────────────────────
   // El "+1" cubre el REF0/ancla como llamada extra a Gemini — pero en
-  // outfit_multi_look el ancla ES la foto del primer look (misma llamada,
-  // ver recipes/outfitMultiLook/anchorFixed.ts), así que no hay imagen
-  // extra que cobrar: son exactamente `count` generaciones reales.
-  const imageCreditCost = recipe === 'outfit_multi_look'
+  // outfit_multi_look el ancla ES la foto del primer look, y en
+  // outfit_reveal_basic el ancla ES el shot mirror_check (misma llamada, ver
+  // recipes/outfitMultiLook/anchorFixed.ts y recipes/outfitRevealBasic/index.ts),
+  // así que en ninguna de las dos hay imagen extra que cobrar: son
+  // exactamente `count` generaciones reales.
+  const imageCreditCost = (recipe === 'outfit_multi_look' || recipe === 'outfit_reveal_basic')
     ? count * CREDITS_PER_IMAGE
     : (count + 1) * CREDITS_PER_IMAGE;
   const insufficient    = !isAdmin && (credits?.available ?? 0) < imageCreditCost;
@@ -1476,9 +1478,10 @@ const PhotodumpModule: React.FC = () => {
     const recipeMeta  = RECIPE_META[recipe];
     const anchorUrl   = ref0Url ?? savedRef0Url;
     // outfit_multi_look: el ancla ES shotUrls[0] (el primer look, misma
-    // imagen, ver recipes/outfitMultiLook/anchorFixed.ts) — no se agrega
-    // aparte para no duplicarla en el set guardado.
-    const anchorImage = (anchorUrl && recipe !== 'outfit_multi_look') ? [{
+    // imagen, ver recipes/outfitMultiLook/anchorFixed.ts). outfit_reveal_basic:
+    // el ancla ES shotUrls[0] (mirror_check, ver recipes/outfitRevealBasic/index.ts).
+    // En ninguna de las dos se agrega aparte, para no duplicarla en el set guardado.
+    const anchorImage = (anchorUrl && recipe !== 'outfit_multi_look' && recipe !== 'outfit_reveal_basic') ? [{
       imageUrl: anchorUrl,
       moment:   'Imagen ancla',
       caption:  '',
@@ -1748,10 +1751,11 @@ const PhotodumpModule: React.FC = () => {
                         </div>
                       </div>
                       <div className={`grid gap-3 ${count <= 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3'}`}>
-                        {/* Imagen ancla (REF0) — outfit_multi_look no la muestra aparte:
-                            el ancla ES el primer look, ya visible en su propio slot del
-                            grid de abajo (misma imagen, sin generación extra). */}
-                        {recipe !== 'outfit_multi_look' && partialImages[0] && (
+                        {/* Imagen ancla (REF0) — outfit_multi_look y outfit_reveal_basic no la
+                            muestran aparte: el ancla ES el primer shot real (look 1 / mirror_check),
+                            ya visible en su propio slot del grid de abajo (misma imagen, sin
+                            generación extra). */}
+                        {recipe !== 'outfit_multi_look' && recipe !== 'outfit_reveal_basic' && partialImages[0] && (
                           <div
                             style={{ aspectRatio: DESTINO_META[destino].aspectRatio }}
                             className="relative rounded-2xl overflow-hidden fade-in shadow-md border-2 border-violet-300"
@@ -1763,7 +1767,7 @@ const PhotodumpModule: React.FC = () => {
                             </div>
                           </div>
                         )}
-                        {recipe !== 'outfit_multi_look' && !partialImages[0] && progressStepIndex >= 1 && (
+                        {recipe !== 'outfit_multi_look' && recipe !== 'outfit_reveal_basic' && !partialImages[0] && progressStepIndex >= 1 && (
                           <div
                             style={{ aspectRatio: DESTINO_META[destino].aspectRatio }}
                             className="relative rounded-2xl overflow-hidden border-2 border-violet-300 bg-violet-50 animate-pulse"
