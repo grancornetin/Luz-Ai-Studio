@@ -134,11 +134,14 @@ motor de prompts en `src/modules/photodump/recipes/`.
 ## 2. En qué fase estamos
 
 **Fase 8 — piloto de integración de `outfit_multi_look` a la app real —
-completada e integrada.** Es la primera receta del grupo "Fashion" que pasa
-de "prompts validados a mano en Higgsfield" a código real corriendo en
-producción. Las otras 2 recetas Fashion validadas (`outfit_night_out`,
-`outfit_reveal_basic`) **todavía NO están integradas** — siguen siendo
-documentación pura en esta carpeta, sin código en `src/`.
+completada, integrada Y APROBADA por el usuario (2026-07-22).** Fue la
+primera receta del grupo "Fashion" en pasar de "prompts validados a mano en
+Higgsfield" a código real corriendo en producción, y ya pasó por varias
+rondas de prueba real con bugs encontrados y corregidos (ver sección 5 y
+"Qué falta" abajo). Las otras 2 recetas Fashion validadas en el manifiesto
+(`outfit_night_out`, `outfit_reveal_basic`) **todavía NO están integradas**
+— siguen siendo documentación pura en esta carpeta, sin código en `src/`.
+**Siguiente paso del proyecto: integrarlas, siguiendo el mismo patrón.**
 
 ### Qué es `outfit_multi_look`
 
@@ -445,30 +448,33 @@ señalar `outfit_reveal_basic` en vez de recrear `rate_check` — ya existe
 diseño validado y con más riqueza visual para esa historia exacta, solo
 falta integrarlo a la app (mismo patrón que este piloto).
 
+## ✅ `outfit_multi_look` — APROBADA por el usuario (2026-07-22)
+
+Las 4 intenciones vigentes (`weekly`, `then_vs_now`, `trip_recap`,
+`curated_ideas`) quedaron validadas en la app real tras encontrar y corregir
+6 bugs de producción + 3 bugs adicionales de `curated_ideas` + el fix de
+selector de cantidad (ver Bugs 1-6 arriba y la sección de `curated_ideas`
+ronda 3). El usuario confirmó explícitamente: "esta receta y sub
+intenciones quedan aprobadas". No se requieren más cambios en
+`outfit_multi_look` salvo que aparezca un problema nuevo al usarla.
+
 ## 6. Qué falta (pendientes explícitos)
 
-1. **Confirmar visualmente el Bug 6** — subir/quitar looks en
-   `outfit_multi_look` y revisar que el contador de "fotos" se ajusta solo,
-   sin poder editarlo manualmente. (Bugs 1 a 5 ya confirmados resueltos.)
-2. Probar las 4 intenciones vigentes de `outfit_multi_look` en la app real y
-   reportar resultados — hasta ahora solo se probaron manualmente en
-   Higgsfield (excepto lo que ya se generó en este piloto). En particular,
-   `curated_ideas` **nunca se generó visualmente en ningún lado**, ni a mano
-   ni en la app. (`rate_check` ya no existe — ver decisión de diseño arriba.)
-3. Integrar las otras 2 recetas Fashion (`outfit_night_out`,
-   `outfit_reveal_basic`) a la app real — mismo patrón que este piloto,
-   diferido a después de que `outfit_multi_look` esté validado en
-   producción. `outfit_reveal_basic` ahora también es el destino sugerido
-   para la historia de "calificar mi look".
-4. Agrupar recetas por categoría (Fashion/Shoes/Beauty) en `PDStep1.tsx` —
-   explícitamente diferido, no tocar hasta que las 3 recetas Fashion estén
-   integradas.
-5. Formalizar el bloque de composición UGC casual (Finding 005) en
+1. **Integrar las otras 2 recetas Fashion** (`outfit_night_out`,
+   `outfit_reveal_basic`) a la app real — mismo patrón que este piloto
+   (`recipes/outfitMultiLook/` como plantilla estructural). Es el siguiente
+   paso lógico ahora que `outfit_multi_look` está aprobada.
+   `outfit_reveal_basic` es además el destino sugerido para la historia de
+   "calificar mi look" (ver decisión de eliminación de `rate_check` arriba).
+2. Agrupar recetas por categoría (Fashion/Shoes/Beauty) en `PDStep1.tsx` —
+   explícitamente diferido hasta que las 3 recetas Fashion estén integradas
+   y probadas. Con solo 1 de 3 lista, todavía no toca hacer esto.
+3. Formalizar el bloque de composición UGC casual (Finding 005) en
    `03_photodump_recipe_architecture.md` sección 19, como parte oficial del
    perfil `iphone_camera_roll` — mencionado en la bitácora pero nunca
-   escrito ahí.
-6. Test B y C (sin avatar / con escenas cargadas) de las recetas Fashion ya
-   validadas — no iniciados.
+   escrito ahí. Tarea de limpieza de documentación, no bloqueante.
+4. Test B y C (sin avatar / con escenas cargadas) de `outfit_night_out` y
+   `outfit_reveal_basic` — no iniciados, relevante recién cuando se integren.
 
 ## 7. Cómo seguir si este documento se está leyendo desde un chat nuevo
 
