@@ -20,7 +20,7 @@ import type { PhotodumpShotDirective, PhotodumpREF0Result } from '../shared';
 import { buildMultiLookManifest } from './manifest';
 import { generateFixedAnchor } from './anchorFixed';
 import { generateAnchorChain, getCachedAnchorChain } from './anchorChain';
-import { allocateLookShots } from './allocator';
+import { allocateLookShots, requestedCountToLookCount } from './allocator';
 import { buildShotContract, buildShotContracts } from './contracts';
 import { validateShotContract } from './contractValidator';
 import { routeReferences } from './referenceRouter';
@@ -66,7 +66,7 @@ export function buildOutfitMultiLookDirectives(
   requestedCount: number,
 ): { directives: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[]; plan: OutfitMultiLookPlan } {
   const manifest = buildMultiLookManifest(refs);
-  const allocation = allocateLookShots(manifest.looks, requestedCount);
+  const allocation = allocateLookShots(manifest.looks, requestedCountToLookCount(requestedCount, manifest.intent));
   const shotContracts = buildShotContracts(allocation.looksToShoot, manifest.intent, undefined, manifest.accessories);
 
   const directives = shotContracts.map((contract): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> => {
@@ -110,9 +110,10 @@ export async function generateOutfitMultiLookREF0(
   sessionParams:  { uid?: string; sessionId?: string },
 ): Promise<PhotodumpREF0Result> {
   const manifest = buildMultiLookManifest(refs);
+  const requestedLookCount = requestedCountToLookCount(requestedCount, manifest.intent);
 
   if (manifest.backgroundMode === 'variable_per_shot') {
-    const allocation = allocateLookShots(manifest.looks, requestedCount);
+    const allocation = allocateLookShots(manifest.looks, requestedLookCount);
     if (allocation.looksToShoot.length === 0) {
       throw new Error('Se necesita al menos un look con lugar declarado para generar este viaje.');
     }
@@ -128,7 +129,7 @@ export async function generateOutfitMultiLookREF0(
     };
   }
 
-  const allocation = allocateLookShots(manifest.looks, requestedCount);
+  const allocation = allocateLookShots(manifest.looks, requestedLookCount);
   const firstLook = allocation.looksToShoot[0];
   if (!firstLook) {
     throw new Error('Se necesita al menos un look para generar esta sesión.');
@@ -162,7 +163,7 @@ export async function generateOutfitMultiLookShot(
   protagonist:    PhotodumpProtagonist,
 ): Promise<OutfitMultiLookShotResult> {
   const manifest = buildMultiLookManifest(refs);
-  const allocation = allocateLookShots(manifest.looks, requestedCount);
+  const allocation = allocateLookShots(manifest.looks, requestedCountToLookCount(requestedCount, manifest.intent));
 
   const lookId = shot.outfitMultiLookPlan?.lookId;
   const angle  = shot.outfitMultiLookPlan?.angle ?? 'frontal';

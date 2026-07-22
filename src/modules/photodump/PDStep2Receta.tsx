@@ -72,20 +72,23 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   const isOutfitRecipe = recipe === 'outfit_check' || recipe === 'outfit_haul' || recipe === 'outfit_week';
   const maxCount = recipe === 'outfit_check' ? OUTFIT_CHECK_MAX_COUNT : MAX_COUNT;
 
-  // outfit_multi_look: la cantidad de fotos SIEMPRE se deriva de la cantidad
-  // de looks subidos (ver recipes/outfitMultiLook/), nunca del selector
-  // manual. weekly/then_vs_now/trip_recap: 1 shot por look. curated_ideas:
-  // 2 shots por look (frontal + variación de ángulo, ver contracts.ts) — sin
-  // esto, alguien podía pedir "4 fotos" con 2 outfits cargados y terminar
-  // con un número de fotos sin ningún aviso de por qué.
+  // outfit_multi_look: el TOPE de fotos lo define la cantidad de looks
+  // subidos (ver recipes/outfitMultiLook/allocator.ts, que nunca genera más
+  // shots que looks disponibles) — weekly/then_vs_now/trip_recap: 1 shot por
+  // look. curated_ideas: 2 shots por look (frontal + variación de ángulo,
+  // ver contracts.ts). Dentro de ese tope, el usuario SÍ puede elegir pedir
+  // menos fotos (ej. generar solo 3 de 5 looks cargados) — no se fuerza un
+  // valor fijo, solo se corrige automáticamente si count queda fuera de
+  // rango (0, o por encima del máximo posible).
   const multiLookLookCount = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean).length;
   const multiLookShotsPerLook = refs.multiLookIntent === 'curated_ideas' ? 2 : 1;
-  const multiLookExpectedCount = multiLookLookCount * multiLookShotsPerLook;
+  const multiLookMaxCount = multiLookLookCount * multiLookShotsPerLook;
   useEffect(() => {
-    if (recipe === 'outfit_multi_look' && multiLookExpectedCount > 0 && multiLookExpectedCount !== count) {
-      onCount(multiLookExpectedCount);
+    if (recipe !== 'outfit_multi_look' || multiLookMaxCount === 0) return;
+    if (count > multiLookMaxCount || count === 0) {
+      onCount(multiLookMaxCount);
     }
-  }, [recipe, multiLookExpectedCount, count, onCount]);
+  }, [recipe, multiLookMaxCount, count, onCount]);
 
   // Insertar @tag en la posición del cursor del textarea
   const insertTag = (tag: string) => {
@@ -516,15 +519,33 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
             {recipe === 'outfit_multi_look' ? (
               <>
                 <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => onCount(Math.max(1, count - 1))}
+                    disabled={count <= 1 || multiLookMaxCount === 0}
+                    className="w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold text-lg flex items-center justify-center hover:border-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                  >
+                    −
+                  </button>
                   <div className="flex flex-col items-center min-w-[48px]">
                     <span className="text-2xl font-black text-slate-900 leading-none">{count}</span>
                     <span className="text-[9px] text-slate-400 font-medium">fotos</span>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => onCount(Math.min(multiLookMaxCount, count + 1))}
+                    disabled={count >= multiLookMaxCount}
+                    className="w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold text-lg flex items-center justify-center hover:border-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                  >
+                    +
+                  </button>
                 </div>
                 <p className="text-[9px] text-slate-400 mt-1.5">
-                  {refs.multiLookIntent === 'curated_ideas'
-                    ? 'Se generan 2 fotos por look (frontal + otro ángulo) — no hace falta elegir cantidad.'
-                    : 'Se genera 1 foto por look que subas abajo — no hace falta elegir cantidad.'}
+                  {multiLookMaxCount === 0
+                    ? 'Subí al menos un look para poder elegir cantidad.'
+                    : refs.multiLookIntent === 'curated_ideas'
+                    ? `Hasta ${multiLookMaxCount} fotos (2 por look subido: frontal + otro ángulo).`
+                    : `Hasta ${multiLookMaxCount} fotos (1 por look subido).`}
                 </p>
               </>
             ) : (
