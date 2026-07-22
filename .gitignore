@@ -43,3 +43,7 @@ dist-ssr
 .vercel
 
 .env*
+!.env.example
+
+# Datos privados del agente QA de Photodump (imágenes propias, no código)
+/LuzPhotodumpAgent/

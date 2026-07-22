@@ -30,6 +30,7 @@
   "exclude": [
     "src/modules/planner/_archived_v2",
     "src/modules/brandProfiles/_archived",
-    "src/modules/_archived_mismarcas_prototype"
+    "src/modules/_archived_mismarcas_prototype",
+    "tools"
   ]
 }
