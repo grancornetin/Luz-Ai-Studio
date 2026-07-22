@@ -7,7 +7,64 @@
 > (nueva fase completada, bug encontrado, decisión tomada). No reemplaza el
 > resto del manifiesto — es el índice de "dónde vamos" que apunta al resto.
 
-Última actualización: 2026-07-21.
+Última actualización: 2026-07-22.
+
+## Cambio reciente — selector manual de cantidad restaurado + fix de unidades
+
+Tras el fix anterior (cantidad = looks siempre, sin botones), el usuario
+reportó que **ninguna** intención de `outfit_multi_look` dejaba elegir
+cantidad — quería poder pedir menos fotos que looks subidos. Se restauraron
+los botones +/-, con tope en la cantidad máxima real (looks subidos, ×2 en
+`curated_ideas`). Esto expuso un bug real: `allocateLookShots` recibía
+`requestedCount` en unidades de FOTOS pero lo trataba como cantidad de
+LOOKS — en `curated_ideas`, pedir "3 fotos" con 3 looks devolvía los 3
+looks completos (6 fotos), ignorando el recorte. Se agregó
+`requestedCountToLookCount()` en `allocator.ts` para convertir antes de
+repartir, aplicado en los 3 puntos de entrada de `index.ts`. Commit
+`d36816f`, deploy `dpl_5q176B4XHD2G7X7KJkQhwGwBi9DZ`.
+
+## Cambio reciente — 3 bugs reales de curated_ideas, primera tanda de prueba real
+
+El usuario generó el primer set real de `curated_ideas` (3 looks de boda:
+vestido rojo, falda rosa, vestido rosa) y encontró 3 problemas, confirmados
+leyendo el JSON de debug:
+
+1. **Shot de variación del look 1 idéntico al frontal** (las 2 fotos del
+   vestido rojo eran la misma imagen). Causa: el chequeo de "ya generado
+   como ancla" en `index.ts` solo comparaba `lookId`, no `angle` — el shot
+   de variación del primer look entraba en la misma rama que el frontal y
+   devolvía la imagen cacheada sin generar nada nuevo. Fix: se agregó
+   `angle === 'frontal'` a la condición.
+2. **El close-up de tela cambiaba el color de la prenda** (vestido rosa se
+   veía de otro tono en el macro). Causa: `fabric_detail_closeup` en
+   `promptBuilder.ts` no pedía preservar el color exacto. Fix: instrucción
+   explícita de fidelidad de color agregada.
+3. **Poses planas/contradictorias pese al fix anterior de variantes**.
+   Causa real, más profunda que el fix previo: `buildHpiBlock`
+   (`hpiService.ts`) elige entre las 9 familias de `poseBanks` sin ningún
+   filtro — varias son literalmente sentada/reclinada/gimnasio/piso
+   (`SEATED_EDITORIAL_OR_LIFESTYLE_POSE`, `ACTIVE_FITNESS_FORM_DISPLAY`,
+   `MIRROR_SELFIE_FLOOR_POSE`), y terminaban inyectando texto como "seated
+   on floor doing a lat pulldown" en el mismo prompt que pedía "standing
+   mirror selfie" — contradicción directa que el modelo resolvía a su
+   manera, dando poses genéricas. Fix: se agregó `HpiConfig.allowedFamilies`
+   (nuevo campo opcional, por banco: pose/gesture/camera) en `hpiService.ts`,
+   y `outfitMultiLook/intelligenceLayer.ts` lo usa para restringir el HPI a
+   las únicas 3 familias reales de pie/cuerpo completo verificadas contra el
+   JSON del banco: `STANDING_ASYMMETRIC_FASHION_POSE` (pose),
+   `MIRROR_SELFIE_REFLECTION` (camera), `CLOSED_OR_CONFIDENT_ARM_PLACEMENT`
+   (gesture).
+
+Commit `fa7334b`, deploy `dpl_59ubr93ArLtZx1XLz9bjf5tNqeVM`. **Pendiente**:
+confirmación visual del usuario con una nueva tanda de `curated_ideas`.
+
+**Nota para el futuro**: si aparece contenido de HPI que contradice el
+resto del prompt en OTRA receta (no solo `outfit_multi_look`), el mismo
+mecanismo de `allowedFamilies` se puede reusar — pero hay que volver a
+inspeccionar `dominantTags`/`familyId` del banco JSON real
+(`src/data/HPI/03_reglas_director_hpi_mujer_151.json` /
+`...hpi_51 hombre.json`) para esa receta específica, los IDs no son
+universales entre contextos (standing vs. sentada vs. tumbada).
 
 ## Cambio reciente — curated_ideas ahora genera 2 shots por look
 
