@@ -9,6 +9,68 @@
 
 Última actualización: 2026-07-22.
 
+## ✅ Segunda receta Fashion integrada — `outfit_reveal_basic` (2026-07-22)
+
+Tras aprobar `outfit_multi_look`, se integró `outfit_reveal_basic` a la app
+real siguiendo el mismo patrón estructural. Commit `66e8ab6`, deploy
+`dpl_5RU1WaSs6BnxBKzg1TjH3cMUp6HX`. **Pendiente: confirmación visual del
+usuario** — todavía no se generó ningún set real en la app.
+
+**Qué es**: receta mucho más simple que `outfit_multi_look` — sin looks
+múltiples, sin intenciones, siempre los mismos 3 shots fijos (validados a
+mano en `10_session_log_outfit_reveal_basic_validation.md`):
+1. `mirror_check` — mirror selfie de cuerpo completo, celular visible.
+   Cumple doble función de ancla y primer shot publicable (mismo patrón de
+   fusión REF0+shot1 de `outfit_multi_look`).
+2. `self_pov` — POV genuino, cámara = los propios ojos mirando hacia abajo,
+   sin celular/brazo/rostro visible. Sin HPI (no existe familia real para
+   esto).
+3. `close_detail` — selfie de cerca, mano en el pelo, celular visible.
+
+Reemplaza a la intención `rate_check` eliminada de `outfit_multi_look` —
+"calificar mi look" ahora vive acá.
+
+Código nuevo en `src/modules/photodump/recipes/outfitRevealBasic/` (8
+archivos: types, contracts, referenceRouter, routingValidator,
+intelligenceLayer, promptBuilder, debug, index) — **sin**
+manifest/allocator/contractValidator/anchorChain (no aplican: no hay looks
+que repartir ni fondo variable).
+
+**Cambio de arquitectura transversal**: las constantes de render globales
+(`IPHONE_CAMERA_ROLL_LINE`, `UGC_CASUAL_COMPOSITION_BLOCK`,
+`NO_WALKING_LINE`, `AVOID_EDITORIAL_LINE`, `NO_STUDIO_BACKDROP_LINE`) se
+movieron de `outfitMultiLook/renderProfile.ts` a `recipes/shared.ts` — son
+reglas de toda la app, no de una receta puntual. `outfitMultiLook/renderProfile.ts`
+quedó como re-export para no romper sus 3 consumidores internos
+(`anchorFixed.ts`, `anchorChain.ts`, `promptBuilder.ts`). Verificado con
+`npm run lint` + `npm run build` que `outfit_multi_look` no sufrió ninguna
+regresión.
+
+**HPI verificado contra el JSON real** antes de usarlo (mismo cuidado que
+con `outfit_multi_look`): `mirror_check` usa `STANDING_ASYMMETRIC_FASHION_POSE`
++ `MIRROR_SELFIE_REFLECTION`, `close_detail` usa `UPPER_BODY_SELFIE_POSE` —
+los 3 `familyId` confirmados existentes en
+`src/data/HPI/03_reglas_director_hpi_mujer_151.json` antes de escribir código.
+
+**Decisión de producto tomada durante la implementación**: a diferencia del
+diseño original validado a mano (que asumía "1 outfit ya armado, 1 imagen"),
+el usuario decidió permitir subir varias prendas sueltas como slots
+separados (igual que `outfit_check`) — el prompt las trata como componentes
+de un solo look combinado, reusando el mismo criterio textual que
+`photodumpDirectorService.ts` ya usa para `outfit_check`/`outfit_haul`/`outfit_week`
+(`outfitRefInstruction`), no como looks independientes.
+
+**Nota operativa importante — ramas paralelas**: durante esta sesión
+apareció una rama `feat/photodump-qa-agent` (otro agente/proceso trabajando
+en paralelo sobre el mismo repo, con una carpeta `tools/photodump-qa-agent/`
+propia). El usuario confirmó: *"hay otro agente trabajando en la rama, tu
+trabaja en el main el otro agente trabajará en la rama luego pasará a
+main."* — es decir, este hilo de trabajo (Photodump/recetas) sigue siempre
+en `main`; no tocar ni fusionar la rama del otro agente, y no sorprenderse
+si el working directory aparece en esa rama por un cambio externo — volver
+a `main` con `git checkout main` es seguro (no pierde el otro trabajo, cada
+rama mantiene su propia copia de los commits).
+
 ## Cambio reciente — selector manual de cantidad restaurado + fix de unidades
 
 Tras el fix anterior (cantidad = looks siempre, sin botones), el usuario
@@ -460,15 +522,17 @@ intenciones quedan aprobadas". No se requieren más cambios en
 
 ## 6. Qué falta (pendientes explícitos)
 
-1. **Integrar las otras 2 recetas Fashion** (`outfit_night_out`,
-   `outfit_reveal_basic`) a la app real — mismo patrón que este piloto
-   (`recipes/outfitMultiLook/` como plantilla estructural). Es el siguiente
-   paso lógico ahora que `outfit_multi_look` está aprobada.
-   `outfit_reveal_basic` es además el destino sugerido para la historia de
-   "calificar mi look" (ver decisión de eliminación de `rate_check` arriba).
-2. Agrupar recetas por categoría (Fashion/Shoes/Beauty) en `PDStep1.tsx` —
+1. **Confirmar visualmente `outfit_reveal_basic`** — generar un set real en
+   la app (avatar + 1 o más prendas) y revisar los 3 shots: mirror check
+   completo, POV genuino sin rostro, close-up. Todavía sin ninguna
+   confirmación visual del usuario.
+2. **Integrar la última receta Fashion** (`outfit_night_out`) a la app real
+   — mismo patrón estructural. Es la más compleja de las 3 (7-8 shots, arco
+   narrativo con venue, continuidad de mundo entre escenas) — dejarla para
+   el final fue la decisión correcta.
+3. Agrupar recetas por categoría (Fashion/Shoes/Beauty) en `PDStep1.tsx` —
    explícitamente diferido hasta que las 3 recetas Fashion estén integradas
-   y probadas. Con solo 1 de 3 lista, todavía no toca hacer esto.
+   y probadas. Con 2 de 3 listas, todavía falta `outfit_night_out`.
 3. Formalizar el bloque de composición UGC casual (Finding 005) en
    `03_photodump_recipe_architecture.md` sección 19, como parte oficial del
    perfil `iphone_camera_roll` — mencionado en la bitácora pero nunca
