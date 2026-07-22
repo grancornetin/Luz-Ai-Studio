@@ -60,6 +60,20 @@ export interface HpiConfig {
   modoVisual: 'ugc' | 'editorial';
   includeGesture:     boolean;
   includePerformance: boolean;
+  // Opcional: restringe la selección de familias a IDs específicos por
+  // banco, en vez de elegir entre todas al azar. Necesario cuando el resto
+  // del prompt ya fija una postura concreta (ej. "de pie frente al espejo,
+  // cuerpo completo") — sin esto, pickFamily puede elegir familias de
+  // sentada/reclinada/piso/gimnasio que contradicen esa instrucción (bug
+  // real visto en producción: HPI describía "seated on floor" / "lat
+  // pulldown exercise" sobre un prompt que pedía standing mirror-selfie).
+  // Cada banco tiene su propio espacio de familyId — no se comparte la
+  // misma lista entre poseBanks/gestureBanks/cameraRelationshipBanks.
+  allowedFamilies?: {
+    pose?:    string[];
+    gesture?: string[];
+    camera?:  string[];
+  };
 }
 
 // ─── Estado interno ────────────────────────────────────────────
@@ -99,11 +113,18 @@ function getBank(gender: HpiGender): HpiDirectorRules {
 }
 
 // Elige una familia del banco: preferencia por stable_family,
-// selección aleatoria dentro de ese subconjunto.
-function pickFamily(bank: HpiFamily[] | undefined): HpiFamily | null {
+// selección aleatoria dentro de ese subconjunto. Si allowedFamilyIds viene
+// dado, se restringe el banco a esas familias ANTES de aplicar el filtro de
+// stable_family — si ninguna coincide, se devuelve null en vez de caer de
+// nuevo al banco completo (evitar el filtro sería el mismo bug que resuelve).
+function pickFamily(bank: HpiFamily[] | undefined, allowedFamilyIds?: string[]): HpiFamily | null {
   if (!bank || bank.length === 0) return null;
-  const stable = bank.filter(f => f.quality === 'stable_family');
-  const pool   = stable.length > 0 ? stable : bank;
+  const scoped = allowedFamilyIds
+    ? bank.filter(f => allowedFamilyIds.includes(f.familyId))
+    : bank;
+  if (scoped.length === 0) return null;
+  const stable = scoped.filter(f => f.quality === 'stable_family');
+  const pool   = stable.length > 0 ? stable : scoped;
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
@@ -146,9 +167,9 @@ export function buildHpiBlock(config: HpiConfig): string {
   const posebank = config.gender === 'neutral' ? _male : bank;
 
   const expressionFamily   = pickFamily(bank.expressionBanks);
-  const poseFamily         = pickFamily(posebank.poseBanks);
-  const cameraFamily       = pickFamily(bank.cameraRelationshipBanks);
-  const gestureFamily      = config.includeGesture     ? pickFamily(bank.gestureBanks)     : null;
+  const poseFamily         = pickFamily(posebank.poseBanks, config.allowedFamilies?.pose);
+  const cameraFamily       = pickFamily(bank.cameraRelationshipBanks, config.allowedFamilies?.camera);
+  const gestureFamily      = config.includeGesture     ? pickFamily(bank.gestureBanks, config.allowedFamilies?.gesture) : null;
   const performanceFamily  = config.includePerformance ? pickFamily(bank.performanceBanks)  : null;
 
   // Elegir 1-2 amplificadores del banco

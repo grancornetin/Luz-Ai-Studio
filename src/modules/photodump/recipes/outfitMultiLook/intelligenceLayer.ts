@@ -24,9 +24,26 @@
  * determinística por la posición del look en el set (look.sourceIndex) —
  * así cada shot del mismo set pide una postura distinta sin depender de
  * aleatoriedad no reproducible.
+ *
+ * Bug real reportado en producción (curated_ideas, ronda 3): el HPI genérico
+ * (buildHpiBlock) elige entre las 9 familias de poseBanks sin filtrar —
+ * varias son "seated_pose"/"reclined_pose"/gimnasio (ej.
+ * SEATED_EDITORIAL_OR_LIFESTYLE_POSE, ACTIVE_FITNESS_FORM_DISPLAY), que
+ * contradicen directamente el poseLine escrito a mano ("standing mirror
+ * selfie"). Resultado observado: el modelo recibía "standing" y "seated on
+ * the floor doing a lat pulldown" en el mismo prompt. Se restringe el HPI a
+ * las únicas familias con tag standing/full-body real, por banco.
  */
 import { buildHpiBlock, getHpiNegatives, type HpiConfig, type HpiGender } from '../../../../services/hpiService';
 import type { ShotContract, LookPoseIntensity } from './types';
+
+// Familias verificadas contra el banco HPI real (03_reglas_director_hpi_mujer_151.json)
+// como las únicas de pie / cuerpo completo, sin sentada/reclinada/piso/gimnasio mezclado.
+const STANDING_FULL_BODY_FAMILIES = {
+  pose:    ['STANDING_ASYMMETRIC_FASHION_POSE'],
+  camera:  ['MIRROR_SELFIE_REFLECTION'],
+  gesture: ['CLOSED_OR_CONFIDENT_ARM_PLACEMENT'],
+};
 
 export interface AppliedIntelligence {
   hpiBlock:     string;
@@ -41,6 +58,7 @@ function hpiConfigFor(intensity: LookPoseIntensity, gender: HpiGender): HpiConfi
     modoVisual:         'ugc',
     includeGesture:      true,
     includePerformance:  intensity === 'high_impact',
+    allowedFamilies:     STANDING_FULL_BODY_FAMILIES,
   };
 }
 

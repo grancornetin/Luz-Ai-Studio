@@ -176,11 +176,17 @@ export async function generateOutfitMultiLookShot(
   let anchorImageUrl: string | undefined;
 
   if (hasAnchor) {
-    // El ancla YA es la foto del primer look (fondo + outfit puesto,
+    // El ancla YA es la foto FRONTAL del primer look (fondo + outfit puesto,
     // generados juntos en generateFixedAnchor) — si este shot es ese mismo
-    // look, se devuelve la imagen ya generada en vez de duplicarla.
+    // look Y el mismo ángulo frontal, se devuelve la imagen ya generada en
+    // vez de duplicarla. El shot de VARIACIÓN del primer look (curated_ideas)
+    // comparte lookId pero es un ángulo distinto (trasera/lateral/detalle) —
+    // debe generarse de verdad, nunca reusar el ancla. Bug real: sin el
+    // chequeo de angle acá, el shot de variación del look 0 devolvía la
+    // misma imagen frontal dos veces (visto en producción — 2 fotos
+    // idénticas del mismo vestido en vez de frontal + trasera).
     const cachedFirstLook = firstLookImageCache.get(firstLookImageCacheKey(refs));
-    if (cachedFirstLook && cachedFirstLook.lookId === look.id) {
+    if (cachedFirstLook && cachedFirstLook.lookId === look.id && angle === 'frontal') {
       const debug = buildShotDebug(
         { shotId: shot.key, look, referencePolicy: { useIdentityRef: true, useBodyRef: true, useAnchorRef: false, activeLookRef: look.refUrl }, cameraGrammar: { framing: 'MEDIUM_FULL', angle: 'eye_level', composition: 'mirror_selfie' }, poseIntensity: 'neutral', angle: 'frontal' },
         { orderedUrls: [cachedFirstLook.imageUrl], breakdown: { look: [cachedFirstLook.imageUrl] } },

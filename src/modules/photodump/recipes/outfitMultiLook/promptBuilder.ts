@@ -62,7 +62,8 @@ function variationBlock(composition: string): string {
         'No mirror frame needs to be visible; the raised arm holding the phone is what reads clearly as a self-taken mirror photo, seen from the side.\n' + NO_STUDIO_BACKDROP_LINE;
     case 'fabric_detail_closeup':
       return 'A close-up detail shot of the outfit\'s fabric, texture, and silhouette — framed from roughly chest/waist height down to mid-thigh, no mirror needed for this shot. ' +
-        'The focus is the garment itself: fabric texture, how it drapes, stitching or embellishment detail — a genuine close-up, not a full-body shot cropped tighter.';
+        'The focus is the garment itself: fabric texture, how it drapes, stitching or embellishment detail — a genuine close-up, not a full-body shot cropped tighter. ' +
+        'CRITICAL: the garment\'s exact color, shade, and material shown in the outfit reference image must be preserved precisely in this close-up — do not shift, reinterpret, or lighten/darken the color under close framing.';
     default:
       return '';
   }
