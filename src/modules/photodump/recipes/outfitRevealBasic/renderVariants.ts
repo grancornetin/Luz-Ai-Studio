@@ -12,6 +12,12 @@
  * se repite la misma variante dos veces en el mismo set de 3 (shot 1 siempre
  * es mirror_check full-body, shots 2 y 3 toman 2 variantes distintas de este
  * banco, en orden).
+ *
+ * NOTA: 'genuine_pov' se eliminó del banco tras probarlo en producción — sin
+ * una familia HPI real de respaldo (no existe banco de pose para "cámara =
+ * mis propios ojos"), el resultado salía rígido y simétrico, tipo recorte de
+ * catálogo, no creíble como un POV genuino. Todas las variantes que quedan
+ * tienen celular visible en mano y familia HPI real verificada.
  */
 import type { CameraGrammarRef } from './types';
 
@@ -57,13 +63,6 @@ export const REVEAL_VARIANTS: RevealVariant[] = [
     hpiPoseFamily: 'OVER_SHOULDER_HIP_HAND_POSE',
     hpiCameraFamily: 'OBSERVED_PROFILE_OR_CANDID',
     footwearVisible: true,
-  },
-  {
-    id: 'genuine_pov',
-    sceneBlock: 'A genuine first-person point-of-view shot — the camera IS her own eyes looking down at her own body and outfit. No phone visible anywhere in frame, no arm holding a phone, no face, no mirror. The framing is naturally cropped the way a real person\'s own gaze would be: chin barely at the top edge or not visible at all. This is literally what she sees when she looks down at herself — NOT a photo someone else took.',
-    cameraGrammar: { framing: 'POV', angle: 'looking_down', composition: 'genuine_pov' },
-    hpiPoseFamily: null,
-    footwearVisible: false, // el encuadre POV mirando hacia abajo naturalmente puede no llegar a los pies
   },
   {
     id: 'close_detail_hair',

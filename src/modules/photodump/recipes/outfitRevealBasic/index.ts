@@ -11,6 +11,14 @@
  * son variaciones elegidas del banco de renderVariants.ts, fijadas UNA VEZ
  * en buildOutfitRevealBasicDirectives() y transportadas en el plan — nunca
  * recalculadas, para que el plan y la generación real siempre coincidan.
+ *
+ * Anclaje de escena (bug real en producción: cada shot inventaba su propio
+ * cuarto/fondo, distinto entre sí): generateOutfitRevealBasicShot recupera la
+ * imagen ya generada de mirror_check desde mirrorCheckCache y la pasa como
+ * referencia extra a generateFromContract para los shots de variación — el
+ * modelo cita esa imagen como referencia de escena y reusa el mismo cuarto,
+ * en vez de generar uno nuevo cada vez (mismo criterio de encadenamiento que
+ * outfitMultiLook/anchorChain.ts).
  */
 import { prepareRefs, getAspectRatio } from '../shared';
 import type {
@@ -48,15 +56,16 @@ async function generateFromContract(
   sessionParams: { uid?: string; sessionId?: string },
   shotIndex:     number,
   totalShots:    number,
+  anchorImageUrl?: string,
 ): Promise<{ imageUrl: string; prompt: string; refsCount: number; debug: OutfitRevealBasicShotDebug }> {
-  const routed   = routeReferences(contract, refs);
+  const routed   = routeReferences(contract, refs, anchorImageUrl);
   const routingValidation = validateRouting(contract, routed);
   if (!routingValidation.passed) {
     throw new Error(`El shot "${contract.shotId}" no pasó la validación de referencias: ${routingValidation.errors.join(' | ')}`);
   }
 
   const intelligence = applyIntelligence(contract.poseFamily, contract.variantIndex, refs.gender ?? 'female');
-  const { prompt, negative } = buildShotPrompt(contract.shotId, contract.variantIndex, garmentCountFor(refs), intelligence);
+  const { prompt, negative } = buildShotPrompt(contract.shotId, contract.variantIndex, garmentCountFor(refs), intelligence, Boolean(anchorImageUrl));
   const preparedRefs = await prepareRefs(routed.orderedUrls);
 
   const imageUrl = await imageApiService.generateImage({
@@ -157,5 +166,6 @@ export async function generateOutfitRevealBasicShot(
 
   const variantIndex = shot.outfitRevealBasicPlan?.variantIndex ?? 0;
   const contract = buildVariationContract(shotId, variantIndex);
-  return generateFromContract(contract, refs, destino, sessionParams, shotIndex, totalShots);
+  const anchorImageUrl = mirrorCheckCache.get(cacheKey(refs))?.imageUrl;
+  return generateFromContract(contract, refs, destino, sessionParams, shotIndex, totalShots, anchorImageUrl);
 }
