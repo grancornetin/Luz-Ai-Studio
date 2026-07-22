@@ -1,0 +1,34 @@
+{
+  "id": "photodump-example-001",
+  "recipeId": "outfit_check_night_out",
+  "recipeName": "Outfit Check — Night Out",
+  "brief": "Preparación en casa y salida nocturna. Debe sentirse como contenido orgánico de Instagram capturado con iPhone.",
+  "globalReferences": [
+    "references/face.jpg",
+    "references/body.jpg",
+    "references/home.jpg"
+  ],
+  "criteria": [
+    "identity",
+    "body",
+    "hair",
+    "outfit",
+    "anatomy",
+    "scene",
+    "objects",
+    "pose",
+    "iphone_realism",
+    "continuity",
+    "story"
+  ],
+  "thresholds": { "pass": 82, "critical": 55 },
+  "shots": [
+    {
+      "id": "SHOT_01",
+      "image": "outputs/shot_01.jpg",
+      "prompt": "Standing full-body preparation shot in front of mirror.",
+      "objective": "Presentar la silueta y establecer el inicio del try-on.",
+      "references": ["references/outfit_base.jpg"]
+    }
+  ]
+}
