@@ -21,7 +21,7 @@ export function PresetManagerPanel<TState>({
 }: PresetManagerPanelProps<TState>) {
   const {
     presets, loading, saving, error,
-    savePreset, loadPreset, updatePreset, deletePreset, duplicatePreset,
+    savePreset, loadPreset, updatePreset, deletePreset, duplicatePreset, setDefaultPreset,
     reload, clearError,
   } = manager;
 
@@ -115,6 +115,9 @@ export function PresetManagerPanel<TState>({
         </div>
       ) : (
         <div className="space-y-3">
+          <p className="text-xs text-slate-400 px-1">
+            Marcá un preset como <span className="font-bold text-amber-600">default</span> para que se precargue solo al entrar al módulo.
+          </p>
           {presets.map(preset => (
             <PresetCard
               key={preset.id}
@@ -123,6 +126,7 @@ export function PresetManagerPanel<TState>({
               onUpdate={p => setUpdateTarget(p)}
               onDuplicate={duplicatePreset}
               onDelete={id => setConfirmDeleteId(id)}
+              onSetDefault={setDefaultPreset}
             />
           ))}
         </div>

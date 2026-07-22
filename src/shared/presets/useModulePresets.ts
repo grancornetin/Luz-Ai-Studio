@@ -22,6 +22,7 @@ export interface UseModulePresetsReturn<TState> {
   updatePreset: (presetId: string, options: SavePresetOptions) => Promise<void>;
   deletePreset: (presetId: string) => Promise<void>;
   duplicatePreset: (presetId: string) => Promise<void>;
+  setDefaultPreset: (presetId: string | null) => Promise<void>;
   reload: () => Promise<void>;
   clearError: () => void;
 }
@@ -141,6 +142,16 @@ export function useModulePresets<TState>(
     }
   }, [uid]);
 
+  const setDefaultPreset = useCallback(async (presetId: string | null): Promise<void> => {
+    if (!uid) return;
+    try {
+      await presetService.setDefault(uid, adapter.moduleId, presetId);
+      setPresets(prev => prev.map(p => ({ ...p, isDefault: p.id === presetId })));
+    } catch {
+      setError('Error al marcar el preset por defecto');
+    }
+  }, [uid, adapter.moduleId]);
+
   return {
     presets,
     loading,
@@ -151,6 +162,7 @@ export function useModulePresets<TState>(
     updatePreset,
     deletePreset,
     duplicatePreset,
+    setDefaultPreset,
     reload,
     clearError: () => setError(null),
   };

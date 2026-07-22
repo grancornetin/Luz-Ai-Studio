@@ -28,6 +28,7 @@ export interface ModulePreset<TConfig = Record<string, unknown>> {
   config: TConfig;          // payload serializado por el adapter del módulo
   assets: PresetAsset[];    // referencias a archivos subidos a Storage
   version: number;          // para futuras migraciones por módulo
+  isDefault?: boolean;      // se auto-carga al entrar al módulo (uno por moduleId)
 }
 
 // Lo que se necesita para crear/actualizar un preset (sin id ni timestamps)

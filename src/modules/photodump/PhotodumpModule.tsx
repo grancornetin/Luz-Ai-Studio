@@ -59,6 +59,7 @@ import PDStep2Receta from './PDStep2Receta';
 import PDLibreEditor, { newFreeScene } from './PDLibreEditor';
 import { useModelSelection } from '../../hooks/useModelSelection';
 import { useModulePresets } from '../../shared/presets/useModulePresets';
+import { presetService } from '../../shared/presets/presetService';
 import { photodumpPresetAdapter, type PhotodumpPresetState } from './photodumpPresetAdapter';
 import { PresetManagerPanel } from '../../components/presets/PresetManagerPanel';
 
@@ -198,7 +199,7 @@ const PhotodumpModule: React.FC = () => {
   };
   const presetManager = useModulePresets(photodumpPresetAdapter, currentPresetState);
 
-  const handleLoadPreset = (partialState: Partial<PhotodumpPresetState>) => {
+  const handleLoadPreset = (partialState: Partial<PhotodumpPresetState>, opts?: { jumpToStep2?: boolean }) => {
     if (partialState.recipe    !== undefined) setRecipe(partialState.recipe);
     if (partialState.count     !== undefined) setCount(partialState.count);
     if (partialState.destino   !== undefined) setDestino(partialState.destino);
@@ -207,8 +208,21 @@ const PhotodumpModule: React.FC = () => {
     if (partialState.refs      !== undefined) setRefs(partialState.refs);
     if (partialState.modelId   !== undefined) setModelId(partialState.modelId as any);
     setShowPresets(false);
-    setStep(2); // ir directo al brief con la configuración restaurada
+    if (opts?.jumpToStep2 !== false) setStep(2); // ir directo al brief con la configuración restaurada
   };
+
+  // Al entrar al módulo, si hay un preset marcado como default, precargarlo
+  // automáticamente (sin saltar de paso, para no sorprender al usuario).
+  useEffect(() => {
+    if (!user?.uid) return;
+    (async () => {
+      const defaultPreset = await presetService.getDefault(user.uid, photodumpPresetAdapter.moduleId);
+      if (!defaultPreset) return;
+      const partialState = photodumpPresetAdapter.deserialize(defaultPreset.config, defaultPreset.assets);
+      handleLoadPreset(partialState, { jumpToStep2: false });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
 
   // ── Costos modo recetas ───────────────────────────────────
   // El "+1" cubre el REF0/ancla como llamada extra a Gemini — pero en

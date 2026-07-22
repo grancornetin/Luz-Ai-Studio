@@ -110,4 +110,15 @@ export const presetService = {
       version:     original.version,
     });
   },
+
+  // Marca un preset como default del módulo (solo uno a la vez); pasar null para quitar el default
+  async setDefault(uid: string, moduleId: ModuleId, presetId: string | null): Promise<void> {
+    const list = readAll(uid, moduleId);
+    writeAll(uid, moduleId, list.map(p => ({ ...p, isDefault: p.id === presetId })));
+  },
+
+  async getDefault(uid: string, moduleId: ModuleId): Promise<ModulePreset | null> {
+    const list = readAll(uid, moduleId);
+    return list.find(p => p.isDefault) ?? null;
+  },
 };

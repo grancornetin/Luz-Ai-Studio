@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2, Copy, RotateCcw, MoreVertical, Pencil } from 'lucide-react';
+import { Trash2, Copy, RotateCcw, MoreVertical, Pencil, Star } from 'lucide-react';
 import type { ModulePreset } from '../../shared/presets/types';
 
 interface PresetCardProps {
@@ -8,10 +8,11 @@ interface PresetCardProps {
   onUpdate: (preset: ModulePreset) => void;
   onDuplicate: (presetId: string) => void;
   onDelete: (presetId: string) => void;
+  onSetDefault?: (presetId: string | null) => void;
 }
 
 export const PresetCard: React.FC<PresetCardProps> = ({
-  preset, onLoad, onUpdate, onDuplicate, onDelete,
+  preset, onLoad, onUpdate, onDuplicate, onDelete, onSetDefault,
 }) => {
   const [menuOpen, setMenuOpen] = React.useState(false);
 
@@ -37,7 +38,15 @@ export const PresetCard: React.FC<PresetCardProps> = ({
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-black text-slate-900 truncate">{preset.name}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-sm font-black text-slate-900 truncate">{preset.name}</p>
+          {preset.isDefault && (
+            <span className="flex-shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 text-[10px] font-black uppercase tracking-widest">
+              <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+              Default
+            </span>
+          )}
+        </div>
         {preset.description && (
           <p className="text-xs text-slate-500 truncate mt-0.5">{preset.description}</p>
         )}
@@ -82,6 +91,16 @@ export const PresetCard: React.FC<PresetCardProps> = ({
               >
                 <Copy className="w-4 h-4 text-slate-400" /> Duplicar
               </button>
+              {onSetDefault && (
+                <button
+                  onClick={() => { setMenuOpen(false); onSetDefault(preset.isDefault ? null : preset.id); }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700
+                             hover:bg-slate-50 transition-colors"
+                >
+                  <Star className="w-4 h-4 text-slate-400" />
+                  {preset.isDefault ? 'Quitar como default' : 'Marcar como default'}
+                </button>
+              )}
               <div className="border-t border-slate-100 my-1" />
               <button
                 onClick={() => { setMenuOpen(false); onDelete(preset.id); }}
