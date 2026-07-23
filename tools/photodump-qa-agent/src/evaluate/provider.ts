@@ -29,12 +29,29 @@ Revisa estas categorías, en este orden de prioridad:
 Devuelve SOLO JSON con: score (0-100) y findings[]. Cada finding: criterion (uno de la lista de categorías en inglés snake_case, ej. "hands", "product_quantity", "invented_objects"), severity ("info"|"warning"|"critical"), title, evidence (qué se ve exactamente), probableCause (tu hipótesis de qué pudo causarlo, en términos visuales/de dirección, no de código).
 Defectos críticos: extremidades de más o de menos, identidad equivocada, outfit sustituido, cantidad de producto incorrecta, objetos duplicados de forma imposible, manos imposibles, o un shot que contradice su objetivo narrativo.`;
 
+function getCredentials(): Record<string, unknown> {
+  const raw = process.env.GEMINI_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_SERVICE_ACCOUNT_KEY || "";
+  if (!raw) throw new Error("Falta GEMINI_SERVICE_ACCOUNT_KEY o GOOGLE_SERVICE_ACCOUNT_KEY en el entorno.");
+  const decoded = raw.startsWith("{") ? raw : Buffer.from(raw, "base64").toString("utf-8");
+  return JSON.parse(decoded);
+}
+
 export class GeminiEvaluator {
   private readonly ai: GoogleGenAI;
   private readonly model: string;
 
-  constructor(apiKey: string, model = process.env.QA_MODEL || "gemini-2.5-flash") {
-    this.ai = new GoogleGenAI({ apiKey });
+  /**
+   * Misma autenticación que api/gemini/image-worker.ts: Vertex AI con la
+   * cuenta de servicio del proyecto (GCP_PROJECT_ID + GEMINI_SERVICE_ACCOUNT_KEY),
+   * no una GEMINI_API_KEY suelta de Google AI Studio.
+   */
+  constructor(model = process.env.QA_MODEL || "gemini-2.5-flash") {
+    this.ai = new GoogleGenAI({
+      vertexai: true,
+      project: process.env.GCP_PROJECT_ID!,
+      location: "global",
+      googleAuthOptions: { credentials: getCredentials() },
+    });
     this.model = model;
   }
 

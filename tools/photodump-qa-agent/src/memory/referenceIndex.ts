@@ -1,8 +1,22 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import type { GoogleGenAI } from "@google/genai";
 import { ReferenceMemory } from "./store.js";
 import type { ReferenceDescriptor } from "../schema.js";
+
+const IMAGE_EXT = /\.(png|jpe?g|webp)$/i;
+
+/** Recorre REFERENCES/ y subcarpetas (banco organizado por álbum/tema). */
+export async function listReferenceFiles(root: string): Promise<string[]> {
+  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+  const out: string[] = [];
+  for (const entry of entries) {
+    const full = path.join(root, entry.name);
+    if (entry.isDirectory()) out.push(...await listReferenceFiles(full));
+    else if (entry.isFile() && IMAGE_EXT.test(entry.name)) out.push(full);
+  }
+  return out;
+}
 
 function mimeFor(file: string): string {
   const ext = path.extname(file).toLowerCase();

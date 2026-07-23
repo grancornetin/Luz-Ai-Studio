@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import unzipper from "unzipper";
 
@@ -10,10 +10,14 @@ export type IngestedTest = {
   debugData: any;
 };
 
+const IMAGE_EXT = /\.(png|jpe?g|webp)$/i;
+
 /**
- * Un test en INBOX/<testId>/ trae images.zip (el "↓ ZIP" de PhotodumpModule)
- * y debug.json (el botón "Debug" — mismo currentSet.debugData serializado).
- * Ambos ya existen hoy en la UI; acá solo se extraen y normalizan.
+ * Un test en INBOX/<testId>/ trae debug.json (el botón "Debug" de
+ * PhotodumpModule) más las imágenes generadas, en dos formatos posibles:
+ * - images.zip (copiado a mano) — se extrae a RESULTS/<testId>/.
+ * - imágenes sueltas ya en la carpeta (las arma downloadsImporter.ts al
+ *   importar automáticamente desde Descargas) — se copian directo.
  */
 export async function ingestTest(inboxTestDir: string, resultsRoot: string): Promise<IngestedTest> {
   const testId = path.basename(inboxTestDir);
@@ -24,11 +28,21 @@ export async function ingestTest(inboxTestDir: string, resultsRoot: string): Pro
 
   const resultDir = path.join(resultsRoot, testId);
   await mkdir(resultDir, { recursive: true });
-  await createReadStream(zipPath).pipe(unzipper.Extract({ path: resultDir })).promise();
+
+  const hasZip = await readFile(zipPath).then(() => true).catch(() => false);
+  if (hasZip) {
+    await createReadStream(zipPath).pipe(unzipper.Extract({ path: resultDir })).promise();
+  } else {
+    const inboxEntries = await readdir(inboxTestDir, { withFileTypes: true });
+    const looseImages = inboxEntries.filter(e => e.isFile() && IMAGE_EXT.test(e.name));
+    for (const img of looseImages) {
+      await copyFile(path.join(inboxTestDir, img.name), path.join(resultDir, img.name));
+    }
+  }
 
   const entries = await readdir(resultDir, { withFileTypes: true });
   const imageFiles = entries
-    .filter(e => e.isFile() && /\.(png|jpe?g|webp)$/i.test(e.name))
+    .filter(e => e.isFile() && IMAGE_EXT.test(e.name))
     .map(e => path.join(resultDir, e.name))
     .sort();
 
@@ -36,13 +50,14 @@ export async function ingestTest(inboxTestDir: string, resultsRoot: string): Pro
 }
 
 export async function isTestReady(inboxTestDir: string): Promise<boolean> {
-  try {
-    await readFile(path.join(inboxTestDir, "images.zip"));
-    await readFile(path.join(inboxTestDir, "debug.json"));
-    return true;
-  } catch {
-    return false;
-  }
+  const debugOk = await readFile(path.join(inboxTestDir, "debug.json")).then(() => true).catch(() => false);
+  if (!debugOk) return false;
+
+  const hasZip = await readFile(path.join(inboxTestDir, "images.zip")).then(() => true).catch(() => false);
+  if (hasZip) return true;
+
+  const entries = await readdir(inboxTestDir, { withFileTypes: true }).catch(() => []);
+  return entries.some(e => e.isFile() && IMAGE_EXT.test(e.name));
 }
 
 export async function clearInboxTest(inboxTestDir: string): Promise<void> {
