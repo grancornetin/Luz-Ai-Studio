@@ -1,0 +1,2198 @@
+{
+  "version": "2.1",
+  "name": "Campaign Creative Director Engine — Commercial Visual Intelligence Rules",
+  "generatedAt": "2026-05-12T18:03:46.789Z",
+  "compatibleWith": {
+    "module": "Campaign Generator",
+    "engineVersion": "2.1",
+    "modoVisualValues": [
+      "ugc",
+      "editorial"
+    ]
+  },
+  "globalDirectorPrinciples": [
+    "Cada imagen debe tener un rol comercial claro — no solo belleza visual.",
+    "La legibilidad del producto debe ser inequívoca en 1 segundo.",
+    "UGC debe sentirse creíble y humano — nunca fabricado ni sobreproducido.",
+    "Editorial debe sentirse dirigido y con intención — nunca frío ni genérico.",
+    "Los props y el entorno deben comunicar el beneficio del producto, no decorar.",
+    "No copiar referencias literalmente — extraer patrones transferibles y recombinables.",
+    "Cada imagen debe activar al menos un mecanismo psicológico comercial específico.",
+    "El dominio visual debe ser claro — un elemento debe liderar la jerarquía.",
+    "El scroll-stop mechanism debe estar presente en toda pieza de performance.",
+    "Las señales de lujo, confianza y tacto deben elegirse según el canal y el objetivo.",
+    "La familia visual y la subfamilia deben guiar la dirección creativa, no limitarla.",
+    "El riesgo de IA debe mitigarse con estrategia de generación — nunca ignorarse."
+  ],
+  "commercialArchetypes": [
+    {
+      "archetype": "product_worship",
+      "label": "PRODUCT WORSHIP",
+      "familyIds": [
+        "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+        "FAMILY_EDITORIAL_PRODUCT_HERO_RANGE_PRODUCT_PRODUCT_WORSHIP",
+        "FAMILY_UGC_PRODUCT_HERO_RANGE_BALANCED_PRODUCT_WORSHIP"
+      ],
+      "purchaseStages": [
+        "awareness",
+        "consideration",
+        "conversion"
+      ],
+      "visualRoles": [
+        "hook",
+        "desire_amplifier",
+        "detail_revealer",
+        "brand_builder",
+        "trust_builder",
+        "converter"
+      ],
+      "narrativeBehaviors": [
+        "static_worship"
+      ]
+    },
+    {
+      "archetype": "trust_humanization",
+      "label": "TRUST HUMANIZATION",
+      "familyIds": [
+        "FAMILY_UGC_CLOSE_RANGE_BALANCED_TRUST_HUMANIZATION"
+      ],
+      "purchaseStages": [
+        "consideration",
+        "awareness"
+      ],
+      "visualRoles": [
+        "trust_builder",
+        "hook",
+        "detail_revealer",
+        "desire_amplifier"
+      ],
+      "narrativeBehaviors": [
+        "static_worship"
+      ]
+    },
+    {
+      "archetype": "atmospheric_world",
+      "label": "ATMOSPHERIC WORLD",
+      "familyIds": [
+        "FAMILY_EDITORIAL_MEDIUM_RANGE_BALANCED_ATMOSPHERIC_WORLD"
+      ],
+      "purchaseStages": [
+        "consideration",
+        "awareness"
+      ],
+      "visualRoles": [
+        "converter",
+        "brand_builder",
+        "desire_amplifier",
+        "detail_revealer"
+      ],
+      "narrativeBehaviors": [
+        "static_worship"
+      ]
+    },
+    {
+      "archetype": "playful_abundance",
+      "label": "PLAYFUL ABUNDANCE",
+      "familyIds": [
+        "FAMILY_UGC_CLOSE_RANGE_PRODUCT_PLAYFUL_ABUNDANCE"
+      ],
+      "purchaseStages": [
+        "consideration",
+        "awareness"
+      ],
+      "visualRoles": [
+        "hook",
+        "trust_builder",
+        "retention_anchor"
+      ],
+      "narrativeBehaviors": [
+        "static_worship"
+      ]
+    },
+    {
+      "archetype": "authority_status",
+      "label": "AUTHORITY STATUS",
+      "familyIds": [
+        "FAMILY_EDITORIAL_CLOSE_RANGE_ATMOSPHERE_AUTHORITY_STATUS"
+      ],
+      "purchaseStages": [
+        "awareness"
+      ],
+      "visualRoles": [
+        "hook",
+        "brand_builder",
+        "detail_revealer"
+      ],
+      "narrativeBehaviors": [
+        "static_worship"
+      ]
+    }
+  ],
+  "visualBanks": [
+    {
+      "id": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+      "name": "PRODUCT WORSHIP · EDITORIAL · Primer plano / Medio-cercano",
+      "compatibleModoVisual": "editorial",
+      "definition": "[PRODUCT WORSHIP] Familia EDITORIAL — Primer plano / Medio-cercano, sin dominancia clara. Función comercial: product worship. 78 imagenes.",
+      "strategicSummary": "Arquetipo comercial: PRODUCT WORSHIP. Activa object_desire + visual_possession en etapa awareness. Canales: editorial_banner, instagram_feed.",
+      "subfamilies": [
+        {
+          "id": "editorial_luxury_product_hero",
+          "label": "editorial luxury product hero",
+          "imageCount": 63,
+          "campaignHint": "Producto como joya. Ideal para PDP premium y editorial ads."
+        },
+        {
+          "id": "editorial_lifestyle_scene",
+          "label": "editorial lifestyle scene",
+          "imageCount": 5,
+          "campaignHint": "Mundo de marca construido. Para brand campaigns y awareness."
+        },
+        {
+          "id": "editorial_product_hero",
+          "label": "editorial product hero",
+          "imageCount": 4,
+          "campaignHint": "Claridad y presencia de producto. Efectivo para consideration y conversión."
+        },
+        {
+          "id": "editorial_luxury_minimalist",
+          "label": "editorial luxury minimalist",
+          "imageCount": 3,
+          "campaignHint": "Máxima señal de premium. Para hero banners y campañas de lujo."
+        },
+        {
+          "id": "editorial_luxury_portrait",
+          "label": "editorial luxury portrait",
+          "imageCount": 1,
+          "campaignHint": "Aspiración personal. Alta efectividad en campaigns de deseo y status."
+        },
+        {
+          "id": "editorial_aspirational_portrait",
+          "label": "editorial aspirational portrait",
+          "imageCount": 1,
+          "campaignHint": "Activa aspiración e identidad. Para awareness y brand building."
+        },
+        {
+          "id": "editorial_texture_detail",
+          "label": "editorial texture detail",
+          "imageCount": 1,
+          "campaignHint": "Credibilidad de ingrediente o material. PDP y banners de detalle."
+        }
+      ],
+      "commercialIntentDNA": {
+        "primaryIntent": "product_worship",
+        "secondaryIntent": "authority_status",
+        "purchaseStages": [
+          "awareness",
+          "consideration"
+        ],
+        "visualRoles": [
+          "hook",
+          "desire_amplifier",
+          "detail_revealer",
+          "brand_builder"
+        ],
+        "psychologicalMechanisms": [
+          "object_desire",
+          "visual_possession",
+          "aspiration",
+          "ritual",
+          "social_dominance",
+          "exclusivity_signal"
+        ],
+        "narrativeBehavior": "static_worship",
+        "attentionMechanism": "color_impact",
+        "intentDistribution": [
+          {
+            "intent": "product_worship",
+            "count": 65
+          },
+          {
+            "intent": "authority_status",
+            "count": 5
+          },
+          {
+            "intent": "atmospheric_world",
+            "count": 4
+          },
+          {
+            "intent": "sensory_desire",
+            "count": 3
+          },
+          {
+            "intent": "trust_humanization",
+            "count": 1
+          }
+        ]
+      },
+      "intelligenceProfile": {
+        "trustScore": 31,
+        "luxuryScore": 69,
+        "tactileScore": 65,
+        "trainingValue": 86
+      },
+      "psychologicalMechanisms": [
+        "aspiration",
+        "ritual",
+        "premium_perception",
+        "intimacy",
+        "exclusivity",
+        "status"
+      ],
+      "campaignRoles": {
+        "recommendedRoles": [
+          "detail",
+          "retention",
+          "hook",
+          "conversion"
+        ],
+        "hookStrength": 75,
+        "trustStrength": 46,
+        "conversionStrength": 67
+      },
+      "channelFit": {
+        "recommendedChannels": [
+          "editorial_banner",
+          "instagram_feed",
+          "pdp",
+          "meta_ads",
+          "instagram_stories",
+          "website_hero",
+          "tiktok"
+        ],
+        "tiktok": 53,
+        "instagram_feed": 87,
+        "meta_ads": 78,
+        "pdp": 77
+      },
+      "bestForProductTypes": [],
+      "bestForObjectives": [
+        "soft_premium",
+        "status",
+        "sensory_texture",
+        "playfulness",
+        "luxury",
+        "desire",
+        "freshness",
+        "clean_beauty",
+        "product_clarity",
+        "high_energy"
+      ],
+      "bestForChannels": [
+        "editorial_banner",
+        "instagram_feed",
+        "pdp",
+        "meta_ads",
+        "instagram_stories",
+        "website_hero",
+        "tiktok"
+      ],
+      "visualDirectives": [
+        "Producto como joya. Ideal para PDP premium y editorial ads.",
+        "Mundo de marca construido. Para brand campaigns y awareness.",
+        "Claridad y presencia de producto. Efectivo para consideration y conversión.",
+        "Máxima señal de premium. Para hero banners y campañas de lujo."
+      ],
+      "blendDirective": "[EDITORIAL · luxury led] medium close up framing with soft wrapping light and flowing visual rhythm · deliberate negative space and premium material hierarchy · strong tactile texture and sensory skin interaction · activating aspiration + premium perception · scroll-stopped by color contrast · product presented as hero product. Best for: instagram feed, editorial banner, pdp. Campaign roles: hook, detail, conversion.",
+      "avoid": [
+        "Evitar: hand_anatomy_risk: Fingers gripping curved paper in mid-motion are anatomically complex — AI generation risks distorting finger count, knuckle geometry, or nail rendering under page-curl pressure",
+        "Evitar: product_identity_risk: The publication's interior page layout with grids and text blocks requires consistent typographic fidelity across regenerations",
+        "Evitar: brand_logo_text_risk: Small readable text and layout elements visible on the open publication pages may contain protected or identifiable content",
+        "Evitar: jewelry_detail_risk: Multiple stacked rings with distinct finishes and a metal-band watch require precise detail rendering — AI risks merging or misshaping elements",
+        "Evitar: label_typography_risk: Text columns and graphic blocks on visible publication pages risk generating illegible or hallucinated pseudo-text"
+      ],
+      "promptBlock": "Soft editorial lifestyle shot: a single arm and hand with layered metallic rings and a minimal metal-strap wristwatch reaches diagonally into frame from upper left against a bright white background. The hand lifts and turns a page of an open printed publication resting flat on a clean white matte surface. The paper curves mid-turn creating a dynamic arc. Partial lower torso in dark fabric is visible at frame edge. Small personal identity marks on forearm add authenticity texture. Lighting is soft and diffused, no harsh shadows. Composition is minimal with generous negative space. Three-quarter elevated camera angle. Color palette: warm skin tones, white, off-white, charcoal. Mood: intentional, cultured, unhurried, premium lifestyle ritual.",
+      "anchorPromptBlock": "[EDITORIAL · luxury led] medium close up framing with soft wrapping light and flowing visual rhythm · deliberate negative space and premium material hierarchy · strong tactile texture and sensory skin interaction · activating aspiration + premium perception · scroll-stopped by color contrast · product presented as hero product. Best for: instagram feed, editorial banner, pdp. Campaign roles: hook, detail, conversion.",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry",
+        "illegible hallucinated text",
+        "warped page geometry"
+      ],
+      "humanRules": {
+        "humanRequired": true,
+        "preferredHumanRole": "hand_model"
+      },
+      "productRules": {
+        "productRole": "hero_product",
+        "identityRule": "Mantener identidad del producto del brief. Visibilidad clara en 1 segundo."
+      },
+      "sourceImageCount": 78
+    },
+    {
+      "id": "FAMILY_EDITORIAL_PRODUCT_HERO_RANGE_PRODUCT_PRODUCT_WORSHIP",
+      "name": "PRODUCT WORSHIP · EDITORIAL · Hero de producto / Flat lay",
+      "compatibleModoVisual": "editorial",
+      "definition": "[PRODUCT WORSHIP] Familia EDITORIAL — Hero de producto / Flat lay, producto dominante. Función comercial: product worship. 52 imagenes.",
+      "strategicSummary": "Arquetipo comercial: PRODUCT WORSHIP. Activa object_desire + visual_possession en etapa awareness. Canales: editorial_banner, instagram_feed.",
+      "subfamilies": [
+        {
+          "id": "editorial_luxury_product_hero",
+          "label": "editorial luxury product hero",
+          "imageCount": 49,
+          "campaignHint": "Producto como joya. Ideal para PDP premium y editorial ads."
+        },
+        {
+          "id": "editorial_flat_lay_composition",
+          "label": "editorial flat lay composition",
+          "imageCount": 2,
+          "campaignHint": "Control creativo total. Versátil para feed, blog y editorial."
+        },
+        {
+          "id": "editorial_product_hero",
+          "label": "editorial product hero",
+          "imageCount": 1,
+          "campaignHint": "Claridad y presencia de producto. Efectivo para consideration y conversión."
+        }
+      ],
+      "commercialIntentDNA": {
+        "primaryIntent": "product_worship",
+        "secondaryIntent": "sensory_desire",
+        "purchaseStages": [
+          "awareness",
+          "consideration"
+        ],
+        "visualRoles": [
+          "hook",
+          "desire_amplifier",
+          "trust_builder",
+          "brand_builder"
+        ],
+        "psychologicalMechanisms": [
+          "object_desire",
+          "visual_possession",
+          "aspiration",
+          "dominance",
+          "abundance",
+          "brand_immersion"
+        ],
+        "narrativeBehavior": "static_worship",
+        "attentionMechanism": "object_isolation",
+        "intentDistribution": [
+          {
+            "intent": "product_worship",
+            "count": 49
+          },
+          {
+            "intent": "sensory_desire",
+            "count": 2
+          },
+          {
+            "intent": "atmospheric_world",
+            "count": 1
+          }
+        ]
+      },
+      "intelligenceProfile": {
+        "trustScore": 26,
+        "luxuryScore": 68,
+        "tactileScore": 49,
+        "trainingValue": 87
+      },
+      "psychologicalMechanisms": [
+        "dominance",
+        "abundance",
+        "aspiration",
+        "premium_perception",
+        "trust",
+        "creator_closeness"
+      ],
+      "campaignRoles": {
+        "recommendedRoles": [
+          "hook",
+          "trust",
+          "detail",
+          "conversion"
+        ],
+        "hookStrength": 60,
+        "trustStrength": 40,
+        "conversionStrength": 70
+      },
+      "channelFit": {
+        "recommendedChannels": [
+          "editorial_banner",
+          "instagram_feed",
+          "pdp",
+          "website_hero",
+          "meta_ads"
+        ],
+        "tiktok": 38,
+        "instagram_feed": 84,
+        "meta_ads": 77,
+        "pdp": 78
+      },
+      "bestForProductTypes": [],
+      "bestForObjectives": [
+        "high_energy",
+        "trust",
+        "product_clarity",
+        "desire",
+        "luxury",
+        "status",
+        "playfulness",
+        "sensory_texture",
+        "clean_beauty",
+        "freshness",
+        "community"
+      ],
+      "bestForChannels": [
+        "editorial_banner",
+        "instagram_feed",
+        "pdp",
+        "website_hero",
+        "meta_ads"
+      ],
+      "visualDirectives": [
+        "Producto como joya. Ideal para PDP premium y editorial ads.",
+        "Control creativo total. Versátil para feed, blog y editorial.",
+        "Claridad y presencia de producto. Efectivo para consideration y conversión."
+      ],
+      "blendDirective": "[EDITORIAL · luxury led] product hero framing with soft wrapping light and flowing visual rhythm · deliberate negative space and premium material hierarchy · sensory material cues and product touch emphasis · activating aspiration + premium perception · scroll-stopped by color contrast · product presented as hero product. Best for: pdp, instagram feed, editorial banner. Campaign roles: conversion, detail, hook.",
+      "avoid": [
+        "Evitar: brand_logo_text_risk: Logotype and product name text visible on every bottle and in headline — any AI regeneration would hallucinate or corrupt these",
+        "Evitar: label_typography_risk: Bold typographic labels on all bottles at multiple scales — AI generation consistently fails to reproduce legible or consistent label text across a product array",
+        "Evitar: product_identity_risk: Identical pump bottle repeated 12+ times at varying sizes and angles — maintaining product fidelity and consistency across the entire array is an extreme AI generation challenge",
+        "Evitar: inconsistent_product_risk: Forced perspective array means each bottle appears at different scale and angle — AI models frequently introduce shape distortion or pump head inconsistency across the sequence",
+        "Evitar: excessive_perfection_risk: Studio-precise shadow geometry and diagonal alignment are mathematically precise — AI generation often breaks the geometric regularity of repeated object arrays"
+      ],
+      "promptBlock": "Studio product campaign: a single pump dispenser bottle multiplied into a long diagonal recession line of 8 to 12 identical units, arranged from lower-left foreground to upper-right background, each progressively smaller in scale to create forced perspective depth. Background is a saturated solid color field that closely matches the bottle body color, creating a deliberate chromatic camouflage effect. Each bottle casts a hard elongated shadow to the right, all shadows parallel and rhythmic, forming a repeating directional arrow pattern across the field. Bottles have matte-to-semi-gloss surface finish in amber-warm tone. Black pump dispenser heads on each unit, consistent and precise. Lighting is hard directional studio light from upper left, creating high contrast between bottle surface highlight and deep cast shadows. No human presence. Lower right quadrant contains bold sans-serif headline copy in high contrast color. Upper left corner holds brand logotype. Overall mood: kinetic, dominant, high-energy, forward-momentum performance brand. Compositional feel: graphic, geometric, aggressively confident.",
+      "anchorPromptBlock": "[EDITORIAL · luxury led] product hero framing with soft wrapping light and flowing visual rhythm · deliberate negative space and premium material hierarchy · sensory material cues and product touch emphasis · activating aspiration + premium perception · scroll-stopped by color contrast · product presented as hero product. Best for: pdp, instagram feed, editorial banner. Campaign roles: conversion, detail, hook.",
+      "negativePromptHints": [
+        "legible text on product label",
+        "readable brand name",
+        "distorted pump head",
+        "melting bottle shapes",
+        "inconsistent bottle scale",
+        "shadow direction inconsistency",
+        "floating bottles",
+        "visible ground plane edge"
+      ],
+      "humanRules": {
+        "humanRequired": true,
+        "preferredHumanRole": "not_applicable"
+      },
+      "productRules": {
+        "productRole": "hero_product",
+        "identityRule": "Mantener identidad del producto del brief. Visibilidad clara en 1 segundo."
+      },
+      "sourceImageCount": 52
+    },
+    {
+      "id": "FAMILY_UGC_CLOSE_RANGE_BALANCED_TRUST_HUMANIZATION",
+      "name": "TRUST HUMANIZATION · UGC · Primer plano / Medio-cercano",
+      "compatibleModoVisual": "ugc",
+      "definition": "[TRUST HUMANIZATION] Familia UGC — Primer plano / Medio-cercano, sin dominancia clara. Función comercial: trust humanization. 10 imagenes.",
+      "strategicSummary": "Arquetipo comercial: TRUST HUMANIZATION. Activa social_proof + creator_closeness en etapa consideration. Canales: tiktok, meta_ads.",
+      "subfamilies": [
+        {
+          "id": "ugc_emotional_testimonial",
+          "label": "ugc emotional testimonial",
+          "imageCount": 5,
+          "campaignHint": "Alto poder de conversión por cercanía emocional. Usar en etapa consideration-conversion."
+        },
+        {
+          "id": "ugc_social_proof",
+          "label": "ugc social proof",
+          "imageCount": 3,
+          "campaignHint": "Prueba social directa. Alta efectividad en consideración y conversión."
+        },
+        {
+          "id": "ugc_ritual_routine",
+          "label": "ugc ritual routine",
+          "imageCount": 1,
+          "campaignHint": "Construye hábito y pertenencia. Ideal para retention y brand building."
+        },
+        {
+          "id": "ugc_lifestyle_general",
+          "label": "ugc lifestyle general",
+          "imageCount": 1,
+          "campaignHint": "Contexto de vida real. Versátil para awareness y consideration."
+        }
+      ],
+      "commercialIntentDNA": {
+        "primaryIntent": "trust_humanization",
+        "secondaryIntent": "ritual_lifestyle",
+        "purchaseStages": [
+          "consideration",
+          "awareness"
+        ],
+        "visualRoles": [
+          "trust_builder",
+          "hook",
+          "detail_revealer",
+          "desire_amplifier"
+        ],
+        "psychologicalMechanisms": [
+          "social_proof",
+          "creator_closeness",
+          "authentic_validation",
+          "informed_confidence",
+          "feature_conviction",
+          "rational_desire"
+        ],
+        "narrativeBehavior": "static_worship",
+        "attentionMechanism": "face_eye_contact",
+        "intentDistribution": [
+          {
+            "intent": "trust_humanization",
+            "count": 6
+          },
+          {
+            "intent": "ritual_lifestyle",
+            "count": 2
+          },
+          {
+            "intent": "educational_clarity",
+            "count": 1
+          },
+          {
+            "intent": "product_worship",
+            "count": 1
+          }
+        ]
+      },
+      "intelligenceProfile": {
+        "trustScore": 56,
+        "luxuryScore": 15,
+        "tactileScore": 33,
+        "trainingValue": 84
+      },
+      "psychologicalMechanisms": [
+        "trust",
+        "creator_authenticity",
+        "intimacy",
+        "social_proof",
+        "ritual",
+        "confidence"
+      ],
+      "campaignRoles": {
+        "recommendedRoles": [
+          "hook",
+          "trust",
+          "detail"
+        ],
+        "hookStrength": 65,
+        "trustStrength": 65,
+        "conversionStrength": 60
+      },
+      "channelFit": {
+        "recommendedChannels": [
+          "tiktok",
+          "meta_ads"
+        ],
+        "tiktok": 70,
+        "instagram_feed": 40,
+        "meta_ads": 67,
+        "pdp": 49
+      },
+      "bestForProductTypes": [],
+      "bestForObjectives": [
+        "routine",
+        "product_clarity",
+        "sensory_texture",
+        "soft_premium",
+        "playfulness",
+        "clean_beauty",
+        "trust"
+      ],
+      "bestForChannels": [
+        "tiktok",
+        "meta_ads"
+      ],
+      "visualDirectives": [
+        "Alto poder de conversión por cercanía emocional. Usar en etapa consideration-conversion.",
+        "Prueba social directa. Alta efectividad en consideración y conversión.",
+        "Construye hábito y pertenencia. Ideal para retention y brand building.",
+        "Contexto de vida real. Versátil para awareness y consideration."
+      ],
+      "blendDirective": "[UGC · trust led] medium close up framing with soft wrapping light and dynamic visual rhythm · relatable creator energy and spontaneous framing · activating trust + creator authenticity · scroll-stopped by face eye contact · product presented as hero product. Best for: tiktok, meta ads. Campaign roles: hook, trust, detail.",
+      "avoid": [
+        "Evitar: brand_logo_text_risk: Multiple products display clearly readable brand name and label text across all five items — reproduction in AI generation would require complete label design replacement",
+        "Evitar: product_identity_risk: Five distinct SKUs with specific shapes, label colors, and cap types must be reproduced accurately; pump bottle shape, foil pouch, and squeeze tubes are complex forms prone to AI distortion",
+        "Evitar: hand_anatomy_risk: Hand gripping tube near face at an elevated angle may produce finger count errors or unnatural wrist articulation in AI generation",
+        "Evitar: jewelry_detail_risk: Gold chain necklace and bracelet with fine detail are prone to AI hallucination — doubling, melting, or incorrect link rendering",
+        "Evitar: hand_anatomy_risk: Four disembodied hands entering from frame edges at various angles — AI generation frequently produces extra fingers, merged knuckles, unnatural wrist angles or mismatched skin tones across multiple isolated hands"
+      ],
+      "promptBlock": "UGC-style skincare routine portrait with premium composition. A young woman with long wavy hair wearing a white chunky-knit textured robe sits at a clean white surface. She holds a pale yellow squeeze tube vertically near her face, with the tube partially covering one eye in a playful, confident pose. Soft natural-style lighting from the front, slightly low camera angle, off-white neutral background. Warm skin tones with soft blush makeup. Thin gold chain necklace and thin gold bangle bracelet visible. On the white surface in front of her: a small travel-size tube, a pump dispenser bottle with amber-toned liquid, a small clear bottle, and a flat foil pouch — all unbranded with clean minimal labels in a pale yellow and white color palette. Products loosely arranged in a natural display row. Mood: cozy morning skincare routine, approachable creator energy, soft editorial finish. All packaging unbranded unless brand assets are supplied separately.",
+      "anchorPromptBlock": "[UGC · trust led] medium close up framing with soft wrapping light and dynamic visual rhythm · relatable creator energy and spontaneous framing · activating trust + creator authenticity · scroll-stopped by face eye contact · product presented as hero product. Best for: tiktok, meta ads. Campaign roles: hook, trust, detail.",
+      "negativePromptHints": [
+        "readable text on packaging",
+        "brand logos",
+        "extra fingers",
+        "fused fingers",
+        "distorted wrist",
+        "melting jewelry",
+        "doubled necklace",
+        "floating products"
+      ],
+      "humanRules": {
+        "humanRequired": true,
+        "preferredHumanRole": "real_user_creator"
+      },
+      "productRules": {
+        "productRole": "hero_product",
+        "identityRule": "Mantener identidad del producto del brief. Visibilidad clara en 1 segundo."
+      },
+      "sourceImageCount": 10
+    },
+    {
+      "id": "FAMILY_UGC_PRODUCT_HERO_RANGE_BALANCED_PRODUCT_WORSHIP",
+      "name": "PRODUCT WORSHIP · UGC · Hero de producto / Flat lay",
+      "compatibleModoVisual": "ugc",
+      "definition": "[PRODUCT WORSHIP] Familia UGC — Hero de producto / Flat lay, sin dominancia clara. Función comercial: product worship. 7 imagenes.",
+      "strategicSummary": "Arquetipo comercial: PRODUCT WORSHIP. Activa object_desire + visual_possession en etapa awareness. Canales: instagram_stories, meta_ads.",
+      "subfamilies": [
+        {
+          "id": "ugc_product_close_up",
+          "label": "ugc product close up",
+          "imageCount": 3,
+          "campaignHint": "Claridad de producto en 1 segundo. Excelente para PDP y ads directos."
+        },
+        {
+          "id": "ugc_ritual_routine",
+          "label": "ugc ritual routine",
+          "imageCount": 2,
+          "campaignHint": "Construye hábito y pertenencia. Ideal para retention y brand building."
+        },
+        {
+          "id": "ugc_lifestyle_general",
+          "label": "ugc lifestyle general",
+          "imageCount": 1,
+          "campaignHint": "Contexto de vida real. Versátil para awareness y consideration."
+        },
+        {
+          "id": "ugc_social_proof",
+          "label": "ugc social proof",
+          "imageCount": 1,
+          "campaignHint": "Prueba social directa. Alta efectividad en consideración y conversión."
+        }
+      ],
+      "commercialIntentDNA": {
+        "primaryIntent": "product_worship",
+        "secondaryIntent": "playful_abundance",
+        "purchaseStages": [
+          "awareness",
+          "consideration",
+          "conversion"
+        ],
+        "visualRoles": [
+          "desire_amplifier",
+          "converter",
+          "hook",
+          "brand_builder"
+        ],
+        "psychologicalMechanisms": [
+          "object_desire",
+          "visual_possession",
+          "aspiration",
+          "abundance",
+          "joy_activation",
+          "abundance_perception"
+        ],
+        "narrativeBehavior": "static_worship",
+        "attentionMechanism": "object_isolation",
+        "intentDistribution": [
+          {
+            "intent": "product_worship",
+            "count": 4
+          },
+          {
+            "intent": "playful_abundance",
+            "count": 1
+          },
+          {
+            "intent": "authority_status",
+            "count": 1
+          },
+          {
+            "intent": "trust_humanization",
+            "count": 1
+          }
+        ]
+      },
+      "intelligenceProfile": {
+        "trustScore": 55,
+        "luxuryScore": 33,
+        "tactileScore": 43,
+        "trainingValue": 80
+      },
+      "psychologicalMechanisms": [
+        "aspiration",
+        "abundance",
+        "premium_perception",
+        "exclusivity",
+        "social_proof",
+        "trust"
+      ],
+      "campaignRoles": {
+        "recommendedRoles": [
+          "conversion",
+          "hook",
+          "trust"
+        ],
+        "hookStrength": 65,
+        "trustStrength": 60,
+        "conversionStrength": 61
+      },
+      "channelFit": {
+        "recommendedChannels": [
+          "instagram_stories",
+          "meta_ads",
+          "instagram_feed",
+          "tiktok",
+          "pdp"
+        ],
+        "tiktok": 63,
+        "instagram_feed": 52,
+        "meta_ads": 72,
+        "pdp": 57
+      },
+      "bestForProductTypes": [],
+      "bestForObjectives": [
+        "conversion",
+        "value_stack",
+        "status",
+        "routine",
+        "clean_beauty",
+        "proof"
+      ],
+      "bestForChannels": [
+        "instagram_stories",
+        "meta_ads",
+        "instagram_feed",
+        "tiktok",
+        "pdp"
+      ],
+      "visualDirectives": [
+        "Claridad de producto en 1 segundo. Excelente para PDP y ads directos.",
+        "Construye hábito y pertenencia. Ideal para retention y brand building.",
+        "Contexto de vida real. Versátil para awareness y consideration.",
+        "Prueba social directa. Alta efectividad en consideración y conversión."
+      ],
+      "blendDirective": "[UGC · trust led] top down framing with soft wrapping light and dynamic visual rhythm · relatable creator energy and spontaneous framing · light texture suggestion · activating social proof + trust · scroll-stopped by close up detail · product presented as hero product. Best for: meta ads, tiktok, instagram stories. Campaign roles: conversion, hook, trust.",
+      "avoid": [
+        "Evitar: brand_logo_text_risk: Sale percentage text and emoji overlay are readable promotional copy — reproduction in AI generation would require neutralizing or replacing with generic placeholder text",
+        "Evitar: product_identity_risk: Exotic-texture sneaker with distinctive scale pattern is a highly specific product shape — AI generation may hallucinate incorrect texture topology, misplace lace holes, or distort platform sole proportions",
+        "Evitar: inconsistent_product_risk: Stacked box tower with multiple boxes of varying slight asymmetry may generate with inconsistent box counts, misaligned edges, or unrealistic physics stacking",
+        "Evitar: label_typography_risk: Overlaid promotional text with emoji is brand-associated and percentage-specific — direct reproduction creates IP and accuracy risk",
+        "Evitar: brand_logo_text_risk: Multiple clearly readable brand names, publication titles, and product labels are visible throughout the basket — high likelihood of unintended brand reproduction in AI-generated versions"
+      ],
+      "promptBlock": "Vertical product hero shot on a herringbone light wood floor against a muted warm-grey wall. Five to six identical clean white rectangular boxes stacked in a slightly irregular tower occupy the lower two-thirds of the frame. A single premium textured sneaker with an embossed scale-pattern leather upper and contrast gum rubber sole sits atop the box stack as the apex object. Soft ambient natural light from left creates gentle side shadows on box edges. Bold white sans-serif promotional text is overlaid across the mid-stack area with high contrast. The composition is centered, static, with generous negative space above the sneaker. Warm tonal palette throughout — cream, bone, tan, cognac. No humans. No hands. Environmental lifestyle feel with semi-editorial precision.",
+      "anchorPromptBlock": "[UGC · trust led] top down framing with soft wrapping light and dynamic visual rhythm · relatable creator energy and spontaneous framing · light texture suggestion · activating social proof + trust · scroll-stopped by close up detail · product presented as hero product. Best for: meta ads, tiktok, instagram stories. Campaign roles: conversion, hook, trust.",
+      "negativePromptHints": [
+        "no visible brand logos",
+        "no readable text",
+        "no distorted box edges",
+        "no floating boxes",
+        "no incorrect lace patterns",
+        "no extra fingers or hands",
+        "no scale texture hallucination",
+        "no wrong shoe proportions"
+      ],
+      "humanRules": {
+        "humanRequired": true,
+        "preferredHumanRole": "not_applicable"
+      },
+      "productRules": {
+        "productRole": "hero_product",
+        "identityRule": "Mantener identidad del producto del brief. Visibilidad clara en 1 segundo."
+      },
+      "sourceImageCount": 7
+    },
+    {
+      "id": "FAMILY_EDITORIAL_MEDIUM_RANGE_BALANCED_ATMOSPHERIC_WORLD",
+      "name": "ATMOSPHERIC WORLD · EDITORIAL · Plano medio / Lifestyle",
+      "compatibleModoVisual": "editorial",
+      "definition": "[ATMOSPHERIC WORLD] Familia EDITORIAL — Plano medio / Lifestyle, sin dominancia clara. Función comercial: atmospheric world. 3 imagenes.",
+      "strategicSummary": "Arquetipo comercial: ATMOSPHERIC WORLD. Activa brand_immersion + world_belonging en etapa consideration. Canales: instagram_feed, pdp.",
+      "subfamilies": [
+        {
+          "id": "editorial_lifestyle_scene",
+          "label": "editorial lifestyle scene",
+          "imageCount": 1,
+          "campaignHint": "Mundo de marca construido. Para brand campaigns y awareness."
+        },
+        {
+          "id": "editorial_luxury_product_hero",
+          "label": "editorial luxury product hero",
+          "imageCount": 1,
+          "campaignHint": "Producto como joya. Ideal para PDP premium y editorial ads."
+        },
+        {
+          "id": "editorial_luxury_minimalist",
+          "label": "editorial luxury minimalist",
+          "imageCount": 1,
+          "campaignHint": "Máxima señal de premium. Para hero banners y campañas de lujo."
+        }
+      ],
+      "commercialIntentDNA": {
+        "primaryIntent": "atmospheric_world",
+        "secondaryIntent": "product_worship",
+        "purchaseStages": [
+          "consideration",
+          "awareness"
+        ],
+        "visualRoles": [
+          "converter",
+          "brand_builder",
+          "desire_amplifier",
+          "detail_revealer"
+        ],
+        "psychologicalMechanisms": [
+          "brand_immersion",
+          "world_belonging",
+          "aesthetic_desire",
+          "aspiration",
+          "ritual",
+          "object_desire"
+        ],
+        "narrativeBehavior": "static_worship",
+        "attentionMechanism": "color_impact",
+        "intentDistribution": [
+          {
+            "intent": "atmospheric_world",
+            "count": 1
+          },
+          {
+            "intent": "product_worship",
+            "count": 1
+          },
+          {
+            "intent": "authority_status",
+            "count": 1
+          }
+        ]
+      },
+      "intelligenceProfile": {
+        "trustScore": 37,
+        "luxuryScore": 60,
+        "tactileScore": 65,
+        "trainingValue": 82
+      },
+      "psychologicalMechanisms": [
+        "aspiration",
+        "ritual",
+        "abundance",
+        "social_proof",
+        "premium_perception",
+        "intimacy"
+      ],
+      "campaignRoles": {
+        "recommendedRoles": [
+          "conversion",
+          "detail"
+        ],
+        "hookStrength": 70,
+        "trustStrength": 47,
+        "conversionStrength": 71
+      },
+      "channelFit": {
+        "recommendedChannels": [
+          "instagram_feed",
+          "pdp",
+          "editorial_banner"
+        ],
+        "tiktok": 56,
+        "instagram_feed": 89,
+        "meta_ads": 77,
+        "pdp": 79
+      },
+      "bestForProductTypes": [],
+      "bestForObjectives": [
+        "routine",
+        "desire",
+        "status"
+      ],
+      "bestForChannels": [
+        "instagram_feed",
+        "pdp",
+        "editorial_banner"
+      ],
+      "visualDirectives": [
+        "Mundo de marca construido. Para brand campaigns y awareness.",
+        "Producto como joya. Ideal para PDP premium y editorial ads.",
+        "Máxima señal de premium. Para hero banners y campañas de lujo."
+      ],
+      "blendDirective": "[EDITORIAL · tactile led] medium shot framing with balanced light and flowing visual rhythm · controlled production feel with subtle premium cues · strong tactile texture and sensory skin interaction · activating aspiration + premium perception · scroll-stopped by color contrast · product presented as held recommendation product. Best for: instagram feed, pdp, editorial banner. Campaign roles: detail, conversion.",
+      "avoid": [
+        "Evitar: brand_logo_text_risk: Multiple supplement product labels with readable text and logos are clearly visible — AI generation must not reproduce protected label design or brand identity",
+        "Evitar: label_typography_risk: White labels on amber bottles contain specific typographic layout, product name hierarchy and color accent bars that are proprietary — replication risk is high",
+        "Evitar: product_identity_risk: Amber glass supplement bottle with specific cap and label format must not be replicated with inaccurate proportions or label placement",
+        "Evitar: excessive_perfection_risk: Hyper-coordinated monochromatic pink styling may read as over-produced in UGC contexts, reducing believability",
+        "Evitar: fake_ugc_behavior_risk: Scene is too styled to pass as genuine user-generated content — prop coordination and lighting betray editorial production"
+      ],
+      "promptBlock": "Lifestyle wellness scene: cropped female torso in form-fitting athletic wear, arm extended, hand gripping a dark amber glass bottle with a generic minimal white label, placing it into an open soft fabric gym bag. Scene surface scattered with two matching small dumbbells in the same dominant hue as the background. Two additional generic supplement bottles with clean minimal labels staged to the right of frame. Background is a single solid pastel tone matching all props — full monochromatic color world. Lighting is controlled studio softbox, slightly elevated angle, warm skin tones on forearm and hand catching soft highlight. Medium shot, three-quarter angle. Dynamic visual rhythm. No face visible. Product contrast is the hero anchor.",
+      "anchorPromptBlock": "[EDITORIAL · tactile led] medium shot framing with balanced light and flowing visual rhythm · controlled production feel with subtle premium cues · strong tactile texture and sensory skin interaction · activating aspiration + premium perception · scroll-stopped by color contrast · product presented as held recommendation product. Best for: instagram feed, pdp, editorial banner. Campaign roles: detail, conversion.",
+      "negativePromptHints": [
+        "visible brand name",
+        "readable label text",
+        "logo on bottle",
+        "typography on product",
+        "hyper-perfect prop alignment",
+        "excessive color uniformity",
+        "plastic-looking skin",
+        "stiff or malformed fingers"
+      ],
+      "humanRules": {
+        "humanRequired": true,
+        "preferredHumanRole": "body_part_model"
+      },
+      "productRules": {
+        "productRole": "held_recommendation_product",
+        "identityRule": "Mantener identidad del producto del brief. Visibilidad clara en 1 segundo."
+      },
+      "sourceImageCount": 3
+    },
+    {
+      "id": "FAMILY_UGC_CLOSE_RANGE_PRODUCT_PLAYFUL_ABUNDANCE",
+      "name": "PLAYFUL ABUNDANCE · UGC · Primer plano / Medio-cercano",
+      "compatibleModoVisual": "ugc",
+      "definition": "[PLAYFUL ABUNDANCE] Familia UGC — Primer plano / Medio-cercano, producto dominante. Función comercial: playful abundance. 3 imagenes.",
+      "strategicSummary": "Arquetipo comercial: PLAYFUL ABUNDANCE. Activa joy_activation + abundance_perception en etapa consideration. Canales: meta_ads.",
+      "subfamilies": [
+        {
+          "id": "ugc_product_close_up",
+          "label": "ugc product close up",
+          "imageCount": 1,
+          "campaignHint": "Claridad de producto en 1 segundo. Excelente para PDP y ads directos."
+        },
+        {
+          "id": "ugc_soft_selfcare",
+          "label": "ugc soft selfcare",
+          "imageCount": 1,
+          "campaignHint": "Señales de ritual y cuidado personal. Funciona en retention y community."
+        },
+        {
+          "id": "ugc_ritual_routine",
+          "label": "ugc ritual routine",
+          "imageCount": 1,
+          "campaignHint": "Construye hábito y pertenencia. Ideal para retention y brand building."
+        }
+      ],
+      "commercialIntentDNA": {
+        "primaryIntent": "playful_abundance",
+        "secondaryIntent": "trust_humanization",
+        "purchaseStages": [
+          "consideration",
+          "awareness"
+        ],
+        "visualRoles": [
+          "hook",
+          "trust_builder",
+          "retention_anchor"
+        ],
+        "psychologicalMechanisms": [
+          "joy_activation",
+          "abundance_perception",
+          "dopamine_reward",
+          "social_proof",
+          "creator_closeness",
+          "authentic_validation"
+        ],
+        "narrativeBehavior": "static_worship",
+        "attentionMechanism": "object_isolation",
+        "intentDistribution": [
+          {
+            "intent": "playful_abundance",
+            "count": 1
+          },
+          {
+            "intent": "trust_humanization",
+            "count": 1
+          },
+          {
+            "intent": "ritual_lifestyle",
+            "count": 1
+          }
+        ]
+      },
+      "intelligenceProfile": {
+        "trustScore": 55,
+        "luxuryScore": 13,
+        "tactileScore": 35,
+        "trainingValue": 85
+      },
+      "psychologicalMechanisms": [
+        "abundance",
+        "trust",
+        "creator_authenticity",
+        "social_proof",
+        "ritual"
+      ],
+      "campaignRoles": {
+        "recommendedRoles": [
+          "conversion",
+          "trust"
+        ],
+        "hookStrength": 55,
+        "trustStrength": 58,
+        "conversionStrength": 68
+      },
+      "channelFit": {
+        "recommendedChannels": [
+          "meta_ads"
+        ],
+        "tiktok": 45,
+        "instagram_feed": 32,
+        "meta_ads": 74,
+        "pdp": 62
+      },
+      "bestForProductTypes": [],
+      "bestForObjectives": [
+        "value_stack",
+        "routine"
+      ],
+      "bestForChannels": [
+        "meta_ads"
+      ],
+      "visualDirectives": [
+        "Claridad de producto en 1 segundo. Excelente para PDP y ads directos.",
+        "Señales de ritual y cuidado personal. Funciona en retention y community.",
+        "Construye hábito y pertenencia. Ideal para retention y brand building."
+      ],
+      "blendDirective": "[UGC · trust led] medium close up framing with soft wrapping light and dynamic visual rhythm · relatable creator energy and spontaneous framing · light texture suggestion · activating trust + ritual · scroll-stopped by close up detail · product presented as hero product. Best for: meta ads. Campaign roles: conversion, trust.",
+      "avoid": [
+        "Evitar: hand_anatomy_risk: Generating multiple hands holding 4–5 objects simultaneously is a critical AI anatomy challenge — finger count errors, unnatural grip positions, overlapping hand geometry and impossible wrist angles are highly probable",
+        "Evitar: brand_logo_text_risk: Readable branded text and sustainability labels are visible on the cup surfaces — AI generation will hallucinate or distort text, requiring strict no-text or masked-text generation approach",
+        "Evitar: product_identity_risk: Kraft cup proportions, lid shape and cup-sleeve geometry must remain consistent across all units in the cluster — AI tends to vary product shape when generating multiples",
+        "Evitar: brand_logo_text_risk: The product label contains clearly visible brand name, product line name, numbered designation, size, and website URL — all readable at one second.",
+        "Evitar: product_identity_risk: The specific product format (compact rounded bottle, label design, numbered product tier) is highly brand-distinctive and difficult to genericize without losing recognition."
+      ],
+      "promptBlock": "UGC-style lifestyle product cluster shot. Two expressive hands with visible finger tattoos hold a fanned arrangement of 4 to 5 tapered kraft paper hot beverage cups with translucent flat plastic lids, in various orientations — some upright, some tilted, one empty and open facing the camera. The cups are unbranded with a natural matte tan texture. Subject wears a vivid cobalt blue knit polo shirt that fills the entire background, creating maximum warm-cool contrast against the kraft tones. Lighting is soft natural daylight with gentle directional shadows across the cups and hand surfaces. Camera at slight downward angle, medium close-up framing centered on hands and lower torso. No face visible. No text or logo on cups. Mood: generous, tactile, sustainable, confident, street-adjacent authenticity.",
+      "anchorPromptBlock": "[UGC · trust led] medium close up framing with soft wrapping light and dynamic visual rhythm · relatable creator energy and spontaneous framing · light texture suggestion · activating trust + ritual · scroll-stopped by close up detail · product presented as hero product. Best for: meta ads. Campaign roles: conversion, trust.",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "deformed hands",
+        "six fingers",
+        "floating fingers",
+        "distorted wrists",
+        "readable text on cups",
+        "legible logo"
+      ],
+      "humanRules": {
+        "humanRequired": true,
+        "preferredHumanRole": "hand_model"
+      },
+      "productRules": {
+        "productRole": "hero_product",
+        "identityRule": "Mantener identidad del producto del brief. Visibilidad clara en 1 segundo."
+      },
+      "sourceImageCount": 3
+    },
+    {
+      "id": "FAMILY_EDITORIAL_CLOSE_RANGE_ATMOSPHERE_AUTHORITY_STATUS",
+      "name": "AUTHORITY STATUS · EDITORIAL · Primer plano / Medio-cercano",
+      "compatibleModoVisual": "editorial",
+      "definition": "[AUTHORITY STATUS] Familia EDITORIAL — Primer plano / Medio-cercano, atmósfera / luz / textura. Función comercial: authority status. 2 imagenes.",
+      "strategicSummary": "Arquetipo comercial: AUTHORITY STATUS. Activa social_dominance + exclusivity_signal en etapa awareness. Canales: editorial_banner, instagram_feed.",
+      "subfamilies": [
+        {
+          "id": "editorial_lifestyle_scene",
+          "label": "editorial lifestyle scene",
+          "imageCount": 2,
+          "campaignHint": "Mundo de marca construido. Para brand campaigns y awareness."
+        }
+      ],
+      "commercialIntentDNA": {
+        "primaryIntent": "authority_status",
+        "secondaryIntent": "atmospheric_world",
+        "purchaseStages": [
+          "awareness"
+        ],
+        "visualRoles": [
+          "hook",
+          "brand_builder",
+          "detail_revealer"
+        ],
+        "psychologicalMechanisms": [
+          "social_dominance",
+          "exclusivity_signal",
+          "prestige_association",
+          "dominance",
+          "trust",
+          "brand_immersion"
+        ],
+        "narrativeBehavior": "static_worship",
+        "attentionMechanism": "color_impact",
+        "intentDistribution": [
+          {
+            "intent": "authority_status",
+            "count": 1
+          },
+          {
+            "intent": "atmospheric_world",
+            "count": 1
+          }
+        ]
+      },
+      "intelligenceProfile": {
+        "trustScore": 49,
+        "luxuryScore": 48,
+        "tactileScore": 54,
+        "trainingValue": 81
+      },
+      "psychologicalMechanisms": [
+        "dominance",
+        "trust",
+        "social_proof",
+        "aspiration",
+        "premium_perception",
+        "ritual"
+      ],
+      "campaignRoles": {
+        "recommendedRoles": [
+          "hook",
+          "detail"
+        ],
+        "hookStrength": 80,
+        "trustStrength": 62,
+        "conversionStrength": 49
+      },
+      "channelFit": {
+        "recommendedChannels": [
+          "editorial_banner",
+          "instagram_feed"
+        ],
+        "tiktok": 64,
+        "instagram_feed": 88,
+        "meta_ads": 75,
+        "pdp": 48
+      },
+      "bestForProductTypes": [],
+      "bestForObjectives": [
+        "trust",
+        "status"
+      ],
+      "bestForChannels": [
+        "editorial_banner",
+        "instagram_feed"
+      ],
+      "visualDirectives": [
+        "Mundo de marca construido. Para brand campaigns y awareness."
+      ],
+      "blendDirective": "[EDITORIAL · tactile led] medium close up framing with directional hard light and dynamic visual rhythm · light UGC naturalness · light aspirational finish · sensory material cues and product touch emphasis · activating aspiration + dominance · scroll-stopped by color contrast · product presented as hero product. Best for: editorial banner, instagram feed. Campaign roles: hook, detail.",
+      "avoid": [
+        "Evitar: brand_logo_text_risk: The phone screen displays a clearly readable brand name and full interface text including rights categories — reproduction in AI generation would constitute direct IP and potentially sensitive content replication",
+        "Evitar: label_typography_risk: The screen typography is highly legible and specific — any AI generation must use entirely placeholder or fictional text on device screens",
+        "Evitar: product_identity_risk: Specific smartphone model form factor is recognizable — AI generation should use generic device silhouette",
+        "Evitar: over_editorialization_risk: The hard shadow and hyper-saturated orange background may not replicate organically in AI generation without explicit lighting control prompts",
+        "Evitar: brand_logo_text_risk: A recognizable lifestyle magazine title is clearly legible on the cover — reproducing this in AI generation constitutes IP risk."
+      ],
+      "promptBlock": "Editorial product-held hero shot: a single hand grips a modern touchscreen smartphone at a slight forward angle, held at mid-frame. The phone screen faces the camera displaying bold, stacked white typographic content on a dark background — text is non-specific and placeholder in nature. The background is a vivid, flat, high-saturation warm color — intense orange or red-adjacent. A single hard directional light source from upper-left casts a strong, clean shadow of both the hand and phone directly onto the background, creating a graphic shadow silhouette that nearly doubles the visual footprint of the subject. At upper right, a soft partial head shadow from off-frame person adds implied human presence. Composition is vertical. No face visible. Mood is urgent, civic, bold, empowering. Shot on medium-format editorial camera. No brand identifiers, no readable screen text.",
+      "anchorPromptBlock": "[EDITORIAL · tactile led] medium close up framing with directional hard light and dynamic visual rhythm · light UGC naturalness · light aspirational finish · sensory material cues and product touch emphasis · activating aspiration + dominance · scroll-stopped by color contrast · product presented as hero product. Best for: editorial banner, instagram feed. Campaign roles: hook, detail.",
+      "negativePromptHints": [
+        "no readable brand names on screen",
+        "no identifiable smartphone manufacturer logos",
+        "no legible interface text",
+        "no specific civic or political messaging",
+        "no realistic logo reproduction",
+        "no photo-real screen content",
+        "no over-smoothed skin",
+        "no floating or distorted fingers"
+      ],
+      "humanRules": {
+        "humanRequired": true,
+        "preferredHumanRole": "hand_model"
+      },
+      "productRules": {
+        "productRole": "hero_product",
+        "identityRule": "Mantener identidad del producto del brief. Visibilidad clara en 1 segundo."
+      },
+      "sourceImageCount": 2
+    }
+  ],
+  "anchorDecisionRules": [
+    {
+      "when": {
+        "objective": "soft_premium"
+      },
+      "anchorA_ugc": {
+        "visualBankId": "FAMILY_UGC_CLOSE_RANGE_BALANCED_TRUST_HUMANIZATION",
+        "direction": "Arquetipo comercial: TRUST HUMANIZATION. Activa social_proof + creator_closeness en etapa consideration. Canales: tiktok, meta_ads."
+      },
+      "anchorB_editorial": {
+        "visualBankId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+        "direction": "Arquetipo comercial: PRODUCT WORSHIP. Activa object_desire + visual_possession en etapa awareness. Canales: editorial_banner, instagram_feed."
+      }
+    },
+    {
+      "when": {
+        "objective": "status"
+      },
+      "anchorA_ugc": {
+        "visualBankId": "FAMILY_UGC_PRODUCT_HERO_RANGE_BALANCED_PRODUCT_WORSHIP",
+        "direction": "Arquetipo comercial: PRODUCT WORSHIP. Activa object_desire + visual_possession en etapa awareness. Canales: instagram_stories, meta_ads."
+      },
+      "anchorB_editorial": {
+        "visualBankId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+        "direction": "Arquetipo comercial: PRODUCT WORSHIP. Activa object_desire + visual_possession en etapa awareness. Canales: editorial_banner, instagram_feed."
+      }
+    },
+    {
+      "when": {
+        "objective": "sensory_texture"
+      },
+      "anchorA_ugc": {
+        "visualBankId": "FAMILY_UGC_CLOSE_RANGE_BALANCED_TRUST_HUMANIZATION",
+        "direction": "Arquetipo comercial: TRUST HUMANIZATION. Activa social_proof + creator_closeness en etapa consideration. Canales: tiktok, meta_ads."
+      },
+      "anchorB_editorial": {
+        "visualBankId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+        "direction": "Arquetipo comercial: PRODUCT WORSHIP. Activa object_desire + visual_possession en etapa awareness. Canales: editorial_banner, instagram_feed."
+      }
+    },
+    {
+      "when": {
+        "objective": "playfulness"
+      },
+      "anchorA_ugc": {
+        "visualBankId": "FAMILY_UGC_CLOSE_RANGE_BALANCED_TRUST_HUMANIZATION",
+        "direction": "Arquetipo comercial: TRUST HUMANIZATION. Activa social_proof + creator_closeness en etapa consideration. Canales: tiktok, meta_ads."
+      },
+      "anchorB_editorial": {
+        "visualBankId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+        "direction": "Arquetipo comercial: PRODUCT WORSHIP. Activa object_desire + visual_possession en etapa awareness. Canales: editorial_banner, instagram_feed."
+      }
+    },
+    {
+      "when": {
+        "objective": "luxury"
+      },
+      "anchorA_ugc": {
+        "visualBankId": "UGC_DEFAULT",
+        "direction": "Modo UGC genérico."
+      },
+      "anchorB_editorial": {
+        "visualBankId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+        "direction": "Arquetipo comercial: PRODUCT WORSHIP. Activa object_desire + visual_possession en etapa awareness. Canales: editorial_banner, instagram_feed."
+      }
+    },
+    {
+      "when": {
+        "objective": "desire"
+      },
+      "anchorA_ugc": {
+        "visualBankId": "UGC_DEFAULT",
+        "direction": "Modo UGC genérico."
+      },
+      "anchorB_editorial": {
+        "visualBankId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+        "direction": "Arquetipo comercial: PRODUCT WORSHIP. Activa object_desire + visual_possession en etapa awareness. Canales: editorial_banner, instagram_feed."
+      }
+    },
+    {
+      "when": {
+        "objective": "freshness"
+      },
+      "anchorA_ugc": {
+        "visualBankId": "UGC_DEFAULT",
+        "direction": "Modo UGC genérico."
+      },
+      "anchorB_editorial": {
+        "visualBankId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+        "direction": "Arquetipo comercial: PRODUCT WORSHIP. Activa object_desire + visual_possession en etapa awareness. Canales: editorial_banner, instagram_feed."
+      }
+    },
+    {
+      "when": {
+        "objective": "clean_beauty"
+      },
+      "anchorA_ugc": {
+        "visualBankId": "FAMILY_UGC_CLOSE_RANGE_BALANCED_TRUST_HUMANIZATION",
+        "direction": "Arquetipo comercial: TRUST HUMANIZATION. Activa social_proof + creator_closeness en etapa consideration. Canales: tiktok, meta_ads."
+      },
+      "anchorB_editorial": {
+        "visualBankId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+        "direction": "Arquetipo comercial: PRODUCT WORSHIP. Activa object_desire + visual_possession en etapa awareness. Canales: editorial_banner, instagram_feed."
+      }
+    },
+    {
+      "when": {
+        "objective": "product_clarity"
+      },
+      "anchorA_ugc": {
+        "visualBankId": "FAMILY_UGC_CLOSE_RANGE_BALANCED_TRUST_HUMANIZATION",
+        "direction": "Arquetipo comercial: TRUST HUMANIZATION. Activa social_proof + creator_closeness en etapa consideration. Canales: tiktok, meta_ads."
+      },
+      "anchorB_editorial": {
+        "visualBankId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+        "direction": "Arquetipo comercial: PRODUCT WORSHIP. Activa object_desire + visual_possession en etapa awareness. Canales: editorial_banner, instagram_feed."
+      }
+    },
+    {
+      "when": {
+        "objective": "high_energy"
+      },
+      "anchorA_ugc": {
+        "visualBankId": "UGC_DEFAULT",
+        "direction": "Modo UGC genérico."
+      },
+      "anchorB_editorial": {
+        "visualBankId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+        "direction": "Arquetipo comercial: PRODUCT WORSHIP. Activa object_desire + visual_possession en etapa awareness. Canales: editorial_banner, instagram_feed."
+      }
+    },
+    {
+      "when": {
+        "objective": "trust"
+      },
+      "anchorA_ugc": {
+        "visualBankId": "FAMILY_UGC_CLOSE_RANGE_BALANCED_TRUST_HUMANIZATION",
+        "direction": "Arquetipo comercial: TRUST HUMANIZATION. Activa social_proof + creator_closeness en etapa consideration. Canales: tiktok, meta_ads."
+      },
+      "anchorB_editorial": {
+        "visualBankId": "FAMILY_EDITORIAL_PRODUCT_HERO_RANGE_PRODUCT_PRODUCT_WORSHIP",
+        "direction": "Arquetipo comercial: PRODUCT WORSHIP. Activa object_desire + visual_possession en etapa awareness. Canales: editorial_banner, instagram_feed."
+      }
+    },
+    {
+      "when": {
+        "objective": "community"
+      },
+      "anchorA_ugc": {
+        "visualBankId": "UGC_DEFAULT",
+        "direction": "Modo UGC genérico."
+      },
+      "anchorB_editorial": {
+        "visualBankId": "FAMILY_EDITORIAL_PRODUCT_HERO_RANGE_PRODUCT_PRODUCT_WORSHIP",
+        "direction": "Arquetipo comercial: PRODUCT WORSHIP. Activa object_desire + visual_possession en etapa awareness. Canales: editorial_banner, instagram_feed."
+      }
+    },
+    {
+      "when": {
+        "objective": "routine"
+      },
+      "anchorA_ugc": {
+        "visualBankId": "FAMILY_UGC_CLOSE_RANGE_BALANCED_TRUST_HUMANIZATION",
+        "direction": "Arquetipo comercial: TRUST HUMANIZATION. Activa social_proof + creator_closeness en etapa consideration. Canales: tiktok, meta_ads."
+      },
+      "anchorB_editorial": {
+        "visualBankId": "FAMILY_EDITORIAL_MEDIUM_RANGE_BALANCED_ATMOSPHERIC_WORLD",
+        "direction": "Arquetipo comercial: ATMOSPHERIC WORLD. Activa brand_immersion + world_belonging en etapa consideration. Canales: instagram_feed, pdp."
+      }
+    },
+    {
+      "when": {
+        "objective": "conversion"
+      },
+      "anchorA_ugc": {
+        "visualBankId": "FAMILY_UGC_PRODUCT_HERO_RANGE_BALANCED_PRODUCT_WORSHIP",
+        "direction": "Arquetipo comercial: PRODUCT WORSHIP. Activa object_desire + visual_possession en etapa awareness. Canales: instagram_stories, meta_ads."
+      },
+      "anchorB_editorial": {
+        "visualBankId": "EDITORIAL_DEFAULT",
+        "direction": "Modo editorial genérico."
+      }
+    },
+    {
+      "when": {
+        "objective": "value_stack"
+      },
+      "anchorA_ugc": {
+        "visualBankId": "FAMILY_UGC_PRODUCT_HERO_RANGE_BALANCED_PRODUCT_WORSHIP",
+        "direction": "Arquetipo comercial: PRODUCT WORSHIP. Activa object_desire + visual_possession en etapa awareness. Canales: instagram_stories, meta_ads."
+      },
+      "anchorB_editorial": {
+        "visualBankId": "EDITORIAL_DEFAULT",
+        "direction": "Modo editorial genérico."
+      }
+    },
+    {
+      "when": {
+        "objective": "proof"
+      },
+      "anchorA_ugc": {
+        "visualBankId": "FAMILY_UGC_PRODUCT_HERO_RANGE_BALANCED_PRODUCT_WORSHIP",
+        "direction": "Arquetipo comercial: PRODUCT WORSHIP. Activa object_desire + visual_possession en etapa awareness. Canales: instagram_stories, meta_ads."
+      },
+      "anchorB_editorial": {
+        "visualBankId": "EDITORIAL_DEFAULT",
+        "direction": "Modo editorial genérico."
+      }
+    }
+  ],
+  "pieceRoleRules": [
+    {
+      "pieceRole": "detail",
+      "directive": "Comunicar ingrediente, textura o diferencial técnico. Señales táctiles y de material.",
+      "recommendedFamilies": [
+        {
+          "familyId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+          "style": "editorial"
+        },
+        {
+          "familyId": "FAMILY_EDITORIAL_PRODUCT_HERO_RANGE_PRODUCT_PRODUCT_WORSHIP",
+          "style": "editorial"
+        },
+        {
+          "familyId": "FAMILY_UGC_CLOSE_RANGE_BALANCED_TRUST_HUMANIZATION",
+          "style": "ugc"
+        }
+      ]
+    },
+    {
+      "pieceRole": "retention",
+      "directive": "Construir ritual, hábito y pertenencia. Activar mecanismos de intimidad y comunidad.",
+      "recommendedFamilies": [
+        {
+          "familyId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+          "style": "editorial"
+        }
+      ]
+    },
+    {
+      "pieceRole": "hook",
+      "directive": "Máxima atención en 0–2 segundos. Priorizar scroll-stop mechanism y dominancia visual clara.",
+      "recommendedFamilies": [
+        {
+          "familyId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+          "style": "editorial"
+        },
+        {
+          "familyId": "FAMILY_EDITORIAL_PRODUCT_HERO_RANGE_PRODUCT_PRODUCT_WORSHIP",
+          "style": "editorial"
+        },
+        {
+          "familyId": "FAMILY_UGC_CLOSE_RANGE_BALANCED_TRUST_HUMANIZATION",
+          "style": "ugc"
+        }
+      ]
+    },
+    {
+      "pieceRole": "conversion",
+      "directive": "Producto legible en 1 segundo. CTA implícita clara. Beneficio principal visible.",
+      "recommendedFamilies": [
+        {
+          "familyId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+          "style": "editorial"
+        },
+        {
+          "familyId": "FAMILY_EDITORIAL_PRODUCT_HERO_RANGE_PRODUCT_PRODUCT_WORSHIP",
+          "style": "editorial"
+        },
+        {
+          "familyId": "FAMILY_UGC_PRODUCT_HERO_RANGE_BALANCED_PRODUCT_WORSHIP",
+          "style": "ugc"
+        }
+      ]
+    },
+    {
+      "pieceRole": "trust",
+      "directive": "Activar señales de credibilidad, autenticidad UGC y social proof. Evitar exceso de perfección.",
+      "recommendedFamilies": [
+        {
+          "familyId": "FAMILY_EDITORIAL_PRODUCT_HERO_RANGE_PRODUCT_PRODUCT_WORSHIP",
+          "style": "editorial"
+        },
+        {
+          "familyId": "FAMILY_UGC_CLOSE_RANGE_BALANCED_TRUST_HUMANIZATION",
+          "style": "ugc"
+        },
+        {
+          "familyId": "FAMILY_UGC_PRODUCT_HERO_RANGE_BALANCED_PRODUCT_WORSHIP",
+          "style": "ugc"
+        }
+      ]
+    }
+  ],
+  "channelRules": [
+    {
+      "channel": "editorial_banner",
+      "directive": "Dirección artística máxima. Señales de lujo y prestige. Mínimo producto, máximo mundo.",
+      "recommendedFamilies": [
+        {
+          "familyId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+          "style": "editorial"
+        },
+        {
+          "familyId": "FAMILY_EDITORIAL_PRODUCT_HERO_RANGE_PRODUCT_PRODUCT_WORSHIP",
+          "style": "editorial"
+        },
+        {
+          "familyId": "FAMILY_EDITORIAL_MEDIUM_RANGE_BALANCED_ATMOSPHERIC_WORLD",
+          "style": "editorial"
+        }
+      ]
+    },
+    {
+      "channel": "instagram_feed",
+      "directive": "Composición cuidada. Jerarquía visual clara. Funciona en thumbnail. Estético y legible.",
+      "recommendedFamilies": [
+        {
+          "familyId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+          "style": "editorial"
+        },
+        {
+          "familyId": "FAMILY_EDITORIAL_PRODUCT_HERO_RANGE_PRODUCT_PRODUCT_WORSHIP",
+          "style": "editorial"
+        },
+        {
+          "familyId": "FAMILY_UGC_PRODUCT_HERO_RANGE_BALANCED_PRODUCT_WORSHIP",
+          "style": "ugc"
+        }
+      ]
+    },
+    {
+      "channel": "pdp",
+      "directive": "Detalle técnico y sensorial. Señales táctiles. Producto como héroe. Alta claridad.",
+      "recommendedFamilies": [
+        {
+          "familyId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+          "style": "editorial"
+        },
+        {
+          "familyId": "FAMILY_EDITORIAL_PRODUCT_HERO_RANGE_PRODUCT_PRODUCT_WORSHIP",
+          "style": "editorial"
+        },
+        {
+          "familyId": "FAMILY_UGC_PRODUCT_HERO_RANGE_BALANCED_PRODUCT_WORSHIP",
+          "style": "ugc"
+        }
+      ]
+    },
+    {
+      "channel": "meta_ads",
+      "directive": "Producto legible en 1s. Señal comercial clara. Scroll-stop para cold audiences.",
+      "recommendedFamilies": [
+        {
+          "familyId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+          "style": "editorial"
+        },
+        {
+          "familyId": "FAMILY_EDITORIAL_PRODUCT_HERO_RANGE_PRODUCT_PRODUCT_WORSHIP",
+          "style": "editorial"
+        },
+        {
+          "familyId": "FAMILY_UGC_CLOSE_RANGE_BALANCED_TRUST_HUMANIZATION",
+          "style": "ugc"
+        }
+      ]
+    },
+    {
+      "channel": "instagram_stories",
+      "directive": "Impacto inmediato. Producto visible rápido. Puede ser más crudo y directo que feed.",
+      "recommendedFamilies": [
+        {
+          "familyId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+          "style": "editorial"
+        },
+        {
+          "familyId": "FAMILY_UGC_PRODUCT_HERO_RANGE_BALANCED_PRODUCT_WORSHIP",
+          "style": "ugc"
+        }
+      ]
+    },
+    {
+      "channel": "website_hero",
+      "directive": "Señal de marca fuerte. Composición aspiracional. Jerarquía visual premium.",
+      "recommendedFamilies": [
+        {
+          "familyId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+          "style": "editorial"
+        },
+        {
+          "familyId": "FAMILY_EDITORIAL_PRODUCT_HERO_RANGE_PRODUCT_PRODUCT_WORSHIP",
+          "style": "editorial"
+        }
+      ]
+    },
+    {
+      "channel": "tiktok",
+      "directive": "Scroll-stop en 0–1s. UGC o movimiento implícito. Formato vertical. Autenticidad sobre perfección.",
+      "recommendedFamilies": [
+        {
+          "familyId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+          "style": "editorial"
+        },
+        {
+          "familyId": "FAMILY_UGC_CLOSE_RANGE_BALANCED_TRUST_HUMANIZATION",
+          "style": "ugc"
+        },
+        {
+          "familyId": "FAMILY_UGC_PRODUCT_HERO_RANGE_BALANCED_PRODUCT_WORSHIP",
+          "style": "ugc"
+        }
+      ]
+    }
+  ],
+  "riskLockRules": [
+    {
+      "riskType": "hand_anatomy_risk: Fingers gripping curved paper in mid-motion are anatomically complex — AI generation risks distorting finger count, knuckle geometry, or nail rendering under page-curl pressure",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: hand_anatomy_risk: Fingers gripping curved paper in mid-motion are anatomically complex — AI generation risks distorting finger count, knuckle geometry, or nail rendering under page-curl pressure",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "product_identity_risk: The publication's interior page layout with grids and text blocks requires consistent typographic fidelity across regenerations",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: product_identity_risk: The publication's interior page layout with grids and text blocks requires consistent typographic fidelity across regenerations",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "brand_logo_text_risk: Small readable text and layout elements visible on the open publication pages may contain protected or identifiable content",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: brand_logo_text_risk: Small readable text and layout elements visible on the open publication pages may contain protected or identifiable content",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "jewelry_detail_risk: Multiple stacked rings with distinct finishes and a metal-band watch require precise detail rendering — AI risks merging or misshaping elements",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: jewelry_detail_risk: Multiple stacked rings with distinct finishes and a metal-band watch require precise detail rendering — AI risks merging or misshaping elements",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "label_typography_risk: Text columns and graphic blocks on visible publication pages risk generating illegible or hallucinated pseudo-text",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: label_typography_risk: Text columns and graphic blocks on visible publication pages risk generating illegible or hallucinated pseudo-text",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "brand_logo_text_risk: Logotype and product name text visible on every bottle and in headline — any AI regeneration would hallucinate or corrupt these",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: brand_logo_text_risk: Logotype and product name text visible on every bottle and in headline — any AI regeneration would hallucinate or corrupt these",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "label_typography_risk: Bold typographic labels on all bottles at multiple scales — AI generation consistently fails to reproduce legible or consistent label text across a product array",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: label_typography_risk: Bold typographic labels on all bottles at multiple scales — AI generation consistently fails to reproduce legible or consistent label text across a product array",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "product_identity_risk: Identical pump bottle repeated 12+ times at varying sizes and angles — maintaining product fidelity and consistency across the entire array is an extreme AI generation challenge",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: product_identity_risk: Identical pump bottle repeated 12+ times at varying sizes and angles — maintaining product fidelity and consistency across the entire array is an extreme AI generation challenge",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "inconsistent_product_risk: Forced perspective array means each bottle appears at different scale and angle — AI models frequently introduce shape distortion or pump head inconsistency across the sequence",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: inconsistent_product_risk: Forced perspective array means each bottle appears at different scale and angle — AI models frequently introduce shape distortion or pump head inconsistency across the sequence",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "excessive_perfection_risk: Studio-precise shadow geometry and diagonal alignment are mathematically precise — AI generation often breaks the geometric regularity of repeated object arrays",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: excessive_perfection_risk: Studio-precise shadow geometry and diagonal alignment are mathematically precise — AI generation often breaks the geometric regularity of repeated object arrays",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "brand_logo_text_risk: Multiple products display clearly readable brand name and label text across all five items — reproduction in AI generation would require complete label design replacement",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: brand_logo_text_risk: Multiple products display clearly readable brand name and label text across all five items — reproduction in AI generation would require complete label design replacement",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "product_identity_risk: Five distinct SKUs with specific shapes, label colors, and cap types must be reproduced accurately; pump bottle shape, foil pouch, and squeeze tubes are complex forms prone to AI distortion",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: product_identity_risk: Five distinct SKUs with specific shapes, label colors, and cap types must be reproduced accurately; pump bottle shape, foil pouch, and squeeze tubes are complex forms prone to AI distortion",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "hand_anatomy_risk: Hand gripping tube near face at an elevated angle may produce finger count errors or unnatural wrist articulation in AI generation",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: hand_anatomy_risk: Hand gripping tube near face at an elevated angle may produce finger count errors or unnatural wrist articulation in AI generation",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "jewelry_detail_risk: Gold chain necklace and bracelet with fine detail are prone to AI hallucination — doubling, melting, or incorrect link rendering",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: jewelry_detail_risk: Gold chain necklace and bracelet with fine detail are prone to AI hallucination — doubling, melting, or incorrect link rendering",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "hand_anatomy_risk: Four disembodied hands entering from frame edges at various angles — AI generation frequently produces extra fingers, merged knuckles, unnatural wrist angles or mismatched skin tones across multiple isolated hands",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: hand_anatomy_risk: Four disembodied hands entering from frame edges at various angles — AI generation frequently produces extra fingers, merged knuckles, unnatural wrist angles or mismatched skin tones across multiple isolated hands",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "brand_logo_text_risk: Sale percentage text and emoji overlay are readable promotional copy — reproduction in AI generation would require neutralizing or replacing with generic placeholder text",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: brand_logo_text_risk: Sale percentage text and emoji overlay are readable promotional copy — reproduction in AI generation would require neutralizing or replacing with generic placeholder text",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "product_identity_risk: Exotic-texture sneaker with distinctive scale pattern is a highly specific product shape — AI generation may hallucinate incorrect texture topology, misplace lace holes, or distort platform sole proportions",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: product_identity_risk: Exotic-texture sneaker with distinctive scale pattern is a highly specific product shape — AI generation may hallucinate incorrect texture topology, misplace lace holes, or distort platform sole proportions",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "inconsistent_product_risk: Stacked box tower with multiple boxes of varying slight asymmetry may generate with inconsistent box counts, misaligned edges, or unrealistic physics stacking",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: inconsistent_product_risk: Stacked box tower with multiple boxes of varying slight asymmetry may generate with inconsistent box counts, misaligned edges, or unrealistic physics stacking",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "label_typography_risk: Overlaid promotional text with emoji is brand-associated and percentage-specific — direct reproduction creates IP and accuracy risk",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: label_typography_risk: Overlaid promotional text with emoji is brand-associated and percentage-specific — direct reproduction creates IP and accuracy risk",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "brand_logo_text_risk: Multiple clearly readable brand names, publication titles, and product labels are visible throughout the basket — high likelihood of unintended brand reproduction in AI-generated versions",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: brand_logo_text_risk: Multiple clearly readable brand names, publication titles, and product labels are visible throughout the basket — high likelihood of unintended brand reproduction in AI-generated versions",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "brand_logo_text_risk: Multiple supplement product labels with readable text and logos are clearly visible — AI generation must not reproduce protected label design or brand identity",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: brand_logo_text_risk: Multiple supplement product labels with readable text and logos are clearly visible — AI generation must not reproduce protected label design or brand identity",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "label_typography_risk: White labels on amber bottles contain specific typographic layout, product name hierarchy and color accent bars that are proprietary — replication risk is high",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: label_typography_risk: White labels on amber bottles contain specific typographic layout, product name hierarchy and color accent bars that are proprietary — replication risk is high",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "product_identity_risk: Amber glass supplement bottle with specific cap and label format must not be replicated with inaccurate proportions or label placement",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: product_identity_risk: Amber glass supplement bottle with specific cap and label format must not be replicated with inaccurate proportions or label placement",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "excessive_perfection_risk: Hyper-coordinated monochromatic pink styling may read as over-produced in UGC contexts, reducing believability",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: excessive_perfection_risk: Hyper-coordinated monochromatic pink styling may read as over-produced in UGC contexts, reducing believability",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "fake_ugc_behavior_risk: Scene is too styled to pass as genuine user-generated content — prop coordination and lighting betray editorial production",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: fake_ugc_behavior_risk: Scene is too styled to pass as genuine user-generated content — prop coordination and lighting betray editorial production",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "hand_anatomy_risk: Generating multiple hands holding 4–5 objects simultaneously is a critical AI anatomy challenge — finger count errors, unnatural grip positions, overlapping hand geometry and impossible wrist angles are highly probable",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: hand_anatomy_risk: Generating multiple hands holding 4–5 objects simultaneously is a critical AI anatomy challenge — finger count errors, unnatural grip positions, overlapping hand geometry and impossible wrist angles are highly probable",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "brand_logo_text_risk: Readable branded text and sustainability labels are visible on the cup surfaces — AI generation will hallucinate or distort text, requiring strict no-text or masked-text generation approach",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: brand_logo_text_risk: Readable branded text and sustainability labels are visible on the cup surfaces — AI generation will hallucinate or distort text, requiring strict no-text or masked-text generation approach",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "product_identity_risk: Kraft cup proportions, lid shape and cup-sleeve geometry must remain consistent across all units in the cluster — AI tends to vary product shape when generating multiples",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: product_identity_risk: Kraft cup proportions, lid shape and cup-sleeve geometry must remain consistent across all units in the cluster — AI tends to vary product shape when generating multiples",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "brand_logo_text_risk: The product label contains clearly visible brand name, product line name, numbered designation, size, and website URL — all readable at one second.",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: brand_logo_text_risk: The product label contains clearly visible brand name, product line name, numbered designation, size, and website URL — all readable at one second.",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "product_identity_risk: The specific product format (compact rounded bottle, label design, numbered product tier) is highly brand-distinctive and difficult to genericize without losing recognition.",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: product_identity_risk: The specific product format (compact rounded bottle, label design, numbered product tier) is highly brand-distinctive and difficult to genericize without losing recognition.",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "brand_logo_text_risk: The phone screen displays a clearly readable brand name and full interface text including rights categories — reproduction in AI generation would constitute direct IP and potentially sensitive content replication",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: brand_logo_text_risk: The phone screen displays a clearly readable brand name and full interface text including rights categories — reproduction in AI generation would constitute direct IP and potentially sensitive content replication",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "label_typography_risk: The screen typography is highly legible and specific — any AI generation must use entirely placeholder or fictional text on device screens",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: label_typography_risk: The screen typography is highly legible and specific — any AI generation must use entirely placeholder or fictional text on device screens",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "product_identity_risk: Specific smartphone model form factor is recognizable — AI generation should use generic device silhouette",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: product_identity_risk: Specific smartphone model form factor is recognizable — AI generation should use generic device silhouette",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "over_editorialization_risk: The hard shadow and hyper-saturated orange background may not replicate organically in AI generation without explicit lighting control prompts",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: over_editorialization_risk: The hard shadow and hyper-saturated orange background may not replicate organically in AI generation without explicit lighting control prompts",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    },
+    {
+      "riskType": "brand_logo_text_risk: A recognizable lifestyle magazine title is clearly legible on the cover — reproducing this in AI generation constitutes IP risk.",
+      "lockInstruction": "Aplicar estrategia de mitigación específica para: brand_logo_text_risk: A recognizable lifestyle magazine title is clearly legible on the cover — reproducing this in AI generation constitutes IP risk.",
+      "negativePromptHints": [
+        "extra fingers",
+        "fused fingers",
+        "distorted knuckles",
+        "deformed hand",
+        "floating rings",
+        "melted jewelry"
+      ]
+    }
+  ],
+  "performanceMemoryArchitecture": {
+    "status": "scaffold_ready",
+    "description": "Arquitectura lista para recibir datos de performance (CTR, saves, engagement) cuando estén disponibles.",
+    "families": [
+      {
+        "familyId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+        "performanceMemory": {
+          "familyId": "FAMILY_EDITORIAL_CLOSE_RANGE_BALANCED_PRODUCT_WORSHIP",
+          "performanceMemoryVersion": "1.0",
+          "status": "scaffold_ready",
+          "note": "Architecture ready. Connect to analytics layer when performance data becomes available.",
+          "metrics": {
+            "conversionRate": null,
+            "ctrAverage": null,
+            "saveRate": null,
+            "engagementScore": null,
+            "bestPerformingSubfamily": null,
+            "bestPerformingChannel": null,
+            "learningCycles": 0,
+            "lastUpdated": null
+          },
+          "performanceSignals": [],
+          "learningHistory": []
+        }
+      },
+      {
+        "familyId": "FAMILY_EDITORIAL_PRODUCT_HERO_RANGE_PRODUCT_PRODUCT_WORSHIP",
+        "performanceMemory": {
+          "familyId": "FAMILY_EDITORIAL_PRODUCT_HERO_RANGE_PRODUCT_PRODUCT_WORSHIP",
+          "performanceMemoryVersion": "1.0",
+          "status": "scaffold_ready",
+          "note": "Architecture ready. Connect to analytics layer when performance data becomes available.",
+          "metrics": {
+            "conversionRate": null,
+            "ctrAverage": null,
+            "saveRate": null,
+            "engagementScore": null,
+            "bestPerformingSubfamily": null,
+            "bestPerformingChannel": null,
+            "learningCycles": 0,
+            "lastUpdated": null
+          },
+          "performanceSignals": [],
+          "learningHistory": []
+        }
+      },
+      {
+        "familyId": "FAMILY_UGC_CLOSE_RANGE_BALANCED_TRUST_HUMANIZATION",
+        "performanceMemory": {
+          "familyId": "FAMILY_UGC_CLOSE_RANGE_BALANCED_TRUST_HUMANIZATION",
+          "performanceMemoryVersion": "1.0",
+          "status": "scaffold_ready",
+          "note": "Architecture ready. Connect to analytics layer when performance data becomes available.",
+          "metrics": {
+            "conversionRate": null,
+            "ctrAverage": null,
+            "saveRate": null,
+            "engagementScore": null,
+            "bestPerformingSubfamily": null,
+            "bestPerformingChannel": null,
+            "learningCycles": 0,
+            "lastUpdated": null
+          },
+          "performanceSignals": [],
+          "learningHistory": []
+        }
+      },
+      {
+        "familyId": "FAMILY_UGC_PRODUCT_HERO_RANGE_BALANCED_PRODUCT_WORSHIP",
+        "performanceMemory": {
+          "familyId": "FAMILY_UGC_PRODUCT_HERO_RANGE_BALANCED_PRODUCT_WORSHIP",
+          "performanceMemoryVersion": "1.0",
+          "status": "scaffold_ready",
+          "note": "Architecture ready. Connect to analytics layer when performance data becomes available.",
+          "metrics": {
+            "conversionRate": null,
+            "ctrAverage": null,
+            "saveRate": null,
+            "engagementScore": null,
+            "bestPerformingSubfamily": null,
+            "bestPerformingChannel": null,
+            "learningCycles": 0,
+            "lastUpdated": null
+          },
+          "performanceSignals": [],
+          "learningHistory": []
+        }
+      },
+      {
+        "familyId": "FAMILY_EDITORIAL_MEDIUM_RANGE_BALANCED_ATMOSPHERIC_WORLD",
+        "performanceMemory": {
+          "familyId": "FAMILY_EDITORIAL_MEDIUM_RANGE_BALANCED_ATMOSPHERIC_WORLD",
+          "performanceMemoryVersion": "1.0",
+          "status": "scaffold_ready",
+          "note": "Architecture ready. Connect to analytics layer when performance data becomes available.",
+          "metrics": {
+            "conversionRate": null,
+            "ctrAverage": null,
+            "saveRate": null,
+            "engagementScore": null,
+            "bestPerformingSubfamily": null,
+            "bestPerformingChannel": null,
+            "learningCycles": 0,
+            "lastUpdated": null
+          },
+          "performanceSignals": [],
+          "learningHistory": []
+        }
+      },
+      {
+        "familyId": "FAMILY_UGC_CLOSE_RANGE_PRODUCT_PLAYFUL_ABUNDANCE",
+        "performanceMemory": {
+          "familyId": "FAMILY_UGC_CLOSE_RANGE_PRODUCT_PLAYFUL_ABUNDANCE",
+          "performanceMemoryVersion": "1.0",
+          "status": "scaffold_ready",
+          "note": "Architecture ready. Connect to analytics layer when performance data becomes available.",
+          "metrics": {
+            "conversionRate": null,
+            "ctrAverage": null,
+            "saveRate": null,
+            "engagementScore": null,
+            "bestPerformingSubfamily": null,
+            "bestPerformingChannel": null,
+            "learningCycles": 0,
+            "lastUpdated": null
+          },
+          "performanceSignals": [],
+          "learningHistory": []
+        }
+      },
+      {
+        "familyId": "FAMILY_EDITORIAL_CLOSE_RANGE_ATMOSPHERE_AUTHORITY_STATUS",
+        "performanceMemory": {
+          "familyId": "FAMILY_EDITORIAL_CLOSE_RANGE_ATMOSPHERE_AUTHORITY_STATUS",
+          "performanceMemoryVersion": "1.0",
+          "status": "scaffold_ready",
+          "note": "Architecture ready. Connect to analytics layer when performance data becomes available.",
+          "metrics": {
+            "conversionRate": null,
+            "ctrAverage": null,
+            "saveRate": null,
+            "engagementScore": null,
+            "bestPerformingSubfamily": null,
+            "bestPerformingChannel": null,
+            "learningCycles": 0,
+            "lastUpdated": null
+          },
+          "performanceSignals": [],
+          "learningHistory": []
+        }
+      }
+    ]
+  }
+}
