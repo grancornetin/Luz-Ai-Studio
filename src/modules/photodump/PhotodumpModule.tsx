@@ -231,7 +231,7 @@ const PhotodumpModule: React.FC = () => {
   // recipes/outfitMultiLook/anchorFixed.ts y recipes/outfitRevealBasic/index.ts),
   // así que en ninguna de las dos hay imagen extra que cobrar: son
   // exactamente `count` generaciones reales.
-  const imageCreditCost = (recipe === 'outfit_multi_look' || recipe === 'outfit_reveal_basic')
+  const imageCreditCost = (recipe === 'outfit_multi_look' || recipe === 'outfit_reveal_basic' || recipe === 'outfit_night_out')
     ? count * CREDITS_PER_IMAGE
     : (count + 1) * CREDITS_PER_IMAGE;
   const insufficient    = !isAdmin && (credits?.available ?? 0) < imageCreditCost;
@@ -492,7 +492,7 @@ const PhotodumpModule: React.FC = () => {
       // (mismo shot, fusionado) — no sembrar el preview con él aparte, o el loop
       // de abajo lo vuelve a agregar al hacer push, duplicando la imagen 1 en el
       // panel de progreso (bug real reportado en producción).
-      const ref0IsFirstShot = recipe === 'outfit_multi_look' || recipe === 'outfit_reveal_basic';
+      const ref0IsFirstShot = recipe === 'outfit_multi_look' || recipe === 'outfit_reveal_basic' || recipe === 'outfit_night_out';
       setPartialImages(ref0IsFirstShot ? [] : [ref0Url]);
 
       // Debug: acumular prompts de cada shot (solo para admins)
@@ -1486,7 +1486,7 @@ const PhotodumpModule: React.FC = () => {
     // imagen, ver recipes/outfitMultiLook/anchorFixed.ts). outfit_reveal_basic:
     // el ancla ES shotUrls[0] (mirror_check, ver recipes/outfitRevealBasic/index.ts).
     // En ninguna de las dos se agrega aparte, para no duplicarla en el set guardado.
-    const anchorImage = (anchorUrl && recipe !== 'outfit_multi_look' && recipe !== 'outfit_reveal_basic') ? [{
+    const anchorImage = (anchorUrl && recipe !== 'outfit_multi_look' && recipe !== 'outfit_reveal_basic' && recipe !== 'outfit_night_out') ? [{
       imageUrl: anchorUrl,
       moment:   'Imagen ancla',
       caption:  '',
@@ -1760,7 +1760,7 @@ const PhotodumpModule: React.FC = () => {
                             muestran aparte: el ancla ES el primer shot real (look 1 / mirror_check),
                             ya visible en su propio slot del grid de abajo (misma imagen, sin
                             generación extra). */}
-                        {recipe !== 'outfit_multi_look' && recipe !== 'outfit_reveal_basic' && partialImages[0] && (
+                        {recipe !== 'outfit_multi_look' && recipe !== 'outfit_reveal_basic' && recipe !== 'outfit_night_out' && partialImages[0] && (
                           <div
                             style={{ aspectRatio: DESTINO_META[destino].aspectRatio }}
                             className="relative rounded-2xl overflow-hidden fade-in shadow-md border-2 border-violet-300"
@@ -1772,7 +1772,7 @@ const PhotodumpModule: React.FC = () => {
                             </div>
                           </div>
                         )}
-                        {recipe !== 'outfit_multi_look' && recipe !== 'outfit_reveal_basic' && !partialImages[0] && progressStepIndex >= 1 && (
+                        {recipe !== 'outfit_multi_look' && recipe !== 'outfit_reveal_basic' && recipe !== 'outfit_night_out' && !partialImages[0] && progressStepIndex >= 1 && (
                           <div
                             style={{ aspectRatio: DESTINO_META[destino].aspectRatio }}
                             className="relative rounded-2xl overflow-hidden border-2 border-violet-300 bg-violet-50 animate-pulse"
@@ -1787,7 +1787,7 @@ const PhotodumpModule: React.FC = () => {
                           // primer shot real (el ancla fusionada, sin generación aparte) — sin
                           // offset. El resto de recetas reserva el índice 0 para el ancla mostrada
                           // en su propio recuadro arriba.
-                          const shotIndexInArray = (recipe === 'outfit_multi_look' || recipe === 'outfit_reveal_basic') ? i : i + 1;
+                          const shotIndexInArray = (recipe === 'outfit_multi_look' || recipe === 'outfit_reveal_basic' || recipe === 'outfit_night_out') ? i : i + 1;
                           const shotUrl  = partialImages[shotIndexInArray] ?? null;
                           const imgUrl   = shotUrl ?? '';
                           const done     = !!shotUrl;

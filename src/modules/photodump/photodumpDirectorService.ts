@@ -100,6 +100,12 @@ import {
 import {
   buildOutfitRevealBasicDirectives, generateOutfitRevealBasicREF0, generateOutfitRevealBasicShot,
 } from './recipes/outfitRevealBasic';
+// outfit_night_out — receta propia, 3 shots fijos de preparación (presentation/
+// tryon_detail/mirror_check) + banco rotable de "momentos de noche" según el
+// nivel elegido (corto/completo/extendido). Ver recipes/outfitNightOut/index.ts.
+import {
+  buildOutfitNightOutDirectives, generateOutfitNightOutREF0, generateOutfitNightOutShot,
+} from './recipes/outfitNightOut';
 
 initHpiService();
 
@@ -990,6 +996,29 @@ export async function buildPhotodumpSessionPlan(
     };
   }
 
+  // outfit_night_out — motor propio, 1 shot de preparación fijo (mirror_check,
+  // siempre presente) + shots opcionales de preparación (presentation/
+  // tryon_detail, solo Completo/Extendido) + N momentos de noche rotados del
+  // banco según el nivel elegido — no pasa por buildStoryDirectives.
+  if (recipe === 'outfit_night_out' && refs) {
+    const directives = buildOutfitNightOutDirectives(refs, basePrompt);
+    const shots: PhotodumpShotDirective[] = directives.map((d, i) => ({
+      ...d,
+      arcPosition: i + 1,
+      aspectRatio: getAspectRatio(destino),
+    }));
+    const sessionFamilies = { storySupport: [], creatorAesthetic: [] };
+    return {
+      narrative,
+      protagonist,
+      destino,
+      storyTheme: `${NARRATIVE_META[narrative].label} · ${basePrompt.slice(0, 50)}`,
+      shots,
+      assignedFamilies: [],
+      sessionFamilies,
+    };
+  }
+
   const isOutfitRecipe = recipe === 'outfit_check' || recipe === 'outfit_haul' || recipe === 'outfit_week';
   const presentationStyle = isOutfitRecipe
     ? resolveOutfitPresentationStyle(basePrompt, refs)
@@ -1151,6 +1180,10 @@ export async function generatePhotodumpREF0(
 
   if (recipe === 'outfit_reveal_basic') {
     return generateOutfitRevealBasicREF0(refs, destino, sessionParams);
+  }
+
+  if (recipe === 'outfit_night_out') {
+    return generateOutfitNightOutREF0(refs, destino, basePrompt, sessionParams);
   }
 
   const aspectInstr = getAspectInstruction(destino);
@@ -2256,6 +2289,16 @@ export async function generatePhotodumpShot(
   if (recipe === 'outfit_reveal_basic') {
     const result = await generateOutfitRevealBasicShot(
       shot, refs, destino, sessionParams, shot.arcPosition - 1, totalShots,
+    );
+    return { imageUrl: result.imageUrl, prompt: result.prompt, refsCount: result.refsCount };
+  }
+
+  // outfit_night_out — motor propio (ver recipes/outfitNightOut/). Cada shot
+  // (fijo de preparación o del banco de momentos de noche) está identificado
+  // en shot.outfitNightOutPlan.
+  if (recipe === 'outfit_night_out') {
+    const result = await generateOutfitNightOutShot(
+      shot, refs, destino, basePrompt, sessionParams, shot.arcPosition - 1, totalShots,
     );
     return { imageUrl: result.imageUrl, prompt: result.prompt, refsCount: result.refsCount };
   }

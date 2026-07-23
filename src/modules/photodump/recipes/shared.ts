@@ -81,6 +81,8 @@ export interface PhotodumpShotDirective {
   outfitMultiLookPlan?:      import('./outfitMultiLook/types').OutfitMultiLookShotPlan;
   // outfit_reveal_basic: qué shot fijo del pool de 3 corresponde a este shot
   outfitRevealBasicPlan?:    import('./outfitRevealBasic/types').OutfitRevealBasicShotPlan;
+  // outfit_night_out: qué shot (fijo o del banco de momentos de noche) corresponde a este shot
+  outfitNightOutPlan?:       import('./outfitNightOut/types').OutfitNightOutShotPlan;
 }
 
 // Estilo visual de presentación para recetas outfit.

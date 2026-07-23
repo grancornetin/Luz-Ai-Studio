@@ -454,6 +454,7 @@ export type PhotodumpRecipe =
   | 'outfit_week'   // Persona + N outfits completos — variedad semanal o temática
   | 'outfit_multi_look' // Persona + N looks completos — semana, antes/ahora, calificar, viaje o ideas curadas
   | 'outfit_reveal_basic' // Persona + 1 outfit (N prendas combinadas) — 3 ángulos fijos: mirror check, POV, close-up
+  | 'outfit_night_out' // Persona + 1 outfit de noche — preparación, mirror check y el venue (bar/fiesta/restaurante)
   | 'day_in_life'   // Persona + escena + producto
   | 'product_haul'  // Persona + N productos — se prueban/usan uno por uno, con empaque opcional
   | 'bts'           // Producto/workspace + escena, nunca avatar
@@ -581,6 +582,16 @@ export const RECIPE_META: Record<PhotodumpRecipe, {
     narrative:   'character',
     protagonist: 'person',
   },
+  outfit_night_out: {
+    label:       'Look de noche',
+    description: 'El look completo para salir: preparación, mirror check y el venue.',
+    icon:        'Martini',
+    // producto: 'optional' habilita el slot ya usado por day_in_life para marcar una foto
+    // como "Acompañante" (mismo mecanismo, sin campo de UI nuevo).
+    refs:        { avatar: 'required', outfit: 'required', accesorios: 'none', producto: 'optional', empaque: 'none', escena: 'optional', escena_prueba: 'none', escena_destino: 'none' },
+    narrative:   'character',
+    protagonist: 'person',
+  },
   day_in_life: {
     label:       'Un día en mi vida',
     description: 'Contá tu día — un momento o varios (mañana, tarde, noche). Cada momento puede tener su propia escena.',
@@ -696,6 +707,9 @@ export interface PhotodumpRefs {
   // Paralelo al array de arriba — ids de MultiLookLookItem con los que cada
   // accesorio combina (many-to-many, declarado por el usuario con chips).
   curatedIdeasAccessoryLinks?: (string[] | null)[];
+  // outfit_night_out: nivel elegido por el usuario, determina cuántos y
+  // cuáles shots se generan (Corto=3, Completo=5, Extendido=7).
+  nightOutLevel?: 'corto' | 'completo' | 'extendido';
 }
 
 // ── Tipos modo libre ───────────────────────────────────────────

@@ -169,6 +169,7 @@ export const photodumpPresetAdapter: ModulePresetAdapter<PhotodumpPresetState> =
       outfit_week:  'Favoritos de la semana',
       outfit_multi_look: 'Varios looks',
       outfit_reveal_basic: 'Muestra un look',
+      outfit_night_out: 'Look de noche',
       unboxing:     'Unboxing',
       product_haul: 'Haul de productos',
       bts:          'BTS',

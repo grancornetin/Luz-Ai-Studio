@@ -100,6 +100,18 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
     }
   }, [recipe, count, onCount]);
 
+  // outfit_night_out: cantidad fija por nivel elegido (Corto=3, Completo=5,
+  // Extendido=7) — no hay selector +/- libre, ver recipes/outfitNightOut/levelResolver.ts.
+  const NIGHT_OUT_COUNT_BY_LEVEL: Record<'corto' | 'completo' | 'extendido', number> = {
+    corto: 3, completo: 5, extendido: 7,
+  };
+  const nightOutLevel = refs.nightOutLevel ?? 'corto';
+  useEffect(() => {
+    if (recipe !== 'outfit_night_out') return;
+    const target = NIGHT_OUT_COUNT_BY_LEVEL[nightOutLevel];
+    if (count !== target) onCount(target);
+  }, [recipe, nightOutLevel, count, onCount]);
+
   // Insertar @tag en la posición del cursor del textarea
   const insertTag = (tag: string) => {
     const el = textareaRef.current;
@@ -347,6 +359,17 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
     onRefs({ ...refs, multiLookEras: arr });
   };
 
+  // ── Handlers de outfit_night_out ────────────────────────────────
+  const NIGHT_OUT_LEVEL_OPTIONS: { value: 'corto' | 'completo' | 'extendido'; label: string; hint: string }[] = [
+    { value: 'corto',     label: 'Corto (3 fotos)',     hint: 'Mirror check y 2 momentos de la noche.' },
+    { value: 'completo',  label: 'Completo (5 fotos)',  hint: '+ un detalle de cómo armaste el look, y 3 momentos de la noche.' },
+    { value: 'extendido', label: 'Extendido (7 fotos)', hint: 'La historia completa: preparación, detalle, mirror check y 4 momentos de la noche.' },
+  ];
+
+  const handleNightOutLevelChange = (level: 'corto' | 'completo' | 'extendido') => {
+    onRefs({ ...refs, nightOutLevel: level });
+  };
+
   // trip_recap: el lugar de cada look ya no es texto — se sube como foto
   // real en el slot "Escena" (misma posición que el outfit correspondiente,
   // ver manifest.ts). No hace falta un handler propio acá, se usa el
@@ -488,6 +511,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
       if (recipe === 'unboxing') return 'El producto dentro del empaque: lo que el cliente recibe. Subí hasta 3 ángulos.';
       if (recipe === 'product_haul') return 'Subí cada producto del set — una imagen por slot. Usá el selector debajo de cada imagen para indicar qué tipo de producto es (skincare, maquillaje, gadget, comida/bebida, bienestar o genérico): eso define cómo interactúa con el producto en cada foto.';
       if (recipe === 'day_in_life') return 'Producto del día (opcional) o foto de tu acompañante — usá el selector debajo de cada imagen y elegí "Acompañante" para que el sistema genere momentos grupales en el set. Los distintos momentos del día (mañana, tarde, noche) se describen en el brief de texto, no acá.';
+      if (recipe === 'outfit_night_out') return 'Opcional: foto de tu acompañante — usá el selector debajo de la imagen y elegí "Acompañante" para que el sistema incluya un momento con esa persona en la noche. Si no subís nada, todos los momentos son en solitario.';
       return 'Subí hasta 3 ángulos del mismo producto para mayor fidelidad visual.';
     }
     if (key === 'empaque') return recipe === 'product_haul'
@@ -496,6 +520,9 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
     if (key === 'escena') {
       if (recipe === 'outfit_multi_look' && refs.multiLookIntent === 'trip_recap') {
         return 'Subí una foto del lugar por cada look — Escena 1 va con Look 1, Escena 2 con Look 2, y así. El sistema nunca inventa el lugar, siempre usa la foto real que subas acá.';
+      }
+      if (recipe === 'outfit_night_out') {
+        return 'Foto del lugar (opcional) — si no subís nada, armamos el venue según lo que cuentes en el brief (ej. "cena en un rooftop", "previa y boliche").';
       }
       return 'La escena principal define la ambientación del set completo.';
     }
@@ -536,6 +563,18 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                 </div>
                 <p className="text-[9px] text-slate-400 mt-1.5">
                   Siempre 3 ángulos: mirror check completo, tu propia vista, y un close-up — no hace falta elegir cantidad.
+                </p>
+              </>
+            ) : recipe === 'outfit_night_out' ? (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="flex flex-col items-center min-w-[48px]">
+                    <span className="text-2xl font-black text-slate-900 leading-none">{count}</span>
+                    <span className="text-[9px] text-slate-400 font-medium">fotos</span>
+                  </div>
+                </div>
+                <p className="text-[9px] text-slate-400 mt-1.5">
+                  La cantidad la define el nivel elegido más abajo — no hace falta elegir cantidad acá.
                 </p>
               </>
             ) : recipe === 'outfit_multi_look' ? (
@@ -618,6 +657,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                 recipe === 'outfit_week'  ? 'Ej: Estos fueron los outfits de @persona de la semana: del gym al restaurante, todo en uno...' :
                 recipe === 'outfit_multi_look' ? 'Ej: Los outfits que usé en mi semana de trabajo, todos con el mismo espejo de mi cuarto...' :
                 recipe === 'outfit_reveal_basic' ? 'Ej: Así me quedó el vestido que compré para el cumpleaños de mi amiga...' :
+                recipe === 'outfit_night_out' ? 'Ej: Cena con amigas en un rooftop antes de ir al boliche...' :
                 recipe === 'outfit'       ? 'Ej: @persona hace un haul de otoño luciendo @outfit en Palermo...' :
                 recipe === 'unboxing'     ? 'Ej: Caja de mi nueva crema de vitamina C, @persona hace el unboxing de @producto...' :
                 recipe === 'day_in_life'  ? 'Ej: @persona en una mañana de domingo tranquila en casa con @producto...' :
@@ -700,6 +740,33 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                   El lugar de cada look se sube como foto en el slot <b>Escena</b> más abajo — Escena 1 va con Look 1, Escena 2 con Look 2, y así. Subí una foto real del lugar (tuya o encontrada), no hace falta escribir el nombre.
                 </p>
               )}
+            </div>
+          )}
+
+          {/* outfit_night_out: selector de nivel (cantidad fija por nivel) */}
+          {recipe === 'outfit_night_out' && (
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-2">
+                ¿Cuánta historia querés contar?
+              </label>
+              <div className="grid grid-cols-1 gap-2">
+                {NIGHT_OUT_LEVEL_OPTIONS.map(opt => {
+                  const sel = (refs.nightOutLevel ?? 'corto') === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => handleNightOutLevelChange(opt.value)}
+                      className={`text-left px-4 py-2.5 rounded-xl border transition-all ${
+                        sel ? 'border-brand-500 bg-brand-50/60 ring-2 ring-brand-100' : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="text-sm font-bold text-slate-900">{opt.label}</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">{opt.hint}</div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -872,7 +939,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                                     category="accesorio"
                                   />
                                 )}
-                                {(recipe === 'outfit_week' || recipe === 'product_haul' || recipe === 'day_in_life') && hasImage && key === 'producto' && (
+                                {(recipe === 'outfit_week' || recipe === 'product_haul' || recipe === 'day_in_life' || recipe === 'outfit_night_out') && hasImage && key === 'producto' && (
                                   <HaulReferenceTypeSelector
                                     value={getProductKind(i)}
                                     onChange={kind => handleProductKindChange(i, kind)}
