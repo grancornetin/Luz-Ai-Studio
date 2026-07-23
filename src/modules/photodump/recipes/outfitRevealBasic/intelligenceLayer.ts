@@ -14,6 +14,20 @@
  *    familias incompatibles (bug ya corregido una vez para outfit_multi_look,
  *    y que rompió el shot self_pov original de esta receta — el HPI
  *    describía "seated on floor" sobre un prompt de pie).
+ *
+ * includeGesture: false (bug real en producción, 2026-07-22): el banco
+ * gestureBanks del JSON HPI mezcla en el mismo basePromptBlock el gesto de
+ * la mano CON una postura corporal entera no relacionada (ej. el familyId
+ * "RESTING_OR_SUPPORT_HANDS", que suena a "solo la mano", en realidad
+ * describe "reclined on couch, legs extended, torso rotated 90-120°" — una
+ * escena sentada completa). Como allowedFamilies.gesture no está definido
+ * para esta receta, pickFamily elegía cualquier familia del banco entero sin
+ * ninguna garantía de compatibilidad con "de pie frente al espejo", y el
+ * resultado real fue un brazo extra apoyado en una superficie inexistente
+ * sobre una pose de pie. Curar el banco (separar gesto puro de pose) es
+ * trabajo de datos pendiente — mientras tanto, sin gesture en esta receta.
+ * BODY POSE + CAMERA RELATIONSHIP (ambos con allowedFamilies fijo) siguen
+ * aportando dirección de postura sin ese riesgo.
  */
 import { buildHpiBlock, getHpiNegatives, type HpiConfig, type HpiGender } from '../../../../services/hpiService';
 import type { RevealPoseFamilies } from './types';
@@ -27,7 +41,7 @@ export interface AppliedIntelligence {
 function hpiConfigFor(poseFamily: RevealPoseFamilies, variantIndex: number | undefined, gender: HpiGender): HpiConfig {
   if (poseFamily === 'standing_anchor') {
     return {
-      enabled: true, gender, modoVisual: 'ugc', includeGesture: true, includePerformance: false,
+      enabled: true, gender, modoVisual: 'ugc', includeGesture: false, includePerformance: false,
       allowedFamilies: { pose: ['STANDING_ASYMMETRIC_FASHION_POSE'], camera: ['MIRROR_SELFIE_REFLECTION'] },
     };
   }
@@ -38,7 +52,7 @@ function hpiConfigFor(poseFamily: RevealPoseFamilies, variantIndex: number | und
     return { enabled: false, gender, modoVisual: 'ugc', includeGesture: false, includePerformance: false };
   }
   return {
-    enabled: true, gender, modoVisual: 'ugc', includeGesture: true, includePerformance: false,
+    enabled: true, gender, modoVisual: 'ugc', includeGesture: false, includePerformance: false,
     allowedFamilies: {
       pose:   [variant.hpiPoseFamily],
       camera: variant.hpiCameraFamily ? [variant.hpiCameraFamily] : undefined,
