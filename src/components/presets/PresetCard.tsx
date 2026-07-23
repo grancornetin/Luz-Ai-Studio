@@ -98,7 +98,7 @@ export const PresetCard: React.FC<PresetCardProps> = ({
                              hover:bg-slate-50 transition-colors"
                 >
                   <Star className="w-4 h-4 text-slate-400" />
-                  {preset.isDefault ? 'Quitar como default' : 'Marcar como default'}
+                  {preset.isDefault ? 'Quitar como predeterminada' : 'Marcar como predeterminada'}
                 </button>
               )}
               <div className="border-t border-slate-100 my-1" />

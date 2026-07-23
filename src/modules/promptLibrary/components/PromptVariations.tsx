@@ -53,7 +53,7 @@ const PromptVariations: React.FC<PromptVariationsProps> = ({
       const result = await variationsService.generate(promptText, dna, lockedLayers);
       setVariations(result);
     } catch (err: any) {
-      setError(err?.message || 'Error generando variaciones.');
+      setError('No pudimos preparar nuevas versiones. Inténtalo de nuevo.');
     } finally {
       setIsLoading(false);
     }
@@ -83,7 +83,7 @@ const PromptVariations: React.FC<PromptVariationsProps> = ({
           <div className="group relative">
             <Info className="w-3.5 h-3.5 text-slate-400 cursor-help" />
             <div className="absolute bottom-full left-0 mb-2 w-64 p-2 bg-slate-900 text-white text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-              Genera hasta 3 variaciones creativas del prompt modificando capas específicas (estilo, iluminación, fondo, composición o detalles). Bloquea las capas que quieras mantener intactas.
+              Crea hasta 3 versiones de tu descripción cambiando el estilo, la luz, el fondo, la composición o los detalles. Elige qué partes quieres conservar.
             </div>
           </div>
         </div>
@@ -98,7 +98,7 @@ const PromptVariations: React.FC<PromptVariationsProps> = ({
 
           {/* EXPLANATION TEXT */}
           <div className="bg-brand-50 border border-brand-100 rounded-xl p-3 text-[10px] font-medium text-brand-800">
-            💡 <strong>¿Cómo funciona?</strong> Puedes bloquear las capas que quieras conservar (ej. estilo, iluminación). La IA generará 3 variaciones creativas modificando SOLO las capas desbloqueadas. Aplica una variación y luego genera la imagen en el compositor.
+            💡 <strong>¿Cómo funciona?</strong> Marca las partes que quieres conservar. Crearemos 3 versiones cambiando únicamente las demás. Elige una y luego crea la imagen en el editor.
           </div>
 
           {/* STYLE LOCK */}
@@ -106,12 +106,12 @@ const PromptVariations: React.FC<PromptVariationsProps> = ({
             <div className="flex items-center gap-2">
               <Lock className="w-3.5 h-3.5 text-slate-400" />
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                Bloquear capas
+                Partes que quieres conservar
               </span>
             </div>
 
             <p className="text-[10px] text-slate-400 leading-relaxed">
-              Las capas bloqueadas no serán modificadas por la IA.
+              Las partes marcadas se mantendrán sin cambios.
             </p>
 
             <div className="flex flex-wrap gap-2">
@@ -135,7 +135,7 @@ const PromptVariations: React.FC<PromptVariationsProps> = ({
 
             {lockedLayers.length > 0 && (
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                {lockedLayers.length} bloqueada{lockedLayers.length !== 1 ? 's' : ''} ·{' '}
+                {lockedLayers.length} conservada{lockedLayers.length !== 1 ? 's' : ''} ·{' '}
                 {availableCount} disponible{availableCount !== 1 ? 's' : ''} para variar
               </p>
             )}
@@ -178,7 +178,7 @@ const PromptVariations: React.FC<PromptVariationsProps> = ({
           {variations.length > 0 && (
             <div className="space-y-4">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                3 variaciones generadas — click para aplicar
+                3 versiones listas: elige una para aplicarla
               </p>
 
               {variations.map((variation, idx) => {
@@ -226,7 +226,7 @@ const PromptVariations: React.FC<PromptVariationsProps> = ({
               })}
 
               <p className="text-center text-[9px] font-bold text-slate-300 uppercase tracking-widest">
-                Aplica una variación y genera en el compositor
+                Elige una versión y crea la imagen en el editor
               </p>
             </div>
           )}

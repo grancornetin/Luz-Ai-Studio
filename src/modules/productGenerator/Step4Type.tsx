@@ -78,8 +78,8 @@ export const Step4Type: React.FC<Step4TypeProps> = ({
         </h2>
         <p className="text-sm text-slate-500 mt-2 leading-[1.55]">
           {hasReference
-            ? 'Como hay referencia, vamos a recrear su estilo. Elegí solo cuántas imágenes querés.'
-            : 'Elegí entre un pack de imágenes individuales o un grid con varios ángulos en una sola foto.'}
+            ? 'Como añadiste una referencia, recrearemos su estilo. Elige cuántas fotos quieres.'
+            : 'Elige entre una serie de fotos individuales o un collage con varios ángulos.'}
         </p>
       </div>
 
@@ -131,13 +131,13 @@ export const Step4Type: React.FC<Step4TypeProps> = ({
                 {([
                   {
                     id: 'pack' as GenMode,
-                    title: 'Pack automático',
+                    title: 'Serie de fotos',
                     desc: 'Varias imágenes listas para redes o ecommerce',
                     Icon: Layers,
                   },
                   {
                     id: 'grid' as GenMode,
-                    title: 'Grid automático',
+                    title: 'Collage automático',
                     desc: 'Múltiples ángulos en una sola imagen',
                     Icon: Grid3x3,
                   },
@@ -214,7 +214,7 @@ export const Step4Type: React.FC<Step4TypeProps> = ({
               {type.mode === 'grid' && (
                 <div className="fade-in bg-white border border-slate-200 rounded-2xl p-4 md:p-[18px]">
                   <div className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-3">
-                    Estructura del grid
+                    Estructura del collage
                   </div>
                   <div className="flex gap-2.5">
                     {(['1x2', '2x2', '3x3'] as GridSize[]).map((s) => {
@@ -252,7 +252,7 @@ export const Step4Type: React.FC<Step4TypeProps> = ({
                     })}
                   </div>
                   <div className="text-[11px] text-slate-500 mt-3 leading-[1.5] italic">
-                    Se generarán {(() => { const [r, c] = type.gridSize.split('x').map((n) => parseInt(n, 10)); return r * c; })()} imágenes individuales + 1 imagen final tipo grid.
+                    Crearemos {(() => { const [r, c] = type.gridSize.split('x').map((n) => parseInt(n, 10)); return r * c; })()} fotos individuales y 1 collage final.
                   </div>
                 </div>
               )}
@@ -301,7 +301,7 @@ export const Step4Type: React.FC<Step4TypeProps> = ({
                   <span className="opacity-70">Imágenes</span>
                   <span className="font-semibold">
                     {finalCount}
-                    {!hasReference && type.mode === 'grid' ? ' + 1 grid' : ''}
+                    {!hasReference && type.mode === 'grid' ? ' + 1 collage' : ''}
                   </span>
                 </div>
                 <div className="h-px bg-white/10 my-1.5" />

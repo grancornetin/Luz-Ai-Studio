@@ -6,7 +6,7 @@ export function InterviewReview({ value, onChange }: { value: InterviewExtractio
   return <div className="space-y-4 rounded-2xl border border-rose-100 bg-rose-50/40 p-5">
     <h3 className="text-lg font-bold text-slate-800">Esto entendí de tu marca</h3>
     {field('shortDescription','Tu marca en una frase')}
-    {field('customerFreeDescription','Tu clienta ideal')}
+    {field('customerFreeDescription','Tu público ideal')}
     {field('mainDifferentiatorText','Lo que te hace diferente')}
     {field('brandPromise','Tu promesa')}
     {!!value.missing.length && <p className="text-sm text-slate-600">No me contaste {value.missing.join(', ')}. Puedes completarlo después.</p>}

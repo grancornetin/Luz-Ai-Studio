@@ -35,7 +35,7 @@ import { GenerationProgress as GenProgress, type ProgressStep } from '../../comp
 type WizardStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 const WIZARD_STEP_DEFS = [
-  { id: '1', label: 'Brief' },
+  { id: '1', label: 'Tu campaña' },
   { id: '2', label: 'Estilo' },    // ancla generada desde el brief
   { id: '3', label: 'Canales' },
   { id: '4', label: 'Cantidad' },
@@ -44,8 +44,8 @@ const WIZARD_STEP_DEFS = [
 ];
 
 const ANCHOR_PROGRESS_STEPS: ProgressStep[] = [
-  { id: 'brief',   label: 'Analizando brief y referencias' },
-  { id: 'anchor',  label: 'Generando propuestas de estilo visual' },
+  { id: 'brief',   label: 'Revisando tu idea y referencias' },
+  { id: 'anchor',  label: 'Creando propuestas de estilo visual' },
   { id: 'done',    label: 'Listo para aprobar' },
 ];
 
@@ -69,22 +69,22 @@ const UpgradeWall: React.FC<{ proCredits: number }> = ({ proCredits }) => {
         <Megaphone className="w-10 h-10 text-brand-600" />
       </div>
       <div className="space-y-2 max-w-sm">
-        <h2 className="t-display text-3xl text-slate-900">Campaign Generator</h2>
+        <h2 className="t-display text-3xl text-slate-900">Crear una campaña</h2>
         <p className="t-body leading-relaxed">
           {proCredits === 0
-            ? 'Agotaste tus sesiones Campaign de este período. Comprá pro-credits extra o actualizá tu plan.'
-            : 'Necesitás pro-credits para usar Campaign Generator. Cada sesión consume 1 pro-credit.'}
+            ? 'Usaste todas tus sesiones de campaña de este período. Puedes comprar sesiones extra o actualizar tu plan.'
+            : 'Necesitas una sesión Pro para crear una campaña completa.'}
         </p>
       </div>
       <div className="bg-slate-50 border border-slate-200 rounded-[28px] p-6 space-y-3 max-w-xs w-full">
-        <p className="t-meta">Tus pro-credits</p>
+        <p className="t-meta">Tus sesiones Pro</p>
         <p className="t-display text-5xl text-slate-900">{proCredits}</p>
-        <p className="t-body-sm">1 pro-credit = 1 kit de campaña completo</p>
+        <p className="t-body-sm">Una sesión incluye la campaña completa</p>
       </div>
       <div className="flex flex-col gap-3 w-full max-w-xs">
         <button onClick={() => navigate('/buy-credits')}
           className="w-full py-4 bg-brand-600 hover:bg-brand-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg">
-          Comprar pro-credits
+          Comprar sesiones
         </button>
         <button onClick={() => navigate('/pricing')}
           className="w-full py-3 bg-white border border-slate-200 hover:border-slate-300 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest transition-all">
@@ -412,7 +412,7 @@ const CampaignModule: React.FC = () => {
 
     if (!isAdmin) {
       const ok = await deductProCredit();
-      if (!ok) { setError('No tenés pro-credits para esta sesión.'); return; }
+      if (!ok) { setError('No tienes sesiones Pro disponibles.'); return; }
     }
     if (!isAdmin && (credits?.available ?? 0) < anchorCreditCost) {
       if (!isAdmin) await refundProCredit().catch(() => {});
@@ -423,7 +423,7 @@ const CampaignModule: React.FC = () => {
       const ok = await deductCredits(anchorCreditCost);
       if (!ok) {
         await refundProCredit().catch(() => {});
-        setError('Error al descontar créditos. Intentá de nuevo.');
+        setError('No pudimos confirmar el costo. Tus créditos no cambiaron. Inténtalo de nuevo.');
         return;
       }
     }
@@ -476,7 +476,7 @@ const CampaignModule: React.FC = () => {
       // Quedarse en step 2 — las tarjetas ya están visibles y se vuelven seleccionables
     } catch (err: any) {
       console.error('[Campaign] handleGenerateAnchor error:', err);
-      setError(`Error generando las propuestas de estilo: ${err?.message || err}`);
+      setError('No pudimos preparar los estilos. Inténtalo de nuevo; si el problema continúa, contáctanos.');
       if (!isAdmin) {
         await refundProCredit().catch(() => {});
         await deductCredits(-anchorCreditCost).catch(() => {});
@@ -495,7 +495,7 @@ const CampaignModule: React.FC = () => {
     if (insufficientForAnchorRegen) return;
     if (!isAdmin) {
       const ok = await deductCredits(anchorCreditCost);
-      if (!ok) { setError('Error al descontar créditos.'); return; }
+      if (!ok) { setError('No pudimos confirmar el costo. Tus créditos no cambiaron. Inténtalo de nuevo.'); return; }
     }
 
     setIsRegenerating(true);
@@ -513,7 +513,7 @@ const CampaignModule: React.FC = () => {
       setAnchorAnalysis(null); // resetear análisis previo
       await refreshCredits();
     } catch (err: any) {
-      setError(`Error regenerando: ${err?.message || err}`);
+      setError('No pudimos preparar nuevas opciones. Inténtalo de nuevo.');
       if (!isAdmin) await deductCredits(-anchorCreditCost).catch(() => {});
     } finally {
       setIsRegenerating(false);
@@ -539,7 +539,7 @@ const CampaignModule: React.FC = () => {
       }
       const ok = await deductCredits(imageCreditCost);
       if (!ok) {
-        setError('Error al descontar créditos. Intentá de nuevo.');
+        setError('No pudimos confirmar el costo. Tus créditos no cambiaron. Inténtalo de nuevo.');
         return;
       }
     }
@@ -687,7 +687,7 @@ const CampaignModule: React.FC = () => {
       await refreshCredits();
     } catch (err: any) {
       console.error('[Campaign] handleGenerateCampaign error:', err);
-      setError(`Error generando la campaña: ${err?.message || err}`);
+      setError('No pudimos crear la campaña. Inténtalo de nuevo.');
       // Reembolsar créditos de imágenes si falló en el primer intento
       if (!retryIndexes && !isAdmin) {
         await deductCredits(-imageCreditCost).catch(() => {});
@@ -716,7 +716,7 @@ const CampaignModule: React.FC = () => {
             </h1>
             <div className="flex items-center gap-2 mt-2">
               <p className="text-slate-500 font-medium italic text-xs md:text-sm">
-                Agencia creativa IA · Brief → Estilo → Imágenes + Copy + Calendario
+                Crea las imágenes, los textos y el calendario de tu campaña
               </p>
               <ModuleTutorial moduleId="campaignMode" steps={TUTORIAL_CONFIGS.campaignMode} />
             </div>
@@ -745,10 +745,10 @@ const CampaignModule: React.FC = () => {
           <div className="mb-4 bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-4">
             <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-bold text-amber-900">Tenés una campaña sin terminar</p>
+              <p className="text-[13px] font-bold text-amber-900">Tienes una campaña sin terminar</p>
               <p className="text-[11px] text-amber-700 mt-0.5 truncate">
                 "{pendingRestore.idea?.slice(0, 60)}{pendingRestore.idea?.length > 60 ? '…' : ''}"
-                {pendingRestore.anchorOptions?.some(Boolean) ? ' · Estilo listo, faltaba configurar y generar' : ' · Brief listo'}
+                {pendingRestore.anchorOptions?.some(Boolean) ? ' · El estilo está listo; falta configurar y crear' : ' · La información está lista'}
               </p>
             </div>
             <div className="flex gap-2 flex-shrink-0">
@@ -791,7 +791,7 @@ const CampaignModule: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-9 items-start">
                     <div className="md:col-span-7 order-2 md:order-1 flex flex-col gap-5">
                       <div>
-                        <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Paso 1 · Brief</div>
+                        <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Paso 1 · Tu campaña</div>
                         <h2 className="t-display text-[28px] md:text-[34px] text-slate-900 mt-2.5 leading-[1.05]">
                           ¿Cuál es tu <span className="text-brand-600 italic normal-case">idea de campaña?</span>
                         </h2>
@@ -808,7 +808,7 @@ const CampaignModule: React.FC = () => {
                           rows={4} autoComplete="off" autoCapitalize="sentences"
                           className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3.5 text-[15px] text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 transition-all resize-none leading-relaxed" />
                         <p className="text-[11px] text-slate-400 mt-1.5">
-                          Podés mencionar el producto, el precio, la fecha especial, el descuento, o el resultado que querés lograr.
+                          Puedes mencionar el producto, el precio, una fecha especial, el descuento o el resultado que quieres lograr.
                         </p>
                       </div>
                       {/* ── Switch HPI ────────────────────────────── */}
@@ -847,7 +847,7 @@ const CampaignModule: React.FC = () => {
                       <div>
                         <div className="flex items-center justify-between mb-3">
                           <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em]">
-                            ¿Tenés imágenes para usar?{' '}
+                            ¿Tienes imágenes para usar?{' '}
                             <span className="text-slate-400 font-medium normal-case tracking-normal">(opcional pero recomendado)</span>
                           </label>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${totalSlotsUsed >= MAX_TOTAL_SLOTS ? 'bg-slate-100 text-slate-500' : totalSlotsUsed > 0 ? 'bg-brand-50 text-brand-600' : 'bg-slate-50 text-slate-400'}`}>
@@ -862,7 +862,7 @@ const CampaignModule: React.FC = () => {
                           ))}
                         </div>
                         <p className="text-[11px] text-slate-400 mt-2 leading-[1.5]">
-                          Podés subir hasta {MAX_PER_SLOT} imágenes por categoría ({MAX_TOTAL_SLOTS} en total). Seleccioná varias a la vez desde tu galería. La IA elige las mejores referencias automáticamente.
+                          Puedes subir hasta {MAX_PER_SLOT} imágenes por categoría ({MAX_TOTAL_SLOTS} en total). Selecciona varias a la vez desde tu galería. Luz elegirá las referencias más útiles.
                         </p>
                       </div>
                     </div>
@@ -899,7 +899,7 @@ const CampaignModule: React.FC = () => {
                       ¿Dónde vas a <span className="text-brand-600 italic normal-case">publicar?</span>
                     </h2>
                     <p className="text-sm text-slate-500 mt-2 mb-6 leading-[1.55]">
-                      Elegí uno o varios canales. La IA adapta el copy, el formato y las instrucciones a cada uno.
+                      Elige uno o varios canales. Luz adapta el texto, el formato y las indicaciones para cada uno.
                     </p>
                     <div className="flex flex-col gap-3">
                       {(Object.keys(CAMPAIGN_CHANNEL_META) as CampaignChannel[]).map(canal => {
@@ -921,7 +921,7 @@ const CampaignModule: React.FC = () => {
                       })}
                     </div>
                     {canales.length === 0 && (
-                      <p className="text-[12px] text-rose-500 font-medium mt-3">Seleccioná al menos un canal para continuar.</p>
+                      <p className="text-[12px] text-rose-500 font-medium mt-3">Selecciona al menos un canal para continuar.</p>
                     )}
                   </div>
                 </div>
@@ -971,9 +971,9 @@ const CampaignModule: React.FC = () => {
                         <div className="flex items-start gap-3">
                           <Zap className="w-4 h-4 text-brand-600 flex-shrink-0 mt-0.5" />
                           <div>
-                            <p className="text-[12px] font-bold text-brand-900 mb-0.5">1 pro-credit por sesión</p>
+                            <p className="text-[12px] font-bold text-brand-900 mb-0.5">Una sesión Pro por campaña</p>
                             <p className="text-[11px] text-brand-700 leading-[1.5]">
-                              Tenés <strong>{isAdmin ? '∞' : proCredits} sesiones</strong> disponibles.
+                              Tienes <strong>{isAdmin ? '∞' : proCredits} sesiones</strong> disponibles.
                             </p>
                           </div>
                         </div>
@@ -1045,7 +1045,7 @@ const CampaignModule: React.FC = () => {
                             <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />{error}
                           </div>
                           <p className="text-[12px] text-slate-500 mt-3 leading-[1.5]">
-                            Tus créditos fueron reembolsados automáticamente. Podés reintentar sin costo adicional.
+                            Tus créditos fueron devueltos automáticamente. Puedes intentarlo de nuevo sin costo adicional.
                           </p>
                           <div className="flex gap-2 mt-4">
                             <button onClick={() => { setError(null); handleGenerateAnchor(); }}
@@ -1054,7 +1054,7 @@ const CampaignModule: React.FC = () => {
                             </button>
                             <button onClick={() => { setError(null); setStep(1); }}
                               className="px-4 py-3 rounded-xl border border-slate-200 text-[13px] text-slate-600 hover:bg-slate-50 transition-colors">
-                              Volver al brief
+                              Volver a mi campaña
                             </button>
                           </div>
                         </>
@@ -1070,12 +1070,12 @@ const CampaignModule: React.FC = () => {
                               </div>
                               <h2 className="font-display font-extrabold italic uppercase tracking-tight text-[22px] md:text-[26px] text-slate-900 leading-tight"
                                 style={{ fontFamily: 'Syne, Inter, sans-serif', letterSpacing: '-0.025em' }}>
-                                {anchorsReady ? 'Elegí el estilo de tu campaña' : 'Generando propuestas de estilo'}
+                                {anchorsReady ? 'Elige el estilo de tu campaña' : 'Creando propuestas de estilo'}
                               </h2>
                               <div className="text-[13px] text-slate-500 mt-1 mb-4">
                                 {anchorsReady
                                   ? 'La imagen que elijas define el estilo visual de toda la campaña.'
-                                  : (campaignPlan?.concepto ?? 'Analizando brief y referencias...')}
+                                  : (campaignPlan?.concepto ?? 'Revisando tu idea y referencias...')}
                               </div>
                               {!anchorsReady && (
                                 <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-[18px]">
@@ -1083,7 +1083,7 @@ const CampaignModule: React.FC = () => {
                                 </div>
                               )}
                               <div className="mt-3 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5]">
-                                💡 Podés cerrar la ventana — te avisamos cuando termine.
+                                💡 Puedes cerrar la ventana. Te avisaremos cuando termine.
                               </div>
                               {anchorsReady && (
                                 <button type="button"
@@ -1162,7 +1162,7 @@ const CampaignModule: React.FC = () => {
               {/* ── PASO 3: APROBAR ANCLA ────────────────── */}
               {step === 3 && (
                 <div className="fade-in p-4 md:p-8">
-                  <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em] mb-2">Paso 2 · Elegí el estilo</div>
+                  <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em] mb-2">Paso 2 · Elige el estilo</div>
                   <h2 className="t-display text-[26px] md:text-[32px] text-slate-900 mb-2 leading-[1.05]">
                     ¿Cuál es la estética de <span className="text-brand-600 italic normal-case">tu campaña?</span>
                   </h2>
@@ -1237,7 +1237,7 @@ const CampaignModule: React.FC = () => {
                   </div>
 
                   <div className="px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5]">
-                    💡 Podés cerrar la ventana — te avisamos cuando termine.
+                    💡 Puedes cerrar la ventana. Te avisaremos cuando termine.
                   </div>
                 </div>
               )}
@@ -1310,7 +1310,7 @@ const CampaignModule: React.FC = () => {
                                 {failedIndexes.length} imagen{failedIndexes.length > 1 ? 'es no se generaron' : ' no se generó'} correctamente.
                               </p>
                               <p className="text-[11px] text-rose-600 mt-0.5 leading-snug">
-                                Podés regenerarlas sin costo adicional — se usarán las mismas referencias y estilo.
+                                Puedes crearlas de nuevo sin costo adicional. Usaremos las mismas referencias y el mismo estilo.
                               </p>
                             </div>
                           </div>
@@ -1438,7 +1438,7 @@ const CampaignModule: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <button type="button" onClick={() => downloadSetZip(currentSet)}
                           className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[11px] font-semibold text-slate-600 transition-colors">
-                          <Download size={12} /> ZIP
+                          <Download size={12} /> Descargar imágenes
                         </button>
                         <button type="button" onClick={() => handleDownloadHtml(currentSet)} disabled={downloadingHtml || downloadingPdf}
                           className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[11px] font-semibold text-slate-600 transition-colors disabled:opacity-50 disabled:cursor-wait">
@@ -1600,7 +1600,7 @@ const CampaignModule: React.FC = () => {
                                       <button type="button" onClick={e => { e.stopPropagation(); copyText(pieza.caption, `cap-${i}`); }}
                                         className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-brand-600 transition-colors">
                                         {copiedKey === `cap-${i}` ? <Check size={9} className="text-emerald-500" /> : <Copy size={9} />}
-                                        {copiedKey === `cap-${i}` ? 'Copiado' : 'Copiar caption'}
+                                        {copiedKey === `cap-${i}` ? 'Copiado' : 'Copiar texto'}
                                       </button>
                                     </div>
                                   </div>
@@ -1650,9 +1650,9 @@ const CampaignModule: React.FC = () => {
                         {activeTab2 === 'hashtags' && (
                           <div className="space-y-4">
                             {[
-                              { title: '🔥 Hashtags de nicho', desc: 'Mayor alcance en tu industria. Usá estos en tus posts principales del Feed.', tags: plan.hashtagsNicho, color: 'bg-brand-50 text-brand-700 border-brand-100' },
+                              { title: '🔥 Para llegar a tu público', desc: 'Úsalos en las publicaciones principales de tu feed.', tags: plan.hashtagsNicho, color: 'bg-brand-50 text-brand-700 border-brand-100' },
                               { title: '🌿 Comunidad', desc: 'Conectan con la comunidad emprendedora latinoamericana.', tags: plan.hashtagsComunidad, color: 'bg-lime-50 text-lime-700 border-lime-200' },
-                              { title: '🎯 Cola larga', desc: 'Menos alcance pero más conversión. Audiencia específica con intención de compra.', tags: plan.hashtagsColarga, color: 'bg-slate-100 text-slate-600 border-slate-200' },
+                              { title: '🎯 Más específicos', desc: 'Ayudan a llegar a personas con una intención de compra más clara.', tags: plan.hashtagsColarga, color: 'bg-slate-100 text-slate-600 border-slate-200' },
                             ].map(group => (
                               <div key={group.title} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
                                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
@@ -1703,7 +1703,7 @@ const CampaignModule: React.FC = () => {
                         {/* Descargas */}
                         <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
                           <div className="px-4 py-3 border-b border-slate-100">
-                            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">📥 Descargar kit</p>
+                            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">📥 Descargar campaña</p>
                           </div>
                           <div className="p-3 space-y-2">
                             <button type="button" onClick={() => handleDownloadPdf(currentSet)} disabled={downloadingPdf || downloadingHtml}
@@ -1719,7 +1719,7 @@ const CampaignModule: React.FC = () => {
                               className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-slate-300 transition-colors">
                               <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-base flex-shrink-0">🗜️</div>
                               <div className="flex-1 text-left">
-                                <p className="text-[12px] font-semibold text-slate-800">ZIP de imágenes</p>
+                                <p className="text-[12px] font-semibold text-slate-800">Todas las imágenes</p>
                                 <p className="text-[10px] text-slate-400">{plan.piezas.length} imágenes en alta calidad</p>
                               </div>
                               <ChevronRight size={14} className="text-slate-400" />
@@ -1728,8 +1728,8 @@ const CampaignModule: React.FC = () => {
                               className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-slate-300 transition-colors disabled:opacity-50 disabled:cursor-wait">
                               <div className="w-8 h-8 rounded-lg bg-lime-50 flex items-center justify-center text-base flex-shrink-0">☑️</div>
                               <div className="flex-1 text-left">
-                                <p className="text-[12px] font-semibold text-slate-800">{downloadingHtml ? 'Generando…' : 'Kit interactivo'}</p>
-                                <p className="text-[10px] text-slate-400">HTML con checklist y hashtags</p>
+                                <p className="text-[12px] font-semibold text-slate-800">{downloadingHtml ? 'Preparando…' : 'Guía interactiva'}</p>
+                                <p className="text-[10px] text-slate-400">Guía con tareas y hashtags</p>
                               </div>
                               {downloadingHtml ? <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> : <ChevronRight size={14} className="text-slate-400" />}
                             </button>
@@ -1814,7 +1814,7 @@ const CampaignModule: React.FC = () => {
                             </div>
                             <h3 className="text-[17px] font-black text-slate-900 mb-4 leading-tight" style={{ fontFamily: 'Syne, Inter, sans-serif' }}>{modalP.titular}</h3>
 
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Caption completo</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Texto para publicar</p>
                             <div className="flex items-start gap-2 mb-4">
                               <p className="text-[13px] text-slate-600 flex-1 leading-relaxed whitespace-pre-line">{modalP.caption}</p>
                               <button type="button" onClick={() => copyText(modalP.caption, 'modal-cap')}
@@ -1823,7 +1823,7 @@ const CampaignModule: React.FC = () => {
                               </button>
                             </div>
 
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">CTA recomendado</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Cómo cerrar la publicación</p>
                             <div className="bg-brand-50 border border-brand-100 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2 mb-4">
                               <p className="text-[12px] text-brand-700 font-medium italic flex-1">{modalP.cta}</p>
                               <button type="button" onClick={() => copyText(modalP.cta, 'modal-cta')}
@@ -1891,10 +1891,10 @@ const CampaignModule: React.FC = () => {
                   else if (step === 5 && !insufficientForCampaign) handleGenerateCampaign();
                 }}
                 continueLabel={
-                  step === 1 ? `Generar propuestas de estilo · ${anchorCreditCost} cr` :
+                  step === 1 ? `Crear propuestas de estilo · ${anchorCreditCost} cr` :
                   (step === 2 || step === 3) ? 'Usar este estilo →' :
                   step === 4 ? 'Continuar →' :
-                  step === 5 ? `Generar campaña · ${imageCreditCost} cr` :
+                  step === 5 ? `Crear campaña · ${imageCreditCost} cr` :
                   'Continuar'
                 }
                 disabled={
@@ -2033,7 +2033,7 @@ const CampaignModule: React.FC = () => {
                         </button>
                         <button type="button" onClick={() => downloadSetZip(set)}
                           className="flex-1 py-1.5 rounded-xl text-[11px] font-semibold bg-slate-50 text-slate-600 border border-slate-200 hover:border-slate-300 transition-colors">
-                          ↓ ZIP
+                          ↓ Imágenes
                         </button>
                         <button type="button" onClick={() => deleteSet(set.id)} disabled={deletingId === set.id}
                           className="w-8 flex items-center justify-center rounded-xl bg-rose-50 text-rose-400 hover:text-rose-600 hover:bg-rose-100 border border-rose-100 transition-colors disabled:opacity-40">

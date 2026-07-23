@@ -65,13 +65,13 @@ const AvatarLibrary: React.FC<AvatarLibraryProps> = ({ avatars }) => {
         <div>
           <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">Biblioteca <span className="text-brand-600">· Modelos guardados</span></h2>
           <div className="flex items-center gap-2 mt-2">
-            <p className="text-slate-400 font-medium italic text-xs md:text-sm">Gestiona tus modelos digitales.</p>
+            <p className="text-slate-400 font-medium italic text-xs md:text-sm">Encuentra y descarga los modelos que creaste.</p>
             <ModuleTutorial moduleId="avatarLibrary" steps={TUTORIAL_CONFIGS.avatarLibrary} />
           </div>
         </div>
         <div className="flex gap-2 w-full md:w-auto">
-          <button onClick={() => navigate('/crear/clonar')} className="flex-1 md:flex-none px-5 md:px-6 py-3 md:py-4 bg-brand-600 text-white rounded-[16px] md:rounded-[20px] text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-xl shadow-brand-100 hover:bg-brand-700 active:scale-95 transition-all">Nueva Clonación</button>
-          <button onClick={() => navigate('/crear/manual')} className="flex-1 md:flex-none px-5 md:px-6 py-3 md:py-4 bg-slate-900 text-white rounded-[16px] md:rounded-[20px] text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-xl shadow-slate-200 hover:bg-slate-800 active:scale-95 transition-all">Crear ADN</button>
+          <button onClick={() => navigate('/crear/clonar')} className="flex-1 md:flex-none px-5 md:px-6 py-3 md:py-4 bg-brand-600 text-white rounded-[16px] md:rounded-[20px] text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-xl shadow-brand-100 hover:bg-brand-700 active:scale-95 transition-all">Crear desde fotos</button>
+          <button onClick={() => navigate('/crear/manual')} className="flex-1 md:flex-none px-5 md:px-6 py-3 md:py-4 bg-slate-900 text-white rounded-[16px] md:rounded-[20px] text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-xl shadow-slate-200 hover:bg-slate-800 active:scale-95 transition-all">Diseñar un modelo</button>
         </div>
       </header>
 
@@ -80,14 +80,14 @@ const AvatarLibrary: React.FC<AvatarLibraryProps> = ({ avatars }) => {
         stats={[
           { label: 'Modelos', value: avatars.length, sub: 'guardados' },
           { label: 'Clonados', value: avatars.filter(a => a.type === 'reference' || a.type === 'clone').length, sub: 'desde foto', color: 'text-brand-600' },
-          { label: 'ADN Manual', value: avatars.filter(a => a.type === 'manual').length, sub: 'creados' },
+          { label: 'Desde cero', value: avatars.filter(a => a.type === 'manual').length, sub: 'creados' },
         ]}
         searchTexts={avatars.map(a => `${a.name} ${a.metadata?.ethnicity ?? ''} ${a.metadata?.personality ?? ''} ${a.type}`)}
         emptyTitle="Sin modelos guardados"
-        emptyDescription="Usá el laboratorio para crear tu primera identidad digital"
-        emptyCtaLabel="Nueva clonación"
+        emptyDescription="Crea tu primer modelo para encontrarlo aquí."
+        emptyCtaLabel="Crear desde fotos"
         onEmpty={() => navigate('/crear/clonar')}
-        primaryAction={{ label: 'Crear ADN', onClick: () => navigate('/crear/manual') }}
+        primaryAction={{ label: 'Diseñar un modelo', onClick: () => navigate('/crear/manual') }}
       >
         {avatars.map(avatar => (
           <ResultCard
@@ -97,7 +97,7 @@ const AvatarLibrary: React.FC<AvatarLibraryProps> = ({ avatars }) => {
             subtitle={avatar.metadata?.personality ?? ''}
             date={avatar.createdAt}
             badge={{
-              label: avatar.type === 'reference' || avatar.type === 'clone' ? 'PROT. CLON' : 'ADN MASTER',
+              label: avatar.type === 'reference' || avatar.type === 'clone' ? 'Desde fotos' : 'Desde cero',
               color: avatar.type === 'manual' ? 'violet' as any : 'fuchsia',
             }}
             pills={[
@@ -136,7 +136,7 @@ const AvatarLibrary: React.FC<AvatarLibraryProps> = ({ avatars }) => {
                     />
                  </div>
                  <div className="space-y-4 md:space-y-6">
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Master Asset Set (Base)</h3>
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Fotos base del modelo</h3>
                     <div className="grid grid-cols-3 gap-2 md:gap-3">
                        {selectedAvatar.baseImages.map((img, i) => (
                          <div key={i} className="group aspect-square rounded-xl md:rounded-2xl overflow-hidden relative border border-slate-200 cursor-pointer shadow-sm">
@@ -161,11 +161,6 @@ const AvatarLibrary: React.FC<AvatarLibraryProps> = ({ avatars }) => {
               <div className="flex-1 flex flex-col p-6 md:p-16 overflow-y-auto custom-scrollbar">
                  <header className="mb-8 md:mb-12">
                     <div className="flex flex-wrap items-center gap-2 md:gap-4 mb-2">
-                       <span className="px-2 md:px-3 py-1 bg-brand-50 text-brand-500 text-[7px] md:text-[8px] font-black uppercase rounded-full border border-brand-100 tracking-widest">Digital Model ID: {selectedAvatar.id.slice(-6)}</span>
-                       <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 bg-accent-500 rounded-full"></span>
-                        <span className="text-[7px] md:text-[8px] font-black text-slate-400 uppercase tracking-widest">Estado: Activo en Cloud</span>
-                       </div>
                     </div>
                     <h2 className="text-3xl md:text-5xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">{selectedAvatar.name}</h2>
                  </header>
@@ -173,7 +168,7 @@ const AvatarLibrary: React.FC<AvatarLibraryProps> = ({ avatars }) => {
                  <div className="space-y-8 md:space-y-12 animate-in fade-in duration-500">
                     <section className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
                        {[
-                         { label: 'Etnia / ADN', value: selectedAvatar.metadata.ethnicity, icon: 'fa-dna' },
+                         { label: 'Etnia', value: selectedAvatar.metadata.ethnicity, icon: 'fa-earth-americas' },
                          { label: 'Edad Aparente', value: selectedAvatar.metadata.age, icon: 'fa-user-clock' },
                          { label: 'Complexión', value: selectedAvatar.metadata.build, icon: 'fa-person' },
                          { label: 'Ojos / Mirada', value: selectedAvatar.metadata.eyes, icon: 'fa-eye' },
@@ -192,7 +187,7 @@ const AvatarLibrary: React.FC<AvatarLibraryProps> = ({ avatars }) => {
                     </section>
 
                     <section className="space-y-4 md:space-y-6">
-                       <h4 className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Descripción Física Narrativa (IA)</h4>
+                       <h4 className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Descripción del modelo</h4>
                        <div className="bg-brand-50/30 p-6 md:p-8 rounded-[32px] md:rounded-[40px] border border-brand-100/50">
                           <p className="text-xs md:text-base text-slate-700 leading-relaxed font-medium italic">
                              "{selectedAvatar.physicalDescription}"

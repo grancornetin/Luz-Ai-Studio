@@ -286,19 +286,19 @@ const ContentStudioProModule: React.FC = () => {
 
   const validateReferences = (): boolean => {
     if (faceRefs.length === 0) {
-      alert('⚠️ La foto del rostro (ADN) es obligatoria.');
+      alert('Sube una foto clara del rostro de la persona.');
       return false;
     }
     if (focus === 'PRODUCT' && !productRef) {
-      alert('⚠️ Enfoque PRODUCTO requiere referencia de producto.');
+      alert('Sube una foto del producto para continuar.');
       return false;
     }
     if (focus === 'OUTFIT' && !outfitRef) {
-      alert('⚠️ Enfoque OUTFIT requiere referencia de outfit.');
+      alert('Sube una foto del look para continuar.');
       return false;
     }
     if (focus === 'SCENE' && !sceneRef) {
-      alert('⚠️ Enfoque ESCENA requiere referencia de escena.');
+      alert('Sube una foto del lugar para continuar.');
       return false;
     }
     return true;
@@ -354,7 +354,7 @@ const ContentStudioProModule: React.FC = () => {
       );
       setSessionPlan(plan);
 
-      setLoadingMsg('Sincronizando identidad y generando Master...');
+      setLoadingMsg('Preparando la primera foto de tu sesión...');
 
       const { imageUrl: image0, analysis } = await contentStudioService.generateImage0(
         faceRefs[0],
@@ -368,7 +368,7 @@ const ContentStudioProModule: React.FC = () => {
         useProduct,
         (status, image) => {
           if (status === 'processing') setLoadingMsg('Generando imagen base (puede tomar hasta 2 minutos)...');
-          if (status === 'completed') setLoadingMsg('Master generado exitosamente');
+          if (status === 'completed') setLoadingMsg('Tu foto base está lista.');
         },
         modelId,
         // Master = posición 0 dentro del set master+derived
@@ -379,7 +379,7 @@ const ContentStudioProModule: React.FC = () => {
       const shotKeys = getShotKeys(userShotCount);
       const initialShots = shotKeys.map((key, idx) => ({
         key,
-        name: `Shot ${idx + 1}`,
+        name: `Foto ${idx + 1}`,
         promptUsed: '',
         negativeUsed: '',
         status: 'idle' as const,
@@ -1012,11 +1012,11 @@ const ContentStudioProModule: React.FC = () => {
         <header className="flex flex-col md:flex-row items-center justify-between gap-6 px-4">
           <div className="text-center md:text-left">
             <h1 className="t-display text-3xl md:text-4xl text-slate-900">
-              Content <span className="text-brand-600">Studio</span>
+              Fotos para <span className="text-brand-600">redes</span>
             </h1>
             <div className="flex items-center justify-center md:justify-start gap-2 mt-2">
               <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.4em] italic">
-                Contenido para redes · Sesiones orgánicas
+                Sesiones naturales listas para publicar
               </p>
               <ModuleTutorial moduleId="contentStudio" steps={TUTORIAL_CONFIGS.contentStudio} />
             </div>
@@ -1032,7 +1032,7 @@ const ContentStudioProModule: React.FC = () => {
               }}
               className={`px-6 md:px-8 py-2 md:py-3 rounded-xl md:rounded-2xl t-meta transition-all ${step !== 'library' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400'}`}
             >
-              Laboratorio
+              Crear una sesión
             </button>
             <button
               onClick={() => {
@@ -1103,7 +1103,7 @@ const ContentStudioProModule: React.FC = () => {
                   <ImageSlot
                     value={faceRefs[0] || null}
                     onChange={updateFaceRef}
-                    label="Rostro ADN"
+                    label="Foto del rostro"
                     aspectRatio="portrait"
                     required
                   />
@@ -1159,7 +1159,7 @@ const ContentStudioProModule: React.FC = () => {
 
                 {focus === 'SCENE' && (
                   <div className="space-y-2">
-                    <label className="t-meta">Descripción adicional (opcional)</label>
+                    <label className="t-meta">¿Quieres agregar algo? (opcional)</label>
                     <textarea
                       value={sceneText}
                       onChange={(e) => setSceneText(e.target.value)}
@@ -1196,7 +1196,7 @@ const ContentStudioProModule: React.FC = () => {
 
                 {/* Selector de modelo de IA */}
                 <div className="space-y-3">
-                  <label className="t-meta">Motor de generación</label>
+                  <label className="t-meta">Calidad de creación</label>
                   <div className="flex bg-white p-1 rounded-[16px] border border-slate-200 gap-1">
                     {([
                       { id: 'gemini' as ModelId,   label: 'Nano Banana 2', sub: 'Gemini · Recomendado' },
@@ -1225,7 +1225,7 @@ const ContentStudioProModule: React.FC = () => {
                 {/* Selector de cantidad de shots */}
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <label className="t-meta">Cantidad de shots</label>
+                    <label className="t-meta">Cantidad de fotos</label>
                     <span className="text-[9px] text-slate-400 italic">recomendado: 6</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
@@ -1240,23 +1240,23 @@ const ContentStudioProModule: React.FC = () => {
                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}
                       >
-                        {n} shots
+                        {n} fotos
                       </button>
                     ))}
                   </div>
                   {userShotCount === 2 && (
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-700 text-[11px] font-medium">
-                      ⚠️ <strong>2 shots</strong>: solo obtendrás close-up y torso. Se perderán ángulos como hero shot, lifestyle y detalle.
+                      <strong>2 fotos:</strong> primer plano y plano medio.
                     </div>
                   )}
                   {userShotCount === 4 && (
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-700 text-[11px] font-medium">
-                      ⚠️ <strong>4 shots</strong>: incluye close-up, producto en mano, detalle y torso. No habrá hero shot ni lifestyle.
+                      <strong>4 fotos:</strong> primer plano, producto en mano, detalle y plano medio.
                     </div>
                   )}
                   {userShotCount === 6 && (
                     <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-emerald-700 text-[11px] font-medium">
-                      ✅ <strong>6 shots</strong>: cobertura completa (close-up, producto, detalle, torso, hero, lifestyle).
+                      <strong>6 fotos:</strong> primer plano, producto en mano, detalle, plano medio, foto principal y foto en uso.
                     </div>
                   )}
                 </div>
@@ -1264,8 +1264,8 @@ const ContentStudioProModule: React.FC = () => {
                 <GenerateButton
                   onClick={startMasterGeneration}
                   disabled={step !== 'setup'}
-                  label={`Generar imagen base + ${userShotCount} imágenes`}
-                  loadingLabel="Generando..."
+                  label={`Crear foto base + ${userShotCount} fotos`}
+                  loadingLabel="Creando..."
                   fixedCost={sessionCost}
                   creditsAfter={creditsAfterMaster}
                   className="py-5 md:py-7 rounded-[24px] md:rounded-[32px] text-[10px] md:text-xs"
@@ -1310,7 +1310,7 @@ const ContentStudioProModule: React.FC = () => {
                 <div className="aspect-[3/4] w-full max-w-xs rounded-[24px] overflow-hidden border-4 border-brand-600 shadow-xl relative">
                   <img src={currentSet.image0Url!} className="w-full h-full object-cover" />
                   <div className="absolute top-4 left-4">
-                    <span className="px-3 py-1 bg-brand-600 text-white text-[10px] font-black rounded-full uppercase">Master</span>
+                    <span className="px-3 py-1 bg-brand-600 text-white text-[10px] font-black rounded-full uppercase">Foto base</span>
                   </div>
                 </div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Imagen base · coherencia facial activa</p>
@@ -1339,7 +1339,7 @@ const ContentStudioProModule: React.FC = () => {
             <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3.5 flex items-center gap-3">
               <i className="fa-solid fa-rotate-right text-amber-500 animate-spin text-sm"></i>
               <div>
-                <p className="text-[11px] font-black text-amber-800 uppercase tracking-widest">Reintentando shots fallidos</p>
+                <p className="text-[11px] font-black text-amber-800 uppercase tracking-widest">Volviendo a crear las fotos pendientes</p>
                 <p className="text-[10px] text-amber-600">Los shots completados se mantienen visibles mientras se regeneran los que fallaron.</p>
               </div>
             </div>
@@ -1357,7 +1357,7 @@ const ContentStudioProModule: React.FC = () => {
                 <div className="aspect-[3/4] rounded-[24px] overflow-hidden border-2 border-brand-600 relative">
                   <img src={currentSet.image0Url!} className="w-full h-full object-cover" />
                   <div className="absolute top-4 left-4">
-                    <span className="px-3 py-1 bg-brand-600 text-white text-[10px] font-black rounded-full uppercase">Master</span>
+                    <span className="px-3 py-1 bg-brand-600 text-white text-[10px] font-black rounded-full uppercase">Foto base</span>
                   </div>
                 </div>
                 {currentSet.shots.map((s, idx) => (
@@ -1378,7 +1378,7 @@ const ContentStudioProModule: React.FC = () => {
                         </div>
                       )}
                       <div className="absolute top-3 left-3">
-                        <span className="px-2 py-1 bg-black/40 text-white text-[9px] font-black rounded-full uppercase">Shot {idx + 1}</span>
+                        <span className="px-2 py-1 bg-black/40 text-white text-[9px] font-black rounded-full uppercase">Foto {idx + 1}</span>
                       </div>
                       {s.imageUrl && s.status === 'done' && (
                         <div className="absolute top-3 right-3">
@@ -1422,7 +1422,7 @@ const ContentStudioProModule: React.FC = () => {
                   <div className="space-y-3 md:space-y-4">
                     <div className="flex items-start gap-3 md:gap-4">
                       <i className="fa-solid fa-circle-check text-brand-400 mt-0.5"></i>
-                      <p className="text-[10px] md:text-[11px] font-bold">Rostro consistente vs tu ADN.</p>
+                      <p className="text-[10px] md:text-[11px] font-bold">El rostro se parece a tu foto de referencia.</p>
                     </div>
                     <div className="flex items-start gap-3 md:gap-4">
                       <i className="fa-solid fa-circle-check text-brand-400 mt-0.5"></i>
@@ -1439,7 +1439,7 @@ const ContentStudioProModule: React.FC = () => {
                     onClick={regenerateMaster}
                     className="t-meta text-brand-400 hover:text-white transition-all italic flex items-center gap-2"
                   >
-                    <i className="fa-solid fa-rotate"></i> Regenerar imagen base ({currentSet.attemptsImage0}/3)
+                    <i className="fa-solid fa-rotate"></i> Probar otra foto base ({currentSet.attemptsImage0}/3)
                   </button>
                 </div>
 
@@ -1487,7 +1487,7 @@ const ContentStudioProModule: React.FC = () => {
                   {(focus === 'OUTFIT' || focus === 'SCENE') && currentSet.productRef && (
                     <div className="space-y-2">
                       <label className="t-meta">
-                        {focus === 'OUTFIT' ? 'Objeto complementario' : 'Prop / Objeto adicional'}
+                        Objeto adicional
                       </label>
                       <div className="text-[11px] font-bold text-slate-700 bg-white p-3 rounded-xl border border-slate-200 flex items-center gap-2">
                         <i className="fa-solid fa-check-circle text-green-500 text-xs"></i>
@@ -1509,7 +1509,7 @@ const ContentStudioProModule: React.FC = () => {
                     onClick={approveAndProduce}
                     className="w-full py-5 md:py-7 bg-brand-600 text-white rounded-[24px] md:rounded-[32px] t-meta shadow-2xl hover:bg-brand-700 transition-all active:scale-95"
                   >
-                    Generar {currentSet.userShotCount ?? userShotCount} imágenes
+                    Crear {currentSet.userShotCount ?? userShotCount} fotos
                   </button>
                 </div>
               </div>
@@ -1544,9 +1544,9 @@ const ContentStudioProModule: React.FC = () => {
                 { label: 'Avatar', value: sets.filter(s => s.focus === 'AVATAR').length, sub: 'sesiones' },
                 { label: 'Producto', value: sets.filter(s => s.focus === 'PRODUCT').length, sub: 'sesiones' },
               ]}
-              emptyTitle="Sin sesiones todavía"
-              emptyDescription="Creá tu primera sesión en el laboratorio para verla aquí"
-              emptyCtaLabel="Ir al laboratorio"
+              emptyTitle="Aún no tienes sesiones"
+              emptyDescription="Crea la primera para verla aquí."
+              emptyCtaLabel="Crear una sesión"
               onEmpty={() => { setStep('setup'); setSelectionMode(false); }}
               columns={1}
               searchTexts={filteredSets.map(s => `sesión ${s.id} ${FOCUS_LABELS[s.focus]} ${s.productCategory ?? ''}`)}
@@ -1601,7 +1601,7 @@ const ContentStudioProModule: React.FC = () => {
                           onClick={() => downloadSingleSet(set)}
                           className="flex-1 md:flex-none px-6 md:px-10 py-3 md:py-5 bg-white border border-slate-200 rounded-xl md:rounded-2xl t-meta flex items-center justify-center gap-2 md:gap-3 shadow-sm hover:bg-slate-50 active:scale-95 transition-all"
                         >
-                          <i className="fa-solid fa-file-zipper"></i> Pack
+                          <i className="fa-solid fa-file-zipper"></i> Descargar sesión
                         </button>
                         <button
                           onClick={() => contentStudioStorage.deleteSet(set.id).then(() => { loadSets(); setSelectedSets(new Set()); })}
@@ -1626,7 +1626,7 @@ const ContentStudioProModule: React.FC = () => {
                         <img src={set.image0Url!} className="w-full h-full object-cover" />
                         <div className="absolute top-4 left-4 md:top-6 md:left-6">
                           <span className="px-3 md:px-4 py-1 md:py-1.5 bg-brand-600 text-white text-[10px] font-black rounded-full uppercase italic shadow-lg">
-                            Master
+                            Foto base
                           </span>
                         </div>
                         <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
@@ -1646,7 +1646,7 @@ const ContentStudioProModule: React.FC = () => {
                                 <div className="flex flex-col items-center gap-2 md:gap-3">
                                   <i className="fa-solid fa-spinner animate-spin text-xl md:text-2xl text-brand-500"></i>
                                   <span className="text-[10px] font-black uppercase text-brand-400 tracking-widest">
-                                    Render...
+                                    Creando...
                                   </span>
                                 </div>
                               </div>
@@ -1679,7 +1679,7 @@ const ContentStudioProModule: React.FC = () => {
 
                             <div className="absolute top-4 left-4 md:top-6 md:left-6">
                               <span className="px-3 md:px-4 py-1 md:py-1.5 bg-black/40 backdrop-blur-md text-white text-[10px] font-black rounded-full uppercase border border-white/10 italic">
-                                Shot {idx + 1}
+                                Foto {idx + 1}
                               </span>
                             </div>
 

@@ -7,7 +7,7 @@ const TIPOS = [
   { value: 'bug',     label: '🐛 Error o falla técnica' },
   { value: 'billing', label: '💳 Suscripción o pago' },
   { value: 'credits', label: '⚡ Problema con créditos' },
-  { value: 'content', label: '🎨 Problema con generación de imágenes' },
+  { value: 'content', label: '🎨 Problema al crear una imagen' },
   { value: 'account', label: '👤 Problema con mi cuenta' },
   { value: 'other',   label: '💬 Otra consulta' },
 ];
@@ -35,11 +35,11 @@ const Contacto: React.FC = () => {
           <i className="fa-solid fa-envelope text-white text-lg"></i>
         </div>
         <h1 className="text-3xl font-black text-slate-900 uppercase italic tracking-tighter">
-          Contacto y Soporte
+          Contacto y soporte
         </h1>
         <p className="text-sm text-slate-500 font-medium">
           ¿Tienes un error, consulta sobre tu suscripción o necesitas ayuda?
-          Completa el formulario — se abrirá tu app de correo con todo pre-llenado.
+          Completa el formulario. Se abrirá tu aplicación de correo con los datos completos.
         </p>
       </header>
 
@@ -78,7 +78,7 @@ const Contacto: React.FC = () => {
         <div className="space-y-1.5">
           <label className="text-xs font-black text-slate-400 uppercase tracking-widest block">Mensaje</label>
           <textarea
-            required rows={5} placeholder="Describe tu consulta con el mayor detalle posible..."
+            required rows={5} placeholder="Cuéntanos qué pasó y, si puedes, qué estabas intentando hacer..."
             value={form.message} onChange={e => setForm(p => ({ ...p, message: e.target.value }))}
             className="w-full px-4 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-2xl outline-none transition-all text-base md:text-sm font-medium resize-none"
           />
@@ -87,7 +87,7 @@ const Contacto: React.FC = () => {
         <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
           <p className="text-xs font-bold text-blue-700 flex items-start gap-2">
             <i className="fa-solid fa-circle-info mt-0.5 flex-shrink-0"></i>
-            Al hacer click en "Enviar", se abrirá tu app de correo con el mensaje pre-llenado.
+            Al elegir "Enviar", se abrirá tu aplicación de correo con el mensaje completo.
           </p>
         </div>
 

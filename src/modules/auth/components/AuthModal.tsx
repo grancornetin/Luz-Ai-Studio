@@ -48,11 +48,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const friendlyError = (code: string): string => {
     console.error('[Auth] Firebase error code:', code);
     const map: Record<string, string> = {
-      'auth/user-not-found':         'Usuario no encontrado.',
+      'auth/user-not-found':         'No encontramos una cuenta con ese correo.',
       'auth/wrong-password':         'Contraseña incorrecta.',
       'auth/email-already-in-use':   'El correo ya está en uso.',
       'auth/weak-password':          'La contraseña debe tener al menos 6 caracteres.',
-      'auth/invalid-email':          'Correo inválido.',
+      'auth/invalid-email':          'Revisa que el correo esté escrito correctamente.',
       'auth/popup-closed-by-user':   'Cerraste la ventana de Google. Intenta de nuevo.',
       'auth/cancelled-popup-request':'Operación cancelada.',
       'auth/invalid-credential':     'Correo o contraseña incorrectos.',
@@ -61,7 +61,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       'auth/popup-blocked':          'El navegador bloqueó la ventana de Google. Permite popups para este sitio e intenta de nuevo.',
       'auth/network-request-failed': 'Error de red. Verifica tu conexión e intenta de nuevo.',
     };
-    return map[code] || `Ocurrió un error inesperado (${code}).`;
+    return map[code] || 'Algo salió mal. Inténtalo de nuevo en unos minutos.';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -118,7 +118,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
   const SUBTITLES: Record<AuthMode, string> = {
     login:  'Ingresa para continuar creando',
-    signup: 'Únete a la comunidad de LUZ IA',
+    signup: 'Empieza con 20 créditos de regalo',
     reset:  'Te enviaremos un enlace de recuperación',
   };
 
@@ -237,9 +237,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             >
               {loading
                 ? <Loader2 className="animate-spin" size={18} />
-                : mode === 'login' ? 'Iniciar Sesión'
-                : mode === 'signup' ? 'Crear Cuenta'
-                : 'Enviar Enlace'
+                : mode === 'login' ? 'Iniciar sesión'
+                : mode === 'signup' ? 'Crear cuenta'
+                : 'Enviar enlace'
               }
             </button>
           </form>

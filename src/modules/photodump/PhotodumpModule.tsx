@@ -83,9 +83,9 @@ const WIZARD_STEPS_LIBRE = [
 const GENERATION_STEPS: ProgressStep[] = [
   { id: 'analyze',  label: 'Analizando referencias visuales'   },
   { id: 'plan',     label: 'Armando la estructura narrativa'   },
-  { id: 'ref0',     label: 'Generando imagen ancla del set'    },
-  { id: 'shots',    label: 'Generando imágenes de la historia' },
-  { id: 'captions', label: 'Escribiendo captions y hashtags'   },
+  { id: 'ref0',     label: 'Creando la primera foto'            },
+  { id: 'shots',    label: 'Creando las fotos de la historia'   },
+  { id: 'captions', label: 'Preparando el texto y los hashtags' },
   { id: 'done',     label: 'Historia visual lista'             },
 ];
 
@@ -100,22 +100,22 @@ const UpgradeWall: React.FC<{ proCredits: number }> = ({ proCredits }) => {
         <Images className="w-10 h-10 text-brand-600" />
       </div>
       <div className="space-y-2 max-w-sm">
-        <h2 className="t-display text-3xl text-slate-900">Photodump Mode</h2>
+        <h2 className="t-display text-3xl text-slate-900">Historia en fotos</h2>
         <p className="t-body leading-relaxed">
           {proCredits === 0
-            ? 'Agotaste tus sesiones Photodump de este período. Comprá pro-credits o actualizá tu plan.'
-            : 'Necesitás pro-credits para usar Photodump. Cada sesión consume 1 pro-credit.'}
+            ? 'Usaste todas tus sesiones de este período. Puedes comprar sesiones extra o actualizar tu plan.'
+            : 'Necesitas una sesión Pro para crear una historia completa.'}
         </p>
       </div>
       <div className="bg-slate-50 border border-slate-200 rounded-[28px] p-6 space-y-3 max-w-xs w-full">
-        <p className="t-meta">Tus pro-credits</p>
+        <p className="t-meta">Tus sesiones Pro</p>
         <p className="t-display text-5xl text-slate-900">{proCredits}</p>
-        <p className="t-body-sm">1 pro-credit = 1 historia visual</p>
+        <p className="t-body-sm">Una sesión crea una historia completa</p>
       </div>
       <div className="flex flex-col gap-3 w-full max-w-xs">
         <button onClick={() => navigate('/buy-credits')}
           className="w-full py-4 bg-brand-600 hover:bg-brand-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg">
-          Comprar pro-credits
+          Comprar sesiones
         </button>
         <button onClick={() => navigate('/pricing')}
           className="w-full py-3 bg-white border border-slate-200 hover:border-slate-300 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest transition-all">
@@ -353,7 +353,7 @@ const PhotodumpModule: React.FC = () => {
     }
     if (!isAdmin) {
       const ok = await deductCredits(cost);
-      if (!ok) { setError('Error al descontar créditos.'); return; }
+      if (!ok) { setError('No pudimos confirmar el costo. Tus créditos no cambiaron. Inténtalo de nuevo.'); return; }
     }
 
     setGeneratingFreeIndex(index);
@@ -387,7 +387,7 @@ const PhotodumpModule: React.FC = () => {
         await deductCredits(-cost).catch(() => {});
         await refreshCredits().catch(() => {});
       }
-      setError(`Error generando escena ${index + 1}: ${err?.message ?? 'Intentá de nuevo.'}`);
+      setError(`No pudimos crear la foto ${index + 1}. Inténtalo de nuevo.`);
     } finally {
       setGeneratingFreeIndex(null);
     }
@@ -399,7 +399,7 @@ const PhotodumpModule: React.FC = () => {
 
     if (!isAdmin) {
       const ok = await deductProCredit();
-      if (!ok) { setError('No tenés pro-credits para esta sesión.'); return; }
+      if (!ok) { setError('No tienes sesiones Pro disponibles.'); return; }
     }
     if (!isAdmin && (credits?.available ?? 0) < imageCreditCost) {
       if (!isAdmin) await refundProCredit();
@@ -408,7 +408,7 @@ const PhotodumpModule: React.FC = () => {
     }
     if (!isAdmin) {
       const ok = await deductCredits(imageCreditCost);
-      if (!ok) { await refundProCredit(); setError('Error al descontar créditos.'); return; }
+      if (!ok) { await refundProCredit(); setError('No pudimos confirmar el costo. Tus créditos no cambiaron. Inténtalo de nuevo.'); return; }
     }
 
     setStep(3);
@@ -1406,7 +1406,7 @@ const PhotodumpModule: React.FC = () => {
 
       await finalizarSet(shotUrls, shots, captions, ref0Url, debugData);
     } catch (err: any) {
-      setError(err?.message || 'Error generando el photodump.');
+      setError('No pudimos crear la historia en fotos. Inténtalo de nuevo.');
       if (!isAdmin) {
         await refundProCredit().catch(() => {});
         await deductCredits(-imageCreditCost).catch(() => {});
@@ -1539,7 +1539,7 @@ const PhotodumpModule: React.FC = () => {
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-5 px-1 mb-6 md:mb-8">
           <div>
             <h1 className="t-display text-3xl text-slate-900">
-              Photodump <span className="text-brand-600">Mode</span>
+              Historia <span className="text-brand-600">en fotos</span>
             </h1>
             <div className="flex items-center gap-2 mt-2">
               <p className="text-slate-500 font-medium italic text-xs md:text-sm">
@@ -1623,7 +1623,7 @@ const PhotodumpModule: React.FC = () => {
                         manager={presetManager}
                         onLoad={handleLoadPreset}
                         suggestedName={photodumpPresetAdapter.defaultName!(currentPresetState)}
-                        emptyLabel="No tenés presets de Photodump guardados"
+                        emptyLabel="No tienes configuraciones guardadas"
                       />
                     </div>
                   )}
@@ -1684,7 +1684,7 @@ const PhotodumpModule: React.FC = () => {
                       {isGenerating ? (
                         <div className="flex items-center gap-2 mb-2">
                           <div className="w-2 h-2 rounded-full bg-brand-600 animate-pulse" />
-                          <span className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Generando · no cierres esta ventana</span>
+                          <span className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Creando tu historia</span>
                         </div>
                       ) : failedIndexes.length > 0 ? (
                         <div className="flex items-center gap-2 mb-2">
@@ -1720,7 +1720,7 @@ const PhotodumpModule: React.FC = () => {
                                 {failedIndexes.length} imagen{failedIndexes.length > 1 ? 'es no se generaron' : ' no se generó'} correctamente.
                               </p>
                               <p className="text-[11px] text-rose-600 mt-0.5 leading-snug">
-                                Podés regenerarlas sin costo adicional.
+                                Puedes crearlas de nuevo sin costo adicional.
                               </p>
                             </div>
                           </div>
@@ -1778,7 +1778,7 @@ const PhotodumpModule: React.FC = () => {
                             className="relative rounded-2xl overflow-hidden border-2 border-violet-300 bg-violet-50 animate-pulse"
                           >
                             <div className="absolute inset-0 flex items-center justify-center">
-                              <div className="bg-white/95 rounded-full px-3 py-1 text-[9px] font-bold text-violet-600 tracking-wide uppercase">Generando ancla...</div>
+                              <div className="bg-white/95 rounded-full px-3 py-1 text-[9px] font-bold text-violet-600 tracking-wide uppercase">Creando la primera foto...</div>
                             </div>
                           </div>
                         )}
@@ -1814,7 +1814,7 @@ const PhotodumpModule: React.FC = () => {
                               )}
                               {active && !imgUrl && (
                                 <div className="absolute inset-0 flex items-center justify-center">
-                                  <div className="bg-white/95 rounded-full px-3.5 py-1.5 text-[10px] font-bold text-brand-600 tracking-[0.12em] uppercase">Generando...</div>
+                                  <div className="bg-white/95 rounded-full px-3.5 py-1.5 text-[10px] font-bold text-brand-600 tracking-[0.12em] uppercase">Creando...</div>
                                 </div>
                               )}
                               {isFailed && !retrying && (
@@ -1893,7 +1893,7 @@ const PhotodumpModule: React.FC = () => {
                     if (!firstShot?.caption) return null;
                     return (
                       <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2.5">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Caption del set</p>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Texto para publicar</p>
                         <p className="text-[13px] text-slate-700 leading-relaxed">{firstShot.caption}</p>
                         {firstShot.hashtags && (
                           <p className="text-[12px] text-violet-500 leading-relaxed">{firstShot.hashtags}</p>
@@ -1903,7 +1903,7 @@ const PhotodumpModule: React.FC = () => {
                             onClick={() => copyText(firstShot.caption + '\n\n' + firstShot.hashtags, 'set-full')}
                             className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-brand-600 transition-colors font-medium">
                             {copiedKey === 'set-full' ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
-                            {copiedKey === 'set-full' ? 'Copiado' : 'Copiar caption + hashtags'}
+                            {copiedKey === 'set-full' ? 'Copiado' : 'Copiar texto y hashtags'}
                           </button>
                           <button type="button"
                             onClick={() => copyText(firstShot.hashtags, 'set-ht')}
@@ -2064,7 +2064,7 @@ const PhotodumpModule: React.FC = () => {
               <ResultCard
                 key={set.id}
                 images={set.images.map(i => i.imageUrl).filter(Boolean).slice(0, 3)}
-                title={`${RECIPE_META[set.recipe ?? 'day_in_life']?.label ?? NARRATIVE_META[set.narrative]?.label ?? 'Photodump'}`}
+                title={`${RECIPE_META[set.recipe ?? 'day_in_life']?.label ?? NARRATIVE_META[set.narrative]?.label ?? 'Historia en fotos'}`}
                 subtitle={set.basePrompt}
                 date={set.createdAt}
                 badge={{ label: '✓ Completado', color: 'green' }}
@@ -2097,7 +2097,7 @@ const PhotodumpModule: React.FC = () => {
           initialIndex={lightboxIndex}
           onClose={() => setLightboxOpen(false)}
           onDownload={(url, idx) => { const a = document.createElement('a'); a.href = url; a.download = `photodump_${idx + 1}.png`; a.click(); }}
-          metadata={{ label: 'Photodump' }}
+          metadata={{ label: 'Historia en fotos' }}
         />
       )}
     </>

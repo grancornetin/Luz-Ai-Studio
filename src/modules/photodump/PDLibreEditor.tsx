@@ -28,7 +28,7 @@ const REF_SLOTS: {
   border:   string;
   bg:       string;
 }[] = [
-  { key: 'outfit',   label: 'Outfit',   tag: 'outfit',   max: 4, icon: <Shirt   size={12} strokeWidth={2} />, slotType: 'outfit',  color: 'text-purple-600',  border: 'border-purple-200',  bg: 'bg-purple-50/30'  },
+  { key: 'outfit',   label: 'Look',     tag: 'outfit',   max: 4, icon: <Shirt   size={12} strokeWidth={2} />, slotType: 'outfit',  color: 'text-purple-600',  border: 'border-purple-200',  bg: 'bg-purple-50/30'  },
   { key: 'producto', label: 'Producto', tag: 'producto', max: 4, icon: <Package size={12} strokeWidth={2} />, slotType: 'product', color: 'text-emerald-600', border: 'border-emerald-200', bg: 'bg-emerald-50/30' },
   { key: 'escena',   label: 'Escena',   tag: 'escena',   max: 1, icon: <Layers  size={12} strokeWidth={2} />, slotType: 'scene',   color: 'text-blue-600',    border: 'border-blue-200',    bg: 'bg-blue-50/30'    },
 ];
@@ -554,7 +554,7 @@ const SceneCard: React.FC<SceneCardProps> = ({
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.12em]">
-                  Prompt <span className="text-brand-600">*</span>
+                  Describe la foto <span className="text-brand-600">*</span>
                 </label>
                 <div className="flex items-center gap-1 text-[9px] text-slate-400">
                   <AtSign size={9} />
@@ -565,7 +565,7 @@ const SceneCard: React.FC<SceneCardProps> = ({
                 value={scene.prompt}
                 onChange={handlePromptChange}
                 suggestions={allSuggestions}
-                placeholder="Ej: la @persona lleva el @outfit y entra al bar..."
+                placeholder="Ej.: la @persona lleva el @outfit y entra al bar..."
               />
               {usedTags.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1">
@@ -667,7 +667,7 @@ const SceneCard: React.FC<SceneCardProps> = ({
                   Contexto visual de escenas anteriores
                 </label>
                 <p className="text-[10px] text-slate-400 mb-2 leading-relaxed">
-                  Seleccioná o escribí @escenaN en el prompt. Ambas formas funcionan igual.
+                  Elige una foto anterior como referencia para mantener la continuidad.
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {prevScenesWithResult.map(({ scene: s, index: i }) => {
@@ -742,12 +742,12 @@ const SceneCard: React.FC<SceneCardProps> = ({
               {generating ? (
                 <>
                   <div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  Generando...
+                  Creando...
                 </>
               ) : (
                 <>
                   <Sparkles size={13} />
-                  Generar · 2 créditos
+                  Crear foto · 2 créditos
                 </>
               )}
             </button>
@@ -816,7 +816,7 @@ const PDLibreEditor: React.FC<PDLibreEditorProps> = ({
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-[10px] font-black text-violet-600 uppercase tracking-[0.18em]">Paso 2 · Modo libre</div>
+          <div className="text-[10px] font-black text-violet-600 uppercase tracking-[0.18em]">Paso 2 · Crea foto por foto</div>
           <h2 className="t-display text-[28px] md:text-[34px] text-slate-900 mt-2.5 leading-[1.05]">
             Diseñá cada<br /><span className="text-violet-600 italic normal-case">escena a tu gusto</span>
           </h2>
@@ -870,7 +870,7 @@ const PDLibreEditor: React.FC<PDLibreEditorProps> = ({
                     Escena {item.originalIdx + 1}
                     {item.scene.result && <span className="ml-1.5 text-[9px] text-emerald-600 font-black">· tenía imagen</span>}
                   </p>
-                  <p className="text-[10px] text-slate-400 truncate">{item.scene.prompt || 'Sin prompt'}</p>
+                  <p className="text-[10px] text-slate-400 truncate">{item.scene.prompt || 'Sin descripción'}</p>
                 </div>
                 <button
                   onClick={() => handleRestore(item)}

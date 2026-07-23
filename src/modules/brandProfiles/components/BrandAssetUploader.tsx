@@ -209,7 +209,7 @@ export const BrandAssetUploader: React.FC<Props> = ({
               <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
                 <Check size={18} className="text-green-600" />
               </div>
-              <p className="text-xs font-bold text-green-600">¡Subido correctamente!</p>
+              <p className="text-xs font-bold text-green-600">Archivo guardado.</p>
             </>
           ) : (
             <>

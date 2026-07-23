@@ -63,10 +63,10 @@ const EmptyOutputState: React.FC = () => (
       <Sparkles className="w-9 h-9 text-white" />
     </div>
     <h3 className="text-white text-[22px] font-extrabold italic uppercase tracking-tighter leading-none">
-      Esperando generación
+      Tu imagen aparecerá aquí
     </h3>
     <p className="text-slate-500 text-[11px] font-bold uppercase tracking-[0.3em] mt-4 max-w-[260px] leading-relaxed">
-      Escribe un prompt y genera una imagen
+      Describe lo que quieres crear
     </p>
   </div>
 );
@@ -76,7 +76,7 @@ const ErrorBanner: React.FC<{ message: string; onRetry?: () => void }> = ({ mess
   <div className="flex items-start gap-3 p-4 rounded-2xl bg-red-50 border border-red-100">
     <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
     <div className="flex-1 min-w-0">
-      <p className="text-[12px] font-bold text-red-700">Falló la generación</p>
+      <p className="text-[12px] font-bold text-red-700">No pudimos crear la imagen</p>
       <p className="text-[11px] text-red-600 leading-relaxed mt-0.5">{message}</p>
     </div>
     {onRetry && (
@@ -194,9 +194,9 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
               <SectionHeader
                 icon={<Sparkles className="w-5 h-5" />}
                 iconBg="bg-brand-50 text-brand-600"
-                title="Editor de prompts"
+                title="Describe tu idea"
                 subtitle={
-                  <>Lenguaje natural + referencias con <code className="font-mono text-brand-600 text-[12px]">@</code>.</>
+                  <>Escribe lo que quieres y menciona tus fotos con <code className="font-mono text-brand-600 text-[12px]">@</code> cuando quieras usarlas.</>
                 }
               />
 
@@ -217,8 +217,8 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
                   onClick={generate}
                   loading={isGenerating}
                   disabled={!safePromptText.trim() || !hasEnoughCredits}
-                  label="Generar imagen"
-                  loadingLabel="Sintetizando DNA…"
+                  label="Crear imagen"
+                  loadingLabel="Organizando tu idea…"
                   imageCount={1}
                   creditsAfter={creditsAfter}
                 />
@@ -233,7 +233,7 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
                 iconBg="bg-emerald-50 text-emerald-600"
                 title="Referencias visuales"
                 subtitle={
-                  <>Sube hasta 4 imágenes e invócalas con <code className="font-mono text-brand-600 text-[12px]">@nombre</code> en el prompt.</>
+                  <>Sube hasta 4 fotos y escribe <code className="font-mono text-brand-600 text-[12px]">@nombre</code> cuando quieras incluir una.</>
                 }
               />
               <ReferenceSlots
@@ -247,7 +247,7 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
               {/* Tokens activos */}
               {usedTokens.length > 0 && (
                 <div className="mt-5 flex flex-wrap gap-2 items-center">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tokens activos:</span>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Referencias incluidas:</span>
                   {usedTokens.map(t => (
                     <span key={t} className="inline-flex items-center px-2.5 py-1 rounded-full bg-brand-50 border border-brand-100 text-brand-700 font-mono text-[11px] font-semibold">
                       @{t}
@@ -269,10 +269,10 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
                   </div>
                   <div className="text-left">
                     <p className="text-[14px] font-bold text-slate-800 leading-none">
-                      Estructura avanzada <span className="text-[10px] text-slate-300 font-normal normal-case">(DNA)</span>
+                      Editar la descripción por partes
                     </p>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      {showAdvanced ? '7 capas detectadas' : 'Editar capas semánticas del prompt'}
+                      {showAdvanced ? '7 partes disponibles' : 'Cambia solo lo que necesites'}
                     </p>
                   </div>
                 </div>
@@ -301,7 +301,7 @@ const PromptComposer: React.FC<PromptComposerProps> = ({
                 icon={<History className="w-5 h-5" />}
                 iconBg="bg-slate-100 text-slate-500"
                 title="Historial"
-                subtitle="Tus últimos prompts generados."
+                subtitle="Tus últimas descripciones."
               />
               <PromptHistory onRestore={(text) => setPromptText(text)} />
             </section>

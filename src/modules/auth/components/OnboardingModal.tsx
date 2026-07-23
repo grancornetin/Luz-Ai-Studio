@@ -53,10 +53,10 @@ const SLIDES: Slide[] = [
     icon: <Image className="w-10 h-10 text-white" />,
     bg: 'from-brand-600 to-cyan-500',
     title: 'Contenido UGC Orgánico',
-    subtitle: 'UGC Studio · Para redes sociales',
+    subtitle: 'Fotos naturales para tus redes sociales',
     description: 'Sube tu modelo, un outfit, un producto o una escena y genera una sesión completa de 7 fotos estilo iPhone — contenido auténtico listo para publicar en Instagram o TikTok.',
     badge: 'UGC & Social',
-    ctaLabel: '→ Ir a UGC Studio',
+    ctaLabel: '→ Crear fotos para redes',
     ctaRoute: '/studio-pro',
   },
   {

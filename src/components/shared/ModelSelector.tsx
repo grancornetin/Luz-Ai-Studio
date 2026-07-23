@@ -28,8 +28,8 @@ const MODELS: {
 }[] = [
   {
     id:      'gemini',
-    label:   'Nano Banana 2',
-    desc:    'Máxima calidad, referencias de imagen',
+    label:   'Mayor fidelidad',
+    desc:    'Ideal para usar fotos de referencia',
     credits: 2,
     icon:    <BananaIcon className="w-4 h-4" />,
     color:   'text-yellow-500',
@@ -37,8 +37,8 @@ const MODELS: {
   },
   {
     id:      'seedream',
-    label:   'Seedream 4.5',
-    desc:    'Rápido y económico',
+    label:   'Más rápida',
+    desc:    'Usa menos créditos',
     credits: 1,
     icon:    <Zap className="w-4 h-4" />,
     color:   'text-emerald-600',
@@ -46,8 +46,8 @@ const MODELS: {
   },
   {
     id:      'gptimage',
-    label:   'GPT Image 2',
-    desc:    'Alta creatividad, prompts complejos',
+    label:   'Más creativa',
+    desc:    'Ideal para ideas con muchos detalles',
     credits: 2,
     icon:    <Sparkles className="w-4 h-4" />,
     color:   'text-violet-600',
@@ -64,7 +64,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 }) => (
   <div className={`space-y-1.5 ${className}`}>
     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">
-      Modelo de IA · activo: <span className="text-slate-700">{MODELS.find(m => m.id === value)?.label}</span>
+      Opción de calidad · activa: <span className="text-slate-700">{MODELS.find(m => m.id === value)?.label}</span>
     </p>
     <div className="flex gap-2 min-w-0 overflow-hidden">
       {MODELS.filter(m => !exclude.includes(m.id)).map(m => {

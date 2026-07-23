@@ -62,7 +62,7 @@ const readableName = (record: GenerationRecord): string => {
 
 const promptSnippet = (record: GenerationRecord): string => {
   const prompt = record.promptText?.replace(/\s+/g, ' ').trim();
-  if (!prompt) return 'Sin prompt guardado';
+  if (!prompt) return 'Sin descripción guardada';
   return prompt.length > 110 ? `${prompt.slice(0, 110)}...` : prompt;
 };
 
@@ -131,7 +131,7 @@ const GenerationHistory: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Eliminar esta imagen del historial?')) return;
+    if (!confirm('¿Quieres eliminar esta imagen de tus creaciones?')) return;
     setDeletingId(id);
     try {
       await generationHistoryService.delete(id).catch(console.error);
@@ -144,7 +144,7 @@ const GenerationHistory: React.FC = () => {
 
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`Eliminar ${selectedIds.size} imagenes?`)) return;
+    if (!confirm(`¿Quieres eliminar ${selectedIds.size} imágenes? Esta acción no se puede deshacer.`)) return;
     setIsBulkLoading(true);
     try {
       await generationHistoryService.deleteBatch(Array.from(selectedIds)).catch(console.error);
@@ -162,7 +162,7 @@ const GenerationHistory: React.FC = () => {
       const selected = records.filter(r => selectedIds.has(r.id));
       await downloadAsZip(selected.map(r => r.imageUrl), `luzIA_${Date.now()}.zip`, 'gen');
     } catch {
-      alert('Error al crear ZIP. Descarga individualmente.');
+      alert('No pudimos preparar la descarga. Puedes descargar las imágenes una por una.');
     } finally {
       setIsBulkLoading(false);
     }
@@ -178,11 +178,11 @@ const GenerationHistory: React.FC = () => {
   const copyPrompt = async (record: GenerationRecord) => {
     const text = record.promptText || '';
     if (!text) {
-      showToast('Esta imagen no tiene prompt guardado');
+      showToast('Esta imagen no tiene una descripción guardada');
       return;
     }
     await navigator.clipboard?.writeText(text);
-    showToast('Prompt copiado');
+    showToast('Descripción copiada');
   };
 
   const saveToCatalog = async (record: GenerationRecord) => {
@@ -208,7 +208,7 @@ const GenerationHistory: React.FC = () => {
     };
 
     await dbService.saveProduct(product);
-    showToast('Guardado en catalogo');
+    showToast('Producto guardado en tu catálogo');
   };
 
   const saveToModelLibrary = async (record: GenerationRecord) => {
@@ -238,7 +238,7 @@ const GenerationHistory: React.FC = () => {
     };
 
     await dbService.saveAvatar(avatar);
-    showToast('Guardado en biblioteca de modelos');
+    showToast('Modelo guardado en Tus modelos');
   };
 
   return (
@@ -251,10 +251,10 @@ const GenerationHistory: React.FC = () => {
             </div>
             <div>
               <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter italic leading-none">
-                Mis Generaciones
+                Mis creaciones
               </h1>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                {loading ? 'Cargando...' : `${records.length} imagenes protegidas`}
+                {loading ? 'Cargando...' : `${records.length} imágenes guardadas`}
               </p>
             </div>
           </div>
@@ -275,7 +275,7 @@ const GenerationHistory: React.FC = () => {
           <div>
             <p className="text-xs font-black uppercase tracking-tight">Historial local activo</p>
             <p className="text-xs font-bold text-amber-600 mt-0.5">
-              No se pudo sincronizar con el servidor, pero se mantiene la copia de seguridad de este dispositivo.
+              No pudimos actualizar tus creaciones en línea. Mientras tanto, puedes ver la copia guardada en este dispositivo.
             </p>
           </div>
         </div>
@@ -284,7 +284,7 @@ const GenerationHistory: React.FC = () => {
       {loading && (
         <div className="flex flex-col items-center justify-center py-24 space-y-4">
           <Loader2 className="w-10 h-10 text-indigo-400 animate-spin" />
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cargando historial...</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cargando tus creaciones...</p>
         </div>
       )}
 
@@ -293,9 +293,9 @@ const GenerationHistory: React.FC = () => {
           <div className="w-16 h-16 bg-slate-100 rounded-[24px] flex items-center justify-center">
             <Image className="w-8 h-8 text-slate-300" />
           </div>
-          <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Sin generaciones aun</p>
+          <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Aún no tienes creaciones</p>
           <p className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-            Las imagenes que generes apareceran aqui
+            Elige una herramienta para comenzar. Tus imágenes aparecerán aquí.
           </p>
         </div>
       )}
@@ -377,7 +377,7 @@ const GenerationHistory: React.FC = () => {
                       <button
                         onClick={e => { e.stopPropagation(); copyPrompt(record); }}
                         className="p-2 bg-white/20 backdrop-blur-sm text-white rounded-xl hover:bg-white/30 transition-colors"
-                        title="Copiar prompt"
+                        title="Copiar descripción"
                       >
                         <Copy className="w-4 h-4" />
                       </button>
@@ -393,7 +393,7 @@ const GenerationHistory: React.FC = () => {
                         <button
                           onClick={e => { e.stopPropagation(); saveToCatalog(record).catch(err => showToast(err.message)); }}
                           className="p-2 bg-emerald-500/90 text-white rounded-xl hover:bg-emerald-500 transition-colors"
-                          title="Guardar en catalogo"
+                          title="Guardar en catálogo"
                         >
                           <PackagePlus className="w-4 h-4" />
                         </button>
@@ -462,7 +462,7 @@ const GenerationHistory: React.FC = () => {
           onDownload={(url, idx) => downloadImage(url, idx)}
           metadata={lightboxMeta}
           extraButton={filtered.some(record => !!record.promptText) ? {
-            label: 'Copiar prompt',
+            label: 'Copiar descripción',
             icon: <Copy className="w-4 h-4" />,
             onClick: (_url, idx) => {
               const record = filtered[idx];

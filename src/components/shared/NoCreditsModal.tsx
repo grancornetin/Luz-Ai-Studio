@@ -86,7 +86,7 @@ const NoCreditsModal: React.FC<NoCreditsModalProps> = ({
         <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
 
           <p className="text-sm text-slate-600 font-medium leading-relaxed">
-            Para continuar generando imágenes elige un plan. Los créditos se renuevan cada mes y nunca expiran durante el período de suscripción.
+            Te faltan {Math.max(required - available, 0)} créditos. Puedes comprar créditos adicionales o elegir un plan.
           </p>
 
           {/* PLANS */}
@@ -127,6 +127,20 @@ const NoCreditsModal: React.FC<NoCreditsModalProps> = ({
               </div>
             ))}
           </div>
+
+          <button
+            onClick={() => { onClose(); navigate('/buy-credits'); }}
+            className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all"
+          >
+            Comprar créditos
+          </button>
+
+          <button
+            onClick={() => { onClose(); navigate('/pricing'); }}
+            className="w-full py-3.5 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all"
+          >
+            Ver todos los planes
+          </button>
 
           <button
             onClick={onClose}

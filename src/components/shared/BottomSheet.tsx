@@ -4,11 +4,11 @@ import { useNavigate } from 'react-router-dom';
 
 const modules = [
   { name: 'Crear modelo',     tech: 'Model DNA',         icon: '👤', path: '/crear/clonar',      cost: '8 cr' },
-  { name: 'Foto producto',    tech: 'Product Studio',    icon: '📸', path: '/productos',          cost: '2 cr' },
-  { name: 'Contenido redes',  tech: 'UGC Studio',        icon: '📱', path: '/studio-pro',         cost: '6-14 cr' },
+  { name: 'Fotos de producto',tech: '',                  icon: '📸', path: '/productos',          cost: '2 cr' },
+  { name: 'Fotos para redes', tech: '',                  icon: '📱', path: '/studio-pro',         cost: '6-14 cr' },
   { name: 'Generador con IA', tech: 'Prompt Studio',     icon: '✨', path: '/prompt-studio',      cost: '2 cr' },
-  { name: 'Clonar escena',    tech: 'Scene Clone',       icon: '🖼️', path: '/clonar',             cost: '2 cr' },
-  { name: 'Extraer prendas',  tech: 'Outfit Extractor',  icon: '👕', path: '/outfit-extractor',   cost: '0 cr' },
+  { name: 'Recrear una foto', tech: '',                  icon: '🖼️', path: '/clonar',             cost: '2 cr' },
+  { name: 'Separar prendas',   tech: '',                  icon: '👕', path: '/outfit-extractor',   cost: '0 cr' },
 ];
 
 interface BottomSheetProps {

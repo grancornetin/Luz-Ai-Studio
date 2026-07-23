@@ -100,7 +100,7 @@ export const MODULES_WITH_PRO_ACCESS = ['free', 'weekly', 'starter', 'pro', 'stu
 export const PLANS = {
   free: {
     id: 'free',
-    label: 'Free',
+    label: 'Gratis',
     credits: 20,
     proCredits: 2,
     priceMonthly: 0,
@@ -111,7 +111,7 @@ export const PLANS = {
     description: 'Para explorar la plataforma',
     features: [
       '20 créditos (única vez)',
-      '2 sesiones Campaign/Photodump de prueba',
+      '2 sesiones Pro de prueba',
       'Acceso a todos los módulos',
       'Misiones para ganar créditos gratis',
     ],
@@ -129,7 +129,7 @@ export const PLANS = {
     description: 'Para uso casual semanal',
     features: [
       '60 créditos/semana',
-      '15 sesiones Campaign/Photodump por semana',
+      '15 sesiones Pro por semana',
       'Acceso a todos los módulos',
       'Revelado de prompts con costo (1 crédito)',
     ],
@@ -147,7 +147,7 @@ export const PLANS = {
     description: 'Para creadores independientes',
     features: [
       '200 créditos/mes',
-      '80 sesiones Campaign/Photodump/mes',
+      '80 sesiones Pro al mes',
       'Acceso a todos los módulos',
       'Revelado de prompts con costo (1 crédito)',
       'Soporte por email',
@@ -166,7 +166,7 @@ export const PLANS = {
     description: 'Para agencias y equipos creativos',
     features: [
       '500 créditos/mes',
-      '200 sesiones Campaign/Photodump/mes',
+      '200 sesiones Pro al mes',
       'Revelado de prompts GRATIS',
       'Soporte prioritario',
     ],
@@ -184,7 +184,7 @@ export const PLANS = {
     description: 'Para producción a escala',
     features: [
       '1200 créditos/mes',
-      '500 sesiones Campaign/Photodump/mes',
+      '500 sesiones Pro al mes',
       'Revelado de prompts GRATIS',
       'Prioridad de generación',
       'Soporte chat dedicado',
@@ -203,7 +203,7 @@ export const PLANS = {
     description: 'Acceso total',
     features: [
       'Créditos ilimitados',
-      'Sesiones Campaign/Photodump ilimitadas',
+      'Sesiones Pro ilimitadas',
       'Revelado de prompts gratis',
       'Panel de administración',
     ],

@@ -66,7 +66,7 @@ export default function BuyCredits() {
         <TrendingDown className="w-5 h-5 text-emerald-500 flex-shrink-0" />
         <p className="text-xs font-bold text-slate-600">
           <span className="font-black text-slate-800">1 crédito = {format(0.10)} · </span>
-          Cada imagen cuesta <strong>2 cr. con Nano Banana 2</strong> o <strong>1 cr. con Seedream 4.5</strong>. Los paquetes más grandes tienen mejor precio por crédito.
+          Cada foto usa entre 1 y 2 créditos. Verás el costo exacto antes de crearla.
         </p>
       </div>
 
@@ -85,7 +85,7 @@ export default function BuyCredits() {
             >
               {isBest && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow">
-                  Mejor valor
+                  Menor precio por crédito
                 </div>
               )}
 
@@ -121,7 +121,7 @@ export default function BuyCredits() {
         })}
       </div>
 
-      {/* Pro-credits (Campaign / Photodump) */}
+      {/* Sesiones Pro */}
       <section className="space-y-5">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-violet-100 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -129,21 +129,21 @@ export default function BuyCredits() {
           </div>
           <div>
             <h2 className="text-xl font-black text-slate-900 tracking-tighter uppercase italic">
-              Recargar Pro-credits
+              Comprar sesiones Pro
             </h2>
             <p className="text-xs font-medium text-slate-500">
-              Cada pro-credit = 1 sesión Campaign o Photodump. Las imágenes de la sesión siguen costando créditos normales.
+              Cada sesión Pro abre una campaña o una historia en fotos. Las imágenes que crees dentro usan créditos de imagen.
             </p>
           </div>
         </div>
 
-        {/* Saldo actual pro-credits */}
+        {/* Saldo actual de sesiones Pro */}
         <div className="flex items-center gap-4 bg-violet-50 border border-violet-100 rounded-2xl px-6 py-4">
           <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center flex-shrink-0">
             <Megaphone className="w-5 h-5 text-white" />
           </div>
           <div>
-            <p className="text-[10px] font-black text-violet-400 uppercase tracking-widest">Pro-credits disponibles</p>
+            <p className="text-[10px] font-black text-violet-400 uppercase tracking-widest">Sesiones Pro disponibles</p>
             <p className="text-2xl font-black text-violet-700">{proCredits ?? 0}</p>
           </div>
         </div>
@@ -162,7 +162,7 @@ export default function BuyCredits() {
               >
                 {isBest && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-violet-600 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow">
-                    Mejor valor
+                    Menor precio por sesión
                   </div>
                 )}
 
@@ -204,10 +204,10 @@ export default function BuyCredits() {
         <h3 className="text-sm font-black text-slate-800 uppercase italic tracking-tighter">¿Cuánto me alcanza?</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { label: 'AI Generator', cost: '1–2 cr.', note: 'según modelo', icon: 'fa-wand-magic-sparkles' },
-            { label: 'Scene Clone',  cost: '1–2 cr.', note: 'según modelo', icon: 'fa-clone' },
-            { label: 'Content Studio (sesión)', cost: '7–14 cr.', note: 'según modelo', icon: 'fa-mobile-screen-button' },
-            { label: 'Model DNA',    cost: '8 cr.',   note: 'solo Gemini',  icon: 'fa-dna' },
+            { label: 'Crear una imagen', cost: '1–2 cr.', note: 'por foto', icon: 'fa-wand-magic-sparkles' },
+            { label: 'Recrear una foto', cost: '1–2 cr.', note: 'por foto', icon: 'fa-clone' },
+            { label: 'Fotos para redes', cost: '7–14 cr.', note: 'por sesión', icon: 'fa-mobile-screen-button' },
+            { label: 'Modelo digital',   cost: '8 cr.',   note: '4 imágenes',  icon: 'fa-dna' },
           ].map((item, i) => (
             <div key={i} className="bg-white rounded-2xl border border-slate-100 p-4 text-center space-y-1">
               <i className={`fa-solid ${item.icon} text-indigo-500 text-lg`}></i>

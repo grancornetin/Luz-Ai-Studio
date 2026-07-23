@@ -23,7 +23,7 @@ export const SavePresetModal: React.FC<SavePresetModalProps> = ({
 
   if (!open) return null;
 
-  const label = mode === 'update' ? 'Actualizar preset' : 'Guardar preset';
+  const label = mode === 'update' ? 'Actualizar configuración' : 'Guardar configuración';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">

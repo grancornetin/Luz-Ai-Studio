@@ -60,7 +60,7 @@ const PRODUCT_STEPS: ProgressStep[] = [
   { id: 'analyze',  label: 'Analizando producto y materiales' },
   { id: 'plan',     label: 'Definiendo composición y dirección de arte' },
   { id: 'generate', label: 'Generando imágenes' },
-  { id: 'collage',  label: 'Componiendo grid final' },
+  { id: 'collage',  label: 'Preparando el collage final' },
   { id: 'done',     label: 'Set listo' },
 ];
 
@@ -361,7 +361,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
         const validShots = shots.filter((s) => s && s !== 'error');
         if (validShots.length >= 2) {
           setProgressStepIndex(3);
-          setProcessingStatus('Componiendo grid final...');
+          setProcessingStatus('Preparando el collage final...');
           try {
             const collage = await generateCollage(state, direction, validShots, referenceObjects);
             setCollageShot(collage);
@@ -587,7 +587,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
       createdAt: Date.now(),
     };
     saveProduct(newProduct);
-    alert('Producto archivado en el catálogo exitosamente.');
+    alert('Producto guardado en tu catálogo.');
     resetCreator();
     setActiveTab('library');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -606,7 +606,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
       const prefix = wizard.product.title.replace(/\s+/g, '_') || 'product';
       await downloadAsZip(finalShots, zipName, prefix);
     } catch {
-      alert('Error al comprimir el set.');
+      alert('No pudimos preparar la descarga. Inténtalo de nuevo.');
     } finally {
       setIsZipping(false);
     }
@@ -728,7 +728,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
       <div className="rounded-2xl bg-white/10 border border-white/10 backdrop-blur-md p-3 text-white">
         <div className="flex items-center justify-between gap-3 mb-2">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/50">Set replicable</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/50">Configuración guardada</p>
             <p className="text-sm font-bold leading-tight">{selectedProduct.name}</p>
           </div>
           <span className="text-[10px] font-bold text-white/50">{selectedProduct.generatedImages?.length ?? 0} generadas</span>
@@ -827,7 +827,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
             <h1 className="t-display text-3xl text-slate-900">Foto de producto</h1>
             <div className="flex items-center gap-2 mt-2">
               <p className="text-slate-500 font-medium italic text-xs md:text-sm">
-                Genera contenido comercial en 6 pasos.{' '}
+                Crea fotos para vender en 6 pasos.{' '}
                 <span className="normal-case font-normal text-slate-300 text-[9px]">
                   (Product Studio)
                 </span>

@@ -32,8 +32,8 @@ export interface GenerationRecord {
 
 export const MODULE_LABELS: Record<string, string> = {
   prompt_studio:      'AI Generator',
-  scene_clone:        'Scene Clone',
-  cloneImageService:  'Scene Clone',
+  scene_clone:        'Recrear una foto',
+  cloneImageService:  'Recrear una foto',
   model_dna:          'Model DNA · From Photos',
   model_dna_manual:   'Model DNA · From Scratch',
   content_studio:     'Content Studio',

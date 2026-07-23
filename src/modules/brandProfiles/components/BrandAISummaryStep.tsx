@@ -96,7 +96,7 @@ export const BrandAISummaryStep: React.FC<Props> = ({ data, onChange }) => {
           ) : (
             <Sparkles size={14} />
           )}
-          {loading ? 'Generando...' : (hasSummary ? 'Regenerar resumen' : 'Generar resumen IA')}
+          {loading ? 'Preparando...' : (hasSummary ? 'Preparar de nuevo' : 'Preparar mi resumen')}
         </button>
 
         {hasSummary && !accepted && (
@@ -133,7 +133,7 @@ export const BrandAISummaryStep: React.FC<Props> = ({ data, onChange }) => {
             <Sparkles size={20} className="text-slate-400" />
           </div>
           <p className="text-sm font-bold text-slate-500 mb-1">Aún no hay resumen</p>
-          <p className="text-xs text-slate-400">Presiona "Generar resumen IA" para que Luz IA analice tu marca.</p>
+          <p className="text-xs text-slate-400">Prepara una guía clara con la información que completaste.</p>
         </div>
       )}
 
@@ -193,7 +193,7 @@ export const BrandAISummaryStep: React.FC<Props> = ({ data, onChange }) => {
                       </div>
                     ))}
                     {arr.length === 0 && (
-                      <p className="text-[11px] text-slate-400 italic">Sin ítems aún</p>
+                      <p className="text-[11px] text-slate-400 italic">Aún no agregaste información</p>
                     )}
                   </div>
                 </div>

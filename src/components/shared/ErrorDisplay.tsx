@@ -51,7 +51,7 @@ const ERROR_CONFIG: Record<string, ErrorConfig> = {
   },
   [ErrorCode.SERVER_ERROR]: {
     icon: '🖥️',
-    label: 'Error del servidor',
+    label: 'No pudimos completar la creación',
     actionLabel: 'Reintentar',
     actionType: 'retry',
     refund: true,
@@ -134,7 +134,9 @@ export const ErrorDisplay: React.FC<ErrorDisplayProps> = ({
             )}
           </div>
           <p className={`text-xs font-medium mt-0.5 leading-relaxed ${isRefundable ? 'text-amber-800' : 'text-red-800'}`}>
-            {error.message}
+            {code === ErrorCode.UNKNOWN || code === ErrorCode.SERVER_ERROR
+              ? 'Algo salió mal. Inténtalo de nuevo.'
+              : error.message}
           </p>
         </div>
       </div>
@@ -188,7 +190,7 @@ export const ErrorDisplay: React.FC<ErrorDisplayProps> = ({
               onClick={() => navigate('/dashboard')}
               className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all"
             >
-              Ver misiones gratis
+              Ganar créditos con misiones
             </button>
           )}
         </div>
@@ -200,7 +202,7 @@ export const ErrorDisplay: React.FC<ErrorDisplayProps> = ({
 /** Helper para convertir cualquier Error en un AppError */
 export function toAppError(err: any): AppError {
   return {
-    message: err?.message || 'Error inesperado',
+    message: 'No pudimos completar la acción. Inténtalo de nuevo.',
     code: err?.code || ErrorCode.UNKNOWN,
   };
 }

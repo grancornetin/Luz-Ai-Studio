@@ -47,7 +47,7 @@ const PRESETS: PresetDef[] = [
     title: 'Premium',
     desc: 'Lujo discreto, iluminación de alta gama.',
     bgLabel: 'Superficie elegante',
-    lightLabel: 'Estudio high-end',
+    lightLabel: 'Acabado profesional',
     toneLabel: 'Cálido-neutro refinado',
     bgGradient: 'from-stone-700 to-stone-950',
     mockBgColor: '#1c1917',
@@ -56,7 +56,7 @@ const PRESETS: PresetDef[] = [
   },
   {
     id: 'lifestyle',
-    title: 'Lifestyle',
+    title: 'En uso',
     desc: 'Producto en contexto real y situaciones de vida.',
     bgLabel: 'Ambiente real',
     lightLabel: 'Luz natural de ventana',
@@ -159,10 +159,10 @@ export const Step3Style: React.FC<Step3StyleProps> = ({ state, onChange }) => {
           Paso 3 · Estilo
         </div>
         <h2 className="t-display text-[28px] md:text-[36px] text-slate-900 mt-2.5 leading-[1.05]">
-          Define la <span className="text-pink-600 italic normal-case">dirección estética.</span>
+          Elige <span className="text-pink-600 italic normal-case">cómo quieres que se vean tus fotos.</span>
         </h2>
         <p className="text-sm text-slate-500 mt-2 leading-[1.55]">
-          Subí una foto que te inspire <strong>o</strong> elegí un estilo predefinido.{' '}
+          Sube una foto que te inspire <strong>o</strong> elige un estilo.{' '}
           <strong>No se pueden combinar</strong> — la referencia siempre gana.
         </p>
       </div>
@@ -201,7 +201,7 @@ export const Step3Style: React.FC<Step3StyleProps> = ({ state, onChange }) => {
             <div className="mt-3 bg-slate-50 border border-slate-100 rounded-xl p-3.5">
               <p className="text-[11px] text-slate-500 leading-[1.55]">
                 <strong className="text-slate-700">¿Qué hace la referencia?</strong><br/>
-                La IA replica la escena, la cámara y la luz de tu foto, pero con <em>tu producto</em> en lugar del que aparece en la imagen.
+                Usaremos la escena, la luz y la composición como inspiración, pero mostraremos <em>tu producto</em>.
               </p>
             </div>
           )}

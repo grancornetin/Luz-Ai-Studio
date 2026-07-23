@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 const TIPS = [
   { icon: '🎭', title: 'Coherencia facial', body: 'Luz IA bloquea la identidad de tu persona en cada shot — ni la IA más avanzada puede cambiarle la cara.' },
-  { icon: '📸', title: 'Sobre el Master', body: 'Esta primera imagen es el ancla de toda la sesión. Define la luz, el espacio y la paleta de color que heredarán los demás shots.' },
+  { icon: '📸', title: 'Tu foto base', body: 'Esta primera foto define la luz, el espacio y los colores que mantendremos durante la sesión.' },
   { icon: '🎨', title: 'Referencia de escena', body: 'Si subiste foto de fondo real, la IA coloca a tu persona dentro de ese espacio — no pegada sobre él.' },
   { icon: '👗', title: 'Outfit fidelity', body: 'Cada detalle del outfit — textura, costuras, colores — se bloquea desde la referencia. Nada se inventa.' },
   { icon: '📱', title: 'Estética iPhone', body: 'Los prompts están calibrados para que el resultado parezca una foto tomada con iPhone, no un render de estudio.' },
@@ -10,14 +10,14 @@ const TIPS = [
   { icon: '✨', title: 'Sin filtros', body: 'Luz IA instruye explícitamente a la IA que NO aplique filtros de belleza ni suavizado de piel — lo real siempre se ve mejor en UGC.' },
   { icon: '💡', title: 'La luz lo es todo', body: 'En fotografía UGC, la iluminación natural siempre gana. Por eso los prompts priorizan luz de ventana y ambientes reales sobre cualquier set artificial.' },
   { icon: '🧠', title: 'GPT Image y Gemini', body: 'Gemini entiende instrucciones complejas mejor para multirreferencia. GPT Image tiende a generar texturas más fotográficas. Cada uno tiene su fortaleza.' },
-  { icon: '🎯', title: 'El focus importa', body: 'AVATAR centra la cara. OUTFIT pone la ropa como héroe. PRODUCT equilibra producto y emoción. SCENE integra a la persona en el lugar.' },
-  { icon: '🔄', title: 'Sesiones derivadas', body: 'Cada shot posterior usa el Master como referencia de continuidad — mismo ambiente, misma temperatura de color, misma persona.' },
+  { icon: '🎯', title: 'Elige al protagonista', body: 'Puedes centrar la sesión en una persona, un producto, un look o un lugar.' },
+  { icon: '🔄', title: 'Una sesión coherente', body: 'Cada foto usará la foto base para mantener el ambiente, los colores y la misma persona.' },
   { icon: '📐', title: 'Formato 3:4', body: 'El ratio vertical 3:4 es el estándar de feed de Instagram y TikTok — cada imagen sale lista para publicar sin recortar.' },
 ];
 
 const QUOTES = [
   { text: 'El mejor contenido UGC parece que lo tomó un amigo, no una agencia.', author: 'Principio UGC' },
-  { text: 'La autenticidad no se puede editar — se captura.', author: 'Content Studio Pro' },
+  { text: 'Las mejores fotos se sienten naturales.', author: 'Luz IA' },
   { text: 'Una sola foto real vale más que diez renders perfectos.', author: 'Marketing digital' },
   { text: 'La cara de tu persona es la firma de toda la sesión.', author: 'Identity Lock' },
   { text: 'Confianza se construye mostrando el producto en uso, no en exhibición.', author: 'UGC Marketing' },

@@ -17,7 +17,7 @@ interface PresetManagerPanelProps<TState> {
 }
 
 export function PresetManagerPanel<TState>({
-  manager, onLoad, suggestedName = '', emptyLabel = 'No hay presets guardados',
+  manager, onLoad, suggestedName = '', emptyLabel = 'No hay configuraciones guardadas',
 }: PresetManagerPanelProps<TState>) {
   const {
     presets, loading, saving, error,
@@ -62,7 +62,7 @@ export function PresetManagerPanel<TState>({
         <div className="flex items-center gap-2">
           <BookMarked className="w-4 h-4 text-slate-400" />
           <span className="text-xs font-black uppercase tracking-widest text-slate-500">
-            Presets guardados
+            Configuraciones guardadas
           </span>
           {presets.length > 0 && (
             <span className="px-2 py-0.5 rounded-full bg-slate-100 text-xs text-slate-500 font-bold">
@@ -111,12 +111,12 @@ export function PresetManagerPanel<TState>({
         <div className="text-center py-10 text-slate-400">
           <BookMarked className="w-8 h-8 mx-auto mb-2 opacity-30" />
           <p className="text-sm">{emptyLabel}</p>
-          <p className="text-xs mt-1">Guardá la configuración actual para reutilizarla.</p>
+          <p className="text-xs mt-1">Guarda esta configuración para volver a usarla.</p>
         </div>
       ) : (
         <div className="space-y-3">
           <p className="text-xs text-slate-400 px-1">
-            Marcá un preset como <span className="font-bold text-amber-600">default</span> para que se precargue solo al entrar al módulo.
+            Márcala como <span className="font-bold text-amber-600">predeterminada</span> para cargarla automáticamente al abrir esta herramienta.
           </p>
           {presets.map(preset => (
             <PresetCard
@@ -157,7 +157,7 @@ export function PresetManagerPanel<TState>({
       {confirmDeleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xs p-6 space-y-5 text-center">
-            <p className="text-base font-black text-slate-900">¿Eliminar preset?</p>
+            <p className="text-base font-black text-slate-900">¿Eliminar esta configuración?</p>
             <p className="text-sm text-slate-500">Esta acción no se puede deshacer.</p>
             <div className="flex gap-3">
               <button

@@ -166,10 +166,10 @@ export interface GalleryImage {
 // ===================================================================
 
 export const FOCUS_LABELS: Record<Focus, string> = {
-  AVATAR: 'Avatar / Persona',
-  PRODUCT: 'Producto Hero',
-  OUTFIT: 'Outfit / Moda',
-  SCENE: 'Escenario / Lifestyle'
+  AVATAR: 'Persona',
+  PRODUCT: 'Producto',
+  OUTFIT: 'Look',
+  SCENE: 'Lugar'
 };
 
 export const STYLE_LABELS: Record<Style, string> = {

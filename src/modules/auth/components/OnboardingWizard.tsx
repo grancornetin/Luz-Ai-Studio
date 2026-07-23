@@ -23,13 +23,13 @@ const CASES: CaseConfig[] = [
     title: 'Modelo Digital',
     subtitle: 'Tu modelo, listo para todo',
     realCost: 8,
-    description: 'Crea tu modelo digital a partir de fotos reales. Lo usas en todos los módulos.',
+    description: 'Crea tu modelo digital a partir de fotos reales y úsalo en tus imágenes.',
     route: '/crear/clonar',
     tourSteps: [
       'Sube al menos 4 fotos de tu rostro con buena luz y sin gafas',
       'Dale un nombre a tu modelo',
       'Elige un estilo o descríbelo con tus palabras',
-      'Toca Generar y listo — tu modelo digital queda guardado',
+      'Toca Crear y listo: tu modelo digital queda guardado',
     ],
   },
   {
@@ -44,14 +44,14 @@ const CASES: CaseConfig[] = [
       'Sube mínimo 2 fotos de tu producto (frente y atrás)',
       'Escribe el nombre de tu producto',
       'Elige para qué lo vas a usar (redes, tienda, anuncios)',
-      'Selecciona el estilo y toca Generar',
+      'Selecciona el estilo y toca Crear',
     ],
   },
   {
     id: 'ugc',
     icon: 'fa-mobile-screen-button',
     title: 'Fotos para redes',
-    subtitle: 'Estilo iPhone real',
+    subtitle: 'Fotos naturales para redes',
     realCost: 6,
     description: 'Crea fotos de redes que parecen sacadas de un iPhone, con tu modelo y tu producto.',
     route: '/studio-pro',
@@ -59,7 +59,7 @@ const CASES: CaseConfig[] = [
       'Elige tu modelo o sube una foto de referencia',
       'Describe la escena que quieres crear',
       'Ajusta el estilo y el formato',
-      'Toca Generar — tus fotos quedan listas para publicar',
+      'Toca Crear: tus fotos quedan listas para publicar',
     ],
   },
 ];
@@ -131,7 +131,7 @@ const OnboardingWizard: React.FC<Props> = ({ onDone }) => {
           {step === 1 && (
             <>
               <p className="text-xs text-slate-500 font-medium">
-                Elige qué quieres crear. Tu primera generación corre <strong>por cuenta de la casa</strong> — gratis, sin gastar tus 20 créditos.
+                Elige qué quieres crear. Tu primera creación va <strong>por nuestra cuenta</strong>: no gastarás tus 20 créditos.
               </p>
               <div className="space-y-3">
                 {CASES.map(c => (
@@ -182,7 +182,7 @@ const OnboardingWizard: React.FC<Props> = ({ onDone }) => {
               </div>
 
               <p className="text-xs text-slate-500 font-medium">
-                Te llevamos al módulo y te guiamos paso a paso. Así va a funcionar:
+                Abriremos la herramienta y te guiaremos paso a paso. Así funcionará:
               </p>
 
               <ol className="space-y-3">
@@ -199,7 +199,7 @@ const OnboardingWizard: React.FC<Props> = ({ onDone }) => {
               <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2">
                 <Zap className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                 <p className="text-xs font-bold text-emerald-700">
-                  Esta primera generación no te costará créditos. Tus 20 créditos quedan intactos.
+                  Esta primera creación no usará créditos. Tus 20 créditos quedarán intactos.
                 </p>
               </div>
             </>
@@ -233,9 +233,9 @@ const OnboardingWizard: React.FC<Props> = ({ onDone }) => {
                 className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest disabled:opacity-50 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-200"
               >
                 {isLaunching ? (
-                  <><i className="fa-solid fa-spinner animate-spin" /> Abriendo módulo...</>
+                  <><i className="fa-solid fa-spinner animate-spin" /> Preparando todo...</>
                 ) : (
-                  <><Zap className="w-4 h-4" /> Ir al módulo — Gratis</>
+                  <><Zap className="w-4 h-4" /> Empezar gratis</>
                 )}
               </button>
             </div>
@@ -245,7 +245,7 @@ const OnboardingWizard: React.FC<Props> = ({ onDone }) => {
             onClick={handleSkip}
             className="w-full text-center text-[10px] font-bold text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-widest py-1"
           >
-            Saltar tutorial — ir al dashboard
+            Explorar por mi cuenta
           </button>
         </div>
       </div>

@@ -69,7 +69,7 @@ function IdentityPreview({ data }: { data: Partial<BrandProfile> }) {
 function CustomerPreview({ data }: { data: Partial<BrandProfile> }) {
   const tc = data.targetCustomer;
   return (
-    <PreviewShell title="Así se verá en el Planner">
+    <PreviewShell title="Así se verá en el planificador">
       <div className="space-y-2">
         <div className="bg-slate-50 rounded-xl p-3">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Cliente ideal</p>
@@ -88,7 +88,7 @@ function CustomerPreview({ data }: { data: Partial<BrandProfile> }) {
           <p className="text-[11px] text-slate-500 italic leading-relaxed">"{tc.freeDescription.slice(0, 100)}{tc.freeDescription.length > 100 ? '...' : ''}"</p>
         )}
         <div className="bg-rose-50 rounded-xl p-2 text-[10px] text-[#F72C5B] font-bold flex items-center gap-1.5">
-          <Sparkles size={11} /> El Planner usará esto para crear mejores ideas
+          <Sparkles size={11} /> El planificador usará esto para crear mejores ideas
         </div>
       </div>
     </PreviewShell>
@@ -259,8 +259,8 @@ function CommercialPreview({ data }: { data: Partial<BrandProfile> }) {
 // Pantalla 8 — Resumen IA
 function SummaryPreview({ data }: { data: Partial<BrandProfile> }) {
   const modules = [
-    { name: 'Planner',        icon: Calendar },
-    { name: 'Campaign',       icon: Sparkles },
+    { name: 'Planificador',   icon: Calendar },
+    { name: 'Campañas',       icon: Sparkles },
     { name: 'Product Studio', icon: ShoppingBag },
     { name: 'Prompt Studio',  icon: Wand2 },
   ];
@@ -287,9 +287,9 @@ function SummaryPreview({ data }: { data: Partial<BrandProfile> }) {
 // Pantalla 1 — Bienvenida
 function WelcomePreview() {
   const benefits = [
-    { title: 'Captions coherentes',   desc: 'Cada texto sonará a tu marca.' },
-    { title: 'Mejores ideas',         desc: 'El Planner conocerá tu cliente.' },
-    { title: 'CTAs más claros',       desc: 'Adaptados a tu canal.' },
+    { title: 'Textos coherentes',     desc: 'Cada publicación sonará a tu marca.' },
+    { title: 'Mejores ideas',         desc: 'El planificador conocerá a tu público.' },
+    { title: 'Cierres más claros',    desc: 'Adaptados a tu canal.' },
     { title: 'Estilo consistente',    desc: 'Mismos colores en cada pieza.' },
   ];
   return (

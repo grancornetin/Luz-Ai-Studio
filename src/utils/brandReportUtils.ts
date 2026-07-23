@@ -499,16 +499,16 @@ function buildSummaryPage(profile: Partial<BrandProfile>): string {
 
   if (!s?.brandEssence) {
     return `
-    <div class="page-label">Página 5 · Resumen IA</div>
+    <div class="page-label">Página 5 · Resumen de tu marca</div>
     <div class="page" id="page-5">
       <div class="section-header">
-        <span class="section-header-title">Resumen IA</span>
+        <span class="section-header-title">Resumen de tu marca</span>
         <span class="section-header-badge">Pendiente</span>
       </div>
       <div class="page-body">
         <div class="empty-box" style="text-align:center;padding:64px 48px">
-          <p style="font-size:16px;font-weight:800;color:#475569;margin-bottom:8px">Resumen IA no generado</p>
-          <p style="font-size:13px;color:#94a3b8">Volvé al wizard, completá el paso de Resumen IA y descargá el informe de nuevo.</p>
+          <p style="font-size:16px;font-weight:800;color:#475569;margin-bottom:8px">El resumen aún no está listo</p>
+          <p style="font-size:13px;color:#94a3b8">Vuelve a Mis marcas, prepara el resumen y descarga el informe de nuevo.</p>
         </div>
       </div>
       ${pageFooter(5)}
@@ -516,10 +516,10 @@ function buildSummaryPage(profile: Partial<BrandProfile>): string {
   }
 
   return `
-  <div class="page-label">Página 5 · Resumen IA</div>
+  <div class="page-label">Página 5 · Resumen de tu marca</div>
   <div class="page" id="page-5">
     <div class="section-header">
-      <span class="section-header-title">Resumen IA</span>
+      <span class="section-header-title">Resumen de tu marca</span>
       <span class="section-header-badge">Guía estratégica</span>
     </div>
     <div class="page-body">

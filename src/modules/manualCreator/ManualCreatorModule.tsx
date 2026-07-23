@@ -255,7 +255,7 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
         generationHistoryService.save({
           imageUrl: img,
           module: 'model_dna',
-          moduleLabel: `Model DNA (${labels[idx]})`,
+          moduleLabel: `Diseñar un modelo (${labels[idx]})`,
           creditsUsed: idx === 0 ? CREDIT_COSTS.CREATE_MODEL_MANUAL : 0,
           promptText: identityPrompt
         }).catch(console.error);
@@ -278,7 +278,7 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
       setPendingAvatarData(newAvatar);
       setStatus('Identidad sintetizada correctamente.');
     } catch (e: any) {
-      alert("Error en síntesis de ADN: " + e.message);
+      alert('No pudimos crear el modelo. Inténtalo de nuevo.');
     } finally {
       setIsProcessing(false);
     }
@@ -308,7 +308,7 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
         <div className="space-y-6">
           <section className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-6">
             <header className="border-b pb-4">
-              <h2 className="text-xl font-black text-slate-900 uppercase italic">Model DNA <span className="text-brand-600">· From Scratch</span></h2>
+              <h2 className="text-xl font-black text-slate-900 uppercase italic">Crear modelo <span className="text-brand-600">· desde cero</span></h2>
               <div className="flex items-center gap-3 mt-1">
                 <p className="text-slate-400 text-xs font-medium">Crea una identidad digital 100% nueva desde cero.</p>
                 <ModuleTutorial moduleId="modelDnaManual" steps={TUTORIAL_CONFIGS.modelDnaManual} compact />
@@ -328,7 +328,7 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
             <div className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2 block">Nombre de la Identidad</label>
+                  <label className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2 block">Nombre del modelo</label>
                   <input 
                     type="text" 
                     value={name} 
@@ -412,7 +412,7 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
                 </div>
 
                 <div className="col-span-2">
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2 block">Outfit Inicial</label>
+                  <label className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2 block">Ropa inicial</label>
                   <select value={data.outfit} onChange={e => setData({...data, outfit: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl outline-none text-base md:text-xs font-bold">
                     {(data.gender === 'mujer' ? OUTFITS_MUJER : OUTFITS_HOMBRE).map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
@@ -435,8 +435,8 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
                   onClick={handleCreate}
                   loading={isProcessing}
                   disabled={!name || isProcessing}
-                  label="Sintetizar ADN Maestro"
-                  loadingLabel={status || 'Sintetizando...'}
+                  label="Diseñar un modelo"
+                  loadingLabel={status || 'Creando...'}
                   imageCount={4}
                   fixedModel="gemini"
                   creditsAfter={creditsAfter}
@@ -464,7 +464,7 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
                 <div>
                   <h3 className="text-white font-black text-xl uppercase italic tracking-tighter">{name}</h3>
                   <p className="text-brand-400 text-[8px] font-black uppercase tracking-widest">
-                    {importedMode ? 'Importado desde JSON' : 'Sintetizado via ADN'}
+                    {importedMode ? 'Importado desde un archivo' : 'Modelo creado'}
                   </p>
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
@@ -472,7 +472,7 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
                     onClick={() => downloadAsZip(previews, `Avatar_DNA_${name}_MasterSet.zip`, `avatar_dna_${name}`)}
                     className="flex-1 sm:flex-none px-5 py-3 bg-white/10 text-white rounded-xl text-[9px] font-black uppercase border border-white/5 hover:bg-white/20 transition-all flex items-center justify-center gap-2"
                   >
-                    <i className="fa-solid fa-file-zipper"></i> ZIP SET
+                    <i className="fa-solid fa-file-zipper"></i> Descargar todas
                   </button>
                   <button 
                     onClick={handleSaveToLibrary}
@@ -511,9 +511,9 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
               <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center text-4xl text-white/10 border border-white/10">
                 <i className="fa-solid fa-wand-magic-sparkles"></i>
               </div>
-              <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Vista ADN Master</h3>
+              <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Vista previa de tu modelo</h3>
               <p className="text-slate-500 text-xs font-medium max-w-xs mx-auto italic leading-relaxed">
-                Configura los rasgos a la izquierda para sintetizar el set maestro. <br/> Podrás guardar el personaje y usarlo en tus campañas publicitarias.
+                Configura los rasgos para crear las fotos base. Después podrás guardar el modelo y usarlo en tus imágenes.
               </p>
             </div>
           )}
@@ -531,7 +531,7 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
               link.download = `avatar_dna_${name}_plano_${idx + 1}.png`;
               link.click();
             }}
-            metadata={{ label: `ADN: ${name}` }}
+            metadata={{ label: `Modelo: ${name}` }}
           />
         )}
 
@@ -539,7 +539,7 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
         <FloatingActionBar
           isVisible={previews.length > 0 && fabVisible && !isProcessing}
           primaryAction={{
-            label: 'Descargar ZIP',
+            label: 'Descargar todas las fotos',
             icon: <i className="fa-solid fa-download text-sm"></i>,
             onClick: () => downloadAsZip(previews, `Avatar_DNA_${name}_MasterSet.zip`, `avatar_dna_${name}`),
           }}

@@ -118,7 +118,7 @@ const PromptDNAPanel: React.FC<PromptDNAPanelProps> = ({ dna, onUpdate }) => {
             className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
           >
             {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            Prompt DNA
+            Partes de tu descripción
             <span className="bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded-full text-[8px]">{activeBlocks.length}</span>
           </button>
         </div>

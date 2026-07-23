@@ -102,7 +102,7 @@ const OutfitExtractorModule: React.FC = () => {
   const [isZipping, setIsZipping]       = useState(false);
   const [savedMsg, setSavedMsg]         = useState(false);
   const [creatorSelectedItems, setCreatorSelectedItems] = useState<SavedOutfitItem[]>([]);
-  const [creatorName, setCreatorName]   = useState('Nuevo Outfit Set');
+  const [creatorName, setCreatorName]   = useState('Nueva combinación');
 
   const [lightboxOpen, setLightboxOpen]         = useState(false);
   const [lightboxImages, setLightboxImages]     = useState<string[]>([]);
@@ -183,18 +183,18 @@ const OutfitExtractorModule: React.FC = () => {
   const startDetection = async () => {
     if (!sourceImage) return;
     setStep('detecting');
-    setLoadingMsg('Analizando prendas de tu foto...');
+    setLoadingMsg('Buscando las prendas de tu foto...');
     try {
       const result = await outfitService.analyzeOutfit(sourceImage);
       if (!result.items || result.items.length === 0) {
-        alert('No se detectaron prendas. Asegúrate de que la foto muestre claramente el outfit completo.');
+        alert('No encontramos prendas claras. Asegúrate de que la foto muestre el look completo.');
         setStep('idle');
         return;
       }
       setCurrentKit(result);
       setStep('scan_overlay');
     } catch (e: any) {
-      alert('Error al analizar el outfit: ' + e.message);
+      alert('No pudimos separar las prendas. Prueba con otra foto.');
       setStep('idle');
     }
   };
@@ -268,7 +268,7 @@ const OutfitExtractorModule: React.FC = () => {
         generationHistoryService.save({
           imageUrl: url,
           module: 'outfit_extractor',
-          moduleLabel: `Outfit Extractor (${item.name})`,
+          moduleLabel: `Separar prendas (${item.name})`,
           creditsUsed: outfitCostPerItem,
           promptText: `Render for ${item.name}`,
         }).catch(console.error);
@@ -352,7 +352,7 @@ const OutfitExtractorModule: React.FC = () => {
   const confirmSelectionAndRender = async () => {
     if (!currentKit || renderQueueRunningRef.current) return;
     const selectedItems = currentKit.items.filter(i => i.selected);
-    if (selectedItems.length === 0) return alert('Seleccioná al menos una prenda para generar.');
+    if (selectedItems.length === 0) return alert('Selecciona al menos una prenda para crear la foto.');
 
     renderQueueRunningRef.current = true;
     try {
@@ -379,7 +379,7 @@ const OutfitExtractorModule: React.FC = () => {
     const ok = await checkAndDeduct(outfitCostPerItem);
     if (!ok) return;
     setStep('composing');
-    setLoadingMsg('Componiendo tu kit final...');
+    setLoadingMsg('Uniendo las prendas en una sola imagen...');
     try {
       const finalUrl = await outfitService.generateFinalComposition(currentKit, modelId, {
         uid: user?.uid,
@@ -392,7 +392,7 @@ const OutfitExtractorModule: React.FC = () => {
       generationHistoryService.save({
         imageUrl: finalUrl,
         module: 'outfit_extractor',
-        moduleLabel: 'Outfit Extractor (Final Kit)',
+        moduleLabel: 'Separar prendas (imagen final)',
         creditsUsed: outfitCostPerItem,
         promptText: 'Final composition',
       }).catch(console.error);
@@ -417,7 +417,7 @@ const OutfitExtractorModule: React.FC = () => {
       await loadLibrary();
       setStep('final_kit');
     } catch (e: any) {
-      alert('Error al componer el kit: ' + e.message);
+      alert('No pudimos preparar las prendas seleccionadas. Inténtalo de nuevo.');
       setStep('reviewing_renders');
     }
   };
@@ -532,7 +532,7 @@ const OutfitExtractorModule: React.FC = () => {
       setStep('idle');
       setCreatorSelectedItems([]);
     } catch (e: any) {
-      alert('Error al generar: ' + e.message);
+      alert('No pudimos crear la imagen. Inténtalo de nuevo.');
       setStep('idle');
     }
   };
@@ -564,8 +564,8 @@ const OutfitExtractorModule: React.FC = () => {
   // Pasos narrados durante la carga — calculados fuera del JSX para evitar narrowing de TypeScript
   const loadingProgressSteps = [
     { label: 'Analizando la foto',          done: step !== 'detecting', active: step === 'detecting' },
-    { label: 'Generando renders por prenda', done: step === 'composing', active: step === 'generating_renders' },
-    { label: 'Componiendo kit final',        done: false,                active: step === 'composing' },
+    { label: 'Creando la foto de cada prenda', done: step === 'composing', active: step === 'generating_renders' },
+    { label: 'Uniendo las prendas',            done: false,                active: step === 'composing' },
   ];
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -582,8 +582,7 @@ const OutfitExtractorModule: React.FC = () => {
             <h1 className="t-display text-3xl text-slate-900">Extraer prendas</h1>
             <div className="flex items-center gap-2 mt-2">
               <p className="text-slate-500 font-medium italic text-xs md:text-sm">
-                Aísla y renderiza cada prenda de tu foto.{' '}
-                <span className="normal-case font-normal text-slate-300 text-[9px]">(Outfit Extractor)</span>
+                Separa cada prenda de una foto y crea una imagen limpia para tu catálogo.
               </p>
               <ModuleTutorial moduleId="outfitKit" steps={TUTORIAL_CONFIGS.outfitKit} />
             </div>
@@ -621,7 +620,7 @@ const OutfitExtractorModule: React.FC = () => {
                     </span>
                   </div>
                   <h2 className="t-display text-[24px] md:text-[28px] text-slate-900 leading-tight">
-                    {step === 'detecting' ? 'Detectando prendas' : step === 'composing' ? 'Componiendo kit' : 'Generando renders'}
+                    {step === 'detecting' ? 'Buscando prendas' : step === 'composing' ? 'Uniendo las prendas' : 'Creando fotos'}
                   </h2>
                   <div className="text-[13px] text-slate-500 mt-1 mb-4">
                     {step === 'detecting'
@@ -652,7 +651,7 @@ const OutfitExtractorModule: React.FC = () => {
                     </div>
                   )}
                   <div className="mt-3 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5]">
-                    💡 Podés cerrar la ventana — te avisamos cuando termine.
+                    💡 Puedes cerrar la ventana. Te avisaremos cuando termine.
                   </div>
                 </div>
 
@@ -721,7 +720,7 @@ const OutfitExtractorModule: React.FC = () => {
                   {/* PASO 1: subir foto */}
                   {step === 'idle' && (
                     <div className="space-y-6 animate-in slide-in-from-left-4">
-                      <StepHeader title="Subí tu foto" subtitle="Foto con outfit completo visible" icon="fa-camera" />
+                      <StepHeader title="Sube tu foto" subtitle="Usa una foto donde se vea el look completo" icon="fa-camera" />
                       <ImageSlot
                         value={sourceImage}
                         onChange={setSourceImage}
@@ -742,7 +741,7 @@ const OutfitExtractorModule: React.FC = () => {
                   {/* PASO 2: seleccionar prendas */}
                   {step === 'scan_overlay' && currentKit && (
                     <div className="space-y-5 animate-in slide-in-from-left-4">
-                      <StepHeader title="Elegí las prendas" subtitle="Seleccioná cuáles querés generar" icon="fa-shirt" />
+                      <StepHeader title="Elige las prendas" subtitle="Selecciona cuáles quieres separar" icon="fa-shirt" />
 
                       {/* Botones de selección rápida */}
                       <div className="grid grid-cols-2 gap-2">
@@ -798,7 +797,7 @@ const OutfitExtractorModule: React.FC = () => {
                               </div>
                             </div>
                             <div className="text-[11px] leading-[1.5] opacity-70">
-                              Te quedarán {creditsAfterRender} cr · El kit final se cobra aparte si lo generás.
+                              Te quedarán {creditsAfterRender} cr · La imagen final se cobra aparte si decides crearla.
                             </div>
                           </div>
                         </div>
@@ -810,7 +809,7 @@ const OutfitExtractorModule: React.FC = () => {
                   {/* PASO 3: renders listos — selección para kit final */}
                   {step === 'reviewing_renders' && currentKit && (
                     <div className="space-y-4 animate-in slide-in-from-left-4">
-                      <StepHeader title="Renders listos" subtitle="Elegí cuáles van al kit final" icon="fa-images" />
+                      <StepHeader title="Fotos listas" subtitle="Elige cuáles incluir en la imagen final" icon="fa-images" />
 
                       <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-[11px] text-emerald-900">
                         <strong>{doneSelectedCount}</strong> de <strong>{selectedItemsCount}</strong> prendas listas. Tocá una para incluirla o quitarla del kit.
@@ -883,9 +882,9 @@ const OutfitExtractorModule: React.FC = () => {
                   {/* PASO 4: kit final */}
                   {step === 'final_kit' && currentKit && (
                     <div className="space-y-5 animate-in slide-in-from-left-4">
-                      <StepHeader title="Kit listo" subtitle="Tu catálogo de prendas está listo" icon="fa-check-circle" />
+                      <StepHeader title="Imagen lista" subtitle="Tu catálogo de prendas está listo" icon="fa-check-circle" />
                       <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-[12px] text-emerald-900">
-                        Tu kit fue guardado en la <strong>Biblioteca</strong>. Podés descargarlo o empezar una nueva producción.
+                        Tu imagen fue guardada en la <strong>Biblioteca</strong>. Puedes descargarla o empezar otra foto.
                       </div>
                     </div>
                   )}
@@ -896,7 +895,7 @@ const OutfitExtractorModule: React.FC = () => {
                 {step === 'idle' && (
                   <WizardFooter
                     onContinue={startDetection}
-                    continueLabel="Analizar outfit"
+                    continueLabel="Buscar prendas"
                     disabled={!sourceImage}
                   />
                 )}
@@ -928,7 +927,7 @@ const OutfitExtractorModule: React.FC = () => {
                         className="w-full py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
                         <i className="fa-solid fa-floppy-disk text-slate-400" />
-                        Guardar prendas en biblioteca (sin kit)
+                        Guardar prendas en la biblioteca
                       </button>
                     )}
                     {/* Opción 2: generar imagen compuesta + guardar todo */}
@@ -939,11 +938,11 @@ const OutfitExtractorModule: React.FC = () => {
                       style={{ touchAction: 'manipulation' }}
                       className="w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 bg-gradient-to-br from-violet-600 to-pink-600 text-white shadow-[0_12px_28px_rgba(124,58,237,0.32)] active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
                     >
-                      Generar kit final · {outfitCostPerItem} cr
+                      Crear imagen final · {outfitCostPerItem} cr
                       <i className="fa-solid fa-arrow-right text-sm" />
                     </button>
                     <p className="text-center text-[9px] text-slate-400">
-                      El kit final genera una imagen con todas las prendas juntas
+                      Crea una imagen con todas las prendas juntas
                     </p>
                   </div>
                 )}
@@ -1071,7 +1070,7 @@ const OutfitExtractorModule: React.FC = () => {
               {step === 'final_kit' && currentKit && (
                 <div className="bg-white p-8 md:p-12 rounded-[48px] border border-slate-100 shadow-lg text-center space-y-8">
                   <div>
-                    <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">Kit listo</h3>
+                    <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">Imagen lista</h3>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-2">Guardado en tu biblioteca</p>
                   </div>
                   <div
@@ -1105,7 +1104,7 @@ const OutfitExtractorModule: React.FC = () => {
           <div className="space-y-8 px-4 md:px-0">
             <nav className="flex items-center gap-2 p-2 bg-slate-100 rounded-3xl w-full overflow-x-auto md:w-fit">
               {[
-                { id: 'kits',         label: 'Mis kits',     icon: 'fa-box' },
+                { id: 'kits',         label: 'Imágenes finales', icon: 'fa-box' },
                 { id: 'items',        label: 'Prendas',      icon: 'fa-shirt' },
                 { id: 'combinations', label: 'Combinaciones',icon: 'fa-user-tie' },
                 { id: 'creator',      label: 'Crear mix',    icon: 'fa-plus' },
@@ -1128,8 +1127,8 @@ const OutfitExtractorModule: React.FC = () => {
                   { label: 'Prendas', value: libraryKits.reduce((s, k) => s + (k.items?.length ?? 0), 0), sub: 'extraídas', color: 'text-brand-600' },
                 ]}
                 searchTexts={libraryKits.map(k => `kit ${k.id}`)}
-                emptyTitle="Sin kits todavía"
-                emptyDescription="Extraé tu primer outfit para verlo aquí"
+                emptyTitle="Aún no tienes imágenes finales"
+                emptyDescription="Separa las prendas de tu primera foto para verla aquí"
                 columns={3}
               >
                 {libraryKits.map(kit => (
@@ -1201,8 +1200,8 @@ const OutfitExtractorModule: React.FC = () => {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                 <div className="lg:col-span-7 bg-white p-6 md:p-10 rounded-[40px] border border-slate-100 shadow-sm space-y-10">
                   <div>
-                    <h3 className="text-xl font-black text-slate-900 uppercase italic">Mezclador de prendas</h3>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Combiná prendas de distintos kits</p>
+                    <h3 className="text-xl font-black text-slate-900 uppercase italic">Crear una combinación</h3>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Combina prendas de distintas fotos</p>
                   </div>
                   <div className="space-y-10">
                     {['top', 'bottom', 'footwear', 'accessory'].map(cat => (
@@ -1268,8 +1267,8 @@ const OutfitExtractorModule: React.FC = () => {
                         <GenerateButton
                           onClick={generateCombinedOutfit}
                           disabled={creatorSelectedItems.length === 0}
-                          label="Generar combinación"
-                          loadingLabel="Generando..."
+                          label="Crear combinación"
+                          loadingLabel="Creando..."
                           imageCount={1}
                           creditsAfter={creditsAfterCombo}
                           className="w-full py-5 rounded-[20px] text-xs uppercase tracking-[0.3em] shadow-xl transition-all active:scale-95 disabled:opacity-30 disabled:grayscale"

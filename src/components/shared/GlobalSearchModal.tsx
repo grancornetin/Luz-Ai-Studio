@@ -6,13 +6,13 @@ import { useGlobalSearch, type SearchableItem } from '../../hooks/useGlobalSearc
 
 const TYPE_CONFIG: Record<SearchableItem['type'], { icon: React.ElementType; label: string; color: string }> = {
   project: { icon: Folder,   label: 'Proyectos',          color: 'text-blue-500 bg-blue-50' },
-  image:   { icon: Image,    label: 'Imágenes generadas', color: 'text-violet-500 bg-violet-50' },
-  prompt:  { icon: FileText, label: 'Prompts',            color: 'text-emerald-500 bg-emerald-50' },
+  image:   { icon: Image,    label: 'Creaciones',         color: 'text-violet-500 bg-violet-50' },
+  prompt:  { icon: FileText, label: 'Ideas',              color: 'text-emerald-500 bg-emerald-50' },
   avatar:  { icon: User,     label: 'Modelos',            color: 'text-rose-500 bg-rose-50' },
-  outfit:  { icon: Shirt,    label: 'Outfits',            color: 'text-amber-500 bg-amber-50' },
+  outfit:  { icon: Shirt,    label: 'Prendas',            color: 'text-amber-500 bg-amber-50' },
 };
 
-const TYPE_ORDER: SearchableItem['type'][] = ['project', 'avatar', 'image', 'prompt', 'outfit'];
+const TYPE_ORDER: SearchableItem['type'][] = ['avatar', 'image', 'prompt', 'outfit'];
 
 interface GlobalSearchModalProps {
   isOpen: boolean;
@@ -79,7 +79,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
           <input
             ref={inputRef}
             type="text"
-            placeholder="Busca proyectos, imágenes, modelos, prompts..."
+            placeholder="Busca imágenes, modelos, ideas y contenido guardado..."
             value={query}
             onChange={e => setQuery(e.target.value)}
             className="flex-1 outline-none text-slate-800 text-sm placeholder:text-slate-400 bg-transparent"

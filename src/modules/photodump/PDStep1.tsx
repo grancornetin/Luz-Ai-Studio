@@ -54,7 +54,7 @@ const PDStep1: React.FC<PDStep1Props> = ({
               ¿Qué historia<br /><span className="text-brand-600 italic normal-case">querés contar?</span>
             </h2>
             <p className="text-sm text-slate-500 mt-2 leading-[1.55]">
-              Elegí el tipo de contenido y el resto del wizard se adapta a lo que necesitás.
+              Elige el tipo de historia y la guía se adaptará a lo que necesitas.
             </p>
           </div>
 
@@ -216,7 +216,7 @@ const PDStep1: React.FC<PDStep1Props> = ({
             <div className="bg-violet-50 border border-violet-100 rounded-2xl p-4">
               <p className="text-[12px] font-bold text-violet-900 mb-1">Modo avanzado</p>
               <p className="text-[11px] text-violet-700 leading-relaxed">
-                Cada escena tiene su propio prompt y referencias. Podés relacionar escenas para mantener coherencia visual entre ellas.
+                Cada foto tiene su propia descripción y referencias. Puedes relacionar fotos para mantener la continuidad visual.
               </p>
             </div>
           )}

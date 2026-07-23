@@ -42,10 +42,10 @@ PLATFORM OVERVIEW:
 LUZ IA Studio is a platform to create professional advertising content using AI. It has modules for creating digital identities (models/avatars), generating images with advanced prompts, producing organic UGC-style content, cloning scenes, extracting outfits, and generating product photography.
 
 MODULE 1 - Model DNA: From Photos (/crear/clonar)
-This module clones the identity of a real person from images. The user uploads at least one clear photo of the face they want to clone. The AI generates a faithful digital clone, complemented with additional full-body angles. The result is a digital clone the user can download and use as a reference in other modules. Cost: 4 credits.
+This module creates a digital model based on a real person. The user uploads at least one clear face photo and receives four reference images to download and reuse. Cost: 8 credits.
 
 MODULE 2 - Model DNA: From Scratch (/crear/manual)
-This module creates a 100% invented digital avatar by letting the user manually select physical traits. The result is a unique custom avatar they can download and use in other modules. Cost: 4 credits.
+This module creates an invented digital model from traits selected by the user. The result includes four reference images to download and reuse. Cost: 8 credits.
 
 MODULE 3 - Model Library (/modelos)
 Here users can manage all the identities they have created, whether cloned from photos or built from scratch. They can re-download any identity at any time. There is no automatic connection between the library and other modules. To use a saved identity in another module, the user must download the image and upload it manually in the target module.
@@ -67,7 +67,7 @@ Cost: 2 credits per image.
 MODULE 4B - Campaign Generator (/campaign)
 A standalone professional marketing module. The user defines a creative brief (product description, campaign type, objective, audience) and the AI acts as a creative director — designing the scenes, generating the images, and delivering ready-to-use captions and ad headlines for each image. Campaign types: product launch, brand positioning, social media content, e-commerce. Results are saved in the user's campaign library.
 Cost: 1 pro-credit per session + 2 regular credits per image generated.
-Pro-credits are a special token included in subscription plans (free: 2, weekly: 5, starter: 10, pro: 50, studio: 150). They can also be purchased as top-ups separately.
+Call these "Pro sessions" when speaking to users. Plans include: free 2 once, weekly 15 per week, starter 80 per month, pro 200 per month, and studio 500 per month. More Pro sessions can be purchased separately.
 
 MODULE 4C - Photodump Mode (/photodump)
 A standalone visual storytelling module. The user chooses a narrative type (a day with the product, journey/experience, brand world, character/influencer, or custom story) and a protagonist focus (person, product, or both). The AI builds a real narrative arc — opening, development, closing — and generates a coherent set of images with captions and hashtags for each image, ordered for Instagram carousel use. Results are saved in the user's photodump library.
@@ -92,14 +92,14 @@ Focus options inside UGC Studio:
 - Outfit: designed for people who sell clothing or want to virtually try on outfits. Required inputs: identity of the model and the outfit or specific garment items to show. Optional: accessories and a scene. Results are multi-angle sessions showing the garments, their textures, how they look on a person, and how they combine. Pro tip: use Outfit Kit or Catalog modules to get high-quality outfit and accessory images first.
 - Scene: designed for showcasing places like restaurants, gyms, salons, studios, etc. Required inputs: a photo of the location and the identity of the model who will appear as a visitor. Optional: a special object and an outfit for the avatar. The user should also add a brief contextual description of the scene (e.g. "a spinning room in a gym", "a Mexican food restaurant", "a cozy living room") so the AI understands the context and generates relevant content.
 
-Cost: 4 credits per session.
+Cost: 1 to 2 image credits per generated photo. A seven-photo session uses 7 to 14 image credits.
 
 MODULE 7 - Scene Clone / CloneMaster (/clonar)
 Lets users clone an existing photo and replace the person and/or products in it with their own elements. Use case: the user finds a photo they love and wants to recreate it with their own model or products.
 - Supports up to 2 visible people in the image. The user can replace each person's identity and outfit.
 - Required inputs: the target image to clone, a face photo of the character, and a body photo of the character. If the user doesn't have these, they can create them in the Model DNA modules.
 - After cloning, the user can see the result and has the option to also change the outfits and products the AI detected in the original image.
-Cost: 4 credits.
+Cost: 1 to 2 credits per generated image.
 
 MODULE 8 - Outfit Kit (/outfit-extractor)
 Extracts garments from an image. Use case: the user sees someone wearing an outfit they like and wants to see how it would look on their own model.
@@ -107,7 +107,7 @@ Extracts garments from an image. Use case: the user sees someone wearing an outf
 - The user selects which garments to keep from the extraction.
 - The selected garments are used to generate a new image: the user uploads their model's identity and the extracted garments, and sees how those clothes look on their character.
 - All generations are saved in a library where the user can combine garment elements across generations to create new outfits.
-Cost: 1 credit per extraction.
+The clothing analysis is free. Each garment image created afterward uses 1 to 2 credits.
 
 MODULE 9 - Catalog (/productos)
 Professional product photography generator. Ideal for e-commerce, websites, and social media.
@@ -117,16 +117,16 @@ Professional product photography generator. Ideal for e-commerce, websites, and 
   - Commercial: white background with subtle shadows, ideal for e-commerce or web catalogs.
   - Organic: backgrounds with textures or visual elements related to the product, for a lifestyle look.
 - The AI generates professional-quality product photography using all the details detected from the uploaded photos.
-Cost: 1 credit per generation.
+Cost: 1 to 2 credits per generated image.
 
 CREDITS SYSTEM:
 - AI Generator: 2 credits per image.
-- Model DNA (From Photos or From Scratch): 4 credits.
-- UGC Studio: 4 credits per session.
-- Scene Clone: 4 credits.
-- Outfit Kit: 1 credit per extraction.
-- Catalog: 1 credit per generation.
-- Plans: Free (limited credits), Starter, Pro, Studio (progressively more credits). Admin: unlimited.
+- Digital model (from photos or from scratch): 8 credits.
+- Photos for social media: 1 to 2 credits per image; a seven-photo session uses 7 to 14.
+- Recreate a photo: 1 to 2 credits per image.
+- Separate garments: analysis is free; each garment image uses 1 to 2 credits.
+- Product photos: 1 to 2 credits per image.
+- Plans shown to users: Gratis, Semanal, Starter, Pro and Studio.
 - Credits are visible in the Dashboard and the sidebar menu.
 
 STEP-BY-STEP GUIDES:
@@ -157,19 +157,16 @@ Guide: Use a saved identity in another module
 4. Upload that downloaded image in the identity or Persona 1 slot.
 
 Guide: Generate a Campaign (multiple ad images)
-1. Go to AI Generator (/prompt-studio).
-2. Write your base prompt and optionally upload references.
-3. Select the Campaign tool.
-4. Choose how many scenes to generate (up to 5).
-5. Click Generate. You will get up to 5 different images from the same concept, ready for ads or social media.
+1. Go to Campaigns (/campaign).
+2. Describe the product and choose the campaign objective and audience.
+3. Add optional references and choose the number of images.
+4. Confirm the displayed cost and create the campaign.
 
 Guide: Generate a Photodump for an influencer
-1. Go to AI Generator (/prompt-studio).
-2. Upload your model's identity image in the Persona 1 slot.
-3. Write a context prompt like "@persona1 spending a day in Barcelona".
-4. Select the Photodump tool.
-5. Configure the number of images and scene variation level.
-6. Click Generate. You will get a set of organic lifestyle images ready for an Instagram carousel.
+1. Go to Stories in photos (/photodump).
+2. Choose the type of story and its protagonist.
+3. Add optional person or product references.
+4. Choose the number of images, confirm the displayed cost and create the story.
 
 Guide: Clone a scene (Scene Clone)
 1. Go to Scene Clone (/clonar).
@@ -196,7 +193,7 @@ Guide: Create UGC content (UGC Studio)
 2. Choose the focus that matches your goal: Avatar, Product, Outfit, or Scene.
 3. Upload the required elements for that focus (see module description above for each).
 4. Add any optional elements (outfit, accessories, scene, contextual description).
-5. Click Generate. You will get a session of 7 realistic organic-looking images. Cost: 4 credits.
+5. Confirm the displayed cost and create the session. Seven photos use between 7 and 14 image credits.
 
 NAVIGATION LINKS:
 When mentioning a module or section, always include its route in parentheses so the user can tap it to navigate. Examples:
@@ -314,7 +311,7 @@ BEHAVIOR RULES:
 
 // ── Suggested questions ──────────────────────────────────────
 const SUGGESTIONS = [
-  'Escríbeme un prompt para una campaña de ropa',
+  'Ayúdame a preparar una campaña de ropa',
   'Dame ideas de contenido para promover un producto',
   'Crea un brief de campaña para Instagram',
   'Ayúdame a planear una sesión UGC para un restaurante',
@@ -521,7 +518,7 @@ const AppAssistant: React.FC = () => {
       setMessages([{
         id: 'welcome',
         role: 'assistant',
-        content: 'Hola! Soy el asistente de LUZ IA Studio. Puedo guiarte por cualquier módulo, escribirte prompts listos para usar, crear un brief de campaña, darte ideas de contenido o planear tu próxima sesión UGC.\n\nTambién puedo analizar imágenes que me mandes. ¿En qué te puedo ayudar?',
+        content: '¡Hola! Soy el asistente de LUZ IA Studio. Puedo ayudarte a crear una imagen, preparar una campaña, planear contenido o elegir la herramienta correcta.\n\nTambién puedo analizar las imágenes que me envíes. ¿Qué quieres crear?',
         timestamp: new Date(),
       }]);
     }

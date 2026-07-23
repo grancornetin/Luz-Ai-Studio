@@ -47,7 +47,7 @@ export default function Pricing() {
           <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter uppercase italic leading-tight">
             Planes <span className="text-indigo-600">&amp; Precios</span>
           </h1>
-          <p className="text-slate-500 font-medium mt-2 text-sm">Elige el plan que mejor se adapte a tu flujo de trabajo.</p>
+          <p className="text-slate-500 font-medium mt-2 text-sm">Elige según cuánto contenido quieres crear.</p>
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
@@ -185,9 +185,9 @@ export default function Pricing() {
       {/* FAQ rápido */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
-          { q: '¿Qué es un crédito?', a: '1 crédito = $0.10 USD. Cada imagen cuesta 2 créditos con Nano Banana 2 (Gemini) o 1 crédito con Seedream 4.5. Model DNA cuesta 8 créditos (4 imágenes, siempre Gemini).' },
-          { q: '¿Los créditos vencen?', a: 'Los créditos de planes mensuales se renuevan cada ciclo. Los créditos de recargas y misiones no vencen.' },
-          { q: '¿Puedo cancelar cuando quiera?', a: 'Sí. Cancelas cuando quieras desde tu panel de cuenta. Tu plan se mantiene activo hasta el fin del período pagado.' },
+          { q: '¿Qué es un crédito?', a: 'Los créditos se usan para crear imágenes. Una imagen usa entre 1 y 2 créditos según la opción disponible, y siempre verás el costo antes de confirmar.' },
+          { q: '¿Los créditos vencen?', a: 'Los créditos incluidos en un plan se renuevan con cada período de facturación. Los créditos de recargas y misiones no vencen.' },
+          { q: '¿Puedo cancelar cuando quiera?', a: 'Sí. Solicita la cancelación desde la sección Contacto. Tu plan seguirá activo hasta que termine el período pagado.' },
         ].map((item, i) => (
           <div key={i} className="bg-white rounded-[20px] border border-slate-100 p-5 space-y-2">
             <p className="text-xs font-black text-slate-800 uppercase tracking-tight">{item.q}</p>

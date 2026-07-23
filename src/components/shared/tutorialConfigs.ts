@@ -230,15 +230,15 @@ export const TUTORIAL_CONFIGS: Record<string, TutorialStep[]> = {
     {
       icon: 'fa-megaphone',
       color: 'bg-brand-600 text-white',
-      title: '¿Qué es Campaign Mode?',
-      description: 'Es un director creativo de marketing dentro de la app. No genera imágenes al azar — primero entiende tu campaña (producto, objetivo, audiencia) y luego construye un set coherente de imágenes listas para publicar o usar en anuncios.',
+      title: '¿Qué puedes crear aquí?',
+      description: 'Prepara una campaña completa a partir de tu producto, objetivo y audiencia. Recibirás una serie de imágenes coherentes para publicar o usar en anuncios.',
     },
     {
       icon: 'fa-pen-to-square',
       color: 'bg-violet-600 text-white',
-      title: 'Paso 1 — Define el brief',
-      description: 'Primero escribí el prompt base del sujeto en el compositor de arriba (ej: "mujer sosteniendo una crema hidratante"). Después en Campaign completá: descripción del producto, tipo de campaña, objetivo y audiencia. Esto le da contexto real a la IA.',
-      tip: 'Cuanto más específica sea la descripción del producto, más relevantes serán las escenas generadas.',
+      title: 'Paso 1 — Cuéntanos sobre la campaña',
+      description: 'Describe el producto y elige el tipo de campaña, el objetivo y la audiencia. También puedes añadir imágenes de referencia.',
+      tip: 'Una descripción concreta del producto ayuda a crear escenas más relevantes.',
     },
     {
       icon: 'fa-layer-group',
@@ -256,9 +256,9 @@ export const TUTORIAL_CONFIGS: Record<string, TutorialStep[]> = {
     {
       icon: 'fa-copy',
       color: 'bg-slate-700 text-white',
-      title: 'Paso 4 — Resultados listos para publicar',
-      description: 'Cada imagen viene con: titular de anuncio listo para copiar, caption para redes sociales, y el prompt técnico que se usó (para reutilizar). Al final podés descargar todo como ZIP.',
-      tip: 'Los captions y titulares los genera la IA en español y adaptados al tono de tu audiencia. Podés usarlos directamente o ajustarlos.',
+      title: 'Paso 4 — Revisa y descarga',
+      description: 'Revisa las imágenes y sus textos sugeridos. Puedes copiarlos, ajustarlos y descargar el resultado completo.',
+      tip: 'Antes de publicar, adapta los textos a la voz de tu marca.',
     },
   ],
 
@@ -267,8 +267,8 @@ export const TUTORIAL_CONFIGS: Record<string, TutorialStep[]> = {
     {
       icon: 'fa-images',
       color: 'bg-violet-600 text-white',
-      title: '¿Qué es Photodump Mode?',
-      description: 'Es un creador de sets de imágenes con narrativa visual — como el photodump de un influencer real, no fotos sueltas. Cada set cuenta una historia progresiva: apertura, desarrollo y cierre. Ideal para carruseles de Instagram.',
+      title: '¿Qué es una historia en fotos?',
+      description: 'Es una serie de imágenes conectadas que cuenta una historia con inicio, desarrollo y cierre. Es ideal para carruseles de Instagram.',
     },
     {
       icon: 'fa-book-open',
@@ -293,9 +293,9 @@ export const TUTORIAL_CONFIGS: Record<string, TutorialStep[]> = {
     {
       icon: 'fa-hashtag',
       color: 'bg-slate-700 text-white',
-      title: 'Paso 4 — Set listo con captions',
-      description: 'Cada imagen viene con su propio caption y hashtags adaptados al momento narrativo. También se muestra el orden sugerido para el carrusel. Descargás todo como ZIP.',
-      tip: 'Los captions son cortos y conversacionales — están pensados para sonar naturales, no como copy de empresa.',
+      title: 'Paso 4 — Revisa el orden sugerido',
+      description: 'Recibirás las imágenes en el orden recomendado para contar la historia. Revisa el resultado y descarga la serie completa.',
+      tip: 'Puedes cambiar el orden antes de publicar si otra secuencia funciona mejor para tu historia.',
     },
   ],
 
@@ -396,29 +396,29 @@ export const TUTORIAL_CONFIGS: Record<string, TutorialStep[]> = {
     {
       icon: 'fa-wand-magic-sparkles',
       color: 'bg-indigo-600 text-white',
-      title: '¿Qué es AI Generator?',
-      description: 'El centro de creación de la plataforma. Tiene tres modos: Standard para generación individual, Campaign para crear sets de imágenes coherentes, y Photodump para un set de escenas tipo lifestyle.',
+      title: '¿Qué puedes crear aquí?',
+      description: 'Crea una imagen a partir de una descripción. Puedes añadir fotos de personas, productos o estilos cuando necesites un resultado más específico.',
     },
     {
       icon: 'fa-palette',
       color: 'bg-purple-600 text-white',
-      title: 'Modo Standard — Una imagen',
-      description: 'Construye tu prompt con el DNA visual: persona, producto, estilo, iluminación, fondo y composición. Sube referencias en los slots para anclar identidad y productos.',
-      tip: 'Para usar un modelo de tu Biblioteca: descárgalo desde allí y súbelo en el slot "Persona 1".',
+      title: 'Describe la imagen',
+      description: 'Escribe qué quieres ver e incluye detalles sobre la persona, el producto, el estilo, la luz o el fondo cuando sean importantes.',
+      tip: 'Una descripción sencilla es suficiente para comenzar.',
     },
     {
       icon: 'fa-megaphone',
       color: 'bg-blue-600 text-white',
-      title: 'Modo Campaign — Campaña de marketing',
-      description: 'Definís el brief (producto, objetivo, audiencia) y la IA actúa como directora creativa: diseña las escenas, genera las imágenes y entrega captions y titulares de anuncio listos para copiar. Tiene su propio tutorial dentro del modo.',
-      tip: 'Pulsá "¿Cómo funciona?" dentro del modo Campaign para ver el tutorial detallado.',
+      title: 'Usa imágenes de referencia',
+      description: 'Añade una foto cuando quieras conservar una persona, mostrar un producto concreto o seguir un estilo visual.',
+      tip: 'Menciona en tu descripción la referencia que quieres usar.',
     },
     {
       icon: 'fa-images',
       color: 'bg-violet-600 text-white',
-      title: 'Modo Photodump — Historia visual',
-      description: 'Elegís una narrativa (un día con el producto, viaje, mundo de marca...) y la IA construye un set de imágenes con arco narrativo real: apertura, desarrollo y cierre. Cada imagen trae su propio caption. Tiene su propio tutorial dentro del modo.',
-      tip: 'Pulsá "¿Cómo funciona?" dentro del modo Photodump para ver el tutorial detallado.',
+      title: 'Para crear una serie',
+      description: 'Si necesitas varias piezas relacionadas, abre Campañas publicitarias o Historias en fotos desde el menú de creación.',
+      tip: 'Cada herramienta tiene una guía breve antes de comenzar.',
     },
     {
       icon: 'fa-users',

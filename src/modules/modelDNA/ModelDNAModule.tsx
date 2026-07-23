@@ -114,7 +114,7 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
 
   const startCloning = async (free = false) => {
     if (!name || files.length === 0) {
-      alert("Nombre y al menos una foto de referencia son requeridos.");
+      alert('Escribe un nombre y sube al menos una foto.');
       return;
     }
     const isFreeOnboarding = free || localStorage.getItem('onboarding_free_generation') === 'true';
@@ -192,7 +192,7 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
         generationHistoryService.save({
           imageUrl: img,
           module: 'model_dna',
-          moduleLabel: `Model DNA — Por Imagen (${viewLabels[idx] || `Vista ${idx + 1}`})`,
+          moduleLabel: `Crear modelo desde fotos (${viewLabels[idx] || `Vista ${idx + 1}`})`,
           creditsUsed: (!free && idx === 0) ? CREDIT_COSTS.CREATE_MODEL_CLONE : 0,
           promptText: `Clonación desde imagen — ${name}`,
         }).catch(console.error);
@@ -244,7 +244,7 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
               <header className="border-b pb-4">
                 <h2 className="t-display text-xl text-slate-900">Crear modelo <span className="text-brand-600">· desde fotos</span></h2>
                 <div className="flex items-center gap-3 mt-1">
-                  <p className="t-meta text-slate-400">Crea tu modelo digital desde fotos reales <span className="text-slate-300 text-[9px] normal-case font-medium">(Model DNA)</span></p>
+                  <p className="t-meta text-slate-400">Crea tu modelo digital desde fotos reales</p>
                   <ModuleTutorial moduleId="modelDnaPhotos" steps={TUTORIAL_CONFIGS.modelDnaPhotos} compact />
                 </div>
               </header>
@@ -254,7 +254,7 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                   type="text"
                   value={name}
                   onChange={e => setName(e.target.value)}
-                  placeholder="Nombre del Digital Twin"
+                  placeholder="Nombre de tu modelo"
                   disabled={isLoading}
                   autoComplete="off"
                   autoCapitalize="words"
@@ -284,8 +284,8 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                   onClick={startCloning}
                   loading={isLoading}
                   disabled={!name || files.length === 0}
-                  label="Generar modelo digital"
-                  loadingLabel={status || 'Procesando...'}
+                  label="Crear modelo digital"
+                  loadingLabel={status || 'Creando...'}
                   imageCount={4}
                   fixedModel="gemini"
                   creditsAfter={creditsAfter}
@@ -315,10 +315,10 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                 <div className="space-y-4">
                   <div className="p-6 bg-accent-50 rounded-[32px] border border-accent-100 text-center">
                     <i className="fa-solid fa-circle-check text-accent-500 text-2xl mb-2"></i>
-                    <p className="text-[10px] font-black text-accent-600 uppercase">Avatar Guardado en Biblioteca</p>
+                    <p className="text-[10px] font-black text-accent-600 uppercase">Modelo guardado en tu biblioteca</p>
                   </div>
                   <button onClick={reset} className="w-full py-4 text-slate-400 t-meta hover:text-slate-600">
-                    Crear Otro Avatar
+                    Crear otro modelo
                   </button>
                 </div>
               )}
@@ -336,9 +336,8 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                   <div className="space-y-4">
                     <h3 className="t-display text-4xl text-white">Creador de modelos</h3>
                     <p className="text-slate-500 text-sm font-medium max-w-sm mx-auto italic leading-relaxed">
-                      Genera tu modelo digital para e‑commerce de alta escala.
+                      Crea un modelo digital para usar en las imágenes de tu marca.
                     </p>
-                    <p className="text-slate-600 text-[9px] normal-case tracking-normal">(Identity Synthesizer · Model DNA)</p>
                   </div>
                 </div>
               )}
@@ -348,11 +347,11 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                   <header className="flex justify-between items-center border-b border-white/10 pb-8">
                     <div>
                       <h3 className="t-display text-3xl text-white">{name}</h3>
-                      <p className="t-meta text-brand-400">Set de identidad digital <span className="text-brand-700/60 text-[9px] normal-case">(Digital Twin)</span></p>
+                      <p className="t-meta text-brand-400">Fotos de tu modelo</p>
                     </div>
                     {/* Botón de descarga rápida (además del FAB) */}
                     <button onClick={handleDownloadZip} className="px-6 py-4 bg-white/10 text-white rounded-2xl text-[10px] font-black uppercase border border-white/10 hover:bg-white/20">
-                      Descargar Set ZIP
+                      Descargar todas las fotos
                     </button>
                   </header>
 
@@ -400,7 +399,7 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
                       <i className="fa-solid fa-circle-info"></i>
                     </div>
                     <p className="text-[11px] text-slate-400 font-medium leading-relaxed italic">
-                      Este set garantiza la persistencia facial. La <span className="text-white font-bold">foto de cara</span> se usa como referencia de identidad en todas las generaciones para mantener coherencia facial.
+                      Usa la <span className="text-white font-bold">foto del rostro</span> como referencia para mantener el mismo rostro en tus creaciones.
                     </p>
                   </footer>
                 </div>
@@ -421,7 +420,7 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
               link.download = `${name}_vista_${idx + 1}.png`;
               link.click();
             }}
-            metadata={{ label: `Digital Twin: ${name}` }}
+            metadata={{ label: `Modelo: ${name}` }}
           />
         )}
 
@@ -429,7 +428,7 @@ const CloningModule: React.FC<CloningModuleProps> = ({ onSave }) => {
         <FloatingActionBar
           isVisible={previews.length === 4 && fabVisible && !isLoading}
           primaryAction={{
-            label: 'Descargar ZIP',
+            label: 'Descargar todas las fotos',
             icon: <i className="fa-solid fa-download text-sm"></i>,
             onClick: handleDownloadZip,
           }}

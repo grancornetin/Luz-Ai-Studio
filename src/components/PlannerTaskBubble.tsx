@@ -35,11 +35,11 @@ interface TaskPayload {
 }
 
 const MODULE_META: Record<string, { label: string; color: string; bg: string }> = {
-  product: { label: 'Product Studio',   color: '#F72C5B', bg: 'rgba(247,44,91,0.08)' },
-  ugc:     { label: 'UGC Studio',       color: '#10B981', bg: 'rgba(16,185,129,0.08)' },
+  product: { label: 'Fotos de producto',color: '#F72C5B', bg: 'rgba(247,44,91,0.08)' },
+  ugc:     { label: 'Fotos para redes', color: '#10B981', bg: 'rgba(16,185,129,0.08)' },
   campaign:{ label: 'Campaign',         color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)' },
-  scene:   { label: 'Scene Clone',      color: '#F59E0B', bg: 'rgba(245,158,11,0.08)' },
-  outfit:  { label: 'Outfit Extractor', color: '#EC4899', bg: 'rgba(236,72,153,0.08)' },
+  scene:   { label: 'Recrear una foto', color: '#F59E0B', bg: 'rgba(245,158,11,0.08)' },
+  outfit:  { label: 'Separar prendas', color: '#EC4899', bg: 'rgba(236,72,153,0.08)' },
   prompt:  { label: 'Prompt Studio',    color: '#6366F1', bg: 'rgba(99,102,241,0.08)' },
 };
 

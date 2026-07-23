@@ -28,13 +28,13 @@ export const MODULE_ROUTES: Record<ToolModule, string> = {
 };
 
 export const MODULE_DISPLAY_NAMES: Record<ToolModule, string> = {
-  product: 'Product Studio',
-  ugc: 'UGC Studio',
-  scene: 'Scene Clone',
-  outfit: 'Outfit Extractor',
-  prompt: 'Prompt Studio',
-  photodump: 'Photodump',
-  campaign: 'Campañas',
+  product: 'Fotos de producto',
+  ugc: 'Fotos para redes',
+  scene: 'Recrear una foto',
+  outfit: 'Separar prendas',
+  prompt: 'Crear una imagen',
+  photodump: 'Historia en fotos',
+  campaign: 'Crear una campaña',
   none: 'Sin herramienta (publicación directa)',
 };
 

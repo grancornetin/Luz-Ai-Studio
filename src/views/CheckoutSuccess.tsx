@@ -51,14 +51,14 @@ export default function CheckoutSuccess() {
         </div>
         <div className="space-y-2">
           <h1 className="text-3xl font-black text-slate-900 uppercase italic tracking-tighter">
-            ¡Pago exitoso!
+            ¡Listo! Recibimos tu pago.
           </h1>
           <p className="text-slate-500 font-medium leading-relaxed">
             {creditsReceived
-              ? 'Tus créditos están listos. Te llevamos al dashboard...'
+              ? 'Tus créditos están listos. Te llevamos al inicio...'
               : polling
               ? 'Activando tus créditos, un momento...'
-              : 'Tus créditos estarán disponibles en breve. Puedes ir al dashboard.'}
+              : 'Tus créditos estarán disponibles en breve. Puedes volver al inicio.'}
           </p>
         </div>
 
@@ -66,7 +66,7 @@ export default function CheckoutSuccess() {
           <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex items-center gap-3">
             <Zap className="w-5 h-5 text-emerald-600 flex-shrink-0" />
             <p className="text-sm font-bold text-emerald-700 text-left">
-              ¡Créditos acreditados! Redirigiendo al dashboard...
+              Tus créditos ya están disponibles. Volviendo al inicio...
             </p>
           </div>
         ) : polling ? (
@@ -80,7 +80,7 @@ export default function CheckoutSuccess() {
           <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex items-center gap-3">
             <Zap className="w-5 h-5 text-amber-600 flex-shrink-0" />
             <p className="text-sm font-bold text-amber-700 text-left">
-              Si no ves los créditos, recarga la página en unos segundos.
+              La activación puede tardar unos minutos. Si no aparecen, revisa de nuevo o contáctanos.
             </p>
           </div>
         )}

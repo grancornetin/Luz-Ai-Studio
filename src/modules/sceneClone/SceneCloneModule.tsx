@@ -413,7 +413,7 @@ export default function CloneImageModule() {
       generationHistoryService.save({
         imageUrl: img,
         module: 'scene_clone',
-        moduleLabel: 'Scene Clone (Base)',
+        moduleLabel: 'Recrear una foto (primera versión)',
         creditsUsed: baseGenerationCost,
         promptText: `Clonación de escena base con estilo ${cameraStyle}`
       }).catch(console.error);
@@ -458,12 +458,12 @@ export default function CloneImageModule() {
     setCreditsRefunded(false);
 
     if (needsOutfit1Image) {
-      setError(toAppError(new Error('Activaste Cambiar Outfit S1, pero falta subir la imagen del outfit.')));
+      setError({ message: 'Sube la foto de la ropa que quieres usar.' });
       return;
     }
 
     if (!hasFinalChanges) {
-      setError(toAppError(new Error('Selecciona al menos un cambio: outfit S1, outfit S2 o reemplazo de producto.')));
+      setError({ message: 'Elige al menos un cambio: ropa de la primera persona, ropa de la segunda o producto.' });
       return;
     }
 
@@ -517,7 +517,7 @@ export default function CloneImageModule() {
       generationHistoryService.save({
         imageUrl: img,
         module: 'scene_clone',
-        moduleLabel: 'Scene Clone (Final)',
+        moduleLabel: 'Recrear una foto (resultado final)',
         creditsUsed: CREDIT_COSTS.CLONE_IMAGE,
         promptText: `Clonación final con aplicación de outfits y productos`
       }).catch(console.error);
@@ -626,9 +626,9 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
         
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-4 pt-2">
           <div className="text-center md:text-left">
-            <h1 className="t-display text-3xl md:text-4xl text-slate-900">Scene <span className="text-brand-600">Clone</span></h1>
+            <h1 className="t-display text-3xl md:text-4xl text-slate-900">Recrear una <span className="text-brand-600">foto</span></h1>
             <div className="flex items-center justify-center md:justify-start gap-2 mt-1">
-              <p className="text-slate-500 font-bold uppercase text-[8px] md:text-[10px] tracking-[0.3em] italic">Clonar escenas · Coherencia facial <span className="normal-case font-medium text-slate-400 text-[8px]">(Scene Clone)</span></p>
+              <p className="text-slate-500 font-bold uppercase text-[8px] md:text-[10px] tracking-[0.3em] italic">Usa una foto de inspiración con tu modelo o producto</p>
               <ModuleTutorial moduleId="sceneClone" steps={TUTORIAL_CONFIGS.sceneClone} />
             </div>
           </div>
@@ -643,7 +643,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                 <span className="w-4 h-4 bg-brand-100 text-brand-700 rounded-full text-[8px] font-black flex items-center justify-center">{sessions.length}</span>
               </button>
             )}
-            <button onClick={fullReset} className="px-6 md:px-8 py-2 md:py-3 rounded-xl md:rounded-2xl t-meta text-slate-400 hover:text-slate-900 transition-all">Reset</button>
+            <button onClick={fullReset} className="px-6 md:px-8 py-2 md:py-3 rounded-xl md:rounded-2xl t-meta text-slate-400 hover:text-slate-900 transition-all">Empezar de nuevo</button>
           </div>
         </header>
 
@@ -662,14 +662,14 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-2 h-2 rounded-full bg-pink-500 animate-pulse" />
                     <span className="text-[10px] font-black text-pink-600 uppercase tracking-[0.18em]">
-                      Generando · no cierres esta ventana
+                      Creando · no cierres esta ventana
                     </span>
                   </div>
                   <h2 className="t-display text-[24px] md:text-[28px] text-slate-900 leading-tight">
-                    {step === 4 ? 'Aplicando cambios' : 'Clonando escena'}
+                    {step === 4 ? 'Aplicando cambios' : 'Creando la primera versión'}
                   </h2>
                   <div className="text-[13px] text-slate-500 mt-1 mb-4">
-                    1 imagen · Scene Clone
+                    1 imagen
                   </div>
                   <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-[18px]">
                     <GenerationProgress
@@ -679,7 +679,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                     />
                   </div>
                   <div className="mt-3 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5]">
-                    💡 Podés cerrar la ventana — te avisamos cuando termine.
+                    💡 Puedes cerrar la ventana. Te avisaremos cuando termine.
                   </div>
                 </div>
                 {/* Derecha: tarjeta de imagen en vivo */}
@@ -773,7 +773,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
 
               {step === 3 && !loading && (
                 <div className="space-y-5 animate-in slide-in-from-left-4">
-                  <ProHeader title="Generar Base" subtitle="Fusión de Escena + Identidad" icon="fa-wand-magic-sparkles" />
+                  <ProHeader title="Crear primera versión" subtitle="Combina la foto original con tus referencias" icon="fa-wand-magic-sparkles" />
 
                   {/* Panel de costo — mismo diseño que Step4Type de Product Generator */}
                   <div className="relative bg-slate-900 text-white rounded-2xl p-5 overflow-hidden">
@@ -871,7 +871,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                   <div className="space-y-4">
                     <div className={`p-4 rounded-[24px] border transition-all ${replaceOutfit1 ? 'bg-brand-50 border-brand-200' : 'bg-white border-slate-200'}`}>
                        <div className="flex items-center justify-between mb-4">
-                          <label className="t-meta text-slate-700">Cambiar Outfit</label>
+                          <label className="t-meta text-slate-700">Cambiar ropa</label>
                           <input type="checkbox" checked={replaceOutfit1} onChange={(e) => setReplaceOutfit1(e.target.checked)} className="w-5 h-5 accent-brand-600 cursor-pointer" />
                        </div>
                        {replaceOutfit1 && (
@@ -889,7 +889,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                       <div className="space-y-3">
                         <div className="flex items-center gap-2">
                           <i className="fa-solid fa-box-open text-brand-500"></i>
-                          <label className="t-meta text-slate-700">Productos detectados (opcional)</label>
+                          <label className="t-meta text-slate-700">Productos que encontramos en la foto (opcional)</label>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           {detectedProducts.map((product) => (
@@ -935,7 +935,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                   else if (step === 4) handleApplyOutfitsAndProducts();
                 }}
                 continueLabel={
-                  step === 3 ? `Generar Base · ${baseGenerationCost} cr` :
+                  step === 3 ? `Crear primera versión · ${baseGenerationCost} cr` :
                   step === 4 ? `Aplicar Cambios · ${CLONE_COST} cr` :
                   'Continuar'
                 }
@@ -956,9 +956,9 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
               
               <div className="flex justify-between items-center mb-8 relative z-10">
                  <div>
-                    <h3 className="text-white font-black text-2xl uppercase italic tracking-tighter">Visualizador</h3>
+                    <h3 className="text-white font-black text-2xl uppercase italic tracking-tighter">Vista previa</h3>
                     <p className="text-brand-400 text-[9px] font-black uppercase tracking-[0.3em]">
-                      {step === 1 ? "TARGET INPUT" : step === 3 ? "BASE RESULT" : step === 4 ? "FINAL EDIT" : "CONFIGURANDO"}
+                      {step === 1 ? "FOTO ORIGINAL" : step === 3 ? "PRIMERA VERSIÓN" : step === 4 ? "RESULTADO FINAL" : "PREPARANDO"}
                     </p>
                  </div>
                  {activePreview && (
@@ -981,7 +981,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                  ) : (
                    <div className="text-center space-y-4 opacity-30">
                       <i className="fa-regular fa-image text-6xl text-white"></i>
-                      <p className="text-white text-xs font-bold uppercase tracking-widest">Esperando Input...</p>
+                      <p className="text-white text-xs font-bold uppercase tracking-widest">Sube una foto para comenzar</p>
                    </div>
                  )}
               </div>
@@ -1078,7 +1078,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
         <FloatingActionBar
           isVisible={!!((baseComposition || finalImage) && fabVisible && !loading)}
           primaryAction={{
-            label: 'Descargar ZIP',
+            label: 'Descargar todo',
             icon: <i className="fa-solid fa-file-zipper text-sm"></i>,
             onClick: handleDownloadZip,
           }}

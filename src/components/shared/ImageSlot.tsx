@@ -83,7 +83,7 @@ const SLOT_CONFIGS: Record<SlotType, SlotConfig> = {
   },
   outfit: {
     icon: <Shirt className="w-7 h-7" strokeWidth={1.5} />,
-    label: 'Outfit',
+    label: 'Look o ropa',
     hint: 'Foto del outfit o prenda',
     color: 'text-purple-400',
     bgColor: 'bg-purple-50/60 hover:bg-purple-50 hover:border-purple-300',
@@ -91,7 +91,7 @@ const SLOT_CONFIGS: Record<SlotType, SlotConfig> = {
   style: {
     icon: <Palette className="w-7 h-7" strokeWidth={1.5} />,
     label: 'Estilo',
-    hint: 'Imagen de referencia de estilo',
+    hint: 'Foto de inspiración',
     color: 'text-amber-400',
     bgColor: 'bg-amber-50/60 hover:bg-amber-50 hover:border-amber-300',
   },
@@ -105,7 +105,7 @@ const SLOT_CONFIGS: Record<SlotType, SlotConfig> = {
   face: {
     icon: <Camera className="w-7 h-7" strokeWidth={1.5} />,
     label: 'Rostro',
-    hint: 'Close-up del rostro',
+    hint: 'Foto clara del rostro',
     color: 'text-rose-400',
     bgColor: 'bg-rose-50/60 hover:bg-rose-50 hover:border-rose-300',
   },
@@ -119,7 +119,7 @@ const SLOT_CONFIGS: Record<SlotType, SlotConfig> = {
   generic: {
     icon: <Upload className="w-7 h-7" strokeWidth={1.5} />,
     label: 'Imagen',
-    hint: 'Haz click para subir',
+    hint: 'Haz clic para subir',
     color: 'text-slate-400',
     bgColor: 'bg-slate-50/60 hover:bg-slate-50 hover:border-slate-300',
   },

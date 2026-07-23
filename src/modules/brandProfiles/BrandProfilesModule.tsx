@@ -123,7 +123,7 @@ function BrandCard({ profile, onEdit, onDelete, onSetDefault, deleting }: BrandC
             {formatDate(profile.updatedAt)}
           </div>
           <p className="mb-3 text-xs text-slate-500">
-            {isComplete ? 'Tus planes ya salen a tu medida.' : 'Complétala y tus captions mejorarán.'}
+            {isComplete ? 'Tus planes ya salen a tu medida.' : 'Complétala para personalizar los textos de tus publicaciones.'}
           </p>
           <div className="flex items-center gap-1.5 text-[10px]">
             {!isComplete && (
@@ -172,7 +172,7 @@ function BrandCard({ profile, onEdit, onDelete, onSetDefault, deleting }: BrandC
                   className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-black text-white transition-all shadow-sm"
                   style={{ background: primaryColor }}
                 >
-                  <CalendarDays size={13} /> Usar en Planner
+                  <CalendarDays size={13} /> Usar en el planificador
                 </button>
               </div>
             ) : (
@@ -226,9 +226,9 @@ function EmptyState({ onNew }: { onNew: () => void }) {
       >
         <Palette size={32} style={{ color: '#F72C5B' }} />
       </div>
-      <h2 className="text-2xl font-bold text-slate-800 mb-3">Tu marca merece un cerebro propio</h2>
+      <h2 className="text-2xl font-bold text-slate-800 mb-3">Tu marca merece una identidad clara</h2>
       <p className="text-sm text-slate-400 leading-relaxed max-w-md mx-auto mb-6">
-        Cuéntale a Luz quién eres una sola vez. Tus planes, captions e imágenes saldrán hechos a tu medida.
+        Cuéntale a Luz sobre tu marca una sola vez. Tus planes, textos e imágenes saldrán hechos a tu medida.
       </p>
       <button
         onClick={onNew}
@@ -317,12 +317,12 @@ export const BrandProfilesModule: React.FC = () => {
       {/* Hero */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
-          <p className="text-[11px] font-bold text-[#F72C5B] uppercase tracking-widest mb-2">Mis Marcas · v2.0</p>
+          <p className="text-[11px] font-bold text-[#F72C5B] uppercase tracking-widest mb-2">Mis marcas</p>
           <h1 className="text-3xl font-black text-slate-800 leading-tight">
             El cerebro de <span style={{ color: '#F72C5B' }}>tu marca</span>
           </h1>
           <p className="text-sm text-slate-400 mt-2 max-w-lg leading-relaxed">
-            Una identidad viva que mejora tus planes, captions e imágenes.
+            Una identidad clara que personaliza tus planes, textos e imágenes.
           </p>
         </div>
         {profiles.length > 0 && (
@@ -380,7 +380,7 @@ export const BrandProfilesModule: React.FC = () => {
             </div>
             <div className="text-center">
               <p className="text-sm font-black text-slate-600 group-hover:text-[#F72C5B] transition-colors">Crear nueva marca</p>
-              <p className="text-xs text-slate-500 mt-0.5">Tu núcleo de marca en 4 min.</p>
+              <p className="text-xs text-slate-500 mt-0.5">Guarda lo esencial de tu marca en pocos pasos.</p>
             </div>
           </button>
         </div>

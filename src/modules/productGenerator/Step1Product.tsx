@@ -68,7 +68,7 @@ export const Step1Product: React.FC<Step1ProductProps> = ({ state, onChange, dis
               <textarea
                 value={state.desc}
                 onChange={(e) => onChange({ ...state, desc: e.target.value })}
-                placeholder="Material, color, ingredientes, lo que la IA debería saber…"
+                placeholder="Material, color, ingredientes o detalles que debemos respetar…"
                 rows={3}
                 disabled={disabled}
                 autoComplete="off"
@@ -180,7 +180,7 @@ export const Step1Product: React.FC<Step1ProductProps> = ({ state, onChange, dis
               </>
             ) : status === 'warning' ? (
               <>
-                <strong>Sumá una vista más.</strong> Con una sola foto la IA puede perder detalle del reverso o lateral.
+                <strong>Añade una vista más.</strong> Una foto del reverso o lateral nos ayuda a respetar todos los detalles.
               </>
             ) : (
               <>

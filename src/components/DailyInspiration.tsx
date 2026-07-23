@@ -22,11 +22,11 @@ interface DailyInspirationProps {
 }
 
 const MODULE_LABELS: Record<string, string> = {
-  campaign:  'Campaign',
-  photodump: 'Photodump',
-  ugc:       'UGC Studio',
-  catalog:   'Catálogo',
-  prompt:    'Prompt Studio',
+  campaign:  'Campaña',
+  photodump: 'Historia en fotos',
+  ugc:       'Fotos para redes',
+  catalog:   'Fotos de producto',
+  prompt:    'Crear una imagen',
 };
 
 const MODULE_COLORS: Record<string, string> = {
@@ -38,8 +38,8 @@ const MODULE_COLORS: Record<string, string> = {
 };
 
 const MODULE_ROUTES: Record<string, string> = {
-  campaign:  '/prompt-studio',
-  photodump: '/prompt-studio',
+  campaign:  '/campaign',
+  photodump: '/photodump',
   ugc:       '/studio-pro',
   catalog:   '/productos',
   prompt:    '/prompt-studio',
@@ -147,7 +147,7 @@ const FALLBACK_IDEAS: ContentIdea[] = [
     tag: 'Venta',
   },
   {
-    title: 'Photodump lifestyle',
+    title: 'Historia visual cotidiana',
     description: 'Genera un set de 4 imágenes orgánicas estilo influencer con tu producto en su contexto natural.',
     module: 'photodump',
     params: { mode: 'photodump', narrative: 'day', protagonist: 'both', count: '4' },

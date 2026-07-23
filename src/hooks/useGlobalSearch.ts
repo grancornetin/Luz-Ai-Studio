@@ -5,7 +5,6 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../modules/auth/AuthContext';
 import { generationHistoryService } from '../services/generationHistoryService';
 import { promptLibraryService } from '../modules/promptLibrary/services/promptLibraryService';
-import { getProjects } from '../services/projectService';
 import { dbService } from '../services/dbService';
 import { outfitStorage } from '../modules/outfitExtractor/outfitStorage';
 
@@ -41,18 +40,6 @@ export const useGlobalSearch = () => {
     if (!user) return;
     setIsLoading(true);
     const newItems: SearchableItem[] = [];
-
-    // Proyectos (Firestore)
-    try {
-      const projects = await getProjects();
-      projects.forEach(p => newItems.push({
-        id: p.id,
-        type: 'project',
-        title: p.name,
-        subtitle: `${p.items?.length ?? 0} imágenes`,
-        url: `/projects/${p.id}`,
-      }));
-    } catch { /* si falla, omitir */ }
 
     // Historial de imágenes generadas
     try {

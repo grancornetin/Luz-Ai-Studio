@@ -74,13 +74,13 @@ const MENU_GROUPS = [
     ]
   },
   {
-    label: 'Generar contenido',
+    label: 'Crear contenido',
     icon: 'fa-wand-magic-sparkles',
     items: [
-      { path: '/prompt-studio',   label: 'Generador con IA',    sublabel: 'Prompt Studio',  icon: 'fa-wand-magic-sparkles' },
-      { path: '/prompt-gallery',  label: 'Galería de prompts',  sublabel: 'Prompt Gallery', icon: 'fa-images' },
-      { path: '/studio-pro',      label: 'Contenido para redes',sublabel: 'UGC Studio',     icon: 'fa-mobile-screen-button' },
-      { path: '/clonar',          label: 'Clonar escena',       sublabel: 'Scene Clone',    icon: 'fa-clone' },
+      { path: '/prompt-studio',   label: 'Crear una imagen',    sublabel: 'Describe tu idea',             icon: 'fa-wand-magic-sparkles' },
+      { path: '/prompt-gallery',  label: 'Ideas para crear',    sublabel: 'Ejemplos de la comunidad',     icon: 'fa-images' },
+      { path: '/studio-pro',      label: 'Fotos para redes',    sublabel: 'Sesiones naturales',           icon: 'fa-mobile-screen-button' },
+      { path: '/clonar',          label: 'Recrear una foto',    sublabel: 'Usa una foto de inspiración',  icon: 'fa-clone' },
     ]
   },
   {
@@ -96,7 +96,6 @@ const MENU_GROUPS = [
     icon: 'fa-calendar-days',
     items: [
       { path: '/planner',     label: 'Planes de contenido', sublabel: 'Tu estrategia semanal', icon: 'fa-calendar-days' },
-      { path: '/projects',    label: 'Proyectos',  sublabel: 'Biblioteca',             icon: 'fa-folder-open' },
       { path: '/mis-marcas',  label: 'Mis Marcas', sublabel: 'Perfiles de marca',      icon: 'fa-palette' },
     ]
   },
@@ -104,8 +103,8 @@ const MENU_GROUPS = [
     label: 'Herramientas',
     icon: 'fa-toolbox',
     items: [
-      { path: '/outfit-extractor', label: 'Extraer prendas',  sublabel: 'Outfit Extractor', icon: 'fa-shirt' },
-      { path: '/productos',         label: 'Foto de producto', sublabel: 'Product Studio',   icon: 'fa-gem' },
+      { path: '/outfit-extractor', label: 'Separar prendas',   sublabel: 'Fotos para catálogo',   icon: 'fa-shirt' },
+      { path: '/productos',         label: 'Fotos de producto', sublabel: 'Catálogo y redes',      icon: 'fa-gem' },
     ]
   },
 ];
@@ -257,9 +256,9 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
 
         <div className="flex-1 overflow-y-auto px-6 space-y-6 pb-4">
           <div className="space-y-1">
-            {navLink('/dashboard', 'Dashboard', 'fa-house')}
+            {navLink('/dashboard', 'Inicio', 'fa-house')}
             {notificationsLink()}
-            {navLink('/historial', 'Mis Generaciones', 'fa-clock-rotate-left')}
+            {navLink('/historial', 'Mis creaciones', 'fa-clock-rotate-left')}
           </div>
 
           <div className="space-y-1">

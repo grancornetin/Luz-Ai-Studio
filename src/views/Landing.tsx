@@ -37,10 +37,10 @@ const MODULES = [
     accentBg: 'rgba(124,58,237,0.12)',
     name: 'Modelo Digital',
     sub: 'Tu modelo, listo para todos los módulos',
-    desc: 'Crea tu modelo digital a partir de fotos reales — o diseña uno desde cero. Una vez creado, lo usás en todas las herramientas de la plataforma.',
+    desc: 'Crea tu modelo digital a partir de fotos reales o diseña uno desde cero. Después podrás usarlo en tus imágenes.',
     features: ['4 vistas del modelo (frente, espalda, lateral, rostro)', 'Tu modelo funciona en todos los módulos', 'Desde fotos reales o desde cero', 'Biblioteca de modelos guardados'],
     refs:    [{ src: IMG('dna_ref.jpg'), label: 'Referencia' }],
-    results: [{ src: IMG('dna_p1.jpg'), label: 'Vista Frontal' }, { src: IMG('dna_p2.jpg'), label: 'Vista Trasera' }, { src: IMG('dna_p3.jpg'), label: 'Vista Lateral' }, { src: IMG('dna_p4.jpg'), label: 'Close-up Facial' }],
+    results: [{ src: IMG('dna_p1.jpg'), label: 'Vista frontal' }, { src: IMG('dna_p2.jpg'), label: 'Vista trasera' }, { src: IMG('dna_p3.jpg'), label: 'Vista lateral' }, { src: IMG('dna_p4.jpg'), label: 'Primer plano' }],
   },
   {
     id: 'gen',
@@ -48,8 +48,8 @@ const MODULES = [
     accent: '#E879F9',
     accentBg: 'rgba(232,121,249,0.12)',
     name: 'Crear imagen libre',
-    sub: 'Describí lo que querés y la IA lo crea',
-    desc: 'Describí con tus palabras la imagen que necesitás — o elegí de cientos de ejemplos listos para usar. No hace falta saber nada de diseño.',
+    sub: 'Cuéntanos qué quieres crear',
+    desc: 'Describe con tus palabras la imagen que necesitas o elige uno de los ejemplos listos para usar. No hace falta saber de diseño.',
     features: ['Galería de ejemplos listos para copiar y usar', 'Tu modelo en cualquier escena que imagines', 'Campañas y generación en lotes', 'Varios estilos y formatos'],
     prompt: 'A studio-style close-up editorial portrait of a person with strong, well-defined facial features and slightly imperfect, natural skin texture. The subject wears a black tailored turtleneck, layered under a high-collared black jacket. Selective color photography — monochrome black-and-white image with only the sunglasses in vivid orange. Mood is calm and confident, direct gaze. Lighting: soft frontal studio light, cinematic contrast. Shot on a professional portrait camera, f/2.0, ISO 100, 1/125s.',
     refs:    [],
@@ -65,7 +65,7 @@ const MODULES = [
     desc: 'Crea sesiones completas de fotos para redes — el tipo de contenido que publican los influencers. Con tu modelo, tu producto y tu estilo.',
     features: ['Foto base + fotos derivadas en el mismo estilo', 'Tu modelo, tu producto, tu ropa o tu escena', 'Revisión antes de gastar créditos', 'Descarga todo de una o guarda en biblioteca'],
     refs:    [{ src: IMG('cs_avatar.jpg'), label: 'Avatar' }, { src: IMG('cs_product.jpg'), label: 'Producto' }, { src: IMG('cs_scene.jpg'), label: 'Escena' }, { src: IMG('cs_outfit.jpg'), label: 'Outfit' }],
-    results: [{ src: IMG('cs_master.jpg'), label: 'Imagen base' }, { src: IMG('cs_s1.jpg'), label: 'Shot 1' }, { src: IMG('cs_s2.jpg'), label: 'Shot 2' }],
+    results: [{ src: IMG('cs_master.jpg'), label: 'Imagen base' }, { src: IMG('cs_s1.jpg'), label: 'Foto 1' }, { src: IMG('cs_s2.jpg'), label: 'Foto 2' }],
   },
   {
     id: 'clone',
@@ -74,9 +74,9 @@ const MODULES = [
     accentBg: 'rgba(99,179,237,0.12)',
     name: 'Clonar escena',
     sub: 'Copiá el estilo de cualquier foto',
-    desc: 'Subís una foto que te gusta — de Pinterest, Instagram, donde sea — y el sistema recrea esa misma escena con tu producto o modelo.',
+    desc: 'Sube una foto que te guste y recrea su composición con tu producto o modelo.',
     features: ['Misma composición y luz, con tu contenido', 'Funciona con 1 o 2 personas', 'Podés cambiar la ropa también'],
-    refs:    [{ src: IMG('sc_target.jpg'), label: 'Target' }, { src: IMG('sc_ref.jpg'), label: 'Identidad' }],
+    refs:    [{ src: IMG('sc_target.jpg'), label: 'Foto original' }, { src: IMG('sc_ref.jpg'), label: 'Persona' }],
     results: [{ src: IMG('sc_result.jpg'), label: 'Resultado' }],
   },
   {
@@ -86,8 +86,8 @@ const MODULES = [
     accentBg: 'rgba(104,211,145,0.12)',
     name: 'Extraer prendas',
     sub: 'Cada prenda lista para publicar',
-    desc: 'Subís una foto con ropa puesta y la app detecta cada prenda automáticamente. Te la devuelve lista para catálogo, sobre fondo blanco.',
-    features: ['La IA detecta cada prenda sola', 'Cada pieza sobre fondo blanco, lista para publicar', 'Elegís cuáles querés procesar', 'Descargá todo junto de una vez'],
+    desc: 'Sube una foto con ropa puesta y separaremos cada prenda sobre fondo blanco, lista para tu catálogo.',
+    features: ['Separamos cada prenda de la foto', 'Cada pieza sobre fondo blanco, lista para publicar', 'Elige cuáles quieres preparar', 'Descarga todo junto'],
     refs:    [{ src: IMG('out_orig.jpg'), label: 'Outfit Original' }],
     results: [{ src: IMG('out_p1.jpg'), label: 'Prenda 1' }, { src: IMG('out_p2.jpg'), label: 'Prenda 2' }, { src: IMG('out_final.jpg'), label: 'Kit Final' }],
   },
@@ -96,12 +96,12 @@ const MODULES = [
     icon: 'fa-gem',
     accent: '#F6AD55',
     accentBg: 'rgba(246,173,85,0.12)',
-    name: 'Product Studio',
+    name: 'Fotos de producto',
     sub: 'Fotos de catálogo profesional en minutos',
-    desc: 'Subís fotos simples de tu producto y obtenés imágenes de catálogo profesional listas para tu tienda, tus redes o tus anuncios. Sin fotógrafo, sin estudio.',
-    features: ['La IA analiza tu producto automáticamente', 'Varios ángulos: héroe, detalle, lifestyle', 'Collage listo para publicar con un clic', 'Recreá el estilo de cualquier foto con tu producto', 'Catálogo guardado con descarga ZIP'],
+    desc: 'Sube fotos simples de tu producto y obtén imágenes de catálogo listas para tu tienda, redes o anuncios. Sin fotógrafo, sin estudio.',
+    features: ['Reconocemos la forma, el color y los detalles de tu producto', 'Varios ángulos: foto principal, detalle y foto en uso', 'Composición lista para publicar', 'Recrea una foto con tu producto', 'Guarda y descarga tu catálogo'],
     refs:    [{ src: IMG('prod_ref.jpg'), label: 'Foto Real' }],
-    results: [{ src: IMG('prod_hero.jpg'), label: 'Hero Shot' }, { src: IMG('prod_ang.jpg'), label: 'Ángulo' }, { src: IMG('prod_life.jpg'), label: 'Lifestyle' }],
+    results: [{ src: IMG('prod_hero.jpg'), label: 'Foto principal' }, { src: IMG('prod_ang.jpg'), label: 'Ángulo' }, { src: IMG('prod_life.jpg'), label: 'Foto en uso' }],
   },
 ];
 
@@ -145,7 +145,7 @@ const LANDING_PLANS = [
     images: '~200 imágenes',
     hook: 'Menos que un fotógrafo por hora. Para todo el mes.',
     featured: false,
-    features: ['Todo de Explorer', 'Campaign Generator', 'Photodump ilimitado', 'Soporte email prioritario'],
+    features: ['Todo de Explorer', 'Crear campañas', 'Historias en fotos ilimitadas', 'Soporte prioritario por correo'],
     negative: [],
     cta: 'Empezar',
   },
@@ -181,10 +181,10 @@ const LANDING_PLANS = [
 
 // ── FAQ DATA ──────────────────────────────────────────────────────────────────
 const FAQS = [
-  { q: '¿Necesito experiencia en diseño o IA?', a: 'No. LUZ IA está diseñada para emprendedores y marketers. Sube fotos, ajusta parámetros y obtén resultados profesionales en segundos.' },
-  { q: '¿Cómo funcionan los créditos?', a: 'Con tecnología Seedream, 1 crédito = 1 imagen. Módulos más complejos como Content Studio o Model DNA consumen más créditos por el procesamiento multicapa.' },
+  { q: '¿Necesito experiencia en diseño o IA?', a: 'No. Sube tus fotos, elige lo que quieres lograr y sigue los pasos. Luz IA está hecha para emprendedoras, no para diseñadoras.' },
+  { q: '¿Cómo funcionan los créditos?', a: 'Cada herramienta muestra su costo antes de crear. Una foto simple usa menos créditos y una sesión con varias fotos usa más. Siempre sabrás cuánto gastarás antes de confirmar.' },
   { q: '¿Puedo usar las imágenes para publicidad comercial?', a: 'Sí. Las imágenes generadas son tuyas para uso comercial. Debes tener los derechos sobre las referencias que subes.' },
-  { q: '¿Funciona para cualquier industria?', a: 'Absolutamente. Moda, gastronomía, belleza, tecnología, retail y más. Cualquier negocio que necesite contenido visual puede usar LUZ IA.' },
+  { q: '¿Funciona para cualquier industria?', a: 'Sí. Funciona con ropa, accesorios, belleza, comida, decoración y otros productos físicos.' },
   { q: '¿Puedo cancelar mi suscripción?', a: 'Sí. Sin permanencia ni penalizaciones. Cancelas cuando quieras y tu plan sigue activo hasta el fin del período pagado.' },
   { q: '¿Las imágenes de referencia se guardan?', a: 'No. Las imágenes se procesan en tiempo real y no se almacenan en nuestros servidores. Tu privacidad está protegida.' },
 ];
@@ -372,7 +372,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
           {[0, 1, 2].map(idx => {
             const isMain = idx === 1;
             const key = HERO_KEYS[cardImgs[idx]];
-            const labels = ['Content Studio · UGC', 'AI Generator · Resultado', 'Model DNA · Facemaster'];
+            const labels = ['Fotos para redes', 'Crear una imagen', 'Modelos digitales'];
             return (
               <div key={idx} style={{
                 width: isMain ? 210 : 175,
@@ -435,10 +435,10 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
               Módulos del sistema
             </div>
             <h2 style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', textTransform: 'uppercase', fontSize: 'clamp(32px,4vw,56px)', letterSpacing: '-0.03em', lineHeight: 1.05, marginBottom: 12 }}>
-              Todo lo que necesitas<br />en una sola plataforma
+              Todo tu contenido,<br />en un solo lugar
             </h2>
             <p style={{ fontSize: 15, color: 'rgba(242,240,250,0.45)', maxWidth: 480, lineHeight: 1.75 }}>
-              Seis herramientas especializadas. Haz click en cada módulo para ver cómo funciona.
+              Seis herramientas especializadas. Haz clic en cada una para ver cómo funciona.
             </p>
           </div>
 
@@ -496,7 +496,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
                 {'prompt' in activeMod && (
                   <div style={{ background: 'rgba(124,58,237,0.07)', border: '1px solid rgba(124,58,237,0.18)', borderRadius: 14, padding: '14px 16px' }}>
                     <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: '#F72C5B', marginBottom: 8 }}>
-                      <i className="fa-solid fa-terminal" style={{ marginRight: 5 }} />Prompt utilizado
+                      <i className="fa-solid fa-pen" style={{ marginRight: 5 }} />Así se describió esta foto
                     </div>
                     <p style={{ fontSize: 11, fontStyle: 'italic', color: 'rgba(242,240,250,0.45)', lineHeight: 1.7, maxHeight: 88, overflow: 'auto' }}>
                       {(activeMod as any).prompt}
@@ -597,7 +597,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
                     <div>
                       <div className="flex items-center gap-2 mb-2">
                         <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', color: '#F72C5B' }}>
-                          {activeMod.id === 'clone' ? 'Resultado clonado' : activeMod.id === 'studio' ? 'Resultados' : 'Resultados generados'}
+                          {activeMod.id === 'clone' ? 'Foto recreada' : 'Tus resultados'}
                         </span>
                         <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.07)' }} />
                       </div>
@@ -740,7 +740,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
             {/* Credit note */}
             <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 mb-6" style={{ background: 'rgba(232,121,249,0.08)', border: '1px solid rgba(232,121,249,0.2)', fontSize: 12, fontWeight: 600, color: '#E879F9' }}>
               <i className="fa-solid fa-bolt text-xs" />
-              Seedream: 1 crédito = 1 imagen &nbsp;·&nbsp; Gemini: 2 créditos = 1 imagen
+              Cada foto usa entre 1 y 2 créditos. Verás el costo antes de crear.
             </div>
 
             {/* Billing toggle */}
@@ -828,8 +828,8 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
           <div className="flex items-start gap-3 mt-6 rounded-2xl p-4" style={{ background: 'rgba(124,58,237,0.07)', border: '1px solid rgba(124,58,237,0.18)' }}>
             <i className="fa-solid fa-bolt" style={{ color: '#F72C5B', marginTop: 2, flexShrink: 0, fontSize: 13 }} />
             <div>
-              <p style={{ fontSize: 12, fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>1 crédito = 1 imagen (con Seedream)</p>
-              <p style={{ fontSize: 12, color: 'rgba(242,240,250,0.40)', lineHeight: 1.65 }}>Módulos como Content Studio o Model DNA consumen más créditos por la complejidad del proceso (set de 4 planos, múltiples shots, etc.). Los planes Explorer, Starter, Pro y Studio se renuevan automáticamente. Plan Free: 20 créditos únicos, no renovables.</p>
+              <p style={{ fontSize: 12, fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Siempre sabrás cuánto usarás</p>
+              <p style={{ fontSize: 12, color: 'rgba(242,240,250,0.40)', lineHeight: 1.65 }}>Cada herramienta muestra el costo antes de crear. Los créditos incluidos se renuevan según el período de tu plan; los 20 créditos del plan Gratis se entregan una sola vez.</p>
             </div>
           </div>
 
@@ -864,7 +864,7 @@ const Landing: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
             <div style={{ width: 20, height: 1, background: '#F72C5B' }} /> Comienza hoy <div style={{ width: 20, height: 1, background: '#F72C5B' }} />
           </div>
           <h2 style={{ fontFamily: '"Syne",sans-serif', fontWeight: 800, fontStyle: 'italic', textTransform: 'uppercase', fontSize: 'clamp(32px,5vw,64px)', letterSpacing: '-0.03em', lineHeight: 1.05, marginBottom: 14 }}>
-            ¿Listo para producir<br />como un estudio?
+            ¿Lista para crear<br />tu próximo contenido?
           </h2>
           <p style={{ fontSize: 15, color: 'rgba(242,240,250,0.45)', marginBottom: 36 }}>20 créditos gratis al registrarte. Sin tarjeta. Resultados en minutos.</p>
           <button onClick={onOpenAuth} className="inline-flex items-center gap-2 text-white font-black uppercase tracking-widest rounded-full transition-all hover:opacity-90 hover:translate-y-[-2px]" style={{ fontFamily: '"Syne",sans-serif', fontSize: 15, padding: '18px 44px', background: 'linear-gradient(135deg,#7C3AED,#F72C5B)', border: 'none', cursor: 'pointer', boxShadow: '0 0 40px rgba(247,44,91,0.25)' }}>

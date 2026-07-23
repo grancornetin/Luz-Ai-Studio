@@ -81,7 +81,7 @@ export const WalletPill: React.FC<WalletPillProps> = ({
       {/* SALDO pro-credits */}
       <div
         className="flex items-center gap-2 bg-gradient-to-r from-violet-700 to-violet-600 text-white px-4 py-2 rounded-full shadow-lg border border-white/10 hover:shadow-xl transition-all cursor-default"
-        title="Pro-credits para Campaign y Photodump"
+        title="Sesiones Pro para campañas e historias en fotos"
       >
         <Megaphone className="w-4 h-4 text-violet-200" />
         <span className="text-sm font-bold">{proCredits ?? 0}</span>

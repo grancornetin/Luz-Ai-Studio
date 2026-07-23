@@ -29,7 +29,7 @@ const MODULE_GROUPS = [
         path: '/crear/clonar',
         title: 'CREAR MODELO',
         subtitle: 'desde tus fotos',
-        description: 'Crea tu modelo digital a partir de fotos reales. Úsalo en todos los módulos.',
+        description: 'Crea tu modelo digital a partir de fotos reales y úsalo en tus imágenes.',
         icon: 'fa-camera',
         accent: 'text-indigo-600',
         bg: 'bg-indigo-50',
@@ -51,7 +51,7 @@ const MODULE_GROUPS = [
         path: '/modelos',
         title: 'MIS MODELOS',
         subtitle: 'Tus modelos guardados',
-        description: 'Accede a todos tus modelos y úsalos en cualquier módulo cuando quieras.',
+        description: 'Encuentra tus modelos guardados y descarga el que necesites.',
         icon: 'fa-user-astronaut',
         accent: 'text-purple-600',
         bg: 'bg-purple-50',
@@ -61,14 +61,14 @@ const MODULE_GROUPS = [
     ]
   },
   {
-    groupLabel: 'Generar contenido',
+    groupLabel: 'Crear contenido',
     groupColor: 'bg-emerald-600',
     modules: [
       {
         path: '/prompt-studio',
         title: 'CREAR IMAGEN LIBRE',
         subtitle: 'Describe lo que quieres',
-        description: 'Describe la imagen que necesitas y la IA la genera. Con galería de ejemplos listos para usar.',
+        description: 'Describe la foto que necesitas o parte de un ejemplo listo para usar.',
         icon: 'fa-wand-magic-sparkles',
         accent: 'text-indigo-600',
         bg: 'bg-indigo-50',
@@ -78,8 +78,8 @@ const MODULE_GROUPS = [
       {
         path: '/studio-pro',
         title: 'CONTENIDO PARA REDES',
-        subtitle: 'Fotos estilo iPhone real',
-        description: 'Crea fotos de redes que parecen sacadas de un iPhone real. Con tu modelo, tu producto y tu estilo.',
+        subtitle: 'Fotos naturales para redes',
+        description: 'Crea fotos naturales con tu modelo, tu producto y el estilo de tu marca.',
         icon: 'fa-mobile-screen-button',
         accent: 'text-emerald-600',
         bg: 'bg-emerald-50',
@@ -89,7 +89,7 @@ const MODULE_GROUPS = [
       {
         path: '/clonar',
         title: 'CLONAR ESCENA',
-        subtitle: 'Copia el estilo de cualquier foto',
+        subtitle: 'Recrea una foto con tu producto',
         description: 'Sube una foto que te guste y recrea ese mismo estilo con tu producto o modelo.',
         icon: 'fa-clone',
         accent: 'text-blue-600',
@@ -107,7 +107,7 @@ const MODULE_GROUPS = [
         path: '/campaign',
         title: 'CAMPAÑAS PUBLICITARIAS',
         subtitle: 'Ideas + piezas para vender',
-        description: 'Arma escenas, imágenes, captions y titulares para lanzar o promocionar tu producto.',
+        description: 'Crea las imágenes y textos de una campaña para lanzar o promocionar tu producto.',
         icon: 'fa-bullhorn',
         accent: 'text-brand-600',
         bg: 'bg-brand-50',
@@ -120,7 +120,7 @@ const MODULE_GROUPS = [
         path: '/photodump',
         title: 'CONTENIDO ORGÁNICO',
         subtitle: 'Historias para Instagram',
-        description: 'Crea sets de imágenes naturales para tu feed, con narrativa real y captions incluidos.',
+        description: 'Crea una serie de fotos conectadas, con textos listos para publicar.',
         icon: 'fa-images',
         accent: 'text-violet-600',
         bg: 'bg-violet-50',
@@ -133,7 +133,7 @@ const MODULE_GROUPS = [
         path: '/planner',
         title: 'PLANES DE CONTENIDO',
         subtitle: 'Qué publicar cada día',
-        description: 'Organiza tu semana con ideas, captions y la herramienta exacta para crear cada pieza.',
+        description: 'Organiza tu semana con ideas, textos y la herramienta indicada para crear cada pieza.',
         icon: 'fa-calendar-days',
         accent: 'text-rose-600',
         bg: 'bg-rose-50',
@@ -371,7 +371,7 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
                 <p className="text-2xl font-black text-indigo-700">{isAdmin ? '∞' : availableCredits}</p>
               </div>
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Generaciones</p>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Creaciones</p>
                 <p className="text-2xl font-black text-slate-700">{stats?.totalGenerations || 0}</p>
               </div>
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
@@ -624,7 +624,7 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-white opacity-80" />
               <div>
-                <p className="text-[9px] font-black uppercase tracking-widest opacity-70">Pro-credits</p>
+                <p className="text-[9px] font-black uppercase tracking-widest opacity-70">Sesiones Pro</p>
                 <p className="text-sm font-black leading-none">{isAdmin ? '∞' : proCredits} sesiones pro</p>
               </div>
             </div>
@@ -652,7 +652,7 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
       {/* ── STATS (monthly) ── */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Generaciones', value: String(totalGens), sub: 'totales', color: 'text-slate-900' },
+          { label: 'Creaciones', value: String(totalGens), sub: 'totales', color: 'text-slate-900' },
           { label: 'Modelos',      value: String(avatars?.length || 0), sub: 'guardados', color: 'text-purple-600' },
           { label: 'Productos',    value: String(products?.length || 0), sub: 'en catálogo', color: 'text-blue-600' },
         ].map((s, i) => (
@@ -676,7 +676,7 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
         <div className="grid grid-cols-2 gap-3">
           {[
             { t: 'Modelo digital',   s: 'Desde tus fotos',      cost: '8 cr',     accent: 'text-violet-600', bg: 'bg-violet-50',  path: '/crear/clonar' },
-            { t: 'Fotos para redes', s: 'Estilo iPhone real',   cost: '2-4 cr',   accent: 'text-pink-600',   bg: 'bg-pink-50',    path: '/studio-pro'   },
+            { t: 'Fotos para redes', s: 'Fotos naturales',      cost: '2-4 cr',   accent: 'text-pink-600',   bg: 'bg-pink-50',    path: '/studio-pro'   },
             { t: 'Foto de producto', s: 'Lista para vender',    cost: '2 cr/foto',accent: 'text-indigo-600', bg: 'bg-indigo-50',  path: '/productos'    },
             { t: 'Clonar escena',    s: 'Copia cualquier estilo',cost: '2 cr',    accent: 'text-emerald-600',bg: 'bg-emerald-50', path: '/clonar'       },
           ].map(a => (
@@ -720,12 +720,12 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
                     <Sparkles className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="t-display text-lg text-white">Prompt Gallery</h3>
+                    <h3 className="t-display text-lg text-white">Ideas para crear</h3>
                     <p className="t-meta text-indigo-200">Comunidad</p>
                   </div>
                 </div>
                 <p className="text-sm text-indigo-100 font-medium leading-relaxed max-w-xs">
-                  Explora, guarda y publica prompts con la comunidad.
+                  Explora ideas, guárdalas y adáptalas a tu marca.
                 </p>
               </div>
               <div className="w-9 h-9 rounded-full border border-white/30 flex items-center justify-center text-white/60 group-hover:bg-white group-hover:text-indigo-600 transition-all flex-shrink-0 mt-1">
@@ -748,7 +748,7 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
                     <Clock className="w-5 h-5 text-slate-600" />
                   </div>
                   <div>
-                    <h3 className="t-display text-lg text-slate-900">Mis Generaciones</h3>
+                    <h3 className="t-display text-lg text-slate-900">Mis creaciones</h3>
                     <p className="t-meta">Historial</p>
                   </div>
                 </div>
@@ -789,7 +789,7 @@ const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) =>
                   </div>
                 </div>
                 <p className="text-sm text-white/85 font-medium leading-relaxed max-w-xs">
-                  Planificá tu semana, generá captions y descubrí ideas listas para tu producto.
+                  Planifica tu semana, prepara textos y descubre ideas listas para tu producto.
                 </p>
               </div>
               <div className="w-9 h-9 rounded-full border border-white/30 flex items-center justify-center text-white/60 group-hover:bg-white transition-all flex-shrink-0 mt-1" style={{ '--hover-color': '#F72C5B' } as any}>

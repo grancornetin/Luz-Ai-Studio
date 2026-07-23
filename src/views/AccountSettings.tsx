@@ -321,7 +321,7 @@ const AccountSettings: React.FC = () => {
           <div className="bg-white rounded-[28px] border border-slate-100 p-6 space-y-5">
             <div className="flex items-center gap-2 mb-1">
               <Globe className="w-4 h-4 text-indigo-500" />
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Identidad pública</p>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Perfil público</p>
             </div>
             <div className="flex items-center gap-5">
               <div className="w-16 h-16 rounded-2xl bg-indigo-100 flex items-center justify-center overflow-hidden flex-shrink-0 border-2 border-white shadow">
@@ -359,7 +359,7 @@ const AccountSettings: React.FC = () => {
                 )}
               </div>
               {username && usernameOk === false && !checkingUsername && (
-                <p className="text-[10px] text-rose-500 font-bold">Username no disponible o muy corto.</p>
+                <p className="text-[10px] text-rose-500 font-bold">Elige un nombre disponible de al menos 3 caracteres.</p>
               )}
             </FieldRow>
 
@@ -401,11 +401,11 @@ const AccountSettings: React.FC = () => {
               </div>
             </FieldRow>
 
-            <FieldRow label="Tags de interés" hint="Enter para añadir. Ej: streetwear, maquillaje, smartwatch">
+            <FieldRow label="Temas que te interesan" hint="Presiona Enter para añadir. Ej.: moda urbana, maquillaje, tecnología">
               <TagInput
                 tags={interests.tags}
                 onChange={tags => setInterests(prev => ({ ...prev, tags }))}
-                placeholder="ej: streetwear, skincare..."
+                placeholder="Ej.: moda urbana, cuidado de la piel..."
               />
             </FieldRow>
 
@@ -482,7 +482,7 @@ const AccountSettings: React.FC = () => {
             />
 
             <div className="pt-4 space-y-3">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Orden del feed</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Orden de las publicaciones</p>
               <div className="grid grid-cols-3 gap-2">
                 {([
                   { v: 'recent',       label: 'Reciente',      desc: 'Lo más nuevo primero' },

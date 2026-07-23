@@ -37,7 +37,7 @@ const SLOT_ICON = {
 
 const SLOT_LABEL: Record<string, string> = {
   avatar:         'Persona',
-  outfit:         'Prendas / Outfit',
+  outfit:         'Prendas / Look',
   accesorios:     'Accesorios',
   producto:       'Producto',
   empaque:        'Empaque',
@@ -342,7 +342,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
 
   // ── Handlers de outfit_multi_look ─────────────────────────────
   const MULTI_LOOK_INTENT_OPTIONS: { value: MultiLookIntent; label: string; hint: string }[] = [
-    { value: 'weekly',        label: 'Mi semana en looks',      hint: 'Mostrás varios outfits, uno por día — sin que ninguno sea "el mejor".' },
+    { value: 'weekly',        label: 'Mi semana en looks',      hint: 'Muestra varios looks, uno por día, sin elegir uno como el mejor.' },
     { value: 'then_vs_now',   label: 'Antes vs. ahora',         hint: 'Marcá qué look es "antes" y cuál es "ahora" — el segundo se ve con más onda.' },
     { value: 'trip_recap',    label: 'Los looks de mi viaje',   hint: 'Cada foto en un lugar distinto — subí una foto real de cada lugar.' },
     { value: 'curated_ideas', label: 'Ideas para una ocasión',  hint: 'Varias opciones del mismo estilo — ej. "3 vestidos para invitada a boda".' },
@@ -496,16 +496,16 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
       return 'La foto del rostro ancla la identidad facial en todas las imágenes.';
     }
     if (key === 'outfit') {
-      if (recipe === 'outfit_check') return 'Subí las prendas del look por separado — una foto clara de cada pieza sola. Podés usar el módulo Outfit Extractor o Foto de Producto de la app para mejores resultados. ⚠️ Evitá subir fotos con personas vistiéndolas — el modelo puede confundir identidades.';
-      if (recipe === 'outfit_haul') return 'Subí cada ítem del haul — una imagen por slot. Podés subir prendas, calzado, bolsos, joyería o accesorios. Usá el selector debajo de cada imagen para indicar qué tipo de ítem es: eso mejora mucho la planificación de shots. ⚠️ Evitá fotos con personas — podría confundir identidades.';
-      if (recipe === 'outfit_week') return 'Subí una imagen por ítem: outfits, prendas sueltas, bolsos, calzado, joyería o beauty products. El orden es el orden de aparición. Usá el selector para indicar el tipo de cada ítem. ⚠️ Evitá fotos con personas — podría confundir identidades.';
-      if (recipe === 'outfit_multi_look') return 'Subí una foto por look — el orden de aparición es el orden en que aparecen en el set. ⚠️ Evitá fotos con personas — podría confundir identidades.';
-      return 'Subí hasta 4 prendas. Podés usar el módulo Outfit Extractor o Foto de Producto para mejores resultados.';
+      if (recipe === 'outfit_check') return 'Sube las prendas del look por separado: una foto clara de cada pieza. Puedes usar Separar prendas o Fotos de producto para obtener mejores resultados. Evita fotos con personas para no mezclar identidades.';
+      if (recipe === 'outfit_haul') return 'Sube una imagen por prenda o accesorio. Indica qué tipo de artículo aparece en cada imagen para crear una historia más precisa. Evita fotos con personas para no mezclar identidades.';
+      if (recipe === 'outfit_week') return 'Sube una imagen por artículo: looks, prendas, bolsos, calzado, joyería o productos de belleza. Aparecerán en este mismo orden.';
+      if (recipe === 'outfit_multi_look') return 'Sube una foto por look. Aparecerán en el mismo orden. Evita fotos con personas para no mezclar identidades.';
+      return 'Sube hasta 4 prendas. Puedes usar Separar prendas o Fotos de producto para obtener mejores resultados.';
     }
     if (key === 'accesorios') {
-      if (recipe === 'outfit_haul') return 'Accesorios adicionales del haul: bolsos, joyería, cinturones, gorras. Marcá ⭐ para close-up dedicado. Usá el selector de tipo para que el sistema sepa cómo fotografiar cada pieza.';
-      if (recipe === 'outfit_week') return 'Accesorios, bolsos, joyería o calzado que forman parte de tus favoritos. Usá el selector para indicar el tipo. Marcá ⭐ para close-up dedicado de ese ítem.';
-      return 'Subí accesorios que quieras destacar. Marcá el ⭐ de cada accesorio que quieras con una toma de close-up dedicada — se generará como imagen extra.';
+      if (recipe === 'outfit_haul') return 'Añade bolsos, joyería, cinturones o gorras. Marca ⭐ si quieres una foto de detalle de una pieza.';
+      if (recipe === 'outfit_week') return 'Añade tus accesorios, bolsos, joyería o calzado favoritos. Marca ⭐ si quieres una foto de detalle.';
+      return 'Sube los accesorios que quieras destacar. Marca ⭐ si quieres una foto de detalle adicional.';
     }
     if (key === 'producto') {
       if (recipe === 'unboxing') return 'El producto dentro del empaque: lo que el cliente recibe. Subí hasta 3 ángulos.';
@@ -603,7 +603,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                 </div>
                 <p className="text-[9px] text-slate-400 mt-1.5">
                   {multiLookMaxCount === 0
-                    ? 'Subí al menos un look para poder elegir cantidad.'
+                    ? 'Sube al menos un look para elegir la cantidad.'
                     : refs.multiLookIntent === 'curated_ideas'
                     ? `Hasta ${multiLookMaxCount} fotos (2 por look subido: frontal + otro ángulo).`
                     : `Hasta ${multiLookMaxCount} fotos (1 por look subido).`}
@@ -706,7 +706,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
               </div>
             ) : (
               <p className="text-[11px] text-slate-400 mt-1.5">
-                Cuanto más detalle des, más específico será el resultado. Subí referencias para usar @tags.
+                Cuantos más detalles compartas, más preciso será el resultado. Puedes añadir imágenes de referencia.
               </p>
             )}
           </div>
@@ -1081,7 +1081,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
           {/* Receta activa */}
           <div className="bg-white border border-slate-200 rounded-2xl p-4">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-              Receta seleccionada
+              Tipo de historia
             </p>
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 bg-brand-50 rounded-xl flex items-center justify-center text-brand-600">

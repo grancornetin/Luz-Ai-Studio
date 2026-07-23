@@ -92,7 +92,7 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
             <span className="text-pink-600 italic normal-case">está listo.</span>
           </h2>
           <p className="text-sm text-slate-500 mt-2 leading-[1.55] max-w-[540px]">
-            Tocá cualquier imagen para ampliarla. Seleccioná varias para crear un grid manual o descargar lo que elijas.
+            Toca cualquier imagen para ampliarla. Selecciona varias para crear un collage o descargar lo que elijas.
           </p>
         </div>
 
@@ -263,7 +263,7 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
                 {selected.size} {selected.size === 1 ? 'imagen seleccionada' : 'imágenes seleccionadas'}
               </div>
               <div className="text-[11px] opacity-70">
-                {canMakeGrid ? 'Listas para crear grid manual' : 'Seleccioná 1 más para hacer un grid'}
+                {canMakeGrid ? 'Listas para crear un collage' : 'Selecciona 1 más para hacer un collage'}
               </div>
             </div>
           </div>
@@ -286,7 +286,7 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
             }`}
           >
             <Grid3x3 size={14} />
-            Crear grid · 1 cr
+            Crear collage · 1 cr
           </button>
         </div>
       )}

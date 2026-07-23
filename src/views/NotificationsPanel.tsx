@@ -92,7 +92,7 @@ const FILTERS: { id: FilterId; label: string }[] = [
   { id: 'in_progress', label: 'En progreso' },
   { id: 'completed',   label: 'Completas' },
   { id: 'partial',     label: 'Parciales' },
-  { id: 'failed',      label: 'Fallidas' },
+  { id: 'failed',      label: 'Necesitan atención' },
 ];
 
 // ── Componente ────────────────────────────────────────────────────────────────
@@ -134,7 +134,7 @@ const NotificationsPanel: React.FC = () => {
             className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest transition-colors"
           >
             <CheckCheck size={14} />
-            <span className="hidden sm:inline">Marcar todas leídas</span>
+            <span className="hidden sm:inline">Marcar todas como leídas</span>
             <span className="sm:hidden">Leídas</span>
           </button>
         )}
@@ -268,7 +268,7 @@ const EmptyState: React.FC<{ filter: FilterId }> = ({ filter }) => (
     <p className="text-xs font-bold text-slate-400 max-w-xs mx-auto">
       {filter === 'unread'
         ? 'Cuando llegue una notificación nueva la verás acá.'
-        : 'Cada vez que generes contenido vas a ver acá su progreso, aunque cierres la app.'}
+        : 'Cada vez que crees contenido verás aquí su progreso, aunque cierres la app.'}
     </p>
   </div>
 );
