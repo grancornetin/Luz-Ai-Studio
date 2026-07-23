@@ -31,6 +31,13 @@ export interface NightMoment {
   requiresCompanion: boolean;
   // Si true, solo disponible cuando la energía resuelta es 'fiesta'.
   fiestaOnly: boolean;
+  // Si false, la protagonista NO aparece en cuadro (ni rostro ni cuerpo) —
+  // ambient_only y car_transition son bodegón/lugar puro. pov_legs SÍ cuenta
+  // como con protagonista (se ven sus propias piernas), aunque no haya
+  // rostro. pickNightMomentsForSet limita a máximo 1 shot sin protagonista
+  // por set completo — de lo contrario el dump se siente como fotos de
+  // situaciones/personas distintas, no la salida de una sola persona.
+  hasProtagonist: boolean;
 }
 
 export const NIGHT_MOMENTS: NightMoment[] = [
@@ -50,6 +57,7 @@ export const NIGHT_MOMENTS: NightMoment[] = [
     },
     requiresCompanion: false,
     fiestaOnly: false,
+    hasProtagonist: true,
   },
   {
     id: 'group_moment',
@@ -66,6 +74,7 @@ export const NIGHT_MOMENTS: NightMoment[] = [
     },
     requiresCompanion: true,
     fiestaOnly: false,
+    hasProtagonist: true,
   },
   {
     id: 'motion_energy',
@@ -82,6 +91,7 @@ export const NIGHT_MOMENTS: NightMoment[] = [
     },
     requiresCompanion: false,
     fiestaOnly: true,
+    hasProtagonist: true,
   },
   {
     id: 'pov_legs',
@@ -99,6 +109,7 @@ export const NIGHT_MOMENTS: NightMoment[] = [
     },
     requiresCompanion: false,
     fiestaOnly: false,
+    hasProtagonist: true,
   },
   {
     id: 'ambient_only',
@@ -116,6 +127,7 @@ export const NIGHT_MOMENTS: NightMoment[] = [
     },
     requiresCompanion: false,
     fiestaOnly: false,
+    hasProtagonist: false,
   },
   {
     id: 'car_transition',
@@ -132,6 +144,7 @@ export const NIGHT_MOMENTS: NightMoment[] = [
     },
     requiresCompanion: false,
     fiestaOnly: false,
+    hasProtagonist: false,
   },
 ];
 
@@ -144,9 +157,41 @@ function hashString(s: string): number {
 }
 
 /**
+ * Selecciona `count` entradas distintas y determinísticas por seed de un
+ * sub-pool dado (mismo principio que pickVariantsForSet de
+ * outfitRevealBasic/renderVariants.ts), usando un namespace de hash propio
+ * para no colisionar con otras llamadas sobre el mismo seed.
+ */
+function pickDistinctIndices(seed: string, namespace: string, count: number, poolSize: number): number[] {
+  const safeCount = Math.max(0, Math.min(count, poolSize));
+  const picked: number[] = [];
+  const used = new Set<number>();
+
+  for (let i = 0; i < safeCount; i++) {
+    let idx = hashString(`${seed}::${namespace}::${i}`) % poolSize;
+    let attempts = 0;
+    while (used.has(idx) && attempts < poolSize) {
+      idx = (idx + 1) % poolSize;
+      attempts++;
+    }
+    used.add(idx);
+    picked.push(idx);
+  }
+  return picked;
+}
+
+/**
  * Filtra el pool disponible según companion/energía, y selecciona `count`
- * entradas distintas de forma determinística por seed — mismo principio que
- * pickVariantsForSet de outfitRevealBasic/renderVariants.ts.
+ * entradas distintas de forma determinística por seed.
+ *
+ * Regla dura: máximo 1 shot sin protagonista (hasProtagonist: false) por set
+ * completo. Sin este límite, el set puede quedar con la protagonista ausente
+ * en 2 de 3 fotos (ej. pov_legs + ambient_only + car_transition), lo que se
+ * lee como fotos de lugares/situaciones distintas en vez del dump de la
+ * salida de una sola persona. Si el pool con protagonista no alcanza para
+ * cubrir el resto de `count` (pool muy chico tras filtrar companion/energía),
+ * se permite más de 1 sin protagonista antes que repetir una entrada — evitar
+ * duplicados es más importante que el límite blando.
  */
 export function pickNightMomentsForSet(
   seed:         string,
@@ -160,22 +205,34 @@ export function pickNightMomentsForSet(
     return true;
   });
 
-  const n = pool.length;
-  const safeCount = Math.max(0, Math.min(count, n));
-  const picked: NightMoment[] = [];
-  const usedIndices = new Set<number>();
+  const withProtagonist    = pool.filter(m => m.hasProtagonist);
+  const withoutProtagonist = pool.filter(m => !m.hasProtagonist);
 
-  for (let i = 0; i < safeCount; i++) {
-    let idx = hashString(`${seed}::${i}`) % n;
-    let attempts = 0;
-    while (usedIndices.has(idx) && attempts < n) {
-      idx = (idx + 1) % n;
-      attempts++;
-    }
-    usedIndices.add(idx);
-    picked.push(pool[idx]);
-  }
-  return picked;
+  const safeCount = Math.max(0, Math.min(count, pool.length));
+  // Preferido: exactamente 1 sin protagonista (si el set tiene al menos 1
+  // shot y el sub-pool sin protagonista no está vacío). Piso: lo que sobre
+  // si withProtagonist no alcanza para cubrir el resto por sí solo (pool muy
+  // chico tras filtrar companion/energía) — evitar duplicados manda por
+  // sobre el límite blando de "máximo 1".
+  const preferred = safeCount > 0 && withoutProtagonist.length > 0 ? 1 : 0;
+  const floor = Math.max(0, safeCount - withProtagonist.length);
+  const noProtagonistCount = Math.min(Math.max(preferred, floor), withoutProtagonist.length, safeCount);
+  const protagonistSlots = safeCount - noProtagonistCount;
+
+  const protagonistIndices    = pickDistinctIndices(seed, 'protagonist', protagonistSlots, withProtagonist.length);
+  const noProtagonistIndices  = pickDistinctIndices(seed, 'no-protagonist', noProtagonistCount, withoutProtagonist.length);
+
+  const picked = [
+    ...protagonistIndices.map(idx => withProtagonist[idx]),
+    ...noProtagonistIndices.map(idx => withoutProtagonist[idx]),
+  ];
+
+  // Reordenar de forma determinística (no agrupar todos los "sin
+  // protagonista" al final) usando el mismo hash de orden relativo por seed.
+  return picked
+    .map((moment, i) => ({ moment, key: hashString(`${seed}::order::${moment.id}::${i}`) }))
+    .sort((a, b) => a.key - b.key)
+    .map(({ moment }) => moment);
 }
 
 export function findNightMoment(id: NightMomentId): NightMoment {
