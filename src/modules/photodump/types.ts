@@ -574,8 +574,8 @@ export const RECIPE_META: Record<PhotodumpRecipe, {
     protagonist: 'person',
   },
   outfit_reveal_basic: {
-    label:       'Así quedó este look',
-    description: 'Mostrás un outfit desde 3 ángulos: mirror check completo, tu propia vista, y un close-up.',
+    label:       'Muestra un look',
+    description: 'Un outfit completo desde 3 ángulos distintos: mirror check, perfil o espalda, y un close-up.',
     icon:        'Sparkles',
     refs:        { avatar: 'required', outfit: 'required', accesorios: 'none', producto: 'none', empaque: 'none', escena: 'optional', escena_prueba: 'none', escena_destino: 'none' },
     narrative:   'character',
