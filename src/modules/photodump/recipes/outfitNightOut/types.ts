@@ -13,15 +13,23 @@
  * El banco de noche (ver nightMoments.ts) surge de analizar 23 imágenes
  * reales de salidas nocturnas — no es un pool de "momentos narrativos"
  * (llegada/social/cierre) sino de tipos de encuadre/sujeto (retrato posado,
- * detalle de manos, grupo, movimiento/energía, POV de piernas, ambiental,
- * auto), cada uno parametrizado por energía (elegante/fiesta) y venue.
+ * grupo, movimiento/energía, POV de piernas, ambiental, auto), cada uno
+ * parametrizado por energía (elegante/fiesta) y venue.
+ *
+ * 'hands_detail' (detalle de manos sosteniendo el trago) se eliminó del
+ * banco: sin una familia de cámara real que fuerce una distancia/ángulo
+ * físicamente distinto al shot vecino, el modelo lo resolvía como un simple
+ * recorte/zoom sobre la composición ya generada en vez de una toma nueva
+ * (mismo tipo de bug que el de HPI: un eje real tratado solo como texto de
+ * contenido, sin restricción dura). El trago como protagonista ya está
+ * cubierto sin mano en cuadro por 'ambient_only', y como prop secundario en
+ * 'posed_portrait'/'pov_legs'/'group_moment'.
  */
 
 export type NightOutFixedShotId = 'presentation' | 'tryon_detail' | 'mirror_check';
 
 export type NightMomentId =
   | 'posed_portrait'
-  | 'hands_detail'
   | 'group_moment'
   | 'motion_energy'
   | 'pov_legs'

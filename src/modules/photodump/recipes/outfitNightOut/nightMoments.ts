@@ -7,7 +7,7 @@
  * se explica por "en qué momento narrativo está" (llegada/social/cierre),
  * sino por el CRUCE de 4 ejes independientes:
  *
- *   Eje A — encuadre/sujeto (las 6 entradas de este banco)
+ *   Eje A — encuadre/sujeto (las 5 entradas de este banco)
  *   Eje B — energía: elegante | fiesta (resolveEnergyFromBrief) — parametriza
  *           el promptBlock de cada entrada, no agrega entradas nuevas
  *   Eje C — venue: resuelto aparte por venueResolver.ts, inyectado como
@@ -47,22 +47,6 @@ export const NIGHT_MOMENTS: NightMoment[] = [
     sceneBlockByEnergy: {
       elegante: 'A posed portrait, medium-close, holding a drink or a small prop close to the body — glass of wine, cocktail, cup. Warm, intentional lighting. She is looking away from the camera or slightly past it, composed and calm.',
       fiesta:   'A posed portrait under colorful venue lighting, holding a drink close to the body — cocktail, cup, bottle. Playful, confident expression, looking toward or past the camera.',
-    },
-    requiresCompanion: false,
-    fiestaOnly: false,
-  },
-  {
-    id: 'hands_detail',
-    contract: {
-      shotId: 'hands_detail',
-      cameraGrammar: { framing: 'CLOSE_UP', angle: 'high_angle', composition: 'hands_detail' },
-      referencePolicy: { useIdentityRef: true, useBodyRef: true, useOutfitRefs: true },
-      hpiPoseFamily: null,
-      footwearVisible: false,
-    },
-    sceneBlockByEnergy: {
-      elegante: 'A close detail shot — hands holding a drink, a plate of food, or an accessory, no face in frame. The outfit fabric or a piece of jewelry may be visible at the edge of the frame. Warm, intimate lighting.',
-      fiesta:   'A close detail shot — hands holding a drink cup or bottle, no face in frame, colorful venue lighting spilling into the frame. May include a glimpse of the outfit fabric.',
     },
     requiresCompanion: false,
     fiestaOnly: false,
