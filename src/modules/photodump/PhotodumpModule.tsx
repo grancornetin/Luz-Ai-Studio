@@ -488,7 +488,12 @@ const PhotodumpModule: React.FC = () => {
       const ref0Analysis = ref0Result.ref0Analysis;
       setSavedRef0Url(ref0Url);
       setSavedRef0Analysis(ref0Analysis);
-      setPartialImages([ref0Url]);
+      // outfit_multi_look / outfit_reveal_basic: el REF0 ES el primer shot real
+      // (mismo shot, fusionado) — no sembrar el preview con él aparte, o el loop
+      // de abajo lo vuelve a agregar al hacer push, duplicando la imagen 1 en el
+      // panel de progreso (bug real reportado en producción).
+      const ref0IsFirstShot = recipe === 'outfit_multi_look' || recipe === 'outfit_reveal_basic';
+      setPartialImages(ref0IsFirstShot ? [] : [ref0Url]);
 
       // Debug: acumular prompts de cada shot (solo para admins)
       const inferredDest = isAdmin ? inferDestinationFromBrief(basePrompt) : 'none' as const;
@@ -1778,7 +1783,12 @@ const PhotodumpModule: React.FC = () => {
                           </div>
                         )}
                         {Array.from({ length: count }).map((_, i) => {
-                          const shotUrl  = partialImages[i + 1] ?? null;
+                          // outfit_multi_look / outfit_reveal_basic: partialImages[0] YA es el
+                          // primer shot real (el ancla fusionada, sin generación aparte) — sin
+                          // offset. El resto de recetas reserva el índice 0 para el ancla mostrada
+                          // en su propio recuadro arriba.
+                          const shotIndexInArray = (recipe === 'outfit_multi_look' || recipe === 'outfit_reveal_basic') ? i : i + 1;
+                          const shotUrl  = partialImages[shotIndexInArray] ?? null;
                           const imgUrl   = shotUrl ?? '';
                           const done     = !!shotUrl;
                           const isFailed = !isGenerating && failedIndexes.includes(i);
