@@ -15,19 +15,19 @@
  *    y que rompió el shot self_pov original de esta receta — el HPI
  *    describía "seated on floor" sobre un prompt de pie).
  *
- * includeGesture: false (bug real en producción, 2026-07-22): el banco
- * gestureBanks del JSON HPI mezcla en el mismo basePromptBlock el gesto de
- * la mano CON una postura corporal entera no relacionada (ej. el familyId
- * "RESTING_OR_SUPPORT_HANDS", que suena a "solo la mano", en realidad
- * describe "reclined on couch, legs extended, torso rotated 90-120°" — una
- * escena sentada completa). Como allowedFamilies.gesture no está definido
- * para esta receta, pickFamily elegía cualquier familia del banco entero sin
- * ninguna garantía de compatibilidad con "de pie frente al espejo", y el
- * resultado real fue un brazo extra apoyado en una superficie inexistente
- * sobre una pose de pie. Curar el banco (separar gesto puro de pose) es
- * trabajo de datos pendiente — mientras tanto, sin gesture en esta receta.
- * BODY POSE + CAMERA RELATIONSHIP (ambos con allowedFamilies fijo) siguen
- * aportando dirección de postura sin ese riesgo.
+ * includeGesture: true (reactivado 2026-07-23, ver hpiService.ts): el banco
+ * gestureBanks se curó — cada basePromptBlock ahora describe SOLO el gesto
+ * de mano/brazo, sin la postura corporal entera que antes venía mezclada
+ * (ej. "RESTING_OR_SUPPORT_HANDS" ya no arrastra "reclined on couch, torso
+ * rotated 90-120°"). Se había desactivado tras un bug real en producción
+ * (brazo extra apoyado en una superficie inexistente sobre una pose de pie,
+ * causado por ese texto contaminado) — verificado contra el JSON real antes
+ * de reactivar: las 11 familias actuales solo describen la mano.
+ * Nota: dominantTags de varias familias (RESTING_OR_SUPPORT_HANDS,
+ * HAND_TO_HAIR_GESTURE, PHONE_OR_DEVICE_CAPTURE) todavía traen tags de
+ * postura (seated_pose, reclined_pose) sin curar — no afecta el prompt real
+ * hoy porque no usamos contextTags/preferTags acá, pero si en el futuro se
+ * filtra por tags en esta receta, revisar esos tags primero.
  */
 import { buildHpiBlock, getHpiNegatives, type HpiConfig, type HpiGender } from '../../../../services/hpiService';
 import type { RevealPoseFamilies } from './types';
@@ -41,7 +41,7 @@ export interface AppliedIntelligence {
 function hpiConfigFor(poseFamily: RevealPoseFamilies, variantIndex: number | undefined, gender: HpiGender): HpiConfig {
   if (poseFamily === 'standing_anchor') {
     return {
-      enabled: true, gender, modoVisual: 'ugc', includeGesture: false, includePerformance: false,
+      enabled: true, gender, modoVisual: 'ugc', includeGesture: true, includePerformance: false,
       allowedFamilies: { pose: ['STANDING_ASYMMETRIC_FASHION_POSE'], camera: ['MIRROR_SELFIE_REFLECTION'] },
     };
   }
@@ -49,10 +49,10 @@ function hpiConfigFor(poseFamily: RevealPoseFamilies, variantIndex: number | und
   // variation
   const variant = REVEAL_VARIANTS[variantIndex ?? 0];
   if (!variant?.hpiPoseFamily) {
-    return { enabled: false, gender, modoVisual: 'ugc', includeGesture: false, includePerformance: false };
+    return { enabled: false, gender, modoVisual: 'ugc', includeGesture: true, includePerformance: false };
   }
   return {
-    enabled: true, gender, modoVisual: 'ugc', includeGesture: false, includePerformance: false,
+    enabled: true, gender, modoVisual: 'ugc', includeGesture: true, includePerformance: false,
     allowedFamilies: {
       pose:   [variant.hpiPoseFamily],
       camera: variant.hpiCameraFamily ? [variant.hpiCameraFamily] : undefined,
