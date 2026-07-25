@@ -1,13 +1,21 @@
 // ─── Photodump Story Intelligence ─────────────────────────────
-// Lee el banco UGC y expone SOLO las familias con valor narrativo:
+// Lee el banco UGC (original + v2) y expone SOLO las familias con
+// valor narrativo:
 //   story_support   → BTS, contexto, transición, vida real
 //   creator_aesthetic → flat lay, moodboard, detalle curado
 //
-// Estas familias NO se usan en Campaign (que usa ugc_core).
+// Estas familias NO se usan en Campaign (que usa ugc_core/editorial).
 // Este servicio es de solo lectura — no modifica ningún archivo.
+// El banco crece agregando archivos "_v2", "_v3", etc. a
+// FAMILY_BRIEFS_SOURCES — no hace falta tocar el resto del servicio.
 
-let _familyBriefsUgc: Record<string, unknown> = {};
+let _familyBriefsBanks: Record<string, unknown>[] = [];
 let _loaded = false;
+
+const FAMILY_BRIEFS_SOURCES = [
+  () => import('../../data/trainer/inteligencia ugc/visual_family_briefs_ugc.json'),
+  () => import('../../data/trainer/inteligencia ugc/visual_family_briefs_ugc_v2.json'),
+];
 
 // ─── Tipos ────────────────────────────────────────────────────
 
@@ -63,12 +71,17 @@ export interface StorySupportFamily {
 async function ensureLoaded(): Promise<void> {
   if (_loaded) return;
   _loaded = true;
-  try {
-    const mod = await import('../../data/trainer/inteligencia ugc/visual_family_briefs_ugc.json');
-    _familyBriefsUgc = (mod.default ?? mod) as Record<string, unknown>;
-  } catch {
-    _familyBriefsUgc = {};
-  }
+  const briefs = await Promise.all(
+    FAMILY_BRIEFS_SOURCES.map(async load => {
+      try {
+        const mod = await load();
+        return (mod.default ?? mod) as Record<string, unknown>;
+      } catch {
+        return {};
+      }
+    })
+  );
+  _familyBriefsBanks = briefs;
 }
 
 // ─── API pública ──────────────────────────────────────────────
@@ -79,10 +92,17 @@ async function ensureLoaded(): Promise<void> {
  * Ordena por storyFamilyValue.avgScore descendente.
  */
 export function getStorySupportFamilies(): StorySupportFamily[] {
-  const raw = (_familyBriefsUgc as any)?.families;
-  if (!Array.isArray(raw)) return [];
+  const byId = new Map<string, any>();
+  for (const bank of _familyBriefsBanks) {
+    const raw = (bank as any)?.families;
+    if (!Array.isArray(raw)) continue;
+    for (const f of raw as any[]) {
+      const id = f.familyId;
+      if (id && !byId.has(id)) byId.set(id, f);
+    }
+  }
 
-  const filtered = (raw as any[]).filter(
+  const filtered = Array.from(byId.values()).filter(
     (f) => f.usageClass === 'story_support' || f.usageClass === 'creator_aesthetic'
   );
 

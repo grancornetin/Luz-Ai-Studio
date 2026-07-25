@@ -37,7 +37,31 @@ interface HpiFamily {
     negativePromptHints?: string[];
   };
   compatibleFamilies?: string[];
+  dominantTags?:       string[];
   amplifierHints?: Array<{ amplifierId: string; promptPhrase: string; frequency: number }>;
+  // Solo poseBanks: qué acción genérica ya describe cada mano en el texto de
+  // la pose (ej. ['on_hip', 'holds_phone']). La mayoría de las poses (20/28
+  // en el banco de mujer) ya comprometen ambas manos — agregar un GESTURE
+  // independiente encima arriesga describir una TERCERA acción de mano para
+  // solo 2 manos reales, y el modelo de imagen resuelve la contradicción
+  // generando un elemento visual extra (bug real: "brazo/objeto fantasma"
+  // cerca del codo). Solución: GESTURE solo se permite si su amplifiesAction
+  // coincide con una de estas acciones — así el gesto AÑADE DETALLE a una
+  // mano que la pose ya describió de forma genérica, en vez de inventar una
+  // acción nueva. Ver informe de causa raíz de julio 2026.
+  handActions?: string[];
+  // Solo gestureBanks: qué acción de handActions amplifica este gesto (debe
+  // aparecer en el vocabulario compartido: on_hip, holds_phone, on_surface,
+  // in_hair, holds_bag, on_thigh_or_knee, relaxed_at_side, on_face_or_social,
+  // gripping_equipment, holds_object, none). 'none' = compatible con
+  // cualquier pose sin amplificar nada específico (ej. NO_VISIBLE_HAND_FOCUS).
+  amplifiesAction?: string;
+  // Solo gestureBanks: true si el texto del gesto asume un prop externo
+  // (bolso, objeto) que puede no existir en el outfit/escena real. Estos
+  // gestos ya están redactados de forma condicional ("IF the outfit already
+  // includes...") pero se marcan igual para posible filtrado futuro por
+  // contexto de outfit real.
+  dependsOnExternalProp?: boolean;
 }
 
 interface HpiDirectorRules {
@@ -74,6 +98,12 @@ export interface HpiConfig {
     gesture?: string[];
     camera?:  string[];
   };
+  // Opcional: tags de contexto/escenario ya decididos en el resto del prompt
+  // (ej. "bedroom", "mirror", "outdoor"). Cuando se pasa, pickFamily prefiere
+  // familias cuyo dominantTags matchee al menos uno de estos tags antes de
+  // caer al pool completo — evita que HPI describa una pose de piscina sobre
+  // un prompt que ya fijó un dormitorio.
+  contextTags?: string[];
 }
 
 // ─── Estado interno ────────────────────────────────────────────
@@ -103,6 +133,30 @@ export function initHpiService(): void {
   ensureLoaded().catch(() => {});
 }
 
+// ─── Anti-repetición por sesión ───────────────────────────────
+// Recuerda los últimos familyId usados por banco durante la sesión del tab
+// (memoria de proceso — se reinicia al recargar la página). No requiere
+// pasar userId a través de las ~5 cadenas de llamada distintas que consumen
+// buildHpiBlock: es un efecto colateral interno, no parte de HpiConfig.
+// Objetivo: bajar la probabilidad de que dos generaciones consecutivas del
+// mismo usuario repitan literalmente la misma familia de pose/gesto/cámara.
+
+const RECENT_HISTORY_SIZE = 4;
+const _recentByBank: Record<string, string[]> = {};
+
+function rememberFamily(bankKey: string, familyId: string | undefined): void {
+  if (!familyId) return;
+  const history = _recentByBank[bankKey] ?? (_recentByBank[bankKey] = []);
+  history.push(familyId);
+  if (history.length > RECENT_HISTORY_SIZE) history.shift();
+}
+
+// Expuesto para tests/debug y para módulos que quieran forzar variedad
+// entre tomas de una misma tanda sin esperar al próximo build.
+export function resetHpiSessionMemory(): void {
+  for (const key of Object.keys(_recentByBank)) delete _recentByBank[key];
+}
+
 // ─── Helpers internos ─────────────────────────────────────────
 
 function getBank(gender: HpiGender): HpiDirectorRules {
@@ -112,20 +166,75 @@ function getBank(gender: HpiGender): HpiDirectorRules {
   return _female;
 }
 
-// Elige una familia del banco: preferencia por stable_family,
-// selección aleatoria dentro de ese subconjunto. Si allowedFamilyIds viene
-// dado, se restringe el banco a esas familias ANTES de aplicar el filtro de
-// stable_family — si ninguna coincide, se devuelve null en vez de caer de
-// nuevo al banco completo (evitar el filtro sería el mismo bug que resuelve).
-function pickFamily(bank: HpiFamily[] | undefined, allowedFamilyIds?: string[]): HpiFamily | null {
+interface PickFamilyOptions {
+  allowedFamilyIds?: string[];
+  // Restringe el pool a estos IDs si al menos uno está presente en el banco
+  // (usado para compatibilidad dirigida derivada de la pose ya elegida).
+  // A diferencia de allowedFamilyIds, si la intersección queda vacía se cae
+  // silenciosamente al pool anterior en vez de devolver null — es una
+  // preferencia, no una restricción dura como allowedFamilies del caller.
+  preferFamilyIds?: string[];
+  // Tags de dominantTags a preferir (contexto de escenario/outfit).
+  preferTags?: string[];
+  // Restricción DURA (a diferencia de preferFamilyIds/preferTags, que caen
+  // sin red si la intersección da vacía): solo se aceptan familias cuyo
+  // amplifiesAction esté en esta lista, o cuyo amplifiesAction sea 'none'
+  // (compatible con cualquier pose). Si la intersección queda vacía, se
+  // devuelve null en vez de caer al banco completo — usado para que GESTURE
+  // solo añada detalle a una mano que la pose ya describió, nunca una acción
+  // nueva. Este es el fix del defecto que preferFamilyIds no cubría.
+  requireActionMatch?: string[];
+  // Bank key para anti-repetición por sesión (ej. 'pose:female').
+  sessionBankKey?: string;
+}
+
+// Elige una familia del banco con esta prioridad de filtrado:
+//   1. allowedFamilyIds (restricción dura, puede devolver null)
+//   2. stable_family
+//   3. requireActionMatch (restricción DURA, puede devolver null — ver arriba)
+//   4. preferFamilyIds (compatibilidad dirigida con la pose ya elegida — best-effort, cae sin red)
+//   5. preferTags (contexto de escenario — best-effort, cae sin red)
+//   6. excluir familyId usados recientemente en la sesión (anti-repetición)
+function pickFamily(bank: HpiFamily[] | undefined, options: PickFamilyOptions = {}): HpiFamily | null {
   if (!bank || bank.length === 0) return null;
+  const { allowedFamilyIds, preferFamilyIds, preferTags, requireActionMatch, sessionBankKey } = options;
+
   const scoped = allowedFamilyIds
     ? bank.filter(f => allowedFamilyIds.includes(f.familyId))
     : bank;
   if (scoped.length === 0) return null;
+
   const stable = scoped.filter(f => f.quality === 'stable_family');
-  const pool   = stable.length > 0 ? stable : scoped;
-  return pool[Math.floor(Math.random() * pool.length)];
+  let pool = stable.length > 0 ? stable : scoped;
+
+  if (requireActionMatch) {
+    pool = pool.filter(f =>
+      f.amplifiesAction === 'none' || (f.amplifiesAction != null && requireActionMatch.includes(f.amplifiesAction))
+    );
+    if (pool.length === 0) return null;
+  }
+
+  if (preferFamilyIds && preferFamilyIds.length > 0) {
+    const compatible = pool.filter(f => preferFamilyIds.includes(f.familyId));
+    if (compatible.length > 0) pool = compatible;
+  }
+
+  if (preferTags && preferTags.length > 0) {
+    const tagged = pool.filter(f =>
+      (f.dominantTags ?? []).some(tag => preferTags.includes(tag))
+    );
+    if (tagged.length > 0) pool = tagged;
+  }
+
+  if (sessionBankKey) {
+    const recent = _recentByBank[sessionBankKey] ?? [];
+    const fresh = pool.filter(f => !recent.includes(f.familyId));
+    if (fresh.length > 0) pool = fresh;
+  }
+
+  const chosen = pool[Math.floor(Math.random() * pool.length)];
+  if (sessionBankKey) rememberFamily(sessionBankKey, chosen?.familyId);
+  return chosen;
 }
 
 // Extrae el texto de prompt más compacto de una familia.
@@ -165,12 +274,60 @@ export function buildHpiBlock(config: HpiConfig): string {
 
   // Banco de pose: para neutral usar male (más estructurado)
   const posebank = config.gender === 'neutral' ? _male : bank;
+  const sessionScope = `${config.gender}`;
+  const contextTags = config.contextTags;
 
-  const expressionFamily   = pickFamily(bank.expressionBanks);
-  const poseFamily         = pickFamily(posebank.poseBanks, config.allowedFamilies?.pose);
-  const cameraFamily       = pickFamily(bank.cameraRelationshipBanks, config.allowedFamilies?.camera);
-  const gestureFamily      = config.includeGesture     ? pickFamily(bank.gestureBanks, config.allowedFamilies?.gesture) : null;
-  const performanceFamily  = config.includePerformance ? pickFamily(bank.performanceBanks)  : null;
+  // Pose se elige primero: es el ancla del resto de la selección.
+  const poseFamily = pickFamily(posebank.poseBanks, {
+    allowedFamilyIds: config.allowedFamilies?.pose,
+    preferTags:       contextTags,
+    sessionBankKey:   `pose:${sessionScope}`,
+  });
+
+  // Compatibilidad dirigida: si el caller no fijó allowedFamilies para
+  // gesto/cámara, restringir el pool a compatibleFamilies de la pose ya
+  // elegida antes de sortear — evita combinaciones incoherentes (ej. pose
+  // sentada + gesto de caminar) que la selección puramente aleatoria podía
+  // producir. Si el caller SÍ fijó allowedFamilies (casos como
+  // outfitRevealBasic, que ya resuelve la familia exacta a mano), esa
+  // restricción dura tiene prioridad y preferFamilyIds no se aplica.
+  const poseCompatible = poseFamily?.compatibleFamilies;
+
+  // Compatibilidad de manos: en vez de vetar GESTURE por completo cuando la
+  // pose ya compromete ambas manos (20/28 poses), permitimos que GESTURE
+  // añada DETALLE a una mano que la pose ya describió de forma genérica —
+  // ej. la pose dice "one hand rests on it [the hip]" sin detalle, y
+  // HAND_ON_HIP_GESTURE (amplifiesAction: 'on_hip') especifica cómo se ven
+  // los dedos en esa misma cadera, sin inventar una tercera acción de mano.
+  // requireActionMatch es una restricción DURA: si ninguna familia de gesto
+  // amplifica alguna de las handActions de la pose, se devuelve null (gesto
+  // omitido) en vez de caer al banco completo sin restricción — ese fallback
+  // silencioso era exactamente el defecto que producía el bug original
+  // (brazo/objeto fantasma). No aplica si el caller ya fijó una familia de
+  // gesto explícita a mano (allowedFamilies.gesture), ni si la pose no
+  // declara handActions (banco masculino, sin este campo aún).
+  const poseHandActions = poseFamily?.handActions;
+
+  const expressionFamily = pickFamily(bank.expressionBanks, {
+    preferTags:     contextTags,
+    sessionBankKey: `expression:${sessionScope}`,
+  });
+  const cameraFamily = pickFamily(bank.cameraRelationshipBanks, {
+    allowedFamilyIds: config.allowedFamilies?.camera,
+    preferFamilyIds:  config.allowedFamilies?.camera ? undefined : poseCompatible,
+    sessionBankKey:   `camera:${sessionScope}`,
+  });
+  const gestureFamily = config.includeGesture ? pickFamily(bank.gestureBanks, {
+    allowedFamilyIds:   config.allowedFamilies?.gesture,
+    requireActionMatch: (!config.allowedFamilies?.gesture && poseHandActions) ? poseHandActions : undefined,
+    preferFamilyIds:    config.allowedFamilies?.gesture ? undefined : poseCompatible,
+    sessionBankKey:     `gesture:${sessionScope}`,
+  }) : null;
+  const performanceFamily = config.includePerformance ? pickFamily(bank.performanceBanks, {
+    preferFamilyIds: poseCompatible,
+    preferTags:      contextTags,
+    sessionBankKey:  `performance:${sessionScope}`,
+  }) : null;
 
   // Elegir 1-2 amplificadores del banco
   const amplifiers = (bank.amplifierBanks ?? []).slice(0, 2)

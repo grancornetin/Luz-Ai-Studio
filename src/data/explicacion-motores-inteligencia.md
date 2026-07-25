@@ -6,7 +6,7 @@
 > 3. No borrar secciones historicas; marcar lo eliminado y explicar el motivo.
 > 4. El objetivo es que otra IA o una persona pueda entender como crear motores nuevos sin leer todo el codigo.
 
-**Ultima actualizacion:** 2026-07-09  
+**Ultima actualizacion:** 2026-07-25  
 **Alcance:** `src/data/trainer`, `src/data/trainer/inteligencia ugc`, `src/data/HPI` y los servicios que cargan esos bancos.
 
 ---
@@ -27,6 +27,7 @@ Los motores actuales funcionan como capas de direccion creativa:
 | --- | --- | --- | --- |
 | Editorial Campaign Intelligence | `src/data/trainer/` | `src/modules/campaign/campaignIntelligence.ts` | Familias visuales editoriales y UGC historicas para Campaign. |
 | UGC Visual Intelligence | `src/data/trainer/inteligencia ugc/` | `src/modules/campaign/ugcIntelligence.ts` y `src/modules/photodump/photodumpIntelligence.ts` | Familias UGC clasificadas por uso: campana, historia, estetica de creador. |
+| UGC Scene Intelligence | `src/data/trainer/inteligencia ugc/scene_bank_ugc.json` | `src/modules/campaign/sceneIntelligence.ts` | Escenas reales entrenadas (locacion + luz + capacidades fisicas) para rellenar el vacio cuando no hay foto real de escena. Activo en Campaign; pendiente en Photodump. |
 | HPI | `src/data/HPI/` | `src/services/hpiService.ts` | Direccion humana: expresion, pose, gesto, relacion con camara y performance. |
 
 ---
@@ -144,41 +145,78 @@ La idea es:
 **Datos:** `src/data/trainer/inteligencia ugc/`  
 **Servicios:** `src/modules/campaign/ugcIntelligence.ts` y `src/modules/photodump/photodumpIntelligence.ts`
 
+### El banco es versionado y se fusiona en runtime
+
+Este motor ya no lee un unico par de archivos. Cada tanda nueva de
+entrenamiento se agrega como un archivo `_v2`, `_v3`, etc., **sin tocar
+los archivos anteriores**. Los dos servicios adaptadores cargan TODAS
+las fuentes listadas y fusionan las familias por `familyId`/`id` antes
+de filtrar por `usageClass`. Si el mismo ID aparece en dos archivos,
+gana el primero de la lista (el banco original).
+
+Para agregar una tanda nueva:
+
+1. Sumar los archivos `campaign_director_rules_ugc_vN.json` y
+   `visual_family_briefs_ugc_vN.json` a la carpeta (nombre estable, sin
+   espacios ni parentesis — Vite no resuelve bien esos nombres en
+   `dynamic import`).
+2. Agregar una linea a `DIRECTOR_RULES_SOURCES` / `FAMILY_BRIEFS_SOURCES`
+   en `ugcIntelligence.ts`, y a `FAMILY_BRIEFS_SOURCES` en
+   `photodumpIntelligence.ts`.
+3. No hace falta tocar ningun otro archivo: el filtro por `usageClass`,
+   el ranking y los bloques de prompt ya operan sobre el banco fusionado.
+
 ### Archivos
 
 | Archivo | Rol |
 | --- | --- |
-| `campaign_director_rules_ugc.json` | Reglas UGC v2.4. Tiene principios, arquetipos, `visualBanks`, reglas de ancla, reglas por pieza/canal y riesgos. |
-| `visual_family_briefs_ugc.json` | Resumen curado de 18 familias UGC. Es el archivo mas importante para filtros por `usageClass`. |
-| `raw_image_analysis_ugc (4).json` | Analisis crudo de 236 imagenes UGC con `usageClass`, performance/story value y directivas. |
-| `master_visual_database.json` | Base exportada con 236 imagenes aprobadas y sus analisis. |
-| `metadata.json` | Estadisticas del entrenamiento UGC. |
+| `campaign_director_rules_ugc.json` | Banco original. Reglas UGC v2.4: principios, arquetipos, `visualBanks`, reglas de ancla, reglas por pieza/canal y riesgos. |
+| `visual_family_briefs_ugc.json` | Banco original. Resumen curado de 18 familias UGC. |
+| `campaign_director_rules_ugc_v2.json` | Banco v2 (agregado 2026-07-24). Mismo esquema, familias nuevas y variadas, primera aparicion de `sceneKnowledgeContract`. |
+| `visual_family_briefs_ugc_v2.json` | Banco v2 (agregado 2026-07-24). ~31 familias nuevas, IDs propios sin overlap con el banco original. |
+| `raw_image_analysis_ugc (4).json` | Analisis crudo de 236 imagenes UGC del banco original con `usageClass`, performance/story value y directivas. |
+| `master_visual_database.json` | Base exportada con 236 imagenes aprobadas y sus analisis (banco original). |
+| `metadata.json` | Estadisticas del entrenamiento UGC (banco original). |
 
-### Estado actual
+### Estado actual (banco fusionado: original + v2)
 
-- 236 imagenes totales.
-- 236 imagenes aprobadas.
-- 18 familias exportadas.
-- 66 subfamilias exportadas.
+- 51 familias unicas combinadas (deduplicadas por `familyId`).
+- Distribucion por `usageClass` tras la fusion:
 
-Distribucion por imagen:
+| usageClass | Familias | Que modulo la ve |
+| --- | ---: | --- |
+| `ugc_core` | 25 | Campaign |
+| `editorial` | 17 | Campaign (activado 2026-07-24, antes sin consumidor) |
+| `story_support` | 7 | Photodump |
+| `creator_aesthetic` | 2 | Photodump |
 
-| usageClass | Imagenes |
-| --- | ---: |
-| `ugc_core` | 82 |
-| `story_support` | 72 |
-| `creator_aesthetic` | 63 |
-| `editorial` | 19 |
-| `reject` | 0 |
+### Que significa `usageClass: 'editorial'` en este banco (importante)
 
-Distribucion por familia:
+`editorial` **NO** es fotografia de estudio/revista. Es UGC real donde
+la creadora tiene mas cuidado de luz y pose — sabe que la camara la
+esta viendo, pero sigue siendo una foto de creadora, no una produccion
+de marca. Ejemplos: selfie en la calle con buena luz natural, pose de
+espejo cuidada, foto de bar/vacaciones con composicion pensada. La
+diferencia con `ugc_core` es el nivel de intencionalidad de la pose y
+la luz, no el contexto ni el equipo de produccion.
 
-| usageClass | Familias |
-| --- | ---: |
-| `ugc_core` | 6 |
-| `story_support` | 3 |
-| `creator_aesthetic` | 2 |
-| `editorial` | 7 |
+Por eso `ugcIntelligence.ts` NO le da su propia seccion de prompt ni
+lo trata como categoria comercial aparte: lo mezcla en la misma lista
+que `ugc_core` y le agrega el tag `[polished UGC]` en
+`buildUgcIntelligencePromptBlock()`, con una aclaracion explicita para
+Gemini de que sigue siendo UGC autentico, solo mas pulido. Si se
+tratara como "editorial de revista" se corre el riesgo de que Gemini
+lo descarte por no encajar con el resto del banco UGC, cuando en
+realidad son las familias con mejor luz/pose del mismo continuo.
+
+`sceneKnowledgeContract` (solo en el banco v2, a nivel raiz de
+`campaign_director_rules_ugc_v2.json`) es metadata que **describe** un
+banco de 516 escenas candidatas (50 principales + 142 parciales + 276
+modificadores ambientales), pero ese banco de escenas fisico no vino
+incluido en esta entrega — es un contrato para una integracion futura,
+no datos consumibles todavia. Si llega ese banco, debe tratarse como un
+motor nuevo (ver "Como agregar un motor nuevo" mas abajo) y no forzarse
+dentro de `visualBanks`/`families`.
 
 ### Esquema mental de una familia UGC
 
@@ -203,12 +241,24 @@ Una familia UGC normalmente incluye:
 
 **Servicio:** `src/modules/campaign/ugcIntelligence.ts`
 
-Este servicio solo expone familias `usageClass === 'ugc_core'`.
+Este servicio fusiona todas las fuentes (`DIRECTOR_RULES_SOURCES` +
+`FAMILY_BRIEFS_SOURCES`, banco original + v2 + las que se agreguen) y
+expone familias `usageClass === 'ugc_core'` **o** `'editorial'`
+(activado 2026-07-24 — antes `editorial` estaba en el banco pero
+ningun motor lo leia).
+
+Como el banco fusionado puede tener muchas mas familias que las 7 que
+entran en el prompt, `getUgcVisualFamilies()` las ordena por
+`familyQualityScore()`: usa `performanceFamilyValue.avgScore` (0-100)
+y cae a `intelligenceScores.avgTrainingValueScore` si no existe. El
+`slice(0, 7)` de `buildUgcIntelligencePromptBlock()` toma siempre las
+de mejor puntaje de todo el banco combinado, no las primeras del
+archivo.
 
 Funciones principales:
 
 - `initUgcIntelligence()`
-- `getUgcVisualFamilies()`
+- `getUgcVisualFamilies()` — fusiona + filtra (`ugc_core`/`editorial`) + ordena por calidad.
 - `getUgcFamilyById(id)`
 - `buildUgcIntelligencePromptBlock()`
 - `getTopUgcFamilyFromPieces(pieces)`
@@ -219,7 +269,8 @@ El bloque UGC se inserta cuando Campaign planifica piezas en modo UGC. El prompt
 
 **Servicio:** `src/modules/photodump/photodumpIntelligence.ts`
 
-Este servicio reutiliza el mismo banco UGC, pero filtra otras clases:
+Este servicio reutiliza el mismo banco UGC fusionado (todas las
+`FAMILY_BRIEFS_SOURCES`), pero filtra otras clases:
 
 - `story_support`: BTS, contexto, transicion, vida real.
 - `creator_aesthetic`: flat lay, moodboard, detalle curado.
@@ -236,14 +287,136 @@ Photodump usa estas familias como soporte narrativo para secuencias, no como fam
 
 ### Regla clave
 
-El mismo banco UGC sirve para dos usos distintos:
+El mismo banco UGC fusionado sirve para dos usos distintos:
 
 | Modulo | Familias permitidas | Motivo |
 | --- | --- | --- |
-| Campaign | `ugc_core` | Piezas de campana con creador/producto como centro comercial. |
+| Campaign | `ugc_core`, `editorial` | Piezas de campana con creador/producto como centro comercial, mas piezas con estetica editorial/marca. |
 | Photodump | `story_support`, `creator_aesthetic` | Frames de contexto, transicion, atmosfera y narrativa diaria. |
 
-Si agregas una familia nueva, su `usageClass` decide que modulo la vera.
+Si agregas una familia nueva, su `usageClass` decide que modulo la
+vera — no importa en que archivo `_vN` llegue, ni el orden dentro del
+JSON, porque el ranking por `familyQualityScore()` la ubica segun su
+puntaje real.
+
+---
+
+## Motor UGC Scene Intelligence
+
+**Datos:** `src/data/trainer/inteligencia ugc/scene_bank_ugc.json`  
+**Servicio:** `src/modules/campaign/sceneIntelligence.ts`  
+**Agregado:** 2026-07-25
+
+### Que resuelve
+
+Antes de este motor, cuando no habia ninguna imagen real que definiera
+el entorno (ancla, inspiracion, foto de escena), Campaign y Photodump
+le pedian a Gemini que inventara la locacion con una linea generica:
+`"Real inhabited environment — home, café, street"` (Campaign) o
+`"REF0 already defined the visual world — bedroom, hotel room, or
+dressing area"` (Photodump). Gemini improvisaba el espacio entero sin
+ninguna referencia entrenada.
+
+`scene_bank_ugc.json` es el banco de escenas real (39 escenas
+aprobadas al 2026-07-25) que veniamos esperando desde que
+`sceneKnowledgeContract` aparecio en el banco de familias v2 (ver
+seccion anterior) sin traer el banco fisico todavia.
+
+### Contrato del JSON
+
+Raiz: `schemaVersion`, `exportedAt`, `counts`, `policy`, `mainScenes`,
+`partialScenes`, `ambientModifiers`. Hoy solo `mainScenes` trae datos
+(39); `partialScenes` y `ambientModifiers` estan vacios en esta
+entrega — son extensiones futuras del mismo banco, no motores nuevos.
+
+Cada escena en `mainScenes` trae, entre otros campos:
+
+- `sceneId`, `name`, `status` (`sceneIntelligence.ts` solo usa las
+  `approved`).
+- `sceneIdentity.settingCategory`: `bedroom`, `hallway`, `living_room`,
+  `closet`, `urban_exterior`, `cafe`, `restaurant`, `terrace`,
+  `bathroom`, `travel_landmark`, `other`.
+- `scenePromptBlock`: descripcion lista para inyectar en el prompt —
+  el campo mas importante del esquema.
+- `capabilities`: `supportsFullBody`, `supportsSeatedPose`,
+  `supportsExtendedArms`, `allowsMultipleOutfitChanges`,
+  `privacyLevel`, `mirror.availability/usability`.
+- `limitations` y `contaminationRisks`: avisos cortos para evitar que
+  Gemini copie detalles no deseados (por ejemplo luces de decoracion
+  que deberian omitirse).
+
+**Campos rotos en esta entrega — no los uses:** `compatibleUses` viene
+siempre como `["[object Object]"]` (bug de exportacion, se perdio la
+serializacion real) y `lightingEnvironment` / `aesthetics.mood`
+siempre vienen `"unknown"`. `sceneIntelligence.ts` los ignora a
+proposito. Si una entrega futura los arregla, recien ahi vale la pena
+consumirlos.
+
+### API publica
+
+En `sceneIntelligence.ts`:
+
+- `initSceneIntelligence()`: precarga el JSON.
+- `getScenes()`: todas las escenas `approved`.
+- `getSceneById(id)`
+- `getScenesByCategory(category)`: filtra por `settingCategory`.
+- `getFullBodyScenes()`: filtra por `capabilities.supportsFullBody === 'yes'`.
+- `pickScene(seed, category?)`: eleccion **deterministica** a partir
+  de un seed (hash simple) — misma seed siempre devuelve la misma
+  escena, para que una sesion de generacion no salte de escena entre
+  llamadas sucesivas. Si `category` no tiene escenas, cae al banco
+  completo.
+- `buildScenePromptBlock(scene)`: arma el bloque de texto final con
+  `scenePromptBlock` + capacidades relevantes + limitaciones + riesgos
+  a evitar, cerrando con la instruccion de no inventar otro lugar.
+
+### Regla de oro: nunca reemplaza una foto real
+
+Este motor **solo** interviene cuando no existe ninguna imagen que ya
+defina el entorno. Si la usuaria subio una foto de referencia, ancla,
+inspiracion, o escena (`sceneRef`/`scenePruebaRef`/`sceneDestinoRef`
+en Photodump), esa foto manda siempre — el banco de escenas ni se
+consulta. La logica de deteccion vive en el llamador (por ejemplo
+`!selected.inspirationRef` en Campaign), no en `sceneIntelligence.ts`.
+
+### Uso en Campaign (activo)
+
+**Consumidor:** `src/modules/campaign/campaignService.ts`
+
+Se llama `initSceneIntelligence()` junto a los demas motores al
+importar el modulo. Se usa `pickScene()` + `buildScenePromptBlock()`
+en dos lugares, ambos SOLO para la variante UGC (`variant === 'A'`) y
+SOLO cuando `!selected.inspirationRef`:
+
+1. `generateAnchorImages()` (flujo con plan previo): despues de
+   inyectar la familia UGC ancla, agrega el bloque de escena al
+   `basePrompt` si corresponde.
+2. `generateAnchorImagesFromBrief()` (flujo directo desde el brief):
+   reemplaza el `bgNote` generico por una referencia al bloque de
+   escena, e inyecta `buildScenePromptBlock()` junto al `lockSystem`.
+
+El seed de `pickScene()` combina el concepto/idea de la campana con el
+`sessionId`, para que la eleccion sea estable dentro de la misma
+generacion pero varie entre campanas distintas.
+
+La variante editorial (`variant === 'B'`) NO usa este motor — su
+entorno lo define el `visualSpine` o la familia editorial elegida, que
+ya son mas especificos que una escena generica de UGC.
+
+### Uso en Photodump (pendiente)
+
+Photodump todavia usa el texto generico (`extractShotLocationOverride`
+en `photodumpDirectorService.ts`, linea ~322) cuando no hay
+`scenePruebaRef`/`sceneRef`. No se integro todavia porque Photodump
+tiene 6 recetas distintas (`outfit_check`, `dayInLife`,
+`outfitMultiLook`, `outfitRevealBasic`, `outfitNightOut`,
+`weeklyFavoritesV2`), cada una con su propia funcion `generateXREF0` y
+un sistema de "fingerprint"/lock de escena que propaga continuidad
+entre shots de una misma sesion. Integrar mal el motor de escenas ahi
+podria romper esa continuidad. Cuando se aborde, revisar receta por
+receta empezando por `generatePhotodumpREF0` (la generica, no las
+especializadas) y reusar `pickScene()` / `buildScenePromptBlock()` de
+este mismo servicio — no crear un adaptador nuevo.
 
 ---
 

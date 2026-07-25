@@ -24,6 +24,11 @@ import {
   getTopUgcFamilyFromPieces,
 } from './ugcIntelligence';
 import {
+  initSceneIntelligence,
+  pickScene,
+  buildScenePromptBlock,
+} from './sceneIntelligence';
+import {
   initHpiService,
   buildHpiBlock,
   getHpiNegatives,
@@ -33,6 +38,7 @@ import {
 // Precarga los JSON de inteligencia visual en background al importar este módulo
 initCampaignIntelligence();
 initUgcIntelligence();
+initSceneIntelligence();
 initHpiService();
 
 // ─── Negativos base (anatomía + identidad + texto — siempre) ──
@@ -1078,6 +1084,17 @@ Establish these rules visually — all derived images will inherit them:
       }
     }
 
+    // Sin imagen de inspiración, la locación del ancla UGC queda librada a
+    // texto genérico ("home, café, street"). Si hay una escena entrenada
+    // disponible, la usamos para darle un entorno real en vez de una
+    // improvisación completa de Gemini.
+    if (variant === 'A' && !selected.inspirationRef) {
+      const scene = pickScene(`${plan.concepto}-${sessionParams.sessionId ?? 'anchor'}`);
+      if (scene) {
+        basePrompt += `\n\n${buildScenePromptBlock(scene)}`;
+      }
+    }
+
     const params = {
       prompt:          basePrompt,
       negative:        getNegative(modo),
@@ -1227,9 +1244,16 @@ export async function generateAnchorImagesFromBrief(
     const poseNote = modo === 'ugc'
       ? (hasModel ? 'Full body visible head-to-toe. Organic, asymmetric, mid-movement. Feet must be in frame. NOT catalog.' : 'Organic product placement in real-life context.')
       : (hasModel ? 'Full body visible head-to-toe. Confident and expressive. Aspirational, not stiff. Feet must be in frame.' : 'Hero product — perfectly lit, intentional composition.');
+    // Sin imagen de inspiración, la locación UGC queda librada a texto
+    // genérico. Si hay una escena entrenada disponible, la describimos
+    // en detalle en vez de dejar que Gemini improvise el entorno entero.
+    const scene = modo === 'ugc' && !selected.inspirationRef
+      ? pickScene(`${idea}-${sessionParams.sessionId ?? 'brief-anchor'}`)
+      : undefined;
     const bgNote = modo === 'ugc'
-      ? 'Real inhabited environment — home, café, street.'
+      ? (scene ? 'See TRAINED SCENE block below — use it as the physical environment.' : 'Real inhabited environment — home, café, street.')
       : 'Curated environment OR minimal clean — serves the concept.';
+    const sceneBlock = scene ? `\n\n${buildScenePromptBlock(scene)}` : '';
 
     // Fix 4: inteligencia va al inicio, antes del lockSystem, para que tenga mayor peso
     const intelligenceSnippet = modo === 'ugc' ? ugcAnchorBlock : editorialAnchorBlock;
@@ -1279,6 +1303,7 @@ The anchor must establish the complete visual truth: full outfit, full body, com
 - Pose/Placement: ${poseNote}
 - Background: ${bgNote}
 ${stylingNote}
+${sceneBlock}
 
 ${lockSystem}
 
