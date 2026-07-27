@@ -47,3 +47,15 @@ dist-ssr
 
 # Datos privados del agente QA de Photodump (imágenes propias, no código)
 /LuzPhotodumpAgent/
+
+# ── Director Lab (modules/motor-de-imagenes-corregido-v2) ───────────
+# Bancos y reglas reales: SÍ se versionan (la regla *.json de arriba los
+# bloquearía por defecto).
+!/modules/motor-de-imagenes-corregido-v2/director-lab/data/**/*.json
+!/modules/motor-de-imagenes-corregido-v2/director-lab/vendor/**/*.json
+# Estado/runtime generado por el uso de la herramienta (proyectos de prueba,
+# notas, casos): NO se versiona, es datos locales, no código.
+/modules/motor-de-imagenes-corregido-v2/director-lab-data/
+/modules/motor-de-imagenes-corregido-v2/.server-batch-data/
+/modules/motor-de-imagenes-corregido-v2/campaign-trainer-data/logs/
+/modules/motor-de-imagenes-corregido-v2/.impeccable/

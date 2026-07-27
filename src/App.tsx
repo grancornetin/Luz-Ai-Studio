@@ -26,6 +26,8 @@ const Contacto              = lazy(() => import('./views/Contacto'));
 const AccountSettings       = lazy(() => import('./views/AccountSettings'));
 const CheckoutSuccess       = lazy(() => import('./views/CheckoutSuccess'));
 const CheckoutCancel        = lazy(() => import('./views/CheckoutCancel'));
+// Herramienta interna solo para desarrollo local — nunca se importa en build de producción.
+const DirectorLabModule     = import.meta.env.DEV ? lazy(() => import('./modules/directorLab/DirectorLabModule')) : null;
 
 const LazyFallback = (
   <div className="flex items-center justify-center h-screen bg-[#06060D]">
@@ -451,6 +453,9 @@ const AppContent: React.FC = () => {
                   <Route path="/mis-marcas"     element={<BrandProfilesModule />} />
                   <Route path="/prompt-library" element={<Navigate to="/prompt-gallery" replace />} />
                   <Route path="/admin/batch"    element={<BatchProgressPanel />} />
+                  {import.meta.env.DEV && DirectorLabModule && (
+                    <Route path="/director-lab" element={<DirectorLabModule />} />
+                  )}
                   <Route path="*"               element={<Navigate to="/dashboard" replace />} />
                 </Routes>
               </main>

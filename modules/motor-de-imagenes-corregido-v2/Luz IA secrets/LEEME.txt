@@ -1,0 +1,5 @@
+Coloca en esta carpeta tu credencial local con el nombre:
+
+vertex-service-account.json
+
+Este archivo JSON no se incluye en el proyecto compartido ni debe subirse a Git.

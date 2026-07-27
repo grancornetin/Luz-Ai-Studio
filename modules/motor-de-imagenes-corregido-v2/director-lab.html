@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>Director Lab — Luz IA</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    background: #f4f5f7;
+    color: #1a1a1a;
+    margin: 0;
+    padding: 24px;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .sub { color: #666; font-size: 13px; margin-bottom: 24px; }
+  .card {
+    background: #fff;
+    border: 1px solid #e2e2e6;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  label { display: block; font-size: 12px; font-weight: 600; color: #444; margin-bottom: 4px; }
+  select, textarea, input[type=text] {
+    width: 100%;
+    border: 1px solid #d6d6db;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 14px;
+    font-family: inherit;
+    margin-bottom: 14px;
+  }
+  textarea { min-height: 90px; resize: vertical; }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  button {
+    background: #1a1a2e;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 11px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.secondary { background: #fff; color: #1a1a2e; border: 1px solid #d6d6db; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .shot { border-top: 1px solid #ececef; padding-top: 16px; margin-top: 16px; }
+  .shot:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+  .shot-title { font-weight: 700; font-size: 15px; margin-bottom: 2px; }
+  .shot-meta { font-size: 11px; color: #999; margin-bottom: 8px; }
+  .prompt-block {
+    background: #fafafa;
+    border: 1px solid #ececef;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 13px;
+    white-space: pre-wrap;
+    max-height: 220px;
+    overflow-y: auto;
+    margin-bottom: 8px;
+  }
+  .prompt-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #888; margin-bottom: 4px; }
+  .note-box { display: flex; gap: 8px; margin-top: 8px; }
+  .note-box input { flex: 1; margin-bottom: 0; }
+  .status-line { font-size: 12px; margin-top: 4px; }
+  .status-ok { color: #1a7d3c; }
+  .status-warn { color: #b35900; }
+  .hint { font-size: 12px; color: #888; margin-top: -8px; margin-bottom: 14px; }
+  #results { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Director Lab</h1>
+  <div class="sub">Herramienta interna — probá si el Director arma historias reales de Photodump con los bancos y reglas ya cargados.</div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Receta</label>
+        <select id="recipeId">
+          <option value="outfit_night_out">Look de noche (outfit_night_out)</option>
+          <option value="outfit_haul" disabled>Haul de ropa — próximamente</option>
+          <option value="outfit_week" disabled>Favoritos de la semana — próximamente</option>
+          <option value="outfit_check" disabled>Outfit Check — próximamente</option>
+        </select>
+      </div>
+      <div>
+        <label>Nivel de la historia</label>
+        <select id="level">
+          <option value="corto">Corto (3 fotos)</option>
+          <option value="completo">Completo (5 fotos)</option>
+          <option value="extendido">Extendido (7 fotos)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>Energía</label>
+        <select id="energy">
+          <option value="elegante">Elegante</option>
+          <option value="fiesta">Fiesta</option>
+        </select>
+      </div>
+      <div>
+        <label>¿Va acompañada?</label>
+        <select id="hasCompanion">
+          <option value="false">No</option>
+          <option value="true">Sí</option>
+        </select>
+      </div>
+    </div>
+
+    <label>Contá la idea (lugar, ocasión, lo que quieras aclarar)</label>
+    <textarea id="brief" placeholder="Ej: salida elegante a un bar de azotea, ambiente de ciudad de noche..."></textarea>
+    <div class="hint">Este texto se usa como descripción del lugar si no subís una foto de referencia (todavía no hay carga de foto en esta versión).</div>
+
+    <button id="generateBtn">Crear historia</button>
+    <div id="statusLine" class="status-line"></div>
+  </div>
+
+  <div id="results" class="card"></div>
+</div>
+
+<script>
+const API = '/api/director-lab';
+
+const generateBtn = document.getElementById('generateBtn');
+const statusLine = document.getElementById('statusLine');
+const resultsEl = document.getElementById('results');
+
+function shotBlockHtml(shot) {
+  return `
+    <div class="shot" data-shot-id="${shot.shotId}">
+      <div class="shot-title">${shot.label}</div>
+      <div class="shot-meta">${shot.isFixed ? 'Shot fijo de la receta' : 'Momento de noche elegido para esta historia'}</div>
+      <div class="prompt-label">Prompt positivo</div>
+      <div class="prompt-block">${escapeHtml(shot.positivePrompt)}</div>
+      <button class="secondary copy-btn" data-target="pos">Copiar prompt positivo</button>
+      <div class="prompt-label" style="margin-top:10px">Prompt negativo</div>
+      <div class="prompt-block">${escapeHtml(shot.negativePrompt)}</div>
+      <button class="secondary copy-btn" data-target="neg">Copiar prompt negativo</button>
+      <div class="note-box">
+        <input type="text" placeholder="¿Algo raro en este shot? Escribí tu nota..." class="note-input" />
+        <button class="secondary save-note-btn">Guardar nota</button>
+      </div>
+      <div class="note-status status-line"></div>
+    </div>
+  `;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+let lastShots = [];
+let lastRecipeId = '';
+
+async function generate() {
+  generateBtn.disabled = true;
+  statusLine.textContent = 'Pensando la historia...';
+  statusLine.className = 'status-line';
+  resultsEl.style.display = 'none';
+
+  const recipeId = document.getElementById('recipeId').value;
+  const level = document.getElementById('level').value;
+  const energy = document.getElementById('energy').value;
+  const hasCompanion = document.getElementById('hasCompanion').value === 'true';
+  const brief = document.getElementById('brief').value;
+
+  try {
+    const res = await fetch(`${API}/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipeId, level, energy, hasCompanion, venueTextFallback: brief, brief })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.cause || 'Error generando la historia');
+
+    lastShots = data.shots;
+    lastRecipeId = recipeId;
+    resultsEl.innerHTML = data.shots.map(shotBlockHtml).join('');
+    resultsEl.style.display = 'block';
+    statusLine.textContent = `Historia lista: ${data.shots.length} fotos.`;
+    statusLine.className = 'status-line status-ok';
+  } catch (err) {
+    statusLine.textContent = 'Error: ' + err.message;
+    statusLine.className = 'status-line status-warn';
+  } finally {
+    generateBtn.disabled = false;
+  }
+}
+
+generateBtn.addEventListener('click', generate);
+
+resultsEl.addEventListener('click', async (e) => {
+  const shotEl = e.target.closest('.shot');
+  if (!shotEl) return;
+  const shotId = shotEl.dataset.shotId;
+  const shot = lastShots.find(s => s.shotId === shotId);
+
+  if (e.target.classList.contains('copy-btn')) {
+    const text = e.target.dataset.target === 'pos' ? shot.positivePrompt : shot.negativePrompt;
+    await navigator.clipboard.writeText(text);
+    e.target.textContent = 'Copiado ✓';
+    setTimeout(() => {
+      e.target.textContent = e.target.dataset.target === 'pos' ? 'Copiar prompt positivo' : 'Copiar prompt negativo';
+    }, 1500);
+  }
+
+  if (e.target.classList.contains('save-note-btn')) {
+    const input = shotEl.querySelector('.note-input');
+    const noteStatus = shotEl.querySelector('.note-status');
+    if (!input.value.trim()) return;
+    try {
+      await fetch(`${API}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipeId: lastRecipeId, shotId, note: input.value.trim() })
+      });
+      noteStatus.textContent = 'Nota guardada. La próxima vez que generes esta receta, se va a tener en cuenta.';
+      noteStatus.className = 'note-status status-line status-ok';
+      input.value = '';
+    } catch (err) {
+      noteStatus.textContent = 'No se pudo guardar la nota.';
+      noteStatus.className = 'note-status status-line status-warn';
+    }
+  }
+});
+</script>
+</body>
+</html>

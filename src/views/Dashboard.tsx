@@ -171,6 +171,24 @@ const MODULE_GROUPS = [
       },
     ]
   },
+  // Herramienta interna de diagnóstico, solo visible en desarrollo local.
+  ...(import.meta.env.DEV ? [{
+    groupLabel: 'Dev tools',
+    groupColor: 'bg-slate-800',
+    modules: [
+      {
+        path: '/director-lab',
+        title: 'DIRECTOR LAB',
+        subtitle: 'Diagnóstico interno',
+        description: 'Ejecuta el Director sobre los bancos reales y revisa su trazabilidad completa.',
+        icon: 'fa-clapperboard',
+        accent: 'text-slate-700',
+        bg: 'bg-slate-100',
+        creditsGemini: 0,
+        creditsSeedream: 0,
+      },
+    ]
+  }] : []),
 ];
 
 interface DashboardProps {

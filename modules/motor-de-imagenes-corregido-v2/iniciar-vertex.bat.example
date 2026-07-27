@@ -1,0 +1,7 @@
+@echo off
+REM Ejemplo opcional para una credencial guardada fuera del proyecto.
+set "GOOGLE_CLOUD_PROJECT=tu-project-id"
+set "GOOGLE_CLOUD_LOCATION=us-central1"
+set "VERTEX_GEMINI_MODEL=gemini-2.5-flash"
+set "GOOGLE_APPLICATION_CREDENTIALS=C:\Ruta\Segura\vertex-service-account.json"
+call "%~dp0iniciar-vertex.bat"

@@ -1,0 +1,9 @@
+# Credentials and local operating data: never version these.
+claude.txt
+*.service-account.json
+service-account*.json
+*service-account*.json
+Luz IA secrets/*.json
+.env
+.server-batch-data/
+exports/
