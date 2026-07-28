@@ -10,11 +10,18 @@
  * Corto — mismo patrón de fusión REF0+shot1 ya usado en
  * outfitRevealBasic/outfitMultiLook.
  *
+ * presentation/tryon_detail (preparación en casa) YA NO aparecen en el nivel
+ * Extendido — se reemplazaron por más momentos de noche (experiencia/
+ * sensación, "vender sin vender"). Siguen existiendo como contratos fijos
+ * porque quedan disponibles para Completo, pero Extendido es 100% mirror_check
+ * + banco de noche (ver levelResolver.ts).
+ *
  * El banco de noche (ver nightMoments.ts) surge de analizar 23 imágenes
  * reales de salidas nocturnas — no es un pool de "momentos narrativos"
  * (llegada/social/cierre) sino de tipos de encuadre/sujeto (retrato posado,
- * grupo, movimiento/energía, POV de piernas, ambiental, auto), cada uno
- * parametrizado por energía (elegante/fiesta) y venue.
+ * grupo, movimiento/energía, POV de piernas, ambiental, auto, vista/paisaje,
+ * comida, brindis), cada uno parametrizado por energía (elegante/fiesta) y
+ * venue.
  *
  * 'hands_detail' (detalle de manos sosteniendo el trago) se eliminó del
  * banco: sin una familia de cámara real que fuerce una distancia/ángulo
@@ -34,7 +41,10 @@ export type NightMomentId =
   | 'motion_energy'
   | 'pov_legs'
   | 'ambient_only'
-  | 'car_transition';
+  | 'car_transition'
+  | 'view_moment'
+  | 'food_detail'
+  | 'toast_moment';
 
 export type NightOutShotId = NightOutFixedShotId | NightMomentId;
 

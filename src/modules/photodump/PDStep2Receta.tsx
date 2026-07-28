@@ -363,7 +363,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   const NIGHT_OUT_LEVEL_OPTIONS: { value: 'corto' | 'completo' | 'extendido'; label: string; hint: string }[] = [
     { value: 'corto',     label: 'Corto (3 fotos)',     hint: 'Mirror check y 2 momentos de la noche.' },
     { value: 'completo',  label: 'Completo (5 fotos)',  hint: '+ un detalle de cómo armaste el look, y 3 momentos de la noche.' },
-    { value: 'extendido', label: 'Extendido (7 fotos)', hint: 'La historia completa: preparación, detalle, mirror check y 4 momentos de la noche.' },
+    { value: 'extendido', label: 'Extendido (7 fotos)', hint: 'Mirror check y 6 momentos de la noche — la experiencia completa, sin volver a la preparación.' },
   ];
 
   const handleNightOutLevelChange = (level: 'corto' | 'completo' | 'extendido') => {

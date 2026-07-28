@@ -7,7 +7,7 @@
  * se explica por "en qué momento narrativo está" (llegada/social/cierre),
  * sino por el CRUCE de 4 ejes independientes:
  *
- *   Eje A — encuadre/sujeto (las 5 entradas de este banco)
+ *   Eje A — encuadre/sujeto (las 8 entradas de este banco)
  *   Eje B — energía: elegante | fiesta (resolveEnergyFromBrief) — parametriza
  *           el promptBlock de cada entrada, no agrega entradas nuevas
  *   Eje C — venue: resuelto aparte por venueResolver.ts, inyectado como
@@ -145,6 +145,59 @@ export const NIGHT_MOMENTS: NightMoment[] = [
     requiresCompanion: false,
     fiestaOnly: false,
     hasProtagonist: false,
+  },
+  {
+    id: 'view_moment',
+    contract: {
+      shotId: 'view_moment',
+      cameraGrammar: { framing: 'MEDIUM_FULL', angle: 'eye_level', composition: 'view_moment' },
+      referencePolicy: { useIdentityRef: true, useBodyRef: true, useOutfitRefs: true },
+      hpiPoseFamily: 'TORSO_TWIST_AND_OVER_SHOULDER_POSE',
+      hpiCameraFamily: 'POSTERIOR_BACK_VIEW_FRAMING',
+      footwearVisible: false,
+    },
+    sceneBlockByEnergy: {
+      elegante: 'She is turned away from the camera, looking out at the view — the city skyline, the water, the string lights, the room — captured from behind or three-quarters behind. This is about the feeling of the place, not a posed look at the camera.',
+      fiesta:   'She is turned away from the camera, looking out over the crowd or the lights of the venue — captured from behind or three-quarters behind. This is about the feeling of the night, not a posed look at the camera.',
+    },
+    requiresCompanion: false,
+    fiestaOnly: false,
+    hasProtagonist: true,
+  },
+  {
+    id: 'food_detail',
+    contract: {
+      shotId: 'food_detail',
+      cameraGrammar: { framing: 'CLOSE_UP', angle: 'high_angle', composition: 'food_detail' },
+      referencePolicy: { useIdentityRef: false, useBodyRef: false, useOutfitRefs: false },
+      hpiPoseFamily: null,
+      hpiCameraFamily: 'HIGH_ANGLE_OVERHEAD_FRAMING',
+      footwearVisible: false,
+    },
+    sceneBlockByEnergy: {
+      elegante: 'An overhead close-up of the food being served — a shared plate, dessert, or dish at the center of the table, shot from directly above. No person in frame, just the sensory detail of the meal.',
+      fiesta:   'An overhead close-up of snacks or shared food at the table or bar — shot from directly above. No person in frame, just the sensory detail of the moment.',
+    },
+    requiresCompanion: false,
+    fiestaOnly: false,
+    hasProtagonist: false,
+  },
+  {
+    id: 'toast_moment',
+    contract: {
+      shotId: 'toast_moment',
+      cameraGrammar: { framing: 'CLOSE_UP', angle: 'eye_level', composition: 'toast_moment' },
+      referencePolicy: { useIdentityRef: true, useBodyRef: true, useOutfitRefs: true, useCompanionRef: true },
+      hpiPoseFamily: null,
+      footwearVisible: false,
+    },
+    sceneBlockByEnergy: {
+      elegante: 'A close, candid toast — glasses clinking together between her and a companion, hands and glasses in focus, faces softly visible in the background. A genuine celebratory beat, not posed for the camera.',
+      fiesta:   'A close, candid toast — cups or glasses clinking together between her and one or more companions under colorful venue lighting, hands and drinks in focus, faces softly visible. A genuine celebratory beat, not posed for the camera.',
+    },
+    requiresCompanion: true,
+    fiestaOnly: false,
+    hasProtagonist: true,
   },
 ];
 
