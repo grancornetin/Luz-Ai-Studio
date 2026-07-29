@@ -59,3 +59,8 @@ dist-ssr
 /modules/motor-de-imagenes-corregido-v2/.server-batch-data/
 /modules/motor-de-imagenes-corregido-v2/campaign-trainer-data/logs/
 /modules/motor-de-imagenes-corregido-v2/.impeccable/
+
+# Banco del entrenador de Photodump (imágenes + análisis JSON, ~4000 archivos
+# locales, no código): NO se versiona.
+/src/data/trainer/photodump/
+/modules/motor-de-imagenes-corregido-v2/photodump-trainer-data/
