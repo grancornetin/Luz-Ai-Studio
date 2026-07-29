@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>Entrenador Photodump — Luz IA</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0d0e12;
+    --bg-elevated: #14161c;
+    --bg-card: #191b22;
+    --border: #262933;
+    --border-soft: #1f212a;
+    --text: #eceef2;
+    --text-dim: #9497a3;
+    --text-faint: #63667a;
+    --accent: #7c8cff;
+    --accent-dim: #4b52a8;
+    --accent-soft: rgba(124, 140, 255, 0.12);
+    --ok: #4ade80;
+    --ok-soft: rgba(74, 222, 128, 0.12);
+    --warn: #fbbf5e;
+    --warn-soft: rgba(251, 191, 94, 0.12);
+    --err: #f87171;
+    --err-soft: rgba(248, 113, 113, 0.12);
+    --radius: 14px;
+    --radius-sm: 9px;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
+    background: var(--bg);
+    background-image: radial-gradient(ellipse 900px 500px at 50% -10%, rgba(124,140,255,0.08), transparent);
+    color: var(--text);
+    margin: 0;
+    padding: 32px 20px 100px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+
+  header { margin-bottom: 24px; }
+  h1 { font-size: 20px; font-weight: 650; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--text-dim); font-size: 13px; }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px;
+    margin-bottom: 16px;
+  }
+  .card-compact { padding: 16px 22px; }
+
+  /* ── Dropzone ── */
+  .dropzone {
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius-sm);
+    padding: 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 160ms var(--ease-out), background-color 160ms var(--ease-out);
+    background: var(--bg-elevated);
+  }
+  .dropzone:hover { border-color: var(--accent-dim); }
+  .dropzone.dragover { border-color: var(--accent); background: var(--accent-soft); }
+  .dropzone-title { font-size: 13.5px; font-weight: 600; margin-bottom: 2px; }
+  .dropzone-sub { font-size: 12px; color: var(--text-faint); }
+  input[type=file] { display: none; }
+
+  .queue-list { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; }
+  .queue-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: var(--radius-sm);
+    background: var(--bg-elevated); font-size: 12.5px;
+    opacity: 0; transform: translateY(4px);
+    animation: itemIn 220ms var(--ease-out) forwards;
+  }
+  .queue-item img { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+  .queue-item .name { flex: 1; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .queue-item.duplicate { border: 1px solid rgba(251,191,94,0.35); }
+  .queue-item.duplicate .name { color: var(--warn); }
+  @keyframes itemIn { to { opacity: 1; transform: translateY(0); } }
+
+  .skipped-notice {
+    margin-top: 10px; padding: 9px 12px; border-radius: var(--radius-sm);
+    background: var(--accent-soft); border: 1px solid var(--accent-dim);
+    color: var(--text-dim); font-size: 12px;
+    opacity: 0; transform: scale(0.97);
+    animation: fadeScaleIn 200ms var(--ease-out) forwards;
+  }
+
+  /* ── Tabs (Banco / Logs) ── */
+  .tab-bar { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border-soft); }
+  .tab-btn {
+    background: transparent; border: none; color: var(--text-dim);
+    padding: 9px 4px; margin-right: 18px; font-size: 13px; font-weight: 600;
+    cursor: pointer; position: relative; border-radius: 0;
+    transition: color 140ms var(--ease-out);
+  }
+  .tab-btn:active { transform: none; }
+  .tab-btn::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+    background: var(--accent); border-radius: 2px;
+    transform: scaleX(0); transform-origin: left center;
+    transition: transform 200ms var(--ease-out);
+  }
+  .tab-btn[data-active="true"] { color: var(--text); }
+  .tab-btn[data-active="true"]::after { transform: scaleX(1); }
+  .tab-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 16px; height: 16px; padding: 0 4px; margin-left: 6px;
+    background: var(--err-soft); color: var(--err); border-radius: 999px;
+    font-size: 10px; font-weight: 700;
+  }
+  .tab-panel { display: none; }
+  .tab-panel[data-active="true"] { display: block; }
+
+  /* ── Log ── */
+  .log-list { display: flex; flex-direction: column; gap: 6px; max-height: 480px; overflow-y: auto; }
+  .log-row {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 10px 12px; border-radius: var(--radius-sm); background: var(--bg-elevated);
+    font-size: 12.5px; border-left: 2.5px solid var(--border);
+  }
+  .log-row.level-error { border-left-color: var(--err); }
+  .log-row.level-warn { border-left-color: var(--warn); }
+  .log-row.level-info { border-left-color: var(--accent); }
+  .log-icon { font-size: 13px; flex-shrink: 0; margin-top: 1px; }
+  .log-row.level-error .log-icon { color: var(--err); }
+  .log-row.level-warn .log-icon { color: var(--warn); }
+  .log-row.level-info .log-icon { color: var(--accent); }
+  .log-body { flex: 1; min-width: 0; }
+  .log-message { color: var(--text); }
+  .log-meta { color: var(--text-faint); font-size: 11px; margin-top: 2px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .log-item-name { color: var(--text-dim); }
+
+  /* ── Buttons ── */
+  button {
+    font-family: inherit;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 140ms var(--ease-out), opacity 140ms var(--ease-out), background-color 140ms var(--ease-out);
+  }
+  button:active { transform: scale(0.97); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+  .btn-primary { background: var(--accent); color: #0d0e12; }
+  .btn-primary:hover { background: #8f9dff; }
+  .btn-secondary { background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--accent-dim); }
+  .btn-ghost { background: transparent; color: var(--text-dim); padding: 8px 10px; }
+  .btn-ghost:hover { color: var(--text); }
+  .btn-danger-ghost { background: transparent; color: var(--err); padding: 8px 10px; }
+  .btn-danger-ghost:hover { background: var(--err-soft); }
+  .btn-row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+
+  /* ── Progress ── */
+  .progress-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+  .progress-count { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+  .progress-count small { font-size: 12.5px; font-weight: 500; color: var(--text-faint); }
+  .progress-track {
+    height: 6px; border-radius: 999px; background: var(--bg-elevated);
+    overflow: hidden; margin-bottom: 10px;
+  }
+  .progress-fill {
+    width: 100%; height: 100%; background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+    border-radius: 999px;
+    transform-origin: left center;
+    transform: scaleX(0);
+    transition: transform 320ms var(--ease-in-out);
+  }
+  .progress-meta { display: flex; gap: 16px; font-size: 12px; color: var(--text-dim); flex-wrap: wrap; }
+  .progress-meta b { color: var(--text); }
+  .rate-limit-banner {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--warn-soft); border: 1px solid rgba(251,191,94,0.25);
+    color: var(--warn); font-size: 12px; padding: 9px 12px; border-radius: var(--radius-sm);
+    margin-top: 10px;
+    opacity: 0; transform: scale(0.97);
+    animation: fadeScaleIn 200ms var(--ease-out) forwards;
+  }
+  @keyframes fadeScaleIn { to { opacity: 1; transform: scale(1); } }
+
+  .current-item { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 12.5px; color: var(--text-dim); }
+  .spinner {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    animation: spin 0.6s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Filtros ── */
+  .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .filter-chip {
+    background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-dim);
+    padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer;
+    transition: transform 140ms var(--ease-out), border-color 140ms var(--ease-out), color 140ms var(--ease-out), background-color 140ms var(--ease-out);
+  }
+  .filter-chip:active { transform: scale(0.96); }
+  .filter-chip[data-active="true"] { background: var(--accent-soft); border-color: var(--accent-dim); color: var(--accent); }
+  .filter-select {
+    background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text);
+    padding: 6px 10px; border-radius: var(--radius-sm); font-size: 12px; font-family: inherit;
+  }
+
+  /* ── Gallery ── */
+  .gallery-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; }
+  .gallery-title { font-size: 14px; font-weight: 650; }
+  .gallery-stats { font-size: 12px; color: var(--text-dim); }
+  .gallery-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px;
+  }
+  .thumb {
+    position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden;
+    background: var(--bg-elevated); border: 1.5px solid transparent;
+    cursor: pointer;
+    transition: border-color 140ms var(--ease-out), transform 140ms var(--ease-out);
+    opacity: 0; transform: scale(0.95);
+    animation: itemIn 240ms var(--ease-out) forwards;
+  }
+  .thumb:active { transform: scale(0.97); }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb.approved { border-color: var(--ok); }
+  .thumb.rejected { opacity: 0.35; filter: grayscale(0.6); }
+  .thumb.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft) inset; }
+  .thumb.pending-analysis { cursor: default; }
+  .thumb.pending-analysis img { opacity: 0.3; filter: grayscale(0.8); }
+  .thumb.processing-analysis img { opacity: 0.45; }
+  .thumb-spinner {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(13,14,18,0.35);
+  }
+  .thumb.processing-analysis .thumb-spinner { display: flex; }
+  .thumb-spinner .spinner { width: 18px; height: 18px; border-width: 2.5px; }
+  .thumb-status-label {
+    position: absolute; bottom: 6px; left: 6px; font-size: 10px; font-weight: 600;
+    color: var(--text-faint); background: rgba(13,14,18,0.75); padding: 2px 6px; border-radius: 5px;
+    backdrop-filter: blur(4px);
+  }
+  .thumb.error .thumb-status-label { color: var(--err); }
+  .thumb-badge {
+    position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
+    background: rgba(13,14,18,0.75); backdrop-filter: blur(4px);
+    opacity: 0; transform: scale(0.9);
+    transition: opacity 140ms var(--ease-out), transform 140ms var(--ease-out);
+  }
+  .thumb.approved .thumb-badge, .thumb.rejected .thumb-badge { opacity: 1; transform: scale(1); }
+  .thumb.approved .thumb-badge { color: var(--ok); }
+  .thumb.rejected .thumb-badge { color: var(--err); }
+  .thumb-check {
+    position: absolute; top: 6px; left: 6px; width: 20px; height: 20px; border-radius: 6px;
+    border: 1.5px solid rgba(255,255,255,0.4); background: rgba(13,14,18,0.5);
+    display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: transparent;
+    transition: transform 120ms var(--ease-out), background-color 120ms var(--ease-out), border-color 120ms var(--ease-out), color 120ms var(--ease-out);
+  }
+  .thumb.selected .thumb-check { background: var(--accent); border-color: var(--accent); color: #0d0e12; }
+  .thumb-actions {
+    position: absolute; inset: auto 0 0 0; display: flex; gap: 4px; padding: 5px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.65));
+    opacity: 0; transition: opacity 140ms var(--ease-out);
+  }
+  .thumb:hover .thumb-actions, .thumb:focus-within .thumb-actions { opacity: 1; }
+  @media (hover: none) { .thumb-actions, .thumb-check { opacity: 1; } }
+  .thumb-action {
+    flex: 1; border: none; border-radius: 6px; padding: 5px 0; font-size: 12px; cursor: pointer;
+    transition: transform 120ms var(--ease-out);
+  }
+  .thumb-action:active { transform: scale(0.92); }
+  .thumb-action.approve { background: var(--ok); color: #0d0e12; }
+  .thumb-action.reject { background: var(--err); color: #0d0e12; }
+  .thumb-action.retry { background: var(--warn); color: #0d0e12; }
+
+  /* ── Barra de acciones en masa (flotante) ── */
+  .bulk-bar {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(0);
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 999px;
+    padding: 8px 10px 8px 18px; box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+    z-index: 40;
+    opacity: 0; visibility: hidden;
+    transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out), visibility 180ms;
+  }
+  .bulk-bar[data-visible="true"] { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(-4px); }
+  .bulk-count { font-size: 12.5px; font-weight: 650; color: var(--text); white-space: nowrap; }
+  .bulk-bar button { padding: 7px 14px; font-size: 12.5px; }
+
+  /* ── Detail modal ── */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+    z-index: 50;
+    opacity: 0; transition: opacity 200ms var(--ease-out);
+  }
+  .modal-backdrop[data-open="true"] { opacity: 1; }
+  .modal {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+    max-width: 720px; width: 100%; max-height: 85vh; overflow-y: auto;
+    transform-origin: center;
+    transform: scale(0.95); opacity: 0;
+    transition: transform 220ms var(--ease-out), opacity 220ms var(--ease-out);
+  }
+  .modal-backdrop[data-open="true"] .modal { transform: scale(1); opacity: 1; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 18px 20px; border-bottom: 1px solid var(--border-soft); position: sticky; top: 0; background: var(--bg-card); }
+  .modal-title { font-size: 14px; font-weight: 650; }
+  .modal-body { padding: 20px; }
+  .modal-img { width: 100%; max-height: 320px; object-fit: contain; border-radius: 10px; margin-bottom: 16px; background: var(--bg-elevated); }
+  pre.json-view {
+    background: var(--bg-elevated); border: 1px solid var(--border-soft); border-radius: var(--radius-sm);
+    padding: 14px; font-size: 11.5px; line-height: 1.6; overflow-x: auto; color: var(--text-dim);
+    max-height: 360px;
+  }
+
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--text-faint); font-size: 13px; }
+
+  .status-line { font-size: 12.5px; margin-top: 10px; }
+  .status-line.ok { color: var(--ok); }
+  .status-line.err { color: var(--err); }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Entrenador Photodump</h1>
+    <div class="sub">Herramienta interna — analiza imágenes reales para extraer conocimiento de dirección reutilizable.</div>
+  </header>
+
+  <!-- Ingesta: siempre visible, para poder sumar tandas nuevas sin salir del banco -->
+  <section class="card card-compact">
+    <div class="dropzone" id="dropzone">
+      <div class="dropzone-title">Arrastrá imágenes acá o hacé clic para elegirlas</div>
+      <div class="dropzone-sub">JPG, PNG o WEBP · podés seleccionar cientos a la vez · se suman al banco existente</div>
+    </div>
+    <input type="file" id="fileInput" accept="image/*" multiple />
+    <div class="skipped-notice" id="skippedNotice" style="display:none"></div>
+    <div class="queue-list" id="queueList"></div>
+    <div class="btn-row" id="ingestActions" style="display:none">
+      <button class="btn-primary" id="startBtn">Analizar esta tanda</button>
+      <button class="btn-ghost" id="clearQueueBtn">Vaciar</button>
+    </div>
+  </section>
+
+  <!-- Progreso de la tanda activa (solo visible mientras corre algo) -->
+  <section class="card" id="progressCard" style="display:none">
+    <div class="progress-header">
+      <div class="progress-count"><span id="progressDone">0</span><small> / <span id="progressTotal">0</span> analizadas en esta tanda</small></div>
+      <button class="btn-secondary" id="pauseResumeBtn">Pausar</button>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-meta">
+      <span>Ritmo: <b id="metaInterval">—</b></span>
+      <span>Errores: <b id="metaErrors">0</b></span>
+      <span>Ajustes por límite de cuota: <b id="metaRateLimits">0</b></span>
+    </div>
+    <div class="current-item" id="currentItem" style="display:none">
+      <div class="spinner"></div>
+      <span id="currentItemName">—</span>
+    </div>
+    <div id="rateLimitBanner"></div>
+  </section>
+
+  <!-- Banco completo (todas las tandas juntas) + Logs -->
+  <section class="card">
+    <div class="tab-bar">
+      <button class="tab-btn" id="tabBankBtn" data-active="true">Banco</button>
+      <button class="tab-btn" id="tabLogsBtn" data-active="false">Logs<span class="tab-badge" id="logErrorBadge" style="display:none">0</span></button>
+    </div>
+
+    <div class="tab-panel" id="tabBankPanel" data-active="true">
+      <div class="gallery-header">
+        <div class="gallery-title">Banco de imágenes</div>
+        <div class="gallery-stats"><span id="curationStats">—</span></div>
+      </div>
+      <div class="filter-bar" style="margin-bottom:14px">
+        <div class="filter-chip" data-filter="review" data-value="all" data-active="true">Todas</div>
+        <div class="filter-chip" data-filter="review" data-value="pending">Sin revisar</div>
+        <div class="filter-chip" data-filter="review" data-value="approved">Aprobadas</div>
+        <div class="filter-chip" data-filter="review" data-value="rejected">Descartadas</div>
+        <div class="filter-chip" data-filter="review" data-value="error">Con error</div>
+        <select class="filter-select" id="categoryFilter">
+          <option value="">Todas las categorías</option>
+        </select>
+        <select class="filter-select" id="companionFilter">
+          <option value="">Con/sin acompañante</option>
+          <option value="true">Con acompañante</option>
+          <option value="false">Sin acompañante</option>
+        </select>
+        <button class="btn-ghost" id="selectAllBtn" style="margin-left:auto">Seleccionar todas (según filtro)</button>
+        <button class="btn-ghost" id="selectNoneBtn" style="display:none">Deseleccionar todas</button>
+      </div>
+      <div class="gallery-grid" id="galleryGrid"></div>
+    </div>
+
+    <div class="tab-panel" id="tabLogsPanel" data-active="false">
+      <div class="log-list" id="logList"></div>
+    </div>
+  </section>
+
+  <div class="btn-row" id="exportRow" style="display:none">
+    <button class="btn-primary" id="exportBtn">Exportar banco aprobado</button>
+  </div>
+  <div class="status-line" id="exportStatus"></div>
+</div>
+
+<!-- Barra flotante de acciones en masa -->
+<div class="bulk-bar" id="bulkBar" data-visible="false">
+  <span class="bulk-count" id="bulkCount">0 seleccionadas</span>
+  <button class="btn-secondary" id="bulkApprove">Aprobar</button>
+  <button class="btn-secondary" id="bulkReject">Descartar</button>
+  <button class="btn-danger-ghost" id="bulkDelete">Eliminar</button>
+  <button class="btn-ghost" id="bulkClear">Cancelar</button>
+</div>
+
+<div class="modal-backdrop" id="modalBackdrop" data-open="false" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modalTitle">—</div>
+      <button class="btn-ghost" id="modalClose">Cerrar ✕</button>
+    </div>
+    <div class="modal-body">
+      <img class="modal-img" id="modalImg" alt="" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7" />
+      <pre class="json-view" id="modalJson"></pre>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/api/photodump-trainer';
+const POLL_MS = 3000;
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const queueList = document.getElementById('queueList');
+const ingestActions = document.getElementById('ingestActions');
+const startBtn = document.getElementById('startBtn');
+const clearQueueBtn = document.getElementById('clearQueueBtn');
+const progressCard = document.getElementById('progressCard');
+const galleryGrid = document.getElementById('galleryGrid');
+const tabBankBtn = document.getElementById('tabBankBtn');
+const tabLogsBtn = document.getElementById('tabLogsBtn');
+const tabBankPanel = document.getElementById('tabBankPanel');
+const tabLogsPanel = document.getElementById('tabLogsPanel');
+
+let queue = []; // { file, name, previewUrl, hash }
+let pollTimer = null;
+let lastBankStatus = null;
+let reviewFilter = 'all';
+let categoryFilter = '';
+let companionFilter = '';
+let selectedIds = new Set();
+let lastBank = { items: [] }; // snapshot del último /status recibido, para recalcular "seleccionar según filtro"
+
+// ── Hash de contenido (para detectar duplicados antes de subir) ──
+
+async function hashFile(file) {
+  const buffer = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ── Ingesta ──
+
+function renderQueue() {
+  queueList.innerHTML = queue.map((q, i) => `
+    <div class="queue-item ${q.isDuplicate ? 'duplicate' : ''}" style="animation-delay:${Math.min(i, 20) * 30}ms">
+      <img src="${q.previewUrl}" />
+      <span class="name">${escapeHtml(q.name)}${q.isDuplicate ? ' — ya está en el banco' : ''}</span>
+    </div>
+  `).join('');
+  ingestActions.style.display = queue.length ? 'flex' : 'none';
+}
+
+async function addFiles(fileList) {
+  const files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+
+  // Chequeo rápido por nombre de archivo PRIMERO (no requiere leer/hashear el binario) —
+  // así al reenviar un lote de 300 imágenes tras un corte, las ya analizadas se descartan
+  // al instante en vez de esperar a que se calcule el hash de cada una.
+  const namesRes = await fetch(`${API}/check-duplicates`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ names: files.map(f => f.name) })
+  });
+  const { duplicateNames } = await namesRes.json();
+  const dupNameSet = new Set(duplicateNames || []);
+
+  const newFiles = files.filter(f => !dupNameSet.has(f.name));
+  const skippedCount = files.length - newFiles.length;
+
+  const withHashes = await Promise.all(newFiles.map(async file => ({
+    file, name: file.name, previewUrl: URL.createObjectURL(file), hash: await hashFile(file), isDuplicate: false
+  })));
+  queue.push(...withHashes);
+  renderQueue();
+  if (skippedCount > 0) showSkippedNotice(skippedCount);
+
+  // Chequeo por hash de contenido sobre lo que queda (mismo archivo con otro nombre), no bloquea, solo avisa.
+  const res = await fetch(`${API}/check-duplicates`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hashes: withHashes.map(q => q.hash) })
+  });
+  const { duplicates } = await res.json();
+  if (duplicates.length) {
+    const dupSet = new Set(duplicates);
+    queue.forEach(q => { if (dupSet.has(q.hash)) q.isDuplicate = true; });
+    renderQueue();
+  }
+}
+
+function showSkippedNotice(count) {
+  const el = document.getElementById('skippedNotice');
+  el.textContent = `${count} imagen${count === 1 ? '' : 'es'} ya estaba${count === 1 ? '' : 'n'} en el banco (mismo nombre de archivo) — se descartó${count === 1 ? '' : 'aron'} automáticamente.`;
+  el.style.display = 'block';
+}
+
+dropzone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => addFiles(e.target.files));
+['dragover', 'dragenter'].forEach(evt => dropzone.addEventListener(evt, e => {
+  e.preventDefault();
+  dropzone.classList.add('dragover');
+}));
+['dragleave', 'drop'].forEach(evt => dropzone.addEventListener(evt, e => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+}));
+dropzone.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+
+clearQueueBtn.addEventListener('click', () => { queue = []; renderQueue(); });
+
+// Toda promesa de preparación tiene un techo de tiempo — sin esto, un solo archivo
+// corrupto o un onload/onerror que nunca dispara (pasa con algunos JPG dañados) cuelga
+// el Promise.all de esa iteración para siempre, y con él TODO el resto del lote detrás.
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label}: timeout (${ms}ms)`)), ms))
+  ]);
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = () => reject(new Error('FileReader falló'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function makeThumbBase64(file, maxSize = 160) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.75).split(',')[1]);
+      URL.revokeObjectURL(img.src);
+    };
+    img.onerror = () => { URL.revokeObjectURL(img.src); reject(new Error('imagen ilegible para el navegador')); };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+// fetch no expone progreso de subida de forma simple — XMLHttpRequest sí, vía upload.onprogress.
+// Con lotes de cientos de MB esto es la diferencia entre "se ve trabado" y "se ve avanzando".
+function uploadWithProgress(url, bodyString, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+      const sentMB = (e.loaded / (1024 * 1024)).toFixed(1);
+      const totalMB = (e.total / (1024 * 1024)).toFixed(1);
+      const pct = Math.round((e.loaded / e.total) * 100);
+      onProgress(sentMB, totalMB, pct);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error('El servidor no pudo iniciar la tanda (status ' + xhr.status + ')'));
+    };
+    xhr.onerror = () => reject(new Error('Falló la conexión con el servidor'));
+    xhr.send(bodyString);
+  });
+}
+
+startBtn.addEventListener('click', async () => {
+  startBtn.disabled = true;
+  const items = [];
+  const failedNames = [];
+  for (let i = 0; i < queue.length; i++) {
+    const q = queue[i];
+    startBtn.textContent = `Preparando... (${i + 1}/${queue.length})`;
+    try {
+      const [dataBase64, thumbBase64] = await Promise.all([
+        withTimeout(fileToBase64(q.file), 20000, q.name),
+        withTimeout(makeThumbBase64(q.file), 20000, q.name)
+      ]);
+      items.push({ name: q.name, mimeType: q.file.type || 'image/jpeg', dataBase64, thumbBase64, contentHash: q.hash });
+    } catch (err) {
+      failedNames.push(q.name); // se salta esta imagen en vez de trabar el resto del lote
+    }
+  }
+
+  if (failedNames.length) {
+    const el = document.getElementById('skippedNotice');
+    el.textContent = `${failedNames.length} imagen(es) no se pudieron preparar y se omitieron: ${failedNames.slice(0, 5).join(', ')}${failedNames.length > 5 ? '...' : ''}`;
+    el.style.display = 'block';
+  }
+
+  if (!items.length) {
+    startBtn.disabled = false;
+    startBtn.textContent = 'Analizar esta tanda';
+    alert('Ninguna imagen se pudo preparar. Revisá el formato de los archivos.');
+    return;
+  }
+
+  try {
+    await uploadWithProgress(`${API}/jobs`, JSON.stringify({ items }), (sentMB, totalMB, pct) => {
+      startBtn.textContent = `Enviando al servidor... ${pct}% (${sentMB}/${totalMB} MB)`;
+    });
+    queue = [];
+    renderQueue();
+    startPolling();
+  } catch (err) {
+    alert('No se pudo conectar con el servidor: ' + err.message);
+  } finally {
+    startBtn.disabled = false;
+    startBtn.textContent = 'Analizar esta tanda';
+  }
+});
+
+// ── Progreso de la tanda activa ──
+
+const pauseResumeBtn = document.getElementById('pauseResumeBtn');
+
+pauseResumeBtn.addEventListener('click', async () => {
+  const action = lastBankStatus === 'paused' || lastBankStatus === 'interrupted' ? 'resume' : 'pause';
+  await fetch(`${API}/jobs/${action}`, { method: 'POST' });
+  fetchStatus();
+});
+
+function formatInterval(ms) {
+  if (!ms) return '—';
+  return Math.round(ms / 1000) + 's entre imágenes';
+}
+
+function renderProgress(bank) {
+  const batch = bank.activeBatch;
+  if (!batch) { progressCard.style.display = 'none'; return; }
+
+  progressCard.style.display = 'block';
+  lastBankStatus = batch.status;
+
+  const batchItems = bank.items.filter(i => i.batchId === batch.id);
+  const doneInBatch = batchItems.filter(i => i.status === 'done' || i.status === 'error').length;
+
+  document.getElementById('progressDone').textContent = doneInBatch;
+  document.getElementById('progressTotal').textContent = batchItems.length;
+  const fraction = batchItems.length ? doneInBatch / batchItems.length : 0;
+  document.getElementById('progressFill').style.transform = `scaleX(${fraction})`;
+  document.getElementById('metaInterval').textContent = formatInterval(batch.currentIntervalMs);
+  document.getElementById('metaErrors').textContent = batchItems.filter(i => i.status === 'error').length;
+  document.getElementById('metaRateLimits').textContent = batch.rateLimitHits || 0;
+
+  const processingItem = batchItems.find(i => i.status === 'processing');
+  const currentItemEl = document.getElementById('currentItem');
+  if (processingItem) {
+    currentItemEl.style.display = 'flex';
+    document.getElementById('currentItemName').textContent = processingItem.name;
+  } else {
+    currentItemEl.style.display = 'none';
+  }
+
+  const banner = document.getElementById('rateLimitBanner');
+  banner.innerHTML = (batch.rateLimitHits > 0 && batch.status === 'running')
+    ? `<div class="rate-limit-banner">⏳ Se ajustó el ritmo por límite de cuota de la API — la tanda sigue corriendo, solo más despacio.</div>`
+    : '';
+
+  pauseResumeBtn.textContent = (batch.status === 'paused' || batch.status === 'interrupted') ? 'Reanudar' : 'Pausar';
+  pauseResumeBtn.style.display = (batch.status === 'completed') ? 'none' : 'inline-block';
+
+  if (batch.status === 'completed' || batch.status === 'error') stopPolling();
+}
+
+function startPolling() {
+  fetchStatus();
+  pollTimer = setInterval(fetchStatus, POLL_MS);
+}
+function stopPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = null;
+}
+
+async function fetchStatus() {
+  const res = await fetch(`${API}/status`);
+  const bank = await res.json();
+  lastBank = bank;
+  renderProgress(bank);
+  renderGallery(bank);
+  populateCategoryFilter(bank);
+  if (bank.activeBatch && ['running', 'queued'].includes(bank.activeBatch.status) && !pollTimer) startPolling();
+  if (bank.errorCount > 0) {
+    const badge = document.getElementById('logErrorBadge');
+    badge.textContent = bank.errorCount;
+    badge.style.display = 'inline-flex';
+  }
+  if (tabLogsPanel.dataset.active === 'true') fetchLogs();
+}
+
+// ── Filtros ──
+
+document.querySelectorAll('.filter-chip[data-filter="review"]').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.filter-chip[data-filter="review"]').forEach(c => c.setAttribute('data-active', 'false'));
+    chip.setAttribute('data-active', 'true');
+    reviewFilter = chip.dataset.value;
+    fetchStatus();
+  });
+});
+document.getElementById('categoryFilter').addEventListener('change', e => { categoryFilter = e.target.value; fetchStatus(); });
+document.getElementById('companionFilter').addEventListener('change', e => { companionFilter = e.target.value; fetchStatus(); });
+
+// Selecciona/deselecciona todo lo que actualmente pasa el filtro activo (no solo lo cargado en pantalla) —
+// evita tener que tildar una por una en bancos de cientos de imágenes.
+document.getElementById('selectAllBtn').addEventListener('click', () => {
+  const selectable = lastBank.items.filter(i => itemMatchesFilters(i) && (i.status === 'done' || i.status === 'error'));
+  selectable.forEach(i => selectedIds.add(i.id));
+  updateBulkBar();
+  renderGallery(lastBank);
+});
+document.getElementById('selectNoneBtn').addEventListener('click', () => {
+  selectedIds.clear();
+  updateBulkBar();
+  renderGallery(lastBank);
+});
+
+function populateCategoryFilter(bank) {
+  const select = document.getElementById('categoryFilter');
+  const current = select.value;
+  const categories = new Set();
+  bank.items.forEach(i => (i.searchTags?.product_categories_present || []).forEach(c => categories.add(c)));
+  const options = ['<option value="">Todas las categorías</option>']
+    .concat([...categories].sort().map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`));
+  const html = options.join('');
+  if (select.innerHTML !== html) {
+    select.innerHTML = html;
+    select.value = current;
+  }
+}
+
+function itemMatchesFilters(item) {
+  if (reviewFilter === 'approved' && item.review !== 'approved') return false;
+  if (reviewFilter === 'rejected' && item.review !== 'rejected') return false;
+  if (reviewFilter === 'pending' && !(item.status === 'done' && item.review === 'pending')) return false;
+  if (reviewFilter === 'error' && item.status !== 'error') return false;
+  if (categoryFilter && !(item.searchTags?.product_categories_present || []).includes(categoryFilter)) return false;
+  if (companionFilter && String(!!item.searchTags?.has_companion) !== companionFilter) return false;
+  return true;
+}
+
+// ── Galería (banco completo) ──
+
+function thumbClassFor(item) {
+  const classes = [];
+  if (item.status === 'done') {
+    if (item.review === 'approved') classes.push('approved');
+    else if (item.review === 'rejected') classes.push('rejected');
+  } else if (item.status === 'processing') classes.push('processing-analysis');
+  else if (item.status === 'error') classes.push('error');
+  else classes.push('pending-analysis');
+  if (selectedIds.has(item.id)) classes.push('selected');
+  return classes.join(' ');
+}
+
+function thumbStatusLabel(item) {
+  if (item.status === 'processing') return 'Analizando...';
+  if (item.status === 'error') return 'Error';
+  if (item.status === 'pending') return 'En cola';
+  return '';
+}
+
+function thumbHtml(item) {
+  const done = item.status === 'done';
+  const isError = item.status === 'error';
+  return `
+    <div class="thumb ${thumbClassFor(item)}" data-id="${item.id}" data-status="${item.status}" data-review="${item.review || 'pending'}">
+      <img src="${API}/items/${item.id}/thumb" loading="lazy" />
+      <div class="thumb-spinner"><div class="spinner"></div></div>
+      <div class="thumb-status-label">${thumbStatusLabel(item)}</div>
+      ${(done || isError) ? `<div class="thumb-check" data-role="select">✓</div>` : ''}
+      ${done ? `<div class="thumb-badge">${item.review === 'approved' ? '✓' : item.review === 'rejected' ? '✕' : ''}</div>
+      <div class="thumb-actions">
+        <button class="thumb-action approve" data-action="approved" title="Aprobar">✓</button>
+        <button class="thumb-action reject" data-action="rejected" title="Descartar">✕</button>
+      </div>` : ''}
+      ${isError ? `<div class="thumb-actions"><button class="thumb-action retry" data-action="retry" title="Reintentar">↻ Reintentar</button></div>` : ''}
+    </div>
+  `;
+}
+
+function renderGallery(bank) {
+  const filtered = bank.items.filter(itemMatchesFilters);
+  document.getElementById('curationStats').textContent =
+    `${bank.total} en el banco · ${bank.approvedCount} aprobadas · ${bank.rejectedCount} descartadas · ${bank.errorCount} con error · mostrando ${filtered.length}`;
+
+  if (!filtered.length) {
+    galleryGrid.innerHTML = '<div class="empty-state">Ninguna imagen coincide con estos filtros.</div>';
+    return;
+  }
+
+  const existingIds = new Set([...galleryGrid.querySelectorAll('[data-id]')].map(el => el.dataset.id));
+  const filteredIds = new Set(filtered.map(i => i.id));
+  const needsFullRepaint = existingIds.size !== filteredIds.size || [...filteredIds].some(id => !existingIds.has(id));
+
+  if (needsFullRepaint) {
+    galleryGrid.innerHTML = filtered.map(thumbHtml).join('');
+    return;
+  }
+
+  filtered.forEach(item => {
+    const el = galleryGrid.querySelector(`[data-id="${item.id}"]`);
+    if (!el) return;
+    if (el.dataset.status === item.status && el.dataset.review === (item.review || 'pending') && (selectedIds.has(item.id) === el.classList.contains('selected'))) return;
+    const temp = document.createElement('div');
+    temp.innerHTML = thumbHtml(item);
+    el.replaceWith(temp.firstElementChild);
+  });
+
+  document.getElementById('exportRow').style.display = bank.approvedCount > 0 ? 'flex' : 'none';
+}
+
+galleryGrid.addEventListener('click', async (e) => {
+  const thumb = e.target.closest('.thumb');
+  if (!thumb) return;
+  const id = thumb.dataset.id;
+  const status = thumb.dataset.status;
+
+  if (e.target.closest('[data-role="select"]')) {
+    if (selectedIds.has(id)) selectedIds.delete(id); else selectedIds.add(id);
+    updateBulkBar();
+    fetchStatus();
+    return;
+  }
+
+  if (e.target.classList.contains('thumb-action')) {
+    const action = e.target.dataset.action;
+    if (action === 'retry') {
+      thumb.querySelector('.thumb-status-label').textContent = 'Reintentando...';
+      await fetch(`${API}/items/${id}/retry`, { method: 'POST' });
+      fetchStatus();
+      return;
+    }
+    await fetch(`${API}/items/${id}/review`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ decision: action })
+    });
+    fetchStatus();
+    return;
+  }
+
+  if (status === 'done') openModal(id);
+});
+
+// ── Barra de acciones en masa ──
+
+const bulkBar = document.getElementById('bulkBar');
+function updateBulkBar() {
+  bulkBar.setAttribute('data-visible', selectedIds.size > 0 ? 'true' : 'false');
+  document.getElementById('bulkCount').textContent = `${selectedIds.size} seleccionada${selectedIds.size === 1 ? '' : 's'}`;
+  document.getElementById('selectNoneBtn').style.display = selectedIds.size > 0 ? 'inline-block' : 'none';
+}
+
+document.getElementById('bulkClear').addEventListener('click', () => { selectedIds.clear(); updateBulkBar(); fetchStatus(); });
+
+document.getElementById('bulkApprove').addEventListener('click', async () => {
+  await fetch(`${API}/items/review-bulk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itemIds: [...selectedIds], decision: 'approved' }) });
+  selectedIds.clear(); updateBulkBar(); fetchStatus();
+});
+document.getElementById('bulkReject').addEventListener('click', async () => {
+  await fetch(`${API}/items/review-bulk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itemIds: [...selectedIds], decision: 'rejected' }) });
+  selectedIds.clear(); updateBulkBar(); fetchStatus();
+});
+document.getElementById('bulkDelete').addEventListener('click', async () => {
+  if (!confirm(`¿Eliminar definitivamente ${selectedIds.size} imagen(es) y su análisis? No se puede deshacer.`)) return;
+  await fetch(`${API}/items/delete-bulk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itemIds: [...selectedIds] }) });
+  selectedIds.clear(); updateBulkBar(); fetchStatus();
+});
+
+// ── Modal de detalle ──
+
+const modalBackdrop = document.getElementById('modalBackdrop');
+async function openModal(id) {
+  const res = await fetch(`${API}/items/${id}/analysis`);
+  if (!res.ok) return;
+  const { entry } = await res.json();
+  document.getElementById('modalTitle').textContent = entry.sourceName || id;
+  document.getElementById('modalImg').src = `${API}/items/${id}/thumb`;
+  document.getElementById('modalJson').textContent = JSON.stringify(entry.analysis, null, 2);
+  modalBackdrop.style.display = 'flex';
+  requestAnimationFrame(() => modalBackdrop.setAttribute('data-open', 'true'));
+}
+function closeModal() {
+  modalBackdrop.setAttribute('data-open', 'false');
+  setTimeout(() => { modalBackdrop.style.display = 'none'; }, 200);
+}
+document.getElementById('modalClose').addEventListener('click', closeModal);
+modalBackdrop.addEventListener('click', e => { if (e.target === modalBackdrop) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// ── Tabs (Banco / Logs) ──
+
+function activateTab(name) {
+  const isBank = name === 'bank';
+  tabBankBtn.setAttribute('data-active', String(isBank));
+  tabLogsBtn.setAttribute('data-active', String(!isBank));
+  tabBankPanel.setAttribute('data-active', String(isBank));
+  tabLogsPanel.setAttribute('data-active', String(!isBank));
+  if (!isBank) fetchLogs();
+}
+tabBankBtn.addEventListener('click', () => activateTab('bank'));
+tabLogsBtn.addEventListener('click', () => activateTab('logs'));
+
+const LOG_ICONS = { error: '✕', warn: '⏳', info: 'ℹ' };
+
+function logRowHtml(entry) {
+  const time = new Date(entry.at).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return `
+    <div class="log-row level-${entry.level}">
+      <div class="log-icon">${LOG_ICONS[entry.level] || 'ℹ'}</div>
+      <div class="log-body">
+        <div class="log-message">${escapeHtml(entry.message)}</div>
+        <div class="log-meta">
+          <span>${time}</span>
+          ${entry.itemName ? `<span class="log-item-name">${escapeHtml(entry.itemName)}</span>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function fetchLogs() {
+  const res = await fetch(`${API}/logs`);
+  const { log } = await res.json();
+  const logList = document.getElementById('logList');
+  logList.innerHTML = log.length
+    ? log.map(logRowHtml).join('')
+    : '<div class="empty-state">Sin eventos registrados todavía.</div>';
+
+  const errorCount = log.filter(e => e.level === 'error').length;
+  const badge = document.getElementById('logErrorBadge');
+  if (errorCount > 0) { badge.textContent = errorCount; badge.style.display = 'inline-flex'; }
+  else badge.style.display = 'none';
+}
+
+// ── Export ──
+
+document.getElementById('exportBtn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('exportStatus');
+  statusEl.textContent = 'Exportando...';
+  statusEl.className = 'status-line';
+  try {
+    const res = await fetch(`${API}/export`);
+    const data = await res.json();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `photodump_visual_intelligence_${Date.now()}.json`;
+    a.click();
+    statusEl.textContent = `Exportadas ${data.total} entradas aprobadas.`;
+    statusEl.className = 'status-line ok';
+  } catch (err) {
+    statusEl.textContent = 'Error al exportar: ' + err.message;
+    statusEl.className = 'status-line err';
+  }
+});
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// ── Al cargar: pinta el banco completo y retoma la tanda activa si hay una ──
+fetchStatus();
+</script>
+</body>
+</html>
