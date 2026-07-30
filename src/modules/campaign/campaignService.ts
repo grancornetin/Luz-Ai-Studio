@@ -5,7 +5,7 @@ import { ugcApiService } from '../../services/ugcApiService';
 import {
   CampaignChannel, CampaignImageSlot, CampaignPiece, CampaignPlan,
   CampaignVisualSpine, CampaignStylingLock, CampaignAnchorAnalysis,
-  ModoVisual, TextoEnImagenes, CAMPAIGN_CHANNEL_META, ANCHOR_IMAGE_COUNT,
+  ModoVisual, TextoEnImagenes, ImageSlotRole, CAMPAIGN_CHANNEL_META, ANCHOR_IMAGE_COUNT,
 } from './types';
 import {
   initCampaignIntelligence,
@@ -117,35 +117,98 @@ function getNegative(modo: ModoVisual): string {
   return modo === 'ugc' ? NEGATIVE_UGC : NEGATIVE_EDITORIAL;
 }
 
+// ─── Clasificación de fotos del moodboard libre ───────────────
+// El Paso 1 ya no reparte fotos en categorías fijas — todo llega con
+// role: 'product'. Para saber qué es cada foto usamos shotDescription
+// (frase corta asignada por Gemini en describeCampaignShots). Si una
+// foto no tiene shotDescription (falló el análisis, o es una campaña
+// guardada con el formato viejo de 4 categorías) usamos su `role` tal
+// cual, que es la única señal que existía antes de este rediseño.
+const MODEL_HINTS       = ['person', 'model', 'face', 'wearing', 'smiling', 'portrait'];
+const BRAND_HINTS       = ['logo', 'packaging', 'brand', 'label'];
+const INSPIRATION_HINTS = ['inspiration', 'lifestyle', 'mood', 'aesthetic reference'];
+
+// Etiqueta cada foto del moodboard con una descripción corta (shotDescription)
+// en una sola llamada a Gemini, mutando los slots in-place. Se llama una vez
+// por campaña, antes de armar el plan — si ya tienen shotDescription (retry,
+// o campaña restaurada) o si el análisis falla, no hace nada y el sistema
+// sigue funcionando con la clasificación por `role` de siempre.
+async function ensureShotDescriptions(slots: CampaignImageSlot[]): Promise<void> {
+  const pending = slots.filter(s => !s.shotDescription);
+  if (pending.length === 0) return;
+  try {
+    const descriptions = await geminiService.describeCampaignShots(pending.map(s => s.base64));
+    pending.forEach((slot, i) => {
+      if (descriptions[i]) slot.shotDescription = descriptions[i];
+    });
+  } catch (err) {
+    console.warn('[CampaignDirector] ensureShotDescriptions failed, using role fallback:', err);
+  }
+}
+
+function classifySlot(slot: CampaignImageSlot): ImageSlotRole {
+  const desc = slot.shotDescription?.toLowerCase() ?? '';
+  if (!desc) return slot.role;
+  if (MODEL_HINTS.some(h => desc.includes(h)))       return 'model';
+  if (BRAND_HINTS.some(h => desc.includes(h)))       return 'brand';
+  if (INSPIRATION_HINTS.some(h => desc.includes(h))) return 'inspiration';
+  return 'product';
+}
+
 // ─── Selección inteligente de referencias ────────────────────
 // Cuando Sofi sube muchas fotos del mismo producto, elegimos las más
 // informativas para no desperdiciar el límite de 10 referencias de Gemini.
 // Estrategia: máx 2 fotos de producto, 1 de modelo, 1 inspiración, 1 marca.
+//
+// Si se pasa `pieza`, la selección de producto se afina más: en vez de
+// tomar siempre primera/medio/última, buscamos las fotos cuya shotDescription
+// mejor matchea lo que esa pieza necesita (ej. una pieza de "detalle"
+// prioriza fotos con "close-up" o "texture"). Sin shotDescription disponible,
+// el comportamiento es idéntico al de antes (mismo combo para toda la campaña).
 
-function selectBestRefs(slots: CampaignImageSlot[]): {
+function selectBestRefs(
+  slots: CampaignImageSlot[],
+  pieza?: CampaignPiece,
+): {
   productRefs:     CampaignImageSlot[];
   modelRef:        CampaignImageSlot | null;
   inspirationRef:  CampaignImageSlot | null;
   brandRef:        CampaignImageSlot | null;
 } {
-  const products     = slots.filter(s => s.role === 'product');
-  const models       = slots.filter(s => s.role === 'model');
-  const inspirations = slots.filter(s => s.role === 'inspiration');
-  const brands       = slots.filter(s => s.role === 'brand');
+  const classified   = slots.map(s => ({ slot: s, kind: classifySlot(s) }));
+  const products     = classified.filter(c => c.kind === 'product').map(c => c.slot);
+  const models       = classified.filter(c => c.kind === 'model').map(c => c.slot);
+  const inspirations = classified.filter(c => c.kind === 'inspiration').map(c => c.slot);
+  const brands       = classified.filter(c => c.kind === 'brand').map(c => c.slot);
 
-  // Para productos: máximo 3 fotos para no saturar el payload
-  // Si hay más de 3, tomamos primera + medio + última (máxima variedad de ángulos)
+  // Para productos: máximo 3 fotos para no saturar el payload.
   let productRefs = products;
   if (products.length > 3) {
-    const mid = Math.floor(products.length / 2);
-    productRefs = [products[0], products[mid], products[products.length - 1]];
+    if (pieza) {
+      // Con info de la pieza: priorizar fotos cuya descripción matchea
+      // las palabras clave del rol/prompt de esta toma específica.
+      const needle = `${pieza.rol} ${pieza.imagePrompt}`.toLowerCase();
+      const scored = products
+        .map(p => {
+          const desc = p.shotDescription?.toLowerCase() ?? '';
+          const score = desc ? desc.split(/\s+/).filter(w => w.length > 3 && needle.includes(w)).length : 0;
+          return { p, score };
+        })
+        .sort((a, b) => b.score - a.score);
+      const best = scored.filter(s => s.score > 0).slice(0, 3).map(s => s.p);
+      productRefs = best.length > 0 ? best : products.slice(0, 3);
+    } else {
+      // Sin pieza (anclas, plan): primera + medio + última — máxima variedad.
+      const mid = Math.floor(products.length / 2);
+      productRefs = [products[0], products[mid], products[products.length - 1]];
+    }
   }
 
   return {
     productRefs,
-    modelRef:       models[0]                     ?? null,
-    inspirationRef: slots.filter(s => s.role === 'inspiration')[0] ?? null,
-    brandRef:       slots.filter(s => s.role === 'brand')[0]       ?? null,
+    modelRef:       models[0]       ?? null,
+    inspirationRef: inspirations[0] ?? null,
+    brandRef:       brands[0]       ?? null,
   };
 }
 
@@ -772,6 +835,10 @@ export async function buildCampaignPlan(
   imageCount: number,
   slots:      CampaignImageSlot[],
 ): Promise<CampaignPlan> {
+  // Describir cada foto del moodboard (una sola llamada) antes de armar el plan,
+  // para que la selección de referencias por pieza tenga con qué trabajar.
+  await ensureShotDescriptions(slots);
+
   const canalesLabel = canales.map(c => CAMPAIGN_CHANNEL_META[c].label).join(', ');
   const selected     = selectBestRefs(slots);
 
@@ -1135,10 +1202,12 @@ export async function generateCampaignImages(
   anchorAnalysis?: CampaignAnchorAnalysis,
   hpiConfig?:     HpiConfig,
 ): Promise<string[]> {
-  const selected  = selectBestRefs(slots);
-  const refs      = await buildStratifiedRefsCompressed(selected, anchorImage);
   const hasAnchor = !!anchorImage;
   const total     = plan.piezas.length;
+  // Referencias "por defecto" — se usan solo para el log inicial. La selección
+  // real ocurre por pieza dentro de generateOne, porque cada toma necesita un
+  // combo distinto de referencias (no siempre las mismas 4-6 para las 8 piezas).
+  const defaultSelected = selectBestRefs(slots);
 
   const getAspectRatio = (canal: CampaignChannel): '3:4' | '9:16' | '1:1' => {
     if (canal === 'instagram_stories' || canal === 'tiktok') return '9:16';
@@ -1148,11 +1217,11 @@ export async function generateCampaignImages(
 
   console.log('[CampaignDirector] generateCampaignImages', {
     total,
-    refs: refs.length,
+    totalSlots: slots.length,
     hasAnchor,
     hasAnchorAnalysis: !!anchorAnalysis,
-    hasModel:   !!selected.modelRef,
-    hasProduct: selected.productRefs.length > 0,
+    hasModel:   !!defaultSelected.modelRef,
+    hasProduct: defaultSelected.productRefs.length > 0,
   });
 
   const CONCURRENCY = 2;
@@ -1169,6 +1238,11 @@ export async function generateCampaignImages(
   };
 
   const generateOne = async (pieza: CampaignPiece, index: number): Promise<string> => {
+    // Selección de referencias específica de esta pieza — no repite siempre
+    // el mismo combo. Con shotDescription disponible, elige las fotos más
+    // relevantes para este rol/prompt puntual (ej. "detalle" prioriza close-ups).
+    const selected = selectBestRefs(slots, pieza);
+    const refs     = await buildStratifiedRefsCompressed(selected, anchorImage);
     const url = await imageApiService.generateImage({
       prompt:          buildDerivedImagePrompt(pieza, plan, selected, hasAnchor, anchorAnalysis, hpiConfig),
       negative:        buildNegative(modo),
@@ -1391,6 +1465,10 @@ export async function buildCampaignPlanFromAnchor(
   anchorAnalysis: CampaignAnchorAnalysis | null,
   modoVisual:     ModoVisual,
 ): Promise<CampaignPlan> {
+  // Describir cada foto del moodboard (una sola llamada) antes de armar el plan,
+  // para que la selección de referencias por pieza tenga con qué trabajar.
+  await ensureShotDescriptions(slots);
+
   const canalesLabel = canales.map(c => CAMPAIGN_CHANNEL_META[c].label).join(', ');
   const selected     = selectBestRefs(slots);
 

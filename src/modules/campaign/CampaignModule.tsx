@@ -22,7 +22,7 @@ import { campaignStorage } from './campaignStorage';
 import {
   CampaignSet, CampaignChannel, CampaignImageSlot, ImageSlotRole,
   CampaignAnchorAnalysis,
-  CAMPAIGN_CHANNEL_META, IMAGE_SLOT_META, ANCHOR_IMAGE_COUNT, CREDITS_PER_IMAGE,
+  CAMPAIGN_CHANNEL_META, ANCHOR_IMAGE_COUNT, CREDITS_PER_IMAGE,
 } from './types';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
@@ -57,8 +57,7 @@ const CAMPAIGN_PROGRESS_STEPS: ProgressStep[] = [
 ];
 
 const SLOT_ROLES: ImageSlotRole[] = ['product', 'inspiration', 'brand', 'model'];
-const MAX_PER_SLOT   = 4;
-const MAX_TOTAL_SLOTS = 12;
+const MAX_TOTAL_SLOTS = 20;
 
 // ─── UpgradeWall ──────────────────────────────────────────────
 const UpgradeWall: React.FC<{ proCredits: number }> = ({ proCredits }) => {
@@ -95,22 +94,20 @@ const UpgradeWall: React.FC<{ proCredits: number }> = ({ proCredits }) => {
   );
 };
 
-// ─── ImageUploadSlot ──────────────────────────────────────────
-const ImageUploadSlot: React.FC<{
-  role:      ImageSlotRole;
-  images:    string[];
-  onChange:  (images: string[]) => void;
-  totalUsed: number;
-}> = ({ role, images, onChange, totalUsed }) => {
+// ─── MoodboardUploader ────────────────────────────────────────
+// Reemplaza los 4 slots fijos (Producto/Inspiración/Marca/Modelo) por un
+// tablero de referencias libre: la usuaria sube lo que tenga, sin repartir
+// en categorías. Luz identifica qué es cada foto más adelante (Gemini,
+// en campaignService), no acá — esta pantalla solo junta el material.
+const MoodboardUploader: React.FC<{
+  images:   string[];
+  onChange: (images: string[]) => void;
+}> = ({ images, onChange }) => {
   const inputRef = useRef<HTMLInputElement>(null);
-  const meta     = IMAGE_SLOT_META[role];
-  const canAddMore = images.length < MAX_PER_SLOT && totalUsed < MAX_TOTAL_SLOTS;
+  const canAddMore = images.length < MAX_TOTAL_SLOTS;
 
   const handleFiles = async (files: FileList) => {
-    // Cuántos más acepta este slot y el total global
-    const canAddToSlot  = MAX_PER_SLOT   - images.length;
-    const canAddGlobal  = MAX_TOTAL_SLOTS - totalUsed;
-    const canAdd        = Math.min(canAddToSlot, canAddGlobal);
+    const canAdd = MAX_TOTAL_SLOTS - images.length;
     if (canAdd <= 0) return;
 
     const validFiles = Array.from(files)
@@ -119,47 +116,38 @@ const ImageUploadSlot: React.FC<{
 
     if (validFiles.length === 0) return;
 
-    // Procesar todos en paralelo y hacer un solo onChange
     const compressed = await Promise.all(validFiles.map(f => readAndCompressFile(f)));
     onChange([...images, ...compressed]);
   };
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.12em] flex items-center gap-1.5">
-          <span>{meta.icon}</span> {meta.label}
-        </div>
-        {images.length > 0 && (
-          <span className="text-[9px] font-bold text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded-full">{images.length}</span>
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-3 md:grid-cols-4 gap-2.5">
+        {images.map((src, idx) => (
+          <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden group">
+            <img src={src} alt="" className="w-full h-full object-cover" />
+            <button type="button" onClick={() => onChange(images.filter((_, i) => i !== idx))}
+              className="absolute top-1.5 right-1.5 w-6 h-6 bg-black/70 hover:bg-black/90 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
+              <X size={10} strokeWidth={3} />
+            </button>
+          </div>
+        ))}
+        {canAddMore && (
+          <button type="button" onClick={() => inputRef.current?.click()}
+            onDrop={e => { e.preventDefault(); if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); }}
+            onDragOver={e => e.preventDefault()}
+            className={`aspect-square rounded-2xl border-2 border-dashed transition-all group flex flex-col items-center justify-center gap-1 ${
+              images.length === 0 ? 'border-slate-200 hover:border-brand-400 bg-slate-50 hover:bg-brand-50' : 'border-slate-200 hover:border-brand-300 bg-white hover:bg-brand-50'
+            }`}>
+            <Plus className="w-5 h-5 text-slate-300 group-hover:text-brand-400 transition-colors" />
+            {images.length === 0 && (
+              <span className="text-[9px] font-semibold text-slate-400 group-hover:text-brand-500 text-center leading-tight px-2">
+                Sumar fotos
+              </span>
+            )}
+          </button>
         )}
       </div>
-      {images.length > 0 && (
-        <div className="grid grid-cols-2 gap-1.5">
-          {images.map((src, idx) => (
-            <div key={idx} className="relative aspect-square rounded-xl overflow-hidden group">
-              <img src={src} alt="" className="w-full h-full object-cover" />
-              <button type="button" onClick={() => onChange(images.filter((_, i) => i !== idx))}
-                className="absolute top-1 right-1 w-5 h-5 bg-black/70 hover:bg-black/90 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
-                <X size={8} strokeWidth={3} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      {canAddMore && (
-        <button type="button" onClick={() => inputRef.current?.click()}
-          onDrop={e => { e.preventDefault(); if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); }}
-          onDragOver={e => e.preventDefault()}
-          className={`rounded-2xl border-2 border-dashed transition-all group flex flex-col items-center justify-center gap-1.5 py-3 ${
-            images.length === 0 ? 'border-slate-200 hover:border-brand-400 bg-slate-50 hover:bg-brand-50' : 'border-slate-200 hover:border-brand-300 bg-white hover:bg-brand-50'
-          }`}>
-          <Plus className="w-4 h-4 text-slate-300 group-hover:text-brand-400 transition-colors" />
-          <span className="text-[9px] font-semibold text-slate-400 group-hover:text-brand-500 text-center leading-tight px-2">
-            {images.length === 0 ? meta.description : `Agregar más (máx ${MAX_PER_SLOT})`}
-          </span>
-        </button>
-      )}
       <input ref={inputRef} type="file" accept="image/*" multiple className="hidden"
         onChange={e => { if (e.target.files?.length) handleFiles(e.target.files); e.target.value = ''; }} />
     </div>
@@ -174,9 +162,9 @@ const CampaignModule: React.FC = () => {
   const [idea,       setIdea]       = useState('');
   const [canales,    setCanales]    = useState<CampaignChannel[]>(['instagram_feed']);
   const [imageCount, setImageCount] = useState(4);
-  const [slots,      setSlots]      = useState<Record<ImageSlotRole, string[]>>({
-    product: [], inspiration: [], brand: [], model: [],
-  });
+  // Moodboard libre — fotos sueltas sin categoría fija (Paso 1 rediseñado).
+  // Luz identifica qué es cada foto más adelante, en campaignService.
+  const [moodboard,  setMoodboard]  = useState<string[]>([]);
 
   // HPI — Human Performance Intelligence
   // Activa una capa de dirección creativa humana: expresión, pose, gesto, cámara.
@@ -251,7 +239,7 @@ const CampaignModule: React.FC = () => {
 
   const saveSession = (overrides?: Partial<{
     step: WizardStep; idea: string; canales: CampaignChannel[]; imageCount: number;
-    slots: Record<ImageSlotRole, string[]>; campaignPlan: any;
+    moodboard: string[]; campaignPlan: any;
     anchorOptions: string[]; selectedAnchor: string;
   }>) => {
     const data = {
@@ -259,7 +247,7 @@ const CampaignModule: React.FC = () => {
       idea:          overrides?.idea          ?? idea,
       canales:       overrides?.canales       ?? canales,
       imageCount:    overrides?.imageCount    ?? imageCount,
-      slots:         overrides?.slots         ?? slots,
+      moodboard:     overrides?.moodboard     ?? moodboard,
       campaignPlan:  overrides?.campaignPlan  ?? campaignPlan,
       anchorOptions: overrides?.anchorOptions ?? anchorOptions,
       selectedAnchor:overrides?.selectedAnchor ?? selectedAnchor,
@@ -293,7 +281,14 @@ const CampaignModule: React.FC = () => {
     setIdea(data.idea ?? '');
     setCanales(data.canales ?? ['instagram_feed']);
     setImageCount(data.imageCount ?? 4);
-    setSlots(data.slots ?? { product: [], inspiration: [], brand: [], model: [] });
+    // Compatibilidad con sesiones viejas guardadas antes del moodboard libre
+    // (data.slots era { product: [], inspiration: [], brand: [], model: [] })
+    const restoredMoodboard: string[] = Array.isArray(data.moodboard)
+      ? data.moodboard
+      : data.slots && typeof data.slots === 'object'
+        ? SLOT_ROLES.flatMap(r => data.slots[r] ?? [])
+        : [];
+    setMoodboard(restoredMoodboard);
     setCampaignPlan(data.campaignPlan ?? null);
     setAnchorOptions(data.anchorOptions ?? []);
     setSelectedAnchor(data.selectedAnchor ?? '');
@@ -337,8 +332,11 @@ const CampaignModule: React.FC = () => {
   // Alias para compatibilidad con referencias existentes en el JSX
   const insufficient = insufficientForAnchor;
 
-  const activeSlots: CampaignImageSlot[] = SLOT_ROLES.flatMap(r => slots[r].map(base64 => ({ role: r, base64 })));
-  const totalSlotsUsed = SLOT_ROLES.reduce((sum, r) => sum + slots[r].length, 0);
+  // Todas las fotos entran con role 'product' por defecto — es solo el bucket
+  // amplio que usa buildLockSystem; la identificación real (vista frontal,
+  // close-up, la persona, etc.) la hace Gemini vía shotDescription más adelante.
+  const activeSlots: CampaignImageSlot[] = moodboard.map(base64 => ({ role: 'product' as ImageSlotRole, base64 }));
+  const totalSlotsUsed = moodboard.length;
 
   // ── Validaciones ──────────────────────────────────────────
   const canStep1 = idea.trim().length >= 10;
@@ -366,7 +364,7 @@ const CampaignModule: React.FC = () => {
   const resetCreator = () => {
     resetCreatorAndClear();
     setStep(1); setIdea(''); setCanales(['instagram_feed']); setImageCount(4);
-    setSlots({ product: [], inspiration: [], brand: [], model: [] });
+    setMoodboard([]);
     setAnchorOptions([]); setSelectedAnchor(''); setAnchorAnalysis(null); setCampaignPlan(null);
     setCurrentSet(null); setError(null); setProgress(null);
     setProgressStepIndex(0); setIsGenerating(false); setPartialImages([]);
@@ -438,12 +436,13 @@ const CampaignModule: React.FC = () => {
     try {
       setProgressStepIndex(1);
 
-      // Inferir género desde el slot de modelo (si hay imagen subida la IA lo interpreta,
-      // si no hay imagen usamos 'female' como default — banco más completo y variado)
-      const hasModelSlot = activeSlots.some(s => s.role === 'model');
+      // Inferir género: con el moodboard libre ya no sabemos de antemano si hay
+      // una foto de persona (eso lo identifica Gemini recién al construir el plan),
+      // así que usamos 'neutral' apenas se subió algo y 'female' solo sin fotos.
+      const hasUploadedPhotos = activeSlots.length > 0;
       const hpiConfig: HpiConfig = {
         enabled:            hpiEnabled,
-        gender:             hasModelSlot ? 'neutral' : 'female',
+        gender:             hasUploadedPhotos ? 'neutral' : 'female',
         modoVisual:         'ugc', // se sobreescribirá por variante dentro del servicio
         includeGesture:     Math.random() > 0.5,
         includePerformance: Math.random() > 0.5,
@@ -590,10 +589,10 @@ const CampaignModule: React.FC = () => {
       let images: string[];
 
       // Config HPI para las imágenes de campaña (mantiene lo que eligió el usuario)
-      const hasModelSlotCampaign = activeSlots.some(s => s.role === 'model');
+      const hasUploadedPhotosCampaign = activeSlots.length > 0;
       const campaignHpiConfig: HpiConfig = {
         enabled:            hpiEnabled,
-        gender:             hasModelSlotCampaign ? 'neutral' : 'female',
+        gender:             hasUploadedPhotosCampaign ? 'neutral' : 'female',
         modoVisual:         modoVisual,
         includeGesture:     Math.random() > 0.5,
         includePerformance: Math.random() > 0.5,
@@ -847,23 +846,22 @@ const CampaignModule: React.FC = () => {
                       <div>
                         <div className="flex items-center justify-between mb-3">
                           <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em]">
-                            ¿Tienes imágenes para usar?{' '}
+                            Sumá tus fotos{' '}
                             <span className="text-slate-400 font-medium normal-case tracking-normal">(opcional pero recomendado)</span>
                           </label>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${totalSlotsUsed >= MAX_TOTAL_SLOTS ? 'bg-slate-100 text-slate-500' : totalSlotsUsed > 0 ? 'bg-brand-50 text-brand-600' : 'bg-slate-50 text-slate-400'}`}>
-                            {totalSlotsUsed}/{MAX_TOTAL_SLOTS} subidas
+                            {totalSlotsUsed}/{MAX_TOTAL_SLOTS}
                           </span>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                          {SLOT_ROLES.map(role => (
-                            <ImageUploadSlot key={role} role={role} images={slots[role]}
-                              onChange={imgs => setSlots(prev => ({ ...prev, [role]: imgs }))}
-                              totalUsed={totalSlotsUsed} />
-                          ))}
-                        </div>
+                        <MoodboardUploader images={moodboard} onChange={setMoodboard} />
                         <p className="text-[11px] text-slate-400 mt-2 leading-[1.5]">
-                          Puedes subir hasta {MAX_PER_SLOT} imágenes por categoría ({MAX_TOTAL_SLOTS} en total). Selecciona varias a la vez desde tu galería. Luz elegirá las referencias más útiles.
+                          Fotos de tu producto desde distintos ángulos, de quién protagoniza la campaña, de tu marca o de estilos que te gustaron — subí lo que tengas, hasta {MAX_TOTAL_SLOTS}. Luz entiende qué es cada una y elige las referencias más útiles para cada pieza.
                         </p>
+                        {totalSlotsUsed > 0 && (
+                          <div className="mt-3 bg-violet-50 border border-violet-100 rounded-xl px-3.5 py-2.5 text-[11.5px] text-violet-700 font-medium leading-[1.5]">
+                            {totalSlotsUsed} foto{totalSlotsUsed === 1 ? '' : 's'} subida{totalSlotsUsed === 1 ? '' : 's'} → en el paso de cantidad te vamos a sugerir cuántas piezas generar según lo que trajiste.
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="md:col-span-5 order-1 md:order-2">
@@ -950,6 +948,12 @@ const CampaignModule: React.FC = () => {
                             </button>
                           ))}
                         </div>
+                        {totalSlotsUsed > 1 && imageCount < Math.min(totalSlotsUsed, 8) && (
+                          <button type="button" onClick={() => setImageCount(Math.min(totalSlotsUsed, 8) as any)}
+                            className="w-full mt-3 text-[11px] font-semibold text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-xl py-2 transition-all">
+                            Subiste {totalSlotsUsed} fotos → usar {Math.min(totalSlotsUsed, 8)} imágenes para que cada una tenga su momento
+                          </button>
+                        )}
                       </div>
 
                       {/* Aviso del flujo */}
@@ -1496,22 +1500,37 @@ const CampaignModule: React.FC = () => {
                                     </div>
                                   </div>
                                 )}
-                                {(['product','inspiration','brand','model'] as const).map(role => {
-                                  const roleSlots = currentSet.slots.filter(s => s.role === role);
-                                  if (roleSlots.length === 0) return null;
-                                  const labels: Record<string, string> = { product: 'Producto', inspiration: ' Inspiración', brand: 'Elementos de Marca', model: 'Personaje/Modelo' };
-                                  return (
-                                    <div key={role} className="flex flex-col gap-1.5">
-                                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{labels[role]}</p>
-                                      {roleSlots.slice(0,2).map((s, si) => (
-                                        <div key={si} className="aspect-square rounded-lg overflow-hidden border border-slate-100">
-                                          <img src={s.base64} alt={role} className="w-full h-full object-cover" />
-                                        </div>
-                                      ))}
-                                      {roleSlots.length > 2 && <p className="text-[9px] text-slate-400 text-center">+{roleSlots.length - 2}</p>}
+                                {currentSet.slots.some(s => s.shotDescription) ? (
+                                  // Moodboard libre (campañas nuevas): agrupar por descripción asignada por Luz
+                                  currentSet.slots.map((s, si) => (
+                                    <div key={si} className="flex flex-col gap-1.5">
+                                      {s.shotDescription && (
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider truncate">{s.shotDescription}</p>
+                                      )}
+                                      <div className="aspect-square rounded-lg overflow-hidden border border-slate-100">
+                                        <img src={s.base64} alt={s.shotDescription ?? 'referencia'} className="w-full h-full object-cover" />
+                                      </div>
                                     </div>
-                                  );
-                                })}
+                                  ))
+                                ) : (
+                                  // Campañas guardadas antes del moodboard libre: formato de 4 categorías fijas
+                                  (['product','inspiration','brand','model'] as const).map(role => {
+                                    const roleSlots = currentSet.slots.filter(s => s.role === role);
+                                    if (roleSlots.length === 0) return null;
+                                    const labels: Record<string, string> = { product: 'Producto', inspiration: ' Inspiración', brand: 'Elementos de Marca', model: 'Personaje/Modelo' };
+                                    return (
+                                      <div key={role} className="flex flex-col gap-1.5">
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{labels[role]}</p>
+                                        {roleSlots.slice(0,2).map((s, si) => (
+                                          <div key={si} className="aspect-square rounded-lg overflow-hidden border border-slate-100">
+                                            <img src={s.base64} alt={role} className="w-full h-full object-cover" />
+                                          </div>
+                                        ))}
+                                        {roleSlots.length > 2 && <p className="text-[9px] text-slate-400 text-center">+{roleSlots.length - 2}</p>}
+                                      </div>
+                                    );
+                                  })
+                                )}
                               </div>
                             </div>
                           )}

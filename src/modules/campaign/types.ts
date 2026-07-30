@@ -17,6 +17,8 @@ export const CAMPAIGN_CHANNEL_META: Record<CampaignChannel, { label: string; ico
 };
 
 // ── Slots de imágenes de referencia ──────────────────────────
+// Rol amplio — sigue existiendo para lockSystem (identidad / producto / marca / inspiración)
+// y para compatibilidad con campañas guardadas en el formato anterior (4 categorías fijas).
 export type ImageSlotRole = 'product' | 'inspiration' | 'brand' | 'model';
 
 export const IMAGE_SLOT_META: Record<ImageSlotRole, { label: string; description: string; icon: string }> = {
@@ -27,8 +29,14 @@ export const IMAGE_SLOT_META: Record<ImageSlotRole, { label: string; description
 };
 
 export interface CampaignImageSlot {
-  role:  ImageSlotRole;
+  role:   ImageSlotRole;
   base64: string;
+  // ── Metadata de moodboard libre (Paso 1 rediseñado) ─────────
+  // Asignada por Gemini en buildCampaignPlan/buildCampaignPlanFromAnchor al
+  // analizar el brief — describe qué es cada foto para poder elegir
+  // referencias por pieza en vez de repetir siempre el mismo combo.
+  // Ausente en campañas guardadas con el formato anterior (fallback: undefined).
+  shotDescription?: string;   // ej. "vista frontal del producto", "close-up de textura", "la persona sonriendo"
 }
 
 // ── Pieza individual de campaña ───────────────────────────────

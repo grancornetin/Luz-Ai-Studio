@@ -161,6 +161,52 @@ export const geminiService = {
     } catch (e) { return this.handleApiError(e); }
   },
 
+  // ── Campaign — describir cada foto del moodboard en una sola llamada ────────
+  // El Paso 1 de Campaign ya no reparte fotos en categorías fijas (producto/
+  // modelo/marca/inspiración) — la usuaria sube hasta 20 fotos sueltas.
+  // Esta función le pide a Gemini que describa QUÉ es cada foto (vista frontal
+  // del producto, close-up de textura, la persona sonriendo, etc.) para que
+  // campaignService pueda elegir después las referencias correctas por pieza,
+  // en vez de repetir siempre el mismo combo fijo en las 8 piezas de la campaña.
+  async describeCampaignShots(images: string[]): Promise<string[]> {
+    if (images.length === 0) return [];
+    try {
+      const { compressImageForUpload } = await import('../utils/imageUtils');
+      const compressed = await Promise.all(
+        images.map(async (img, i) => {
+          const small = await compressImageForUpload(img, 512, 0.75).catch(() => img);
+          return extractImageRef(small, `campaignShot[${i}]`);
+        })
+      );
+
+      const prompt = `You are a photo editor sorting reference images for an e-commerce ad campaign.
+Look at each image in order and write ONE short English phrase (max 6 words) describing what it shows,
+useful for deciding which images to use for a specific campaign shot later.
+
+Examples of good phrases: "front view of product", "close-up of texture/detail", "back view of product",
+"person smiling, face visible", "person wearing product, full body", "brand logo or packaging",
+"lifestyle inspiration photo", "flat lay of product".
+
+Respond ONLY with valid JSON, no markdown:
+{"shots": [ "phrase for image 0", "phrase for image 1", ... ]}`;
+
+      const result = await callContentApi({
+        action:    'analyzeVisualRefs',
+        images:    compressed.map(e => e.data),
+        mimeTypes: compressed.map(e => e.mimeType),
+        prompt,
+        model:     'gemini-2.5-flash',
+      });
+
+      const parsed = result.json as { shots?: unknown[] } | null;
+      if (!parsed || !Array.isArray(parsed.shots)) return [];
+      return parsed.shots.map(s => (typeof s === 'string' ? s : ''));
+    } catch (e) {
+      console.warn('[describeCampaignShots] failed, continuing without descriptions:', e);
+      return [];
+    }
+  },
+
   // ── Análisis visual de múltiples referencias — una sola llamada ──────────────
   // Recibe N imágenes (base64 o URL de dato) y devuelve un análisis por imagen.
   // Diseñada para ser reutilizada por outfit_haul, outfit_check, y cualquier módulo
