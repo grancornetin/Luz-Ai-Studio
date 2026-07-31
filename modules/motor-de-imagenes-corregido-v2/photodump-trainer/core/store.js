@@ -2,9 +2,11 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-// Vive en la raíz del repo (src/data/trainer/photodump/), no dentro de este módulo standalone,
-// para que quede disponible de inmediato al construir la siguiente herramienta sobre este banco.
-const DATA_DIR = path.join(__dirname, '..', '..', '..', '..', 'src', 'data', 'trainer', 'photodump');
+// Por defecto vive en la raíz del repo (src/data/trainer/photodump/), pero el banco crece a
+// miles de imágenes — PHOTODUMP_TRAINER_DATA_DIR permite moverlo fuera del proyecto (ej. a un
+// disco/carpeta separada) sin llenar la carpeta versionada ni sincronizada.
+const DATA_DIR = process.env.PHOTODUMP_TRAINER_DATA_DIR
+  || path.join(__dirname, '..', '..', '..', '..', 'src', 'data', 'trainer', 'photodump');
 const IMAGES_DIR = path.join(DATA_DIR, 'images');
 const THUMBS_DIR = path.join(DATA_DIR, 'thumbnails');
 const ANALYSES_DIR = path.join(DATA_DIR, 'analyses');

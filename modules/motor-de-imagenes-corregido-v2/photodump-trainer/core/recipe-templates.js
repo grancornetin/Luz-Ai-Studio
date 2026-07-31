@@ -83,7 +83,7 @@ const RECIPE_TEMPLATES = {
         preferCategories: ['pose', 'gesto', 'prop_bebida_comida'],
         needsScene: true,
         sceneGroup: 'main_venue',
-        note: 'Otro momento social distinto al shot 2: fotomatón, comida compartida, manos brindando — en el mismo venue.',
+        note: 'Otro momento social distinto al shot 2, con foco en el trago/gesto propio de la protagonista, no en un brindis posado mirando a cámara. La otra persona (si aparece) es presencia incidental: una mano o brazo entrando en el cuadro sosteniendo su propia copa, borroso o cortado por el encuadre — nunca su cara ni cuerpo completo, nítidos y centrados. La mirada de la protagonista puede estar en el trago, con los ojos cerrados bebiendo, o hacia otro punto fuera de cámara — no siempre directo al lente. Copa/trago en primer plano dominando parte del encuadre. En el mismo venue.',
       },
       {
         id: 'venue_scenic_moment',
