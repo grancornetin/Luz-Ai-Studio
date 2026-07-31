@@ -147,24 +147,14 @@ export const NIGHT_MOMENTS: NightMoment[] = [
     hasProtagonist: false,
   },
   {
-    id: 'view_moment',
-    contract: {
-      shotId: 'view_moment',
-      cameraGrammar: { framing: 'MEDIUM_FULL', angle: 'eye_level', composition: 'view_moment' },
-      referencePolicy: { useIdentityRef: true, useBodyRef: true, useOutfitRefs: true },
-      hpiPoseFamily: 'TORSO_TWIST_AND_OVER_SHOULDER_POSE',
-      hpiCameraFamily: 'POSTERIOR_BACK_VIEW_FRAMING',
-      footwearVisible: false,
-    },
-    sceneBlockByEnergy: {
-      elegante: 'She is turned away from the camera, looking out at the view — the city skyline, the water, the string lights, the room — captured from behind or three-quarters behind. This is about the feeling of the place, not a posed look at the camera.',
-      fiesta:   'She is turned away from the camera, looking out over the crowd or the lights of the venue — captured from behind or three-quarters behind. This is about the feeling of the night, not a posed look at the camera.',
-    },
-    requiresCompanion: false,
-    fiestaOnly: false,
-    hasProtagonist: true,
-  },
-  {
+    // Reescrito con base real: img_1785273260414_82 (sushi, luz de barra azul de
+    // fondo), img_1785428822234_19 (pose de beber con lengua asomando, fit=8 ya
+    // en outfit_night_out), img_1785428822196_6 (postre de cumpleaños, atmósfera
+    // íntima). Banco: 8 imágenes de noche con comida servida en mesa de
+    // restaurante — casi todas etiquetadas para day_in_life/travel, no para
+    // night_out, pero el training_note de img_1785428822214_12 lo describe
+    // explícitamente como "combinación de outfit de noche con comida de
+    // restaurante crea un contexto de 'salida' muy útil".
     id: 'food_detail',
     contract: {
       shotId: 'food_detail',
@@ -175,14 +165,23 @@ export const NIGHT_MOMENTS: NightMoment[] = [
       footwearVisible: false,
     },
     sceneBlockByEnergy: {
-      elegante: 'An overhead close-up of the food being served — a shared plate, dessert, or dish at the center of the table, shot from directly above. No person in frame, just the sensory detail of the meal.',
-      fiesta:   'An overhead close-up of snacks or shared food at the table or bar — shot from directly above. No person in frame, just the sensory detail of the moment.',
+      elegante: 'An overhead close-up of the shared food and drinks on the restaurant table — a dish, dessert, or plate at the center, glasses nearby. No person in frame, just the sensory detail of the meal, warm restaurant lighting.',
+      fiesta:   'An overhead close-up of shared snacks or bar food on the table, drinks nearby, colorful venue lighting spilling into the frame. No person in frame, just the sensory detail of the moment.',
     },
     requiresCompanion: false,
     fiestaOnly: false,
     hasProtagonist: false,
   },
   {
+    // Reescrito con base real: img_1785428822266_30 ("un primer plano de gesto
+    // (brindis) ancla una narrativa de experiencia (cena o salida nocturna) al
+    // usar un fondo atmosférico de luces de ciudad y una iluminación cálida de
+    // vela" — el ejemplo más alineado con foto de referencia real compartida
+    // por el usuario), img_1785436486169_48 (brindis de grupo con champán,
+    // fit=9), img_1785428822263_29 (fit=8, training_note: "el choque de copas
+    // es un primitive de alto valor para comunicar celebración y conexión
+    // social"). Sin familia HPI real de pose para 2+ personas interactuando
+    // (mismo criterio que group_moment) — se describe a mano.
     id: 'toast_moment',
     contract: {
       shotId: 'toast_moment',
@@ -192,8 +191,37 @@ export const NIGHT_MOMENTS: NightMoment[] = [
       footwearVisible: false,
     },
     sceneBlockByEnergy: {
-      elegante: 'A close, candid toast — glasses clinking together between her and a companion, hands and glasses in focus, faces softly visible in the background. A genuine celebratory beat, not posed for the camera.',
-      fiesta:   'A close, candid toast — cups or glasses clinking together between her and one or more companions under colorful venue lighting, hands and drinks in focus, faces softly visible. A genuine celebratory beat, not posed for the camera.',
+      elegante: 'A close-up candid toast — her glass and a companion\'s glass clinking together in the center of the frame, hands and glasses sharply in focus, faces softly out of focus or partially visible in the background. Warm candlelight or city lights behind. A genuine celebratory beat, not posed for the camera.',
+      fiesta:   'A close-up candid toast — cups or glasses clinking together between her and one or more companions, hands and drinks sharply in focus, faces softly visible under colorful venue lighting. A genuine celebratory beat, not posed for the camera.',
+    },
+    requiresCompanion: true,
+    fiestaOnly: false,
+    hasProtagonist: true,
+  },
+  {
+    // Nuevo, reemplaza a view_moment (que estaba inventado sin respaldo real
+    // como shot autónomo "de espaldas mirando el paisaje" — el banco solo
+    // respalda la vista urbana como FONDO de otra pose, no como shot propio).
+    // Base real: img_1785331443133_1 (pileta + fiesta + noche, "reflejo en el
+    // agua añade un elemento dinámico y estético reutilizable", el tipo exacto
+    // de fiesta en pileta nocturna con gente compartido por el usuario),
+    // img_1785331443157_8 (fit=10, "fotografía de celular en ambiente de
+    // discoteca... la interacción entre las mujeres añade una capa social
+    // importante"), img_1785297196870_149 ("fondo urbano nocturno como
+    // elemento clave de ambientación para la narrativa de salida nocturna").
+    // Requiere companion — el patrón real es grupo, no protagonista sola.
+    id: 'group_party_moment',
+    contract: {
+      shotId: 'group_party_moment',
+      cameraGrammar: { framing: 'WIDE', angle: 'eye_level', composition: 'group_party_moment' },
+      referencePolicy: { useIdentityRef: true, useBodyRef: true, useOutfitRefs: true, useCompanionRef: true },
+      hpiPoseFamily: null,
+      hpiCameraFamily: 'LIFESTYLE_MEDIUM_DISTANCE',
+      footwearVisible: false,
+    },
+    sceneBlockByEnergy: {
+      elegante: 'A wide candid shot of the wider social scene — her and one or more companions together in the venue, natural unposed energy, genuine interaction, each person clearly distinct in face and body. The venue itself is part of the shot, not just the people.',
+      fiesta:   'A wide candid shot of the party atmosphere — her and one or more companions together, colorful lighting, maybe a pool or dance floor reflected nearby, natural unposed energy, each person clearly distinct in face and body. The venue and the crowd feeling are part of the shot, not just the people.',
     },
     requiresCompanion: true,
     fiestaOnly: false,

@@ -17,11 +17,11 @@
  * + banco de noche (ver levelResolver.ts).
  *
  * El banco de noche (ver nightMoments.ts) surge de analizar 23 imágenes
- * reales de salidas nocturnas — no es un pool de "momentos narrativos"
- * (llegada/social/cierre) sino de tipos de encuadre/sujeto (retrato posado,
- * grupo, movimiento/energía, POV de piernas, ambiental, auto, vista/paisaje,
- * comida, brindis), cada uno parametrizado por energía (elegante/fiesta) y
- * venue.
+ * reales de salidas nocturnas compartidas en el chat — no es un pool de
+ * "momentos narrativos" (llegada/social/cierre) sino de tipos de
+ * encuadre/sujeto (retrato posado, grupo, movimiento/energía, POV de
+ * piernas, ambiental, auto, comida, brindis, fiesta grupal), cada uno
+ * parametrizado por energía (elegante/fiesta) y venue.
  *
  * 'hands_detail' (detalle de manos sosteniendo el trago) se eliminó del
  * banco: sin una familia de cámara real que fuerce una distancia/ángulo
@@ -31,6 +31,14 @@
  * contenido, sin restricción dura). El trago como protagonista ya está
  * cubierto sin mano en cuadro por 'ambient_only', y como prop secundario en
  * 'posed_portrait'/'pov_legs'/'group_moment'.
+ *
+ * 'food_detail', 'toast_moment' y 'group_party_moment' (reemplazó a
+ * 'view_moment') se reescribieron con base en el banco real de ~1030
+ * imágenes analizadas del proyecto (src/data/Analisis de datos/analisis
+ * con genero.md + analisis pre genero.md) — la primera versión de estas 3
+ * entradas fue inventada de memoria sin verificar contra ese banco, lo cual
+ * el usuario corrigió explícitamente. Cada entrada cita el itemId real de
+ * las imágenes que la respaldan (ver comentarios inline en nightMoments.ts).
  */
 
 export type NightOutFixedShotId = 'presentation' | 'tryon_detail' | 'mirror_check';
@@ -42,9 +50,9 @@ export type NightMomentId =
   | 'pov_legs'
   | 'ambient_only'
   | 'car_transition'
-  | 'view_moment'
   | 'food_detail'
-  | 'toast_moment';
+  | 'toast_moment'
+  | 'group_party_moment';
 
 export type NightOutShotId = NightOutFixedShotId | NightMomentId;
 
