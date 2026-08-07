@@ -1,16 +1,18 @@
 /**
  * modules/photodump/director/client.ts
  *
- * Cliente client-side del Director Creativo — llama a /api/photodump/director
- * (donde corren el filtro del banco, Decidir y Redactar) y devuelve el
- * resultado. Este es el ÚNICO archivo del director que se bundlea con la
- * app real (el resto de la lógica — bankFilter, hardRules, recipeContracts,
- * el banco compilado — vive del lado del endpoint, ver api/photodump/director.ts).
+ * Cliente client-side del Director Creativo — llama a /api/gemini/content
+ * (acción 'photodumpDirector', fusionada ahí en vez de un endpoint propio
+ * por el límite de 12 funciones serverless del plan Hobby de Vercel) y
+ * devuelve el resultado. Este es el ÚNICO archivo del director que se
+ * bundlea con la app real — el resto de la lógica (bankFilter, hardRules,
+ * recipeContracts, el banco compilado) vive del lado del endpoint, ver la
+ * sección "PHOTODUMP DIRECTOR CREATIVO" en api/gemini/content.ts.
  */
 import { getAuth } from 'firebase/auth';
 import type { DirectorPlan, FinalPromptShot } from './types';
 
-const DIRECTOR_ENDPOINT = '/api/photodump/director';
+const CONTENT_ENDPOINT = '/api/gemini/content';
 
 async function getAuthHeader(): Promise<Record<string, string>> {
   const token = await getAuth().currentUser?.getIdToken().catch(() => null);
@@ -29,10 +31,13 @@ export interface DirectorResponse {
  * estático, nunca de propagar el error al usuario final.
  */
 export async function runDirector(brief: string, recipe: string, level: string, hasCompanion: boolean): Promise<DirectorResponse> {
-  const res = await fetch(DIRECTOR_ENDPOINT, {
+  const res = await fetch(CONTENT_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
-    body: JSON.stringify({ brief, recipe, level, hasCompanion }),
+    body: JSON.stringify({
+      action: 'photodumpDirector',
+      payload: { brief, recipe, level, hasCompanion },
+    }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Network error' }));
