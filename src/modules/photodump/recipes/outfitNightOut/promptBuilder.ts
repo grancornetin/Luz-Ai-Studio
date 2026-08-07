@@ -70,6 +70,14 @@ export interface PromptBuilderOptions {
   venueImageUrl?:    string;
   venueTextFallback: string;
   energy:            NightOutEnergy;
+  // Si el Director Creativo (ver modules/photodump/director/) ya razonó y
+  // redactó este shot con contenido real del banco de imágenes, su texto
+  // reemplaza al sceneBlock estático de FIXED_SHOT_BLOCKS/nightMoments.ts —
+  // pero las líneas estructurales (outfit, HPI, estilo cámara-roll) se
+  // siguen aplicando igual, para no perder esas garantías de calidad.
+  // Ausente/undefined cuando el director no corrió o falló (fallback al
+  // sistema estático, ver outfitNightOut/index.ts).
+  directorSceneBlock?: string;
 }
 
 export function buildShotPrompt(
@@ -84,11 +92,11 @@ export function buildShotPrompt(
   let extraLine = '';
 
   if (isFixedPrepShot) {
-    sceneBlock = FIXED_SHOT_BLOCKS[shotId as 'presentation' | 'tryon_detail' | 'mirror_check'];
+    sceneBlock = options.directorSceneBlock ?? FIXED_SHOT_BLOCKS[shotId as 'presentation' | 'tryon_detail' | 'mirror_check'];
     footwearVisible = shotId === 'mirror_check';
   } else {
     const moment = findNightMoment(shotId);
-    sceneBlock = moment.sceneBlockByEnergy[options.energy] ?? moment.sceneBlockByEnergy.elegante ?? '';
+    sceneBlock = options.directorSceneBlock ?? moment.sceneBlockByEnergy[options.energy] ?? moment.sceneBlockByEnergy.elegante ?? '';
     footwearVisible = moment.contract.footwearVisible;
     if (shotId === 'group_moment') extraLine = companionLine(options.hasCompanion);
   }

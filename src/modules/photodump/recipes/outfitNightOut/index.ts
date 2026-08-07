@@ -24,6 +24,18 @@
  * fijos durante toda la generación real — no se recalculan por shot, para
  * que el banco de noche (pickNightMomentsForSet) siempre vea la misma
  * energía/companion que vio al armar el plan.
+ *
+ * DIRECTOR CREATIVO (ver modules/photodump/director/): buildOutfitNightOutDirectives
+ * intenta correr el director (arquitectura A-K del usuario) ANTES de caer al
+ * sistema estático de pickNightMomentsForSet. Si el director corre con éxito,
+ * su selección de shots y sus prompts redactados (basados en piezas
+ * reutilizables del banco real de fotos) reemplazan al array estático — el
+ * texto se guarda en directorPromptCache y promptBuilder.ts lo usa en vez de
+ * sceneBlockByEnergy. Si el director falla por CUALQUIER motivo (timeout,
+ * red, JSON inválido), se cae automáticamente al comportamiento estático
+ * actual — el usuario nunca debe ver un error duro por una falla del
+ * director. Este fallback es no-negociable (ver plan "Director Creativo de
+ * Photodump", Fase C).
  */
 import { prepareRefs, getAspectRatio } from '../shared';
 import type { PhotodumpRefs, PhotodumpDestino } from '../../types';
@@ -39,7 +51,8 @@ import { buildShotPrompt } from './promptBuilder';
 import { buildShotDebug } from './debug';
 import { applyIntelligence } from './intelligenceLayer';
 import { imageApiService } from '../../../../services/imageApiService';
-import type { OutfitNightOutShotPlan, OutfitNightOutShotDebug, ShotContract, NightOutLevel } from './types';
+import { runDirector } from '../../director/client';
+import type { OutfitNightOutShotPlan, OutfitNightOutShotDebug, ShotContract, NightOutLevel, NightOutShotId } from './types';
 
 // ── Cachés en memoria por sesión ─────────────────────────────────────────
 // Mismo motivo que outfitRevealBasic/outfitMultiLook: generatePhotodumpREF0
@@ -47,6 +60,11 @@ import type { OutfitNightOutShotPlan, OutfitNightOutShotDebug, ShotContract, Nig
 // compartido — se cachea en memoria por refs.
 const prepAnchorCache  = new Map<string, { imageUrl: string; prompt: string; refsCount: number }>();
 const venueAnchorCache = new Map<string, { imageUrl: string; prompt: string; refsCount: number }>();
+// shotId → texto redactado por el Director Creativo para ESTA sesión (misma
+// key que prepAnchorCache/venueAnchorCache, un Map anidado por shotId).
+// Vacío/ausente cuando el director no corrió o falló — promptBuilder.ts cae
+// al sceneBlock estático en ese caso.
+const directorPromptCache = new Map<string, Map<string, string>>();
 
 function cacheKey(refs: PhotodumpRefs): string {
   const urls = [refs.avatarRef, refs.bodyRef, refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean);
@@ -76,6 +94,7 @@ async function generateFromContract(
   const intelligence = applyIntelligence(contract, refs.gender ?? 'female');
   const venueCtx = resolveVenueContext(refs, basePrompt);
   const energy   = resolveEnergyFromBrief(basePrompt);
+  const directorSceneBlock = directorPromptCache.get(cacheKey(refs))?.get(contract.shotId);
   const { prompt, negative } = buildShotPrompt(contract.shotId, intelligence, {
     garmentCount:      garmentCountFor(refs),
     hasVenueAnchor:    Boolean(anchors.venueAnchorUrl),
@@ -83,6 +102,7 @@ async function generateFromContract(
     venueImageUrl:     venueCtx.venueImageUrl,
     venueTextFallback: venueCtx.venueTextFallback,
     energy,
+    directorSceneBlock,
   });
   const preparedRefs = await prepareRefs(routed.orderedUrls);
 
@@ -111,38 +131,104 @@ function contractForFixedShotId(shotId: 'presentation' | 'tryon_detail' | 'mirro
   return MIRROR_CHECK_CONTRACT;
 }
 
+const FIXED_SHOT_IDS = new Set<NightOutShotId>(['presentation', 'tryon_detail', 'mirror_check']);
+
+function isFixedShotId(shotId: NightOutShotId): shotId is 'presentation' | 'tryon_detail' | 'mirror_check' {
+  return FIXED_SHOT_IDS.has(shotId);
+}
+
+function contractForShotId(shotId: NightOutShotId): ShotContract {
+  if (isFixedShotId(shotId)) {
+    return contractForFixedShotId(shotId);
+  }
+  return findNightMoment(shotId).contract;
+}
+
+function directiveFor(contract: ShotContract, beat: 'reveal' | 'candid'): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
+  const plan: OutfitNightOutShotPlan = { shotId: contract.shotId };
+  return {
+    key:                contract.shotId,
+    beat,
+    role:               'outfit_hero',
+    purpose:            `outfit_night_out_${contract.shotId}`,
+    requiredElements:   [],
+    forbiddenElements:  [],
+    variationSpace:     [],
+    framing:            contract.cameraGrammar.framing,
+    composition:        contract.cameraGrammar.composition,
+    cameraAngle:        contract.cameraGrammar.angle,
+    outfitNightOutPlan: plan,
+  };
+}
+
 // ── Plan de sesión ──────────────────────────────────────────────────────
 
 function seedFor(refs: PhotodumpRefs): string {
   return cacheKey(refs);
 }
 
-export function buildOutfitNightOutDirectives(
+function staticDirectives(
+  level:        NightOutLevel,
+  seed:         string,
+  hasCompanion: boolean,
+  energy:       ReturnType<typeof resolveEnergyFromBrief>,
+): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
+  const resolved = resolveShotsForLevel(level, seed, hasCompanion, energy);
+  return resolved.map(r => {
+    const contract = r.fixedContract ?? r.nightMoment!.contract;
+    return directiveFor(contract, r.fixedContract ? 'reveal' : 'candid');
+  });
+}
+
+/**
+ * Intenta el Director Creativo (arquitectura A-K); si corre con éxito,
+ * guarda sus prompts redactados en directorPromptCache y arma el plan de
+ * shots a partir de los shotId que decidió. Si falla por cualquier motivo,
+ * devuelve null — el caller cae al sistema estático (staticDirectives).
+ * Nunca lanza: cualquier excepción se captura acá mismo.
+ */
+async function tryDirector(
+  refs:         PhotodumpRefs,
+  basePrompt:   string,
+  level:        NightOutLevel,
+  hasCompanion: boolean,
+): Promise<Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] | null> {
+  try {
+    const { plan, finalPrompts } = await runDirector(basePrompt, 'outfit_night_out', level, hasCompanion);
+
+    const promptByShotId = new Map(finalPrompts.map(p => [p.shotId, p.finalPrompt]));
+    const key = cacheKey(refs);
+    const shotCache = new Map<string, string>();
+
+    const directives = plan.shots.map(shotDecision => {
+      const shotId = shotDecision.shotId as NightOutShotId;
+      const contract = contractForShotId(shotId);
+      const redactedPrompt = promptByShotId.get(shotDecision.shotId);
+      if (redactedPrompt) shotCache.set(shotId, redactedPrompt);
+      return directiveFor(contract, FIXED_SHOT_IDS.has(shotId) ? 'reveal' : 'candid');
+    });
+
+    if (directives.length === 0) return null;
+    directorPromptCache.set(key, shotCache);
+    return directives;
+  } catch (err) {
+    console.warn('[outfit_night_out] Director Creativo falló, usando banco estático de respaldo:', err);
+    return null;
+  }
+}
+
+export async function buildOutfitNightOutDirectives(
   refs:       PhotodumpRefs,
   basePrompt: string,
-): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
-  const level = refs.nightOutLevel ?? 'corto';
+): Promise<Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[]> {
+  const level = (refs.nightOutLevel ?? 'corto') as NightOutLevel;
   const hasCompanion = Boolean(extractCompanionRef(refs));
   const energy = resolveEnergyFromBrief(basePrompt);
-  const resolved = resolveShotsForLevel(level as NightOutLevel, seedFor(refs), hasCompanion, energy);
 
-  return resolved.map((r): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> => {
-    const contract = r.fixedContract ?? r.nightMoment!.contract;
-    const plan: OutfitNightOutShotPlan = { shotId: contract.shotId };
-    return {
-      key:                contract.shotId,
-      beat:               r.fixedContract ? 'reveal' : 'candid',
-      role:               'outfit_hero',
-      purpose:            `outfit_night_out_${contract.shotId}`,
-      requiredElements:   [],
-      forbiddenElements:  [],
-      variationSpace:     [],
-      framing:            contract.cameraGrammar.framing,
-      composition:        contract.cameraGrammar.composition,
-      cameraAngle:        contract.cameraGrammar.angle,
-      outfitNightOutPlan: plan,
-    };
-  });
+  const fromDirector = await tryDirector(refs, basePrompt, level, hasCompanion);
+  if (fromDirector) return fromDirector;
+
+  return staticDirectives(level, seedFor(refs), hasCompanion, energy);
 }
 
 // ── REF0 (mirror_check hace doble función de ancla) ─────────────────────

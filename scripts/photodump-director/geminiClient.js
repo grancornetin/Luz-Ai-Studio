@@ -1,0 +1,80 @@
+/**
+ * scripts/photodump-director/geminiClient.js
+ *
+ * Cliente de Gemini/Vertex AI standalone para correr el director fuera de la
+ * app (desde un script de Node, no desde un endpoint de Vercel) — mismo
+ * paquete (@google/genai) que ya usa en producción api/gemini/content.ts,
+ * pero sin depender de un servidor corriendo.
+ *
+ * Credenciales: lee el archivo de service account JSON directo desde
+ * credneciales/luz-ai-studio-bee627582953.json (cuenta luz-ai-vertex@...,
+ * la que tiene permiso real de Vertex AI — la otra disponible,
+ * gen-lang-client-...json, es de Firebase Admin y NO tiene permiso de
+ * aiplatform.endpoints.predict, falla con 403 si se usa acá). Carpeta ya
+ * cubierta por .gitignore, nunca se commitea. El valor equivalente en
+ * .env.local (GOOGLE_SERVICE_ACCOUNT_KEY) además está corrupto — trae
+ * caracteres de escaping sueltos antes del base64 real.
+ *
+ * Esto es solo para la Fase A (prueba standalone, leer el razonamiento como
+ * texto). Cuando se conecte a producción (Fase C del plan), la llamada real
+ * pasa a hacerse desde api/gemini/content.ts como cualquier otra acción, no
+ * desde este cliente de script.
+ */
+
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+import { fileURLToPath } from 'url';
+import { GoogleGenAI } from '@google/genai';
+
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
+const cwd       = resolve(__dirname, '../..');
+
+const SERVICE_ACCOUNT_FILE = 'credneciales/luz-ai-studio-bee627582953.json';
+
+function getCredentials() {
+  const raw = readFileSync(resolve(cwd, SERVICE_ACCOUNT_FILE), 'utf-8');
+  return JSON.parse(raw);
+}
+
+let client = null;
+
+export function getClient() {
+  if (client) return client;
+  const credentials = getCredentials();
+  client = new GoogleGenAI({
+    vertexai: true,
+    project: credentials.project_id,
+    location: 'us-central1',
+    googleAuthOptions: { credentials },
+  });
+  return client;
+}
+
+function extractText(response) {
+  return response.candidates?.[0]?.content?.parts
+    ?.map(p => p.text || '').filter(Boolean).join('') || '';
+}
+
+/**
+ * Llama a Gemini pidiendo una respuesta JSON validada contra un schema —
+ * mismo mecanismo que responseMimeType/responseSchema en api/gemini/content.ts.
+ */
+export async function generateJson(prompt, schema, model = 'gemini-2.5-flash') {
+  const genAI = getClient();
+  const response = await genAI.models.generateContent({
+    model,
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    config: {
+      responseMimeType: 'application/json',
+      responseSchema: schema,
+    },
+  });
+  const text = extractText(response);
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    console.error('No se pudo parsear la respuesta de Gemini como JSON. Texto crudo:');
+    console.error(text);
+    throw err;
+  }
+}
