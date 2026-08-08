@@ -64,7 +64,10 @@ interface ContentRequest {
     | 'analyzeProductRelevance'
     | 'analyzeUGCOutfit'
     | 'analyzeScene'
-    | 'photodumpDirector';
+    | 'photodumpDirector'
+    | 'photodumpDirectorStart'
+    | 'photodumpDirectorStatus'
+    | 'runPhotodumpDirectorJob';
   images?: string[];
   mimeTypes?: string[];
   prompt?: string;
@@ -85,6 +88,39 @@ interface ContentJob {
   text?: string;
   json?: unknown;
   error?: string;
+}
+
+// Job del Director Creativo de Photodump — mismo patrón que ContentJob, pero
+// separado porque el resultado tiene forma propia (plan + finalPrompts, no
+// text/json genérico) y porque el worker hace 2 llamadas secuenciales a
+// Gemini (Decidir + Redactar), no 1. Corre en background vía QStash porque
+// esas 2 llamadas juntas superan lo que una respuesta HTTP síncrona puede
+// esperar de forma confiable (ver 504 real en producción — bug corregido acá
+// pasando a este patrón en vez de seguir subiendo maxDuration).
+interface PhotodumpDirectorJob {
+  id: string;
+  status: ContentJobStatus;
+  uid: string;
+  createdAt: number;
+  updatedAt: number;
+  plan?: PhotodumpDirectorPlan;
+  finalPrompts?: PhotodumpFinalPromptShot[];
+  error?: string;
+}
+
+async function saveDirectorJob(job: PhotodumpDirectorJob): Promise<void> {
+  await redis.set(`photodump_director_job:${job.id}`, JSON.stringify(job), { ex: 3600 });
+}
+
+async function getDirectorJob(jobId: string): Promise<PhotodumpDirectorJob | null> {
+  const data = await redis.get(`photodump_director_job:${jobId}`);
+  if (!data) return null;
+  if (typeof data === 'string') return JSON.parse(data) as PhotodumpDirectorJob;
+  return data as PhotodumpDirectorJob;
+}
+
+function generateDirectorJobId(): string {
+  return `pdd_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 const redis = new Redis({
@@ -420,6 +456,55 @@ async function runPhotodumpDirector(
 
   return { plan, finalPrompts };
 }
+
+/**
+ * Versión background del director — mismo patrón que processContentJob:
+ * corre las 2 llamadas a Gemini (Decidir + Redactar) sin el límite de una
+ * respuesta HTTP síncrona, y guarda el resultado en Redis para que el
+ * cliente lo levante por polling (photodumpDirectorStatus). Invocada
+ * exclusivamente por QStash vía la acción runPhotodumpDirectorJob.
+ */
+async function processPhotodumpDirectorJob(jobId: string): Promise<void> {
+  const job = await getDirectorJob(jobId);
+  if (!job) {
+    console.error(`[PhotodumpDirectorJob ${jobId}] job not found`);
+    return;
+  }
+
+  const storedPayload = await redis.get(`photodump_director_payload:${jobId}`);
+  if (!storedPayload) {
+    job.status = 'failed';
+    job.error = 'Payload no encontrado para el director.';
+    job.updatedAt = Date.now();
+    await saveDirectorJob(job);
+    return;
+  }
+
+  const payload = typeof storedPayload === 'string'
+    ? JSON.parse(storedPayload) as { brief?: string; recipe?: string; level?: string; hasCompanion?: boolean }
+    : storedPayload as { brief?: string; recipe?: string; level?: string; hasCompanion?: boolean };
+
+  job.status = 'processing';
+  job.updatedAt = Date.now();
+  await saveDirectorJob(job);
+
+  try {
+    const ai = getGenAIClient('us-central1');
+    const { plan, finalPrompts } = await runPhotodumpDirector(ai, payload);
+    job.status = 'completed';
+    job.plan = plan;
+    job.finalPrompts = finalPrompts;
+    job.updatedAt = Date.now();
+    await saveDirectorJob(job);
+    await redis.del(`photodump_director_payload:${jobId}`).catch(() => {});
+  } catch (error: any) {
+    job.status = 'failed';
+    job.error = error?.message || 'Error corriendo el Director Creativo.';
+    job.updatedAt = Date.now();
+    await saveDirectorJob(job);
+    console.error(`[PhotodumpDirectorJob ${jobId}] failed:`, job.error);
+  }
+}
 // ─── FIN PHOTODUMP DIRECTOR CREATIVO ────────────────────────────────────────
 
 function buildParts(body: Pick<ContentRequest, 'images' | 'mimeTypes' | 'prompt'>): any[] {
@@ -527,6 +612,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ ok: true, jobId });
   }
 
+  if (body.action === 'runPhotodumpDirectorJob') {
+    const signature = req.headers['upstash-signature'] as string;
+    if (!signature) return res.status(401).json({ error: 'Missing signature' });
+    try {
+      await receiver.verify({ signature, body: JSON.stringify(req.body) });
+    } catch {
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+    const jobId = body.payload?.jobId;
+    if (!jobId) return res.status(400).json({ error: 'Missing jobId' });
+    await processPhotodumpDirectorJob(jobId);
+    return res.status(200).json({ ok: true, jobId });
+  }
+
   let uid = '';
   try {
     uid = await verifyAuth(req);
@@ -536,7 +635,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const payloadOnlyActions = ['analyzeREF0', 'inferGender', 'analyzeAnchor', 'analyzeProductRelevance', 'analyzeUGCOutfit', 'analyzeScene', 'getContentJobStatus', 'photodumpDirector'];
+    const payloadOnlyActions = ['analyzeREF0', 'inferGender', 'analyzeAnchor', 'analyzeProductRelevance', 'analyzeUGCOutfit', 'analyzeScene', 'getContentJobStatus', 'photodumpDirector', 'photodumpDirectorStart', 'photodumpDirectorStatus'];
     if (!body.action || (!body.prompt && !payloadOnlyActions.includes(body.action))) {
       return res.status(400).json({ error: 'Missing action or prompt' });
     }
@@ -553,6 +652,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         status: job.status,
         text: job.status === 'completed' ? job.text : undefined,
         json: job.status === 'completed' ? job.json : undefined,
+        error: job.status === 'failed' ? job.error : undefined,
+      });
+    }
+
+    if (body.action === 'photodumpDirectorStart') {
+      const { brief, recipe, level, hasCompanion } = body.payload || {};
+      if (!brief || !recipe || !level) {
+        return res.status(400).json({ error: 'Faltan campos: brief, recipe, level' });
+      }
+      const jobId = generateDirectorJobId();
+      const job: PhotodumpDirectorJob = {
+        id: jobId,
+        status: 'pending',
+        uid,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      await Promise.all([
+        saveDirectorJob(job),
+        redis.set(`photodump_director_payload:${jobId}`, JSON.stringify({ brief, recipe, level, hasCompanion }), { ex: 3600 }),
+      ]);
+
+      const proto = req.headers['x-forwarded-proto'] || 'https';
+      const host = req.headers.host;
+      const baseUrl = process.env.WORKER_BASE_URL || `${proto}://${host}`;
+      await qstash.publishJSON({
+        url: `${baseUrl}/api/gemini/content`,
+        body: { action: 'runPhotodumpDirectorJob', payload: { jobId } },
+        retries: 1,
+      });
+
+      return res.status(202).json({ success: true, jobId, status: 'pending' });
+    }
+
+    if (body.action === 'photodumpDirectorStatus') {
+      const jobId = body.payload?.jobId;
+      if (!jobId) return res.status(400).json({ error: 'Missing jobId' });
+      const job = await getDirectorJob(jobId);
+      if (!job) return res.status(404).json({ error: 'Job not found' });
+      if (job.uid !== uid) return res.status(403).json({ error: 'Forbidden' });
+      return res.status(200).json({
+        success: true,
+        jobId: job.id,
+        status: job.status,
+        plan: job.status === 'completed' ? job.plan : undefined,
+        finalPrompts: job.status === 'completed' ? job.finalPrompts : undefined,
         error: job.status === 'failed' ? job.error : undefined,
       });
     }
