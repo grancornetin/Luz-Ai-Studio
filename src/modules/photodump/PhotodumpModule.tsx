@@ -475,7 +475,7 @@ const PhotodumpModule: React.FC = () => {
         : (recipe === 'outfit_haul' || recipe === 'product_haul')
           ? Math.min(count, 20)
           : count;
-      const plan  = await buildPhotodumpSessionPlan(narrative, protagonist, destino, basePrompt, recipe, refsWithMode, storyShotCount);
+      const plan  = await buildPhotodumpSessionPlan(narrative, protagonist, destino, basePrompt, recipe, refsWithMode, storyShotCount, sessionId);
       const shots = plan.shots.slice(0, storyShotCount);
       setSavedShots(shots);
       setSavedPlan(plan);

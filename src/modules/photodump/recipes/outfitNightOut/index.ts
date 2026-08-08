@@ -57,7 +57,9 @@ import type { OutfitNightOutShotPlan, OutfitNightOutShotDebug, ShotContract, Nig
 // ── Cachés en memoria por sesión ─────────────────────────────────────────
 // Mismo motivo que outfitRevealBasic/outfitMultiLook: generatePhotodumpREF0
 // y generatePhotodumpShot son llamadas separadas del Director sin estado
-// compartido — se cachea en memoria por refs.
+// compartido — se cachea en memoria por sessionId (único por tanda real, ver
+// cacheKey más abajo). Nunca por refs solas — dos tandas distintas (incluso
+// de usuarios distintos) pueden compartir las mismas fotos de referencia.
 const prepAnchorCache  = new Map<string, { imageUrl: string; prompt: string; refsCount: number }>();
 const venueAnchorCache = new Map<string, { imageUrl: string; prompt: string; refsCount: number }>();
 // shotId → texto redactado por el Director Creativo para ESTA sesión (misma
@@ -71,16 +73,21 @@ const directorPromptCache = new Map<string, Map<string, string>>();
 const directorFailureCache = new Map<string, string>();
 
 /**
- * BUG REAL corregido: antes esta clave solo incluía las URLs de referencia
- * (avatar/cuerpo/outfit), NUNCA el brief. Como estos Maps viven en memoria
- * del proceso serverless (no por request), dos generaciones con las mismas
- * fotos pero briefs distintos ("cena en rooftop" vs "noche de bar") caían en
- * la MISMA clave — el venue y los prompts del director de la primera corrida
- * quedaban pegados para siempre, sin importar qué brief nuevo se mandara.
- * Eso explicaba tanto el venue repetido como el shotId repetido reportados
- * por el usuario. El brief ahora es parte de la clave.
+ * BUG REAL corregido: antes esta clave se armaba solo con las URLs de
+ * referencia (avatar/cuerpo/outfit), sin brief ni sessionId. Como estos Maps
+ * viven en memoria del proceso serverless (compartida entre requests, no por
+ * usuario), dos tandas con las mismas fotos de referencia (típico al usar
+ * presets para ahorrar tiempo entre pruebas) caían en la MISMA clave — el
+ * venue y los shots elegidos por el director de la primera tanda quedaban
+ * pegados para siempre, sin importar el brief nuevo. Usar sessionId (único
+ * por tanda real, generado una vez por generación completa — ver
+ * PhotodumpModule.tsx) es la única clave que garantiza que NINGUNA tanda,
+ * de ningún usuario, pueda leer resultados cacheados de otra. refs+basePrompt
+ * queda solo como fallback defensivo si por algún motivo sessionId no llega
+ * (no debería ocurrir en el flujo real).
  */
-function cacheKey(refs: PhotodumpRefs, basePrompt: string): string {
+function cacheKey(refs: PhotodumpRefs, basePrompt: string, sessionId?: string): string {
+  if (sessionId) return sessionId;
   const urls = [refs.avatarRef, refs.bodyRef, refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean);
   return `${urls.join('|')}::${basePrompt}`;
 }
@@ -108,7 +115,7 @@ async function generateFromContract(
   const intelligence = applyIntelligence(contract, refs.gender ?? 'female');
   const venueCtx = resolveVenueContext(refs, basePrompt);
   const energy   = resolveEnergyFromBrief(basePrompt);
-  const directorSceneBlock = directorPromptCache.get(cacheKey(refs, basePrompt))?.get(contract.shotId);
+  const directorSceneBlock = directorPromptCache.get(cacheKey(refs, basePrompt, sessionParams.sessionId))?.get(contract.shotId);
   const { prompt, negative } = buildShotPrompt(contract.shotId, intelligence, {
     garmentCount:      garmentCountFor(refs),
     hasVenueAnchor:    Boolean(anchors.venueAnchorUrl),
@@ -209,12 +216,13 @@ async function tryDirector(
   basePrompt:   string,
   level:        NightOutLevel,
   hasCompanion: boolean,
+  sessionId?:   string,
 ): Promise<Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] | null> {
   try {
     const { plan, finalPrompts } = await runDirector(basePrompt, 'outfit_night_out', level, hasCompanion);
 
     const promptByShotId = new Map(finalPrompts.map(p => [p.shotId, p.finalPrompt]));
-    const key = cacheKey(refs, basePrompt);
+    const key = cacheKey(refs, basePrompt, sessionId);
     const shotCache = new Map<string, string>();
 
     const directives = plan.shots.map(shotDecision => {
@@ -234,7 +242,7 @@ async function tryDirector(
     return directives;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    directorFailureCache.set(cacheKey(refs, basePrompt), message);
+    directorFailureCache.set(cacheKey(refs, basePrompt, sessionId), message);
     console.warn('[outfit_night_out] Director Creativo falló, usando banco estático de respaldo:', err);
     return null;
   }
@@ -243,12 +251,13 @@ async function tryDirector(
 export async function buildOutfitNightOutDirectives(
   refs:       PhotodumpRefs,
   basePrompt: string,
+  sessionId?: string,
 ): Promise<Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[]> {
   const level = (refs.nightOutLevel ?? 'corto') as NightOutLevel;
   const hasCompanion = Boolean(extractCompanionRef(refs));
   const energy = resolveEnergyFromBrief(basePrompt);
 
-  const fromDirector = await tryDirector(refs, basePrompt, level, hasCompanion);
+  const fromDirector = await tryDirector(refs, basePrompt, level, hasCompanion, sessionId);
   if (fromDirector) return fromDirector;
 
   return staticDirectives(level, seedFor(refs), hasCompanion, energy);
@@ -266,7 +275,7 @@ export async function generateOutfitNightOutREF0(
   const result = await generateFromContract(
     MIRROR_CHECK_CONTRACT, refs, destino, basePrompt, sessionParams, 0, 1, { companionRef },
   );
-  prepAnchorCache.set(cacheKey(refs, basePrompt), result);
+  prepAnchorCache.set(cacheKey(refs, basePrompt, sessionParams.sessionId), result);
   return { imageUrl: result.imageUrl, ref0Analysis: null, prompt: result.prompt, refsCount: result.refsCount };
 }
 
@@ -293,7 +302,7 @@ export async function generateOutfitNightOutShot(
     throw new Error(`El shot "${shot.key}" no tiene un shotId válido de outfit_night_out.`);
   }
 
-  const key = cacheKey(refs, basePrompt);
+  const key = cacheKey(refs, basePrompt, sessionParams.sessionId);
   const companionRef = extractCompanionRef(refs);
 
   if (shotId === 'mirror_check') {

@@ -898,6 +898,7 @@ export async function buildPhotodumpSessionPlan(
   recipe?:     string,
   refs?:       PhotodumpRefs,
   count:       number = 6,
+  sessionId?:  string,
 ): Promise<PhotodumpSessionPlan> {
   initPhotodumpIntelligence();
 
@@ -1001,7 +1002,7 @@ export async function buildPhotodumpSessionPlan(
   // tryon_detail, solo Completo/Extendido) + N momentos de noche rotados del
   // banco según el nivel elegido — no pasa por buildStoryDirectives.
   if (recipe === 'outfit_night_out' && refs) {
-    const directives = await buildOutfitNightOutDirectives(refs, basePrompt);
+    const directives = await buildOutfitNightOutDirectives(refs, basePrompt, sessionId);
     const shots: PhotodumpShotDirective[] = directives.map((d, i) => ({
       ...d,
       arcPosition: i + 1,
