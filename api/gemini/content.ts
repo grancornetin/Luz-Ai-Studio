@@ -6,11 +6,30 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from '@google/genai';
 import { Redis } from '@upstash/redis';
 import { Client as QStashClient, Receiver } from '@upstash/qstash';
-import photodumpBankSnapshot from '../../src/data/photodump-bank/bank-snapshot.json';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { buildShotPools as buildPhotodumpShotPools } from '../../src/modules/photodump/director/bankFilter';
 import { getRecipeContract as getPhotodumpRecipeContract } from '../../src/modules/photodump/director/recipeContracts';
 import { HARD_RULES_TEXT as PHOTODUMP_HARD_RULES_TEXT } from '../../src/modules/photodump/director/hardRules';
 import type { BankSnapshot as PhotodumpBankSnapshot, DirectorPlan as PhotodumpDirectorPlan, FinalPromptShot as PhotodumpFinalPromptShot } from '../../src/modules/photodump/director/types';
+
+// BUG REAL corregido: `import photodumpBankSnapshot from '....json'` rompía
+// TODO este endpoint en producción (Vercel/Node ESM real, no el entorno de
+// tsc/Vite) con TypeError ERR_IMPORT_ATTRIBUTES_MISSING — un import estático
+// de JSON en ESM requiere `with { type: 'json' }`, que Vercel no soporta acá.
+// El error rompía el módulo completo al cargarse, ANTES de correr ningún
+// handler — por eso también fallaban acciones sin relación con el director
+// (ej. generateCaptions). Lectura lazy con fs + cache en variable de módulo:
+// no depende de import attributes y no penaliza acciones que nunca llaman al
+// director (el archivo de 5.7MB solo se lee la primera vez que se usa).
+let photodumpBankSnapshotCache: PhotodumpBankSnapshot | null = null;
+function loadPhotodumpBankSnapshot(): PhotodumpBankSnapshot {
+  if (!photodumpBankSnapshotCache) {
+    const path = join(process.cwd(), 'src/data/photodump-bank/bank-snapshot.json');
+    photodumpBankSnapshotCache = JSON.parse(readFileSync(path, 'utf-8')) as PhotodumpBankSnapshot;
+  }
+  return photodumpBankSnapshotCache;
+}
 
 function getCredentials(): Record<string, unknown> {
   const raw = process.env.GEMINI_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '';
@@ -380,7 +399,7 @@ async function runPhotodumpDirector(
   }
 
   const recipeContract = getPhotodumpRecipeContract(recipe);
-  const snapshot = photodumpBankSnapshot as unknown as PhotodumpBankSnapshot;
+  const snapshot = loadPhotodumpBankSnapshot();
   const shotPools = buildPhotodumpShotPools(snapshot.items, brief, recipeContract);
 
   const decidePrompt = buildPhotodumpDecidePrompt(brief, recipeContract, level, shotPools);

@@ -24,6 +24,11 @@
     "api/webhooks/dodopayments.ts": {
       "maxDuration": 10
     },
+    "api/gemini/content.ts": {
+      "maxDuration": 60,
+      "memory": 1024,
+      "includeFiles": "src/data/photodump-bank/bank-snapshot.json"
+    },
     "api/**/*.ts": {
       "maxDuration": 60,
       "memory": 1024
