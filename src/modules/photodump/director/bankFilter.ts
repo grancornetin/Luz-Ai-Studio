@@ -15,7 +15,12 @@
  */
 import type { BankAnalysisItem, CandidateSummary, RecipeContract, ShotPools } from './types';
 
-const MAX_CANDIDATES_PER_SHOT = 40;
+// Bajado de 40 a 12: con 1 shot fijo + 9 tipos rotables, 40 candidatos por
+// tipo (cada uno con pose/gesto/mirada/outfit/objetos/fondo/luz/encuadre/
+// señales en texto) armaba un prompt de "Decidir" enorme — causa real de los
+// 504 (timeout) vistos en producción. 12 sigue dando variedad real de
+// candidatos por shot sin disparar la duración de la llamada a Gemini.
+const MAX_CANDIDATES_PER_SHOT = 12;
 
 function normalizeText(s: string | undefined | null): string {
   return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
