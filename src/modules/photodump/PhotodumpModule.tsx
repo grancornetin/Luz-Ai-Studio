@@ -775,6 +775,10 @@ const PhotodumpModule: React.FC = () => {
                 ? [...sh.weeklyItemPlan.primaryItemIds, ...sh.weeklyItemPlan.secondaryItemIds]
                 : undefined,
               possibleContradictions: contradictions.length > 0 ? contradictions : undefined,
+              // outfit_night_out: si este shot vino del Director Creativo
+              // (banco real + razonamiento de Gemini) o del banco estático de
+              // respaldo (director no corrió o falló para esta sesión).
+              usedDirector: recipe === 'outfit_night_out' ? (result as PhotodumpShotResult).usedDirector ?? false : undefined,
               status:       'ok',
             });
           }

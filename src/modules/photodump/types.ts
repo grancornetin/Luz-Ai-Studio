@@ -928,6 +928,10 @@ export interface PhotodumpShotDebug {
   familyBlockApplied?:      boolean;
   familyBlockMode?:         'disabled' | 'abstract_style_hint' | 'literal_prompt_block';
   possibleContradictions?:  string[];
+  // outfit_night_out: true si este shot vino del Director Creativo (banco
+  // real de fotos + razonamiento de Gemini), false si vino del banco
+  // estático de respaldo (director no corrió o falló para esta sesión).
+  usedDirector?:            boolean;
 
   // Campos de cierre, política y composición
   outfitComposition?:       OutfitComposition;

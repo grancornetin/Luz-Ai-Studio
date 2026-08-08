@@ -9,6 +9,7 @@ export function buildShotDebug(
   routed:            RoutedReferences,
   prompt:            string,
   routingValidation: ValidationResult,
+  usedDirector:      boolean = false,
 ): OutfitNightOutShotDebug {
   return {
     shotId:            contract.shotId,
@@ -16,5 +17,6 @@ export function buildShotDebug(
     cameraGrammar:      contract.cameraGrammar,
     routingValidation,
     promptSummary:      prompt.slice(0, 300),
+    usedDirector,
   };
 }

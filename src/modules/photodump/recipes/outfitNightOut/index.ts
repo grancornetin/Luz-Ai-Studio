@@ -65,6 +65,10 @@ const venueAnchorCache = new Map<string, { imageUrl: string; prompt: string; ref
 // Vacío/ausente cuando el director no corrió o falló — promptBuilder.ts cae
 // al sceneBlock estático en ese caso.
 const directorPromptCache = new Map<string, Map<string, string>>();
+// Motivo de la última falla del director para esta sesión (refs) — solo
+// para debug/diagnóstico, no afecta el comportamiento. Se limpia si el
+// director corre con éxito.
+const directorFailureCache = new Map<string, string>();
 
 function cacheKey(refs: PhotodumpRefs): string {
   const urls = [refs.avatarRef, refs.bodyRef, refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean);
@@ -121,7 +125,7 @@ async function generateFromContract(
     metadata:        { role: 'OUTFIT_NIGHT_OUT_SHOT', shotId: contract.shotId },
   });
 
-  const debug = buildShotDebug(contract, routed, prompt, routingValidation);
+  const debug = buildShotDebug(contract, routed, prompt, routingValidation, Boolean(directorSceneBlock));
   return { imageUrl, prompt, refsCount: preparedRefs.length, debug };
 }
 
@@ -208,10 +212,16 @@ async function tryDirector(
       return directiveFor(contract, FIXED_SHOT_IDS.has(shotId) ? 'reveal' : 'candid');
     });
 
-    if (directives.length === 0) return null;
+    if (directives.length === 0) {
+      directorFailureCache.set(cacheKey(refs), 'El director devolvió 0 shots.');
+      return null;
+    }
     directorPromptCache.set(key, shotCache);
+    directorFailureCache.delete(key);
     return directives;
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    directorFailureCache.set(cacheKey(refs), message);
     console.warn('[outfit_night_out] Director Creativo falló, usando banco estático de respaldo:', err);
     return null;
   }
@@ -276,11 +286,13 @@ export async function generateOutfitNightOutShot(
   if (shotId === 'mirror_check') {
     const cached = prepAnchorCache.get(key);
     if (cached) {
+      const usedDirector = directorPromptCache.get(key)?.has('mirror_check') ?? false;
       const debug = buildShotDebug(
         MIRROR_CHECK_CONTRACT,
         { orderedUrls: [], breakdown: { outfits: [] } },
         'mirror_check (already generated as the anchor)',
         { passed: true, errors: [] },
+        usedDirector,
       );
       return { imageUrl: cached.imageUrl, prompt: cached.prompt, refsCount: cached.refsCount, debug };
     }

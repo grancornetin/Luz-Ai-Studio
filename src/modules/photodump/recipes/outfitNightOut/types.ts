@@ -117,4 +117,10 @@ export interface OutfitNightOutShotDebug {
   cameraGrammar:     CameraGrammarRef;
   routingValidation: ValidationResult;
   promptSummary:     string;
+  // true si el texto de este shot vino del Director Creativo (banco real +
+  // razonamiento de Gemini), false si vino del banco estático de
+  // nightMoments.ts — ya sea porque el director falló para esta sesión, o
+  // porque el shot es uno de los 3 fijos sin cobertura del director todavía.
+  // Ver directorFailureReason en la sesión si usedDirector es false por falla.
+  usedDirector: boolean;
 }

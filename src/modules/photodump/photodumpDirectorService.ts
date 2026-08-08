@@ -1736,6 +1736,10 @@ export interface PhotodumpShotResult {
   imageUrl:  string;
   prompt:    string;
   refsCount: number;
+  // Solo poblado por outfit_night_out por ahora — true si este shot vino del
+  // Director Creativo (banco real + razonamiento de Gemini), false si vino
+  // del banco estático de respaldo (director no corrió, o falló).
+  usedDirector?: boolean;
 }
 
 // Lógica de alcance del estilo por shot:
@@ -2300,7 +2304,7 @@ export async function generatePhotodumpShot(
     const result = await generateOutfitNightOutShot(
       shot, refs, destino, basePrompt, sessionParams, shot.arcPosition - 1, totalShots,
     );
-    return { imageUrl: result.imageUrl, prompt: result.prompt, refsCount: result.refsCount };
+    return { imageUrl: result.imageUrl, prompt: result.prompt, refsCount: result.refsCount, usedDirector: result.debug.usedDirector };
   }
 
   // day_in_life — multi-mundo: cada shot se ancla al REF0 de SU bloque (no al
