@@ -13,14 +13,19 @@ if not exist "%BACKEND_DIR%\Luz IA secrets\vertex-service-account.json" (
   exit /b 1
 )
 
+set "GOOGLE_CLOUD_PROJECT=luz-ai-studio"
+set "GOOGLE_CLOUD_LOCATION=us-central1"
+set "VERTEX_GEMINI_MODEL=gemini-2.5-flash"
+set "PORT=3134"
+
 echo.
-echo  Iniciando Director Lab (puerto 3131)...
-start "Director Lab" cmd /k "cd /d "%BACKEND_DIR%" && node server.js"
+echo  Iniciando Director Lab (puerto 3134)...
+start "Director Lab (3134)" cmd /k "cd /d "%BACKEND_DIR%" && set GOOGLE_CLOUD_PROJECT=luz-ai-studio&& set GOOGLE_CLOUD_LOCATION=us-central1&& set VERTEX_GEMINI_MODEL=gemini-2.5-flash&& set PORT=3134&& node server.js"
 
 echo  Esperando a que levante...
 timeout /t 4 /nobreak >nul
 
-start "" "http://localhost:3131/director-lab.html"
+start "" "http://localhost:3134/director-lab.html"
 
 echo.
 echo  Director Lab deberia abrirse en tu navegador.

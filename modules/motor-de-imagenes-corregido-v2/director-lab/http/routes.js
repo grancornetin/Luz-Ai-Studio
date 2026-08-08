@@ -2,7 +2,6 @@
 
 const bankRegistry = require('../core/bank-registry');
 const photodumpRecipeAdapter = require('../adapters/photodump-recipe-adapter');
-const shotNotes = require('../persistence/shot-notes');
 const projects = require('../persistence/projects');
 const recipes = require('../persistence/recipes');
 const cases = require('../persistence/cases');
@@ -79,7 +78,7 @@ async function handle(req, res, parsed, deps) {
       return true;
     }
 
-    // ── Interfaz simplificada (v2): generar una historia + guardar notas ──
+    // ── Interfaz simplificada (v3): Gemini razona el brief + elige escena real ──
     if (req.method === 'POST' && pathname === '/api/director-lab/generate') {
       const body = await readJson(req);
       if (body.recipeId !== 'outfit_night_out') {
@@ -90,39 +89,31 @@ async function handle(req, res, parsed, deps) {
         ));
         return true;
       }
-      const level = ['corto', 'completo', 'extendido'].includes(body.level) ? body.level : 'corto';
-      const energy = body.energy === 'fiesta' ? 'fiesta' : 'elegante';
+      const level = ['corto', 'completo', 'extendido'].includes(body.level) ? body.level : null;
+      const energy = body.energy === 'fiesta' ? 'fiesta' : (body.energy === 'elegante' ? 'elegante' : null);
       const gender = body.gender === 'male' ? 'male' : 'female';
       const seed = body.seed || `${body.recipeId}-${Date.now()}`;
-      let shots;
+      const providerReady = vertex.publicConfig().ready;
+      let result;
       try {
-        shots = await photodumpRecipeAdapter.generateOutfitNightOutStory({
+        result = await photodumpRecipeAdapter.generateOutfitNightOutStory({
           level, seed, energy, gender,
           hasCompanion: !!body.hasCompanion,
           garmentCount: Number(body.garmentCount) || 1,
           hasVenueAnchor: !!body.venueImageUrl,
           venueImageUrl: body.venueImageUrl,
           venueTextFallback: body.venueTextFallback || body.brief || 'a stylish night-out venue',
-          noteInjector: shotId => {
-            const note = shotNotes.latestFor(body.recipeId, shotId);
-            return note ? note.note : null;
-          }
+          geminiClient: providerReady ? vertex : null
         });
       } catch (err) {
         sendJson(res, 500, errorPayload('generation_error', err.message, 'Revisar el brief enviado'));
         return true;
       }
-      sendJson(res, 200, { recipeId: body.recipeId, level, energy, seed, shots });
-      return true;
-    }
-
-    if (req.method === 'POST' && pathname === '/api/director-lab/notes') {
-      const body = await readJson(req);
-      if (!body.recipeId || !body.shotId || !body.note) {
-        sendJson(res, 400, errorPayload('validation', 'Falta recipeId, shotId o note', 'Incluir los tres en el body'));
-        return true;
-      }
-      sendJson(res, 201, shotNotes.create({ recipeId: body.recipeId, shotId: body.shotId, note: body.note }));
+      sendJson(res, 200, {
+        recipeId: body.recipeId, level: result.level, energy: result.energy, seed,
+        shots: result.shots, reasoning: result.reasoning,
+        geminiUsed: providerReady
+      });
       return true;
     }
 

@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#EEF0F4;font-family:'Inter',system-ui,sans-serif}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes popCelebrate{0%{opacity:0;transform:scale(.85)}60%{opacity:1;transform:scale(1.03)}100%{opacity:1;transform:scale(1)}}
+@keyframes shimmer{0%{background-position:-200px 0}100%{background-position:200px 0}}
+a{color:#6D28D9;text-decoration:none}
+a:hover{color:#C4224A}
+*{box-sizing:border-box}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:8px}
+@media (prefers-reduced-motion: reduce){*{animation-duration:0.01ms !important;animation-iteration-count:1 !important;transition-duration:0.01ms !important}}
+</style>
+</helmet>
+
+<div style="min-height:100vh;display:flex;flex-direction:column">
+
+  <div style="position:sticky;top:0;z-index:100;background:rgba(6,6,13,0.92);backdrop-filter:blur(14px);color:#fff;padding:14px 28px;display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:8px;font-family:'Syne',sans-serif;font-weight:700;font-size:15px;letter-spacing:-0.01em">
+      <div style="width:20px;height:20px;border-radius:9999px;background:linear-gradient(135deg,#F72C5B,#6D28D9)"></div>
+      Luz IA Studio
+    </div>
+    <div style="width:1px;height:20px;background:rgba(255,255,255,0.15)"></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button onClick="{{ goStep0 }}" style="{{ navPill0Style }}">1 · Brief</button>
+      <button onClick="{{ goStep1 }}" style="{{ navPill1Style }}">2 · Estilo</button>
+      <button onClick="{{ goStep2 }}" style="{{ navPill2Style }}">3 · Canales</button>
+      <button onClick="{{ goStep3 }}" style="{{ navPill3Style }}">4 · Cantidad</button>
+      <button onClick="{{ goStep4 }}" style="{{ navPill4Style }}">5 · Generando</button>
+      <button onClick="{{ goStep5 }}" style="{{ navPill5Style }}">6 · Resultados</button>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:8px">
+      <button onClick="{{ setViewLibrary }}" style="{{ navLibraryStyle }}">Biblioteca de campañas</button>
+    </div>
+  </div>
+
+  <div style="flex:1;padding:36px 28px 80px;display:flex;gap:36px;align-items:flex-start;justify-content:center;flex-wrap:wrap">
+
+    <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
+      <div style="font:600 11px/1.4 ui-monospace,Menlo,monospace;color:#64748B;letter-spacing:0.02em">MOBILE · 390PX</div>
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" width="390" height="844" hint-size="390,844">
+        <div style="height:100%;display:flex;flex-direction:column;background:#F8FAFC">
+          <div style="flex:1;overflow:auto;padding-top:56px">
+
+            <sc-if value="{{ isLibrary }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:0 18px 28px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+                  <div style="font:800 20px/1.2 'Syne',sans-serif;color:#0F172A">Tus campañas</div>
+                  <button onClick="{{ goLibraryNew }}" style="border:none;background:#6D28D9;color:#fff;font:700 11px/1 'Inter',sans-serif;padding:9px 12px;border-radius:9999px">+ Nueva</button>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:14px">
+                  <sc-for list="{{ libraryCards }}" as="card" hint-placeholder-count="3">
+                    <div style="animation:fadeUp 320ms ease-out both;background:#fff;border:1px solid #E2E8F0;border-radius:20px;overflow:hidden;box-shadow:0 1px 3px rgba(15,23,42,0.05)">
+                      <div style="aspect-ratio:16/9;background:repeating-linear-gradient(45deg,#F1F5F9,#F1F5F9 10px,#E9E4FB 10px,#E9E4FB 20px);display:flex;align-items:center;justify-content:center">
+                        <span style="font:500 10px/1.3 ui-monospace,Menlo,monospace;color:#7C3AED">vista previa</span>
+                      </div>
+                      <div style="padding:14px 16px">
+                        <div style="font:700 14px/1.3 'Inter',sans-serif;color:#0F172A;margin-bottom:4px">{{ card.title }}</div>
+                        <div style="font:500 11.5px/1.4 'Inter',sans-serif;color:#64748B">{{ card.meta }}</div>
+                        <div style="display:flex;gap:8px;margin-top:12px">
+                          <button style="flex:1;border:1px solid #E2E8F0;background:#fff;color:#334155;font:600 11px/1 'Inter',sans-serif;padding:8px;border-radius:9999px">Ver</button>
+                          <button style="flex:1;border:1px solid #E2E8F0;background:#fff;color:#334155;font:600 11px/1 'Inter',sans-serif;padding:8px;border-radius:9999px">Descargar</button>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isStep0 }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:0 18px 28px">
+                <div style="font:800 21px/1.25 'Syne',sans-serif;color:#0F172A;margin-bottom:4px">Contanos tu campaña</div>
+                <div style="font:500 12.5px/1.5 'Inter',sans-serif;color:#64748B;margin-bottom:16px">Con una idea y tus fotos, armamos todo lo demás.</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+                  <button onClick="{{ addChipLanzamiento }}" style="border:1px solid #E2E8F0;background:#fff;color:#334155;font:600 11px/1 'Inter',sans-serif;padding:8px 12px;border-radius:9999px">Lanzamiento</button>
+                  <button onClick="{{ addChipOferta }}" style="border:1px solid #E2E8F0;background:#fff;color:#334155;font:600 11px/1 'Inter',sans-serif;padding:8px 12px;border-radius:9999px">Oferta</button>
+                  <button onClick="{{ addChipFecha }}" style="border:1px solid #E2E8F0;background:#fff;color:#334155;font:600 11px/1 'Inter',sans-serif;padding:8px 12px;border-radius:9999px">Fecha especial</button>
+                  <button onClick="{{ addChipMarca }}" style="border:1px solid #E2E8F0;background:#fff;color:#334155;font:600 11px/1 'Inter',sans-serif;padding:8px 12px;border-radius:9999px">Dar a conocer marca</button>
+                </div>
+                <textarea value="{{ brief }}" onChange="{{ onBriefChange }}" placeholder="Ej: Lanzo mis tacones Náyade nuevos. Quiero que se sientan poderosas y sensuales al usarlos." style="width:100%;min-height:90px;border:1px solid #E2E8F0;border-radius:16px;padding:12px 14px;font:500 13px/1.5 'Inter',sans-serif;color:#0F172A;resize:none;outline:none"></textarea>
+                <div style="display:flex;align-items:baseline;justify-content:space-between;margin:20px 0 12px">
+                  <div style="font:700 14px/1.3 'Inter',sans-serif;color:#0F172A">Sumá tus fotos <span style="color:#94A3B8;font-weight:500">(opcional)</span></div>
+                  <div style="font:600 11px/1 ui-monospace,Menlo,monospace;color:#94A3B8">6/20</div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:18px">
+                  <sc-for list="{{ moodGroups }}" as="grp" hint-placeholder-count="4">
+                    <div>
+                      <div style="font:700 12.5px/1.3 'Inter',sans-serif;color:#0F172A;margin-bottom:2px">{{ grp.label }}</div>
+                      <div style="font:500 10.5px/1.4 'Inter',sans-serif;color:#94A3B8;margin-bottom:8px">{{ grp.hint }}</div>
+                      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+                        <sc-for list="{{ grp.tiles }}" as="tile" hint-placeholder-count="2">
+                          <div style="position:relative;aspect-ratio:1;border-radius:14px;overflow:hidden;background:repeating-linear-gradient(45deg,#F1F5F9,#F1F5F9 8px,#E2E8F0 8px,#E2E8F0 16px);display:flex;align-items:center;justify-content:center">
+                            <span style="font:600 9px/1.3 ui-monospace,Menlo,monospace;color:#64748B;text-align:center;padding:0 4px">{{ tile }}</span>
+                          </div>
+                        </sc-for>
+                        <button style="aspect-ratio:1;border-radius:14px;border:1.5px dashed #C4B5FD;background:#F5F3FF;color:#6D28D9;font:700 18px/1 'Inter',sans-serif">+</button>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="margin-top:14px;background:#F5F3FF;border-radius:14px;padding:10px 14px;font:500 11.5px/1.4 'Inter',sans-serif;color:#6D28D9">6 fotos subidas → te vamos a sugerir generar 6 piezas, una por cada ángulo.</div>
+                <button onClick="{{ goStep1 }}" style="width:100%;margin-top:22px;border:none;background:#6D28D9;color:#fff;font:700 14px/1 'Inter',sans-serif;padding:15px;border-radius:9999px">Continuar</button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isStep1 }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:0 18px 28px">
+                <div style="font:800 21px/1.25 'Syne',sans-serif;color:#0F172A;margin-bottom:4px">Elegí el estilo</div>
+                <div style="font:500 12.5px/1.5 'Inter',sans-serif;color:#64748B;margin-bottom:18px">Define la luz, el color y la composición de toda tu campaña.</div>
+                <div style="display:flex;flex-direction:column;gap:14px">
+                  <div onClick="{{ selectStyleA }}" style="{{ styleCardAStyle }}">
+                    <div style="aspect-ratio:4/5;background:repeating-linear-gradient(45deg,#F1F5F9,#F1F5F9 10px,#E2E8F0 10px,#E2E8F0 20px);display:flex;align-items:center;justify-content:center">
+                      <span style="font:500 10px/1.3 ui-monospace,Menlo,monospace;color:#64748B">foto de referencia</span>
+                    </div>
+                    <div style="padding:14px 16px;display:flex;align-items:center;gap:10px">
+                      <sc-if value="{{ styleAisSel }}" hint-placeholder-val="{{ false }}"><div style="width:20px;height:20px;border-radius:9999px;background:#6D28D9;color:#fff;font:700 12px/20px 'Inter',sans-serif;text-align:center;flex-shrink:0">✓</div></sc-if>
+                      <div>
+                        <div style="font:700 13.5px/1.3 'Inter',sans-serif;color:#0F172A">Se ve como una clienta real mostrando tu producto</div>
+                        <div style="font:600 10.5px/1 'Inter',sans-serif;color:#94A3B8;margin-top:3px">Estilo UGC</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div onClick="{{ selectStyleB }}" style="{{ styleCardBStyle }}">
+                    <div style="aspect-ratio:4/5;background:repeating-linear-gradient(45deg,#F1F5F9,#F1F5F9 10px,#E2E8F0 10px,#E2E8F0 20px);display:flex;align-items:center;justify-content:center">
+                      <span style="font:500 10px/1.3 ui-monospace,Menlo,monospace;color:#64748B">foto de referencia</span>
+                    </div>
+                    <div style="padding:14px 16px;display:flex;align-items:center;gap:10px">
+                      <sc-if value="{{ styleBisSel }}" hint-placeholder-val="{{ false }}"><div style="width:20px;height:20px;border-radius:9999px;background:#6D28D9;color:#fff;font:700 12px/20px 'Inter',sans-serif;text-align:center;flex-shrink:0">✓</div></sc-if>
+                      <div>
+                        <div style="font:700 13.5px/1.3 'Inter',sans-serif;color:#0F172A">Se ve como una foto de campaña profesional</div>
+                        <div style="font:600 10.5px/1 'Inter',sans-serif;color:#94A3B8;margin-top:3px">Estilo editorial</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <button onClick="{{ regenerateStyle }}" style="width:100%;margin-top:14px;border:1px solid #E2E8F0;background:#fff;color:#334155;font:600 12px/1 'Inter',sans-serif;padding:11px;border-radius:9999px">Pedir 2 opciones nuevas · +2 créditos</button>
+                <button onClick="{{ goStep2 }}" style="width:100%;margin-top:10px;border:none;background:#6D28D9;color:#fff;font:700 14px/1 'Inter',sans-serif;padding:15px;border-radius:9999px">Continuar con este estilo</button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isStep2 }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:0 18px 28px">
+                <div style="font:800 21px/1.25 'Syne',sans-serif;color:#0F172A;margin-bottom:4px">¿Dónde vas a publicar?</div>
+                <div style="font:500 12.5px/1.5 'Inter',sans-serif;color:#64748B;margin-bottom:18px">Elegí uno o varios — adaptamos el copy a cada canal.</div>
+                <div style="display:flex;flex-direction:column;gap:10px">
+                  <div onClick="{{ toggleIgFeed }}" style="{{ chIgFeedStyle }}"><div style="width:34px;height:34px;border-radius:9999px;background:linear-gradient(135deg,#F72C5B,#7C3AED)"></div><span style="flex:1;font:700 13px/1 'Inter',sans-serif">Instagram Feed</span><sc-if value="{{ chIgFeedSel }}" hint-placeholder-val="{{ false }}"><span style="font:700 14px/1 'Inter',sans-serif;color:#6D28D9">✓</span></sc-if></div>
+                  <div onClick="{{ toggleIgStories }}" style="{{ chIgStoriesStyle }}"><div style="width:34px;height:34px;border-radius:9999px;background:linear-gradient(135deg,#F72C5B,#7C3AED)"></div><span style="flex:1;font:700 13px/1 'Inter',sans-serif">Instagram Stories</span><sc-if value="{{ chIgStoriesSel }}" hint-placeholder-val="{{ false }}"><span style="font:700 14px/1 'Inter',sans-serif;color:#6D28D9">✓</span></sc-if></div>
+                  <div onClick="{{ toggleTikTok }}" style="{{ chTikTokStyle }}"><div style="width:34px;height:34px;border-radius:9999px;background:#0F172A"></div><span style="flex:1;font:700 13px/1 'Inter',sans-serif">TikTok</span><sc-if value="{{ chTikTokSel }}" hint-placeholder-val="{{ false }}"><span style="font:700 14px/1 'Inter',sans-serif;color:#6D28D9">✓</span></sc-if></div>
+                  <div onClick="{{ toggleWhatsapp }}" style="{{ chWhatsappStyle }}"><div style="width:34px;height:34px;border-radius:9999px;background:#25D366"></div><span style="flex:1;font:700 13px/1 'Inter',sans-serif">WhatsApp</span><sc-if value="{{ chWhatsappSel }}" hint-placeholder-val="{{ false }}"><span style="font:700 14px/1 'Inter',sans-serif;color:#6D28D9">✓</span></sc-if></div>
+                  <div onClick="{{ toggleFbAds }}" style="{{ chFbAdsStyle }}"><div style="width:34px;height:34px;border-radius:9999px;background:#1877F2"></div><span style="flex:1;font:700 13px/1 'Inter',sans-serif">Facebook Ads</span><sc-if value="{{ chFbAdsSel }}" hint-placeholder-val="{{ false }}"><span style="font:700 14px/1 'Inter',sans-serif;color:#6D28D9">✓</span></sc-if></div>
+                </div>
+                <button onClick="{{ goStep3 }}" style="width:100%;margin-top:20px;border:none;background:#6D28D9;color:#fff;font:700 14px/1 'Inter',sans-serif;padding:15px;border-radius:9999px">Continuar</button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isStep3 }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:0 18px 28px">
+                <div style="font:800 21px/1.25 'Syne',sans-serif;color:#0F172A;margin-bottom:4px">¿Cuántas piezas?</div>
+                <div style="font:500 12.5px/1.5 'Inter',sans-serif;color:#64748B;margin-bottom:18px">Cada pieza es una foto lista para publicar, con su copy.</div>
+                <div style="display:flex;align-items:center;justify-content:center;gap:22px;background:#fff;border:1px solid #E2E8F0;border-radius:20px;padding:18px">
+                  <button onClick="{{ qtyDec }}" style="width:40px;height:40px;border-radius:9999px;border:1px solid #E2E8F0;background:#F8FAFC;font:700 18px/1 'Inter',sans-serif;color:#334155">−</button>
+                  <div style="font:800 34px/1 'Syne',sans-serif;color:#0F172A;min-width:44px;text-align:center">{{ qty }}</div>
+                  <button onClick="{{ qtyInc }}" style="width:40px;height:40px;border-radius:9999px;border:1px solid #E2E8F0;background:#F8FAFC;font:700 18px/1 'Inter',sans-serif;color:#334155">+</button>
+                </div>
+                <div style="margin-top:12px;background:#E4F1AC;border-radius:14px;padding:10px 14px;font:600 11.5px/1.4 'Inter',sans-serif;color:#3F5B0A">Recomendado: 6 imágenes — cubre una semana sin repetir contenido.</div>
+                <div style="margin-top:12px;background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:14px 16px">
+                  <div style="display:flex;justify-content:space-between;font:500 12px/1.6 'Inter',sans-serif;color:#64748B"><span>{{ qty }} piezas × 40 créditos</span><span>{{ qtyImgCost }}</span></div>
+                  <div style="display:flex;justify-content:space-between;font:500 12px/1.6 'Inter',sans-serif;color:#64748B"><span>Sesión de campaña</span><span>60 créditos</span></div>
+                  <div style="height:1px;background:#E2E8F0;margin:8px 0"></div>
+                  <div style="display:flex;justify-content:space-between;font:700 13.5px/1.4 'Inter',sans-serif;color:#0F172A"><span>Total</span><span>{{ qtyTotalCost }} créditos</span></div>
+                </div>
+                <div style="margin-top:10px;font:500 11.5px/1.5 'Inter',sans-serif;color:#94A3B8;text-align:center">Esta campaña costaría desde $450.000 con fotógrafo y community manager.</div>
+                <button onClick="{{ startGenerate }}" style="width:100%;margin-top:18px;border:none;background:#F72C5B;color:#fff;font:700 14px/1 'Inter',sans-serif;padding:15px;border-radius:9999px">Generar mi campaña</button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isStep4 }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:0 18px 28px">
+                <div style="font:800 20px/1.25 'Syne',sans-serif;color:#0F172A;margin-bottom:6px">Estamos creando tu campaña</div>
+                <div style="font:500 12.5px/1.5 'Inter',sans-serif;color:#64748B;margin-bottom:18px">Esto toma un minuto — no cierres la pantalla.</div>
+                <div style="height:10px;border-radius:9999px;background:#E2E8F0;overflow:hidden;margin-bottom:8px">
+                  <div style="height:100%;border-radius:9999px;background:linear-gradient(90deg,#F72C5B,#6D28D9);transition:width 200ms ease-out;width:{{ genProgressWidth }}"></div>
+                </div>
+                <div style="text-align:right;font:700 11px/1 ui-monospace,Menlo,monospace;color:#6D28D9;margin-bottom:18px">{{ genProgressLabel }}</div>
+                <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+                  <div style="{{ genRow1Style }}">Analizando tus fotos</div>
+                  <div style="{{ genRow2Style }}">Definiendo objetivo de cada día</div>
+                  <div style="{{ genRow3Style }}">Generando tus imágenes</div>
+                  <div style="{{ genRow4Style }}">Escribiendo tus captions</div>
+                  <div style="{{ genRow5Style }}">Armando tu calendario</div>
+                </div>
+                <div style="background:#06060D;border-radius:16px;padding:14px 16px">
+                  <div style="font:700 10px/1 'Inter',sans-serif;color:#F72C5B;letter-spacing:0.04em;margin-bottom:6px">TIP</div>
+                  <div style="font:500 12.5px/1.5 'Inter',sans-serif;color:#fff">{{ tipText }}</div>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isStep5 }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:0 18px 40px">
+                <div style="background:linear-gradient(135deg,#06060D,#3B0764);border-radius:20px;padding:18px;margin-bottom:16px;animation:popCelebrate 500ms ease-out both">
+                  <div style="font:800 16px/1.3 'Syne',sans-serif;color:#fff;margin-bottom:6px">Tu campaña está lista 🎉</div>
+                  <div style="font:500 12px/1.5 'Inter',sans-serif;color:#E9D5FF;margin-bottom:12px">6 piezas para 7 días. Empezá por el Calendario para saber qué publicar hoy.</div>
+                  <button onClick="{{ setTabCalendario }}" style="border:none;background:#fff;color:#0F172A;font:700 12px/1 'Inter',sans-serif;padding:10px 16px;border-radius:9999px">Ver calendario</button>
+                </div>
+                <div style="display:flex;gap:6px;background:#F1F5F9;border-radius:9999px;padding:4px;margin-bottom:16px">
+                  <button onClick="{{ setTabPiezas }}" style="{{ tabPiezasStyle }}">Piezas</button>
+                  <button onClick="{{ setTabCalendario }}" style="{{ tabCalendarioStyle }}">Calendario</button>
+                  <button onClick="{{ setTabHashtags }}" style="{{ tabHashtagsStyle }}">Hashtags</button>
+                </div>
+
+                <sc-if value="{{ isTabPiezas }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;flex-direction:column;gap:20px">
+                    <sc-for list="{{ piecesMobile }}" as="p" hint-placeholder-count="2">
+                      <div style="animation:fadeUp 340ms ease-out both">
+                        <div style="display:inline-block;background:#F5F3FF;color:#6D28D9;font:700 10px/1 'Inter',sans-serif;padding:5px 10px;border-radius:9999px;margin-bottom:8px">{{ p.goalTag }}</div>
+                        <div style="background:#fff;border:1px solid #E2E8F0;border-radius:18px;overflow:hidden;box-shadow:0 1px 3px rgba(15,23,42,0.06)">
+                          <div style="display:flex;align-items:center;gap:8px;padding:10px 12px">
+                            <div style="width:26px;height:26px;border-radius:9999px;background:linear-gradient(135deg,#F72C5B,#6D28D9)"></div>
+                            <span style="font:700 12px/1 'Inter',sans-serif;color:#0F172A">nayade.official</span>
+                          </div>
+                          <div style="aspect-ratio:1;background:repeating-linear-gradient(45deg,#F1F5F9,#F1F5F9 10px,#E2E8F0 10px,#E2E8F0 20px);display:flex;align-items:center;justify-content:center">
+                            <span style="font:500 10px/1.3 ui-monospace,Menlo,monospace;color:#64748B">{{ p.imgLabel }}</span>
+                          </div>
+                          <div style="padding:12px 14px">
+                            <div style="font:700 13px/1.4 'Inter',sans-serif;color:#0F172A;margin-bottom:4px"><span style="font-weight:800">nayade.official</span> {{ p.caption }}</div>
+                            <div style="font:600 11.5px/1.4 'Inter',sans-serif;color:#6D28D9;margin-bottom:8px">{{ p.cta }}</div>
+                            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+                              <sc-for list="{{ p.tags }}" as="tag" hint-placeholder-count="3">
+                                <span style="background:#F1F5F9;color:#475569;font:600 10.5px/1 'Inter',sans-serif;padding:5px 9px;border-radius:9999px">{{ tag }}</span>
+                              </sc-for>
+                            </div>
+                            <div style="font:600 11px/1 ui-monospace,Menlo,monospace;color:#94A3B8">{{ p.publish }}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ isTabCalendario }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:8px">
+                    <sc-for list="{{ calendarDays }}" as="d" hint-placeholder-count="7">
+                      <div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #E2E8F0;border-radius:14px;padding:10px 12px;animation:fadeUp 300ms ease-out both">
+                        <div style="width:34px;height:34px;border-radius:10px;background:repeating-linear-gradient(45deg,#F1F5F9,#F1F5F9 6px,#E2E8F0 6px,#E2E8F0 12px);flex-shrink:0"></div>
+                        <div style="flex:1;min-width:0">
+                          <div style="font:700 12px/1.3 'Inter',sans-serif;color:#0F172A">{{ d.day }} · {{ d.channel }}</div>
+                          <div style="font:500 11px/1.4 'Inter',sans-serif;color:#64748B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.goal }}</div>
+                        </div>
+                        <div style="width:18px;height:18px;border-radius:6px;border:1.5px solid #CBD5E1;flex-shrink:0"></div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ isTabHashtags }}" hint-placeholder-val="{{ false }}">
+                  <div>
+                    <div style="font:700 12px/1 'Inter',sans-serif;color:#7C3AED;margin-bottom:8px">De nicho</div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px">
+                      <sc-for list="{{ nicheTags }}" as="t" hint-placeholder-count="6">
+                        <span style="background:#7C3AED;color:#fff;font:600 11px/1 'Inter',sans-serif;padding:7px 12px;border-radius:9999px">{{ t }}</span>
+                      </sc-for>
+                    </div>
+                    <div style="font:700 12px/1 'Inter',sans-serif;color:#3F5B0A;margin-bottom:8px">Cola larga</div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap">
+                      <sc-for list="{{ longTailTags }}" as="t" hint-placeholder-count="6">
+                        <span style="background:#E4F1AC;color:#3F5B0A;font:600 11px/1 'Inter',sans-serif;padding:7px 12px;border-radius:9999px">{{ t }}</span>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <div style="display:flex;flex-direction:column;gap:8px;margin-top:22px">
+                  <button style="border:1.5px solid #6D28D9;background:#F5F3FF;color:#6D28D9;font:700 12.5px/1 'Inter',sans-serif;padding:13px;border-radius:9999px;display:flex;align-items:center;justify-content:center;gap:8px">HTML interactivo <span style="background:#6D28D9;color:#fff;font:700 9px/1 'Inter',sans-serif;padding:3px 7px;border-radius:9999px">el que más usás</span></button>
+                  <div style="display:flex;gap:8px">
+                    <button style="flex:1;border:1px solid #E2E8F0;background:#fff;color:#334155;font:600 12px/1 'Inter',sans-serif;padding:12px;border-radius:9999px">ZIP de imágenes</button>
+                    <button style="flex:1;border:1px solid #E2E8F0;background:#fff;color:#334155;font:600 12px/1 'Inter',sans-serif;padding:12px;border-radius:9999px">PDF</button>
+                  </div>
+                </div>
+                <div style="margin-top:20px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:16px;padding:16px;text-align:center">
+                  <div style="font:700 13px/1.4 'Inter',sans-serif;color:#0F172A;margin-bottom:10px">¿Ya sabés qué vas a lanzar la próxima semana?</div>
+                  <button onClick="{{ goLibraryNew }}" style="border:none;background:#F72C5B;color:#fff;font:700 12px/1 'Inter',sans-serif;padding:11px 18px;border-radius:9999px">Crear otra campaña</button>
+                </div>
+              </div>
+            </sc-if>
+
+          </div>
+        </div>
+      </x-import>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px;align-items:center;max-width:100%">
+      <div style="font:600 11px/1.4 ui-monospace,Menlo,monospace;color:#64748B;letter-spacing:0.02em">DESKTOP · 1280PX</div>
+      <x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" width="1280" height="800" url="app.luzia.studio/campanas/nueva" hint-size="1280,800">
+        <div style="min-height:100%;background:#F8FAFC">
+
+          <sc-if value="{{ isLibrary }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:40px 56px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px">
+                <div style="font:800 28px/1.2 'Syne',sans-serif;color:#0F172A">Tus campañas</div>
+                <button onClick="{{ goLibraryNew }}" style="border:none;background:#6D28D9;color:#fff;font:700 13px/1 'Inter',sans-serif;padding:12px 18px;border-radius:9999px">+ Nueva campaña</button>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:22px">
+                <sc-for list="{{ libraryCards }}" as="card" hint-placeholder-count="3">
+                  <div style="animation:fadeUp 320ms ease-out both;background:#fff;border:1px solid #E2E8F0;border-radius:20px;overflow:hidden;box-shadow:0 1px 3px rgba(15,23,42,0.05);transition:box-shadow 200ms ease-out,transform 200ms ease-out" style-hover="box-shadow:0 12px 30px rgba(15,23,42,0.12);transform:translateY(-2px)">
+                    <div style="aspect-ratio:16/10;background:repeating-linear-gradient(45deg,#F1F5F9,#F1F5F9 12px,#E9E4FB 12px,#E9E4FB 24px);display:flex;align-items:center;justify-content:center">
+                      <span style="font:500 11px/1.3 ui-monospace,Menlo,monospace;color:#7C3AED">vista previa de la campaña</span>
+                    </div>
+                    <div style="padding:18px 20px">
+                      <div style="font:700 15px/1.3 'Inter',sans-serif;color:#0F172A;margin-bottom:4px">{{ card.title }}</div>
+                      <div style="font:500 12px/1.4 'Inter',sans-serif;color:#64748B;margin-bottom:14px">{{ card.meta }}</div>
+                      <div style="display:flex;gap:8px">
+                        <button style="flex:1;border:1px solid #E2E8F0;background:#fff;color:#334155;font:600 11.5px/1 'Inter',sans-serif;padding:9px;border-radius:9999px">Ver</button>
+                        <button style="flex:1;border:1px solid #E2E8F0;background:#fff;color:#334155;font:600 11.5px/1 'Inter',sans-serif;padding:9px;border-radius:9999px">Descargar</button>
+                        <button style="border:1px solid #E2E8F0;background:#fff;color:#94A3B8;font:600 11.5px/1 'Inter',sans-serif;padding:9px 12px;border-radius:9999px">Eliminar</button>
+                      </div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isStep0 }}" hint-placeholder-val="{{ false }}">
+            <div style="max-width:900px;margin:0 auto;padding:52px 40px">
+              <div style="font:800 30px/1.2 'Syne',sans-serif;color:#0F172A;margin-bottom:8px">Contanos tu campaña</div>
+              <div style="font:500 14px/1.6 'Inter',sans-serif;color:#64748B;margin-bottom:24px">Con una idea y tus fotos, armamos todo lo demás.</div>
+              <div style="display:flex;gap:8px;margin-bottom:14px">
+                <button onClick="{{ addChipLanzamiento }}" style="border:1px solid #E2E8F0;background:#fff;color:#334155;font:600 12.5px/1 'Inter',sans-serif;padding:10px 16px;border-radius:9999px">Lanzamiento</button>
+                <button onClick="{{ addChipOferta }}" style="border:1px solid #E2E8F0;background:#fff;color:#334155;font:600 12.5px/1 'Inter',sans-serif;padding:10px 16px;border-radius:9999px">Oferta</button>
+                <button onClick="{{ addChipFecha }}" style="border:1px solid #E2E8F0;background:#fff;color:#334155;font:600 12.5px/1 'Inter',sans-serif;padding:10px 16px;border-radius:9999px">Fecha especial</button>
+                <button onClick="{{ addChipMarca }}" style="border:1px solid #E2E8F0;background:#fff;color:#334155;font:600 12.5px/1 'Inter',sans-serif;padding:10px 16px;border-radius:9999px">Dar a conocer marca</button>
+              </div>
+              <textarea value="{{ brief }}" onChange="{{ onBriefChange }}" placeholder="Ej: Lanzo mis tacones Náyade nuevos. Quiero que se sientan poderosas y sensuales al usarlos." style="width:100%;min-height:100px;border:1px solid #E2E8F0;border-radius:18px;padding:16px 18px;font:500 14px/1.6 'Inter',sans-serif;color:#0F172A;resize:none;outline:none"></textarea>
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin:28px 0 16px">
+                <div style="font:700 16px/1.3 'Inter',sans-serif;color:#0F172A">Sumá tus fotos <span style="color:#94A3B8;font-weight:500;font-size:13px">(opcional, hasta 20)</span></div>
+                <div style="font:600 12px/1 ui-monospace,Menlo,monospace;color:#94A3B8">6/20</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:24px">
+                <sc-for list="{{ moodGroups }}" as="grp" hint-placeholder-count="4">
+                  <div>
+                    <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:10px">
+                      <span style="font:700 14px/1.3 'Inter',sans-serif;color:#0F172A">{{ grp.label }}</span>
+                      <span style="font:500 11.5px/1.3 'Inter',sans-serif;color:#94A3B8">{{ grp.hint }}</span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px">
+                      <sc-for list="{{ grp.tiles }}" as="tile" hint-placeholder-count="3">
+                        <div style="position:relative;aspect-ratio:1;border-radius:16px;overflow:hidden;background:repeating-linear-gradient(45deg,#F1F5F9,#F1F5F9 8px,#E2E8F0 8px,#E2E8F0 16px);display:flex;align-items:center;justify-content:center">
+                          <span style="font:600 9.5px/1.3 ui-monospace,Menlo,monospace;color:#64748B;text-align:center;padding:0 4px">{{ tile }}</span>
+                        </div>
+                      </sc-for>
+                      <button style="aspect-ratio:1;border-radius:16px;border:1.5px dashed #C4B5FD;background:#F5F3FF;color:#6D28D9;font:700 20px/1 'Inter',sans-serif">+</button>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="margin-top:20px;background:#F5F3FF;border-radius:16px;padding:14px 18px;font:500 13px/1.5 'Inter',sans-serif;color:#6D28D9">6 fotos subidas → te vamos a sugerir generar 6 piezas en el Paso 4, una por cada ángulo que trajiste.</div>
+              <button onClick="{{ goStep1 }}" style="margin-top:28px;border:none;background:#6D28D9;color:#fff;font:700 14.5px/1 'Inter',sans-serif;padding:16px 30px;border-radius:9999px">Continuar</button>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isStep1 }}" hint-placeholder-val="{{ false }}">
+            <div style="max-width:920px;margin:0 auto;padding:52px 40px">
+              <div style="font:800 30px/1.2 'Syne',sans-serif;color:#0F172A;margin-bottom:8px">Elegí el estilo de tu campaña</div>
+              <div style="font:500 14px/1.6 'Inter',sans-serif;color:#64748B;margin-bottom:28px">Esta elección define la luz, el color y la composición de todo lo que viene.</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+                <div onClick="{{ selectStyleA }}" style="{{ styleCardAStyleD }}">
+                  <div style="aspect-ratio:4/5;background:repeating-linear-gradient(45deg,#F1F5F9,#F1F5F9 12px,#E2E8F0 12px,#E2E8F0 24px);display:flex;align-items:center;justify-content:center">
+                    <span style="font:500 11px/1.3 ui-monospace,Menlo,monospace;color:#64748B">foto de referencia</span>
+                  </div>
+                  <div style="padding:18px 20px;display:flex;align-items:center;gap:12px">
+                    <sc-if value="{{ styleAisSel }}" hint-placeholder-val="{{ false }}"><div style="width:24px;height:24px;border-radius:9999px;background:#6D28D9;color:#fff;font:700 13px/24px 'Inter',sans-serif;text-align:center;flex-shrink:0">✓</div></sc-if>
+                    <div>
+                      <div style="font:700 15px/1.3 'Inter',sans-serif;color:#0F172A">Se ve como una clienta real mostrando tu producto</div>
+                      <div style="font:600 11.5px/1 'Inter',sans-serif;color:#94A3B8;margin-top:4px">Estilo UGC</div>
+                    </div>
+                  </div>
+                </div>
+                <div onClick="{{ selectStyleB }}" style="{{ styleCardBStyleD }}">
+                  <div style="aspect-ratio:4/5;background:repeating-linear-gradient(45deg,#F1F5F9,#F1F5F9 12px,#E2E8F0 12px,#E2E8F0 24px);display:flex;align-items:center;justify-content:center">
+                    <span style="font:500 11px/1.3 ui-monospace,Menlo,monospace;color:#64748B">foto de referencia</span>
+                  </div>
+                  <div style="padding:18px 20px;display:flex;align-items:center;gap:12px">
+                    <sc-if value="{{ styleBisSel }}" hint-placeholder-val="{{ false }}"><div style="width:24px;height:24px;border-radius:9999px;background:#6D28D9;color:#fff;font:700 13px/24px 'Inter',sans-serif;text-align:center;flex-shrink:0">✓</div></sc-if>
+                    <div>
+                      <div style="font:700 15px/1.3 'Inter',sans-serif;color:#0F172A">Se ve como una foto de campaña profesional</div>
+                      <div style="font:600 11.5px/1 'Inter',sans-serif;color:#94A3B8;margin-top:4px">Estilo editorial</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div style="display:flex;gap:12px;margin-top:24px">
+                <button onClick="{{ regenerateStyle }}" style="border:1px solid #E2E8F0;background:#fff;color:#334155;font:600 13px/1 'Inter',sans-serif;padding:14px 20px;border-radius:9999px">Pedir 2 opciones nuevas · +2 créditos</button>
+                <button onClick="{{ goStep2 }}" style="border:none;background:#6D28D9;color:#fff;font:700 14.5px/1 'Inter',sans-serif;padding:14px 26px;border-radius:9999px">Continuar con este estilo</button>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isStep2 }}" hint-placeholder-val="{{ false }}">
+            <div style="max-width:760px;margin:0 auto;padding:52px 40px">
+              <div style="font:800 30px/1.2 'Syne',sans-serif;color:#0F172A;margin-bottom:8px">¿Dónde vas a publicar esto?</div>
+              <div style="font:500 14px/1.6 'Inter',sans-serif;color:#64748B;margin-bottom:28px">Elegí uno o varios — adaptamos el copy y el formato a cada canal.</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                <div onClick="{{ toggleIgFeed }}" style="{{ chIgFeedStyleD }}"><div style="width:38px;height:38px;border-radius:9999px;background:linear-gradient(135deg,#F72C5B,#7C3AED)"></div><span style="flex:1;font:700 14px/1 'Inter',sans-serif">Instagram Feed</span><sc-if value="{{ chIgFeedSel }}" hint-placeholder-val="{{ false }}"><span style="font:700 16px/1 'Inter',sans-serif;color:#6D28D9">✓</span></sc-if></div>
+                <div onClick="{{ toggleIgStories }}" style="{{ chIgStoriesStyleD }}"><div style="width:38px;height:38px;border-radius:9999px;background:linear-gradient(135deg,#F72C5B,#7C3AED)"></div><span style="flex:1;font:700 14px/1 'Inter',sans-serif">Instagram Stories</span><sc-if value="{{ chIgStoriesSel }}" hint-placeholder-val="{{ false }}"><span style="font:700 16px/1 'Inter',sans-serif;color:#6D28D9">✓</span></sc-if></div>
+                <div onClick="{{ toggleTikTok }}" style="{{ chTikTokStyleD }}"><div style="width:38px;height:38px;border-radius:9999px;background:#0F172A"></div><span style="flex:1;font:700 14px/1 'Inter',sans-serif">TikTok</span><sc-if value="{{ chTikTokSel }}" hint-placeholder-val="{{ false }}"><span style="font:700 16px/1 'Inter',sans-serif;color:#6D28D9">✓</span></sc-if></div>
+                <div onClick="{{ toggleWhatsapp }}" style="{{ chWhatsappStyleD }}"><div style="width:38px;height:38px;border-radius:9999px;background:#25D366"></div><span style="flex:1;font:700 14px/1 'Inter',sans-serif">WhatsApp</span><sc-if value="{{ chWhatsappSel }}" hint-placeholder-val="{{ false }}"><span style="font:700 16px/1 'Inter',sans-serif;color:#6D28D9">✓</span></sc-if></div>
+                <div onClick="{{ toggleFbAds }}" style="{{ chFbAdsStyleD }}"><div style="width:38px;height:38px;border-radius:9999px;background:#1877F2"></div><span style="flex:1;font:700 14px/1 'Inter',sans-serif">Facebook Ads</span><sc-if value="{{ chFbAdsSel }}" hint-placeholder-val="{{ false }}"><span style="font:700 16px/1 'Inter',sans-serif;color:#6D28D9">✓</span></sc-if></div>
+              </div>
+              <button onClick="{{ goStep3 }}" style="margin-top:28px;border:none;background:#6D28D9;color:#fff;font:700 14.5px/1 'Inter',sans-serif;padding:16px 30px;border-radius:9999px">Continuar</button>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isStep3 }}" hint-placeholder-val="{{ false }}">
+            <div style="max-width:760px;margin:0 auto;padding:52px 40px">
+              <div style="font:800 30px/1.2 'Syne',sans-serif;color:#0F172A;margin-bottom:8px">¿Cuántas piezas querés generar?</div>
+              <div style="font:500 14px/1.6 'Inter',sans-serif;color:#64748B;margin-bottom:28px">Cada pieza es una foto lista para publicar, con su copy.</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+                <div style="display:flex;flex-direction:column;gap:16px">
+                  <div style="display:flex;align-items:center;justify-content:center;gap:26px;background:#fff;border:1px solid #E2E8F0;border-radius:22px;padding:26px">
+                    <button onClick="{{ qtyDec }}" style="width:46px;height:46px;border-radius:9999px;border:1px solid #E2E8F0;background:#F8FAFC;font:700 20px/1 'Inter',sans-serif;color:#334155">−</button>
+                    <div style="font:800 44px/1 'Syne',sans-serif;color:#0F172A;min-width:56px;text-align:center">{{ qty }}</div>
+                    <button onClick="{{ qtyInc }}" style="width:46px;height:46px;border-radius:9999px;border:1px solid #E2E8F0;background:#F8FAFC;font:700 20px/1 'Inter',sans-serif;color:#334155">+</button>
+                  </div>
+                  <div style="background:#E4F1AC;border-radius:16px;padding:14px 18px;font:600 12.5px/1.4 'Inter',sans-serif;color:#3F5B0A">Recomendado: 6 imágenes — cubre una semana sin repetir contenido.</div>
+                  <button onClick="{{ startGenerate }}" style="border:none;background:#F72C5B;color:#fff;font:700 15px/1 'Inter',sans-serif;padding:17px;border-radius:9999px">Generar mi campaña</button>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:16px">
+                  <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:18px 20px">
+                    <div style="display:flex;justify-content:space-between;font:500 13px/1.8 'Inter',sans-serif;color:#64748B"><span>{{ qty }} piezas × 40 créditos</span><span>{{ qtyImgCost }}</span></div>
+                    <div style="display:flex;justify-content:space-between;font:500 13px/1.8 'Inter',sans-serif;color:#64748B"><span>Sesión de campaña</span><span>60 créditos</span></div>
+                    <div style="height:1px;background:#E2E8F0;margin:10px 0"></div>
+                    <div style="display:flex;justify-content:space-between;font:700 15px/1.4 'Inter',sans-serif;color:#0F172A"><span>Total</span><span>{{ qtyTotalCost }} créditos</span></div>
+                  </div>
+                  <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:16px;padding:16px 18px;font:500 12.5px/1.6 'Inter',sans-serif;color:#64748B">Esta campaña te costaría desde <b style="color:#0F172A">$450.000</b> contratando fotógrafo y community manager por separado.</div>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isStep4 }}" hint-placeholder-val="{{ false }}">
+            <div style="max-width:700px;margin:0 auto;padding:64px 40px">
+              <div style="font:800 28px/1.25 'Syne',sans-serif;color:#0F172A;margin-bottom:8px">Estamos creando tu campaña</div>
+              <div style="font:500 14px/1.6 'Inter',sans-serif;color:#64748B;margin-bottom:26px">Esto toma un minuto — no cierres la pantalla.</div>
+              <div style="height:12px;border-radius:9999px;background:#E2E8F0;overflow:hidden;margin-bottom:10px">
+                <div style="height:100%;border-radius:9999px;background:linear-gradient(90deg,#F72C5B,#6D28D9);transition:width 200ms ease-out;width:{{ genProgressWidth }}"></div>
+              </div>
+              <div style="text-align:right;font:700 12px/1 ui-monospace,Menlo,monospace;color:#6D28D9;margin-bottom:24px">{{ genProgressLabel }}</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px">
+                <div style="{{ genRow1Style }}">Analizando tus fotos</div>
+                <div style="{{ genRow2Style }}">Definiendo objetivo de cada día</div>
+                <div style="{{ genRow3Style }}">Generando tus imágenes</div>
+                <div style="{{ genRow4Style }}">Escribiendo tus captions</div>
+                <div style="{{ genRow5Style }}">Armando tu calendario</div>
+              </div>
+              <div style="background:#06060D;border-radius:18px;padding:18px 22px">
+                <div style="font:700 11px/1 'Inter',sans-serif;color:#F72C5B;letter-spacing:0.04em;margin-bottom:8px">TIP</div>
+                <div style="font:500 14px/1.6 'Inter',sans-serif;color:#fff">{{ tipText }}</div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isStep5 }}" hint-placeholder-val="{{ false }}">
+            <div style="max-width:1080px;margin:0 auto;padding:44px 40px 64px">
+              <div style="background:linear-gradient(135deg,#06060D,#3B0764);border-radius:24px;padding:28px 32px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:24px;animation:popCelebrate 500ms ease-out both">
+                <div>
+                  <div style="font:800 20px/1.3 'Syne',sans-serif;color:#fff;margin-bottom:6px">Tu campaña está lista 🎉</div>
+                  <div style="font:500 13.5px/1.5 'Inter',sans-serif;color:#E9D5FF">6 piezas para 7 días. Empezá por el Calendario para saber qué publicar hoy.</div>
+                </div>
+                <button onClick="{{ setTabCalendario }}" style="flex-shrink:0;border:none;background:#fff;color:#0F172A;font:700 13px/1 'Inter',sans-serif;padding:13px 20px;border-radius:9999px">Ver calendario</button>
+              </div>
+              <div style="display:flex;gap:6px;background:#F1F5F9;border-radius:9999px;padding:5px;margin-bottom:24px;width:fit-content">
+                <button onClick="{{ setTabPiezas }}" style="{{ tabPiezasStyleD }}">Piezas</button>
+                <button onClick="{{ setTabCalendario }}" style="{{ tabCalendarioStyleD }}">Calendario</button>
+                <button onClick="{{ setTabHashtags }}" style="{{ tabHashtagsStyleD }}">Hashtags</button>
+              </div>
+
+              <sc-if value="{{ isTabPiezas }}" hint-placeholder-val="{{ true }}">
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:22px">
+                  <sc-for list="{{ piecesDesktop }}" as="p" hint-placeholder-count="3">
+                    <div style="animation:fadeUp 340ms ease-out both">
+                      <div style="display:inline-block;background:#F5F3FF;color:#6D28D9;font:700 10.5px/1 'Inter',sans-serif;padding:6px 11px;border-radius:9999px;margin-bottom:10px">{{ p.goalTag }}</div>
+                      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:20px;overflow:hidden;box-shadow:0 1px 3px rgba(15,23,42,0.06)">
+                        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px">
+                          <div style="width:26px;height:26px;border-radius:9999px;background:linear-gradient(135deg,#F72C5B,#6D28D9)"></div>
+                          <span style="font:700 12px/1 'Inter',sans-serif;color:#0F172A">nayade.official</span>
+                        </div>
+                        <div style="aspect-ratio:1;background:repeating-linear-gradient(45deg,#F1F5F9,#F1F5F9 10px,#E2E8F0 10px,#E2E8F0 20px);display:flex;align-items:center;justify-content:center">
+                          <span style="font:500 10px/1.3 ui-monospace,Menlo,monospace;color:#64748B">{{ p.imgLabel }}</span>
+                        </div>
+                        <div style="padding:14px 16px">
+                          <div style="font:700 13px/1.4 'Inter',sans-serif;color:#0F172A;margin-bottom:5px"><span style="font-weight:800">nayade.official</span> {{ p.caption }}</div>
+                          <div style="font:600 12px/1.4 'Inter',sans-serif;color:#6D28D9;margin-bottom:9px">{{ p.cta }}</div>
+                          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px">
+                            <sc-for list="{{ p.tags }}" as="tag" hint-placeholder-count="3">
+                              <span style="background:#F1F5F9;color:#475569;font:600 10.5px/1 'Inter',sans-serif;padding:5px 9px;border-radius:9999px">{{ tag }}</span>
+                            </sc-for>
+                          </div>
+                          <div style="font:600 11px/1 ui-monospace,Menlo,monospace;color:#94A3B8">{{ p.publish }}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ isTabCalendario }}" hint-placeholder-val="{{ false }}">
+                <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:12px">
+                  <sc-for list="{{ calendarDays }}" as="d" hint-placeholder-count="7">
+                    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:12px;animation:fadeUp 300ms ease-out both">
+                      <div style="aspect-ratio:1;border-radius:10px;background:repeating-linear-gradient(45deg,#F1F5F9,#F1F5F9 6px,#E2E8F0 6px,#E2E8F0 12px);margin-bottom:8px"></div>
+                      <div style="font:700 11.5px/1.3 'Inter',sans-serif;color:#0F172A">{{ d.day }}</div>
+                      <div style="font:600 10px/1.3 'Inter',sans-serif;color:#6D28D9;margin:2px 0 4px">{{ d.channel }}</div>
+                      <div style="font:500 10.5px/1.4 'Inter',sans-serif;color:#64748B">{{ d.goal }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ isTabHashtags }}" hint-placeholder-val="{{ false }}">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px">
+                  <div>
+                    <div style="font:700 13px/1 'Inter',sans-serif;color:#7C3AED;margin-bottom:12px">De nicho</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap">
+                      <sc-for list="{{ nicheTags }}" as="t" hint-placeholder-count="6">
+                        <span style="background:#7C3AED;color:#fff;font:600 12px/1 'Inter',sans-serif;padding:8px 14px;border-radius:9999px">{{ t }}</span>
+                      </sc-for>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="font:700 13px/1 'Inter',sans-serif;color:#3F5B0A;margin-bottom:12px">Cola larga</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap">
+                      <sc-for list="{{ longTailTags }}" as="t" hint-placeholder-count="6">
+                        <span style="background:#E4F1AC;color:#3F5B0A;font:600 12px/1 'Inter',sans-serif;padding:8px 14px;border-radius:9999px">{{ t }}</span>
+                      </sc-for>
+                    </div>
+                  </div>
+                </div>
+              </sc-if>
+
+              <div style="display:flex;align-items:center;gap:12px;margin-top:32px">
+                <button style="border:1.5px solid #6D28D9;background:#F5F3FF;color:#6D28D9;font:700 13px/1 'Inter',sans-serif;padding:14px 20px;border-radius:9999px;display:flex;align-items:center;gap:9px">HTML interactivo <span style="background:#6D28D9;color:#fff;font:700 9.5px/1 'Inter',sans-serif;padding:3px 8px;border-radius:9999px">el que más usás</span></button>
+                <button style="border:1px solid #E2E8F0;background:#fff;color:#334155;font:600 13px/1 'Inter',sans-serif;padding:14px 20px;border-radius:9999px">ZIP de imágenes</button>
+                <button style="border:1px solid #E2E8F0;background:#fff;color:#334155;font:600 13px/1 'Inter',sans-serif;padding:14px 20px;border-radius:9999px">PDF</button>
+              </div>
+              <div style="margin-top:24px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:18px;padding:22px 26px;display:flex;align-items:center;justify-content:space-between">
+                <div style="font:700 15px/1.4 'Inter',sans-serif;color:#0F172A">¿Ya sabés qué vas a lanzar la próxima semana?</div>
+                <button onClick="{{ goLibraryNew }}" style="flex-shrink:0;border:none;background:#F72C5B;color:#fff;font:700 13px/1 'Inter',sans-serif;padding:13px 20px;border-radius:9999px">Crear otra campaña</button>
+              </div>
+            </div>
+          </sc-if>
+
+        </div>
+      </x-import>
+    </div>
+
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    view: 'flow', step: 0, brief: '', styleSel: null,
+    channels: ['ig_feed', 'ig_stories'], qty: 6,
+    tab: 'piezas', genProgress: 0,
+  };
+
+  componentWillUnmount() { clearInterval(this._iv); }
+
+  go(step) { this.setState({ view: 'flow', step }); }
+  setBrief(t) { this.setState({ brief: t }); }
+  toggleCh(ch) {
+    this.setState(s => s.channels.includes(ch)
+      ? { channels: s.channels.filter(c => c !== ch) }
+      : { channels: [...s.channels, ch] });
+  }
+  setQty(n) { this.setState(s => ({ qty: Math.max(1, Math.min(8, s.qty + n)) })); }
+  startGenerate() {
+    this.setState({ step: 4, genProgress: 0 });
+    clearInterval(this._iv);
+    this._iv = setInterval(() => {
+      this.setState(s => {
+        const p = Math.min(100, s.genProgress + 4);
+        if (p >= 100) {
+          clearInterval(this._iv);
+          setTimeout(() => this.setState({ step: 5 }), 400);
+        }
+        return { genProgress: p };
+      });
+    }, 110);
+  }
+
+  renderVals() {
+    const s = this.state;
+    const activePill = (n) => s.view === 'flow' && s.step === n;
+    const pillStyle = (active) => active
+      ? 'border:none;background:#fff;color:#0F172A;font:700 11.5px/1 Inter,sans-serif;padding:8px 13px;border-radius:9999px;cursor:pointer'
+      : 'border:1px solid rgba(255,255,255,0.18);background:transparent;color:rgba(255,255,255,0.7);font:600 11.5px/1 Inter,sans-serif;padding:8px 13px;border-radius:9999px;cursor:pointer';
+
+    const tips = [
+      'El contenido con personas reales convierte más que el de catálogo puro.',
+      'Publicar siempre a la misma hora ayuda a que tu audiencia te encuentre.',
+      'Las historias con encuestas generan el doble de respuestas.',
+      'Un buen close-up del producto vende más que una foto general.',
+    ];
+    const tipIdx = Math.floor(s.genProgress / 26) % tips.length;
+
+    const doneStyle = 'display:flex;align-items:center;gap:10px;font:600 12.5px/1 Inter,sans-serif;color:#0F172A;padding:10px 12px;border-radius:12px;background:#F5F3FF';
+    const pendStyle = 'display:flex;align-items:center;gap:10px;font:500 12.5px/1 Inter,sans-serif;color:#94A3B8;padding:10px 12px;border-radius:12px;background:#F8FAFC';
+    const rowMark = (threshold, label) => (s.genProgress >= threshold ? '✓  ' : '○  ') + label;
+
+    const moodGroups = [
+      { key: 'producto', label: 'Fotos de tu producto', hint: 'ángulos, close-ups, detalles', tiles: ['frontal', 'detalle textura', 'vista trasera'] },
+      { key: 'modelo', label: 'Fotos de un modelo', hint: 'quién protagoniza la campaña', tiles: ['ella sonriendo'] },
+      { key: 'marca', label: 'Fotos de marca', hint: 'logo, empaque, local', tiles: ['logo marca'] },
+      { key: 'inspiracion', label: 'Fotos de inspiración', hint: 'referencias que te gustan', tiles: ['inspiración'] },
+    ];
+
+    const styleCardStyle = (sel, wide) => {
+      const pad = wide ? '' : '';
+      return `border-radius:${wide ? 20 : 18}px;overflow:hidden;cursor:pointer;background:#fff;border:2px solid ${sel ? '#6D28D9' : '#E2E8F0'};box-shadow:${sel ? '0 6px 20px rgba(109,40,217,0.14)' : '0 1px 3px rgba(15,23,42,0.05)'};transition:border-color 180ms ease-out,box-shadow 180ms ease-out`;
+    };
+
+    const chStyle = (sel, wide) => `display:flex;align-items:center;gap:${wide ? 14 : 12}px;cursor:pointer;background:${sel ? '#F5F3FF' : '#fff'};border:1.5px solid ${sel ? '#6D28D9' : '#E2E8F0'};border-radius:16px;padding:${wide ? '16px 18px' : '12px 14px'};transition:border-color 150ms ease-out,background 150ms ease-out`;
+
+    const tabBtn = (active, wide) => active
+      ? `border:none;background:#fff;color:#0F172A;font:700 ${wide ? 13 : 12}px/1 Inter,sans-serif;padding:${wide ? '10px 20px' : '9px 0'};border-radius:9999px;flex:${wide ? 'none' : 1};box-shadow:0 1px 2px rgba(15,23,42,0.08);cursor:pointer`
+      : `border:none;background:transparent;color:#64748B;font:600 ${wide ? 13 : 12}px/1 Inter,sans-serif;padding:${wide ? '10px 20px' : '9px 0'};border-radius:9999px;flex:${wide ? 'none' : 1};cursor:pointer`;
+
+    const piecesData = [
+      { goalTag: 'Día 1 · Objetivo: presentar el lanzamiento', imgLabel: 'vista frontal + modelo', caption: 'Llegaron los Náyade nuevos. Los que te hacen caminar distinto.', cta: 'Mirá la colección completa →', tags: ['#nayade', '#tacones', '#nuevacoleccion'], publish: 'Lunes · 9:00am · IG Feed' },
+      { goalTag: 'Día 3 · Objetivo: generar curiosidad antes de revelar el precio', imgLabel: 'close-up textura', caption: 'El detalle que nadie ve en la foto pero se siente en cada paso.', cta: 'Preguntános el precio por WhatsApp', tags: ['#detalle', '#calidad', '#hechoamano'], publish: 'Miércoles · 7:30pm · IG Stories' },
+      { goalTag: 'Día 5 · Objetivo: mostrar la experiencia real de uso', imgLabel: 'ella caminando, estilo de vida', caption: 'Para las noches en las que querés sentirte imparable.', cta: 'Comprá el tuyo hoy →', tags: ['#poderosa', '#salidadenoche', '#nayadeoficial'], publish: 'Viernes · 6:00pm · TikTok' },
+    ];
+
+    const calendarDays = [
+      { day: 'Lunes', channel: 'IG Feed', goal: 'Presentar el lanzamiento' },
+      { day: 'Martes', channel: 'WhatsApp', goal: 'Recordatorio + link directo' },
+      { day: 'Miércoles', channel: 'IG Stories', goal: 'Generar curiosidad por el precio' },
+      { day: 'Jueves', channel: 'Facebook Ads', goal: 'Alcanzar nuevas clientas' },
+      { day: 'Viernes', channel: 'TikTok', goal: 'Mostrar experiencia real de uso' },
+      { day: 'Sábado', channel: 'IG Feed', goal: 'Prueba social: opiniones reales' },
+      { day: 'Domingo', channel: 'IG Stories', goal: 'Último llamado, cierre de semana' },
+    ];
+
+    return {
+      view: s.view, isLibrary: s.view === 'library',
+      isStep0: s.view === 'flow' && s.step === 0, isStep1: s.view === 'flow' && s.step === 1,
+      isStep2: s.view === 'flow' && s.step === 2, isStep3: s.view === 'flow' && s.step === 3,
+      isStep4: s.view === 'flow' && s.step === 4, isStep5: s.view === 'flow' && s.step === 5,
+
+      goStep0: () => this.go(0), goStep1: () => this.go(1), goStep2: () => this.go(2),
+      goStep3: () => this.go(3), goStep4: () => this.go(4), goStep5: () => this.go(5),
+      setViewLibrary: () => this.setState({ view: 'library' }),
+      goLibraryNew: () => { this.setState({ view: 'flow', step: 0, brief: '', styleSel: null, qty: 6 }); },
+
+      navPill0Style: pillStyle(activePill(0)), navPill1Style: pillStyle(activePill(1)),
+      navPill2Style: pillStyle(activePill(2)), navPill3Style: pillStyle(activePill(3)),
+      navPill4Style: pillStyle(activePill(4)), navPill5Style: pillStyle(activePill(5)),
+      navLibraryStyle: s.view === 'library'
+        ? 'border:none;background:#F72C5B;color:#fff;font:700 11.5px/1 Inter,sans-serif;padding:8px 14px;border-radius:9999px;cursor:pointer'
+        : 'border:1px solid rgba(255,255,255,0.18);background:transparent;color:rgba(255,255,255,0.7);font:600 11.5px/1 Inter,sans-serif;padding:8px 14px;border-radius:9999px;cursor:pointer',
+
+      brief: s.brief, onBriefChange: (e) => this.setBrief(e.target.value),
+      addChipLanzamiento: () => this.setBrief('Quiero lanzar mis tacones Náyade nuevos y que se sientan poderosas al usarlos.'),
+      addChipOferta: () => this.setBrief('Tengo 20% de descuento en tacones Náyade esta semana, quiero que se note urgente pero elegante.'),
+      addChipFecha: () => this.setBrief('Se viene el Día de la Madre y quiero una campaña especial para regalar Náyade.'),
+      addChipMarca: () => this.setBrief('Quiero que más gente conozca Náyade y lo que nos hace distintas de otras marcas de tacones.'),
+
+      moodGroups,
+
+      styleAisSel: s.styleSel === 'A', styleBisSel: s.styleSel === 'B',
+      selectStyleA: () => this.setState({ styleSel: 'A' }), selectStyleB: () => this.setState({ styleSel: 'B' }),
+      regenerateStyle: () => this.setState({ styleSel: null }),
+      styleCardAStyle: styleCardStyle(s.styleSel === 'A', false), styleCardBStyle: styleCardStyle(s.styleSel === 'B', false),
+      styleCardAStyleD: styleCardStyle(s.styleSel === 'A', true), styleCardBStyleD: styleCardStyle(s.styleSel === 'B', true),
+
+      chIgFeedSel: s.channels.includes('ig_feed'), chIgStoriesSel: s.channels.includes('ig_stories'),
+      chTikTokSel: s.channels.includes('tiktok'), chWhatsappSel: s.channels.includes('whatsapp'), chFbAdsSel: s.channels.includes('fb_ads'),
+      toggleIgFeed: () => this.toggleCh('ig_feed'), toggleIgStories: () => this.toggleCh('ig_stories'),
+      toggleTikTok: () => this.toggleCh('tiktok'), toggleWhatsapp: () => this.toggleCh('whatsapp'), toggleFbAds: () => this.toggleCh('fb_ads'),
+      chIgFeedStyle: chStyle(s.channels.includes('ig_feed'), false), chIgStoriesStyle: chStyle(s.channels.includes('ig_stories'), false),
+      chTikTokStyle: chStyle(s.channels.includes('tiktok'), false), chWhatsappStyle: chStyle(s.channels.includes('whatsapp'), false),
+      chFbAdsStyle: chStyle(s.channels.includes('fb_ads'), false),
+      chIgFeedStyleD: chStyle(s.channels.includes('ig_feed'), true), chIgStoriesStyleD: chStyle(s.channels.includes('ig_stories'), true),
+      chTikTokStyleD: chStyle(s.channels.includes('tiktok'), true), chWhatsappStyleD: chStyle(s.channels.includes('whatsapp'), true),
+      chFbAdsStyleD: chStyle(s.channels.includes('fb_ads'), true),
+
+      qty: s.qty, qtyDec: () => this.setQty(-1), qtyInc: () => this.setQty(1),
+      qtyImgCost: (s.qty * 40) + ' créditos', qtyTotalCost: s.qty * 40 + 60,
+
+      startGenerate: () => this.startGenerate(),
+      genProgressWidth: s.genProgress + '%', genProgressLabel: s.genProgress + '%',
+      genRow1Style: s.genProgress >= 20 ? doneStyle : pendStyle,
+      genRow2Style: s.genProgress >= 40 ? doneStyle : pendStyle,
+      genRow3Style: s.genProgress >= 60 ? doneStyle : pendStyle,
+      genRow4Style: s.genProgress >= 80 ? doneStyle : pendStyle,
+      genRow5Style: s.genProgress >= 100 ? doneStyle : pendStyle,
+      tipText: tips[tipIdx],
+
+      isTabPiezas: s.tab === 'piezas', isTabCalendario: s.tab === 'calendario', isTabHashtags: s.tab === 'hashtags',
+      setTabPiezas: () => this.setState({ tab: 'piezas' }), setTabCalendario: () => this.setState({ tab: 'calendario' }),
+      setTabHashtags: () => this.setState({ tab: 'hashtags' }),
+      tabPiezasStyle: tabBtn(s.tab === 'piezas', false), tabCalendarioStyle: tabBtn(s.tab === 'calendario', false), tabHashtagsStyle: tabBtn(s.tab === 'hashtags', false),
+      tabPiezasStyleD: tabBtn(s.tab === 'piezas', true), tabCalendarioStyleD: tabBtn(s.tab === 'calendario', true), tabHashtagsStyleD: tabBtn(s.tab === 'hashtags', true),
+
+      piecesMobile: piecesData.slice(0, 2), piecesDesktop: piecesData,
+      calendarDays,
+      nicheTags: ['#tacontacones', '#modaargentina', '#emprendedorasla', '#zapaterialatina', '#estilopoderoso', '#pisandofuerte'],
+      longTailTags: ['#tacomanoshechoamano', '#comprarenwhatsapp', '#regalodemujer', '#outfitdelanochelatino', '#calzadoconpersonalidad', '#hechoenlatinoamerica'],
+
+      libraryCards: [
+        { title: 'Náyade — Lanzamiento tacones', meta: '18 jul · 6 piezas · IG, TikTok' },
+        { title: 'Náyade — Oferta de invierno', meta: '02 jun · 8 piezas · IG, WhatsApp' },
+        { title: 'Náyade — Día de la Madre', meta: '30 abr · 5 piezas · IG, Facebook' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -65,13 +65,16 @@
     margin-bottom: 8px;
   }
   .prompt-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #888; margin-bottom: 4px; }
-  .note-box { display: flex; gap: 8px; margin-top: 8px; }
-  .note-box input { flex: 1; margin-bottom: 0; }
   .status-line { font-size: 12px; margin-top: 4px; }
   .status-ok { color: #1a7d3c; }
   .status-warn { color: #b35900; }
   .hint { font-size: 12px; color: #888; margin-top: -8px; margin-bottom: 14px; }
   #results { display: none; }
+  .reasoning-card { background: #f0f4ff; border: 1px solid #d6e0ff; border-radius: 10px; padding: 14px; margin-bottom: 16px; font-size: 13px; }
+  .reasoning-card h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; color: #3949ab; margin: 0 0 8px; }
+  .reasoning-row { margin-bottom: 4px; }
+  .reasoning-row b { color: #333; }
+  .no-gemini-warning { background: #fff8ec; border: 1px solid #f0d9a8; color: #8a5a00; border-radius: 8px; padding: 10px 12px; font-size: 12px; margin-bottom: 14px; }
 </style>
 </head>
 <body>
@@ -93,6 +96,7 @@
       <div>
         <label>Nivel de la historia</label>
         <select id="level">
+          <option value="">Que lo decida el Director</option>
           <option value="corto">Corto (3 fotos)</option>
           <option value="completo">Completo (5 fotos)</option>
           <option value="extendido">Extendido (7 fotos)</option>
@@ -104,6 +108,7 @@
       <div>
         <label>Energía</label>
         <select id="energy">
+          <option value="">Que lo decida el Director</option>
           <option value="elegante">Elegante</option>
           <option value="fiesta">Fiesta</option>
         </select>
@@ -117,9 +122,9 @@
       </div>
     </div>
 
-    <label>Contá la idea (lugar, ocasión, lo que quieras aclarar)</label>
-    <textarea id="brief" placeholder="Ej: salida elegante a un bar de azotea, ambiente de ciudad de noche..."></textarea>
-    <div class="hint">Este texto se usa como descripción del lugar si no subís una foto de referencia (todavía no hay carga de foto en esta versión).</div>
+    <label>Contá la idea (lugar, ocasión, cómo te querés ver)</label>
+    <textarea id="brief" placeholder="Ej: night out en un rooftop en Manhattan, quiero verme sofisticada..."></textarea>
+    <div class="hint">El Director lee esta idea, piensa qué historia cuenta mejor (usando la psicología real de Photodump) y elige una escena real de nuestro banco si no subís una foto del lugar.</div>
 
     <button id="generateBtn">Crear historia</button>
     <div id="statusLine" class="status-line"></div>
@@ -146,11 +151,26 @@ function shotBlockHtml(shot) {
       <div class="prompt-label" style="margin-top:10px">Prompt negativo</div>
       <div class="prompt-block">${escapeHtml(shot.negativePrompt)}</div>
       <button class="secondary copy-btn" data-target="neg">Copiar prompt negativo</button>
-      <div class="note-box">
-        <input type="text" placeholder="¿Algo raro en este shot? Escribí tu nota..." class="note-input" />
-        <button class="secondary save-note-btn">Guardar nota</button>
-      </div>
-      <div class="note-status status-line"></div>
+    </div>
+  `;
+}
+
+function reasoningCardHtml(reasoning, geminiUsed) {
+  if (!geminiUsed) {
+    return `<div class="no-gemini-warning">Gemini no está configurado en este servidor (falta GOOGLE_CLOUD_PROJECT) — la historia se armó con nivel/energía por defecto, sin razonamiento ni elección de escena real. El resto de los shots (pose, HPI) es igual de real siempre.</div>`;
+  }
+  if (!reasoning || reasoning.status !== 'ok') {
+    return `<div class="no-gemini-warning">El Director no pudo terminar de razonar esta vez (${escapeHtml(reasoning ? reasoning.reasoning : 'sin detalle')}). Se usó nivel/energía por defecto.</div>`;
+  }
+  const pr = reasoning.psychologicalReading || {};
+  return `
+    <div class="reasoning-card">
+      <h3>Cómo pensó esta historia el Director</h3>
+      <div class="reasoning-row">${escapeHtml(reasoning.reasoning)}</div>
+      ${reasoning.scene ? `<div class="reasoning-row"><b>Escena elegida:</b> ${escapeHtml(reasoning.scene.sourceId)} — ${escapeHtml(reasoning.sceneReason)}</div>` : ''}
+      ${pr.primaryDrive ? `<div class="reasoning-row"><b>Impulso principal:</b> ${escapeHtml(pr.primaryDrive)}</div>` : ''}
+      ${pr.desiredIdentity ? `<div class="reasoning-row"><b>Identidad que proyecta:</b> ${escapeHtml(pr.desiredIdentity)}</div>` : ''}
+      ${pr.desiredFeeling ? `<div class="reasoning-row"><b>Sensación que vende:</b> ${escapeHtml(pr.desiredFeeling)}</div>` : ''}
     </div>
   `;
 }
@@ -162,7 +182,6 @@ function escapeHtml(text) {
 }
 
 let lastShots = [];
-let lastRecipeId = '';
 
 async function generate() {
   generateBtn.disabled = true;
@@ -171,8 +190,8 @@ async function generate() {
   resultsEl.style.display = 'none';
 
   const recipeId = document.getElementById('recipeId').value;
-  const level = document.getElementById('level').value;
-  const energy = document.getElementById('energy').value;
+  const level = document.getElementById('level').value || null;
+  const energy = document.getElementById('energy').value || null;
   const hasCompanion = document.getElementById('hasCompanion').value === 'true';
   const brief = document.getElementById('brief').value;
 
@@ -186,10 +205,9 @@ async function generate() {
     if (!res.ok) throw new Error(data.cause || 'Error generando la historia');
 
     lastShots = data.shots;
-    lastRecipeId = recipeId;
-    resultsEl.innerHTML = data.shots.map(shotBlockHtml).join('');
+    resultsEl.innerHTML = reasoningCardHtml(data.reasoning, data.geminiUsed) + data.shots.map(shotBlockHtml).join('');
     resultsEl.style.display = 'block';
-    statusLine.textContent = `Historia lista: ${data.shots.length} fotos.`;
+    statusLine.textContent = `Historia lista: ${data.shots.length} fotos (nivel ${data.level}, energía ${data.energy}).`;
     statusLine.className = 'status-line status-ok';
   } catch (err) {
     statusLine.textContent = 'Error: ' + err.message;
@@ -202,38 +220,17 @@ async function generate() {
 generateBtn.addEventListener('click', generate);
 
 resultsEl.addEventListener('click', async (e) => {
+  if (!e.target.classList.contains('copy-btn')) return;
   const shotEl = e.target.closest('.shot');
   if (!shotEl) return;
   const shotId = shotEl.dataset.shotId;
   const shot = lastShots.find(s => s.shotId === shotId);
-
-  if (e.target.classList.contains('copy-btn')) {
-    const text = e.target.dataset.target === 'pos' ? shot.positivePrompt : shot.negativePrompt;
-    await navigator.clipboard.writeText(text);
-    e.target.textContent = 'Copiado ✓';
-    setTimeout(() => {
-      e.target.textContent = e.target.dataset.target === 'pos' ? 'Copiar prompt positivo' : 'Copiar prompt negativo';
-    }, 1500);
-  }
-
-  if (e.target.classList.contains('save-note-btn')) {
-    const input = shotEl.querySelector('.note-input');
-    const noteStatus = shotEl.querySelector('.note-status');
-    if (!input.value.trim()) return;
-    try {
-      await fetch(`${API}/notes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipeId: lastRecipeId, shotId, note: input.value.trim() })
-      });
-      noteStatus.textContent = 'Nota guardada. La próxima vez que generes esta receta, se va a tener en cuenta.';
-      noteStatus.className = 'note-status status-line status-ok';
-      input.value = '';
-    } catch (err) {
-      noteStatus.textContent = 'No se pudo guardar la nota.';
-      noteStatus.className = 'note-status status-line status-warn';
-    }
-  }
+  const text = e.target.dataset.target === 'pos' ? shot.positivePrompt : shot.negativePrompt;
+  await navigator.clipboard.writeText(text);
+  e.target.textContent = 'Copiado ✓';
+  setTimeout(() => {
+    e.target.textContent = e.target.dataset.target === 'pos' ? 'Copiar prompt positivo' : 'Copiar prompt negativo';
+  }, 1500);
 });
 </script>
 </body>
