@@ -225,13 +225,25 @@ async function tryDirector(
     const key = cacheKey(refs, basePrompt, sessionId);
     const shotCache = new Map<string, string>();
 
-    const directives = plan.shots.map(shotDecision => {
+    // Defensa adicional al enum del schema (ver content.ts): si Gemini
+    // igual devuelve un shotId inválido, se descarta SOLO ese shot en vez de
+    // tirar la sesión completa al fallback estático — antes un único id
+    // inválido rompía TODO el plan (incluidos shots válidos), por el .map
+    // sin try/catch propagando la excepción de contractForShotId.
+    const directives: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] = [];
+    for (const shotDecision of plan.shots) {
       const shotId = shotDecision.shotId as NightOutShotId;
-      const contract = contractForShotId(shotId);
+      let contract: ShotContract;
+      try {
+        contract = contractForShotId(shotId);
+      } catch {
+        console.warn(`[outfit_night_out] Director devolvió un shotId inválido, se descarta: ${shotDecision.shotId}`);
+        continue;
+      }
       const redactedPrompt = promptByShotId.get(shotDecision.shotId);
       if (redactedPrompt) shotCache.set(shotId, redactedPrompt);
-      return directiveFor(contract, FIXED_SHOT_IDS.has(shotId) ? 'reveal' : 'candid');
-    });
+      directives.push(directiveFor(contract, FIXED_SHOT_IDS.has(shotId) ? 'reveal' : 'candid'));
+    }
 
     if (directives.length === 0) {
       directorFailureCache.set(key, 'El director devolvió 0 shots.');

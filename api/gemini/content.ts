@@ -237,40 +237,57 @@ function cleanBase64(b64: string): string {
 // el filtro del banco (Punto E, sin IA) + 2 llamadas a Gemini (Decidir:
 // D+F+G en una sola llamada; Redactar: H) — acción 'photodumpDirector'.
 
-const PHOTODUMP_DIRECTOR_PLAN_SCHEMA = {
-  type: 'object',
-  properties: {
-    globalReasoning: { type: 'string' },
-    shots: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          shotId: { type: 'string' },
-          candidatesConsidered: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                itemId: { type: 'string' },
-                score: { type: 'number' },
-                keptElements: { type: 'array', items: { type: 'string' } },
-                discardedElements: { type: 'array', items: { type: 'string' } },
+/**
+ * BUG REAL corregido: antes shotId era `{ type: 'string' }` sin restricción —
+ * Gemini devolvía ids inventados como "night_moment_1" en vez de un id real
+ * del contrato (ej. "pov_legs", "toast_moment"), porque un responseSchema de
+ * Gemini valida SOLO contra el JSON Schema, nunca contra las instrucciones en
+ * texto del prompt (que sí pedían usar los ids reales). El resto del
+ * pipeline (findNightMoment) no reconocía esos ids inventados y lanzaba,
+ * tirando todo el set al fallback estático — la causa real detrás de
+ * "NightMoment desconocido: night_moment_1". Con `enum` de los ids reales
+ * del contrato, Gemini queda estructuralmente obligado a elegir uno válido.
+ */
+function buildPhotodumpDirectorPlanSchema(recipeContract: ReturnType<typeof getPhotodumpRecipeContract>) {
+  const validShotIds = [
+    ...(recipeContract.fixedShotTypes || []).map(t => t.id),
+    ...(recipeContract.nightMomentTypes || []).map(t => t.id),
+  ];
+  return {
+    type: 'object',
+    properties: {
+      globalReasoning: { type: 'string' },
+      shots: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            shotId: { type: 'string', enum: validShotIds },
+            candidatesConsidered: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  itemId: { type: 'string' },
+                  score: { type: 'number' },
+                  keptElements: { type: 'array', items: { type: 'string' } },
+                  discardedElements: { type: 'array', items: { type: 'string' } },
+                },
+                required: ['itemId', 'score', 'keptElements', 'discardedElements'],
               },
-              required: ['itemId', 'score', 'keptElements', 'discardedElements'],
             },
+            chosenCandidateId: { type: 'string' },
+            shotReasoning: { type: 'string' },
+            needsVenueAnchor: { type: 'boolean' },
+            continuityNote: { type: 'string' },
           },
-          chosenCandidateId: { type: 'string' },
-          shotReasoning: { type: 'string' },
-          needsVenueAnchor: { type: 'boolean' },
-          continuityNote: { type: 'string' },
+          required: ['shotId', 'candidatesConsidered', 'chosenCandidateId', 'shotReasoning', 'needsVenueAnchor', 'continuityNote'],
         },
-        required: ['shotId', 'candidatesConsidered', 'chosenCandidateId', 'shotReasoning', 'needsVenueAnchor', 'continuityNote'],
       },
     },
-  },
-  required: ['globalReasoning', 'shots'],
-};
+    required: ['globalReasoning', 'shots'],
+  };
+}
 
 const PHOTODUMP_PROMPTS_SCHEMA = {
   type: 'object',
@@ -442,7 +459,7 @@ async function runPhotodumpDirector(
   const decideResponse = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
     contents: [{ role: 'user', parts: [{ text: decidePrompt }] }],
-    config: { responseMimeType: 'application/json', responseSchema: PHOTODUMP_DIRECTOR_PLAN_SCHEMA },
+    config: { responseMimeType: 'application/json', responseSchema: buildPhotodumpDirectorPlanSchema(recipeContract) },
   });
   const plan = JSON.parse(extractText(decideResponse)) as PhotodumpDirectorPlan;
 
