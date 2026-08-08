@@ -8,10 +8,10 @@ import { Redis } from '@upstash/redis';
 import { Client as QStashClient, Receiver } from '@upstash/qstash';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { buildShotPools as buildPhotodumpShotPools } from '../../src/modules/photodump/director/bankFilter';
-import { getRecipeContract as getPhotodumpRecipeContract } from '../../src/modules/photodump/director/recipeContracts';
-import { HARD_RULES_TEXT as PHOTODUMP_HARD_RULES_TEXT } from '../../src/modules/photodump/director/hardRules';
-import type { BankSnapshot as PhotodumpBankSnapshot, DirectorPlan as PhotodumpDirectorPlan, FinalPromptShot as PhotodumpFinalPromptShot } from '../../src/modules/photodump/director/types';
+import { buildShotPools as buildPhotodumpShotPools } from '../../src/modules/photodump/director/bankFilter.js';
+import { getRecipeContract as getPhotodumpRecipeContract } from '../../src/modules/photodump/director/recipeContracts.js';
+import { HARD_RULES_TEXT as PHOTODUMP_HARD_RULES_TEXT } from '../../src/modules/photodump/director/hardRules.js';
+import type { BankSnapshot as PhotodumpBankSnapshot, DirectorPlan as PhotodumpDirectorPlan, FinalPromptShot as PhotodumpFinalPromptShot } from '../../src/modules/photodump/director/types.js';
 
 // BUG REAL corregido: `import photodumpBankSnapshot from '....json'` rompía
 // TODO este endpoint en producción (Vercel/Node ESM real, no el entorno de
