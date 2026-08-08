@@ -70,9 +70,19 @@ const directorPromptCache = new Map<string, Map<string, string>>();
 // director corre con éxito.
 const directorFailureCache = new Map<string, string>();
 
-function cacheKey(refs: PhotodumpRefs): string {
+/**
+ * BUG REAL corregido: antes esta clave solo incluía las URLs de referencia
+ * (avatar/cuerpo/outfit), NUNCA el brief. Como estos Maps viven en memoria
+ * del proceso serverless (no por request), dos generaciones con las mismas
+ * fotos pero briefs distintos ("cena en rooftop" vs "noche de bar") caían en
+ * la MISMA clave — el venue y los prompts del director de la primera corrida
+ * quedaban pegados para siempre, sin importar qué brief nuevo se mandara.
+ * Eso explicaba tanto el venue repetido como el shotId repetido reportados
+ * por el usuario. El brief ahora es parte de la clave.
+ */
+function cacheKey(refs: PhotodumpRefs, basePrompt: string): string {
   const urls = [refs.avatarRef, refs.bodyRef, refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean);
-  return urls.join('|');
+  return `${urls.join('|')}::${basePrompt}`;
 }
 
 function garmentCountFor(refs: PhotodumpRefs): number {
@@ -98,7 +108,7 @@ async function generateFromContract(
   const intelligence = applyIntelligence(contract, refs.gender ?? 'female');
   const venueCtx = resolveVenueContext(refs, basePrompt);
   const energy   = resolveEnergyFromBrief(basePrompt);
-  const directorSceneBlock = directorPromptCache.get(cacheKey(refs))?.get(contract.shotId);
+  const directorSceneBlock = directorPromptCache.get(cacheKey(refs, basePrompt))?.get(contract.shotId);
   const { prompt, negative } = buildShotPrompt(contract.shotId, intelligence, {
     garmentCount:      garmentCountFor(refs),
     hasVenueAnchor:    Boolean(anchors.venueAnchorUrl),
@@ -167,8 +177,11 @@ function directiveFor(contract: ShotContract, beat: 'reveal' | 'candid'): Omit<P
 
 // ── Plan de sesión ──────────────────────────────────────────────────────
 
+// Seed del sorteo determinístico del sistema estático — a propósito NO
+// incluye el brief (rota por refs, no cachea resultado de una llamada cara).
 function seedFor(refs: PhotodumpRefs): string {
-  return cacheKey(refs);
+  const urls = [refs.avatarRef, refs.bodyRef, refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean);
+  return urls.join('|');
 }
 
 function staticDirectives(
@@ -201,7 +214,7 @@ async function tryDirector(
     const { plan, finalPrompts } = await runDirector(basePrompt, 'outfit_night_out', level, hasCompanion);
 
     const promptByShotId = new Map(finalPrompts.map(p => [p.shotId, p.finalPrompt]));
-    const key = cacheKey(refs);
+    const key = cacheKey(refs, basePrompt);
     const shotCache = new Map<string, string>();
 
     const directives = plan.shots.map(shotDecision => {
@@ -213,7 +226,7 @@ async function tryDirector(
     });
 
     if (directives.length === 0) {
-      directorFailureCache.set(cacheKey(refs), 'El director devolvió 0 shots.');
+      directorFailureCache.set(key, 'El director devolvió 0 shots.');
       return null;
     }
     directorPromptCache.set(key, shotCache);
@@ -221,7 +234,7 @@ async function tryDirector(
     return directives;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    directorFailureCache.set(cacheKey(refs), message);
+    directorFailureCache.set(cacheKey(refs, basePrompt), message);
     console.warn('[outfit_night_out] Director Creativo falló, usando banco estático de respaldo:', err);
     return null;
   }
@@ -253,7 +266,7 @@ export async function generateOutfitNightOutREF0(
   const result = await generateFromContract(
     MIRROR_CHECK_CONTRACT, refs, destino, basePrompt, sessionParams, 0, 1, { companionRef },
   );
-  prepAnchorCache.set(cacheKey(refs), result);
+  prepAnchorCache.set(cacheKey(refs, basePrompt), result);
   return { imageUrl: result.imageUrl, ref0Analysis: null, prompt: result.prompt, refsCount: result.refsCount };
 }
 
@@ -280,7 +293,7 @@ export async function generateOutfitNightOutShot(
     throw new Error(`El shot "${shot.key}" no tiene un shotId válido de outfit_night_out.`);
   }
 
-  const key = cacheKey(refs);
+  const key = cacheKey(refs, basePrompt);
   const companionRef = extractCompanionRef(refs);
 
   if (shotId === 'mirror_check') {
