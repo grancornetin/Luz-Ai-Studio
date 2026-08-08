@@ -51,6 +51,19 @@ export interface ShotTypeDef {
   id: string;
   description: string;
   lightingRule?: string;
+  // Eje de diversidad real (manifiesto de dirección, §12 Diversity control):
+  // varios shotTypes con ids distintos pueden cumplir la MISMA función
+  // psicológica/compositiva (ej. pov_legs, food_detail y ambient_only son
+  // los 3 "detalle sin protagonista que insinúa el resto de la experiencia")
+  // — el director no debe elegir más de 1 tipo por eje en un mismo set,
+  // aunque sus ids sean distintos. Opcional: solo los tipos rotables de
+  // banco lo declaran, no los shots fijos (mirror_check, etc.).
+  diversityAxis?: string;
+  // Psicología del attention_bridge (manifiesto §11): qué objeto/gesto
+  // concreto desvía la atención, y qué insinúa sobre el resto de la
+  // experiencia que NO se muestra directamente. Se le pasa a Gemini como
+  // contexto de POR QUÉ ese shot type existe, no solo QUÉ mostrar.
+  attentionBridge?: string;
 }
 
 export interface RecipeContract {
@@ -60,6 +73,10 @@ export interface RecipeContract {
   shotsByLevel: Record<string, { count: number; description: string }>;
   fixedShotTypes: ShotTypeDef[];
   nightMomentTypes: ShotTypeDef[];
+  // Regla de no-redundancia por eje (manifiesto §12 Diversity control) — ver
+  // diversityAxis en ShotTypeDef. Opcional porque no todas las recetas
+  // necesariamente van a declarar este nivel de detalle todavía.
+  nightMomentDiversityRule?: string;
 }
 
 export interface CandidateSummary {

@@ -322,7 +322,11 @@ function buildPhotodumpDecidePrompt(
     .map(t => `- ${t.id} (FIJO, usar exactamente 1 vez, siempre primero): ${t.description}${t.lightingRule ? `\n  REGLA DE ILUMINACIÓN: ${t.lightingRule}` : ''}`)
     .join('\n');
   const momentShotList = recipeContract.nightMomentTypes
-    .map(t => `- ${t.id}: ${t.description}`)
+    .map(t => {
+      const axis = t.diversityAxis ? `\n  EJE DE DIVERSIDAD: ${t.diversityAxis}` : '';
+      const bridge = t.attentionBridge ? `\n  POR QUÉ EXISTE ESTE SHOT (attention bridge): ${t.attentionBridge}` : '';
+      return `- ${t.id}: ${t.description}${axis}${bridge}`;
+    })
     .join('\n');
 
   const poolsText = Object.entries(shotPools)
@@ -359,8 +363,22 @@ NIVEL ELEGIDO: ${level} (${levelInfo.count} fotos) — ${levelInfo.description}
 SHOTS FIJOS (siempre presentes, exactamente 1 vez cada uno):
 ${fixedShotList}
 
+PSICOLOGÍA DE ESTOS TIPOS DE SHOT (importante para elegir bien, no son un
+menú de opciones intercambiables): ninguno de estos tipos "muestra el
+outfit" ni "muestra el lugar" de forma directa — cada uno es una forma
+ALTERNATIVA de probar los mismos 2 ejes de la receta ("la noche fue
+memorable" / "ella se veía increíble") desviando la atención hacia un
+detalle concreto que el espectador usa para inferir el resto (ver
+"attention bridge" de cada tipo abajo). Por eso varios tipos comparten el
+mismo EJE DE DIVERSIDAD: si dos shots del mismo eje conviven en el mismo
+set, se leen como la misma foto repetida aunque sus ids sean técnicamente
+distintos — ej. pov_legs + food_detail + ambient_only son las 3 formas de
+"detalle sin protagonista que insinúa el resto de la experiencia".
+
 TIPOS DE MOMENTO DE NOCHE DISPONIBLES (elegir entre estos para completar el resto del set):
 ${momentShotList}
+
+REGLA DURA DE DIVERSIDAD: ${recipeContract.nightMomentDiversityRule || 'Nunca elijas más de 1 tipo del mismo EJE DE DIVERSIDAD en un mismo set.'}
 
 Para este set, tenés que incluir cada shot fijo exactamente 1 vez, y completar
 el resto de los ${levelInfo.count} shots totales eligiendo entre los tipos de
