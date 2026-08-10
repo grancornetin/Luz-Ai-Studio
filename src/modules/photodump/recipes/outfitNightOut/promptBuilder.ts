@@ -72,11 +72,20 @@ export interface PromptBuilderOptions {
   energy:            NightOutEnergy;
   // Si el Director Creativo (ver modules/photodump/director/) ya razonó y
   // redactó este shot con contenido real del banco de imágenes, su texto
-  // reemplaza al sceneBlock estático de FIXED_SHOT_BLOCKS/nightMoments.ts —
-  // pero las líneas estructurales (outfit, HPI, estilo cámara-roll) se
-  // siguen aplicando igual, para no perder esas garantías de calidad.
+  // reemplaza al sceneBlock estático de FIXED_SHOT_BLOCKS/nightMoments.ts.
   // Ausente/undefined cuando el director no corrió o falló (fallback al
   // sistema estático, ver outfitNightOut/index.ts).
+  //
+  // BUG REAL corregido: cuando directorSceneBlock está presente, el HPI
+  // (bloque de pose genérico pre-cableado por shotId, ver intelligenceLayer.ts)
+  // se agregaba IGUAL al final del prompt — dos descripciones de pose
+  // independientes y a veces contradictorias en el mismo texto (ej. el
+  // director redactó "de pie, mano en el bolsillo" mientras el HPI describía
+  // "reclinada, piernas cruzadas, en tacones" para el mismo shot). El HPI
+  // tenía sentido cuando sceneBlock era un string genérico corto que
+  // necesitaba detalle de pose — es redundante/contradictorio ahora que el
+  // director ya redacta una pose completa extraída de un candidato real del
+  // banco. Con directorSceneBlock presente, el HPI se omite del prompt.
   directorSceneBlock?: string;
 }
 
@@ -86,27 +95,45 @@ export function buildShotPrompt(
   options:      PromptBuilderOptions,
 ): BuiltPrompt {
   const isFixedPrepShot = shotId === 'presentation' || shotId === 'tryon_detail' || shotId === 'mirror_check';
+  const fromDirector = Boolean(options.directorSceneBlock);
 
   let sceneBlock: string;
   let footwearVisible: boolean;
   let extraLine = '';
+  let hasOutfitRef: boolean;
 
   if (isFixedPrepShot) {
     sceneBlock = options.directorSceneBlock ?? FIXED_SHOT_BLOCKS[shotId as 'presentation' | 'tryon_detail' | 'mirror_check'];
     footwearVisible = shotId === 'mirror_check';
+    hasOutfitRef = true;
   } else {
     const moment = findNightMoment(shotId);
     sceneBlock = options.directorSceneBlock ?? moment.sceneBlockByEnergy[options.energy] ?? moment.sceneBlockByEnergy.elegante ?? '';
     footwearVisible = moment.contract.footwearVisible;
+    hasOutfitRef = moment.contract.referencePolicy.useOutfitRefs;
     if (shotId === 'group_moment') extraLine = companionLine(options.hasCompanion);
   }
+
+  // BUG REAL corregido (ver comentario de directorSceneBlock arriba): con el
+  // director activo, el calzado de la referencia deja de ser una bandera fija
+  // por tipo de shot ("no hace falta que se vea") — si el shot muestra el
+  // outfit, muestra el outfit completo, incluido el calzado. La única
+  // excepción real son los shots sin referencia de outfit en absoluto
+  // (ambient_only, car_transition, food_detail — no hay protagonista/cuerpo
+  // en cuadro, la pregunta no aplica).
+  if (fromDirector && hasOutfitRef) footwearVisible = true;
+
+  // El HPI (pose genérica pre-cableada por shotId) se omite cuando el
+  // director ya redactó su propia pose desde un candidato real del banco —
+  // evita 2 descripciones de pose contradictorias en el mismo prompt.
+  const hpiBlock = fromDirector ? '' : intelligence.hpiBlock;
 
   const lines = isFixedPrepShot
     ? [
         sceneBlock,
         NO_STUDIO_BACKDROP_LINE,
         outfitLine(options.garmentCount, footwearVisible),
-        intelligence.hpiBlock,
+        hpiBlock,
         NO_WALKING_LINE,
         IPHONE_CAMERA_ROLL_LINE,
         AVOID_EDITORIAL_LINE,
@@ -116,7 +143,7 @@ export function buildShotPrompt(
         venueLine(options.venueImageUrl, options.venueTextFallback, options.hasVenueAnchor),
         outfitLine(options.garmentCount, footwearVisible),
         extraLine,
-        intelligence.hpiBlock,
+        hpiBlock,
         IPHONE_CAMERA_ROLL_LINE,
         AVOID_EDITORIAL_LINE,
       ];

@@ -110,6 +110,14 @@ export interface ShotDecision {
   shotReasoning: string;
   needsVenueAnchor: boolean;
   continuityNote: string;
+  // Razonamiento explícito sobre accesorios no-esenciales del outfit (bolso,
+  // gafas, bufanda) para ESTE shot puntual: ¿tiene sentido que aparezcan, o
+  // la lógica de la acción/encuadre los excluye de forma creíble (bailando,
+  // POV mirando hacia abajo, manos ocupadas con comida/bebida)? Evita que
+  // desaparezcan/reaparezcan sin motivo entre shots del mismo set — pedido
+  // real del usuario tras ver un bolso "flotante" (presente en unos shots,
+  // ausente en otros del mismo venue, sin ninguna razón narrativa).
+  accessoryReasoning: string;
 }
 
 export interface DirectorPlan {

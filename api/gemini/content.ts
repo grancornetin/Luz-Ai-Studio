@@ -280,8 +280,9 @@ function buildPhotodumpDirectorPlanSchema(recipeContract: ReturnType<typeof getP
             shotReasoning: { type: 'string' },
             needsVenueAnchor: { type: 'boolean' },
             continuityNote: { type: 'string' },
+            accessoryReasoning: { type: 'string' },
           },
-          required: ['shotId', 'candidatesConsidered', 'chosenCandidateId', 'shotReasoning', 'needsVenueAnchor', 'continuityNote'],
+          required: ['shotId', 'candidatesConsidered', 'chosenCandidateId', 'shotReasoning', 'needsVenueAnchor', 'continuityNote', 'accessoryReasoning'],
         },
       },
     },
@@ -421,6 +422,22 @@ cada candidato que consideres, y elegir el mejor punto de partida por shot.
 Para cada shot, además, decidí si necesita anclar continuidad con el venue de
 otros shots del set (needsVenueAnchor) y por qué (continuityNote).
 
+RAZONAMIENTO DE ACCESORIOS (accessoryReasoning, obligatorio en cada shot):
+la referencia de outfit del usuario puede incluir accesorios no-esenciales
+(bolso, gafas, bufanda, joyas visibles) fusionados en la misma imagen. Por
+default, esos accesorios DEBERÍAN seguir presentes en todos los shots del
+mismo venue/momento — no desaparecen y reaparecen sin motivo, igual que en
+la vida real alguien no se queda sin su bolso a mitad de la noche y lo
+recupera después. Para cada shot, razoná explícitamente: ¿tiene sentido que
+el/los accesorio(s) no-esenciales aparezcan en ESTE shot puntual, o hay una
+razón física/narrativa real que los excluye de forma creíble (ej. bailando
+con las manos libres, un POV mirando hacia abajo donde el bolso no entra en
+cuadro, manos ocupadas sosteniendo comida o bebida, un brindis en primer
+plano donde el encuadre no llega al torso)? Escribí esa decisión en
+accessoryReasoning — nunca lo omitas ni lo dejes implícito. Si no hay una
+razón real para excluirlos, la respuesta correcta es "se mantienen
+presentes, sin motivo para excluirlos".
+
 Devolvé el resultado en el formato JSON pedido.`;
 }
 
@@ -436,6 +453,7 @@ ${(chosen?.keptElements || []).map(e => `  - ${e}`).join('\n') || '  (ninguno es
 Elementos a DESCARTAR de este candidato (reemplazar por el brief real/las referencias del usuario):
 ${(chosen?.discardedElements || []).map(e => `  - ${e}`).join('\n') || '  (ninguno específico)'}
 ¿Necesita continuidad de venue con otro shot del set?: ${shot.needsVenueAnchor ? `Sí — ${shot.continuityNote}` : 'No'}
+Accesorios no-esenciales (bolso, gafas, bufanda) en este shot: ${shot.accessoryReasoning}
 `;
   }).join('\n');
 
@@ -453,6 +471,15 @@ REGLAS DURAS DE REDACCIÓN (aplican SIEMPRE, incluso si no aparecen explícitas 
 2. La ILUMINACIÓN de cada shot debe corresponder a la HORA REAL del evento en el brief del usuario — no a la iluminación del candidato del banco, salvo que coincidan. Si el brief describe una salida de noche, TODOS los shots (incluido mirror_check) deben tener iluminación nocturna/artificial de interior — nunca luz de día natural, aunque el candidato elegido como inspiración de pose tuviera luz de día.
 
 Si un shot dice que necesita continuidad de venue, agregá una línea explícita de continuidad ("SCENE CONTINUITY: same venue as the previous shot — reuse the exact same background, furniture and lighting.") antes de la descripción de venue.
+
+ACCESORIOS NO-ESENCIALES: cada shot trae su razonamiento de accesorios (bolso,
+gafas, bufanda) — ver "Accesorios no-esenciales" abajo. Si el razonamiento
+dice que deben mantenerse presentes, incluí una línea explícita en el prompt
+(ej. "She is still carrying the handbag shown in the reference, worn/held
+the same way as in the other shots of this set."). Si el razonamiento dio
+una razón real para excluirlos, incluí esa razón en el prompt en vez de
+omitir el accesorio en silencio (ej. "Her hands are occupied holding the
+wine glasses for the toast, the handbag is not the focus of this framing.").
 
 PLAN DE SHOTS YA DECIDIDO:
 ${shotsText}
