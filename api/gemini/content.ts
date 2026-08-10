@@ -513,6 +513,11 @@ async function runPhotodumpDirector(
   });
   const plan = JSON.parse(extractText(decideResponse)) as PhotodumpDirectorPlan;
 
+  // Mismo espaciado que ya usa el loop de generación de imágenes entre
+  // shots (PhotodumpModule.tsx, 15s) para evitar rate-limit de Vertex AI —
+  // sin esto, las 2 llamadas del director salían pegadas sin respiro.
+  await new Promise(resolve => setTimeout(resolve, 8000));
+
   const writePrompt = buildPhotodumpWritePrompt(brief, plan);
   const writeResponse = await generateContentWithRetry(ai, {
     model: 'gemini-2.5-flash',

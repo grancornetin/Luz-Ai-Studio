@@ -475,6 +475,15 @@ const PhotodumpModule: React.FC = () => {
         : (recipe === 'outfit_haul' || recipe === 'product_haul')
           ? Math.min(count, 20)
           : count;
+      // outfit_night_out: inferAvatarGender (arriba) ya gastó 1 llamada de
+      // texto a Gemini — el Director Creativo va a hacer 2 más apenas arranque
+      // buildPhotodumpSessionPlan. Mismo criterio que el espaciado entre shots
+      // de imagen (15-25s más abajo): dar un respiro evita el rate-limit de
+      // cuota (429 RESOURCE_EXHAUSTED) visto en producción cuando las llamadas
+      // de texto de una misma sesión salen pegadas sin pausa.
+      if (recipe === 'outfit_night_out') {
+        await new Promise(r => setTimeout(r, 6000));
+      }
       const plan  = await buildPhotodumpSessionPlan(narrative, protagonist, destino, basePrompt, recipe, refsWithMode, storyShotCount, sessionId);
       const shots = plan.shots.slice(0, storyShotCount);
       setSavedShots(shots);
