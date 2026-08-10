@@ -460,6 +460,38 @@ ${shotsText}
 Devolvé el resultado en el formato JSON pedido — un finalPrompt completo en inglés por cada shot.`;
 }
 
+/**
+ * BUG REAL corregido: el 429 RESOURCE_EXHAUSTED de Vertex AI visto en
+ * producción es un rate-limit de cuota (proyecto+modelo+región, compartido
+ * por TODAS las llamadas de texto de la app, no solo el director) — no un
+ * bug de código. Es transitorio por naturaleza: la mitigación estándar de
+ * Google es reintentar con backoff exponencial, no tratarlo como fallo
+ * definitivo. El director hace 2 llamadas por sesión; con el patrón de job
+ * en background (ver processPhotodumpDirectorJob) ya hay margen de tiempo
+ * real para esperar y reintentar sin volver a exponer al usuario a un
+ * timeout.
+ */
+async function generateContentWithRetry(
+  ai: GoogleGenAI,
+  params: Parameters<GoogleGenAI['models']['generateContent']>[0],
+  maxRetries: number = 3,
+): Promise<Awaited<ReturnType<GoogleGenAI['models']['generateContent']>>> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await ai.models.generateContent(params);
+    } catch (error: any) {
+      lastError = error;
+      const is429 = error?.message?.includes('429') || error?.message?.includes('RESOURCE_EXHAUSTED');
+      if (!is429 || attempt === maxRetries) throw error;
+      const backoffMs = 2000 * Math.pow(2, attempt); // 2s, 4s, 8s
+      console.warn(`[PhotodumpDirector] 429 recibido, reintento ${attempt + 1}/${maxRetries} en ${backoffMs}ms`);
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
+    }
+  }
+  throw lastError;
+}
+
 async function runPhotodumpDirector(
   ai: GoogleGenAI,
   payload: { brief?: string; recipe?: string; level?: string; hasCompanion?: boolean },
@@ -474,7 +506,7 @@ async function runPhotodumpDirector(
   const shotPools = buildPhotodumpShotPools(snapshot.items, brief, recipeContract);
 
   const decidePrompt = buildPhotodumpDecidePrompt(brief, recipeContract, level, shotPools);
-  const decideResponse = await ai.models.generateContent({
+  const decideResponse = await generateContentWithRetry(ai, {
     model: 'gemini-2.5-flash',
     contents: [{ role: 'user', parts: [{ text: decidePrompt }] }],
     config: { responseMimeType: 'application/json', responseSchema: buildPhotodumpDirectorPlanSchema(recipeContract) },
@@ -482,7 +514,7 @@ async function runPhotodumpDirector(
   const plan = JSON.parse(extractText(decideResponse)) as PhotodumpDirectorPlan;
 
   const writePrompt = buildPhotodumpWritePrompt(brief, plan);
-  const writeResponse = await ai.models.generateContent({
+  const writeResponse = await generateContentWithRetry(ai, {
     model: 'gemini-2.5-flash',
     contents: [{ role: 'user', parts: [{ text: writePrompt }] }],
     config: { responseMimeType: 'application/json', responseSchema: PHOTODUMP_PROMPTS_SCHEMA },
