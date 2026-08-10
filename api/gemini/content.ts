@@ -11,7 +11,15 @@ import { join } from 'path';
 import { buildShotPools as buildPhotodumpShotPools } from '../../src/modules/photodump/director/bankFilter.js';
 import { getRecipeContract as getPhotodumpRecipeContract } from '../../src/modules/photodump/director/recipeContracts.js';
 import { HARD_RULES_TEXT as PHOTODUMP_HARD_RULES_TEXT } from '../../src/modules/photodump/director/hardRules.js';
-import type { BankSnapshot as PhotodumpBankSnapshot, DirectorPlan as PhotodumpDirectorPlan, FinalPromptShot as PhotodumpFinalPromptShot } from '../../src/modules/photodump/director/types.js';
+import type { BankSnapshot as PhotodumpBankSnapshot, DirectorPlan as PhotodumpDirectorPlan, FinalPromptShot as PhotodumpFinalPromptShot, DirectorReferenceImage as PhotodumpDirectorReferenceImage } from '../../src/modules/photodump/director/types.js';
+
+interface PhotodumpDirectorPayload {
+  brief?: string;
+  recipe?: string;
+  level?: string;
+  hasCompanion?: boolean;
+  referenceImages?: PhotodumpDirectorReferenceImage[];
+}
 
 // BUG REAL corregido: `import photodumpBankSnapshot from '....json'` rompía
 // TODO este endpoint en producción (Vercel/Node ESM real, no el entorno de
@@ -317,8 +325,12 @@ function buildPhotodumpDecidePrompt(
   recipeContract: ReturnType<typeof getPhotodumpRecipeContract>,
   level: string,
   shotPools: ReturnType<typeof buildPhotodumpShotPools>,
+  referenceImages?: PhotodumpDirectorReferenceImage[],
 ): string {
   const levelInfo = recipeContract.shotsByLevel[level];
+  const referenceImagesList = (referenceImages && referenceImages.length > 0)
+    ? referenceImages.map((img, i) => `${i + 1}. ${img.role}`).join('\n')
+    : null;
   const fixedShotList = (recipeContract.fixedShotTypes || [])
     .map(t => `- ${t.id} (FIJO, usar exactamente 1 vez, siempre primero): ${t.description}${t.lightingRule ? `\n  REGLA DE ILUMINACIÓN: ${t.lightingRule}` : ''}`)
     .join('\n');
@@ -349,10 +361,29 @@ function buildPhotodumpDecidePrompt(
     })
     .join('\n\n');
 
+  const referenceImagesBlock = referenceImagesList ? `
+IMÁGENES REALES ADJUNTAS (en este orden, antes del texto de este prompt):
+${referenceImagesList}
+
+Estas son las referencias REALES del usuario para esta sesión — MIRALAS antes
+de decidir qué elementos transferir de un candidato del banco. Regla dura:
+nunca heredes una pose, gesto o composición de un candidato del banco que
+dependa de una característica física que la referencia real de outfit/cuerpo
+NO tiene. Ejemplo real de bug corregido: un candidato del banco tenía una
+pose de "mano en el bolsillo", pero el outfit real de esta sesión era una
+falda ajustada sin bolsillos visibles — esa pieza de la pose NO era
+transferible y debía ir a discardedElements, no a keptElements, aunque el
+resto de la pose (postura, mirada, encuadre) sí fuera reutilizable. Aplicá el
+mismo criterio a cualquier característica física dependiente de la prenda:
+bolsillos, tirantes, cierres, capas, largo, cómo se sostiene o dónde se
+apoyan las manos según el corte real del outfit — todo eso lo define la
+imagen de outfit real, nunca el candidato del banco.
+` : '';
+
   return `Sos el Director Creativo de "Photodump", un módulo que genera fotos tipo rollo-de-fotos-real de una historia (ej. una salida nocturna) para una app de contenido para creadoras.
 
 ${PHOTODUMP_HARD_RULES_TEXT}
-
+${referenceImagesBlock}
 RECETA: ${recipeContract.label}
 PSICOLOGÍA DE LA RECETA: ${recipeContract.psychology}
 REGLAS ESPECÍFICAS DE ESTA RECETA:
@@ -521,9 +552,9 @@ async function generateContentWithRetry(
 
 async function runPhotodumpDirector(
   ai: GoogleGenAI,
-  payload: { brief?: string; recipe?: string; level?: string; hasCompanion?: boolean },
+  payload: PhotodumpDirectorPayload,
 ): Promise<{ plan: PhotodumpDirectorPlan; finalPrompts: PhotodumpFinalPromptShot[] }> {
-  const { brief, recipe, level } = payload;
+  const { brief, recipe, level, referenceImages } = payload;
   if (!brief || !recipe || !level) {
     throw new Error('Faltan campos: brief, recipe, level');
   }
@@ -532,10 +563,16 @@ async function runPhotodumpDirector(
   const snapshot = loadPhotodumpBankSnapshot();
   const shotPools = buildPhotodumpShotPools(snapshot.items, brief, recipeContract);
 
-  const decidePrompt = buildPhotodumpDecidePrompt(brief, recipeContract, level, shotPools);
+  const decidePrompt = buildPhotodumpDecidePrompt(brief, recipeContract, level, shotPools, referenceImages);
+  const decideParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
+  for (const img of referenceImages || []) {
+    decideParts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
+  }
+  decideParts.push({ text: decidePrompt });
+
   const decideResponse = await generateContentWithRetry(ai, {
     model: 'gemini-2.5-flash',
-    contents: [{ role: 'user', parts: [{ text: decidePrompt }] }],
+    contents: [{ role: 'user', parts: decideParts }],
     config: { responseMimeType: 'application/json', responseSchema: buildPhotodumpDirectorPlanSchema(recipeContract) },
   });
   const plan = JSON.parse(extractText(decideResponse)) as PhotodumpDirectorPlan;
@@ -580,8 +617,8 @@ async function processPhotodumpDirectorJob(jobId: string): Promise<void> {
   }
 
   const payload = typeof storedPayload === 'string'
-    ? JSON.parse(storedPayload) as { brief?: string; recipe?: string; level?: string; hasCompanion?: boolean }
-    : storedPayload as { brief?: string; recipe?: string; level?: string; hasCompanion?: boolean };
+    ? JSON.parse(storedPayload) as PhotodumpDirectorPayload
+    : storedPayload as PhotodumpDirectorPayload;
 
   job.status = 'processing';
   job.updatedAt = Date.now();
@@ -756,7 +793,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (body.action === 'photodumpDirectorStart') {
-      const { brief, recipe, level, hasCompanion } = body.payload || {};
+      const { brief, recipe, level, hasCompanion, referenceImages } = body.payload || {};
       if (!brief || !recipe || !level) {
         return res.status(400).json({ error: 'Faltan campos: brief, recipe, level' });
       }
@@ -770,7 +807,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
       await Promise.all([
         saveDirectorJob(job),
-        redis.set(`photodump_director_payload:${jobId}`, JSON.stringify({ brief, recipe, level, hasCompanion }), { ex: 3600 }),
+        redis.set(`photodump_director_payload:${jobId}`, JSON.stringify({ brief, recipe, level, hasCompanion, referenceImages }), { ex: 3600 }),
       ]);
 
       const proto = req.headers['x-forwarded-proto'] || 'https';

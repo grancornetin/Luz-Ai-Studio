@@ -134,3 +134,13 @@ export interface DirectorResult {
   plan: DirectorPlan;
   finalPrompts: FinalPromptShot[];
 }
+
+// Referencia visual real del usuario (identidad/cuerpo/outfit/escena/
+// acompañante) mandada al director junto al payload de texto — ver
+// director/client.ts para el porqué (evitar poses heredadas del banco que
+// dependan de estructura física inexistente en el outfit real).
+export interface DirectorReferenceImage {
+  role: 'identidad/rostro' | 'cuerpo' | 'outfit' | 'escena/venue' | 'acompañante';
+  data: string;
+  mimeType: string;
+}

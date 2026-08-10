@@ -20,7 +20,9 @@
  * cada pocos segundos hasta que el resultado esté listo.
  */
 import { getAuth } from 'firebase/auth';
-import type { DirectorPlan, FinalPromptShot } from './types';
+import type { DirectorPlan, FinalPromptShot, DirectorReferenceImage } from './types';
+
+export type { DirectorReferenceImage };
 
 const CONTENT_ENDPOINT = '/api/gemini/content';
 const POLL_INTERVAL_MS = 3000;
@@ -63,13 +65,19 @@ async function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function startDirectorJob(brief: string, recipe: string, level: string, hasCompanion: boolean): Promise<string> {
+async function startDirectorJob(
+  brief: string,
+  recipe: string,
+  level: string,
+  hasCompanion: boolean,
+  referenceImages: DirectorReferenceImage[],
+): Promise<string> {
   const res = await fetch(CONTENT_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
     body: JSON.stringify({
       action: 'photodumpDirectorStart',
-      payload: { brief, recipe, level, hasCompanion },
+      payload: { brief, recipe, level, hasCompanion, referenceImages },
     }),
   });
   if (!res.ok) {
@@ -107,9 +115,23 @@ async function pollDirectorJob(jobId: string): Promise<{
  * brief y receta dados. Lanza si algo falla — el caller (nightMoments.ts /
  * outfitNightOut/index.ts) es responsable de capturar y caer al sistema
  * estático, nunca de propagar el error al usuario final.
+ *
+ * referenceImages: identidad/cuerpo/outfit/escena/acompañante reales del
+ * usuario (ya comprimidas y en base64, mismo formato que prepareRefs en
+ * recipes/shared.ts) — pedido real del usuario tras ver al director heredar
+ * una pose "mano en el bolsillo" de un candidato del banco sobre un outfit
+ * real (falda) sin bolsillos visibles. Sin ver la imagen real, el director
+ * no tiene forma de validar que una pose transferida sea físicamente posible
+ * con el outfit/cuerpo reales — solo compara texto contra texto.
  */
-export async function runDirector(brief: string, recipe: string, level: string, hasCompanion: boolean): Promise<DirectorResponse> {
-  const jobId = await startDirectorJob(brief, recipe, level, hasCompanion);
+export async function runDirector(
+  brief: string,
+  recipe: string,
+  level: string,
+  hasCompanion: boolean,
+  referenceImages: DirectorReferenceImage[] = [],
+): Promise<DirectorResponse> {
+  const jobId = await startDirectorJob(brief, recipe, level, hasCompanion, referenceImages);
   const maxAttempts = maxPollAttemptsForLevel(level);
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {

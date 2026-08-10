@@ -37,7 +37,7 @@
  * director. Este fallback es no-negociable (ver plan "Director Creativo de
  * Photodump", Fase C).
  */
-import { prepareRefs, getAspectRatio } from '../shared';
+import { prepareRefs, getAspectRatio, extractImageData } from '../shared';
 import type { PhotodumpRefs, PhotodumpDestino } from '../../types';
 import type { PhotodumpShotDirective, PhotodumpREF0Result } from '../shared';
 import { PRESENTATION_CONTRACT, TRYON_DETAIL_CONTRACT, MIRROR_CHECK_CONTRACT } from './shotPool';
@@ -51,7 +51,8 @@ import { buildShotPrompt } from './promptBuilder';
 import { buildShotDebug } from './debug';
 import { applyIntelligence } from './intelligenceLayer';
 import { imageApiService } from '../../../../services/imageApiService';
-import { runDirector } from '../../director/client';
+import { compressImageForUpload } from '../../../../utils/imageUtils';
+import { runDirector, type DirectorReferenceImage } from '../../director/client';
 import type { OutfitNightOutShotPlan, OutfitNightOutShotDebug, ShotContract, NightOutLevel, NightOutShotId } from './types';
 
 // ── Cachés en memoria por sesión ─────────────────────────────────────────
@@ -205,6 +206,40 @@ function staticDirectives(
 }
 
 /**
+ * Prepara las imágenes reales del usuario (identidad, cuerpo, outfit, escena
+ * si existe, acompañante si existe) para mandarle al Director Creativo en su
+ * llamada de "Decidir" — mismo formato/compresión que prepareRefs (768px,
+ * calidad 0.72) para no encarecer el payload. Pedido real del usuario: sin
+ * ver el outfit real, el director heredaba poses de candidatos del banco que
+ * dependían de estructura física inexistente en la prenda real (ej. "mano en
+ * el bolsillo" transferido a una falda sin bolsillos visibles) — comparaba
+ * texto contra texto, nunca contra la imagen real.
+ */
+async function buildDirectorReferenceImages(refs: PhotodumpRefs, companionRef: string | null): Promise<DirectorReferenceImage[]> {
+  const entries: Array<{ role: DirectorReferenceImage['role']; url: string | null | undefined }> = [
+    { role: 'identidad/rostro', url: refs.avatarRef },
+    { role: 'cuerpo', url: refs.bodyRef },
+    { role: 'outfit', url: refs.outfitRef },
+    ...(refs.outfitRefs ?? []).map(url => ({ role: 'outfit' as const, url })),
+    { role: 'escena/venue', url: refs.sceneRef },
+    { role: 'acompañante', url: companionRef },
+  ];
+
+  const images: DirectorReferenceImage[] = [];
+  for (const entry of entries) {
+    if (!entry.url) continue;
+    try {
+      const compressed = await compressImageForUpload(entry.url, 768, 0.72);
+      const extracted = extractImageData(compressed);
+      if (extracted) images.push({ role: entry.role, data: extracted.data, mimeType: extracted.mimeType });
+    } catch {
+      // No bloquear el director por una imagen individual que falle en comprimir.
+    }
+  }
+  return images;
+}
+
+/**
  * Intenta el Director Creativo (arquitectura A-K); si corre con éxito,
  * guarda sus prompts redactados en directorPromptCache y arma el plan de
  * shots a partir de los shotId que decidió. Si falla por cualquier motivo,
@@ -219,7 +254,9 @@ async function tryDirector(
   sessionId?:   string,
 ): Promise<Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] | null> {
   try {
-    const { plan, finalPrompts } = await runDirector(basePrompt, 'outfit_night_out', level, hasCompanion);
+    const companionRef = extractCompanionRef(refs);
+    const referenceImages = await buildDirectorReferenceImages(refs, companionRef);
+    const { plan, finalPrompts } = await runDirector(basePrompt, 'outfit_night_out', level, hasCompanion, referenceImages);
 
     const promptByShotId = new Map(finalPrompts.map(p => [p.shotId, p.finalPrompt]));
     const key = cacheKey(refs, basePrompt, sessionId);
