@@ -24,7 +24,28 @@ import type { DirectorPlan, FinalPromptShot } from './types';
 
 const CONTENT_ENDPOINT = '/api/gemini/content';
 const POLL_INTERVAL_MS = 3000;
-const MAX_POLL_ATTEMPTS = 40; // ~2 minutos de margen total
+
+/**
+ * BUG REAL corregido: MAX_POLL_ATTEMPTS era un valor fijo (40 × 3s = 120s),
+ * exactamente IGUAL al maxDuration del servidor (120s, ver vercel.json) — el
+ * cliente se rendía de esperar justo cuando el servidor recién tenía margen
+ * para terminar. Confirmado en producción con un set de 7 shots: "Director
+ * job timed out esperando el resultado" mientras el trabajo real seguía
+ * corriendo del lado del servidor. El trabajo escala con la cantidad de
+ * shots (más candidatos considerados en "Decidir", más prompts completos
+ * que redactar en "Redactar" — la respuesta de 7 shots es notablemente más
+ * larga que la de 3), así que el margen de espera del cliente también debe
+ * escalar por nivel en vez de ser un techo fijo.
+ */
+function maxPollAttemptsForLevel(level: string): number {
+  const totalWaitSeconds: Record<string, number> = {
+    corto: 90,      // 3 shots
+    completo: 150,  // 5 shots
+    extendido: 210, // 7 shots
+  };
+  const seconds = totalWaitSeconds[level] ?? 150;
+  return Math.ceil((seconds * 1000) / POLL_INTERVAL_MS);
+}
 
 type DirectorJobStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
@@ -89,8 +110,9 @@ async function pollDirectorJob(jobId: string): Promise<{
  */
 export async function runDirector(brief: string, recipe: string, level: string, hasCompanion: boolean): Promise<DirectorResponse> {
   const jobId = await startDirectorJob(brief, recipe, level, hasCompanion);
+  const maxAttempts = maxPollAttemptsForLevel(level);
 
-  for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await sleep(POLL_INTERVAL_MS);
     const job = await pollDirectorJob(jobId);
 
