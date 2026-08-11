@@ -7,7 +7,7 @@
  * texto que diverge de producción. Cero dependencias de Vertex AI/Redis/
  * QStash acá — solo transformación de datos a texto.
  */
-import { HARD_RULES_TEXT as PHOTODUMP_HARD_RULES_TEXT } from './hardRules';
+import { HARD_RULES_TEXT as PHOTODUMP_HARD_RULES_TEXT } from './hardRules.js';
 import type { RecipeContract, ShotPools, DirectorPlan, DirectorReferenceImage } from './types';
 
 export function buildPhotodumpDirectorPlanSchema(recipeContract: RecipeContract) {
