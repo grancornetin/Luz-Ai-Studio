@@ -22,7 +22,19 @@ const POLL_INTERVAL_MS      = 2000;  // 2 s entre polls
 const MAX_POLL_ATTEMPTS     = 120;   // 120 × 2 s = 4 min — Gemini / Seedream
 const MAX_POLL_ATTEMPTS_GPT = 210;   // 210 × 2 s = 7 min — GPT Image 2 (puede tardar hasta ~6 min)
 const MAX_SILENT_RETRIES    = 2;     // el inicial + 1 retry para rate-limit
-const RATE_LIMIT_BACKOFF_MS = [3000, 8000]; // 3s, 8s — backoff corto, el 429 es transiente
+const RATE_LIMIT_BACKOFF_MS = [3000, 8000]; // 3s, 8s — backoff corto, el 429 real de Gemini es transiente
+// BUG REAL corregido: CONCURRENCY_LIMIT (el usuario ya tiene su slot de
+// concurrencia ocupado por el shot anterior, ver src/server/api/concurrency.ts)
+// compartía el mismo backoff corto que el 429 de Gemini — pero son casos
+// distintos. Un 429 de Gemini se resuelve solo, en cualquier momento. Un
+// CONCURRENCY_LIMIT se resuelve DETERMINÍSTICAMENTE cuando el shot anterior
+// termina — con solo 1 reintento de 3s, si ese shot anterior (ej. el REF0/
+// ancla, que suele tardar más) todavía no liberó su slot, el shot siguiente
+// fallaba en seco. Confirmado en producción: patrón repetido de que
+// "el shot 2 casi siempre falla" en outfit_night_out. Más reintentos y
+// backoff más largo/creciente le dan tiempo real a que el slot se libere.
+const CONCURRENCY_MAX_SILENT_RETRIES  = 5;
+const CONCURRENCY_BACKOFF_MS = [4000, 8000, 12000, 20000]; // 4s, 8s, 12s, 20s
 
 export type ImageJobStatus = 'pending' | 'processing' | 'retrying' | 'completed' | 'failed';
 
@@ -36,6 +48,11 @@ export enum ErrorCode {
   TIMEOUT          = 'TIMEOUT',
   SERVER_ERROR     = 'SERVER_ERROR',
   RATE_LIMIT       = 'RATE_LIMIT',
+  // Slot de concurrencia del usuario ocupado por otro job propio (ver
+  // src/server/api/concurrency.ts) — distinto de RATE_LIMIT: se resuelve
+  // determinísticamente cuando ESE otro job termina, no es azar de cuota
+  // externa. Necesita su propio backoff (más reintentos, más tiempo).
+  CONCURRENCY_LIMIT = 'CONCURRENCY_LIMIT',
   UNKNOWN          = 'UNKNOWN',
 }
 
@@ -44,6 +61,7 @@ export const REFUNDABLE_ERRORS = new Set<ErrorCode>([
   ErrorCode.SERVER_ERROR,
   ErrorCode.TIMEOUT,
   ErrorCode.RATE_LIMIT,
+  ErrorCode.CONCURRENCY_LIMIT,
 ]);
 
 export interface AppError {
@@ -87,7 +105,7 @@ export function parseErrorCode(raw: unknown): AppError {
   } catch { /* no es JSON */ }
 
   if (lower.includes('concurrency_limit') || lower.includes('demasiadas generaciones activas')) {
-    return { code: ErrorCode.RATE_LIMIT, message: 'Estamos preparando tus imágenes. Espera un momento y vuelve a intentar.' };
+    return { code: ErrorCode.CONCURRENCY_LIMIT, message: 'Estamos preparando tus imágenes. Espera un momento y vuelve a intentar.' };
   }
   if (lower.includes('429') || lower.includes('quota') || lower.includes('resource_exhausted') || lower.includes('exhausted')) {
     return { code: ErrorCode.RATE_LIMIT, message: 'Estamos preparando tus imágenes. Espera un momento y vuelve a intentar.' };
@@ -317,7 +335,11 @@ export const imageApiService = {
   async generateImage(params: GenerateImageParams): Promise<string> {
     let lastError: Error = new Error('Unknown error');
 
-    for (let retry = 0; retry < MAX_SILENT_RETRIES; retry++) {
+    // CONCURRENCY_LIMIT necesita más reintentos/tiempo que un 429 real de
+    // Gemini (ver comentario de CONCURRENCY_BACKOFF_MS) — el límite de
+    // intentos del loop se decide sobre la marcha, según qué tipo de error
+    // trae el primer fallo.
+    for (let retry = 0; ; retry++) {
       try {
         const image = await generateImageOnce(params);
         saveGeneratedImageToHistory(image, params);
@@ -325,13 +347,16 @@ export const imageApiService = {
       } catch (err: any) {
         lastError = err;
         console.warn(`[ImageAPI] Attempt ${retry + 1} failed: ${err.message}`);
-        // Solo hace backoff y reintenta en rate-limit; cualquier otro error falla de inmediato
-        if (err.code !== ErrorCode.RATE_LIMIT) break;
-        if (retry < MAX_SILENT_RETRIES - 1) {
-          const delay = RATE_LIMIT_BACKOFF_MS[retry] ?? 5000;
-          console.info(`[ImageAPI] Rate limit hit — waiting ${delay / 1000}s before retry ${retry + 2}...`);
-          await sleep(delay);
-        }
+        // Solo hace backoff y reintenta en rate-limit/concurrencia; cualquier otro error falla de inmediato
+        const isConcurrency = err.code === ErrorCode.CONCURRENCY_LIMIT;
+        const isRateLimit    = err.code === ErrorCode.RATE_LIMIT;
+        if (!isConcurrency && !isRateLimit) break;
+        const backoffSchedule = isConcurrency ? CONCURRENCY_BACKOFF_MS : RATE_LIMIT_BACKOFF_MS;
+        const maxRetries      = isConcurrency ? CONCURRENCY_MAX_SILENT_RETRIES : MAX_SILENT_RETRIES;
+        if (retry >= maxRetries - 1) break;
+        const delay = backoffSchedule[retry] ?? backoffSchedule[backoffSchedule.length - 1];
+        console.info(`[ImageAPI] ${isConcurrency ? 'Concurrency limit' : 'Rate limit'} hit — waiting ${delay / 1000}s before retry ${retry + 2}...`);
+        await sleep(delay);
       }
     }
 

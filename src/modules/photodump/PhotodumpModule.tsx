@@ -548,9 +548,27 @@ const PhotodumpModule: React.FC = () => {
       const shotUrls: string[] = [];
       const failed: number[]   = [];
       const failedErrors: string[] = [];
+      const SHOT_START_INTERVAL_MS = 25000; // 25s entre el INICIO de un shot y el del siguiente
+      let lastShotStartedAt = 0;
       for (let i = 0; i < shots.length; i++) {
-        // Delay escalonado: shots 1-4 esperan 15s, shots 5+ esperan 25s (Gemini rate-limit)
-        if (i > 0) await new Promise(r => setTimeout(r, i < 5 ? 15000 : 25000));
+        // BUG REAL corregido: el delay antes era "esperar 15-25s DESPUÉS de
+        // que terminó el shot anterior" — el tiempo real entre el inicio de
+        // dos shots consecutivos variaba según cuánto tardara en generarse
+        // cada uno (shot rápido → el siguiente arranca pronto, con el slot
+        // de concurrencia recién liberado, poco margen real). Ahora se mide
+        // desde el INICIO de cada shot: 25s fijos y predecibles entre el
+        // arranque de un shot y el del siguiente, sin importar cuánto tardó
+        // el anterior — como los shots corren en secuencia (await, nunca en
+        // paralelo), a los 25s el shot anterior casi siempre ya liberó su
+        // slot de concurrencia. Patrón real reportado: "el shot 2 casi
+        // siempre falla" — coincidía con el caso de timing más ajustado
+        // (shot 1 rápido + solo 15s de espera).
+        if (i > 0) {
+          const elapsedSinceLastStart = Date.now() - lastShotStartedAt;
+          const remaining = SHOT_START_INTERVAL_MS - elapsedSinceLastStart;
+          if (remaining > 0) await new Promise(r => setTimeout(r, remaining));
+        }
+        lastShotStartedAt = Date.now();
         const sh = shots[i];
         try {
           const result: PhotodumpShotResult = await generatePhotodumpShot(
@@ -802,6 +820,15 @@ const PhotodumpModule: React.FC = () => {
           // Retry automático para haul:
           // • content-policy: safe-retry con prompt conservador
           // • timeout/red: backoff retry con el mismo prompt
+          //
+          // BUG REAL corregido: fuera de outfit_haul, un shot que fallaba
+          // (ej. CONCURRENCY_LIMIT porque el shot anterior todavía tenía el
+          // slot ocupado) nunca se reintentaba a nivel de sesión — dejaba un
+          // hueco permanente en el set. Patrón real reportado: "el shot 2
+          // casi siempre falla" en outfit_night_out. Mismo backoff simple de
+          // 5s + mismo prompt que ya usa la rama de red/timeout de haul —
+          // sin el safe-retry de contenido (específico de moda modesta, no
+          // aplica igual a otras recetas).
           let retryResult: PhotodumpShotResult | null = null;
           if (recipe === 'outfit_haul') {
             const isHeroShot = sh.key && (
@@ -850,6 +877,25 @@ const PhotodumpModule: React.FC = () => {
                   haulManifestForGen,
                 );
               }
+            } catch {
+              // Segundo intento también falló — se trata como fallo definitivo
+            }
+          } else if (!isContentPolicy) {
+            // Cualquier otra receta: mismo reintento simple de red/timeout/
+            // concurrencia que la rama de haul de arriba, sin el safe-retry
+            // de contenido (no aplica). Un fallo de política de contenido
+            // fuera de haul se sigue tratando como definitivo — reintentar
+            // con el mismo prompt no cambiaría el resultado.
+            try {
+              await new Promise(r => setTimeout(r, 5000));
+              retryResult = await generatePhotodumpShot(
+                sh, refsWithMode, ref0Url, ref0Analysis,
+                basePrompt, narrative, destino, sessionParams,
+                plan.assignedFamilies, plan.sessionFamilies,
+                shots.length, protagonist, recipe,
+                plan.presentationStyle,
+                haulManifestForGen,
+              );
             } catch {
               // Segundo intento también falló — se trata como fallo definitivo
             }
