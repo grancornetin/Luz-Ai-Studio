@@ -110,7 +110,7 @@ console.log(`Total shots planificados: ${plan.shots.length}`);
 console.log('\n' + '═'.repeat(70));
 console.log('Redactando prompts finales (Redactar)...');
 console.log('═'.repeat(70));
-const writePrompt = buildPhotodumpWritePrompt(brief, plan);
+const writePrompt = buildPhotodumpWritePrompt(brief, plan, energy);
 const { shots: finalPrompts } = await generateJson(writePrompt, PHOTODUMP_PROMPTS_SCHEMA) as { shots: FinalPromptShot[] };
 
 for (const shot of finalPrompts) {

@@ -354,7 +354,7 @@ async function runPhotodumpDirector(
   // se libere bajo carga real.
   await new Promise(resolve => setTimeout(resolve, 15000));
 
-  const writePrompt = buildPhotodumpWritePrompt(brief, plan);
+  const writePrompt = buildPhotodumpWritePrompt(brief, plan, energy);
   const writeResponse = await generateContentWithRetry(
     ai,
     {

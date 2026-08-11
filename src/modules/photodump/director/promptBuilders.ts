@@ -357,19 +357,36 @@ otros shots del set (needsVenueAnchor) y por qué (continuityNote).
 
 RAZONAMIENTO DE ACCESORIOS (accessoryReasoning, obligatorio en cada shot):
 la referencia de outfit del usuario puede incluir accesorios no-esenciales
-(bolso, gafas, bufanda, joyas visibles) fusionados en la misma imagen. Por
-default, esos accesorios DEBERÍAN seguir presentes en todos los shots del
-mismo venue/momento — no desaparecen y reaparecen sin motivo, igual que en
-la vida real alguien no se queda sin su bolso a mitad de la noche y lo
-recupera después. Para cada shot, razoná explícitamente: ¿tiene sentido que
-el/los accesorio(s) no-esenciales aparezcan en ESTE shot puntual, o hay una
-razón física/narrativa real que los excluye de forma creíble (ej. bailando
-con las manos libres, un POV mirando hacia abajo donde el bolso no entra en
-cuadro, manos ocupadas sosteniendo comida o bebida, un brindis en primer
-plano donde el encuadre no llega al torso)? Escribí esa decisión en
-accessoryReasoning — nunca lo omitas ni lo dejes implícito. Si no hay una
-razón real para excluirlos, la respuesta correcta es "se mantienen
-presentes, sin motivo para excluirlos".
+(bolso, gafas, bufanda, joyas visibles) fusionados en la misma imagen. Para
+shots donde la PROTAGONISTA está en cuadro sosteniendo o llevando el
+accesorio de forma natural, el default es que sigue presente — no desaparece
+y reaparece sin motivo, igual que en la vida real alguien no se queda sin su
+bolso a mitad de la noche y lo recupera después.
+
+PERO eso NO aplica a shots donde el accesorio terminaría ubicado en la
+escena sin que la protagonista lo esté sosteniendo (ej. food_detail,
+ambient_only — planos sin protagonista en cuadro, donde el bolso solo podría
+aparecer "apoyado" en la mesa/silla sin ninguna razón real): ahí el default
+es que el accesorio NO aparece, salvo que exista una razón narrativa real
+para que esté visible en ese plano puntual (bug real corregido: un bolso
+apareció apoyado junto al plato de comida en un food_detail, sin que nadie
+lo hubiera dejado ahí con intención — un objeto de cámara "estacionado" en
+el encuadre solo para que no desaparezca del todo se lee como un error de
+foto, no como continuidad real).
+
+Para cada shot, razoná explícitamente: ¿tiene sentido que el/los
+accesorio(s) no-esenciales aparezcan en ESTE shot puntual, o hay una razón
+física/narrativa real que los excluye de forma creíble (ej. bailando con las
+manos libres, un POV mirando hacia abajo donde el bolso no entra en cuadro,
+manos ocupadas sosteniendo comida o bebida, un brindis en primer plano donde
+el encuadre no llega al torso, un plano sin protagonista donde no hay razón
+para que el bolso esté ahí)? Escribí esa decisión en accessoryReasoning —
+nunca lo omitas ni lo dejes implícito. Si el shot muestra a la protagonista
+llevándolo con naturalidad y no hay razón para excluirlo, la respuesta
+correcta es "se mantienen presentes, sin motivo para excluirlos". Si el shot
+no tiene a la protagonista sosteniéndolo activamente, la respuesta correcta
+por default es "no aparece en este plano — no hay razón real para que esté
+en la escena".
 
 Devolvé el resultado en el formato JSON pedido.`;
 }
@@ -407,7 +424,7 @@ export function sanitizeDirectorPlan(plan: DirectorPlan, recipeContract: RecipeC
   return { ...plan, shots: trimmedShots };
 }
 
-export function buildPhotodumpWritePrompt(brief: string, plan: DirectorPlan): string {
+export function buildPhotodumpWritePrompt(brief: string, plan: DirectorPlan, energy?: 'elegante' | 'fiesta'): string {
   const shotsText = plan.shots.map(shot => {
     const chosen = shot.candidatesConsidered.find(c => c.itemId === shot.chosenCandidateId);
     return `
@@ -428,6 +445,8 @@ Accesorios no-esenciales (bolso, gafas, bufanda) en este shot: ${shot.accessoryR
   return `Sos el redactor final de prompts del Director Creativo de Photodump. Ya se decidió, para cada shot, qué elementos de qué candidato del banco son reutilizables — tu trabajo AHORA es escribir el prompt final en INGLÉS, listo para pegar en un generador de imágenes real.
 
 BRIEF REAL DEL USUARIO (la escena/lugar/hora real a describir, reemplaza cualquier escenario específico de los candidatos del banco): "${brief}"
+
+ENERGÍA REAL DE ESTA NOCHE: ${energy === 'fiesta' ? 'FIESTA' : 'ELEGANTE (cena, previa, salida tranquila — sin pista de baile ni club)'}. REGLA DURA, aplica a CUALQUIER shot sin importar su tipo: si la energía es ELEGANTE, ningún prompt puede describir pista de baile, luces de club/neón/láser, gente bailando en grupo, ni ningún elemento de fiesta/discoteca — aunque el candidato del banco elegido como inspiración de pose tuviera esos elementos, van siempre a discardedElements y se reemplazan por el registro real de la noche (conversación, brindis, gestos tranquilos). Bug real corregido: un shot de "plano grupal" en una cena elegante en rooftop se redactó con láseres y luces de club sin que el brief mencionara ninguna fiesta — la energía real de la noche nunca llegaba a esta instrucción.
 
 REGLAS DE ESTILO FIJAS — aplican a TODOS los shots, agregalas al final de cada prompt:
 ${PHOTODUMP_STYLE_RULES_TEXT}
@@ -456,16 +475,25 @@ razonamiento de accesorios (bolso, gafas, bufanda) — ver "Accesorios
 no-esenciales" abajo. NO lo traduzcas a texto en todos los casos — mencionar
 un accesorio, incluso para decir que está ausente, le da peso visual
 innecesario y el generador de imágenes tiende a sobre-representarlo. Regla:
-- Si el razonamiento es el default genérico ("se mantienen presentes, sin
-  motivo para excluirlos"): NO escribas ninguna línea sobre el accesorio en
-  el prompt. Dejá que la imagen de referencia del outfit (que ya lo incluye)
-  resuelva su presencia por sí sola, sin texto adicional.
+- Si el razonamiento es el default de protagonista-en-cuadro ("se mantienen
+  presentes, sin motivo para excluirlos"): NO escribas ninguna línea sobre el
+  accesorio en el prompt. Dejá que la imagen de referencia del outfit (que ya
+  lo incluye) resuelva su presencia por sí sola, sin texto adicional.
 - Si el razonamiento dio una razón física/narrativa REAL y específica para
   excluirlo (manos ocupadas, POV que no lo encuadra, bailando): sí escribí
   esa razón en el prompt, una sola vez, de forma natural (ej. "Her hands are
   occupied holding the wine glasses for the toast.") — sin nombrar
   explícitamente que el bolso "no es el foco" o "no es necesario", alcanza
   con describir la acción real que ocupa las manos/cuerpo.
+- Si el razonamiento es el default de plano-sin-protagonista ("no aparece en
+  este plano — no hay razón real para que esté en la escena", ej. en
+  food_detail/ambient_only): escribí una línea explícita y breve dejando
+  fuera el accesorio del encuadre (ej. "The frame shows only the table and
+  the dish — no bag, no personal items in view.") — el default acá es
+  activamente EXCLUIRLO del texto, no dejarlo a la imagen de referencia,
+  porque en estos planos el generador de imágenes lo agrega "apoyado" en la
+  escena sin que nadie lo haya dejado ahí (bug real corregido: un bolso
+  apareció junto al plato de comida en un food_detail sin ninguna razón).
 
 PLAN DE SHOTS YA DECIDIDO:
 ${shotsText}
