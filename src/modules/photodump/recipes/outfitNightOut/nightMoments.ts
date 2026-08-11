@@ -227,6 +227,27 @@ export const NIGHT_MOMENTS: NightMoment[] = [
     fiestaOnly: false,
     hasProtagonist: true,
   },
+  {
+    // Solo se usa en el nivel 'una_foto' (ver levelResolver.ts) — nunca
+    // aparece en el sorteo normal de corto/completo/extendido. Fallback
+    // estático de emergencia si el director falla en ese nivel; en el flujo
+    // normal, el texto real viene del director razonando sobre el banco.
+    id: 'single_hero_shot',
+    contract: {
+      shotId: 'single_hero_shot',
+      cameraGrammar: { framing: 'MEDIUM_CLOSE', angle: 'eye_level', composition: 'single_hero_shot' },
+      referencePolicy: { useIdentityRef: true, useBodyRef: true, useOutfitRefs: true },
+      hpiPoseFamily: null,
+      footwearVisible: false,
+    },
+    sceneBlockByEnergy: {
+      elegante: 'A selfie or half-body portrait, arm extended or camera held by herself, direct or semi-direct gaze at the camera, calm and confident expression. The complete outfit and accessories are clearly legible on her torso — not a detail crop. The real venue (table, candles, ambient lighting) is visible but softly out of focus behind her, grounding the moment in a real place. This single photo should read as the whole story of the night on its own — she had a great night and looked incredible.',
+      fiesta:   'A selfie or half-body portrait, arm extended or camera held by herself, direct or semi-direct gaze at the camera, playful confident expression. The complete outfit and accessories are clearly legible on her torso — not a detail crop. The real venue (colorful lighting, crowd, party atmosphere) is visible but softly out of focus behind her, grounding the moment in a real place. This single photo should read as the whole story of the night on its own — she had a great night and looked incredible.',
+    },
+    requiresCompanion: false,
+    fiestaOnly: false,
+    hasProtagonist: true,
+  },
 ];
 
 function hashString(s: string): number {
@@ -281,6 +302,10 @@ export function pickNightMomentsForSet(
   energy:       NightOutEnergy,
 ): NightMoment[] {
   const pool = NIGHT_MOMENTS.filter(m => {
+    // single_hero_shot es exclusivo del nivel 'una_foto' (levelResolver.ts lo
+    // usa directo vía findNightMoment) — nunca debe entrar al sorteo normal
+    // de corto/completo/extendido.
+    if (m.id === 'single_hero_shot') return false;
     if (m.requiresCompanion && !hasCompanion) return false;
     if (m.fiestaOnly && energy !== 'fiesta') return false;
     return true;

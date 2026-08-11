@@ -22,6 +22,42 @@ import type { BankAnalysisItem, CandidateSummary, RecipeContract, ShotPools } fr
 // candidatos por shot sin disparar la duración de la llamada a Gemini.
 const MAX_CANDIDATES_PER_SHOT = 12;
 
+// Pool ampliado del que se muestrea al azar (ver pickWeightedSample) — sin
+// esto, dos sesiones con un brief parecido ("cena en un rooftop" lo escriben
+// muchas usuarias casi igual) siempre recortan al mismo top-12 exacto, y el
+// director tiende a preferir el de mayor relevanceScore dentro de ese grupo
+// — con un banco de 300+ fotos por tipo de shot, la riqueza real del banco
+// nunca se explota, todas las sesiones ven variaciones del mismo puñado de
+// candidatos. 40 sigue siendo liviano de puntuar (no es lo que causaba el
+// timeout — eso era mandarlos TODOS a Gemini, no filtrarlos en código).
+const SAMPLE_POOL_SIZE = 40;
+
+/**
+ * Elige `count` candidatos al azar de `scored`, dando más chance (no
+ * garantía) a los de mayor score — evita que el pool final sea siempre
+ * determinístico (mismo brief → mismos 12 candidatos → mismo elegido en
+ * cada sesión), sin perder relevancia real: un candidato con score 0 no
+ * entra al pool ampliado en primer lugar (ver filtro `score > 0` en el
+ * caller), así que la aleatoriedad ocurre solo entre candidatos ya
+ * relevantes al brief.
+ */
+function pickWeightedSample<T>(scored: Array<{ item: T; score: number }>, count: number): Array<{ item: T; score: number }> {
+  if (scored.length <= count) return scored;
+  const pool = [...scored];
+  const picked: Array<{ item: T; score: number }> = [];
+  for (let i = 0; i < count && pool.length > 0; i++) {
+    const totalWeight = pool.reduce((sum, c) => sum + c.score + 1, 0); // +1: score 0 también puede salir sorteado
+    let roll = Math.random() * totalWeight;
+    let idx = 0;
+    for (; idx < pool.length; idx++) {
+      roll -= pool[idx].score + 1;
+      if (roll <= 0) break;
+    }
+    picked.push(pool.splice(Math.min(idx, pool.length - 1), 1)[0]);
+  }
+  return picked;
+}
+
 function normalizeText(s: string | undefined | null): string {
   return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
@@ -102,9 +138,12 @@ export function buildShotPools(bankItems: BankAnalysisItem[], brief: string, rec
       .map(item => ({ item, score: scoreItemForShot(item, briefKeywords, shotType.description) }))
       .filter(({ score }) => score > 0)
       .sort((a, b) => b.score - a.score)
-      .slice(0, MAX_CANDIDATES_PER_SHOT);
+      .slice(0, SAMPLE_POOL_SIZE);
 
-    pools[shotType.id] = scored.map(({ item, score }) => summarizeCandidate(item, score));
+    const sampled = pickWeightedSample(scored, MAX_CANDIDATES_PER_SHOT)
+      .sort((a, b) => b.score - a.score); // reordenar por score para que el director siga viendo primero los más relevantes en el texto del prompt
+
+    pools[shotType.id] = sampled.map(({ item, score }) => summarizeCandidate(item, score));
   }
 
   return pools;

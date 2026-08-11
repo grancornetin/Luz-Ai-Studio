@@ -321,8 +321,13 @@ export async function generateOutfitNightOutREF0(
   sessionParams:  { uid?: string; sessionId?: string },
 ): Promise<PhotodumpREF0Result> {
   const companionRef = extractCompanionRef(refs);
+  const level = (refs.nightOutLevel ?? 'corto') as NightOutLevel;
+  // 'una_foto': el único shot del set ES el ancla — mismo patrón de fusión
+  // REF0+shot1 que outfitRevealBasic/outfitMultiLook, pero con
+  // single_hero_shot en vez de mirror_check.
+  const contract = level === 'una_foto' ? findNightMoment('single_hero_shot').contract : MIRROR_CHECK_CONTRACT;
   const result = await generateFromContract(
-    MIRROR_CHECK_CONTRACT, refs, destino, basePrompt, sessionParams, 0, 1, { companionRef },
+    contract, refs, destino, basePrompt, sessionParams, 0, 1, { companionRef },
   );
   prepAnchorCache.set(cacheKey(refs, basePrompt, sessionParams.sessionId), result);
   return { imageUrl: result.imageUrl, ref0Analysis: null, prompt: result.prompt, refsCount: result.refsCount };
@@ -354,14 +359,15 @@ export async function generateOutfitNightOutShot(
   const key = cacheKey(refs, basePrompt, sessionParams.sessionId);
   const companionRef = extractCompanionRef(refs);
 
-  if (shotId === 'mirror_check') {
+  if (shotId === 'mirror_check' || shotId === 'single_hero_shot') {
+    const contract = shotId === 'single_hero_shot' ? findNightMoment('single_hero_shot').contract : MIRROR_CHECK_CONTRACT;
     const cached = prepAnchorCache.get(key);
     if (cached) {
-      const usedDirector = directorPromptCache.get(key)?.has('mirror_check') ?? false;
+      const usedDirector = directorPromptCache.get(key)?.has(shotId) ?? false;
       const debug = buildShotDebug(
-        MIRROR_CHECK_CONTRACT,
+        contract,
         { orderedUrls: [], breakdown: { outfits: [] } },
-        'mirror_check (already generated as the anchor)',
+        `${shotId} (already generated as the anchor)`,
         { passed: true, errors: [] },
         usedDirector,
       );
@@ -369,7 +375,7 @@ export async function generateOutfitNightOutShot(
     }
     // Red de seguridad: si por algún motivo el REF0 no se generó antes.
     const result = await generateFromContract(
-      MIRROR_CHECK_CONTRACT, refs, destino, basePrompt, sessionParams, shotIndex, totalShots, { companionRef },
+      contract, refs, destino, basePrompt, sessionParams, shotIndex, totalShots, { companionRef },
     );
     prepAnchorCache.set(key, result);
     return result;

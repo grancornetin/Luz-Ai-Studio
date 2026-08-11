@@ -58,23 +58,43 @@ function extractText(response) {
 /**
  * Llama a Gemini pidiendo una respuesta JSON validada contra un schema —
  * mismo mecanismo que responseMimeType/responseSchema en api/gemini/content.ts.
+ *
+ * Reintenta con backoff exponencial ante 429 RESOURCE_EXHAUSTED — mismo
+ * mecanismo ya agregado en producción (api/gemini/content.ts,
+ * generateContentWithRetry) tras confirmar que es un rate-limit de cuota
+ * transitorio, no un error de código. El harness corre varias pruebas
+ * seguidas contra el mismo proyecto de Google Cloud, así que necesita el
+ * mismo reintento para no fallar en medio de una sesión de investigación.
  */
-export async function generateJson(prompt, schema, model = 'gemini-2.5-flash') {
+export async function generateJson(prompt, schema, model = 'gemini-2.5-flash', maxRetries = 3) {
   const genAI = getClient();
-  const response = await genAI.models.generateContent({
-    model,
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    config: {
-      responseMimeType: 'application/json',
-      responseSchema: schema,
-    },
-  });
-  const text = extractText(response);
-  try {
-    return JSON.parse(text);
-  } catch (err) {
-    console.error('No se pudo parsear la respuesta de Gemini como JSON. Texto crudo:');
-    console.error(text);
-    throw err;
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await genAI.models.generateContent({
+        model,
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: schema,
+        },
+      });
+      const text = extractText(response);
+      try {
+        return JSON.parse(text);
+      } catch (err) {
+        console.error('No se pudo parsear la respuesta de Gemini como JSON. Texto crudo:');
+        console.error(text);
+        throw err;
+      }
+    } catch (error) {
+      lastError = error;
+      const is429 = error?.status === 429 || error?.message?.includes('RESOURCE_EXHAUSTED');
+      if (!is429 || attempt === maxRetries) throw error;
+      const backoffMs = 3000 * Math.pow(2, attempt); // 3s, 6s, 12s
+      console.warn(`[geminiClient] 429 recibido, reintento ${attempt + 1}/${maxRetries} en ${backoffMs}ms...`);
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
+    }
   }
+  throw lastError;
 }

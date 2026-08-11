@@ -52,13 +52,20 @@ export type NightMomentId =
   | 'car_transition'
   | 'food_detail'
   | 'toast_moment'
-  | 'group_party_moment';
+  | 'group_party_moment'
+  | 'single_hero_shot';
 
 export type NightOutShotId = NightOutFixedShotId | NightMomentId;
 
 export type NightOutEnergy = 'elegante' | 'fiesta';
 
-export type NightOutLevel = 'corto' | 'completo' | 'extendido';
+// 'una_foto': 1 sola imagen que resuelve ambos ejes narrativos de la receta
+// a la vez (§4bis del manifiesto — "la noche fue memorable" + "se veía
+// increíble") — sin mirror_check, sin secuencia, una sola foto tipo hero
+// (ej. selfie con brazo extendido que ya muestra outfit completo + contexto
+// del venue). No es una versión recortada de 'corto', es un tipo de imagen
+// distinto — ver 'una_imagen_completa' en nightMomentTypes.
+export type NightOutLevel = 'una_foto' | 'corto' | 'completo' | 'extendido';
 
 export interface CameraGrammarRef {
   framing:     string;

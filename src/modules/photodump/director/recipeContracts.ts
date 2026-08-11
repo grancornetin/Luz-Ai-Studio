@@ -25,6 +25,14 @@ ella en ese momento" — nunca "así se ve la prenda".`,
       'Nunca inventar un acompañante con rostro visible si el usuario no subió una foto real de esa persona.',
     ],
     shotsByLevel: {
+      // Sin mirror_check ni ningún shot fijo — ver nightMomentTypes,
+      // 'single_hero_shot'. No es un 'corto' recortado a 1: es un tipo de
+      // imagen distinto, pensado para resolver la historia completa en un
+      // solo frame (manifiesto §4bis, núcleo narrativo dual).
+      una_foto: {
+        count: 1,
+        description: '1 sola foto que resuelve toda la historia a la vez — outfit completo visible, contexto del venue presente, sin necesitar mirror check ni secuencia. "Tuvo una noche genial y se veía increíble", en una sola imagen.',
+      },
       corto: {
         count: 3,
         description: '1 shot de mirror check (el outfit completo, de cuerpo entero, en un espejo de casa) + 2 momentos de la noche en sí (venue, experiencia).',
@@ -120,6 +128,24 @@ ella en ese momento" — nunca "así se ve la prenda".`,
         description: 'Plano amplio de la escena social — la protagonista y su grupo, con el lugar/ambiente también visible.',
         diversityAxis: 'wide_scene',
         attentionBridge: 'La escena amplia (grupo + lugar) es la única que muestra "pertenencia + estatus del lugar" a la vez, sin depender de un detalle aislado.',
+      },
+      {
+        // Solo se usa en el nivel 'una_foto' — 1 imagen total, sin
+        // mirror_check ni ningún otro shot. A diferencia de todos los tipos
+        // de arriba (que desvían la atención hacia UN detalle e insinúan el
+        // resto), este tipo resuelve los 2 ejes narrativos completos en el
+        // mismo frame: outfit legible de cuerpo/torso completo (no un
+        // detalle aislado) + contexto real del venue visible al fondo
+        // (mesa, velas, luces) — no necesita otro shot para completar la
+        // historia. Ejemplo real que motivó este tipo: selfie con brazo
+        // extendido, mirada directa a cámara, torso con outfit y accesorios
+        // completos (bolso, joyas) visibles, mesa con velas y candelabro
+        // desenfocada al fondo — la foto sola ya dice "tuvo una noche genial
+        // y se veía increíble", sin necesitar una secuencia.
+        id: 'single_hero_shot',
+        description: 'Selfie o retrato de medio cuerpo/torso con brazo extendido o cámara sostenida por la protagonista — outfit y accesorios completos y legibles (no un detalle aislado), mirada directa o semi-directa a cámara, con el venue real (mesa, luces, decoración) visible pero desenfocado al fondo. Debe leerse como una sola foto que ya cuenta toda la noche, sin depender de otras imágenes.',
+        diversityAxis: 'complete_narrative',
+        attentionBridge: 'No hay desvío de atención acá — es la única excepción del banco. La foto declara directamente "así me veía, así era el lugar" porque es la única imagen del set y necesita sostener sola ambos ejes narrativos (memorable + se veía increíble).',
       },
     ],
   },

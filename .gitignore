@@ -53,6 +53,12 @@ dist-ssr
 # bloquearía por defecto).
 !/modules/motor-de-imagenes-corregido-v2/director-lab/data/**/*.json
 !/modules/motor-de-imagenes-corregido-v2/director-lab/vendor/**/*.json
+
+# Snapshot del banco del Director Creativo de Photodump (solo texto/análisis,
+# no imágenes) — DEBE versionarse: api/gemini/content.ts lo lee con
+# fs.readFileSync en runtime de Vercel, no existe otra forma de que el
+# archivo llegue al deploy sin estar en git.
+!/src/data/photodump-bank/*.json
 # Estado/runtime generado por el uso de la herramienta (proyectos de prueba,
 # notas, casos): NO se versiona, es datos locales, no código.
 /modules/motor-de-imagenes-corregido-v2/director-lab-data/

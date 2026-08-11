@@ -360,13 +360,14 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   };
 
   // ── Handlers de outfit_night_out ────────────────────────────────
-  const NIGHT_OUT_LEVEL_OPTIONS: { value: 'corto' | 'completo' | 'extendido'; label: string; hint: string }[] = [
+  const NIGHT_OUT_LEVEL_OPTIONS: { value: 'una_foto' | 'corto' | 'completo' | 'extendido'; label: string; hint: string }[] = [
+    { value: 'una_foto',  label: 'Una foto (1 foto)',   hint: 'Una sola imagen que cuenta toda la historia — sin mirror check, sin secuencia.' },
     { value: 'corto',     label: 'Corto (3 fotos)',     hint: 'Mirror check y 2 momentos de la noche.' },
     { value: 'completo',  label: 'Completo (5 fotos)',  hint: '+ un detalle de cómo armaste el look, y 3 momentos de la noche.' },
     { value: 'extendido', label: 'Extendido (7 fotos)', hint: 'Mirror check y 6 momentos de la noche — la experiencia completa, sin volver a la preparación.' },
   ];
 
-  const handleNightOutLevelChange = (level: 'corto' | 'completo' | 'extendido') => {
+  const handleNightOutLevelChange = (level: 'una_foto' | 'corto' | 'completo' | 'extendido') => {
     onRefs({ ...refs, nightOutLevel: level });
   };
 

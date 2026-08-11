@@ -17,7 +17,7 @@
  */
 import type { NightOutLevel, NightOutEnergy, ShotContract } from './types';
 import { TRYON_DETAIL_CONTRACT, MIRROR_CHECK_CONTRACT } from './shotPool';
-import { pickNightMomentsForSet, type NightMoment } from './nightMoments';
+import { pickNightMomentsForSet, findNightMoment, type NightMoment } from './nightMoments';
 
 export interface ResolvedShot {
   fixedContract?: ShotContract;
@@ -25,6 +25,7 @@ export interface ResolvedShot {
 }
 
 const NIGHT_MOMENT_COUNT_BY_LEVEL: Record<NightOutLevel, number> = {
+  una_foto:  1,
   corto:     2,
   completo:  3,
   extendido: 6,
@@ -36,6 +37,15 @@ export function resolveShotsForLevel(
   hasCompanion: boolean,
   energy:       NightOutEnergy,
 ): ResolvedShot[] {
+  // Fallback de emergencia si el director falla en el nivel de 1 sola foto:
+  // usa directamente single_hero_shot (no pickNightMomentsForSet — ese
+  // sorteo podría devolver cualquier momento del banco, incluido uno sin
+  // protagonista, rompiendo el contrato de "1 sola imagen que cuenta toda la
+  // historia"). Sin mirror_check, para no convertir esto en 2 fotos.
+  if (level === 'una_foto') {
+    return [{ nightMoment: findNightMoment('single_hero_shot') }];
+  }
+
   const momentCount = NIGHT_MOMENT_COUNT_BY_LEVEL[level];
   const nightMoments = pickNightMomentsForSet(seed, momentCount, hasCompanion, energy);
 

@@ -708,8 +708,8 @@ export interface PhotodumpRefs {
   // accesorio combina (many-to-many, declarado por el usuario con chips).
   curatedIdeasAccessoryLinks?: (string[] | null)[];
   // outfit_night_out: nivel elegido por el usuario, determina cuántos y
-  // cuáles shots se generan (Corto=3, Completo=5, Extendido=7).
-  nightOutLevel?: 'corto' | 'completo' | 'extendido';
+  // cuáles shots se generan (Una foto=1, Corto=3, Completo=5, Extendido=7).
+  nightOutLevel?: 'una_foto' | 'corto' | 'completo' | 'extendido';
 }
 
 // ── Tipos modo libre ───────────────────────────────────────────

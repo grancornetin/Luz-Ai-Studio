@@ -118,10 +118,23 @@ export interface ShotDecision {
   // real del usuario tras ver un bolso "flotante" (presente en unos shots,
   // ausente en otros del mismo venue, sin ninguna razón narrativa).
   accessoryReasoning: string;
+  // A qué momento de plan.timelineStages pertenece este shot — evita que el
+  // set se lea como momentos sueltos sin orden real (bug real: un shot de
+  // "yéndose en auto" seguido de otro shot en el mismo venue con más gente).
+  timelineStage: string;
+  // Filtro del manifiesto de dirección (§6, "esta foto existe porque..."):
+  // quién sostiene la cámara y por qué la protagonista publicaría esta foto
+  // puntual — evita candidatos técnicamente válidos pero sin razón de
+  // captura creíble (ej. foto de espaldas sin rostro que sacaría una amiga,
+  // no la propia protagonista).
+  existenceReason: string;
 }
 
 export interface DirectorPlan {
   globalReasoning: string;
+  // 3 a 5 momentos concretos de la noche, en orden cronológico, declarados
+  // una vez antes de asignar shots — ver timelineStage en ShotDecision.
+  timelineStages: string[];
   shots: ShotDecision[];
 }
 
