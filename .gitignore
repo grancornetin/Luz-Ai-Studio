@@ -70,3 +70,6 @@ dist-ssr
 # locales, no código): NO se versiona.
 /src/data/trainer/photodump/
 /modules/motor-de-imagenes-corregido-v2/photodump-trainer-data/
+
+# Pruebas y resultados locales (solo para desarrollo en este equipo)
+/pruebas de resultados/

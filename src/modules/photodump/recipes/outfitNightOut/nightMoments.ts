@@ -440,10 +440,32 @@ export function pickNightMomentsForSet(
 
   // Reordenar de forma determinística (no agrupar todos los "sin
   // protagonista" al final) usando el mismo hash de orden relativo por seed.
-  return picked
+  const ordered = picked
     .map((moment, i) => ({ moment, key: hashString(`${seed}::order::${moment.id}::${i}`) }))
     .sort((a, b) => a.key - b.key)
     .map(({ moment }) => moment);
+
+  // BUG REAL corregido: un shot sin protagonista (ambient_only, food_detail,
+  // car_transition — sin referencePolicy de identidad/cuerpo/outfit, ver
+  // arriba) no tiene NINGUNA referencia propia para anclarse a un lugar —
+  // depende 100% de venueAnchorCache (la foto del PRIMER NightMoment ya
+  // generado en la sesión, ver outfitNightOut/index.ts). Si el reordenamiento
+  // de arriba lo dejaba como el PRIMER NightMoment del set, no había ningún
+  // venue anterior al cual anclarse, y el shot fallaba en routingValidator
+  // con "no tiene ninguna referencia resuelta" — confirmado en debug real de
+  // producción. Un shot sin protagonista nunca puede ser el primero del
+  // grupo de NightMoments (mirror_check, que sí va siempre primero de todo
+  // el set, no cuenta como NightMoment): si el orden aleatorio lo puso
+  // primero, se intercambia con el primer shot CON protagonista que exista.
+  const firstNoProtagonistIdx = ordered.findIndex(m => !m.hasProtagonist);
+  if (firstNoProtagonistIdx === 0) {
+    const firstWithProtagonistIdx = ordered.findIndex(m => m.hasProtagonist);
+    if (firstWithProtagonistIdx > 0) {
+      [ordered[0], ordered[firstWithProtagonistIdx]] = [ordered[firstWithProtagonistIdx], ordered[0]];
+    }
+  }
+
+  return ordered;
 }
 
 export function findNightMoment(id: NightMomentId): NightMoment {
