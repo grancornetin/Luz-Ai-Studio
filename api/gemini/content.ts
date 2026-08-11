@@ -120,6 +120,10 @@ interface PhotodumpDirectorJob {
   plan?: PhotodumpDirectorPlan;
   finalPrompts?: PhotodumpFinalPromptShot[];
   error?: string;
+  // Diagnóstico de reintentos por 429 — visible en Redis aunque la función
+  // muera a mitad de un backoff (ver generateContentWithRetry). Nunca
+  // bloquea el flujo, solo informa.
+  retryInfo?: string;
 }
 
 async function saveDirectorJob(job: PhotodumpDirectorJob): Promise<void> {
@@ -261,11 +265,23 @@ function cleanBase64(b64: string): string {
  * en background (ver processPhotodumpDirectorJob) ya hay margen de tiempo
  * real para esperar y reintentar sin volver a exponer al usuario a un
  * timeout.
+ *
+ * BUG REAL corregido (2): confirmado en logs de producción que un 429 real
+ * llegó, y después NUNCA apareció ni el console.warn de reintento ni un
+ * error final — la función serverless se cortó a mitad del backoff (o el
+ * log no llegó a flushearse) sin dejar rastro. Dos cambios: (a) backoff más
+ * largo (5s/10s/20s/40s + jitter, antes 2s/4s/8s) porque una cuota de
+ * proyecto compartida por TODA la app no siempre se libera en <10s bajo
+ * carga real; (b) onAttempt opcional escribe el intento en el job de Redis
+ * ANTES de esperar el backoff — si el proceso muere después, el estado
+ * "processing, intento N" queda visible para diagnóstico en vez de
+ * desaparecer sin dejar huella.
  */
 async function generateContentWithRetry(
   ai: GoogleGenAI,
   params: Parameters<GoogleGenAI['models']['generateContent']>[0],
-  maxRetries: number = 3,
+  maxRetries: number = 4,
+  onAttempt?: (attempt: number, backoffMs: number) => Promise<void>,
 ): Promise<Awaited<ReturnType<GoogleGenAI['models']['generateContent']>>> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -273,10 +289,13 @@ async function generateContentWithRetry(
       return await ai.models.generateContent(params);
     } catch (error: any) {
       lastError = error;
-      const is429 = error?.message?.includes('429') || error?.message?.includes('RESOURCE_EXHAUSTED');
+      const status = error?.status ?? error?.error?.code;
+      const message = String(error?.message ?? '');
+      const is429 = status === 429 || message.includes('429') || message.includes('RESOURCE_EXHAUSTED') || message.includes('quota');
       if (!is429 || attempt === maxRetries) throw error;
-      const backoffMs = 2000 * Math.pow(2, attempt); // 2s, 4s, 8s
+      const backoffMs = 5000 * Math.pow(2, attempt) + Math.floor(Math.random() * 1000); // ~5s, 10s, 20s, 40s + jitter
       console.warn(`[PhotodumpDirector] 429 recibido, reintento ${attempt + 1}/${maxRetries} en ${backoffMs}ms`);
+      if (onAttempt) await onAttempt(attempt + 1, backoffMs).catch(() => {});
       await new Promise(resolve => setTimeout(resolve, backoffMs));
     }
   }
@@ -286,6 +305,7 @@ async function generateContentWithRetry(
 async function runPhotodumpDirector(
   ai: GoogleGenAI,
   payload: PhotodumpDirectorPayload,
+  onRetry?: (stage: 'decidir' | 'redactar', attempt: number, backoffMs: number) => Promise<void>,
 ): Promise<{ plan: PhotodumpDirectorPlan; finalPrompts: PhotodumpFinalPromptShot[] }> {
   const { brief, recipe, level, referenceImages } = payload;
   if (!brief || !recipe || !level) {
@@ -303,25 +323,39 @@ async function runPhotodumpDirector(
   }
   decideParts.push({ text: decidePrompt });
 
-  const decideResponse = await generateContentWithRetry(ai, {
-    model: 'gemini-2.5-flash',
-    contents: [{ role: 'user', parts: decideParts }],
-    config: { responseMimeType: 'application/json', responseSchema: buildPhotodumpDirectorPlanSchema(recipeContract) },
-  });
+  const decideResponse = await generateContentWithRetry(
+    ai,
+    {
+      model: 'gemini-2.5-flash',
+      contents: [{ role: 'user', parts: decideParts }],
+      config: { responseMimeType: 'application/json', responseSchema: buildPhotodumpDirectorPlanSchema(recipeContract) },
+    },
+    4,
+    onRetry ? (attempt, backoffMs) => onRetry('decidir', attempt, backoffMs) : undefined,
+  );
   const rawPlan = JSON.parse(extractText(decideResponse)) as PhotodumpDirectorPlan;
   const plan = sanitizeDirectorPlan(rawPlan, recipeContract, level);
 
-  // Mismo espaciado que ya usa el loop de generación de imágenes entre
-  // shots (PhotodumpModule.tsx, 15s) para evitar rate-limit de Vertex AI —
-  // sin esto, las 2 llamadas del director salían pegadas sin respiro.
-  await new Promise(resolve => setTimeout(resolve, 8000));
+  // Espaciado entre "Decidir" y "Redactar" — subido de 8s a 15s (mismo valor
+  // que ya usa el loop de generación de imágenes entre shots,
+  // PhotodumpModule.tsx) tras confirmar en logs reales que un 429 de cuota
+  // compartida golpeó "Redactar" apenas arrancó. La cuota es de
+  // proyecto+modelo+región, compartida con TODA la app (fotos y texto de
+  // todos los usuarios simultáneos) — 8s no siempre alcanza a que la cuota
+  // se libere bajo carga real.
+  await new Promise(resolve => setTimeout(resolve, 15000));
 
   const writePrompt = buildPhotodumpWritePrompt(brief, plan);
-  const writeResponse = await generateContentWithRetry(ai, {
-    model: 'gemini-2.5-flash',
-    contents: [{ role: 'user', parts: [{ text: writePrompt }] }],
-    config: { responseMimeType: 'application/json', responseSchema: PHOTODUMP_PROMPTS_SCHEMA },
-  });
+  const writeResponse = await generateContentWithRetry(
+    ai,
+    {
+      model: 'gemini-2.5-flash',
+      contents: [{ role: 'user', parts: [{ text: writePrompt }] }],
+      config: { responseMimeType: 'application/json', responseSchema: PHOTODUMP_PROMPTS_SCHEMA },
+    },
+    4,
+    onRetry ? (attempt, backoffMs) => onRetry('redactar', attempt, backoffMs) : undefined,
+  );
   const { shots: finalPrompts } = JSON.parse(extractText(writeResponse)) as { shots: PhotodumpFinalPromptShot[] };
 
   return { plan, finalPrompts };
@@ -360,7 +394,15 @@ async function processPhotodumpDirectorJob(jobId: string): Promise<void> {
 
   try {
     const ai = getGenAIClient('us-central1');
-    const { plan, finalPrompts } = await runPhotodumpDirector(ai, payload);
+    const { plan, finalPrompts } = await runPhotodumpDirector(ai, payload, async (stage, attempt, backoffMs) => {
+      // Escribe el estado de reintento ANTES de esperar el backoff — si la
+      // función serverless muere durante la espera (maxDuration alcanzado,
+      // crash, lo que sea), el job queda con un rastro real en Redis en vez
+      // de quedar "processing" para siempre sin ninguna pista de qué pasó.
+      job.retryInfo = `429 en "${stage}", reintento ${attempt} (esperando ${Math.round(backoffMs / 1000)}s)`;
+      job.updatedAt = Date.now();
+      await saveDirectorJob(job);
+    });
     job.status = 'completed';
     job.plan = plan;
     job.finalPrompts = finalPrompts;

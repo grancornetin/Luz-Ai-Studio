@@ -66,7 +66,7 @@ function extractText(response) {
  * seguidas contra el mismo proyecto de Google Cloud, así que necesita el
  * mismo reintento para no fallar en medio de una sesión de investigación.
  */
-export async function generateJson(prompt, schema, model = 'gemini-2.5-flash', maxRetries = 3) {
+export async function generateJson(prompt, schema, model = 'gemini-2.5-flash', maxRetries = 4) {
   const genAI = getClient();
   let lastError;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -89,9 +89,14 @@ export async function generateJson(prompt, schema, model = 'gemini-2.5-flash', m
       }
     } catch (error) {
       lastError = error;
-      const is429 = error?.status === 429 || error?.message?.includes('RESOURCE_EXHAUSTED');
+      const status = error?.status ?? error?.error?.code;
+      const message = String(error?.message ?? '');
+      const is429 = status === 429 || message.includes('429') || message.includes('RESOURCE_EXHAUSTED') || message.includes('quota');
       if (!is429 || attempt === maxRetries) throw error;
-      const backoffMs = 3000 * Math.pow(2, attempt); // 3s, 6s, 12s
+      // Mismo backoff que generateContentWithRetry en api/gemini/content.ts
+      // (5s/10s/20s/40s + jitter) — mantenido en sync para que el harness
+      // refleje el comportamiento real de producción.
+      const backoffMs = 5000 * Math.pow(2, attempt) + Math.floor(Math.random() * 1000);
       console.warn(`[geminiClient] 429 recibido, reintento ${attempt + 1}/${maxRetries} en ${backoffMs}ms...`);
       await new Promise(resolve => setTimeout(resolve, backoffMs));
     }

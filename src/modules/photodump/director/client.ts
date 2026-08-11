@@ -38,14 +38,24 @@ const POLL_INTERVAL_MS = 3000;
  * que redactar en "Redactar" — la respuesta de 7 shots es notablemente más
  * larga que la de 3), así que el margen de espera del cliente también debe
  * escalar por nivel en vez de ser un techo fijo.
+ *
+ * BUG REAL corregido (2): confirmado en logs reales de producción que un
+ * 429 de cuota compartida (proyecto+modelo+región, no exclusivo de esta
+ * sesión) puede golpear la llamada "Redactar" y el reintento con backoff no
+ * siempre alcanza a completarse dentro de la ventana anterior — el cliente
+ * abandonaba el polling minutos antes de que el servidor pudiera terminar.
+ * maxDuration del servidor subió a 300s (vercel.json) y el backoff de
+ * generateContentWithRetry ahora puede tardar hasta ~80s por llamada en el
+ * peor caso (4 reintentos, 5s/10s/20s/40s+jitter) — el margen del cliente
+ * debe cubrir ESE peor caso, no solo el tiempo feliz sin reintentos.
  */
 function maxPollAttemptsForLevel(level: string): number {
   const totalWaitSeconds: Record<string, number> = {
-    corto: 90,      // 3 shots
-    completo: 150,  // 5 shots
-    extendido: 210, // 7 shots
+    corto: 180,      // 3 shots
+    completo: 240,   // 5 shots
+    extendido: 290,  // 7 shots — cerca del maxDuration real del servidor (300s)
   };
-  const seconds = totalWaitSeconds[level] ?? 150;
+  const seconds = totalWaitSeconds[level] ?? 240;
   return Math.ceil((seconds * 1000) / POLL_INTERVAL_MS);
 }
 
