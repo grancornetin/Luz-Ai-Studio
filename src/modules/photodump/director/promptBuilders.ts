@@ -10,10 +10,22 @@
 import { HARD_RULES_TEXT as PHOTODUMP_HARD_RULES_TEXT } from './hardRules.js';
 import type { RecipeContract, ShotPools, DirectorPlan, DirectorReferenceImage } from './types';
 
-export function buildPhotodumpDirectorPlanSchema(recipeContract: RecipeContract) {
+export function buildPhotodumpDirectorPlanSchema(recipeContract: RecipeContract, level: string, energy?: 'elegante' | 'fiesta') {
+  // single_hero_shot solo es un id válido en el nivel 'una_foto' — ver
+  // comentario de la misma exclusión en buildPhotodumpDecidePrompt (bug
+  // real: sin esto, el enum del schema seguía permitiendo que Gemini lo
+  // eligiera aunque el texto del prompt ya no lo mencionara como opción).
+  const levelInfo = recipeContract.shotsByLevel[level];
+  const isSingleShotLevel = levelInfo?.count === 1;
+  // fiestaOnly (ej. motion_energy) solo es válido cuando la energía real de
+  // la noche es 'fiesta' — mismo bug real corregido en el enum del schema,
+  // no solo en el texto del prompt.
   const validShotIds = [
     ...(recipeContract.fixedShotTypes || []).map(t => t.id),
-    ...(recipeContract.nightMomentTypes || []).map(t => t.id),
+    ...(recipeContract.nightMomentTypes || [])
+      .filter(t => isSingleShotLevel || t.id !== 'single_hero_shot')
+      .filter(t => !t.fiestaOnly || energy === 'fiesta')
+      .map(t => t.id),
   ];
   return {
     type: 'object',
@@ -100,6 +112,7 @@ export function buildPhotodumpDecidePrompt(
   level: string,
   shotPools: ShotPools,
   referenceImages?: DirectorReferenceImage[],
+  energy?: 'elegante' | 'fiesta',
 ): string {
   const levelInfo = recipeContract.shotsByLevel[level];
   // Nivel de 1 sola foto (ver 'una_foto' en shotsByLevel / 'single_hero_shot'
@@ -115,7 +128,33 @@ export function buildPhotodumpDecidePrompt(
     : (recipeContract.fixedShotTypes || [])
         .map(t => `- ${t.id} (FIJO, usar exactamente 1 vez, siempre primero): ${t.description}${t.lightingRule ? `\n  REGLA DE ILUMINACIÓN: ${t.lightingRule}` : ''}`)
         .join('\n');
+  // BUG REAL corregido: single_hero_shot (el tipo exclusivo del nivel
+  // 'una_foto', pensado para reemplazar TODO el set con 1 sola imagen que
+  // resuelve la historia completa) se le mostraba al director como opción
+  // más en CUALQUIER nivel — solo había una instrucción en texto pidiendo
+  // "usalo solo en una_foto", nunca una exclusión real de la lista. En un
+  // set de 7, el director lo tomó como una opción válida de diversidad, y
+  // como su propósito es "resolver la historia completa en una imagen",
+  // redactó un texto CASI IDÉNTICO al mirror_check (ambos comparten esa
+  // función) — resultado real confirmado en producción: shot 5 salió
+  // pixel-por-pixel igual al shot 1 (mismo dormitorio, misma pose de
+  // espejo). Ahora se excluye directamente de la lista de opciones fuera
+  // del nivel una_foto, no solo por instrucción de texto.
+  //
+  // BUG REAL corregido: fiestaOnly (ej. motion_energy — pista de baile,
+  // luces de club) no tenía NINGÚN control real en el director, solo una
+  // frase suelta en su descripción ("solo si el registro es de fiesta") sin
+  // ningún mecanismo que la hiciera cumplir. El pool estático de respaldo sí
+  // filtraba esto (ver fiestaOnly en nightMoments.ts), pero el director no
+  // tenía equivalente. Resultado real confirmado en producción: brief "cena
+  // en un rooftop" (energía inferida: 'elegante', sin ninguna palabra de
+  // fiesta) generó igual un shot de baile con láser rojo/azul en medio de
+  // los comensales — sin ninguna razón física de que ahí exista una pista
+  // de baile. Ahora se excluye de la lista si la energía real no es fiesta,
+  // igual que ya pasa con el pool estático.
   const momentShotList = recipeContract.nightMomentTypes
+    .filter(t => isSingleShotLevel || t.id !== 'single_hero_shot')
+    .filter(t => !t.fiestaOnly || energy === 'fiesta')
     .map(t => {
       const axis = t.diversityAxis ? `\n  EJE DE DIVERSIDAD: ${t.diversityAxis}` : '';
       const bridge = t.attentionBridge ? `\n  POR QUÉ EXISTE ESTE SHOT (attention bridge): ${t.attentionBridge}` : '';

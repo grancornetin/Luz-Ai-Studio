@@ -64,6 +64,14 @@ export interface ShotTypeDef {
   // experiencia que NO se muestra directamente. Se le pasa a Gemini como
   // contexto de POR QUÉ ese shot type existe, no solo QUÉ mostrar.
   attentionBridge?: string;
+  // Si true, este tipo de shot solo es válido cuando la energía de la noche
+  // (ver energy en buildPhotodumpDecidePrompt) es 'fiesta' — equivalente al
+  // mismo campo ya existente en nightMoments.ts (pool estático de
+  // respaldo), pero el director no tenía ninguna versión de esta regla:
+  // bug real confirmado en producción, "cena en un rooftop" (energía
+  // 'elegante') generó un shot de pista de baile con luces de club, sin
+  // ninguna razón física de que ahí exista una pista de baile.
+  fiestaOnly?: boolean;
 }
 
 export interface RecipeContract {

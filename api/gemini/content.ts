@@ -18,6 +18,11 @@ import {
   sanitizeDirectorPlan,
 } from '../../src/modules/photodump/director/promptBuilders.js';
 import type { BankSnapshot as PhotodumpBankSnapshot, DirectorPlan as PhotodumpDirectorPlan, FinalPromptShot as PhotodumpFinalPromptShot, DirectorReferenceImage as PhotodumpDirectorReferenceImage } from '../../src/modules/photodump/director/types.js';
+// resolveEnergyFromBrief: función pura (sin dependencias de React/cliente),
+// segura de importar server-side. Se reusa en vez de duplicar la lista de
+// FIESTA_KEYWORDS acá — bug real ya conocido en esta sesión: duplicar
+// lógica de texto entre cliente/servidor diverge con el tiempo.
+import { resolveEnergyFromBrief } from '../../src/modules/photodump/recipes/outfitNightOut/venueResolver.js';
 
 interface PhotodumpDirectorPayload {
   brief?: string;
@@ -315,8 +320,12 @@ async function runPhotodumpDirector(
   const recipeContract = getPhotodumpRecipeContract(recipe);
   const snapshot = loadPhotodumpBankSnapshot();
   const shotPools = buildPhotodumpShotPools(snapshot.items, brief, recipeContract);
+  // Ver comentario de fiestaOnly en promptBuilders.ts — sin esto, tipos de
+  // shot como motion_energy (pista de baile) podían aparecer en briefs
+  // elegantes sin ninguna razón física real (bug confirmado en producción).
+  const energy = resolveEnergyFromBrief(brief);
 
-  const decidePrompt = buildPhotodumpDecidePrompt(brief, recipeContract, level, shotPools, referenceImages);
+  const decidePrompt = buildPhotodumpDecidePrompt(brief, recipeContract, level, shotPools, referenceImages, energy);
   const decideParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
   for (const img of referenceImages || []) {
     decideParts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
@@ -328,7 +337,7 @@ async function runPhotodumpDirector(
     {
       model: 'gemini-2.5-flash',
       contents: [{ role: 'user', parts: decideParts }],
-      config: { responseMimeType: 'application/json', responseSchema: buildPhotodumpDirectorPlanSchema(recipeContract) },
+      config: { responseMimeType: 'application/json', responseSchema: buildPhotodumpDirectorPlanSchema(recipeContract, level, energy) },
     },
     4,
     onRetry ? (attempt, backoffMs) => onRetry('decidir', attempt, backoffMs) : undefined,

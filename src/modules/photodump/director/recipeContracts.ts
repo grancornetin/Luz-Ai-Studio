@@ -92,6 +92,7 @@ ella en ese momento" — nunca "así se ve la prenda".`,
         description: 'Movimiento real de pista de baile, luces de club, energía — solo si el registro de la noche es de fiesta.',
         diversityAxis: 'motion',
         attentionBridge: 'El movimiento/blur desvía la atención hacia la energía del momento — insinúa que la noche fue lo suficientemente buena como para perder la pose.',
+        fiestaOnly: true,
       },
       {
         id: 'pov_legs',

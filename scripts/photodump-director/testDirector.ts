@@ -24,6 +24,7 @@ import { resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { getRecipeContract } from '../../src/modules/photodump/director/recipeContracts';
 import { buildShotPools } from '../../src/modules/photodump/director/bankFilter';
+import { resolveEnergyFromBrief } from '../../src/modules/photodump/recipes/outfitNightOut/venueResolver';
 import {
   buildPhotodumpDirectorPlanSchema,
   PHOTODUMP_PROMPTS_SCHEMA,
@@ -63,10 +64,13 @@ for (const [shotId, candidates] of Object.entries(shotPools)) {
   console.log(`  ${shotId}: ${candidates.length} candidatos encontrados`);
 }
 
+const energy = resolveEnergyFromBrief(brief);
+console.log(`Energía inferida del brief: ${energy}`);
+
 console.log('─'.repeat(70));
 console.log('Llamando a Gemini (Decidir)...');
-const decidePrompt = buildPhotodumpDecidePrompt(brief, recipeContract, level, shotPools);
-const rawPlan = await generateJson(decidePrompt, buildPhotodumpDirectorPlanSchema(recipeContract)) as DirectorPlan;
+const decidePrompt = buildPhotodumpDecidePrompt(brief, recipeContract, level, shotPools, undefined, energy);
+const rawPlan = await generateJson(decidePrompt, buildPhotodumpDirectorPlanSchema(recipeContract, level, energy)) as DirectorPlan;
 const plan = sanitizeDirectorPlan(rawPlan, recipeContract, level);
 if (rawPlan.shots.length !== plan.shots.length) {
   console.log(`\n[sanitizeDirectorPlan] Gemini devolvió ${rawPlan.shots.length} shots, se recortó/dedupe a ${plan.shots.length}.`);
