@@ -538,10 +538,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ ok: true, jobId });
   }
 
+  // BUG REAL corregido: las acciones de solo-consulta (getContentJobStatus,
+  // photodumpDirectorStatus) hacen POLLING cada 2-3s durante minutos —
+  // contarlas contra el mismo rate-limit de 120/hora que el resto de
+  // acciones de "datos" agotaba la cuota con una sola sesión de photodump
+  // (confirmado en producción: nivel extendido con el margen de espera
+  // ampliado llega a ~90 polls, sin contar ninguna otra acción del usuario
+  // en esa hora). El polling no gasta cuota de Gemini ni hace trabajo caro
+  // — solo lee un job de Redis — así que no debe competir por el mismo
+  // presupuesto que las llamadas reales de IA.
+  const STATUS_POLL_ACTIONS = new Set(['getContentJobStatus', 'photodumpDirectorStatus']);
+  const isStatusPoll = STATUS_POLL_ACTIONS.has(body.action);
+
   let uid = '';
   try {
     uid = await verifyAuth(req);
-    if (!(await checkRateLimit(getDataRatelimit(), uid, res))) return;
+    if (!isStatusPoll && !(await checkRateLimit(getDataRatelimit(), uid, res))) return;
   } catch {
     return res.status(401).json({ error: 'Unauthorized' });
   }
