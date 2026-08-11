@@ -24,9 +24,19 @@ import type { NightMomentId, NightOutEnergy, ShotContract } from './types';
 export interface NightMoment {
   id:            NightMomentId;
   contract:      ShotContract;
-  // Texto de escena por energía — motion_energy no tiene entrada 'elegante'
-  // porque solo está disponible cuando la energía resuelta es 'fiesta'.
-  sceneBlockByEnergy: Partial<Record<NightOutEnergy, string>>;
+  // Variaciones de texto de escena por energía — 4 por entrada, generadas
+  // una vez con Gemini razonando sobre el banco real (ver
+  // scripts/photodump-director/generateFallbackVariations.ts). Antes esto
+  // era 1 solo string fijo: cuando el Director Creativo cae (timeout, red,
+  // JSON inválido), TODAS las sesiones que caen a este fallback veían
+  // literalmente la misma frase, sin importar que el banco real tenga 300+
+  // fotos por tipo de shot — pedido real del usuario tras notar que el
+  // fallback repetía siempre el mismo resultado. pickNightMomentsForSet
+  // elige 1 de las 4 por seed (mismo mecanismo determinístico que ya usa
+  // para elegir qué tipos de shot entran al set). motion_energy no tiene
+  // entrada 'elegante' porque solo está disponible cuando la energía
+  // resuelta es 'fiesta'.
+  sceneBlockByEnergy: Partial<Record<NightOutEnergy, string[]>>;
   // Si true, requiere companion real subido para entrar al pool disponible.
   requiresCompanion: boolean;
   // Si true, solo disponible cuando la energía resuelta es 'fiesta'.
@@ -52,8 +62,18 @@ export const NIGHT_MOMENTS: NightMoment[] = [
       footwearVisible: false,
     },
     sceneBlockByEnergy: {
-      elegante: 'A posed portrait, medium-close, holding a drink or a small prop close to the body — glass of wine, cocktail, cup. Warm, intentional lighting. She is looking away from the camera or slightly past it, composed and calm.',
-      fiesta:   'A posed portrait under colorful venue lighting, holding a drink close to the body — cocktail, cup, bottle. Playful, confident expression, looking toward or past the camera.',
+      elegante: [
+        "A posed portrait of a woman seated at an elegant table, with one hand gently resting on her chin or cheek, a sophisticated drink (wine or cocktail) positioned on the table nearby. Her gaze is slightly averted, conveying a thoughtful mood in a softly lit restaurant ambiance.",
+        "A posed portrait of a woman seated, her hand gracefully bringing a wine glass or elegant cocktail to her lips, as if savoring the taste. Her eyes are closed or looking down at the drink. The background suggests a warm, intimate bar or restaurant setting.",
+        "A posed portrait of a woman seated, elegantly holding a cocktail or glass of wine, her arm casually resting on a table or bar. She looks composedly towards or slightly past the camera, set against a softly lit, upscale rooftop or terrace.",
+        "A posed portrait of a woman seated, elegantly raising a glass of wine or a cocktail in a soft toasting gesture. Her eyes are gently focused, and the background hints at the sophisticated ambiance of a restaurant or bar.",
+      ],
+      fiesta: [
+        "A vibrant posed portrait, arms raised in joyful celebration, framed by blurred movement and vivid neon club lights. A festive prop, like a glowing drink, is subtly visible.",
+        "A playful, close-up posed portrait with a bold, expressive face – perhaps a mischievous smile or an open-mouthed laugh. The subject wears stylish sunglasses and holds a small, cool prop like a lollipop or a unique accessory, all illuminated by a direct, intense flash against a dark, energetic club background.",
+        "A dynamic posed portrait, focusing on the subject holding a brightly colored cocktail or a unique bottle, positioned near the body. The background is a swirl of electric laser beams and deep, abstract club lighting, creating an immersive party atmosphere.",
+        "A cool, stylized posed portrait captured with a slight dutch angle, featuring the subject striking an energetic pose while interacting playfully with a prop like a phone or a small, branded item. Pulsating red and purple lights cast dramatic shadows, with blurred silhouettes of fellow partygoers in the distance.",
+      ],
     },
     requiresCompanion: false,
     fiestaOnly: false,
@@ -69,8 +89,18 @@ export const NIGHT_MOMENTS: NightMoment[] = [
       footwearVisible: false,
     },
     sceneBlockByEnergy: {
-      elegante: 'A candid moment with one companion — talking, laughing, or leaning in together at the table. Both people clearly distinct in face and body, genuine interaction, not posed symmetrically for the camera.',
-      fiesta:   'A candid group moment with one or more companions — laughing, arms up, celebrating together. Colorful venue lighting, natural unposed energy, each person clearly distinct in face and body.',
+      elegante: [
+        "A close-up of two hands clinking elegant wine or cocktail glasses over a softly lit table, suggesting a celebratory moment. The background is an out-of-focus elegant restaurant or city view at night.",
+        "A candid, medium shot of a person leaning in slightly, engaged in conversation with an unseen companion at an elegant dining table. A warm, intimate light illuminates their face, with subtle gestures of hands resting near a drink or small plate.",
+        "A person with a relaxed, elegant posture, gazing out towards a panoramic city skyline or a scenic vista from a rooftop bar or a sophisticated terrace. A companion's presence is implied by a shared table or a nearby drink, bathed in soft, ambient evening light.",
+        "A candid, close-up shot of a person making a lighthearted or affectionate gesture, such as a subtle smile or a playful hand movement, while sharing a drink or small plate with a companion at an upscale restaurant or lounge. Warm, atmospheric lighting creates an intimate feel.",
+      ],
+      fiesta: [
+        "A dynamic, candid shot of two friends dancing and laughing joyfully in a crowded club, arms raised, bathed in vibrant neon and laser lights. One person has an arm around the other's waist, showing close interaction. The background is a blur of energy and color.",
+        "A close-up, intimate moment between two companions, leaning into each other and sharing a secret or a laugh amidst the bustling party atmosphere. One person holds a drink, the other's hand might be gesturing. Harsh frontal light illuminates their faces against a dark, blurry background of fellow party-goers.",
+        "A small group of friends celebrating at a vibrant party, with one sticking out their tongue playfully while others hold up drinks in a toast. The scene is illuminated by colorful disco lights, highlighting their expressions of shared fun. A table with scattered glasses or party props might be visible.",
+        "A vibrant, semi-posed shot of two friends, faces clearly visible and beaming with laughter, captured amidst the pulsating neon and laser lights of a lively club.",
+      ],
     },
     requiresCompanion: true,
     fiestaOnly: false,
@@ -87,7 +117,12 @@ export const NIGHT_MOMENTS: NightMoment[] = [
       footwearVisible: false,
     },
     sceneBlockByEnergy: {
-      fiesta: 'A candid dance-floor moment with genuine motion blur and colorful club lighting (neon, laser, or flash) — dancing, arms raised, hair in motion. The energy reads as a real captured instant, not a posed photo.',
+      fiesta: [
+        "A dynamic mid-shot of friends dancing on a club floor, arms raised in motion. Vibrant neon and laser lights illuminate the scene, with blurry party-goers in the background.",
+        "A lively portrait of someone mid-dance, arms up, with a playful prop like a lollipop. The background is a blur of warm red club lights and indistinct shapes of people.",
+        "A celebratory shot of a small group of friends holding drinks and a bottle, mid-cheer or playful interaction. Colorful, vibrant club lights create an energetic ambiance.",
+        "A close-up of someone with a playful, energetic expression, possibly sticking their tongue out, wearing cool sunglasses. Intense red and purple club lights glow in the blurred background.",
+      ],
     },
     requiresCompanion: false,
     fiestaOnly: true,
@@ -104,8 +139,18 @@ export const NIGHT_MOMENTS: NightMoment[] = [
       footwearVisible: true,
     },
     sceneBlockByEnergy: {
-      elegante: 'A first-person point-of-view shot looking down at her own legs and shoes, resting or crossed, with a drink glass visible nearby on a table. No face, no arm holding a phone — this is literally what she sees looking down.',
-      fiesta:   'A first-person point-of-view shot looking down at her own legs and shoes, with a drink cup nearby. No face, no arm holding a phone — this is literally what she sees looking down.',
+      elegante: [
+        "A sophisticated POV shot looking down at elegantly crossed legs in stylish high heels, with a chic cocktail glass resting on a sleek, dark table. The refined flooring and warm, soft lighting define an upscale lounge setting.",
+        "A relaxed yet elegant POV of legs extended in stylish flat shoes, casually positioned on a luxurious patterned rug. A stemless wine glass sits nearby on a polished marble surface, bathed in intimate ambient light.",
+        "An artistic POV shot centered on exquisite designer footwear, with legs gracefully angled. The subtle glow of the venue's lighting creates reflections on a pristine, dark floor, highlighting a moment of refined luxury.",
+        "A chic POV observing legs in sophisticated pointed-toe flats, settled on a rich, polished wood floor. A designer evening clutch rests discreetly beside them, subtly illuminated by the warm, inviting atmosphere.",
+      ],
+      fiesta: [
+        "A dynamic POV shot looking down at your feet, caught mid-step on a crowded, vibrating dance floor. Blurred party lights and distant dancing figures fill the background, capturing the energetic club atmosphere.",
+        "POV looking down at your legs casually crossed while seated, a shimmering cocktail glass resting on the glowing club floor next to your footwear. Colorful neon hues softly illuminate the scene.",
+        "A close-up POV of your shoes against a textured, slightly wet or reflective club floor, scattered with glitter or confetti. Hazy, atmospheric lights above create a dreamy, vibrant ambiance.",
+        "POV of your feet traversing a flight of dimly lit club stairs, with streaks of vibrant colored light from decorative wall fixtures guiding the way. A sense of movement and transition within the party venue.",
+      ],
     },
     requiresCompanion: false,
     fiestaOnly: false,
@@ -122,8 +167,18 @@ export const NIGHT_MOMENTS: NightMoment[] = [
       footwearVisible: false,
     },
     sceneBlockByEnergy: {
-      elegante: 'An ambient shot of the table or venue — glasses of wine or cocktails, plates, warm lighting. No person in focus, just the atmosphere of the moment.',
-      fiesta:   'An ambient shot of drinks on a table or bar — cocktails, cups, bottles, colorful lighting. No person in focus, just the atmosphere of the night.',
+      elegante: [
+        "An elegant table setting featuring a cocktail and a wine glass, a lit candle casting a warm glow. The scene includes polished cutlery and a crisp tablecloth, suggesting an intimate dinner in a refined restaurant.",
+        "A wide shot of an upscale restaurant interior at night, showcasing elegant chandeliers and decorative mirrors reflecting the warm ambient light. A large window offers a blurred view of city lights, creating a sophisticated and expansive atmosphere.",
+        "An inviting outdoor lounge area at dusk, featuring comfortable seating and a low table with a refreshing cocktail. Subtle, warm string lights and decorative plants contribute to a chic and relaxed ambiance.",
+        "A close-up of two elegant drinks on a sleek marble table, one a vibrant cocktail and the other a glass of fine wine. The background is softly blurred, highlighting the refined textures and warm, inviting glow of the scene.",
+      ],
+      fiesta: [
+        "A close-up of a club table, showcasing colorful cocktails and glasses glowing under vibrant neon and laser lights. Dynamic light reflections create an energetic atmosphere.",
+        "A wide shot of a dark party venue, filled with abstract geometric neon lights and intense colored beams crisscrossing the space. The scene captures the high-energy club atmosphere.",
+        "An inviting shot of an outdoor evening party, with a pool reflecting warm light and a festive magenta glow. Blurred party decorations enhance the lively, open-air ambiance.",
+        "A detailed shot of a lively party bar counter, covered with an array of colorful drinks, bottles, and scattered party items. Strong, vibrant UV lighting highlights the liquids and textures.",
+      ],
     },
     requiresCompanion: false,
     fiestaOnly: false,
@@ -139,8 +194,18 @@ export const NIGHT_MOMENTS: NightMoment[] = [
       footwearVisible: false,
     },
     sceneBlockByEnergy: {
-      elegante: 'The interior of a car at night, seen from the passenger view — dashboard lights, wet or dark windows, city lights outside. No person in frame, just the feeling of the ride there or back.',
-      fiesta:   'The interior of a car at night, seen from the passenger view — dashboard lights, city lights or rain outside. No person in frame, just the feeling of the ride there or back.',
+      elegante: [
+        "The interior of an elegant car at night, passenger's point of view, looking out the window. Blurred city lights streaking past, rain softly distorting the view. Reflections of the sophisticated car interior are subtly visible on the glass.",
+        "An overhead shot from a passenger's perspective in an opulent car interior at night. A luxurious handbag rests casually on a plush leather seat. Through the window, the abstract blur of distant city lights paints a backdrop.",
+        "A dynamic low-angle shot from the passenger's seat of an elegant car at night. The soft glow of the dashboard lights illuminates subtle textures of the interior, while the window shows elongated streaks of urban lights, conveying motion and speed.",
+        "A medium-close view from inside an elegant car at night, focusing on the dark windowpane. Soft, indistinct reflections of the car's luxurious interior overlay the blurred, colorful bokeh of city lights outside, suggesting a smooth, quiet journey.",
+      ],
+      fiesta: [
+        "An interior view of a car at night from the passenger seat, vibrant streaks of city and club lights blurring past the window, casting dynamic reflections across the dashboard and interior surfaces, conveying movement and festive energy.",
+        "A close-up view from the passenger seat of a car interior at night, subtly lit, with scattered glitter and confetti on the upholstery, and a discarded, faintly glowing party accessory on the floor, suggesting the recent energy of a celebration.",
+        "The perspective from a passenger seat inside a moving car at night, looking out towards the blurred, colorful glow of a distant party venue, with the car's interior bathed in a soft, ambient light, building a sense of anticipation.",
+        "An immersive shot from the passenger seat of a car at night, focusing on the abstract interplay of light and shadow; dynamic, blurred light trails from passing vehicles and ambient streetlights create a vibrant, energetic pattern across the car's darkened interior surfaces.",
+      ],
     },
     requiresCompanion: false,
     fiestaOnly: false,
@@ -165,8 +230,18 @@ export const NIGHT_MOMENTS: NightMoment[] = [
       footwearVisible: false,
     },
     sceneBlockByEnergy: {
-      elegante: 'An overhead close-up of the shared food and drinks on the restaurant table — a dish, dessert, or plate at the center, glasses nearby. No person in frame, just the sensory detail of the meal, warm restaurant lighting.',
-      fiesta:   'An overhead close-up of shared snacks or bar food on the table, drinks nearby, colorful venue lighting spilling into the frame. No person in frame, just the sensory detail of the moment.',
+      elegante: [
+        "An overhead shot of a meticulously plated main course and a red wine glass on a dark wooden table, with elegant ambient lighting in a sophisticated restaurant.",
+        "A top-down view of a handcrafted cocktail and a crystal water glass on a white marble table, complemented by gold cutlery and a folded napkin, in a softly lit, upscale bar or restaurant.",
+        "An elegant dessert plate, a coffee cup, and a small, lit candle on a dark wooden table, capturing an intimate dining moment with warm, low lighting from an upscale restaurant.",
+        "An overhead perspective of a selection of exquisite appetizers and various stemmed glasses on a dark, reflective table surface, set against the blurred, sophisticated lights of a city rooftop lounge.",
+      ],
+      fiesta: [
+        "An overhead shot of a sleek club table adorned with vibrant, neon-lit cocktails and glowing beverages, casting colorful reflections. Dark, energetic background with blurred laser lights.",
+        "An overhead shot of a luxurious, high-gloss bar surface showcasing perfectly crafted, sparkling cocktails and gourmet appetizers under dynamic, colorful club lighting, with mesmerizing light reflections dancing on the drinks.",
+        "A close-up, top-down view of a stylish marble bar top showcasing various colorful cocktails in elegant glasses, some with fruit garnishes and ice. The scene is bathed in a festive glow of shifting red, blue, and yellow party lights.",
+        "An extreme close-up, top-down shot of a festive party treat, like a vibrant candy or a sparkling dessert, placed on a dark surface. The background is a swirl of out-of-focus, energetic red and orange neon lights, suggesting a high-energy club atmosphere.",
+      ],
     },
     requiresCompanion: false,
     fiestaOnly: false,
@@ -191,8 +266,18 @@ export const NIGHT_MOMENTS: NightMoment[] = [
       footwearVisible: false,
     },
     sceneBlockByEnergy: {
-      elegante: 'A close-up candid toast — her glass and a companion\'s glass clinking together in the center of the frame, hands and glasses sharply in focus, faces softly out of focus or partially visible in the background. Warm candlelight or city lights behind. A genuine celebratory beat, not posed for the camera.',
-      fiesta:   'A close-up candid toast — cups or glasses clinking together between her and one or more companions, hands and drinks sharply in focus, faces softly visible under colorful venue lighting. A genuine celebratory beat, not posed for the camera.',
+      elegante: [
+        "A candid close-up of two elegant champagne flutes clinking gently, held by graceful hands. The background features blurred, smiling faces of companions in a warmly lit, sophisticated restaurant setting.",
+        "A close-up, candid shot focusing on a hand delicately holding a wine glass, slightly raised for an elegant toast. In the soft-focused background, the subtle outlines of a companion and refined restaurant decor are visible.",
+        "An atmospheric, close-up view of an elegant table setting, showcasing two filled wine glasses and a sparkling bottle. The soft-focus background reveals indistinct figures enjoying a refined dinner in an upscale rooftop bar.",
+        "A close-up, artful composition of two wine glasses on a polished, dark table, catching warm ambient light and casting subtle reflections. Blurred, out-of-focus figures of companions are visible in the deep background.",
+      ],
+      fiesta: [
+        "A close-up, candid shot of two or more hands holding vibrant, glowing cocktails, clinking together in a celebratory toast. The drinks are in sharp focus, while blurred faces of friends and a lively, neon-lit club environment are visible in the background, suggesting movement and energetic party atmosphere.",
+        "A candid, low-angle medium shot of a group of friends with arms raised in a toast, holding various drinks like wine glasses or cocktails. Their hands and glasses are sharply in focus, while their smiling or laughing faces are visible yet slightly out of focus against a backdrop of colorful, pulsating party lights and blurred silhouettes of other guests.",
+        "An intimate, candid close-up featuring a hand holding a drink (e.g., a cocktail or a can) in sharp focus, brightly illuminated as if by a sudden flash. Other hands and glasses are partially visible in the immediate foreground, while the background shows the dark, dynamic blur of a dance floor with indistinct figures and intense, stark lighting.",
+        "A candid medium-close shot capturing a moment of shared celebration between two or more people. Hands holding glowing drinks are raised in a toast, sharply in focus, while their energetic, slightly out-of-focus faces are visible in the background, illuminated by intense, colorful side and backlighting from a vibrant club setting.",
+      ],
     },
     requiresCompanion: true,
     fiestaOnly: false,
@@ -220,8 +305,18 @@ export const NIGHT_MOMENTS: NightMoment[] = [
       footwearVisible: false,
     },
     sceneBlockByEnergy: {
-      elegante: 'A wide candid shot of the wider social scene — her and one or more companions together in the venue, natural unposed energy, genuine interaction, each person clearly distinct in face and body. The venue itself is part of the shot, not just the people.',
-      fiesta:   'A wide candid shot of the party atmosphere — her and one or more companions together, colorful lighting, maybe a pool or dance floor reflected nearby, natural unposed energy, each person clearly distinct in face and body. The venue and the crowd feeling are part of the shot, not just the people.',
+      elegante: [
+        "A group of friends sharing drinks and laughter around a stylish table in an elegant restaurant, with warm ambient lighting.",
+        "An intimate gathering on a chic rooftop bar, with the group conversing against a backdrop of city lights and a vibrant night sky.",
+        "A sophisticated dinner party in a luxurious restaurant, showing the group at a beautifully set table with exquisite food and warm, inviting decor.",
+        "A vibrant celebratory moment with the protagonist and her friends toasting with elegant drinks in a refined, softly lit venue.",
+      ],
+      fiesta: [
+        "A group of friends dancing energetically, arms raised in celebration, surrounded by flashing neon and laser lights in a club. The scene is dynamic, capturing motion blur and joyful expressions.",
+        "The protagonist and her group gathered closely around a table laden with glowing cocktails and party glasses. They are laughing and interacting, with a direct flash highlighting their expressions amidst the dim club atmosphere.",
+        "A wide shot capturing the protagonist and her friends amidst a vibrant party scene. The energetic crowd and illuminated elements of the venue, such as a bar or dance floor, are visible, bathed in colorful, diffused party lights.",
+        "The protagonist and her group caught in a moment of pure party energy, with expressive gestures and open mouths, immersed in the rhythm of the music. Intense red and purple ambient lights illuminate their faces, with blurred figures in the background.",
+      ],
     },
     requiresCompanion: true,
     fiestaOnly: false,
@@ -241,8 +336,18 @@ export const NIGHT_MOMENTS: NightMoment[] = [
       footwearVisible: false,
     },
     sceneBlockByEnergy: {
-      elegante: 'A selfie or half-body portrait, arm extended or camera held by herself, direct or semi-direct gaze at the camera, calm and confident expression. The complete outfit and accessories are clearly legible on her torso — not a detail crop. The real venue (table, candles, ambient lighting) is visible but softly out of focus behind her, grounding the moment in a real place. This single photo should read as the whole story of the night on its own — she had a great night and looked incredible.',
-      fiesta:   'A selfie or half-body portrait, arm extended or camera held by herself, direct or semi-direct gaze at the camera, playful confident expression. The complete outfit and accessories are clearly legible on her torso — not a detail crop. The real venue (colorful lighting, crowd, party atmosphere) is visible but softly out of focus behind her, grounding the moment in a real place. This single photo should read as the whole story of the night on its own — she had a great night and looked incredible.',
+      elegante: [
+        "A woman is seated at an elegant restaurant table or lounge, her arm gracefully extended to hold a sophisticated drink like a cocktail or a glass of wine, her gaze directly engaging the camera. The table is adorned with subtle details, and the blurred background reveals the upscale ambiance of the venue, highlighting her complete ensemble.",
+        "A three-quarter portrait of a woman standing gracefully within an opulent setting like a grand staircase or a luxurious hotel lobby, her arm gently extended to rest on an elegant architectural feature. She looks confidently towards the camera, showcasing her polished appearance against the softly blurred, refined backdrop of the upscale venue.",
+        "A half-body portrait of a woman at an upscale lounge or rooftop bar, her arm casually extended towards the viewer, perhaps holding a shimmering glass or a small clutch. Her thoughtful expression meets the camera as the city lights or ambient venue glow softly out of focus behind her, completing the sophisticated scene.",
+        "A vibrant, waist-up portrait of a woman, her arm elegantly extended in an inviting pose at a chic restaurant or exclusive event. She presents a confident gaze, with the blurred, warm-lit interiors of the upscale establishment visible in the background, showcasing her complete stylish presence.",
+      ],
+      fiesta: [
+        "A vibrant, half-body selfie in a club, with the person smiling widely, arms raised in an energetic pose, celebrating the night. The background is a blur of colorful party lights, highlighting the festive atmosphere and their full outfit.",
+        "A dynamic, close-up selfie in a buzzing club. The person holds a vibrant drink, with an expressive, open-mouthed smile, capturing a fun moment. Blurry party lights and crowd fill the background, showcasing their festive look.",
+        "A playful, waist-up portrait taken at a lively party. The person is winking or making a fun face while holding a cocktail, directly engaging the camera. The background is a soft blur of glowing party elements, emphasizing their celebratory style.",
+        "A confident, half-body mirror selfie from a vibrant party, with the person striking a dynamic pose, arm extended to capture their festive outfit and accessories. The blurred, energetic club setting is visible in the background's reflection.",
+      ],
     },
     requiresCompanion: false,
     fiestaOnly: false,
@@ -345,4 +450,18 @@ export function findNightMoment(id: NightMomentId): NightMoment {
   const moment = NIGHT_MOMENTS.find(m => m.id === id);
   if (!moment) throw new Error(`NightMoment desconocido: ${id}`);
   return moment;
+}
+
+/**
+ * Elige, de forma determinística por seed, 1 de las variaciones de
+ * sceneBlockByEnergy[energy] de un NightMoment — mismo mecanismo de hash que
+ * pickDistinctIndices, namespace propio para no colisionar con la selección
+ * de qué tipos de shot entran al set. Devuelve '' si no hay variaciones para
+ * esa energía (ej. motion_energy sin entrada 'elegante').
+ */
+export function pickSceneVariation(moment: NightMoment, seed: string, energy: NightOutEnergy): string {
+  const variations = moment.sceneBlockByEnergy[energy] ?? moment.sceneBlockByEnergy.elegante ?? [];
+  if (variations.length === 0) return '';
+  const idx = hashString(`${seed}::scene-variation::${moment.id}::${energy}`) % variations.length;
+  return variations[idx];
 }

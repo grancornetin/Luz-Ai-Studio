@@ -124,6 +124,7 @@ async function generateFromContract(
     venueImageUrl:     venueCtx.venueImageUrl,
     venueTextFallback: venueCtx.venueTextFallback,
     energy,
+    seed: seedFor(refs),
     directorSceneBlock,
   });
   const preparedRefs = await prepareRefs(routed.orderedUrls);

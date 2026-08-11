@@ -24,7 +24,7 @@
 import { NEGATIVE_SHORT, IPHONE_CAMERA_ROLL_LINE, NO_STUDIO_BACKDROP_LINE, NO_WALKING_LINE, AVOID_EDITORIAL_LINE } from '../shared';
 import type { NightOutShotId, NightOutEnergy } from './types';
 import type { AppliedIntelligence } from './intelligenceLayer';
-import { findNightMoment } from './nightMoments';
+import { findNightMoment, pickSceneVariation } from './nightMoments';
 
 export interface BuiltPrompt {
   prompt:   string;
@@ -70,6 +70,12 @@ export interface PromptBuilderOptions {
   venueImageUrl?:    string;
   venueTextFallback: string;
   energy:            NightOutEnergy;
+  // Seed determinístico (ver seedFor en index.ts) para elegir, de las 4
+  // variaciones de sceneBlockByEnergy de un NightMoment, cuál usar en ESTE
+  // shot — sin esto, pickSceneVariation no tendría con qué variar entre
+  // sesiones distintas (mismo motivo que pickNightMomentsForSet ya recibe
+  // seed para elegir qué tipos de shot entran al set).
+  seed:              string;
   // Si el Director Creativo (ver modules/photodump/director/) ya razonó y
   // redactó este shot con contenido real del banco de imágenes, su texto
   // reemplaza al sceneBlock estático de FIXED_SHOT_BLOCKS/nightMoments.ts.
@@ -108,7 +114,7 @@ export function buildShotPrompt(
     hasOutfitRef = true;
   } else {
     const moment = findNightMoment(shotId);
-    sceneBlock = options.directorSceneBlock ?? moment.sceneBlockByEnergy[options.energy] ?? moment.sceneBlockByEnergy.elegante ?? '';
+    sceneBlock = options.directorSceneBlock ?? pickSceneVariation(moment, options.seed, options.energy);
     footwearVisible = moment.contract.footwearVisible;
     hasOutfitRef = moment.contract.referencePolicy.useOutfitRefs;
     if (shotId === 'group_moment') extraLine = companionLine(options.hasCompanion);
