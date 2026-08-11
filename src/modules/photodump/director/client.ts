@@ -144,9 +144,35 @@ export async function runDirector(
   const jobId = await startDirectorJob(brief, recipe, level, hasCompanion, referenceImages);
   const maxAttempts = maxPollAttemptsForLevel(level);
 
+  // BUG REAL corregido: un solo poll que devolviera un 500 transitorio
+  // (pico de carga, error momentáneo de Redis, lo que sea — el trabajo del
+  // director en el servidor sigue corriendo bien, el problema es SOLO en
+  // leer su estado) abortaba TODO el intento del director de inmediato, en
+  // vez de simplemente reintentar ese poll puntual y seguir esperando. Con
+  // ~90 polls en una sesión larga (nivel extendido), la probabilidad de que
+  // 1 solo poll falle por una causa transitoria no es despreciable — no
+  // debería tirar abajo un trabajo que legítimamente sigue en curso.
+  // Máximo 5 fallos de POLL consecutivos antes de rendirse (no cuenta contra
+  // maxAttempts, que es para "sigue procesando", no para "no pude ni
+  // preguntar").
+  let consecutivePollErrors = 0;
+  const MAX_CONSECUTIVE_POLL_ERRORS = 5;
+
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await sleep(POLL_INTERVAL_MS);
-    const job = await pollDirectorJob(jobId);
+
+    let job: Awaited<ReturnType<typeof pollDirectorJob>>;
+    try {
+      job = await pollDirectorJob(jobId);
+      consecutivePollErrors = 0;
+    } catch (pollErr) {
+      consecutivePollErrors++;
+      console.warn(`[Director] poll falló (intento ${consecutivePollErrors}/${MAX_CONSECUTIVE_POLL_ERRORS}), reintentando:`, pollErr);
+      if (consecutivePollErrors >= MAX_CONSECUTIVE_POLL_ERRORS) {
+        throw pollErr instanceof Error ? pollErr : new Error('Director poll falló repetidamente.');
+      }
+      continue;
+    }
 
     if (job.status === 'completed' && job.plan && job.finalPrompts) {
       return { plan: job.plan, finalPrompts: job.finalPrompts };
