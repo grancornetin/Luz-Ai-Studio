@@ -6,11 +6,20 @@
  * (correr el "cerebro" contra el banco real y leer el razonamiento como
  * texto, sin generar ninguna imagen), pero para la rama openBank/.
  *
+ * Como el modo open_bank todavía no genera imágenes reales (ver
+ * outfitNightOut/index.ts, tryDirector), el usuario no puede comprobar
+ * visualmente si el razonamiento mejora sin esto: además de imprimir el
+ * texto, este harness COPIA las fotos reales del banco que el director
+ * eligió a una subcarpeta bajo "pruebas de resultados/experimento
+ * naturalidad/", una por corrida, con un índice legible (README.txt) al
+ * lado — mismo ejercicio manual que se hizo a mano en el chat, ahora
+ * automatizado y repetible.
+ *
  * Uso:
  *   npx tsx scripts/photodump-director/testOpenBankDirector.ts "cena en un rooftop" --count=7
  */
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
+import { readFileSync, mkdirSync, copyFileSync, writeFileSync, existsSync } from 'fs';
+import { resolve, join } from 'path';
 import { fileURLToPath } from 'url';
 import { buildWideCandidatePool, countWideCandidatePool } from '../../src/modules/photodump/director/openBank/openBankFilter';
 import {
@@ -26,6 +35,20 @@ import { generateJson } from './geminiClient.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const cwd       = resolve(__dirname, '../..');
+
+// Carpeta real donde viven las fotos originales del banco (fuera del repo,
+// ver src/data/photodump-bank/COMO_ACTUALIZAR_EL_BANCO.md) — mismo path
+// usado en toda la sesión para inspección visual manual.
+const BANK_IMAGES_DIR = 'C:\\Users\\Nico Trabajo\\Downloads\\contenido de prueba\\photodump\\images';
+const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
+
+function findBankImageFile(itemId: string): string | null {
+  for (const ext of IMAGE_EXTENSIONS) {
+    const candidate = join(BANK_IMAGES_DIR, `${itemId}${ext}`);
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
 
 const rawArgs   = process.argv.slice(2);
 const brief     = rawArgs.find(a => !a.startsWith('--')) || 'cena en un rooftop en Manhattan';
@@ -97,6 +120,8 @@ const richDetailBlock = buildRichDetailBlock(chosenIds, snapshot.items);
 const writePrompt = buildOpenBankWritePrompt(brief, rawPlan, richDetailBlock, energy);
 const { shots: finalPrompts } = await generateJson(writePrompt, OPEN_BANK_PROMPTS_SCHEMA) as { shots: OpenBankFinalPromptShot[] };
 
+const finalPromptByLabel = new Map(finalPrompts.map(s => [s.vehicleLabel, s.finalPrompt]));
+
 for (const shot of finalPrompts) {
   console.log(`\n${'─'.repeat(70)}`);
   console.log(`PROMPT FINAL — ${shot.vehicleLabel}`);
@@ -105,4 +130,74 @@ for (const shot of finalPrompts) {
 }
 
 console.log('\n' + '═'.repeat(70));
-console.log('(No se generó ninguna imagen — esto es solo el razonamiento en texto.)');
+console.log('(No se generó ninguna imagen con IA — esto es solo el razonamiento en texto.)');
+
+// ── Copiar las fotos REALES elegidas a una subcarpeta, para inspección
+// visual directa (el usuario no puede comprobar mejoras solo con texto,
+// ver comentario de cabecera) ────────────────────────────────────────────
+console.log('\n' + '═'.repeat(70));
+console.log('Copiando imágenes elegidas para inspección visual...');
+console.log('═'.repeat(70));
+
+const outputBase = resolve(cwd, 'pruebas de resultados/experimento naturalidad');
+const briefSlug = brief.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
+const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+const outputDir = resolve(outputBase, `openbank_${briefSlug}_${timestamp}`);
+mkdirSync(outputDir, { recursive: true });
+
+const indexLines: string[] = [
+  `Modo BANCO ABIERTO — copia de candidatos elegidos para inspección visual`,
+  `Brief: "${brief}"`,
+  `Cantidad de shots pedida: ${totalShots} (planificados: ${rawPlan.shots.length})`,
+  `Energía inferida: ${energy}`,
+  `Generado: ${new Date().toLocaleString('es-CL')}`,
+  ``,
+  `RAZONAMIENTO GLOBAL:`,
+  rawPlan.globalReasoning,
+  ``,
+  '═'.repeat(70),
+  '',
+];
+
+let copiedCount = 0;
+let missingCount = 0;
+
+rawPlan.shots.forEach((shot, i) => {
+  const n = String(i + 1).padStart(2, '0');
+  indexLines.push(`── Shot ${n}: ${shot.vehicleLabel} [eje: ${shot.narrativeAxis}] [${shot.timelineStage}] ──`);
+  indexLines.push(`itemId original del banco: ${shot.chosenCandidateId || '(ninguno)'}`);
+  indexLines.push(`Por qué se eligió: ${shot.shotReasoning}`);
+  indexLines.push(`Mantiene: ${(shot.keptElements || []).join(' | ') || '(nada)'}`);
+  indexLines.push(`Descarta: ${(shot.discardedElements || []).join(' | ') || '(nada)'}`);
+  indexLines.push(`Existe porque: ${shot.existenceReason}`);
+
+  if (shot.chosenCandidateId) {
+    const sourcePath = findBankImageFile(shot.chosenCandidateId);
+    if (sourcePath) {
+      const ext = sourcePath.slice(sourcePath.lastIndexOf('.'));
+      const destName = `shot_${n}_${shot.vehicleLabel.replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 30)}${ext}`;
+      copyFileSync(sourcePath, join(outputDir, destName));
+      indexLines.push(`Archivo copiado: ${destName}`);
+      copiedCount++;
+    } else {
+      indexLines.push(`⚠ No se encontró el archivo original en el banco (${shot.chosenCandidateId}) — puede tener otra extensión no contemplada.`);
+      missingCount++;
+    }
+  } else {
+    indexLines.push(`(Este shot no usó un candidato del banco — descrito desde cero.)`);
+  }
+
+  const finalPrompt = finalPromptByLabel.get(shot.vehicleLabel);
+  if (finalPrompt) {
+    indexLines.push(``);
+    indexLines.push(`Prompt final redactado (lo que se usaría para generar la imagen real):`);
+    indexLines.push(finalPrompt);
+  }
+  indexLines.push('');
+});
+
+writeFileSync(join(outputDir, 'README.txt'), indexLines.join('\n'), 'utf-8');
+
+console.log(`Carpeta creada: ${outputDir}`);
+console.log(`Imágenes copiadas: ${copiedCount}/${rawPlan.shots.length}${missingCount > 0 ? ` (${missingCount} no encontradas)` : ''}`);
+console.log(`Índice legible: README.txt dentro de esa carpeta.`);
