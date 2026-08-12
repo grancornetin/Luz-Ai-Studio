@@ -23,6 +23,19 @@ import type { BankSnapshot as PhotodumpBankSnapshot, DirectorPlan as PhotodumpDi
 // FIESTA_KEYWORDS acá — bug real ya conocido en esta sesión: duplicar
 // lógica de texto entre cliente/servidor diverge con el tiempo.
 import { resolveEnergyFromBrief } from '../../src/modules/photodump/recipes/outfitNightOut/venueResolver.js';
+// Modo "banco abierto" — bypass aislado y reversible (ver plan de sesión).
+// Vive en archivos nuevos bajo director/openBank/, sin tocar ni importar
+// nada de bankFilter.ts/recipeContracts.ts/promptBuilders.ts. El único punto
+// de contacto con el pipeline actual es el flag directorMode, leído acá.
+import { buildWideCandidatePool } from '../../src/modules/photodump/director/openBank/openBankFilter.js';
+import {
+  OPEN_BANK_PLAN_SCHEMA,
+  OPEN_BANK_PROMPTS_SCHEMA,
+  buildOpenBankDecidePrompt,
+  buildRichDetailBlock,
+  buildOpenBankWritePrompt,
+} from '../../src/modules/photodump/director/openBank/openBankPromptBuilders.js';
+import type { OpenBankPlan, OpenBankFinalPromptShot } from '../../src/modules/photodump/director/openBank/openBankTypes.js';
 
 interface PhotodumpDirectorPayload {
   brief?: string;
@@ -30,6 +43,10 @@ interface PhotodumpDirectorPayload {
   level?: string;
   hasCompanion?: boolean;
   referenceImages?: PhotodumpDirectorReferenceImage[];
+  // Toggle discreto en la UI de Photodump (solo el usuario dueño de la app
+  // lo ve/usa) — default 'categorized' si no viene, así cualquier payload
+  // viejo/externo sigue corriendo el pipeline actual sin cambios.
+  directorMode?: 'categorized' | 'open_bank';
 }
 
 // BUG REAL corregido: `import photodumpBankSnapshot from '....json'` rompía
@@ -122,8 +139,8 @@ interface PhotodumpDirectorJob {
   uid: string;
   createdAt: number;
   updatedAt: number;
-  plan?: PhotodumpDirectorPlan;
-  finalPrompts?: PhotodumpFinalPromptShot[];
+  plan?: PhotodumpDirectorPlan | OpenBankPlan;
+  finalPrompts?: PhotodumpFinalPromptShot[] | OpenBankFinalPromptShot[];
   error?: string;
   // Diagnóstico de reintentos por 429 — visible en Redis aunque la función
   // muera a mitad de un backoff (ver generateContentWithRetry). Nunca
@@ -307,14 +324,77 @@ async function generateContentWithRetry(
   throw lastError;
 }
 
+/**
+ * Pipeline "banco abierto" — mismo patrón Decidir→Redactar con reintentos
+ * que el modo actual, pero sin recipeContract/shotPools por tipo fijo. La
+ * cantidad de shots por nivel se reusa de RECIPE_CONTRACTS (sigue siendo
+ * info de negocio válida — "cuántas fotos por nivel" — que no depende de
+ * nightMomentTypes), sin importar bankFilter/promptBuilders del modo actual.
+ */
+async function runOpenBankDirector(
+  ai: GoogleGenAI,
+  brief: string,
+  level: string,
+  energy: 'elegante' | 'fiesta',
+  onRetry?: (stage: 'decidir' | 'redactar', attempt: number, backoffMs: number) => Promise<void>,
+): Promise<{ plan: OpenBankPlan; finalPrompts: OpenBankFinalPromptShot[] }> {
+  const recipeContract = getPhotodumpRecipeContract('outfit_night_out');
+  const totalShotsRequested = recipeContract.shotsByLevel[level]?.count;
+  if (!totalShotsRequested) throw new Error(`Nivel inválido para banco abierto: ${level}`);
+
+  const snapshot = loadPhotodumpBankSnapshot();
+  const widePool = buildWideCandidatePool(snapshot.items, 25);
+
+  const decidePrompt = buildOpenBankDecidePrompt(brief, totalShotsRequested, widePool, undefined, energy);
+  const decideResponse = await generateContentWithRetry(
+    ai,
+    {
+      model: 'gemini-2.5-flash',
+      contents: [{ role: 'user', parts: [{ text: decidePrompt }] }],
+      config: { responseMimeType: 'application/json', responseSchema: OPEN_BANK_PLAN_SCHEMA },
+    },
+    4,
+    onRetry ? (attempt, backoffMs) => onRetry('decidir', attempt, backoffMs) : undefined,
+  );
+  const plan = JSON.parse(extractText(decideResponse)) as OpenBankPlan;
+
+  await new Promise(resolve => setTimeout(resolve, 15000));
+
+  const chosenIds = plan.shots.map(s => s.chosenCandidateId).filter(Boolean);
+  const richDetailBlock = buildRichDetailBlock(chosenIds, snapshot.items);
+  const writePrompt = buildOpenBankWritePrompt(brief, plan, richDetailBlock, energy);
+  const writeResponse = await generateContentWithRetry(
+    ai,
+    {
+      model: 'gemini-2.5-flash',
+      contents: [{ role: 'user', parts: [{ text: writePrompt }] }],
+      config: { responseMimeType: 'application/json', responseSchema: OPEN_BANK_PROMPTS_SCHEMA },
+    },
+    4,
+    onRetry ? (attempt, backoffMs) => onRetry('redactar', attempt, backoffMs) : undefined,
+  );
+  const { shots: finalPrompts } = JSON.parse(extractText(writeResponse)) as { shots: OpenBankFinalPromptShot[] };
+
+  return { plan, finalPrompts };
+}
+
 async function runPhotodumpDirector(
   ai: GoogleGenAI,
   payload: PhotodumpDirectorPayload,
   onRetry?: (stage: 'decidir' | 'redactar', attempt: number, backoffMs: number) => Promise<void>,
-): Promise<{ plan: PhotodumpDirectorPlan; finalPrompts: PhotodumpFinalPromptShot[] }> {
-  const { brief, recipe, level, referenceImages } = payload;
+): Promise<{ plan: PhotodumpDirectorPlan | OpenBankPlan; finalPrompts: PhotodumpFinalPromptShot[] | OpenBankFinalPromptShot[] }> {
+  const { brief, recipe, level, referenceImages, directorMode } = payload;
   if (!brief || !recipe || !level) {
     throw new Error('Faltan campos: brief, recipe, level');
+  }
+
+  const energy = resolveEnergyFromBrief(brief);
+
+  // Modo "banco abierto" — bypass aislado y reversible (ver plan de
+  // sesión). Toggle de la UI de Photodump, default 'categorized'. No toca
+  // recipeContract/bankFilter/promptBuilders del modo actual en absoluto.
+  if (directorMode === 'open_bank') {
+    return runOpenBankDirector(ai, brief, level, energy, onRetry);
   }
 
   const recipeContract = getPhotodumpRecipeContract(recipe);
@@ -323,8 +403,6 @@ async function runPhotodumpDirector(
   // Ver comentario de fiestaOnly en promptBuilders.ts — sin esto, tipos de
   // shot como motion_energy (pista de baile) podían aparecer en briefs
   // elegantes sin ninguna razón física real (bug confirmado en producción).
-  const energy = resolveEnergyFromBrief(brief);
-
   const decidePrompt = buildPhotodumpDecidePrompt(brief, recipeContract, level, shotPools, referenceImages, energy);
   const decideParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
   for (const img of referenceImages || []) {
@@ -590,7 +668,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (body.action === 'photodumpDirectorStart') {
-      const { brief, recipe, level, hasCompanion, referenceImages } = body.payload || {};
+      const { brief, recipe, level, hasCompanion, referenceImages, directorMode } = body.payload || {};
       if (!brief || !recipe || !level) {
         return res.status(400).json({ error: 'Faltan campos: brief, recipe, level' });
       }
@@ -604,7 +682,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
       await Promise.all([
         saveDirectorJob(job),
-        redis.set(`photodump_director_payload:${jobId}`, JSON.stringify({ brief, recipe, level, hasCompanion, referenceImages }), { ex: 3600 }),
+        redis.set(`photodump_director_payload:${jobId}`, JSON.stringify({ brief, recipe, level, hasCompanion, referenceImages, directorMode }), { ex: 3600 }),
       ]);
 
       const proto = req.headers['x-forwarded-proto'] || 'https';

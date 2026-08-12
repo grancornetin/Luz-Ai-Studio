@@ -768,6 +768,27 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                   );
                 })}
               </div>
+
+              {/* Toggle experimental — bypass aislado y reversible del
+                  Director Creativo (ver plan de sesión). Solo visible acá,
+                  discreto a propósito: es una herramienta de prueba, no una
+                  opción del producto para usuarios finales. Con open_bank
+                  activo, el razonamiento usa un banco de fotos mucho más
+                  amplio y libre de categorías fijas, pero la generación de
+                  imágenes real todavía cae al banco estático de respaldo
+                  (el razonamiento nuevo aún no está conectado a generar
+                  fotos, solo se puede ver su lógica en los logs/debug). */}
+              <label className="flex items-center gap-2 mt-3 px-1 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={refs.directorMode === 'open_bank'}
+                  onChange={(e) => onRefs({ ...refs, directorMode: e.target.checked ? 'open_bank' : 'categorized' })}
+                  className="w-3.5 h-3.5 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
+                />
+                <span className="text-[10px] text-slate-400">
+                  Experimental: director con banco abierto (sin categorías fijas — no genera imágenes todavía, solo razonamiento)
+                </span>
+              </label>
             </div>
           )}
 

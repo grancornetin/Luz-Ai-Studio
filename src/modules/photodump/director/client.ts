@@ -21,6 +21,7 @@
  */
 import { getAuth } from 'firebase/auth';
 import type { DirectorPlan, FinalPromptShot, DirectorReferenceImage } from './types';
+import type { OpenBankPlan, OpenBankFinalPromptShot } from './openBank/openBankTypes';
 
 export type { DirectorReferenceImage };
 
@@ -66,9 +67,15 @@ async function getAuthHeader(): Promise<Record<string, string>> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+// Unión honesta: modo 'categorized' devuelve DirectorPlan/FinalPromptShot
+// (shotId de un enum fijo), modo 'open_bank' devuelve OpenBankPlan/
+// OpenBankFinalPromptShot (vehicleLabel libre) — el caller debe chequear
+// directorMode antes de leer campos específicos de una u otra forma (ver
+// tryDirector en outfitNightOut/index.ts, que corta el flujo antes de leer
+// shotId cuando el modo es open_bank).
 export interface DirectorResponse {
-  plan: DirectorPlan;
-  finalPrompts: FinalPromptShot[];
+  plan: DirectorPlan | OpenBankPlan;
+  finalPrompts: (FinalPromptShot | OpenBankFinalPromptShot)[];
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -81,13 +88,14 @@ async function startDirectorJob(
   level: string,
   hasCompanion: boolean,
   referenceImages: DirectorReferenceImage[],
+  directorMode: 'categorized' | 'open_bank',
 ): Promise<string> {
   const res = await fetch(CONTENT_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
     body: JSON.stringify({
       action: 'photodumpDirectorStart',
-      payload: { brief, recipe, level, hasCompanion, referenceImages },
+      payload: { brief, recipe, level, hasCompanion, referenceImages, directorMode },
     }),
   });
   if (!res.ok) {
@@ -140,8 +148,12 @@ export async function runDirector(
   level: string,
   hasCompanion: boolean,
   referenceImages: DirectorReferenceImage[] = [],
+  // Toggle discreto de la UI de Photodump — bypass aislado y reversible
+  // (ver plan de sesión). Default 'categorized': cualquier caller que no lo
+  // pase corre exactamente el pipeline actual, sin cambios.
+  directorMode: 'categorized' | 'open_bank' = 'categorized',
 ): Promise<DirectorResponse> {
-  const jobId = await startDirectorJob(brief, recipe, level, hasCompanion, referenceImages);
+  const jobId = await startDirectorJob(brief, recipe, level, hasCompanion, referenceImages, directorMode);
   const maxAttempts = maxPollAttemptsForLevel(level);
 
   // BUG REAL corregido: un solo poll que devolviera un 500 transitorio

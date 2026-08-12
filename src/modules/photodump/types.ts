@@ -710,6 +710,16 @@ export interface PhotodumpRefs {
   // outfit_night_out: nivel elegido por el usuario, determina cuántos y
   // cuáles shots se generan (Una foto=1, Corto=3, Completo=5, Extendido=7).
   nightOutLevel?: 'una_foto' | 'corto' | 'completo' | 'extendido';
+  // Toggle discreto en la UI de Photodump — bypass del Director Creativo
+  // hacia el modo "banco abierto" (bypass aislado y reversible, ver plan de
+  // sesión). Solo afecta el RAZONAMIENTO (qué candidatos ve/elige el
+  // director); la generación de imágenes real de outfit_night_out sigue
+  // usando el pipeline actual de contratos con shotId fijo — si
+  // directorMode es 'open_bank', tryDirector cae al fallback estático
+  // (nightMoments.ts) porque el modo abierto todavía no está conectado a la
+  // generación de imágenes, solo al razonamiento de texto. Default
+  // 'categorized' si no se especifica.
+  directorMode?: 'categorized' | 'open_bank';
 }
 
 // ── Tipos modo libre ───────────────────────────────────────────

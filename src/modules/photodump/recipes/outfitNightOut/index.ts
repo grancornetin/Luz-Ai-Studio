@@ -53,6 +53,7 @@ import { applyIntelligence } from './intelligenceLayer';
 import { imageApiService } from '../../../../services/imageApiService';
 import { compressImageForUpload } from '../../../../utils/imageUtils';
 import { runDirector, type DirectorReferenceImage } from '../../director/client';
+import type { DirectorPlan, FinalPromptShot } from '../../director/types';
 import type { OutfitNightOutShotPlan, OutfitNightOutShotDebug, ShotContract, NightOutLevel, NightOutShotId } from './types';
 
 // ── Cachés en memoria por sesión ─────────────────────────────────────────
@@ -255,11 +256,34 @@ async function tryDirector(
   sessionId?:   string,
 ): Promise<Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] | null> {
   try {
+    const directorMode = refs.directorMode ?? 'categorized';
     const companionRef = extractCompanionRef(refs);
     const referenceImages = await buildDirectorReferenceImages(refs, companionRef);
-    const { plan, finalPrompts } = await runDirector(basePrompt, 'outfit_night_out', level, hasCompanion, referenceImages);
+    const { plan, finalPrompts } = await runDirector(basePrompt, 'outfit_night_out', level, hasCompanion, referenceImages, directorMode);
 
-    const promptByShotId = new Map(finalPrompts.map(p => [p.shotId, p.finalPrompt]));
+    // Modo "banco abierto" — bypass aislado y reversible (ver plan de
+    // sesión). Su plan/finalPrompts usan vehicleLabel libre, no shotId de
+    // un enum fijo — el pipeline de generación real de outfit_night_out
+    // (contractForShotId, referenceRouter, routingValidator) depende
+    // profundamente de ese enum, así que conectar open_bank a la
+    // generación de imágenes es trabajo aparte, no incluido en este cambio
+    // (que cubrió el razonamiento: filtro de candidatos + Decidir/Redactar,
+    // validado con el harness testOpenBankDirector.ts). Por ahora, con
+    // open_bank activo, cae al fallback estático a propósito — evita
+    // generar directivas incorrectas a partir de un plan que no calza con
+    // el contrato de shots fijo.
+    if (directorMode === 'open_bank') {
+      console.warn('[outfit_night_out] directorMode=open_bank: razonamiento generado pero aún no conectado a la generación de imágenes, usando banco estático de respaldo.');
+      return null;
+    }
+
+    // A partir de acá directorMode === 'categorized' garantizado (el guard
+    // de arriba corta el flujo para 'open_bank') — la respuesta del server
+    // tiene la forma DirectorPlan/FinalPromptShot[] con shotId, nunca la
+    // forma OpenBankPlan/OpenBankFinalPromptShot[] con vehicleLabel.
+    const categorizedPlan = plan as DirectorPlan;
+    const categorizedFinalPrompts = finalPrompts as FinalPromptShot[];
+    const promptByShotId = new Map(categorizedFinalPrompts.map(p => [p.shotId, p.finalPrompt]));
     const key = cacheKey(refs, basePrompt, sessionId);
     const shotCache = new Map<string, string>();
 
@@ -269,7 +293,7 @@ async function tryDirector(
     // inválido rompía TODO el plan (incluidos shots válidos), por el .map
     // sin try/catch propagando la excepción de contractForShotId.
     const directives: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] = [];
-    for (const shotDecision of plan.shots) {
+    for (const shotDecision of categorizedPlan.shots) {
       const shotId = shotDecision.shotId as NightOutShotId;
       let contract: ShotContract;
       try {
