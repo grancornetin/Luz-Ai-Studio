@@ -221,13 +221,35 @@ sensualidad sola.
 CANTIDAD TOTAL DE SHOTS — LÍMITE DURO: el array "shots" debe tener
 EXACTAMENTE ${totalShotsRequested} elementos, ni uno más ni uno menos.
 
-DIVERSIDAD REAL: evitá que 2 o más shots del set se lean como la misma foto
-repetida (mismo encuadre + mismo gesto + mismo tipo de detalle) — variá
-shot_type, composición y qué eje narrativo aporta cada uno. Preferí SIEMPRE
-un candidato real y fuerte del panorama de abajo antes que inventar una
-escena sin respaldo — si para cierto tipo de encuadre no hay ningún
-candidato relevante para este brief, no lo fuerces, elegí otro tipo con
-mejor respaldo real.
+DIVERSIDAD REAL — qué SÍ puede repetirse vs. qué NO (confirmado contra datos
+reales del banco, no es una prohibición general de repetir nada):
+- SÍ es válido, y de hecho enriquece, que un mismo accesorio reaparezca en
+  varios shots (bolso, gafas de sol, teléfono, la copa/trago en mano) — en
+  el banco real, bolso aparece en ~32% de las fotos y gafas de sol en ~24%:
+  es lo esperable de una sola noche real con un solo outfit, no una señal de
+  repetición pobre. Lo mismo aplica a "de pie, cuerpo completo mostrando el
+  outfit" como encuadre general — es más de la mitad del banco real — puede
+  aparecer en más de un momento de la noche (llegada, mitad, despedida) SI
+  el gesto, la mirada o la interacción con el entorno cambian entre esos
+  shots.
+- NO es válido que 2+ shots compartan el mismo gesto Y la misma expresión Y
+  el mismo tipo de encuadre a la vez (ej. "sosteniendo la copa cerca de la
+  boca, ojos cerrados, medium shot" en 2 shots distintos) — eso sí se lee
+  como la misma foto duplicada. Si notás que 2 candidatos elegidos comparten
+  esa combinación completa, cambiá uno de los dos por una variante distinta.
+- El banco tiene mucha más variedad real de la que parece a primera vista:
+  además de los momentos "posados" obvios, hay cientos de candidatos reales
+  de interacción con elementos propios de un venue — escaleras, barandas o
+  balcones, paredes con textura/decoración interesante, ventanas o vidrios,
+  la barra del lugar, el espejo/mostrador de un baño elegante, entradas o
+  umbrales, incluso el ascensor de llegada — usalos para variar composición
+  real en vez de repetir siempre "de pie contra la baranda" o "sentada en la
+  mesa". Revisá el panorama de abajo por este tipo de candidatos antes de
+  conformarte con los tipos más obvios.
+Preferí SIEMPRE un candidato real y fuerte del panorama de abajo antes que
+inventar una escena sin respaldo — si para cierto tipo de encuadre no hay
+ningún candidato relevante para este brief, no lo fuerces, elegí otro tipo
+con mejor respaldo real.
 
 REGLA ANTI-ALUCINACIÓN — verificación obligatoria antes de responder: cada
 shot debe usar un itemId DISTINTO del panorama (nunca repitas
@@ -367,6 +389,8 @@ Accesorios no-esenciales (bolso, gafas, bufanda) en este shot: ${shot.accessoryR
 
   return `Sos el redactor final de prompts del Director Creativo de Photodump. Ya se decidió, para cada shot, qué elementos de qué candidato del banco son reutilizables — tu trabajo AHORA es escribir el prompt final en INGLÉS, listo para pegar en un generador de imágenes real.
 
+${PHOTODUMP_HARD_RULES_TEXT}
+
 BRIEF REAL DEL USUARIO (la escena/lugar/hora real a describir, reemplaza cualquier escenario específico de los candidatos del banco): "${brief}"
 
 ENERGÍA REAL DE ESTA NOCHE: ${energy === 'fiesta' ? 'FIESTA' : 'ELEGANTE (cena, previa, salida tranquila — sin pista de baile ni club)'}. REGLA DURA, aplica a CUALQUIER shot: si la energía es ELEGANTE, ningún prompt puede describir pista de baile, luces de club/neón/láser, gente bailando en grupo, ni ningún elemento de fiesta/discoteca — aunque el candidato del banco elegido tuviera esos elementos, van siempre a discardedElements y se reemplazan por el registro real de la noche.
@@ -379,8 +403,10 @@ REGLA CENTRAL: para cada shot, describí SOLO la pose/gesto/mirada/encuadre/comp
 REGLAS DURAS DE REDACCIÓN:
 1. NUNCA describas ninguna prenda, color de ropa, o cómo cae/se acomoda la ropa del candidato del banco — el outfit lo resuelve la imagen de referencia del usuario, nunca texto describiendo ropa de otra persona.
 2. La ILUMINACIÓN de cada shot debe corresponder a la HORA REAL del evento en el brief del usuario, no a la del candidato del banco, salvo que coincidan.
+3. FIDELIDAD DE PROPORCIÓN CORPORAL (misma prioridad que la identidad): nunca describas la silueta o contextura de la protagonista de forma genérica ni distinta a la de la referencia real de cuerpo — no la endereces, adelgaces, ni le agregues curvas que la referencia no tiene. Si el gesto/pose de un candidato del banco implica una silueta que no calza con el cuerpo real de la referencia (ej. una pose que depende de una cintura muy marcada que la referencia no tiene), ajustá la descripción de la pose para que sea físicamente coherente con el cuerpo real, no al revés.
+4. PROPS/SUPERFICIES HEREDADAS DEL CANDIDATO (espejos, vidrios, muebles decorativos que no forman parte del brief real): nunca los copies literal sin verificar que tienen un lugar lógico en el venue real — ver regla 6 de las reglas no negociables arriba. Si el candidato elegido incluye un espejo/vidrio/mueble que no tiene sentido en el venue del brief, resolvé la pose con el equivalente real del venue (un vidrio/baranda propio del lugar, el espejo de un baño si el shot ocurre ahí) o quitalo del todo — nunca describas un mueble/superficie flotante sin justificación física.
 
-Si un shot dice que necesita continuidad de venue, agregá una línea explícita ("SCENE CONTINUITY: same venue as the previous shot — reuse the exact same background, furniture and lighting.") antes de la descripción de venue.
+Si un shot dice que necesita continuidad de venue con otro shot del set, agregá una línea explícita ("SCENE CONTINUITY: same venue as the previous shot — reuse the exact same background, furniture and lighting — including the same specific table, chairs and any furniture already described in that shot, not a new one.") antes de la descripción de venue — la continuidad de mobiliario es tan importante como la del fondo, no solo el "lugar" en abstracto.
 
 ACCESORIOS NO-ESENCIALES — REGLA DE SILENCIO POR DEFAULT: NO menciones el accesorio en el texto salvo que el razonamiento haya dado una razón real. Si el razonamiento es el default de protagonista-en-cuadro ("se mantienen presentes"), NO escribas nada — dejá que la imagen de referencia lo resuelva sola. Si el razonamiento es el default de plano-sin-protagonista ("no aparece en este plano"), escribí una línea breve dejándolo explícitamente fuera del encuadre.
 
