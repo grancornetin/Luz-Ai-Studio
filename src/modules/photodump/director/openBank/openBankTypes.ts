@@ -116,6 +116,11 @@ export interface OpenBankPlan {
 }
 
 export interface OpenBankFinalPromptShot {
+  // 1-based, posición del shot en plan.shots — vínculo real con el plan (ver
+  // bug real corregido 13 ago 2026: vehicleLabel como texto libre reescrito
+  // en una llamada aparte no coincidía de forma confiable, causó que 7/7
+  // shots de una sesión real se descartaran por "no emparejado").
+  shotIndex: number;
   vehicleLabel: string;
   finalPrompt: string;
 }

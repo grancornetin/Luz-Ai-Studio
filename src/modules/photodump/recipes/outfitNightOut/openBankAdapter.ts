@@ -77,27 +77,30 @@ export interface OpenBankDirectives {
 
 /**
  * Empareja cada shot del plan con su finalPrompt ya redactado (por
- * vehicleLabel, mismo criterio que ya usa buildOpenBankWritePrompt para
- * devolver los prompts) y arma su ShotContract sintético — punto de entrada
- * único que tryDirector() necesita para reemplazar contractForShotId/
- * promptByShotId del modo categorized.
+ * shotIndex, posición 1-based del shot — no por vehicleLabel) y arma su
+ * ShotContract sintético — punto de entrada único que tryDirector() necesita
+ * para reemplazar contractForShotId/promptByShotId del modo categorized.
  *
- * El vínculo plan↔finalPrompts es por texto libre (vehicleLabel), no por un
- * índice estable — Gemini podría redactar el label levemente distinto entre
- * las 2 llamadas (typo, mayúscula). Un shot sin match NUNCA entra a
- * `contracts` — evita generar una imagen con directorSceneBlock vacío
- * (bug real: sin este filtro, buildShotPrompt caía a sceneBlock='' para el
- * shot huérfano, generando una imagen sin ninguna descripción de escena).
+ * BUG REAL corregido (13 ago 2026, confirmado en producción): el vínculo
+ * plan↔finalPrompts era por vehicleLabel (texto libre) — Gemini tiene que
+ * REESCRIBIR ese texto en una llamada aparte ("Redactar"), y cualquier
+ * variación mínima (coma, sinónimo, resumen) rompe el match exacto. En una
+ * sesión real de 7 shots, los 7 fallaron (0% de coincidencia, no un caso
+ * aislado). shotIndex es un número que Gemini solo necesita leer y copiar
+ * del texto del plan ("Shot #3: ..."), no reescribir — mucho más confiable.
+ * Un shot sin match NUNCA entra a `contracts` — evita generar una imagen con
+ * directorSceneBlock vacío (bug real: sin este filtro, buildShotPrompt caía
+ * a sceneBlock='' para el shot huérfano).
  */
 export function buildOpenBankDirectives(plan: OpenBankPlan, finalPrompts: OpenBankFinalPromptShot[]): OpenBankDirectives {
-  const promptByLabel = new Map(finalPrompts.map(p => [p.vehicleLabel, p.finalPrompt]));
+  const promptByIndex = new Map(finalPrompts.map(p => [p.shotIndex, p.finalPrompt]));
   const contracts = new Map<OpenBankSyntheticShotId, ShotContract>();
   const prompts = new Map<OpenBankSyntheticShotId, string>();
 
   plan.shots.forEach((shot, i) => {
-    const redacted = promptByLabel.get(shot.vehicleLabel);
+    const redacted = promptByIndex.get(i + 1);
     if (!redacted) {
-      console.warn(`[open_bank] Shot "${shot.vehicleLabel}" no tiene finalPrompt emparejado (vehicleLabel no coincidió entre Decidir y Redactar) — se descarta.`);
+      console.warn(`[open_bank] Shot #${i + 1} "${shot.vehicleLabel}" no tiene finalPrompt emparejado (shotIndex ${i + 1} ausente en la respuesta de Redactar) — se descarta.`);
       return;
     }
     const shotId = openBankShotId(i + 1);

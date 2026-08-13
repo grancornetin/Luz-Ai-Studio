@@ -120,7 +120,7 @@ const richDetailBlock = buildRichDetailBlock(chosenIds, snapshot.items);
 const writePrompt = buildOpenBankWritePrompt(brief, rawPlan, richDetailBlock, energy);
 const { shots: finalPrompts } = await generateJson(writePrompt, OPEN_BANK_PROMPTS_SCHEMA) as { shots: OpenBankFinalPromptShot[] };
 
-const finalPromptByLabel = new Map(finalPrompts.map(s => [s.vehicleLabel, s.finalPrompt]));
+const finalPromptByIndex = new Map(finalPrompts.map(s => [s.shotIndex, s.finalPrompt]));
 
 for (const shot of finalPrompts) {
   console.log(`\n${'─'.repeat(70)}`);
@@ -187,7 +187,7 @@ rawPlan.shots.forEach((shot, i) => {
     indexLines.push(`(Este shot no usó un candidato del banco — descrito desde cero.)`);
   }
 
-  const finalPrompt = finalPromptByLabel.get(shot.vehicleLabel);
+  const finalPrompt = finalPromptByIndex.get(i + 1);
   if (finalPrompt) {
     indexLines.push(``);
     indexLines.push(`Prompt final redactado (lo que se usaría para generar la imagen real):`);

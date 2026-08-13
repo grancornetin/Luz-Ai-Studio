@@ -72,8 +72,15 @@ export const OPEN_BANK_PROMPTS_SCHEMA = {
       type: 'array',
       items: {
         type: 'object',
-        properties: { vehicleLabel: { type: 'string' }, finalPrompt: { type: 'string' } },
-        required: ['vehicleLabel', 'finalPrompt'],
+        // shotIndex (no vehicleLabel) es el vínculo real con el plan — ver
+        // bug real confirmado en producción (13 ago 2026): con vehicleLabel
+        // como texto libre reescrito en una llamada separada, los 7/7 shots
+        // de una sesión real no coincidieron (variación mínima de texto
+        // rompe el match exacto). shotIndex es un número que Gemini solo
+        // necesita leer y copiar del plan, no reescribir — mucho más
+        // confiable que comparar strings.
+        properties: { shotIndex: { type: 'integer' }, vehicleLabel: { type: 'string' }, finalPrompt: { type: 'string' } },
+        required: ['shotIndex', 'vehicleLabel', 'finalPrompt'],
       },
     },
   },
@@ -343,8 +350,8 @@ export function buildOpenBankWritePrompt(
   richDetailBlock: string,
   energy?: 'elegante' | 'fiesta',
 ): string {
-  const shotsText = plan.shots.map(shot => `
-### Shot: ${shot.vehicleLabel}
+  const shotsText = plan.shots.map((shot, i) => `
+### Shot #${i + 1}: ${shot.vehicleLabel}
 Eje narrativo: ${shot.narrativeAxis}
 Candidato de referencia elegido: ${shot.chosenCandidateId || '(ninguno, describir desde cero)'}
 Razonamiento: ${shot.shotReasoning}
@@ -383,5 +390,5 @@ ${richDetailBlock}
 PLAN DE SHOTS YA DECIDIDO:
 ${shotsText}
 
-Devolvé el resultado en el formato JSON pedido — un finalPrompt completo en inglés por cada shot (usá el mismo vehicleLabel del plan para identificar cada uno).`;
+Devolvé el resultado en el formato JSON pedido — un finalPrompt completo en inglés por cada shot. IMPORTANTE: en cada shot del array de salida, copiá literal el número que aparece después de "Shot #" en shotIndex (ej. "Shot #3" → shotIndex: 3) — es el identificador real que usa el sistema para emparejar tu prompt con el plan, más confiable que el texto de vehicleLabel. Incluí también vehicleLabel (mismo texto del plan) solo como referencia legible.`;
 }
