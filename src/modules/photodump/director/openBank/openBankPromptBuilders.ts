@@ -38,6 +38,8 @@ export const OPEN_BANK_PLAN_SCHEMA = {
           // itemId del candidato, eso ya viaja en chosenCandidateId.
           vehicleLabel: { type: 'string' },
           narrativeAxis: { type: 'string', enum: ['memorable', 'outfit_increible', 'ambos'] },
+          psychologicalDrive: { type: 'string', enum: ['attraction_self_presentation', 'status_control', 'belonging_social_validation'] },
+          psychologicalReasoning: { type: 'string' },
           chosenCandidateId: { type: 'string' },
           shotReasoning: { type: 'string' },
           keptElements: { type: 'array', items: { type: 'string' } },
@@ -47,11 +49,15 @@ export const OPEN_BANK_PLAN_SCHEMA = {
           accessoryReasoning: { type: 'string' },
           timelineStage: { type: 'string' },
           existenceReason: { type: 'string' },
+          companionVisible: { type: 'boolean' },
+          footwearVisible: { type: 'boolean' },
         },
         required: [
-          'vehicleLabel', 'narrativeAxis', 'chosenCandidateId', 'shotReasoning',
+          'vehicleLabel', 'narrativeAxis', 'psychologicalDrive', 'psychologicalReasoning',
+          'chosenCandidateId', 'shotReasoning',
           'keptElements', 'discardedElements', 'needsVenueAnchor', 'continuityNote',
           'accessoryReasoning', 'timelineStage', 'existenceReason',
+          'companionVisible', 'footwearVisible',
         ],
       },
     },
@@ -83,11 +89,14 @@ She is standing still or naturally posed, not mid-stride.
 
 function formatWidePool(pool: WideCandidatePool): string {
   return Object.entries(pool)
-    .map(([shotType, candidates]) => {
+    .map(([groupKey, candidates]) => {
       const lines = candidates
         .map(c => `  ${c.itemId} | ${c.companionPresent ? 'con acompañante' : 'sola'} | subjects:${c.subjectsVisible} | ${c.briefSummary}`)
         .join('\n');
-      return `### shot_type: ${shotType} (${candidates.length} candidatos)\n${lines}`;
+      // groupKey ya viene prefijado como "escena:X" cuando es una veta de
+      // ambiente/escena (ver detectSceneTag) — el resto son shot_type reales.
+      const label = groupKey.startsWith('escena:') ? groupKey : `shot_type: ${groupKey}`;
+      return `### ${label} (${candidates.length} candidatos)\n${lines}`;
     })
     .join('\n\n');
 }
@@ -135,6 +144,73 @@ cuenta algo distinto cada vez, puede saltarse la preparación por completo.
 Vos decidís, para ESTE brief puntual, qué combinación de fotos cuenta mejor
 esta noche — no rellenes categorías, componé la historia real.
 
+LECTURA PSICOLÓGICA DE CADA CANDIDATO (manifiesto §3, obligatoria antes de
+elegir): la razón por la que un tipo de foto genera atención real en redes
+casi nunca es "se ve linda" — es que activa un impulso motivacional
+específico. Para esta receta, los 3 impulsos relevantes son:
+- attraction_self_presentation: la pose/ángulo/gesto transmite confianza
+  corporal y sensualidad DELIBERADA (no accidental) — mirror check, ángulo
+  que alarga la silueta, mirada directa y segura a cámara.
+- status_control: el entorno, la exclusividad del venue, la calidad de los
+  objetos visibles o la sensación de acceso/dominio de la situación es lo
+  que genera la reacción — no la pose de la protagonista en sí.
+- belonging_social_validation: la foto funciona porque muestra pertenencia
+  a un grupo/momento deseable (amigas, ambiente, código social reconocible)
+  — la fuerza está en el contexto compartido, no en un individuo posando.
+Antes de elegir un candidato, preguntate: ¿qué impulso de estos 3 hace que
+ESTE tipo de foto específico genere atención real si alguien la publicara?
+Usá esa lectura para juzgar si el candidato es realmente fuerte (no solo si
+combina con el brief en palabras) y para decidir qué pose/ángulo/gesto vale
+la pena heredar en keptElements. Declará el impulso identificado en
+psychologicalDrive, y en psychologicalReasoning explicá en 1-2 frases POR
+QUÉ ese candidato puntual activa ese impulso (ej. "la inclinación de cadera
+y la mirada directa al espejo transmiten confianza corporal deliberada,
+por eso una foto así genera atención real").
+REGLA DURA: psychologicalReasoning es tu razonamiento INTERNO de director,
+nunca se traduce a texto literal en el prompt final ni implica prometer un
+resultado social (pretendientes, envidia, aceptación) — eso viola los
+guardrails del manifiesto (§15). Se usa solo para elegir mejor la pose y
+justificar por qué el candidato es fuerte, nunca aparece en shotReasoning
+ni en existenceReason con ese lenguaje: esos campos siempre describen la
+experiencia propia de la protagonista (self-focused: "se sintió increíble
+con el outfit"), nunca el efecto que la foto tendría en terceros
+(other-focused: "para que otros la deseen/envidien").
+
+FILTRO DE TONO — depende del CONTEXTO NARRATIVO de cada shot, no es una
+prohibición general de sensualidad. La pregunta correcta para cada
+candidato es: "¿es plausible que la protagonista esté vestida así EN ESTE
+MOMENTO de ESTA historia?", no "¿es sensual?" — la sensualidad en sí
+(escote, silueta marcada, piernas, pose de confianza corporal) es parte
+legítima de attraction_self_presentation y no hay que evitarla. La regla no
+es una lista fija de prendas prohibidas — es un principio de plausibilidad
+que se aplica al contexto real de CADA receta (nota: este prompt es
+específico de outfit_night_out; si en el futuro se arma un prompt
+equivalente para otra receta con un contexto físico distinto —ej. una
+rutina de skincare donde aplicar crema en el cuerpo es la acción central, o
+un día de playa/piscina donde bikini es la prenda esperada— esa regla debe
+escribirse de nuevo con el contexto propio de esa receta, no heredar esta).
+
+Para outfit_night_out específicamente, la línea de plausibilidad es:
+- Si el shot ocurre en el venue, en tránsito (auto), o en cualquier momento
+  donde la protagonista ya está "arreglada para salir": un candidato cuyo
+  outfit_visible sea ropa interior/lencería NO es plausible ahí — no tiene
+  sentido narrativo estar en ropa interior en un club, restaurante o auto
+  camino a algún lado. Descartalo, sin importar qué tan bien encaje la pose
+  con el brief.
+- Si el shot ocurre en la etapa de PREPARACIÓN EN CASA (ej. "previa",
+  "get ready with me", maquillándose, eligiendo el outfit, arreglándose el
+  pelo) Y el brief describe o admite esa etapa: cualquier prenda plausible
+  ANTES de estar vestida de salida es válida — bata, pijama, toalla,
+  conjunto de loungewear, ropa deportiva de estar en casa. Es el momento
+  natural en que alguien todavía no se puso el outfit de la noche. La línea
+  sigue estando en ropa interior/lencería como prenda final y única visible
+  (eso nunca es válido, ni siquiera en la preparación) — la diferencia es
+  "está en bata/pijama antes de vestirse" (válido) vs. "está en ropa
+  interior sin nada encima, posando" (nunca válido).
+Si dudás sobre un candidato puntual, preguntate primero en qué etapa de la
+noche va ese shot y si esa prenda tiene sentido ahí — no descartes por
+sensualidad sola.
+
 CANTIDAD TOTAL DE SHOTS — LÍMITE DURO: el array "shots" debe tener
 EXACTAMENTE ${totalShotsRequested} elementos, ni uno más ni uno menos.
 
@@ -146,6 +222,18 @@ escena sin respaldo — si para cierto tipo de encuadre no hay ningún
 candidato relevante para este brief, no lo fuerces, elegí otro tipo con
 mejor respaldo real.
 
+REGLA ANTI-ALUCINACIÓN — verificación obligatoria antes de responder: cada
+shot debe usar un itemId DISTINTO del panorama (nunca repitas
+chosenCandidateId entre 2 shots del mismo set). Si en algún shotReasoning
+vas a escribir una comparación entre shots (ej. "es la misma imagen que el
+shot X", "similar al anterior", "hace de contraparte de..."), releé
+primero los 2 itemIds involucrados en el panorama de arriba y confirmá que
+la comparación es literalmente cierta — nunca afirmes que 2 candidatos son
+"la misma imagen" o "la misma escena" a menos que sean exactamente el mismo
+itemId. Si tenés dudas sobre si dos candidatos son iguales o distintos, no
+lo afirmes — describí cada uno por separado con lo que ves en su propio
+resumen.
+
 vehicleLabel (obligatorio en cada shot): una descripción corta en 2-5
 palabras del tipo de foto, en español, pensada para que un humano entienda
 de un vistazo qué es (ej. "mirror selfie con trago", "detalle de copa en la
@@ -155,7 +243,15 @@ vehicleLabel — el itemId va aparte, en chosenCandidateId.
 PANORAMA DEL BANCO DISPONIBLE (agrupado por tipo de encuadre real —
 shot_type — no por categoría narrativa; cada línea es un candidato real del
 banco, resumido; elegí libremente de cualquier grupo, no hace falta usar
-todos los grupos ni distribuir parejo entre ellos):
+todos los grupos ni distribuir parejo entre ellos). Además de los grupos por
+shot_type, hay grupos "escena:X" (ej. "escena:club_discoteca",
+"escena:auto_transicion") que resaltan vetas de ambiente/contexto real del
+banco — un mismo candidato puede aparecer tanto en su grupo de shot_type
+como en su grupo de escena, es la misma foto, no la cuentes dos veces al
+armar el set. Prestá atención especial a los grupos "escena:" cuando el
+brief lo amerite (ej. si el brief menciona un club/discoteca, revisá primero
+si existe "escena:club_discoteca" antes de conformarte con candidatos
+genéricos de mirror_selfie o medio_cuerpo):
 
 ${formatWidePool(widePool)}
 
@@ -182,6 +278,23 @@ MOTIVO DE EXISTENCIA (existenceReason, obligatorio): completá "esta foto
 existe porque..." con la razón concreta por la que la PROTAGONISTA
 publicaría esta foto — nunca una respuesta genérica tipo "para mostrar el
 momento".
+
+REFERENCIAS REALES A ENRUTAR (companionVisible, footwearVisible —
+obligatorios en cada shot, controlan qué fotos de referencia reales se usan
+para generar la imagen, no son solo descriptivos):
+- companionVisible: true SOLO si el prompt final de ESTE shot va a describir
+  a un acompañante real y reconocible en cuadro (rostro o cuerpo propio,
+  parte identificable de una persona) — no una mano genérica de fondo, no
+  "alguien fuera de cuadro", no un brindis contra una mano incidental de
+  utilería. Si el candidato del banco tenía compañera pero decidiste
+  descartar esa parte específica (va a discardedElements), companionVisible
+  es false. Cuando sea true, se usa la foto de referencia real del
+  acompañante que subió el usuario — declararlo mal genera una persona
+  inventada en la imagen final, evitalo si tenés dudas.
+- footwearVisible: true si el encuadre elegido (según lo que ves en el
+  candidato real) muestra los pies/calzado de la protagonista dentro del
+  plano — false si es un encuadre que corta antes (close-up de rostro,
+  medio cuerpo, plano de manos/objeto).
 
 LÍNEA DE TIEMPO (timelineStages, 2 a 4 bloques amplios, ej. "llegada al
 venue" / "más avanzada la noche") — solo para evitar contradicciones

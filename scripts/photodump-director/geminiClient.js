@@ -67,13 +67,25 @@ function extractText(response) {
  * mismo reintento para no fallar en medio de una sesión de investigación.
  */
 export async function generateJson(prompt, schema, model = 'gemini-2.5-flash', maxRetries = 4) {
+  return generateJsonFromParts([{ text: prompt }], schema, model, maxRetries);
+}
+
+/**
+ * Igual que generateJson, pero acepta "parts" mixtas (texto + inlineData de
+ * imágenes reales) en vez de un único string de prompt — necesario para el
+ * experimento de "Decidir viendo imágenes reales" (harness
+ * testOpenBankVisualDirector.ts), que manda base64 de los candidatos
+ * finalistas junto con el texto del prompt, igual que ya hace en producción
+ * api/gemini/content.ts con las referencias del usuario.
+ */
+export async function generateJsonFromParts(parts, schema, model = 'gemini-2.5-flash', maxRetries = 4) {
   const genAI = getClient();
   let lastError;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const response = await genAI.models.generateContent({
         model,
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        contents: [{ role: 'user', parts }],
         config: {
           responseMimeType: 'application/json',
           responseSchema: schema,

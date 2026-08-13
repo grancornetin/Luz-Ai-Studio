@@ -55,7 +55,17 @@ export type NightMomentId =
   | 'group_party_moment'
   | 'single_hero_shot';
 
-export type NightOutShotId = NightOutFixedShotId | NightMomentId;
+// Shot sintético de un plan del director en modo open_bank — no viene de un
+// enum fijo, se arma en runtime (openBankToShotContract) a partir del plan
+// que Gemini ya redactó. El patrón `open_bank_${número}` (índice 1-based del
+// shot dentro de su set) es suficiente para depurar/loguear sin necesitar
+// una lista de nombres — el ShotContract del modo actual no usa shotId más
+// que como identificador de logging y clave de caché una vez armado (ver
+// routingValidator.ts, debug.ts: ninguno de los 2 hace switch sobre el
+// valor).
+export type OpenBankSyntheticShotId = `open_bank_${number}`;
+
+export type NightOutShotId = NightOutFixedShotId | NightMomentId | OpenBankSyntheticShotId;
 
 export type NightOutEnergy = 'elegante' | 'fiesta';
 

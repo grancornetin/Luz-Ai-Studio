@@ -54,7 +54,9 @@ import { imageApiService } from '../../../../services/imageApiService';
 import { compressImageForUpload } from '../../../../utils/imageUtils';
 import { runDirector, type DirectorReferenceImage } from '../../director/client';
 import type { DirectorPlan, FinalPromptShot } from '../../director/types';
-import type { OutfitNightOutShotPlan, OutfitNightOutShotDebug, ShotContract, NightOutLevel, NightOutShotId } from './types';
+import type { OpenBankPlan, OpenBankFinalPromptShot } from '../../director/openBank/openBankTypes';
+import { buildOpenBankDirectives } from './openBankAdapter';
+import type { OutfitNightOutShotPlan, OutfitNightOutShotDebug, ShotContract, NightOutLevel, NightOutShotId, NightMomentId, OpenBankSyntheticShotId } from './types';
 
 // ── Cachés en memoria por sesión ─────────────────────────────────────────
 // Mismo motivo que outfitRevealBasic/outfitMultiLook: generatePhotodumpREF0
@@ -73,6 +75,24 @@ const directorPromptCache = new Map<string, Map<string, string>>();
 // para debug/diagnóstico, no afecta el comportamiento. Se limpia si el
 // director corre con éxito.
 const directorFailureCache = new Map<string, string>();
+// Contrato del PRIMER shot real elegido por el director en modo open_bank —
+// solo se puebla cuando directorMode === 'open_bank' (tryDirector). A
+// diferencia de categorized (mirror_check SIEMPRE fijo, REF0 nunca necesita
+// leer el plan), open_bank compone la apertura libremente — puede ser mirror
+// selfie, POV en un ascensor, plano de escalera, lo que el director decida
+// coherente con el brief (pedido explícito del usuario: "no me gustaría que
+// el primer shot fuera obligado mirror check"). generateOutfitNightOutREF0
+// lee este caché en vez de asumir MIRROR_CHECK_CONTRACT — puebla ANTES de
+// llamar a REF0 porque buildOutfitNightOutDirectives (que llama a
+// tryDirector) siempre corre primero en el flujo real (ver
+// PhotodumpModule.tsx: plan completo se resuelve antes de invocar el REF0).
+const openBankFirstShotCache = new Map<string, { contract: ShotContract; finalPrompt: string | undefined }>();
+// Todos los ShotContract sintéticos de un plan open_bank para esta sesión
+// (shotId → contract), no solo el primero — generateOutfitNightOutShot los
+// necesita para los shots 2..N (open_bank_2, open_bank_3, ...), que de otra
+// forma caerían al findNightMoment(shotId) del banco fijo y explotarían (esos
+// shotIds sintéticos no existen ahí).
+const openBankContractCache = new Map<string, Map<string, ShotContract>>();
 
 /**
  * BUG REAL corregido: antes esta clave se armaba solo con las URLs de
@@ -127,6 +147,8 @@ async function generateFromContract(
     energy,
     seed: seedFor(refs),
     directorSceneBlock,
+    openBankFootwearVisible: contract.footwearVisible,
+    openBankHasOutfitRef: contract.referencePolicy.useOutfitRefs,
   });
   const preparedRefs = await prepareRefs(routed.orderedUrls);
 
@@ -165,7 +187,15 @@ function contractForShotId(shotId: NightOutShotId): ShotContract {
   if (isFixedShotId(shotId)) {
     return contractForFixedShotId(shotId);
   }
-  return findNightMoment(shotId).contract;
+  // Nunca debería llegar acá con un shotId sintético de open_bank — el guard
+  // `directorMode === 'open_bank'` en tryDirector corta ese flujo antes de
+  // usar contractForShotId (ver openBankAdapter.ts para el camino real de
+  // open_bank). Narrowing explícito porque NightOutShotId incluye el tipo
+  // sintético desde que se agregó OpenBankSyntheticShotId.
+  if (typeof shotId === 'string' && shotId.startsWith('open_bank_')) {
+    throw new Error(`contractForShotId recibió un shotId sintético de open_bank ("${shotId}") — esto es un bug, ese modo no debe pasar por acá.`);
+  }
+  return findNightMoment(shotId as NightMomentId).contract;
 }
 
 function directiveFor(contract: ShotContract, beat: 'reveal' | 'candid'): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> {
@@ -263,18 +293,48 @@ async function tryDirector(
 
     // Modo "banco abierto" — bypass aislado y reversible (ver plan de
     // sesión). Su plan/finalPrompts usan vehicleLabel libre, no shotId de
-    // un enum fijo — el pipeline de generación real de outfit_night_out
-    // (contractForShotId, referenceRouter, routingValidator) depende
-    // profundamente de ese enum, así que conectar open_bank a la
-    // generación de imágenes es trabajo aparte, no incluido en este cambio
-    // (que cubrió el razonamiento: filtro de candidatos + Decidir/Redactar,
-    // validado con el harness testOpenBankDirector.ts). Por ahora, con
-    // open_bank activo, cae al fallback estático a propósito — evita
-    // generar directivas incorrectas a partir de un plan que no calza con
-    // el contrato de shots fijo.
+    // un enum fijo — openBankAdapter.ts arma un ShotContract SINTÉTICO por
+    // shot (shotId "open_bank_N") en vez de contractForShotId, reusando tal
+    // cual el resto del pipeline (routeReferences, validateRouting,
+    // buildShotPrompt, buildShotDebug — ninguno hace switch sobre shotId).
     if (directorMode === 'open_bank') {
-      console.warn('[outfit_night_out] directorMode=open_bank: razonamiento generado pero aún no conectado a la generación de imágenes, usando banco estático de respaldo.');
-      return null;
+      const openBankPlan = plan as OpenBankPlan;
+      const openBankFinalPrompts = finalPrompts as OpenBankFinalPromptShot[];
+      const { contracts, finalPrompts: redactedByShotId } = buildOpenBankDirectives(openBankPlan, openBankFinalPrompts);
+
+      if (contracts.size === 0) {
+        directorFailureCache.set(cacheKey(refs, basePrompt, sessionId), 'El director (open_bank) devolvió 0 shots.');
+        return null;
+      }
+
+      const key = cacheKey(refs, basePrompt, sessionId);
+      const shotCache = new Map<string, string>();
+      const directives: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] = [];
+      for (const [shotId, contract] of contracts.entries()) {
+        const redactedPrompt = redactedByShotId.get(shotId);
+        if (redactedPrompt) shotCache.set(shotId, redactedPrompt);
+        directives.push(directiveFor(contract, 'candid'));
+      }
+
+      if (directives.length === 0) {
+        directorFailureCache.set(key, 'El director (open_bank) no produjo ningún shot con prompt redactado.');
+        return null;
+      }
+      directorPromptCache.set(key, shotCache);
+      directorFailureCache.delete(key);
+      openBankContractCache.set(key, contracts);
+
+      // Primer shot real del plan — apertura libre (ver comentario de
+      // openBankFirstShotCache), reemplaza al mirror_check fijo para esta
+      // sesión. generateOutfitNightOutREF0 lo lee de acá.
+      const firstDirective = directives[0];
+      const firstContract = contracts.get(firstDirective.outfitNightOutPlan!.shotId as OpenBankSyntheticShotId)!;
+      openBankFirstShotCache.set(key, {
+        contract: firstContract,
+        finalPrompt: shotCache.get(firstDirective.outfitNightOutPlan!.shotId),
+      });
+
+      return directives;
     }
 
     // A partir de acá directorMode === 'categorized' garantizado (el guard
@@ -347,6 +407,28 @@ export async function generateOutfitNightOutREF0(
 ): Promise<PhotodumpREF0Result> {
   const companionRef = extractCompanionRef(refs);
   const level = (refs.nightOutLevel ?? 'corto') as NightOutLevel;
+  const key = cacheKey(refs, basePrompt, sessionParams.sessionId);
+
+  // open_bank: la apertura la elige libremente el director (mirror selfie,
+  // POV de ascensor, plano de escalera, lo que sea coherente con el brief) —
+  // nunca mirror_check fijo. buildOutfitNightOutDirectives (llamado ANTES en
+  // el flujo real, ver PhotodumpModule.tsx) ya corrió el director y dejó el
+  // primer shot listo en openBankFirstShotCache — no se vuelve a llamar a
+  // Gemini acá.
+  if (refs.directorMode === 'open_bank') {
+    const firstShot = openBankFirstShotCache.get(key);
+    if (firstShot) {
+      const result = await generateFromContract(
+        firstShot.contract, refs, destino, basePrompt, sessionParams, 0, 1, { companionRef },
+      );
+      prepAnchorCache.set(key, result);
+      return { imageUrl: result.imageUrl, ref0Analysis: null, prompt: result.prompt, refsCount: result.refsCount };
+    }
+    // Red de seguridad: si por algún motivo el director no corrió o falló
+    // antes de llegar acá (no debería pasar en el flujo real), cae al mismo
+    // ancla fija que categorized — nunca debe tirar un error duro al usuario.
+  }
+
   // 'una_foto': el único shot del set ES el ancla — mismo patrón de fusión
   // REF0+shot1 que outfitRevealBasic/outfitMultiLook, pero con
   // single_hero_shot en vez de mirror_check.
@@ -354,7 +436,7 @@ export async function generateOutfitNightOutREF0(
   const result = await generateFromContract(
     contract, refs, destino, basePrompt, sessionParams, 0, 1, { companionRef },
   );
-  prepAnchorCache.set(cacheKey(refs, basePrompt, sessionParams.sessionId), result);
+  prepAnchorCache.set(key, result);
   return { imageUrl: result.imageUrl, ref0Analysis: null, prompt: result.prompt, refsCount: result.refsCount };
 }
 
@@ -384,10 +466,18 @@ export async function generateOutfitNightOutShot(
   const key = cacheKey(refs, basePrompt, sessionParams.sessionId);
   const companionRef = extractCompanionRef(refs);
 
-  if (shotId === 'mirror_check' || shotId === 'single_hero_shot') {
-    const contract = shotId === 'single_hero_shot' ? findNightMoment('single_hero_shot').contract : MIRROR_CHECK_CONTRACT;
+  // open_bank_1 es SIEMPRE el primer shot de un plan open_bank (ver
+  // openBankAdapter.ts, openBankShotId(i+1), 1-based) — cumple el mismo rol
+  // de ancla que mirror_check/single_hero_shot: ya se generó como REF0
+  // (generateOutfitNightOutREF0 lee openBankFirstShotCache), acá solo se
+  // reusa el resultado cacheado.
+  const isOpenBankAnchor = shotId === 'open_bank_1';
+  if (shotId === 'mirror_check' || shotId === 'single_hero_shot' || isOpenBankAnchor) {
+    const contract = isOpenBankAnchor
+      ? openBankFirstShotCache.get(key)?.contract
+      : (shotId === 'single_hero_shot' ? findNightMoment('single_hero_shot').contract : MIRROR_CHECK_CONTRACT);
     const cached = prepAnchorCache.get(key);
-    if (cached) {
+    if (cached && contract) {
       const usedDirector = directorPromptCache.get(key)?.has(shotId) ?? false;
       const debug = buildShotDebug(
         contract,
@@ -398,9 +488,12 @@ export async function generateOutfitNightOutShot(
       );
       return { imageUrl: cached.imageUrl, prompt: cached.prompt, refsCount: cached.refsCount, debug };
     }
-    // Red de seguridad: si por algún motivo el REF0 no se generó antes.
+    // Red de seguridad: si por algún motivo el REF0 no se generó antes (o,
+    // para open_bank, el contrato sintético no llegó a cachearse).
+    const fallbackContract = contract
+      ?? (shotId === 'single_hero_shot' ? findNightMoment('single_hero_shot').contract : MIRROR_CHECK_CONTRACT);
     const result = await generateFromContract(
-      contract, refs, destino, basePrompt, sessionParams, shotIndex, totalShots, { companionRef },
+      fallbackContract, refs, destino, basePrompt, sessionParams, shotIndex, totalShots, { companionRef },
     );
     prepAnchorCache.set(key, result);
     return result;
@@ -414,8 +507,28 @@ export async function generateOutfitNightOutShot(
     );
   }
 
-  // NightMoment del banco de noche.
-  const moment = findNightMoment(shotId);
+  // Shots open_bank_2..N (open_bank_1 ya se resolvió arriba como ancla) —
+  // contrato sintético armado por openBankAdapter.ts, cacheado en tryDirector.
+  // La continuidad de venue de open_bank se resuelve por TEXTO dentro del
+  // propio finalPrompt (needsVenueAnchor/continuityNote, ver
+  // buildOpenBankDecidePrompt) — no usa venueAnchorCache/imagen real como
+  // categorized, decisión deliberada de esta iteración (el texto del director
+  // ya declara continuidad explícita cuando corresponde).
+  const openBankContract = openBankContractCache.get(key)?.get(shotId);
+  if (openBankContract) {
+    return generateFromContract(
+      openBankContract, refs, destino, basePrompt, sessionParams, shotIndex, totalShots, { companionRef },
+    );
+  }
+
+  // NightMoment del banco de noche (modo categorized) — nunca debería llegar
+  // acá con un shotId sintético de open_bank (el bloque de arriba ya lo
+  // habría resuelto); narrowing explícito por el mismo motivo que
+  // contractForShotId.
+  if (typeof shotId === 'string' && shotId.startsWith('open_bank_')) {
+    throw new Error(`generateOutfitNightOutShot no encontró el contrato sintético cacheado para "${shotId}" — esto es un bug (openBankContractCache debería tenerlo).`);
+  }
+  const moment = findNightMoment(shotId as NightMomentId);
   const venueAnchorUrl = venueAnchorCache.get(key)?.imageUrl;
   const result = await generateFromContract(
     moment.contract, refs, destino, basePrompt, sessionParams, shotIndex, totalShots,

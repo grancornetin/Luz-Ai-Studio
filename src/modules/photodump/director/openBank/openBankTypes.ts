@@ -62,9 +62,30 @@ export type WideCandidatePool = Record<string, WideCandidate[]>; // agrupado por
 // Cada shot declara su propio "vehículo narrativo" en texto libre (ej.
 // "selfie de espejo con outfit completo", "detalle de trago en primer
 // plano sin protagonista") en vez de elegir de una lista predefinida.
+// Impulsos motivacionales del manifiesto de dirección (02_the_psychology_behind_photodump_v2.md,
+// §3 y §16, PsychologicalIntent.primaryDrive) — subset relevante a outfit_night_out.
+// No se usan los 7 impulsos completos del manifiesto porque varios (safety_relief,
+// ease_energy_saving, care_self_regulation) no aplican a una salida nocturna; se
+// mantienen los 3 que sí son motores reales de por qué alguien publica fotos de
+// una noche de salida.
+export type PsychologicalDrive = 'attraction_self_presentation' | 'status_control' | 'belonging_social_validation';
+
 export interface OpenBankShotDecision {
   vehicleLabel: string; // descripción corta del tipo de foto que el director decidió, en sus propias palabras
   narrativeAxis: 'memorable' | 'outfit_increible' | 'ambos'; // qué eje del manifiesto aporta esta foto
+  // Qué impulso motivacional (manifiesto §3) hace que este TIPO de foto genere
+  // atención/deseo real en redes — guía qué pose/ángulo/encuadre transferir del
+  // candidato. Es lectura interna del director, nunca se traduce a texto literal
+  // en el prompt final (ver psychologicalReasoning más abajo y guardrails §15).
+  psychologicalDrive: PsychologicalDrive;
+  // Razonamiento interno crudo de POR QUÉ ese impulso hace fuerte a este candidato
+  // puntual (ej. "la pose de mirror selfie con esa inclinación de cadera transmite
+  // confianza corporal deliberada, por eso genera atención — heredamos esa pose
+  // para que el outfit real la herede también"). Campo de trabajo del director,
+  // JAMÁS se pasa al prompt "Redactar" ni aparece en el prompt final de imagen —
+  // ver buildOpenBankWritePrompt, que solo lee keptElements/discardedElements/
+  // shotReasoning/existenceReason, nunca este campo.
+  psychologicalReasoning: string;
   chosenCandidateId: string;
   shotReasoning: string;
   keptElements: string[];
@@ -74,6 +95,18 @@ export interface OpenBankShotDecision {
   accessoryReasoning: string;
   timelineStage: string;
   existenceReason: string;
+  // Campos para conectar el plan a generación real de imágenes (openBankToShotContract,
+  // outfitNightOut/index.ts) sin necesitar un ShotContract con nombre fijo por shotId —
+  // ver plan de conexión (sesión 13 ago 2026). A diferencia de companionPresent del
+  // candidato del banco (que puede ser una mano incidental de utilería, ver shot real
+  // "brindis" con "incidental hand... out of frame"), companionVisible es la decisión
+  // consciente del director de si ESTE shot final necesita mostrar un acompañante real
+  // y reconocible (rostro/cuerpo propio en cuadro, no solo una mano de fondo) — controla
+  // si se enruta la foto de referencia real del acompañante subido por el usuario.
+  companionVisible: boolean;
+  // Si el encuadre elegido muestra los pies/calzado de la protagonista — reemplaza el
+  // valor fijo por shotId que usa el modo categorized (footwearVisible en ShotContract).
+  footwearVisible: boolean;
 }
 
 export interface OpenBankPlan {

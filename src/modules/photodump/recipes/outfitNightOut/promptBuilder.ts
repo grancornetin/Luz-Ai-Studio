@@ -22,7 +22,7 @@
  * criterio ya real en photodumpDirectorService.ts para day_in_life.
  */
 import { NEGATIVE_SHORT, IPHONE_CAMERA_ROLL_LINE, NO_STUDIO_BACKDROP_LINE, NO_WALKING_LINE, AVOID_EDITORIAL_LINE } from '../shared';
-import type { NightOutShotId, NightOutEnergy } from './types';
+import type { NightOutShotId, NightOutEnergy, NightMomentId } from './types';
 import type { AppliedIntelligence } from './intelligenceLayer';
 import { findNightMoment, pickSceneVariation } from './nightMoments';
 
@@ -93,6 +93,12 @@ export interface PromptBuilderOptions {
   // director ya redacta una pose completa extraída de un candidato real del
   // banco. Con directorSceneBlock presente, el HPI se omite del prompt.
   directorSceneBlock?: string;
+  // Solo para shots sintéticos de open_bank (shotId "open_bank_N", ver
+  // openBankAdapter.ts) — footwearVisible/useOutfitRefs del ShotContract
+  // sintético, para no depender de findNightMoment(shotId) (que no
+  // reconocería un shotId sintético, ver comentario en buildShotPrompt).
+  openBankFootwearVisible?: boolean;
+  openBankHasOutfitRef?: boolean;
 }
 
 export function buildShotPrompt(
@@ -101,6 +107,7 @@ export function buildShotPrompt(
   options:      PromptBuilderOptions,
 ): BuiltPrompt {
   const isFixedPrepShot = shotId === 'presentation' || shotId === 'tryon_detail' || shotId === 'mirror_check';
+  const isOpenBankShot = typeof shotId === 'string' && shotId.startsWith('open_bank_');
   const fromDirector = Boolean(options.directorSceneBlock);
 
   let sceneBlock: string;
@@ -112,8 +119,15 @@ export function buildShotPrompt(
     sceneBlock = options.directorSceneBlock ?? FIXED_SHOT_BLOCKS[shotId as 'presentation' | 'tryon_detail' | 'mirror_check'];
     footwearVisible = shotId === 'mirror_check';
     hasOutfitRef = true;
+  } else if (isOpenBankShot) {
+    // El director SIEMPRE redacta directorSceneBlock para sus propios shots
+    // (buildOpenBankWritePrompt nunca devuelve un shot sin finalPrompt) — no
+    // hace falta un sceneBlock estático de respaldo acá.
+    sceneBlock = options.directorSceneBlock ?? '';
+    footwearVisible = options.openBankFootwearVisible ?? false;
+    hasOutfitRef = options.openBankHasOutfitRef ?? true;
   } else {
-    const moment = findNightMoment(shotId);
+    const moment = findNightMoment(shotId as NightMomentId);
     sceneBlock = options.directorSceneBlock ?? pickSceneVariation(moment, options.seed, options.energy);
     footwearVisible = moment.contract.footwearVisible;
     hasOutfitRef = moment.contract.referencePolicy.useOutfitRefs;
