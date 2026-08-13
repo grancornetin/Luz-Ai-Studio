@@ -27,6 +27,13 @@
  * preparación), open_bank NO fuerza que exista un shot de ancla — coherente
  * con el manifiesto §4bis (no hay secuencia canónica). prepAnchorCache
  * simplemente queda sin usar si ningún shot de este set califica.
+ *
+ * Continuidad de venue (ver venueAnchorCache en index.ts): usa imagen real
+ * como refuerzo visual, no solo el texto que el propio director redacta
+ * (needsVenueAnchor/continuityNote) — bug real confirmado con una sesión de
+ * prueba (13 ago 2026): el director se saltó needsVenueAnchor en el último
+ * shot de un set de 7, y sin imagen de referencia el venue generado terminó
+ * siendo un lugar completamente distinto al resto del set.
  */
 import type { OpenBankPlan, OpenBankShotDecision, OpenBankFinalPromptShot } from '../../director/openBank/openBankTypes';
 import type { ShotContract, OpenBankSyntheticShotId } from './types';

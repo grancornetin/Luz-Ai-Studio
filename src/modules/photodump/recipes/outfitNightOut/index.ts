@@ -422,6 +422,10 @@ export async function generateOutfitNightOutREF0(
         firstShot.contract, refs, destino, basePrompt, sessionParams, 0, 1, { companionRef },
       );
       prepAnchorCache.set(key, result);
+      // Siembra también el ancla de venue con la primera imagen real del set
+      // — ver comentario en generateOutfitNightOutShot (open_bank_2..N) sobre
+      // el bug real de continuidad que esto corrige.
+      venueAnchorCache.set(key, result);
       return { imageUrl: result.imageUrl, ref0Analysis: null, prompt: result.prompt, refsCount: result.refsCount };
     }
     // Red de seguridad: si por algún motivo el director no corrió o falló
@@ -509,16 +513,31 @@ export async function generateOutfitNightOutShot(
 
   // Shots open_bank_2..N (open_bank_1 ya se resolvió arriba como ancla) —
   // contrato sintético armado por openBankAdapter.ts, cacheado en tryDirector.
-  // La continuidad de venue de open_bank se resuelve por TEXTO dentro del
-  // propio finalPrompt (needsVenueAnchor/continuityNote, ver
-  // buildOpenBankDecidePrompt) — no usa venueAnchorCache/imagen real como
-  // categorized, decisión deliberada de esta iteración (el texto del director
-  // ya declara continuidad explícita cuando corresponde).
+  //
+  // BUG REAL corregido (prueba real, 13 ago 2026): la continuidad de venue
+  // dependía SOLO del texto (needsVenueAnchor/continuityNote que el director
+  // declara por shot) — en una sesión real de 7 shots, el director marcó bien
+  // needsVenueAnchor en los shots 4/5/6 pero se lo saltó en el shot 7 (el
+  // último), y sin ninguna imagen real de referencia, el prompt de ese shot
+  // quedó con una descripción de escena genérica ("dramatic architectural
+  // lighting") que el generador resolvió como un venue completamente
+  // distinto (arquitectura de ladrillo/balcones, nada que ver con el rooftop
+  // real de los otros 6 shots). Mismo patrón de riesgo que ya existía en
+  // categorized antes de tener venueAnchorCache.
+  //
+  // Fix: igual que categorized, TODO shot open_bank_2..N usa automáticamente
+  // la imagen del shot anterior más reciente de este set como referencia
+  // visual de venue — no depende de que el director lo declare bien en cada
+  // shot. Refuerza (no reemplaza) la continuidad por texto que ya existe.
   const openBankContract = openBankContractCache.get(key)?.get(shotId);
   if (openBankContract) {
-    return generateFromContract(
-      openBankContract, refs, destino, basePrompt, sessionParams, shotIndex, totalShots, { companionRef },
+    const venueAnchorUrl = venueAnchorCache.get(key)?.imageUrl;
+    const result = await generateFromContract(
+      openBankContract, refs, destino, basePrompt, sessionParams, shotIndex, totalShots,
+      { venueAnchorUrl, companionRef },
     );
+    venueAnchorCache.set(key, result);
+    return result;
   }
 
   // NightMoment del banco de noche (modo categorized) — nunca debería llegar
