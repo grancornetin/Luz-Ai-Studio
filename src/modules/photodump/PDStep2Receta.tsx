@@ -102,8 +102,8 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
 
   // outfit_night_out: cantidad fija por nivel elegido (Corto=3, Completo=5,
   // Extendido=7) — no hay selector +/- libre, ver recipes/outfitNightOut/levelResolver.ts.
-  const NIGHT_OUT_COUNT_BY_LEVEL: Record<'corto' | 'completo' | 'extendido', number> = {
-    corto: 3, completo: 5, extendido: 7,
+  const NIGHT_OUT_COUNT_BY_LEVEL: Record<'una_foto' | 'corto' | 'completo' | 'extendido', number> = {
+    una_foto: 1, corto: 3, completo: 5, extendido: 7,
   };
   const nightOutLevel = refs.nightOutLevel ?? 'corto';
   useEffect(() => {
