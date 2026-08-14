@@ -21,7 +21,7 @@
  */
 import { getAuth } from 'firebase/auth';
 import type { DirectorPlan, FinalPromptShot, DirectorReferenceImage } from './types';
-import type { OpenBankPlan, OpenBankFinalPromptShot } from './openBank/openBankTypes';
+import type { OpenBankPlan, OpenBankFinalPromptShot, OpenBankShotDecision, OpenBankVenueObservation } from './openBank/openBankTypes';
 
 export type { DirectorReferenceImage };
 
@@ -196,4 +196,86 @@ export async function runDirector(
   }
 
   throw new Error('Director job timed out esperando el resultado.');
+}
+
+// ── Continuidad de venue con imagen real (modo open_bank) ──────────────────
+// Llamadas síncronas livianas (no pasan por el patrón start/poll — son
+// mucho más rápidas que Decidir/Redactar del set completo, no generan
+// ninguna imagen) usadas DENTRO del loop de generación de shots, cuando ya
+// existe la imagen real del shot anterior. Ver comentario de cabecera en
+// buildOpenBankVenueAwareRewritePrompt (openBankPromptBuilders.ts) para el
+// bug real que esto corrige.
+
+async function extractImageParts(imageUrl: string): Promise<{ data: string; mimeType: string } | null> {
+  try {
+    const res = await fetch(imageUrl);
+    const blob = await res.blob();
+    const dataUrl: string = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/);
+    if (!match) return null;
+    return { mimeType: match[1], data: match[2] };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Analiza la imagen REAL de un shot ya generado y devuelve qué elementos de
+ * venue son visibles y dónde están posicionados — para que el shot
+ * siguiente los reuse literalmente en vez de inventar su propia versión.
+ * Devuelve null si falla (imagen no accesible, error de red, etc.) — el
+ * caller debe caer al prompt ya redactado en el plan original como fallback
+ * seguro, nunca romper la generación por esto.
+ */
+export async function analyzeOpenBankVenue(imageUrl: string): Promise<OpenBankVenueObservation | null> {
+  const parts = await extractImageParts(imageUrl);
+  if (!parts) return null;
+  try {
+    const res = await fetch(CONTENT_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
+      body: JSON.stringify({ action: 'analyzeOpenBankVenue', payload: parts }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (typeof data?.observedElements !== 'string') return null;
+    return { observedElements: data.observedElements, isEnclosedSubSpace: !!data.isEnclosedSubSpace };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Re-redacta UN shot puntual de open_bank con la observación real de venue
+ * ya obtenida (analyzeOpenBankVenue). El servidor reconstruye el detalle
+ * rico del candidato de banco elegido a partir de shot.chosenCandidateId —
+ * el cliente no necesita mandar ni cargar el banco. Devuelve null si falla
+ * — el caller debe caer al prompt ya redactado en el plan original.
+ */
+export async function redactOpenBankSingleShot(
+  brief: string,
+  shot: OpenBankShotDecision,
+  venueObservation: OpenBankVenueObservation,
+  energy: 'elegante' | 'fiesta',
+): Promise<string | null> {
+  try {
+    const res = await fetch(CONTENT_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
+      body: JSON.stringify({
+        action: 'redactOpenBankSingleShot',
+        payload: { brief, shot, venueObservation, energy },
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return typeof data?.finalPrompt === 'string' ? data.finalPrompt : null;
+  } catch {
+    return null;
+  }
 }

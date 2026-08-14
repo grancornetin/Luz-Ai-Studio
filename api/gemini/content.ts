@@ -31,9 +31,11 @@ import { buildWideCandidatePool } from '../../src/modules/photodump/director/ope
 import {
   OPEN_BANK_PLAN_SCHEMA,
   OPEN_BANK_PROMPTS_SCHEMA,
+  OPEN_BANK_SINGLE_SHOT_SCHEMA,
   buildOpenBankDecidePrompt,
   buildRichDetailBlock,
   buildOpenBankWritePrompt,
+  buildOpenBankVenueAwareRewritePrompt,
 } from '../../src/modules/photodump/director/openBank/openBankPromptBuilders.js';
 import type { OpenBankPlan, OpenBankFinalPromptShot } from '../../src/modules/photodump/director/openBank/openBankTypes.js';
 
@@ -103,7 +105,9 @@ interface ContentRequest {
     | 'photodumpDirector'
     | 'photodumpDirectorStart'
     | 'photodumpDirectorStatus'
-    | 'runPhotodumpDirectorJob';
+    | 'runPhotodumpDirectorJob'
+    | 'analyzeOpenBankVenue'
+    | 'redactOpenBankSingleShot';
   images?: string[];
   mimeTypes?: string[];
   prompt?: string;
@@ -646,7 +650,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const payloadOnlyActions = ['analyzeREF0', 'inferGender', 'analyzeAnchor', 'analyzeProductRelevance', 'analyzeUGCOutfit', 'analyzeScene', 'getContentJobStatus', 'photodumpDirector', 'photodumpDirectorStart', 'photodumpDirectorStatus'];
+    const payloadOnlyActions = ['analyzeREF0', 'inferGender', 'analyzeAnchor', 'analyzeProductRelevance', 'analyzeUGCOutfit', 'analyzeScene', 'getContentJobStatus', 'photodumpDirector', 'photodumpDirectorStart', 'photodumpDirectorStatus', 'analyzeOpenBankVenue', 'redactOpenBankSingleShot'];
     if (!body.action || (!body.prompt && !payloadOnlyActions.includes(body.action))) {
       return res.status(400).json({ error: 'Missing action or prompt' });
     }
@@ -889,6 +893,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
       return res.status(200).json(JSON.parse(text.replace(/```json|```/g, '').trim()));
+    }
+
+    // Modo "banco abierto" — observación real del venue de una imagen YA
+    // generada, para re-redactar el shot siguiente viéndola en vez de
+    // inventarla (ver bug real prueba 13, comentario de cabecera en
+    // openBankPromptBuilders.ts buildOpenBankVenueAwareRewritePrompt).
+    if (body.action === 'analyzeOpenBankVenue') {
+      const { imageData, mimeType } = body.payload || {};
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          { role: 'user', parts: [
+            { text: `Analizá esta foto real de un venue nocturno (restaurante/bar/rooftop). Describí en español, en 1-2 frases concretas, QUÉ elementos arquitectónicos/mobiliario son visibles Y DÓNDE están posicionados en el encuadre (ej. "baranda de vidrio con marco negro, visible en el borde izquierdo del encuadre a la altura de la cintura; mesas de madera oscura con sillas de cuerda beige ocupadas por comensales al fondo derecho"). Sé específico con material, color y posición — esto se va a usar para que otro shot del mismo set reuse EXACTAMENTE estos mismos elementos, no unos inventados. También indicá si esta imagen muestra un espacio interior cerrado derivado del venue principal (ej. un baño) donde no correspondería ver el resto del venue por una puerta/ventana. Respondé SOLO con JSON.` },
+            { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
+            { text: '{"observedElements": "string", "isEnclosedSubSpace": "boolean"}' },
+          ]},
+        ],
+        config: { responseMimeType: 'application/json' },
+      });
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      return res.status(200).json(JSON.parse(text.replace(/```json|```/g, '').trim()));
+    }
+
+    // Modo "banco abierto" — re-redacta UN shot puntual con continuidad de
+    // venue real (ver buildOpenBankVenueAwareRewritePrompt) — llamada
+    // liviana de texto, no genera ninguna imagen.
+    if (body.action === 'redactOpenBankSingleShot') {
+      const { brief, shot, venueObservation, energy } = body.payload || {};
+      if (!brief || !shot || !venueObservation) {
+        return res.status(400).json({ error: 'Faltan campos: brief, shot, venueObservation' });
+      }
+      // richDetailBlock se reconstruye acá server-side (mismo mecanismo que
+      // runOpenBankDirector) a partir del chosenCandidateId del shot — evita
+      // que el cliente tenga que cargar/mandar el banco completo de ida y
+      // vuelta solo para re-redactar 1 shot.
+      const snapshot = loadPhotodumpBankSnapshot();
+      const richDetailBlock = shot.chosenCandidateId ? buildRichDetailBlock([shot.chosenCandidateId], snapshot.items) : '';
+      const prompt = buildOpenBankVenueAwareRewritePrompt(brief, shot, richDetailBlock, venueObservation, energy);
+      const response = await generateContentWithRetry(ai, {
+        model: 'gemini-2.5-flash',
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: { responseMimeType: 'application/json', responseSchema: OPEN_BANK_SINGLE_SHOT_SCHEMA },
+      });
+      const { finalPrompt } = JSON.parse(extractText(response)) as { finalPrompt: string };
+      return res.status(200).json({ finalPrompt });
     }
 
     if (body.action === 'inferGender') {

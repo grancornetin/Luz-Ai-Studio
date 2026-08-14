@@ -21,7 +21,7 @@
  */
 import { HARD_RULES_TEXT as PHOTODUMP_HARD_RULES_TEXT } from '../hardRules.js';
 import type { DirectorReferenceImage } from '../types';
-import type { WideCandidatePool, OpenBankPlan, OpenBankAnalysisItem } from './openBankTypes';
+import type { WideCandidatePool, OpenBankPlan, OpenBankAnalysisItem, OpenBankShotDecision, OpenBankVenueObservation } from './openBankTypes';
 
 export const OPEN_BANK_PLAN_SCHEMA = {
   type: 'object',
@@ -487,4 +487,85 @@ PLAN DE SHOTS YA DECIDIDO:
 ${shotsText}
 
 Devolvé el resultado en el formato JSON pedido — un finalPrompt completo en inglés por cada shot. IMPORTANTE: en cada shot del array de salida, copiá literal el número que aparece después de "Shot #" en shotIndex (ej. "Shot #3" → shotIndex: 3) — es el identificador real que usa el sistema para emparejar tu prompt con el plan, más confiable que el texto de vehicleLabel. Incluí también vehicleLabel (mismo texto del plan) solo como referencia legible.`;
+}
+
+// Schema de un solo shot — reusa el mismo shape que OPEN_BANK_PROMPTS_SCHEMA
+// pero sin el array, para la llamada puntual de re-redactado.
+export const OPEN_BANK_SINGLE_SHOT_SCHEMA = {
+  type: 'object',
+  properties: { finalPrompt: { type: 'string' } },
+  required: ['finalPrompt'],
+};
+
+/**
+ * Re-redacta UN shot puntual con continuidad de venue, DESPUÉS de que la
+ * imagen del shot anterior ya existe — reemplaza buildOpenBankWritePrompt
+ * para este caso específico (needsVenueAnchor=true, shot no es el primero
+ * del set). Diferencia central respecto al redactado en batch: en vez de la
+ * instrucción abstracta "reuse the exact same venue" (una promesa de texto
+ * que el modelo cumple inventando su propia versión de los elementos), acá
+ * se inyecta una OBSERVACIÓN REAL de qué hay en la imagen anterior — el
+ * redactor describe lo que YA existe, no lo que debería existir.
+ *
+ * Bug real que esto corrige (prueba 13, 14 ago 2026, ver openBankTypes.ts
+ * OpenBankVenueObservation): una baranda apareció de la nada en medio de un
+ * comedor con gente sentada (el redactor nunca vio que en la imagen real ya
+ * había una baranda de vidrio en otra posición del encuadre); un shot de
+ * baño mostró la puerta forzada abierta hacia el venue de fondo para
+ * "cumplir" con la continuidad, cuando lo natural es una puerta cerrada;
+ * shots posteriores del mismo venue mostraron mobiliario de otro estilo
+ * porque nunca hubo observación real de qué material/diseño ya estaba
+ * establecido.
+ */
+export function buildOpenBankVenueAwareRewritePrompt(
+  brief: string,
+  shot: OpenBankShotDecision,
+  richDetailBlock: string,
+  venueObservation: OpenBankVenueObservation,
+  energy?: 'elegante' | 'fiesta',
+): string {
+  const shotText = `### Shot: ${shot.vehicleLabel}
+Eje narrativo: ${shot.narrativeAxis}
+${shot.protagonistVisible === false ? 'ESTE SHOT ES UN DETAIL SHOT SIN LA PROTAGONISTA EN CUADRO — no la describas, ni su rostro, cuerpo ni outfit; el prompt final debe poder generarse sin ninguna referencia de identidad/cuerpo/outfit de ella. Describí solo el objeto/comida/vista/detalle del venue.\n' : ''}Candidato de referencia elegido: ${shot.chosenCandidateId || '(ninguno, describir desde cero)'}
+Razonamiento: ${shot.shotReasoning}
+Elementos a MANTENER (pose/gesto/mirada/composición/encuadre — transferibles):
+${(shot.keptElements || []).map(e => `  - ${e}`).join('\n') || '  (ninguno específico)'}
+Elementos a DESCARTAR (reemplazar por el brief real/las referencias del usuario):
+${(shot.discardedElements || []).map(e => `  - ${e}`).join('\n') || '  (ninguno específico)'}
+Momento de la noche (timeline): ${shot.timelineStage}
+Por qué existe esta foto: ${shot.existenceReason}
+Accesorios no-esenciales (bolso, gafas, bufanda) en este shot: ${shot.accessoryReasoning}`;
+
+  return `Sos el redactor final de prompts del Director Creativo de Photodump. Ya se decidió qué elementos de qué candidato del banco son reutilizables para este shot — tu trabajo AHORA es escribir el prompt final en INGLÉS, listo para pegar en un generador de imágenes real.
+
+${PHOTODUMP_HARD_RULES_TEXT}
+
+BRIEF REAL DEL USUARIO (la escena/lugar/hora real a describir): "${brief}"
+
+ENERGÍA REAL DE ESTA NOCHE: ${energy === 'fiesta' ? 'FIESTA' : 'ELEGANTE (cena, previa, salida tranquila — sin pista de baile ni club)'}. REGLA DURA: si la energía es ELEGANTE, el prompt no puede describir pista de baile, luces de club/neón/láser, gente bailando en grupo, ni ningún elemento de fiesta/discoteca.
+
+REGLAS DE ESTILO FIJAS — agregalas al final del prompt:
+${OPEN_BANK_STYLE_RULES_TEXT}
+
+CONTINUIDAD DE VENUE — ESTO NO ES UNA INSTRUCCIÓN ABSTRACTA, ES UNA OBSERVACIÓN REAL de la imagen del shot anterior de este mismo set, ya generada:
+"${venueObservation.observedElements}"
+Describí el venue de este shot USANDO estos elementos reales — mismo material, mismo estilo, misma posición relativa que la observación de arriba — en vez de inventar tu propia versión de la baranda/mesa/mobiliario. Si tu pose necesita que la protagonista esté cerca de un elemento (ej. apoyada en una baranda), usá el elemento real descrito arriba y su posición real en el encuadre, no un elemento nuevo con las mismas palabras pero ubicado donde te convenga para la pose — si hace falta, ajustá la pose para que sea coherente con dónde está realmente ese elemento (ej. si la baranda real está al fondo/lateral, la protagonista se movió hacia ahí para apoyarse, no apareció una baranda nueva donde ella ya estaba parada).
+${venueObservation.isEnclosedSubSpace ? `
+ESTE SHOT OCURRE EN UN ESPACIO INTERIOR CERRADO DERIVADO DEL VENUE PRINCIPAL (ej. un baño): NO fuerces que se vea el venue principal de fondo a través de una puerta/ventana abierta solo para "cumplir" con la continuidad — eso es forzar el objeto, no razonar la continuidad. Una puerta cerrada, o simplemente no describir la puerta en absoluto, es la opción correcta. La continuidad de este shot con el resto del set se sostiene con la MISMA ROPA/vibe de la protagonista y la coherencia de que es la misma noche — no necesita ver literalmente el resto del venue.` : ''}
+
+REGLAS DURAS DE REDACCIÓN:
+1. NUNCA describas ninguna prenda, color de ropa, o cómo cae/se acomoda la ropa del candidato del banco — el outfit lo resuelve la imagen de referencia del usuario.
+2. La ILUMINACIÓN debe corresponder a la observación real de arriba (misma familia de luz que el resto del set), no al candidato del banco.
+3. FIDELIDAD DE PROPORCIÓN CORPORAL (misma prioridad que la identidad): no endereces, adelgaces, ni le agregues curvas a la protagonista que la referencia real de cuerpo no tiene.
+4. MECÁNICA FÍSICA DE CÓMO SE TOMÓ LA FOTO: si hay un gesto con la mano cerca del rostro o un espejo/reflejo, resolvé sin ambigüedad si es selfie de brazo extendido (sin mostrar el teléfono), mirror selfie (teléfono SÍ visible en el reflejo), o gesto captado por otra persona (mano libre, sin ángulo de selfie) — nunca mezclar estas 3 lecturas.
+
+ACCESORIOS NO-ESENCIALES — REGLA DE SILENCIO POR DEFAULT: no menciones el accesorio salvo que el razonamiento haya dado una razón real.
+
+DETALLE DEL CANDIDATO ELEGIDO (para redactar con precisión):
+${richDetailBlock}
+
+SHOT A REDACTAR:
+${shotText}
+
+Devolvé el resultado en el formato JSON pedido — solo finalPrompt, en inglés.`;
 }

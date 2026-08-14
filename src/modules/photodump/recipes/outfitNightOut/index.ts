@@ -54,8 +54,9 @@ import { imageApiService } from '../../../../services/imageApiService';
 import { compressImageForUpload } from '../../../../utils/imageUtils';
 import { runDirector, type DirectorReferenceImage } from '../../director/client';
 import type { DirectorPlan, FinalPromptShot } from '../../director/types';
-import type { OpenBankPlan, OpenBankFinalPromptShot } from '../../director/openBank/openBankTypes';
+import type { OpenBankPlan, OpenBankFinalPromptShot, OpenBankShotDecision } from '../../director/openBank/openBankTypes';
 import { buildOpenBankDirectives } from './openBankAdapter';
+import { analyzeOpenBankVenue, redactOpenBankSingleShot } from '../../director/client';
 import type { OutfitNightOutShotPlan, OutfitNightOutShotDebug, ShotContract, NightOutLevel, NightOutShotId, NightMomentId, OpenBankSyntheticShotId } from './types';
 
 // ── Cachés en memoria por sesión ─────────────────────────────────────────
@@ -93,6 +94,13 @@ const openBankFirstShotCache = new Map<string, { contract: ShotContract; finalPr
 // forma caerían al findNightMoment(shotId) del banco fijo y explotarían (esos
 // shotIds sintéticos no existen ahí).
 const openBankContractCache = new Map<string, Map<string, ShotContract>>();
+// Plan crudo del director open_bank por sesión (shotId → OpenBankShotDecision)
+// — necesario para re-redactar un shot puntual con continuidad de venue REAL
+// (ver generateOutfitNightOutShot, rama open_bank_2..N con needsVenueAnchor)
+// sin tener que rehacer la llamada de "Decidir" completa. El servidor
+// reconstruye el richDetailBlock a partir de shot.chosenCandidateId — no
+// hace falta cachearlo acá (ver redactOpenBankSingleShot en client.ts).
+const openBankShotDecisionCache = new Map<string, Map<string, OpenBankShotDecision>>();
 
 /**
  * BUG REAL corregido: antes esta clave se armaba solo con las URLs de
@@ -309,7 +317,12 @@ async function tryDirector(
 
       const key = cacheKey(refs, basePrompt, sessionId);
       const shotCache = new Map<string, string>();
+      const decisionCache = new Map<string, OpenBankShotDecision>();
       const directives: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] = [];
+      openBankPlan.shots.forEach((shot, i) => {
+        const shotId = `open_bank_${i + 1}` as OpenBankSyntheticShotId;
+        if (contracts.has(shotId)) decisionCache.set(shotId, shot);
+      });
       for (const [shotId, contract] of contracts.entries()) {
         const redactedPrompt = redactedByShotId.get(shotId);
         if (redactedPrompt) shotCache.set(shotId, redactedPrompt);
@@ -323,6 +336,7 @@ async function tryDirector(
       directorPromptCache.set(key, shotCache);
       directorFailureCache.delete(key);
       openBankContractCache.set(key, contracts);
+      openBankShotDecisionCache.set(key, decisionCache);
 
       // Primer shot real del plan — apertura libre (ver comentario de
       // openBankFirstShotCache), reemplaza al mirror_check fijo para esta
@@ -532,6 +546,34 @@ export async function generateOutfitNightOutShot(
   const openBankContract = openBankContractCache.get(key)?.get(shotId);
   if (openBankContract) {
     const venueAnchorUrl = venueAnchorCache.get(key)?.imageUrl;
+
+    // BUG REAL corregido (prueba 13, 14 ago 2026): incluso con venueAnchorUrl
+    // pasado al GENERADOR de imagen, el TEXTO del prompt (directorSceneBlock)
+    // ya venía redactado desde el plan inicial, ANTES de que existiera
+    // ninguna imagen — así que "reuse la baranda del shot anterior" era una
+    // promesa de texto sobre una baranda que Gemini nunca vio, no una
+    // observación real. Resultado real: una baranda "aparecía de la nada" en
+    // medio de mesas de gente, una puerta de baño forzada abierta para
+    // "cumplir" con la continuidad, y una esquina nueva del venue con
+    // mobiliario de otro estilo. Fix: si el shot necesita continuidad de
+    // venue Y ya existe la imagen real del shot anterior, re-redactar ESTE
+    // shot puntual viendo esa imagen real (analyzeOpenBankVenue +
+    // redactOpenBankSingleShot) antes de generar — reemplaza el texto
+    // genérico del plan original por una observación concreta. Si cualquiera
+    // de las 2 llamadas falla (red, timeout), se cae silenciosamente al
+    // prompt ya redactado del plan original — nunca debe romper la sesión.
+    const shotDecision = openBankShotDecisionCache.get(key)?.get(shotId);
+    if (shotDecision?.needsVenueAnchor && venueAnchorUrl) {
+      const venueObservation = await analyzeOpenBankVenue(venueAnchorUrl);
+      if (venueObservation) {
+        const energy = resolveEnergyFromBrief(basePrompt);
+        const rewritten = await redactOpenBankSingleShot(basePrompt, shotDecision, venueObservation, energy);
+        if (rewritten) {
+          directorPromptCache.get(key)?.set(shotId, rewritten);
+        }
+      }
+    }
+
     const result = await generateFromContract(
       openBankContract, refs, destino, basePrompt, sessionParams, shotIndex, totalShots,
       { venueAnchorUrl, companionRef },

@@ -142,3 +142,26 @@ export interface OpenBankResult {
   plan: OpenBankPlan;
   finalPrompts: OpenBankFinalPromptShot[];
 }
+
+// Descripción real y concreta del venue tal como quedó en una imagen YA
+// generada — reemplaza la instrucción abstracta "reuse the exact same
+// venue" (que el redactor cumplía inventando su propia versión de los
+// elementos, nunca viendo la real) por hechos observados. Ver bug real
+// (prueba 13, 14 ago 2026): una baranda "aparecía de la nada" en medio de
+// mesas de gente, un baño con puerta forzada abierta para mostrar el venue
+// de fondo, y una esquina nueva del venue con mobiliario de otro estilo —
+// las 3 fallas comparten la misma causa: el director redacta TODOS los
+// prompts de un set antes de que exista ninguna imagen real, así que
+// "continuidad" es solo una promesa de texto, nunca una observación.
+export interface OpenBankVenueObservation {
+  // Descripción libre en español de qué elementos arquitectónicos/mobiliario
+  // son visibles y DÓNDE están posicionados en el encuadre (ej. "baranda de
+  // vidrio con marco negro, visible en el borde izquierdo del encuadre, a la
+  // altura de la cintura; mesas de madera con sillas de cuerda beige
+  // ocupadas por comensales al fondo derecho").
+  observedElements: string;
+  // Si el venue de este shot es un espacio interior derivado del principal
+  // (ej. baño) — señal para que el redactor NO fuerce que se vea el resto
+  // del venue por una puerta/ventana, ver hardRules.ts regla de continuidad.
+  isEnclosedSubSpace: boolean;
+}
