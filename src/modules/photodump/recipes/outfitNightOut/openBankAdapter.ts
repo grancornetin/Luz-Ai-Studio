@@ -56,17 +56,22 @@ export function openBankShotId(index: number): OpenBankSyntheticShotId {
  * promptBuilder.ts), así que declarar una familia real acá no tendría efecto.
  */
 export function openBankToShotContract(shot: OpenBankShotDecision, index: number): ShotContract {
+  // protagonistVisible=false → detail shot real sin la protagonista en
+  // cuadro (comida/trago/vista sin ella, ver VARIEDAD DE TIPO DE FOTO en
+  // openBankPromptBuilders.ts) — no tiene sentido enrutar sus referencias de
+  // identidad/cuerpo/outfit a una imagen que no debería mostrarla.
+  const protagonistVisible = shot.protagonistVisible !== false;
   return {
     shotId: openBankShotId(index),
     cameraGrammar: { framing: 'DIRECTOR_DEFINED', angle: 'DIRECTOR_DEFINED', composition: 'DIRECTOR_DEFINED' },
     referencePolicy: {
-      useIdentityRef: true,
-      useBodyRef: true,
-      useOutfitRefs: true,
-      useCompanionRef: shot.companionVisible,
+      useIdentityRef: protagonistVisible,
+      useBodyRef: protagonistVisible,
+      useOutfitRefs: protagonistVisible,
+      useCompanionRef: protagonistVisible && shot.companionVisible,
     },
     hpiPoseFamily: null,
-    footwearVisible: shot.footwearVisible,
+    footwearVisible: protagonistVisible && shot.footwearVisible,
   };
 }
 

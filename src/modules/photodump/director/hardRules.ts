@@ -67,7 +67,29 @@ REGLAS NO NEGOCIABLES (aplican siempre, a cualquier receta):
    protagonista, o con la otra persona fuera de cuadro/incidental (mano,
    brazo), nunca con un rostro nuevo inventado libremente.
 
-6. COHERENCIA CAUSAL DE PROPS Y SUPERFICIES HEREDADAS DE UN CANDIDATO: cuando
+   INTERIOR DE AUTO — CASO ESPECÍFICO (bug real confirmado: un shot de auto
+   redactado como "sentada como pasajera" sin ningún ancla visual quedó
+   ambiguo, se leyó como si estuviera en el asiento del conductor sin
+   volante). Nunca alcanza con decir "es una pasajera" en abstracto — el
+   prompt debe anclar un elemento visual concreto que lo confirme: el
+   volante/tablero del lado del conductor visible al otro lado del cuadro,
+   o la puerta/ventana del lado del copiloto/pasajero trasero como
+   referencia espacial clara. Sin ese ancla, la imagen resultante no tiene
+   forma de comunicar de qué lado del auto está sentada.
+
+6. RIESGO GEOMÉTRICO DE LA POSE ELEGIDA: antes de heredar la pose de un
+   candidato del banco, evaluar si implica un ángulo extremo, un escorzo
+   marcado de una extremidad, o una posición espacial ambigua (ej. una
+   pierna extendida en diagonal vista desde arriba, un brazo cruzado detrás
+   del cuerpo fuera de vista) — ese tipo de geometría es exactamente donde
+   los generadores de imagen fallan con más frecuencia (proporciones rotas,
+   articulaciones imposibles). Si existe una variante más simple del mismo
+   momento narrativo en el banco (misma pose en términos generales, menor
+   complejidad geométrica), preferirla — la pose compleja solo se justifica
+   cuando es genuinamente necesaria para lo que ese shot puntual necesita
+   contar, no por default.
+
+7. COHERENCIA CAUSAL DE PROPS Y SUPERFICIES HEREDADAS DE UN CANDIDATO: cuando
    un candidato del banco usa un elemento físico específico (espejo, vidrio,
    ventana, mueble, decoración) que no es parte del brief real, la pregunta
    NUNCA es "¿este tipo de elemento está prohibido?" — es "¿dónde y cómo
@@ -87,7 +109,7 @@ REGLAS NO NEGOCIABLES (aplican siempre, a cualquier receta):
    del lugar o sin ninguna — nunca insertando un mueble/objeto flotante que
    no tiene ningún lugar lógico donde existir.
 
-7. FIDELIDAD DE PROPORCIÓN CORPORAL: la silueta y proporción física real de
+8. FIDELIDAD DE PROPORCIÓN CORPORAL: la silueta y proporción física real de
    la protagonista (cintura, cadera, busto, contextura general) tal como se
    ve en la imagen de referencia de cuerpo del usuario debe preservarse en
    cada shot — nunca promediarla hacia un cuerpo genérico. Un cuerpo curvilíneo

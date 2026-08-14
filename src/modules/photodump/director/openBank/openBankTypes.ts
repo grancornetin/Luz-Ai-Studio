@@ -107,6 +107,19 @@ export interface OpenBankShotDecision {
   // Si el encuadre elegido muestra los pies/calzado de la protagonista — reemplaza el
   // valor fijo por shotId que usa el modo categorized (footwearVisible en ShotContract).
   footwearVisible: boolean;
+  // Si la protagonista aparece en cuadro (rostro, cuerpo o parte identificable de
+  // ella) en ESTE shot. Default esperado: true (la gran mayoría de un rollo real
+  // sigue siendo fotos de ella). false habilita "detail shots" reales sin
+  // protagonista — comida/tragos recién servidos, la vista del venue, un objeto
+  // del outfit en la mesa — que SÍ existen en un rollo real de fotos de una noche
+  // y el banco tiene evidencia real de sobra (detail_closeup/flat_lay), pero que
+  // el criterio de "Decidir" nunca consideraba antes de este campo (bug real:
+  // sets completos de 5 shots donde los 5 eran retrato posado de la protagonista,
+  // sin ninguna variedad de TIPO de foto). Cuando es false, el contrato de
+  // referencias (openBankToShotContract) no fuerza useIdentityRef/useBodyRef/
+  // useOutfitRefs — evita que el pipeline intente anclar su identidad en una foto
+  // que no debería mostrarla.
+  protagonistVisible: boolean;
 }
 
 export interface OpenBankPlan {

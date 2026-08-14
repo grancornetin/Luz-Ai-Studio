@@ -51,13 +51,14 @@ export const OPEN_BANK_PLAN_SCHEMA = {
           existenceReason: { type: 'string' },
           companionVisible: { type: 'boolean' },
           footwearVisible: { type: 'boolean' },
+          protagonistVisible: { type: 'boolean' },
         },
         required: [
           'vehicleLabel', 'narrativeAxis', 'psychologicalDrive', 'psychologicalReasoning',
           'chosenCandidateId', 'shotReasoning',
           'keptElements', 'discardedElements', 'needsVenueAnchor', 'continuityNote',
           'accessoryReasoning', 'timelineStage', 'existenceReason',
-          'companionVisible', 'footwearVisible',
+          'companionVisible', 'footwearVisible', 'protagonistVisible',
         ],
       },
     },
@@ -251,6 +252,25 @@ inventar una escena sin respaldo — si para cierto tipo de encuadre no hay
 ningún candidato relevante para este brief, no lo fuerces, elegí otro tipo
 con mejor respaldo real.
 
+VARIEDAD DE TIPO DE FOTO, NO SOLO DE POSE (bug real confirmado: un set
+entero de 5 shots resultó en 5 fotos de la protagonista posando/mirando a
+cámara, sin ninguna otra variedad — cada shot individualmente estaba bien
+resuelto, pero el conjunto se sentía monótono porque TODOS compartían el
+mismo tipo de foto: "ella es el sujeto central, mirando hacia algo"). Un
+rollo real de fotos de una noche no es solo fotos de ella — también incluye
+fotos de lo que la rodea: la comida/trago recién servido en la mesa (sin
+que ella esté en cuadro), la vista del venue sola, un detalle del outfit o
+un accesorio sobre la mesa, el ambiente del lugar. El banco tiene evidencia
+real de sobra para esto (grupos shot_type "detail_closeup" y "flat_lay" —
+revisalos en el panorama de abajo). Para un set de 5+ shots, considerá
+activamente si 1-2 de ellos funcionan mejor como esta variante — no es
+obligatorio, es una opción real que hay que evaluar, no descartar por
+default. Cuando un shot NO muestra a la protagonista, marcá
+protagonistVisible=false (ver más abajo) y priorizá que aporte al eje
+outfit_increible mostrando algo tangible de la experiencia (el trago, la
+vista, el detalle) — nunca lo uses solo para "llenar cupo" sin conexión
+real a la historia.
+
 REGLA ANTI-ALUCINACIÓN — verificación obligatoria antes de responder: cada
 shot debe usar un itemId DISTINTO del panorama (nunca repitas
 chosenCandidateId entre 2 shots del mismo set). Si en algún shotReasoning
@@ -308,9 +328,16 @@ existe porque..." con la razón concreta por la que la PROTAGONISTA
 publicaría esta foto — nunca una respuesta genérica tipo "para mostrar el
 momento".
 
-REFERENCIAS REALES A ENRUTAR (companionVisible, footwearVisible —
-obligatorios en cada shot, controlan qué fotos de referencia reales se usan
-para generar la imagen, no son solo descriptivos):
+REFERENCIAS REALES A ENRUTAR (companionVisible, footwearVisible,
+protagonistVisible — obligatorios en cada shot, controlan qué fotos de
+referencia reales se usan para generar la imagen, no son solo descriptivos):
+- protagonistVisible: default true — false SOLO para un detail shot real
+  donde la protagonista NO aparece en cuadro (ver VARIEDAD DE TIPO DE FOTO
+  arriba): comida/trago sin ella, la vista del venue sola, un objeto/detalle
+  del outfit sobre una superficie. Declararlo false evita que el sistema
+  fuerce su identidad/cuerpo/outfit en una imagen que no debería mostrarla —
+  si tenés dudas sobre si ella aparece o no en el encuadre final, dejalo en
+  true (el default seguro).
 - companionVisible: true SOLO si el prompt final de ESTE shot va a describir
   a un acompañante real y reconocible en cuadro (rostro o cuerpo propio,
   parte identificable de una persona) — no una mano genérica de fondo, no
@@ -375,7 +402,7 @@ export function buildOpenBankWritePrompt(
   const shotsText = plan.shots.map((shot, i) => `
 ### Shot #${i + 1}: ${shot.vehicleLabel}
 Eje narrativo: ${shot.narrativeAxis}
-Candidato de referencia elegido: ${shot.chosenCandidateId || '(ninguno, describir desde cero)'}
+${shot.protagonistVisible === false ? 'ESTE SHOT ES UN DETAIL SHOT SIN LA PROTAGONISTA EN CUADRO — no la describas, ni su rostro, cuerpo ni outfit; el prompt final debe poder generarse sin ninguna referencia de identidad/cuerpo/outfit de ella. Describí solo el objeto/comida/vista/detalle del venue.\n' : ''}Candidato de referencia elegido: ${shot.chosenCandidateId || '(ninguno, describir desde cero)'}
 Razonamiento: ${shot.shotReasoning}
 Elementos a MANTENER (pose/gesto/mirada/composición/encuadre — transferibles):
 ${(shot.keptElements || []).map(e => `  - ${e}`).join('\n') || '  (ninguno específico)'}
