@@ -36,14 +36,30 @@ REGLAS NO NEGOCIABLES (aplican siempre, a cualquier receta):
    consistente entre todos esos shots — mismo estilo, misma decoración,
    mismos elementos visibles — no puede cambiar de estética entre un shot y
    el siguiente sin que el brief lo pida explícitamente. Esto incluye el
-   MOBILIARIO específico (mesa, sillas, barra): si un shot ya describió una
-   mesa/silla concreta (tipo, material, color), cualquier shot siguiente que
+   MOBILIARIO Y CUALQUIER ELEMENTO ARQUITECTÓNICO específico (mesa, sillas,
+   barra, baranda, columna, escalera, puerta): si un shot ya describió un
+   elemento concreto (tipo, material, color), cualquier shot siguiente que
    comparta esa misma continuidad de venue debe reusar EXACTAMENTE ese mismo
-   mueble, no describir uno nuevo — nunca resolver esto con la instrucción
+   elemento, no describir uno nuevo — nunca resolver esto con la instrucción
    contraria de "no menciones/no describas la mesa" (eso abre la puerta a
    otro error: un shot sin ningún mueble descrito, cuando el encuadre
    claramente necesita uno). La regla es "reusá lo ya establecido", no
    "evitá mencionarlo".
+   Caso inverso (bug real confirmado): el candidato del banco elegido para UN
+   shot puntual puede tener un elemento propio (ej. una baranda/reja
+   metálica) que NINGÚN shot anterior de ese mismo venue estableció — copiar
+   ese elemento literal introduce algo que "aparece de la nada" en medio de
+   un set por lo demás consistente (mesas y sillas ya establecidas en varios
+   shots, y de repente una baranda nueva en uno solo, sin que ningún otro
+   shot la muestre antes o después). Si el elemento del candidato no fue
+   parte de la continuidad ya establecida por shots anteriores del mismo
+   venue, tenés 2 opciones válidas — nunca copiarlo sin más: (a) descartalo
+   y resolvé la misma pose/gesto contra el mobiliario/fondo ya establecido,
+   o (b) si el elemento es genuinamente necesario para la pose (ej. la pose
+   depende físicamente de apoyarse en algo), incorporalo como parte NUEVA y
+   permanente de ese venue — y entonces cualquier shot posterior que
+   comparta esa continuidad también debería poder reusarlo, no que aparezca
+   en un único shot aislado del set.
 
 5. NO INVENTAR PERSONAS: si un shot necesita un acompañante y el usuario no
    subió ninguna foto de esa persona, ese shot no puede mostrar un rostro de
