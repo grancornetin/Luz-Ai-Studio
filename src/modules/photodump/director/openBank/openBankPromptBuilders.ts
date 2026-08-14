@@ -221,6 +221,42 @@ sensualidad sola.
 
 CANTIDAD TOTAL DE SHOTS — LÍMITE DURO: el array "shots" debe tener
 EXACTAMENTE ${totalShotsRequested} elementos, ni uno más ni uno menos.
+${totalShotsRequested === 1 ? `
+CASO ESPECIAL — 1 SOLA FOTO EN TODO EL SET: esta sesión pide UNA ÚNICA
+imagen, no un set. Todo lo de arriba (diversidad entre shots, continuidad de
+venue entre shots, línea de tiempo de varios momentos) fue escrito pensando
+en sets de varias fotos — con 1 sola foto no aplica nada de eso, porque no
+hay "otro shot" con el que comparar o dar continuidad.
+
+El criterio para elegir el candidato NO es una checklist de composición
+("que se vea el cuerpo completo", "que salga de pie o sentada") — es una
+SENSACIÓN psicológica concreta (definición del usuario, verbatim): la
+protagonista se ve increíble, se sacó una foto instagrameable, se ve de
+infarto, se sintió poderosa, deseable, bella, encontró un lugar bonito y se
+retrató ahí. Esa sensación es lo que tiene que transmitir la ÚNICA foto de
+este set — más que cualquier regla de encuadre. Un candidato de medio
+cuerpo con una pose expresiva, una mirada segura, un venue con carácter
+propio y detalle real (joyas, un trago, la textura del lugar) puede
+transmitir esa sensación mucho mejor que un candidato de cuerpo entero
+parada neutra mirando derecho a cámara — priorizá la intensidad de esa
+sensación por sobre cuánto cuerpo entra en el encuadre.
+Señales reales de que un candidato SÍ transmite esa sensación: pose con
+carácter (no solo "parada, torso girado, mirando a cámara con sonrisa
+neutra" — buscá gestos más vivos, miradas fuera de cámara, cabeza inclinada
+hacia atrás, una mano en el pelo, piernas cruzadas con actitud), un venue
+que se sienta específico y con onda (no un fondo genérico o vacío —
+mejor una terraza con vista real, un rincón con decoración propia, luz
+que arme ambiente), y detalle tangible en cuadro (accesorios, un trago,
+joyas, textura del lugar) que refuerce "este momento fue especial".
+El outfit debe seguir siendo identificable (no un plano que lo oculte por
+completo), pero no hace falta que se vea de arriba a abajo — el foco es la
+sensación completa de la foto, no una lista de partes del cuerpo visibles.
+Evitá elegir un candidato pensado para ser "un detalle dentro de una
+secuencia" (ej. un detail shot de comida sin protagonista, un plano de
+pies o manos, un close-up de un accesorio solo) — acá no hay otras fotos
+que completen el resto de la historia, todo tiene que estar en este único
+frame.
+` : ''}
 
 DIVERSIDAD REAL — qué SÍ puede repetirse vs. qué NO (confirmado contra datos
 reales del banco, no es una prohibición general de repetir nada):
