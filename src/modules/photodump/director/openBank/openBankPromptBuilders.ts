@@ -46,6 +46,7 @@ export const OPEN_BANK_PLAN_SCHEMA = {
           discardedElements: { type: 'array', items: { type: 'string' } },
           needsVenueAnchor: { type: 'boolean' },
           continuityNote: { type: 'string' },
+          isMainVenue: { type: 'boolean' },
           accessoryReasoning: { type: 'string' },
           timelineStage: { type: 'string' },
           existenceReason: { type: 'string' },
@@ -56,7 +57,7 @@ export const OPEN_BANK_PLAN_SCHEMA = {
         required: [
           'vehicleLabel', 'narrativeAxis', 'psychologicalDrive', 'psychologicalReasoning',
           'chosenCandidateId', 'shotReasoning',
-          'keptElements', 'discardedElements', 'needsVenueAnchor', 'continuityNote',
+          'keptElements', 'discardedElements', 'needsVenueAnchor', 'continuityNote', 'isMainVenue',
           'accessoryReasoning', 'timelineStage', 'existenceReason',
           'companionVisible', 'footwearVisible', 'protagonistVisible',
         ],
@@ -402,6 +403,25 @@ REGLAS DURAS DE CONTINUIDAD:
 - Si algún shot muestra el interior de un auto, es SIEMPRE desde el punto
   de vista de una pasajera — nunca manos en el volante ni llaves sueltas
   como si alguien acabara de estacionar.
+
+isMainVenue (obligatorio en cada shot, controla qué imagen real se usa como
+ancla de continuidad — no es solo descriptivo): true si este shot ocurre en
+el venue PRINCIPAL de la noche (el lugar del brief — el rooftop, el
+restaurante, el club), false si ocurre en cualquier otra etapa (el auto de
+camino, la casa antes de salir, la calle). El PRIMER shot del set con
+isMainVenue=true es el que fija la imagen de ancla real para TODOS los
+shots posteriores que también tengan isMainVenue=true — sin importar si el
+venue principal empieza en el shot 1, 2 o 4 del set (ej. si el set abre con
+un shot en el auto camino al lugar, ese shot tiene isMainVenue=false, y el
+ancla se fija recién con el siguiente shot, que ya está en el rooftop). Esto
+aplica a CUALQUIER tipo de shot del venue principal, no solo los que
+muestran a la protagonista: un detail shot de comida sin protagonista, o un
+shot en el baño del mismo lugar (ahí el ancla sirve como referencia de
+ESTILO — que el baño combine con la estética general del venue, no que se
+vea literalmente el mismo fondo) también son isMainVenue=true si pertenecen
+a esa misma experiencia. Un shot puede tener needsVenueAnchor=true (aporta
+continuidad de venue con el resto) e isMainVenue=false a la vez NUNCA — si
+comparte venue con otros shots, es porque es parte del venue principal.
 
 Devolvé el resultado en el formato JSON pedido.`;
 }

@@ -436,10 +436,14 @@ export async function generateOutfitNightOutREF0(
         firstShot.contract, refs, destino, basePrompt, sessionParams, 0, 1, { companionRef },
       );
       prepAnchorCache.set(key, result);
-      // Siembra también el ancla de venue con la primera imagen real del set
-      // — ver comentario en generateOutfitNightOutShot (open_bank_2..N) sobre
-      // el bug real de continuidad que esto corrige.
-      venueAnchorCache.set(key, result);
+      // Siembra el ancla de venue SOLO si este primer shot realmente ocurre
+      // en el venue principal — ver comentario en generateOutfitNightOutShot
+      // (open_bank_2..N) y OpenBankShotDecision.isMainVenue: un set puede
+      // abrir con un shot que NO es del venue principal (auto de camino,
+      // casa antes de salir) y en ese caso el ancla real debe esperar al
+      // primer shot que sí lo sea, no fijarse con esta imagen equivocada.
+      const firstShotDecision = openBankShotDecisionCache.get(key)?.get('open_bank_1');
+      if (firstShotDecision?.isMainVenue !== false) venueAnchorCache.set(key, result);
       return { imageUrl: result.imageUrl, ref0Analysis: null, prompt: result.prompt, refsCount: result.refsCount };
     }
     // Red de seguridad: si por algún motivo el director no corrió o falló
@@ -578,7 +582,12 @@ export async function generateOutfitNightOutShot(
       openBankContract, refs, destino, basePrompt, sessionParams, shotIndex, totalShots,
       { venueAnchorUrl, companionRef },
     );
-    venueAnchorCache.set(key, result);
+    // Solo actualiza el ancla si este shot es del venue principal — nunca
+    // con un shot de otra etapa (auto, casa antes de salir). Si todavía no
+    // había ancla fijada (ningún shot anterior fue isMainVenue=true) y este
+    // sí lo es, este shot la fija por primera vez. isMainVenue !== false
+    // (no === true) como red de seguridad ante planes viejos sin el campo.
+    if (shotDecision?.isMainVenue !== false) venueAnchorCache.set(key, result);
     return result;
   }
 

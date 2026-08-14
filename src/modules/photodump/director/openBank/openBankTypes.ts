@@ -92,6 +92,17 @@ export interface OpenBankShotDecision {
   discardedElements: string[];
   needsVenueAnchor: boolean;
   continuityNote: string;
+  // Si este shot ocurre en el venue PRINCIPAL de la noche (el lugar del
+  // brief) — false para cualquier otra etapa (auto, casa antes de salir,
+  // calle). El PRIMER shot del set con isMainVenue=true fija la imagen de
+  // ancla real para todos los shots posteriores que también sean
+  // isMainVenue=true, sin importar en qué posición del set aparece (ver
+  // venueAnchorCache en outfitNightOut/index.ts). Bug real corregido (14 ago
+  // 2026): antes el ancla era simplemente "la imagen del shot anterior",
+  // sin distinguir si ese shot anterior era realmente del mismo venue —
+  // un set que abriera con un shot de auto o de casa habría anclado el
+  // resto del set a esa imagen equivocada.
+  isMainVenue: boolean;
   accessoryReasoning: string;
   timelineStage: string;
   existenceReason: string;
