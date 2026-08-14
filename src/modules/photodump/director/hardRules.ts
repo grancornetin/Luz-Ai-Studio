@@ -60,6 +60,26 @@ REGLAS NO NEGOCIABLES (aplican siempre, a cualquier receta):
    permanente de ese venue — y entonces cualquier shot posterior que
    comparta esa continuidad también debería poder reusarlo, no que aparezca
    en un único shot aislado del set.
+   Tercer caso (bug real confirmado, distinto de los 2 anteriores): el
+   mueble SÍ es consistente entre shots (ej. "reuse the same table and
+   chairs"), pero su UBICACIÓN respecto a otros elementos ya establecidos
+   del venue (la baranda, otras mesas ocupadas, un pasillo) nunca queda
+   anclada — solo se nombra el mueble, nunca dónde queda parado dentro del
+   layout ya visible en shots anteriores. Resultado real: una silla junto a
+   la baranda, sin mesa propia visible ni ningún otro mueble alrededor,
+   mientras el fondo muestra una fila entera de mesas ocupadas con sillas
+   idénticas — se lee como si alguien hubiera arrastrado una silla suelta
+   solo para la foto, aunque la silla en sí sea "la misma" de shots
+   anteriores. Y por separado: cuando el prompt dice que la protagonista
+   apoya el brazo/mano en un mueble (mesa, barra), ese mueble tiene que
+   estar descrito como visible y cercano en ESE shot — si el encuadre real
+   termina mostrando su brazo apoyado contra la baranda de fondo en vez de
+   contra ninguna mesa en primer plano, es la misma falta de anclaje
+   espacial. Regla: cuando un shot reusa mobiliario de continuidad, ubicalo
+   explícitamente respecto al elemento fijo más cercano ya establecido del
+   venue (ej. "the same table, positioned right against the railing, part
+   of the same row of tables visible in the background") — no alcanza con
+   nombrar el mueble suelto.
 
 5. NO INVENTAR PERSONAS: si un shot necesita un acompañante y el usuario no
    subió ninguna foto de esa persona, ese shot no puede mostrar un rostro de
