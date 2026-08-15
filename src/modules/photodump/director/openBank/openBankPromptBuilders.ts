@@ -308,6 +308,22 @@ outfit_increible mostrando algo tangible de la experiencia (el trago, la
 vista, el detalle) — nunca lo uses solo para "llenar cupo" sin conexión
 real a la historia.
 
+SELFIE DE BRAZO EXTENDIDO — TIPO DE SHOT ESPECÍFICO QUE FALTABA (bug real
+confirmado, prueba 14 ago 2026: un set de 7 shots completo no incluyó NI UN
+SOLO plano de selfie de brazo extendido — el tipo de foto más natural y
+frecuente de un rollo real de salida nocturna, la que alguien se toma sola
+sosteniendo el celular con el brazo estirado, sin espejo). Esto es distinto
+del mirror selfie (que sí requiere un espejo real del venue) y distinto de
+un plano posado captado por otra persona. Para un set de 5+ shots, el
+panorama tiene candidatos reales de sobra (grupos shot_type "selfie_frontal"
+y "close_up" — revisalos abajo) — a menos que el brief o las referencias
+hagan literalmente imposible este tipo de foto (ej. brief que no tiene
+ningún momento de soledad plausible), el plan DEBE incluir al menos 1 shot
+de este tipo. Cuando elijas uno, dejalo explícito en vehicleLabel (ej.
+"selfie de brazo extendido mirando a la vista") para que el redactor lo
+resuelva con la regla de mecánica física de selfie (nunca mostrar el
+teléfono en cuadro, solo el ángulo/postura que lo delata).
+
 REGLA ANTI-ALUCINACIÓN — verificación obligatoria antes de responder: cada
 shot debe usar un itemId DISTINTO del panorama (nunca repitas
 chosenCandidateId entre 2 shots del mismo set). Si en algún shotReasoning
@@ -484,7 +500,7 @@ ${OPEN_BANK_STYLE_RULES_TEXT}
 REGLA CENTRAL: para cada shot, describí SOLO la pose/gesto/mirada/encuadre/composición que se decidió mantener del candidato — nunca menciones el escenario, comida u outfit específico de la foto del banco si fueron marcados para descartar. El escenario debe ser el del brief real del usuario, y el outfit se resuelve por referencia de imagen (no hace falta describirlo en detalle) — mencionalo solo si es relevante para la pose.
 
 REGLAS DURAS DE REDACCIÓN:
-1. NUNCA describas ninguna prenda, color de ropa, o cómo cae/se acomoda la ropa del candidato del banco — el outfit lo resuelve la imagen de referencia del usuario, nunca texto describiendo ropa de otra persona.
+1. NUNCA describas ninguna prenda, color de ropa, o cómo cae/se acomoda la ropa del candidato del banco — el outfit lo resuelve la imagen de referencia del usuario, nunca texto describiendo ropa de otra persona. Esto incluye NO INVENTAR prendas nuevas que no están en ninguna referencia ni en el candidato (bug real confirmado, prueba 14 ago 2026: un shot mencionó "her jacket slips" describiendo una chaqueta que no aparecía en ninguna referencia de outfit ni en el candidato del banco elegido — el generador de imágenes la agregó porque el texto se la pidió). Si necesitás describir que se ve piel/un hombro/una prenda deslizándose para la pose, primero verificá que esa prenda exista en la referencia real del usuario (mirá el richDetailBlock/outfit real, no lo asumas) — si no podés confirmarlo, no lo menciones y dejá que la imagen de referencia del outfit resuelva qué prendas hay.
 2. La ILUMINACIÓN de cada shot debe corresponder a la HORA REAL del evento en el brief del usuario, no a la del candidato del banco, salvo que coincidan.
 3. FIDELIDAD DE PROPORCIÓN CORPORAL (misma prioridad que la identidad): nunca describas la silueta o contextura de la protagonista de forma genérica ni distinta a la de la referencia real de cuerpo — no la endereces, adelgaces, ni le agregues curvas que la referencia no tiene. Si el gesto/pose de un candidato del banco implica una silueta que no calza con el cuerpo real de la referencia (ej. una pose que depende de una cintura muy marcada que la referencia no tiene), ajustá la descripción de la pose para que sea físicamente coherente con el cuerpo real, no al revés.
 4. PROPS/SUPERFICIES HEREDADAS DEL CANDIDATO (espejos, vidrios, muebles decorativos que no forman parte del brief real): nunca los copies literal sin verificar que tienen un lugar lógico en el venue real — ver regla 6 de las reglas no negociables arriba. Si el candidato elegido incluye un espejo/vidrio/mueble que no tiene sentido en el venue del brief, resolvé la pose con el equivalente real del venue (un vidrio/baranda propio del lugar, el espejo de un baño si el shot ocurre ahí) o quitalo del todo — nunca describas un mueble/superficie flotante sin justificación física.
@@ -499,6 +515,8 @@ REGLAS DURAS DE REDACCIÓN:
 Si un shot dice que necesita continuidad de venue con otro shot del set, agregá una línea explícita ("SCENE CONTINUITY: same venue as the previous shot — reuse the exact same background, furniture and lighting — including the same specific table, chairs and any furniture already described in that shot, not a new one.") antes de la descripción de venue — la continuidad de mobiliario es tan importante como la del fondo, no solo el "lugar" en abstracto.
 
 ANCLAJE ESPACIAL DEL MOBILIARIO (bug real confirmado: una silla/mesa "reusada" correctamente en cuanto a estilo/material igual apareció sola junto a la baranda, sin ningún otro mueble alrededor, mientras el fondo mostraba una fila entera de mesas ocupadas con sillas idénticas — se leyó como una silla arrastrada ahí solo para la foto). Nombrar el mueble no alcanza — hay que ubicarlo respecto al elemento fijo del venue más cercano ya establecido en shots anteriores del mismo set (ej. "the same table, positioned right against the railing, part of the same row of tables visible in the background" en vez de solo "seated at a table"). Además, si la pose de este shot puntual hace que la protagonista apoye una mano/brazo en un mueble, ese mueble debe estar descrito como visible y CERCA de esa mano en este encuadre — nunca asumas que "ya se estableció en otro shot" alcanza para que aparezca en este; si el mueble de apoyo no se describe explícitamente presente acá, el resultado puede terminar apoyando la mano contra otra cosa del fondo (ej. la baranda) sin que el texto lo haya pedido.
+
+PROHIBIDO EL ELEMENTO "O ALTERNATIVO" EN LA DESCRIPCIÓN DE VENUE (bug real confirmado, prueba 14 ago 2026): un shot final redactó el fondo como "a city view or a railing" — la palabra "or" es la señal de que no se decidió qué hay realmente ahí, dejándoselo "a elección" al generador de imágenes, que entonces puede inventar cualquiera de las 2 opciones sin anclarla a nada de los shots anteriores. El finalPrompt describe UN lugar concreto, nunca una posibilidad entre varias — si el shot necesita continuidad de venue, elegí explícitamente uno solo de los elementos ya establecidos (o el que la pose realmente necesita) y describilo sin alternativas. Nunca escribas "X or Y", "either X or Y", "possibly X" en la descripción del venue o del mobiliario.
 
 ACCESORIOS NO-ESENCIALES — REGLA DE SILENCIO POR DEFAULT: NO menciones el accesorio en el texto salvo que el razonamiento haya dado una razón real. Si el razonamiento es el default de protagonista-en-cuadro ("se mantienen presentes"), NO escribas nada — dejá que la imagen de referencia lo resuelva sola. Si el razonamiento es el default de plano-sin-protagonista ("no aparece en este plano"), escribí una línea breve dejándolo explícitamente fuera del encuadre.
 
@@ -572,11 +590,12 @@ ${OPEN_BANK_STYLE_RULES_TEXT}
 CONTINUIDAD DE VENUE — ESTO NO ES UNA INSTRUCCIÓN ABSTRACTA, ES UNA OBSERVACIÓN REAL de la imagen del shot anterior de este mismo set, ya generada:
 "${venueObservation.observedElements}"
 Describí el venue de este shot USANDO estos elementos reales — mismo material, mismo estilo, misma posición relativa que la observación de arriba — en vez de inventar tu propia versión de la baranda/mesa/mobiliario. Si tu pose necesita que la protagonista esté cerca de un elemento (ej. apoyada en una baranda), usá el elemento real descrito arriba y su posición real en el encuadre, no un elemento nuevo con las mismas palabras pero ubicado donde te convenga para la pose — si hace falta, ajustá la pose para que sea coherente con dónde está realmente ese elemento (ej. si la baranda real está al fondo/lateral, la protagonista se movió hacia ahí para apoyarse, no apareció una baranda nueva donde ella ya estaba parada).
+COPIÁ LOS DATOS CONCRETOS DE LA OBSERVACIÓN, NO LA PARAFRASEÉS EN ABSTRACTO: si la observación dice un material/color/posición específico, ese texto (o su traducción literal al inglés) tiene que aparecer en el finalPrompt — no la reemplaces por una descripción genérica tipo "an elegant railing" ni por una alternativa ("a city view or a railing"). Nunca escribas "X or Y" en la descripción del venue: la observación de arriba ya te dice qué hay, elegí eso y solo eso, sin ofrecer alternativas al generador de imágenes.
 ${venueObservation.isEnclosedSubSpace ? `
 ESTE SHOT OCURRE EN UN ESPACIO INTERIOR CERRADO DERIVADO DEL VENUE PRINCIPAL (ej. un baño): NO fuerces que se vea el venue principal de fondo a través de una puerta/ventana abierta solo para "cumplir" con la continuidad — eso es forzar el objeto, no razonar la continuidad. Una puerta cerrada, o simplemente no describir la puerta en absoluto, es la opción correcta. La continuidad de este shot con el resto del set se sostiene con la MISMA ROPA/vibe de la protagonista y la coherencia de que es la misma noche — no necesita ver literalmente el resto del venue.` : ''}
 
 REGLAS DURAS DE REDACCIÓN:
-1. NUNCA describas ninguna prenda, color de ropa, o cómo cae/se acomoda la ropa del candidato del banco — el outfit lo resuelve la imagen de referencia del usuario.
+1. NUNCA describas ninguna prenda, color de ropa, o cómo cae/se acomoda la ropa del candidato del banco — el outfit lo resuelve la imagen de referencia del usuario. Tampoco inventes prendas nuevas que no están en ninguna referencia (bug real: "her jacket slips" describiendo una chaqueta inexistente) — si no podés confirmar que la prenda existe en la referencia real del outfit, no la menciones.
 2. La ILUMINACIÓN debe corresponder a la observación real de arriba (misma familia de luz que el resto del set), no al candidato del banco.
 3. FIDELIDAD DE PROPORCIÓN CORPORAL (misma prioridad que la identidad): no endereces, adelgaces, ni le agregues curvas a la protagonista que la referencia real de cuerpo no tiene.
 4. MECÁNICA FÍSICA DE CÓMO SE TOMÓ LA FOTO: si hay un gesto con la mano cerca del rostro o un espejo/reflejo, resolvé sin ambigüedad si es selfie de brazo extendido (sin mostrar el teléfono), mirror selfie (teléfono SÍ visible en el reflejo), o gesto captado por otra persona (mano libre, sin ángulo de selfie) — nunca mezclar estas 3 lecturas.
