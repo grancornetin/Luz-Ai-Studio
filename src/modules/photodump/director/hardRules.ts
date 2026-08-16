@@ -123,6 +123,15 @@ REGLAS NO NEGOCIABLES (aplican siempre, a cualquier receta):
    mostrar bien el detalle de la comida, dejar a la protagonista fuera de
    cuadro en ese shot (detail shot sin protagonista) en vez de forzar su
    rostro dentro de un ángulo que lo va a distorsionar.
+   Referencia real de la opción (a) bien resuelta (bug real confirmado,
+   prueba 17 ago 2026, banco tiene decenas de ejemplos de este patrón):
+   cámara a la altura de los ojos (no picada), la protagonista con una
+   interacción real — sonriendo a cámara, con la mano en el mentón, o
+   mirando el trago/comida con actitud — nunca sentada mirando pasivamente
+   hacia abajo con el plato solo porque la cámara está arriba. La comida
+   entra en primer plano de forma natural aunque la cámara no esté picada
+   desde arriba — el picado no es necesario para que el detalle de comida
+   se vea bien.
 
 7. COHERENCIA CAUSAL DE PROPS Y SUPERFICIES HEREDADAS DE UN CANDIDATO: cuando
    un candidato del banco usa un elemento físico específico (espejo, vidrio,

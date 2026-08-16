@@ -308,6 +308,22 @@ outfit_increible mostrando algo tangible de la experiencia (el trago, la
 vista, el detalle) — nunca lo uses solo para "llenar cupo" sin conexión
 real a la historia.
 
+SI TE QUEDÁS SIN IDEAS FUERTES DE "PROTAGONISTA POSANDO", ESA ES LA SEÑAL
+DE USAR UN DETAIL SHOT — NO DE FORZAR UNA COMPOSICIÓN RARA (bug real
+confirmado, prueba 17 ago 2026: un set de 5 shots tenía 2 fotos realmente
+fuertes de la protagonista — ya suficientes para contar la historia
+completa por sí solas — y los 3 shots restantes, en vez de sumar variedad
+real, forzaron composiciones poco naturales para seguir mostrándola: un
+ángulo cenital raro sobre la comida, y un "selfie" que terminó mostrando
+el cuerpo entero desde una distancia imposible para un brazo real, solo
+para que se viera el outfit completo). Si ya tenés 2-3 shots fuertes de la
+protagonista en el set y el resto del cupo no tiene una idea igual de
+fuerte y natural, la opción correcta NO es estirar con una pose/ángulo
+forzado — es sumar un detail shot real (comida, trago, vista, un detalle
+del outfit sobre la mesa) sin ella en cuadro. Un set más corto con shots
+todos fuertes vale más que un set que llega al número pedido a costa de
+1-2 shots poco naturales.
+
 SELFIE DE BRAZO EXTENDIDO — TIPO DE SHOT ESPECÍFICO QUE FALTABA (bug real
 confirmado, prueba 14 ago 2026: un set de 7 shots completo no incluyó NI UN
 SOLO plano de selfie de brazo extendido — el tipo de foto más natural y
@@ -323,6 +339,20 @@ de este tipo. Cuando elijas uno, dejalo explícito en vehicleLabel (ej.
 "selfie de brazo extendido mirando a la vista") para que el redactor lo
 resuelva con la regla de mecánica física de selfie (nunca mostrar el
 teléfono en cuadro, solo el ángulo/postura que lo delata).
+
+UN SELFIE REAL DE BRAZO EXTENDIDO ES SIEMPRE UN PLANO CERCANO — NUNCA DE
+CUERPO ENTERO (bug real confirmado, prueba 17 ago 2026: se eligió un
+selfie para un shot cuyo objetivo real era mostrar el outfit completo, y
+el resultado terminó siendo un cuerpo entero visto desde una distancia que
+ningún brazo humano puede alcanzar — no es un selfie creíble, es una foto
+de outfit forzada a leerse como selfie). Por la distancia física real del
+brazo, un selfie de brazo extendido SOLO puede mostrar rostro, hombros y
+como mucho el torso superior — nunca piernas, calzado, ni el outfit
+completo. Si el objetivo de un shot es mostrar el outfit completo/de
+cuerpo entero, ESE shot no puede ser un selfie — tiene que resolverse como
+plano posado (captado por otra persona o con la cámara apoyada) o mirror
+selfie (que sí puede mostrar cuerpo entero porque la cámara está lejos, no
+en la mano). No fuerces las dos cosas juntas en el mismo shot.
 
 NO DUPLICAR EL MISMO TIPO DE PLANO "DE PIE, FRONTAL, CUERPO ENTERO" (bug
 real confirmado, prueba 15 ago 2026: un set de 7 shots incluyó 2 fotos casi
