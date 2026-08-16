@@ -330,13 +330,37 @@ idénticas en estructura — de pie, cuerpo entero, torso derecho a cámara,
 sonriendo, brazos en posición similar — una de ellas encima sin ninguna
 interacción con el entorno ni prop, aportando muy poco al set). Este tipo
 de plano (de pie, frontal, sin sentarse/apoyarse/interactuar con nada) es
-válido UNA vez por set como máximo, típicamente el primero (llegada/
-outfit hero) — si ya usaste este tipo de composición en un shot anterior
-del mismo set, el siguiente shot de la protagonista de pie tiene que
+válido UNA vez por set como máximo, típicamente el shot que muestra el
+outfit completo de cuerpo entero (no necesariamente el primero del set ni
+uno de "llegada" — ver LÍNEA DE TIEMPO arriba, no hay orden narrativo fijo)
+— si ya usaste este tipo de composición en un shot anterior del mismo set,
+el siguiente shot de la protagonista de pie tiene que
 diferenciarse con algo real: un giro de torso/mirada hacia otro punto, una
 interacción con un objeto o el entorno (apoyarse, sostener algo, mirar la
 vista), o un ángulo de cámara distinto — nunca repitas la misma fórmula de
 "de pie, sonriendo de frente" solo para sumar un shot más.
+
+CUIDADO: EL TEXTO DEL ANÁLISIS DE UN CANDIDATO PUEDE "APLANAR" UNA POSE QUE
+EN LA FOTO REAL ES VIVA (bug real confirmado, ago 2026): el campo
+subject_pose de un candidato puede describir algo como "de pie, torso
+ligeramente girado, manos a la altura de la cintura sujetando el borde de
+la falda, mirada neutra directo a cámara" — una descripción que suena a
+pose de documento (carnet), simétrica y sin vida. Pero varias veces esa
+descripción resultó ser un resumen pobre de una foto real que SÍ tenía
+piernas cruzadas o una adelantada, codos marcados hacia afuera con actitud,
+mentón levantado — vida real que el análisis de texto perdió al resumir.
+NUNCA copies literal una pose descrita en términos neutros/simétricos sin
+razonar primero si probablemente estás perdiendo matices reales de la
+foto — si el resto del candidato (outfit, encuadre, fondo) es fuerte pero
+la descripción de subject_pose suena plana/simétrica/sin interacción,
+redactá la pose heredada agregando explícitamente al menos un elemento de
+vida real que ese tipo de foto casi siempre tiene aunque el texto no lo
+capture: peso cargado en una pierna (no parejo), un quiebre de cadera, un
+codo marcado hacia afuera o atrás (no solo brazos pegados al cuerpo), o el
+mentón/mirada con actitud en vez de neutra. El objetivo no es inventar una
+pose distinta a la del candidato — es no dejar que un resumen de texto
+pobre termine produciendo, en la imagen final, algo más plano que la foto
+real que inspiró la elección.
 
 REGLA ANTI-ALUCINACIÓN — verificación obligatoria antes de responder: cada
 shot debe usar un itemId DISTINTO del panorama (nunca repitas
@@ -419,11 +443,27 @@ referencia reales se usan para generar la imagen, no son solo descriptivos):
   plano — false si es un encuadre que corta antes (close-up de rostro,
   medio cuerpo, plano de manos/objeto).
 
-LÍNEA DE TIEMPO (timelineStages, 2 a 4 bloques amplios, ej. "llegada al
-venue" / "más avanzada la noche") — solo para evitar contradicciones
-groseras de continuidad (un shot de "yéndose" seguido de otro que la
-muestra todavía en el venue con más gente), nunca para forzar una
-progresión estricta shot-a-shot.
+LÍNEA DE TIEMPO (timelineStages, 2 a 4 bloques amplios) — solo para evitar
+contradicciones groseras de continuidad (un shot de "yéndose" seguido de
+otro que la muestra todavía en el venue con más gente), nunca para forzar
+una progresión estricta shot-a-shot.
+
+PROHIBIDO EMPEZAR POR DEFAULT EN "LA LLEGADA" (bug real recurrente,
+confirmado incluso después de pedir explícitamente que no hubiera una
+secuencia canónica — el modelo vuelve a esta estructura por default salvo
+que se le prohíba activamente): el primer bloque de timelineStages NO
+puede ser "llegada"/"arrival"/"llegando al lugar" ni ningún sinónimo,
+salvo que el BRIEF del usuario mencione explícitamente el momento de
+llegar (ej. "llegando al restaurante", "recién llegando a la fiesta").
+Sin esa mención explícita en el brief, elegí un punto de entrada distinto
+que sea el más fuerte narrativamente para ESTE brief puntual — a mitad de
+la cena, un momento de disfrute ya avanzado, el cierre de la noche — nunca
+la opción por default de "primero mostramos cómo llega". Describí los
+bloques de timelineStages con el momento real que representan (ej.
+"primera mitad de la cena", "sobremesa", "antes de irse"), no con una
+etiqueta genérica de estructura tipo
+"llegada/desarrollo/cierre" solo porque es la forma obvia de ordenar una
+línea de tiempo.
 
 REGLAS DURAS DE CONTINUIDAD:
 - Si 2+ shots comparten el mismo venue, decidí needsVenueAnchor=true y

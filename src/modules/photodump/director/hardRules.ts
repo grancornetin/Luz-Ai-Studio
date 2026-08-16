@@ -170,4 +170,49 @@ REGLAS NO NEGOCIABLES (aplican siempre, a cualquier receta):
    puede volverse delgado, un cuerpo delgado no puede ganar curvas que no
    tiene. Esta regla tiene la misma prioridad que la fidelidad de identidad
    (regla 1) — no es un detalle estético secundario.
+
+9. PROHIBIDA LA "POSE MUGSHOT" — SIMÉTRICA, FRONTAL, SIN VIDA (bug real
+   recurrente, confirmado en al menos 4 sesiones distintas — pruebas 13,
+   14, 15 y 16, ago 2026 — con una redacción casi idéntica cada vez, señal
+   de que es la salida "por default" del redactor cuando no tiene una pose
+   fuerte del candidato para heredar): una pose donde el cuerpo queda de
+   pie, torso frontal o casi frontal a cámara, peso repartido parejo en
+   ambas piernas (nunca se menciona que el peso esté cargado en una pierna),
+   ambos brazos simétricos sosteniendo apenas el borde de la ropa a la
+   altura de la cintura/cadera, mirada neutra directo a cámara, sin ningún
+   objeto ni elemento del entorno con el que interactúe. Esta pose se lee
+   como una foto de documento, no como una foto real que alguien subiría a
+   redes — nadie se para así para una foto real, siempre hay al menos un
+   quiebre de postura, un ángulo favorecedor, o una interacción real.
+   Texto real que produjo este bug las 4 veces (patrón a evitar, no copiar
+   ni parafrasear): "torso slightly turned to the left, head looking
+   frontally at the camera... both arms are flexed with hands at waist
+   height, lightly holding the edge of her skirt" — la combinación de
+   "manos solo sosteniendo el borde de la ropa" + "sin mención de peso
+   cargado en una pierna" + "mirada neutra directo a cámara" es la firma
+   exacta de esta pose muerta, evitala explícitamente. Ojo: esto puede
+   pasar incluso cuando el candidato REAL del banco elegido tiene una pose
+   viva (piernas cruzadas, codos marcados, actitud) — si el texto de
+   análisis de ese candidato resumió la pose en términos neutros/genéricos,
+   heredar ese texto literal produce esta pose plana aunque la foto
+   original no lo fuera. El objetivo es el texto final, no descartar
+   candidatos: si vas a describir una pose de pie, escribila con al menos
+   uno de los elementos de vida de abajo, más allá de lo que diga el
+   resumen del candidato.
+   Toda pose de pie, en cualquier shot (no solo el primero del set), tiene
+   que tener al menos UNO de estos elementos reales:
+   (a) peso claramente cargado en una pierna, con la otra relajada/apoyada
+       apenas (quiebre de cadera real, no cuerpo simétrico),
+   (b) una interacción real con el entorno (apoyada en algo, sosteniendo
+       un trago/accesorio con intención, tocándose el pelo, con una mano
+       en la cadera con el codo marcado hacia atrás — no solo tocando la
+       propia ropa),
+   (c) la mirada o el torso dirigidos hacia algo del entorno (la vista, un
+       punto fuera de cámara) en vez de neutro y directo a cámara.
+   El primer shot del set (el que suele establecer el outfit completo) es
+   el más propenso a caer en este patrón porque prioriza mostrar el outfit
+   entero legible — pero mostrar el outfit completo y tener una pose viva
+   NO son mutuamente excluyentes: un quiebre de cadera o un brazo en la
+   cintura con el codo hacia atrás siguen dejando el outfit igual de
+   legible.
 `.trim();
