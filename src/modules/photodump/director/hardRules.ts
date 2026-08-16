@@ -109,6 +109,21 @@ REGLAS NO NEGOCIABLES (aplican siempre, a cualquier receta):
    cuando es genuinamente necesaria para lo que ese shot puntual necesita
    contar, no por default.
 
+   CASO ESPECÍFICO — ÁNGULO DE CÁMARA EN PICADO SOBRE EL ROSTRO (bug real
+   confirmado: un shot de flat lay de comida con la protagonista sentada a
+   la mesa, tomado desde un ángulo picado (cámara por encima, apuntando
+   hacia abajo sobre la mesa), incluyó su rostro en el encuadre y quedó con
+   una distorsión facial notoria — el escorzo que ese ángulo genera sobre
+   la cara es la misma familia de riesgo geométrico que una extremidad en
+   escorzo). Si un shot combina flat lay/detalle de mesa CON el rostro de
+   la protagonista en cuadro, el ángulo de cámara no puede ser un picado
+   pronunciado sobre su cara — dos soluciones válidas: (a) un ángulo más
+   frontal/a la altura de los ojos que igual capture la mesa en primer
+   plano y el rostro sin distorsión, o (b) si el picado es necesario para
+   mostrar bien el detalle de la comida, dejar a la protagonista fuera de
+   cuadro en ese shot (detail shot sin protagonista) en vez de forzar su
+   rostro dentro de un ángulo que lo va a distorsionar.
+
 7. COHERENCIA CAUSAL DE PROPS Y SUPERFICIES HEREDADAS DE UN CANDIDATO: cuando
    un candidato del banco usa un elemento físico específico (espejo, vidrio,
    ventana, mueble, decoración) que no es parte del brief real, la pregunta
@@ -128,6 +143,24 @@ REGLAS NO NEGOCIABLES (aplican siempre, a cualquier receta):
    entero y se resuelve la misma pose con una superficie reflectante real
    del lugar o sin ninguna — nunca insertando un mueble/objeto flotante que
    no tiene ningún lugar lógico donde existir.
+
+   CASO ESPECÍFICO — EL FONDO ENTERO DEL CANDIDATO, NO SOLO UN PROP SUELTO
+   (bug real confirmado, prueba 15 ago 2026: un shot que debía ocurrir en
+   el mismo rooftop del resto del set terminó descrito como "the interior
+   of a formal, high-end hotel corridor or hall, featuring a dark wooden
+   door... a metallic silver handrail... polished marble floor" — un
+   escenario entero distinto, no un solo objeto suelto, se coló del
+   candidato del banco sin adaptar). Esta regla no aplica solo a props
+   individuales (espejo, mueble): si el candidato elegido es de un
+   shot_type/escena que ocurre en un lugar estructuralmente distinto al
+   venue real (ej. un pasillo/hall interior cuando el venue real es un
+   rooftop exterior), NO alcanza con la instrucción "mismo venue, no
+   inventes otro lugar" — hay que reescribir explícitamente el fondo
+   completo en términos del venue real (qué se ve, qué materiales, qué
+   mobiliario), nunca dejar que el fondo original del candidato quede
+   implícito o se filtre por default. Si no es posible adaptar creíblemente
+   ese fondo al venue real, se descarta el candidato entero y se elige otro
+   con un shot_type/escena más cercana al lugar real del brief.
 
 8. FIDELIDAD DE PROPORCIÓN CORPORAL: la silueta y proporción física real de
    la protagonista (cintura, cadera, busto, contextura general) tal como se

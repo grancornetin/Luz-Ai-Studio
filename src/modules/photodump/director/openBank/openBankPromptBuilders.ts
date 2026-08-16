@@ -324,6 +324,20 @@ de este tipo. Cuando elijas uno, dejalo explícito en vehicleLabel (ej.
 resuelva con la regla de mecánica física de selfie (nunca mostrar el
 teléfono en cuadro, solo el ángulo/postura que lo delata).
 
+NO DUPLICAR EL MISMO TIPO DE PLANO "DE PIE, FRONTAL, CUERPO ENTERO" (bug
+real confirmado, prueba 15 ago 2026: un set de 7 shots incluyó 2 fotos casi
+idénticas en estructura — de pie, cuerpo entero, torso derecho a cámara,
+sonriendo, brazos en posición similar — una de ellas encima sin ninguna
+interacción con el entorno ni prop, aportando muy poco al set). Este tipo
+de plano (de pie, frontal, sin sentarse/apoyarse/interactuar con nada) es
+válido UNA vez por set como máximo, típicamente el primero (llegada/
+outfit hero) — si ya usaste este tipo de composición en un shot anterior
+del mismo set, el siguiente shot de la protagonista de pie tiene que
+diferenciarse con algo real: un giro de torso/mirada hacia otro punto, una
+interacción con un objeto o el entorno (apoyarse, sostener algo, mirar la
+vista), o un ángulo de cámara distinto — nunca repitas la misma fórmula de
+"de pie, sonriendo de frente" solo para sumar un shot más.
+
 REGLA ANTI-ALUCINACIÓN — verificación obligatoria antes de responder: cada
 shot debe usar un itemId DISTINTO del panorama (nunca repitas
 chosenCandidateId entre 2 shots del mismo set). Si en algún shotReasoning
@@ -418,7 +432,17 @@ REGLAS DURAS DE CONTINUIDAD:
   o a la mitad), nunca vacía con restos.
 - Si algún shot muestra el interior de un auto, es SIEMPRE desde el punto
   de vista de una pasajera — nunca manos en el volante ni llaves sueltas
-  como si alguien acabara de estacionar.
+  como si alguien acabara de estacionar. Preferí, salvo que el banco no
+  tenga ningún candidato real de este tipo, un candidato de SELFIE
+  AUTO-CAPTURADA (rostro y parte del torso, brazo propio sosteniendo el
+  teléfono o ángulo que lo implica) por sobre un candidato compuesto como
+  si otra persona la fotografiara desde afuera/al lado (bug real
+  confirmado, prueba 15 ago 2026: el shot de auto elegido se redactó con
+  "the camera captures her from a slightly low, diagonal angle" — una
+  composición de tercero, técnicamente correcta pero menos natural que una
+  selfie real). Revisá el panorama: el banco tiene bastante más peso en
+  selfies de auto que en tomas de tercero para este tipo de shot — si hay
+  candidatos de selfie disponibles, priorizalos.
 
 isMainVenue (obligatorio en cada shot, controla qué imagen real se usa como
 ancla de continuidad — no es solo descriptivo): true si este shot ocurre en
