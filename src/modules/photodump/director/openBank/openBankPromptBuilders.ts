@@ -94,6 +94,7 @@ Camera roll quality: unedited photo, casual handheld feel, everyday smartphone c
 Avoid: editorial or catalog-like finish, overly polished or retouched skin, perfectly centered symmetric composition, walking or mid-stride pose, legs in a walking stance.
 The background (when indoors/domestic) must be a real, lived-in space — never a photography studio, never a seamless backdrop, never a plain concrete or cyclorama floor.
 She is standing still or naturally posed, not mid-stride.
+Flat, even smartphone flash/ambient lighting — NOT a shallow depth of field, NOT heavy background bokeh, NOT a visible rim light or backlight outlining her silhouette against a dark background. The background stays reasonably legible (softly out of focus at most), never reduced to abstract blurred light dots — that look reads as a professional camera with a wide aperture, not a phone.
 `.trim();
 
 function formatWidePool(pool: WideCandidatePool): string {
@@ -308,6 +309,22 @@ outfit_increible mostrando algo tangible de la experiencia (el trago, la
 vista, el detalle) — nunca lo uses solo para "llenar cupo" sin conexión
 real a la historia.
 
+UN DETAIL SHOT DE TRAGO/COMIDA SIN PROTAGONISTA (protagonistVisible=false)
+DEBE SENTIRSE COMO CENA/SALIDA CON GENTE, NO COMO UNA MESA SOLITARIA (bug
+real confirmado, prueba 18 ago 2026: un detail shot de trago terminó
+mostrando UN SOLO vaso con la protagonista igual visible/sosteniéndolo —
+ni cumplió el objetivo de detail shot puro, ni comunicó que hay una cena o
+salida en grupo real). Si revisás el banco vas a ver que en los candidatos
+reales de detail_closeup/flat_lay de tragos/comida, la protagonista casi
+nunca aparece — y muchas veces hay 2+ tragos o platos en el encuadre,
+comunicando que no está sola. Cuando elijas este tipo de shot: (a)
+protagonistVisible=false tiene que reflejarse también en chosenCandidateId
+y keptElements — no elijas un candidato donde ella sostiene el vaso si el
+objetivo es que no esté en cuadro, y (b) si el brief/contexto sugiere
+compañía o una cena servida (no una copa solitaria de alguien bebiendo
+sola), preferí un candidato o describí el detalle con 2+ tragos/platos en
+vez de uno solo — reforzá la sensación de acompañamiento real de la noche.
+
 SI TE QUEDÁS SIN IDEAS FUERTES DE "PROTAGONISTA POSANDO", ESA ES LA SEÑAL
 DE USAR UN DETAIL SHOT — NO DE FORZAR UNA COMPOSICIÓN RARA (bug real
 confirmado, prueba 17 ago 2026: un set de 5 shots tenía 2 fotos realmente
@@ -323,6 +340,20 @@ forzado — es sumar un detail shot real (comida, trago, vista, un detalle
 del outfit sobre la mesa) sin ella en cuadro. Un set más corto con shots
 todos fuertes vale más que un set que llega al número pedido a costa de
 1-2 shots poco naturales.
+
+SI UN MIRROR SELFIE OCURRE EN EL BAÑO, NO LLEVES EL TRAGO (bug real
+confirmado, prueba 18 ago 2026: se decidió un "mirror selfie con trago" en
+el baño del venue, con keptElements incluyendo explícitamente "holding a
+drink" — la propia decisión de qué mantener del candidato ya traía el
+trago, así que ninguna instrucción del redactor podía corregirlo después).
+Nadie se lleva su copa/trago al baño en una situación social real — es un
+detalle que rompe la credibilidad aunque el resto de la pose sea buena. Si
+el vehicleLabel de un mirror selfie ubica el shot en el baño (o cualquier
+espacio cerrado derivado del venue, ej. ascensor), NO incluyas el trago en
+keptElements ni en accessoryReasoning — el teléfono y el bolso sí pueden
+seguir presentes (son objetos que alguien realmente se lleva), la copa se
+queda en la mesa. Si el candidato elegido tiene un trago en la pose
+original, marcalo en discardedElements, no en keptElements.
 
 SELFIE DE BRAZO EXTENDIDO — TIPO DE SHOT ESPECÍFICO QUE FALTABA (bug real
 confirmado, prueba 14 ago 2026: un set de 7 shots completo no incluyó NI UN
@@ -605,6 +636,7 @@ REGLAS DURAS DE REDACCIÓN:
    Nunca mezcles estas lecturas en el mismo shot (ej. mano posada "libre" en la cara pero con ángulo de selfie, o un mirror selfie sin el teléfono en el reflejo) — esa mezcla es la ambigüedad real que rompe la sensación de "esta foto existe porque..." del manifiesto.
 6. SOLO DESCRIPCIÓN VISUAL LITERAL — NUNCA LENGUAJE INFERENCIAL O NARRATIVO: el finalPrompt lo lee un generador de imágenes, no un humano que entiende contexto — cualquier frase que describa un ESTADO o una HISTORIA inferida en vez de algo literalmente visible en el frame es ruido que el generador no puede ejecutar (no puede dibujar "parece que", solo puede dibujar objetos/poses/luces concretas). Los campos shotReasoning/existenceReason que recibiste arriba SON narrativos a propósito (explican la psicología del shot) — son insumo para que entiendas la intención, nunca texto a trasladar literal al finalPrompt. Ejemplos de lo que NO va en el finalPrompt: "she seems to have moved to a different part of the venue", "as if she just finished dinner", "suggesting a shift in the night", "implying she recently arrived" — todo esto se resuelve describiendo directamente lo que está en cuadro (ej. en vez de "parece que terminó de cenar": "an empty wine glass and a plate with food remnants are on the table"). Antes de escribir cualquier frase del finalPrompt, preguntate: ¿esto describe algo que la cámara literalmente ve, o es mi inferencia de qué pasó/está por pasar? Si es lo segundo, reescribilo como el objeto/pose/detalle concreto que sostiene esa inferencia.
    OJO CON LA VERSIÓN CORTA DEL MISMO ERROR — es la más frecuente y la más fácil de dejar pasar (bug real confirmado 2 veces en la misma sesión, en 2 formas distintas: "an empty wine glass and a plate with food remnants... suggesting the end of dinner"; "her gaze is downcast... implying a moment of personal enjoyment or contemplation"). En ambos casos la PRIMERA mitad de la frase es descripción visual literal perfecta — el problema es la coletilla pegada al final que la traduce a significado. REGLA MECÁNICA: después de escribir cualquier frase del finalPrompt, buscá si termina en "suggesting...", "implying...", "indicating...", "hinting at...", "as if...", "characteristic of..." (cuando se usa para justificar una emoción/momento, no una textura/material) — si aparece cualquiera de esas construcciones, BORRÁ esa parte de la frase y dejá solo la descripción física de antes. Esto aplica en particular a la dirección de la mirada (gaze) y a la expresión facial: "she looks slightly downward and to the left" es literal y correcta, agregarle "implying contemplation" o "suggesting she's lost in thought" no lo es — la mirada y expresión ya comunican eso por sí solas en la imagen, no hace falta explicarlo en el texto.
+7. COHERENCIA SOCIAL DE LO QUE SE LLEVA A UN ESPACIO CERRADO DERIVADO DEL VENUE (baño, ascensor): un mirror selfie de baño con la protagonista sosteniendo un trago de la mesa no es creíble — nadie se lleva su copa al baño en una situación social real. A este tipo de espacio solo la siguen objetos que alguien realmente se llevaría (el teléfono, el bolso) — un trago, un plato de comida, o cualquier cosa que se deja en la mesa/barra por norma social, NO debe aparecer en este shot salvo que el shotReasoning dé una razón real y explícita para lo contrario.
 
 Si un shot dice que necesita continuidad de venue con otro shot del set, agregá una línea explícita ("SCENE CONTINUITY: same venue as the previous shot — reuse the exact same background, furniture and lighting — including the same specific table, chairs and any furniture already described in that shot, not a new one.") antes de la descripción de venue — la continuidad de mobiliario es tan importante como la del fondo, no solo el "lugar" en abstracto.
 
@@ -666,6 +698,7 @@ Elementos a MANTENER (pose/gesto/mirada/composición/encuadre — transferibles)
 ${(shot.keptElements || []).map(e => `  - ${e}`).join('\n') || '  (ninguno específico)'}
 Elementos a DESCARTAR (reemplazar por el brief real/las referencias del usuario):
 ${(shot.discardedElements || []).map(e => `  - ${e}`).join('\n') || '  (ninguno específico)'}
+¿El director marcó que este shot necesita continuidad explícita de venue con otro shot?: ${shot.needsVenueAnchor ? `Sí — ${shot.continuityNote}` : 'No lo marcó explícitamente, pero la imagen de referencia de abajo es del mismo venue principal de la noche — usala igual como contexto de qué lugar es, adaptando según lo que este shot puntual necesite (ver más abajo).'}
 Momento de la noche (timeline): ${shot.timelineStage}
 Por qué existe esta foto: ${shot.existenceReason}
 Accesorios no-esenciales (bolso, gafas, bufanda) en este shot: ${shot.accessoryReasoning}`;
@@ -681,12 +714,17 @@ ENERGÍA REAL DE ESTA NOCHE: ${energy === 'fiesta' ? 'FIESTA' : 'ELEGANTE (cena,
 REGLAS DE ESTILO FIJAS — agregalas al final del prompt:
 ${OPEN_BANK_STYLE_RULES_TEXT}
 
-CONTINUIDAD DE VENUE — ESTO NO ES UNA INSTRUCCIÓN ABSTRACTA, ES UNA OBSERVACIÓN REAL de la imagen del shot anterior de este mismo set, ya generada:
+CONTINUIDAD DE VENUE — ESTO NO ES UNA INSTRUCCIÓN ABSTRACTA, ES UNA OBSERVACIÓN REAL de la imagen ancla de este mismo set, ya generada (SIEMPRE la del primer shot del venue principal, no necesariamente el shot inmediato anterior — así todo el set queda anclado al mismo origen, sin que un shot intermedio pueda desviar el estilo del resto):
 "${venueObservation.observedElements}"
-Describí el venue de este shot USANDO estos elementos reales — mismo material, mismo estilo, misma posición relativa que la observación de arriba — en vez de inventar tu propia versión de la baranda/mesa/mobiliario. Si tu pose necesita que la protagonista esté cerca de un elemento (ej. apoyada en una baranda), usá el elemento real descrito arriba y su posición real en el encuadre, no un elemento nuevo con las mismas palabras pero ubicado donde te convenga para la pose — si hace falta, ajustá la pose para que sea coherente con dónde está realmente ese elemento (ej. si la baranda real está al fondo/lateral, la protagonista se movió hacia ahí para apoyarse, no apareció una baranda nueva donde ella ya estaba parada).
-COPIÁ LOS DATOS CONCRETOS DE LA OBSERVACIÓN, NO LA PARAFRASEÉS EN ABSTRACTO: si la observación dice un material/color/posición específico, ese texto (o su traducción literal al inglés) tiene que aparecer en el finalPrompt — no la reemplaces por una descripción genérica tipo "an elegant railing" ni por una alternativa ("a city view or a railing"). Nunca escribas "X or Y" en la descripción del venue: la observación de arriba ya te dice qué hay, elegí eso y solo eso, sin ofrecer alternativas al generador de imágenes.
+
+Cómo usar esta observación depende de si el director marcó continuidad explícita (ver arriba):
+- Si SÍ la marcó ("Sí — ..."): este shot comparte el mismo encuadre/mobiliario que otro shot puntual del set — describí el venue USANDO los elementos reales de la observación — mismo material, mismo estilo, misma posición relativa — en vez de inventar tu propia versión de la baranda/mesa/mobiliario. Si tu pose necesita que la protagonista esté cerca de un elemento (ej. apoyada en una baranda), usá el elemento real descrito arriba y su posición real en el encuadre — si hace falta, ajustá la pose para que sea coherente con dónde está realmente ese elemento, nunca inventes uno nuevo donde te convenga para la pose.
+- Si NO la marcó explícitamente: este shot puede ser otro rincón/ángulo del MISMO venue (ej. la barra en vez de la mesa, otro lado de la terraza) — no estás obligado a mostrar exactamente el mismo mueble, pero SÍ tenés que mantener el mismo estilo/material/paleta que la observación describe (si el venue tiene mesas de madera oscura y luz cálida, este rincón nuevo también, aunque no sea literalmente la misma mesa) — nunca contradigas el estilo ya establecido inventando una estética distinta.
+
+COPIÁ LOS DATOS CONCRETOS DE LA OBSERVACIÓN, NO LA PARAFRASEÉS EN ABSTRACTO (aplica sobre todo cuando SÍ hay continuidad explícita marcada): si la observación dice un material/color/posición específico, ese texto (o su traducción literal al inglés) tiene que aparecer en el finalPrompt — no la reemplaces por una descripción genérica tipo "an elegant railing" ni por una alternativa ("a city view or a railing"). Nunca escribas "X or Y" en la descripción del venue: la observación de arriba ya te dice qué hay, elegí eso y solo eso, sin ofrecer alternativas al generador de imágenes.
 ${venueObservation.isEnclosedSubSpace ? `
-ESTE SHOT OCURRE EN UN ESPACIO INTERIOR CERRADO DERIVADO DEL VENUE PRINCIPAL (ej. un baño): NO fuerces que se vea el venue principal de fondo a través de una puerta/ventana abierta solo para "cumplir" con la continuidad — eso es forzar el objeto, no razonar la continuidad. Una puerta cerrada, o simplemente no describir la puerta en absoluto, es la opción correcta. La continuidad de este shot con el resto del set se sostiene con la MISMA ROPA/vibe de la protagonista y la coherencia de que es la misma noche — no necesita ver literalmente el resto del venue.` : ''}
+ESTE SHOT OCURRE EN UN ESPACIO INTERIOR CERRADO DERIVADO DEL VENUE PRINCIPAL (ej. un baño): NO fuerces que se vea el venue principal de fondo a través de una puerta/ventana abierta solo para "cumplir" con la continuidad — eso es forzar el objeto, no razonar la continuidad. Una puerta cerrada, o simplemente no describir la puerta en absoluto, es la opción correcta. La continuidad de este shot con el resto del set se sostiene con la MISMA ROPA/vibe de la protagonista y la coherencia de que es la misma noche — no necesita ver literalmente el resto del venue.
+COHERENCIA SOCIAL DE LO QUE SE LLEVA AL ESPACIO CERRADO (bug real confirmado, prueba 18 ago 2026): un mirror selfie de baño incluyó a la protagonista sosteniendo un trago de la mesa — nadie se lleva su copa al baño en una situación social real, es un detalle que rompe la credibilidad del momento aunque el resto de la pose esté bien resuelta. Al espacio cerrado solo la siguen objetos que alguien realmente se llevaría (el teléfono, el bolso) — un trago, un plato de comida, o cualquier cosa que se deja en la mesa/barra por norma social, NO debe aparecer en este shot salvo que el shotReasoning dé una razón real y explícita para lo contrario.` : ''}
 
 REGLAS DURAS DE REDACCIÓN:
 1. NUNCA describas ninguna prenda, color de ropa, o cómo cae/se acomoda la ropa del candidato del banco — el outfit lo resuelve la imagen de referencia del usuario. Tampoco inventes prendas nuevas que no están en ninguna referencia (bug real: "her jacket slips" describiendo una chaqueta inexistente) — si no podés confirmar que la prenda existe en la referencia real del outfit, no la menciones.

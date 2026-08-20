@@ -544,32 +544,45 @@ export async function generateOutfitNightOutShot(
   // categorized antes de tener venueAnchorCache.
   //
   // Fix: igual que categorized, TODO shot open_bank_2..N usa automáticamente
-  // la imagen del shot anterior más reciente de este set como referencia
-  // visual de venue — no depende de que el director lo declare bien en cada
-  // shot. Refuerza (no reemplaza) la continuidad por texto que ya existe.
+  // la imagen ANCLA de este set (venueAnchorCache, ver comentario extenso más
+  // abajo — la del primer shot isMainVenue=true, NO "la más reciente") como
+  // referencia visual de venue — no depende de que el director lo declare
+  // bien en cada shot. Refuerza (no reemplaza) la continuidad por texto que
+  // ya existe.
   const openBankContract = openBankContractCache.get(key)?.get(shotId);
   if (openBankContract) {
     const venueAnchorUrl = venueAnchorCache.get(key)?.imageUrl;
 
-    // BUG REAL corregido (prueba 13, 14 ago 2026): incluso con venueAnchorUrl
-    // pasado al GENERADOR de imagen, el TEXTO del prompt (directorSceneBlock)
-    // ya venía redactado desde el plan inicial, ANTES de que existiera
-    // ninguna imagen — así que "reuse la baranda del shot anterior" era una
-    // promesa de texto sobre una baranda que Gemini nunca vio, no una
-    // observación real. Resultado real: una baranda "aparecía de la nada" en
-    // medio de mesas de gente, una puerta de baño forzada abierta para
-    // "cumplir" con la continuidad, y una esquina nueva del venue con
-    // mobiliario de otro estilo. Fix: si el shot necesita continuidad de
-    // venue Y ya existe la imagen real del shot anterior, re-redactar ESTE
-    // shot puntual viendo esa imagen real (analyzeOpenBankVenue +
-    // redactOpenBankSingleShot) antes de generar — reemplaza el texto
-    // genérico del plan original por una observación concreta. Si cualquiera
-    // de las 2 llamadas falla (red, timeout), se cae silenciosamente al
-    // prompt ya redactado del plan original — nunca debe romper la sesión.
+    // ARQUITECTURA (16→20 ago 2026): re-redactado individual, SIEMPRE que
+    // exista ancla de venue — ya no depende de shotDecision.needsVenueAnchor.
+    //
+    // Bug real que forzó este cambio (prueba 18, 20 ago 2026): un shot con
+    // needsVenueAnchor mal marcado (o el batch redactor escribiendo "a
+    // metallic railing" genérico igual) produjo una baranda "aparecida de la
+    // nada" — el mismo bug de prueba 13 que el re-redactado individual ya
+    // resolvía, pero SOLO cuando esa bandera venía bien puesta desde
+    // "Decidir". Confiar en una bandera de una llamada de Gemini para decidir
+    // si vale la pena verificar contra la imagen real es exactamente el tipo
+    // de punto único de falla que esta arquitectura busca eliminar — más
+    // barato y más seguro re-redactar SIEMPRE (es una llamada de texto, no de
+    // imagen) que confiar en que el plan la haya marcado bien.
+    //
+    // Ancla FIJA, no cadena: venueAnchorUrl es siempre la imagen del PRIMER
+    // shot isMainVenue=true de la sesión (ver venueAnchorCache más abajo,
+    // nunca se sobreescribe con un shot que no sea isMainVenue) — todo shot
+    // del venue principal compara siempre contra ese mismo origen, nunca
+    // contra el shot inmediato anterior. Esto evita que un error/alucinación
+    // de un shot intermedio se propague en cascada al resto del set, y
+    // garantiza consistencia transitiva (shot 7 vs shot 1, no solo shot 7 vs
+    // shot 6) — ver discusión de arquitectura, sesión 20 ago 2026.
+    //
+    // Si la re-redacción falla (red, timeout, cualquiera de las 2 llamadas),
+    // se cae silenciosamente al prompt ya redactado del plan original en
+    // batch — nunca debe romper la sesión.
     const shotDecision = openBankShotDecisionCache.get(key)?.get(shotId);
-    if (shotDecision?.needsVenueAnchor && venueAnchorUrl) {
+    if (venueAnchorUrl) {
       const venueObservation = await analyzeOpenBankVenue(venueAnchorUrl);
-      if (venueObservation) {
+      if (venueObservation && shotDecision) {
         const energy = resolveEnergyFromBrief(basePrompt);
         const rewritten = await redactOpenBankSingleShot(basePrompt, shotDecision, venueObservation, energy);
         if (rewritten) {
