@@ -209,6 +209,10 @@ export async function runDirector(
 async function extractImageParts(imageUrl: string): Promise<{ data: string; mimeType: string } | null> {
   try {
     const res = await fetch(imageUrl);
+    if (!res.ok) {
+      console.warn(`[openBank] extractImageParts: fetch de la imagen ancla devolvió ${res.status} (${imageUrl})`);
+      return null;
+    }
     const blob = await res.blob();
     const dataUrl: string = await new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -217,9 +221,13 @@ async function extractImageParts(imageUrl: string): Promise<{ data: string; mime
       reader.readAsDataURL(blob);
     });
     const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/);
-    if (!match) return null;
+    if (!match) {
+      console.warn(`[openBank] extractImageParts: la imagen ancla no matcheó el patrón data URL esperado (${imageUrl})`);
+      return null;
+    }
     return { mimeType: match[1], data: match[2] };
-  } catch {
+  } catch (err) {
+    console.warn(`[openBank] extractImageParts: excepción al leer la imagen ancla (${imageUrl})`, err);
     return null;
   }
 }
@@ -241,11 +249,18 @@ export async function analyzeOpenBankVenue(imageUrl: string): Promise<OpenBankVe
       headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
       body: JSON.stringify({ action: 'analyzeOpenBankVenue', payload: parts }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`[openBank] analyzeOpenBankVenue: el endpoint devolvió ${res.status}`);
+      return null;
+    }
     const data = await res.json();
-    if (typeof data?.observedElements !== 'string') return null;
+    if (typeof data?.observedElements !== 'string') {
+      console.warn('[openBank] analyzeOpenBankVenue: respuesta sin observedElements válido', data);
+      return null;
+    }
     return { observedElements: data.observedElements, isEnclosedSubSpace: !!data.isEnclosedSubSpace };
-  } catch {
+  } catch (err) {
+    console.warn('[openBank] analyzeOpenBankVenue: excepción en la llamada', err);
     return null;
   }
 }
@@ -272,10 +287,17 @@ export async function redactOpenBankSingleShot(
         payload: { brief, shot, venueObservation, energy },
       }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`[openBank] redactOpenBankSingleShot: el endpoint devolvió ${res.status}`);
+      return null;
+    }
     const data = await res.json();
+    if (typeof data?.finalPrompt !== 'string') {
+      console.warn('[openBank] redactOpenBankSingleShot: respuesta sin finalPrompt válido', data);
+    }
     return typeof data?.finalPrompt === 'string' ? data.finalPrompt : null;
-  } catch {
+  } catch (err) {
+    console.warn('[openBank] redactOpenBankSingleShot: excepción en la llamada', err);
     return null;
   }
 }
