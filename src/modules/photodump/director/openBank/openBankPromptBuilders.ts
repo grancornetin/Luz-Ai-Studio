@@ -290,138 +290,66 @@ inventar una escena sin respaldo — si para cierto tipo de encuadre no hay
 ningún candidato relevante para este brief, no lo fuerces, elegí otro tipo
 con mejor respaldo real.
 
-VARIEDAD DE TIPO DE FOTO, NO SOLO DE POSE (bug real confirmado: un set
-entero de 5 shots resultó en 5 fotos de la protagonista posando/mirando a
-cámara, sin ninguna otra variedad — cada shot individualmente estaba bien
-resuelto, pero el conjunto se sentía monótono porque TODOS compartían el
-mismo tipo de foto: "ella es el sujeto central, mirando hacia algo"). Un
-rollo real de fotos de una noche no es solo fotos de ella — también incluye
-fotos de lo que la rodea: la comida/trago recién servido en la mesa (sin
-que ella esté en cuadro), la vista del venue sola, un detalle del outfit o
-un accesorio sobre la mesa, el ambiente del lugar. El banco tiene evidencia
-real de sobra para esto (grupos shot_type "detail_closeup" y "flat_lay" —
-revisalos en el panorama de abajo). Para un set de 5+ shots, considerá
-activamente si 1-2 de ellos funcionan mejor como esta variante — no es
-obligatorio, es una opción real que hay que evaluar, no descartar por
-default. Cuando un shot NO muestra a la protagonista, marcá
-protagonistVisible=false (ver más abajo) y priorizá que aporte al eje
-outfit_increible mostrando algo tangible de la experiencia (el trago, la
-vista, el detalle) — nunca lo uses solo para "llenar cupo" sin conexión
-real a la historia.
+VARIEDAD DE TIPO DE FOTO Y DETAIL SHOTS (3 bugs reales relacionados,
+consolidados): un rollo real de una noche no es solo fotos de ella posando
+— también incluye fotos de lo que la rodea (comida/trago recién servido,
+la vista sola, un detalle del outfit sobre la mesa). El banco tiene
+evidencia real de sobra para esto (grupos "detail_closeup"/"flat_lay").
+- CUÁNDO USARLO: si ya tenés 2-3 shots fuertes de la protagonista y el
+  resto del cupo no tiene una idea igual de fuerte/natural, la señal
+  correcta es sumar un detail shot sin ella — NO forzar una pose/ángulo raro
+  para seguir mostrándola (bug real: un ángulo cenital forzado sobre la
+  comida, y un "selfie" con cuerpo entero visto desde una distancia
+  imposible para un brazo real, solo para no usar un detail shot). Un set
+  más corto con shots todos fuertes vale más que llegar al número pedido a
+  costa de 1-2 shots poco naturales.
+- CÓMO EJECUTARLO: cuando protagonistVisible=false, eso tiene que reflejarse
+  TAMBIÉN en chosenCandidateId/keptElements — no elijas un candidato donde
+  ella sostiene el vaso si el objetivo es que no esté en cuadro (bug real:
+  un "detail shot de trago" terminó con ella igual visible sosteniéndolo,
+  un solo vaso, sin comunicar cena/salida en grupo). Si el contexto sugiere
+  compañía, preferí un candidato o describí el detalle con 2+ tragos/platos
+  en vez de uno solo.
 
-UN DETAIL SHOT DE TRAGO/COMIDA SIN PROTAGONISTA (protagonistVisible=false)
-DEBE SENTIRSE COMO CENA/SALIDA CON GENTE, NO COMO UNA MESA SOLITARIA (bug
-real confirmado, prueba 18 ago 2026: un detail shot de trago terminó
-mostrando UN SOLO vaso con la protagonista igual visible/sosteniéndolo —
-ni cumplió el objetivo de detail shot puro, ni comunicó que hay una cena o
-salida en grupo real). Si revisás el banco vas a ver que en los candidatos
-reales de detail_closeup/flat_lay de tragos/comida, la protagonista casi
-nunca aparece — y muchas veces hay 2+ tragos o platos en el encuadre,
-comunicando que no está sola. Cuando elijas este tipo de shot: (a)
-protagonistVisible=false tiene que reflejarse también en chosenCandidateId
-y keptElements — no elijas un candidato donde ella sostiene el vaso si el
-objetivo es que no esté en cuadro, y (b) si el brief/contexto sugiere
-compañía o una cena servida (no una copa solitaria de alguien bebiendo
-sola), preferí un candidato o describí el detalle con 2+ tragos/platos en
-vez de uno solo — reforzá la sensación de acompañamiento real de la noche.
+SI UN MIRROR SELFIE OCURRE EN EL BAÑO/ASCENSOR, NO LLEVES EL TRAGO (bug
+real confirmado: keptElements incluyó "holding a drink" para un mirror
+selfie en el baño — nadie se lleva su copa a un espacio así en la vida
+real). El teléfono y el bolso sí pueden seguir (se los lleva), la copa se
+queda en la mesa — si el candidato original tiene un trago en la pose, va
+a discardedElements, nunca a keptElements/accessoryReasoning.
 
-SI TE QUEDÁS SIN IDEAS FUERTES DE "PROTAGONISTA POSANDO", ESA ES LA SEÑAL
-DE USAR UN DETAIL SHOT — NO DE FORZAR UNA COMPOSICIÓN RARA (bug real
-confirmado, prueba 17 ago 2026: un set de 5 shots tenía 2 fotos realmente
-fuertes de la protagonista — ya suficientes para contar la historia
-completa por sí solas — y los 3 shots restantes, en vez de sumar variedad
-real, forzaron composiciones poco naturales para seguir mostrándola: un
-ángulo cenital raro sobre la comida, y un "selfie" que terminó mostrando
-el cuerpo entero desde una distancia imposible para un brazo real, solo
-para que se viera el outfit completo). Si ya tenés 2-3 shots fuertes de la
-protagonista en el set y el resto del cupo no tiene una idea igual de
-fuerte y natural, la opción correcta NO es estirar con una pose/ángulo
-forzado — es sumar un detail shot real (comida, trago, vista, un detalle
-del outfit sobre la mesa) sin ella en cuadro. Un set más corto con shots
-todos fuertes vale más que un set que llega al número pedido a costa de
-1-2 shots poco naturales.
+SELFIE DE BRAZO EXTENDIDO (bug real confirmado 2 veces): distinto del
+mirror selfie (requiere espejo real) y del plano posado por otra persona —
+es el tipo de foto más natural y frecuente de un rollo real, y suele
+faltar por completo si no se lo pide explícitamente. Para un set de 5+
+shots, salvo que el brief lo haga implausible, el plan DEBE incluir al
+menos 1 (candidatos reales en "selfie_frontal"/"close_up"). Regla física
+no negociable: por la distancia real del brazo, SOLO puede mostrar rostro/
+hombros/torso superior — nunca piernas, calzado, ni el outfit completo (bug
+real: un "selfie" terminó mostrando cuerpo entero desde una distancia
+imposible para un brazo humano, forzado solo para mostrar el outfit). Si el
+objetivo de un shot es mostrar el outfit completo, ESE shot no puede ser
+selfie de brazo — usá plano posado o mirror selfie. Cuando elijas uno,
+dejalo explícito en vehicleLabel (ej. "selfie de brazo extendido mirando a
+la vista").
 
-SI UN MIRROR SELFIE OCURRE EN EL BAÑO, NO LLEVES EL TRAGO (bug real
-confirmado, prueba 18 ago 2026: se decidió un "mirror selfie con trago" en
-el baño del venue, con keptElements incluyendo explícitamente "holding a
-drink" — la propia decisión de qué mantener del candidato ya traía el
-trago, así que ninguna instrucción del redactor podía corregirlo después).
-Nadie se lleva su copa/trago al baño en una situación social real — es un
-detalle que rompe la credibilidad aunque el resto de la pose sea buena. Si
-el vehicleLabel de un mirror selfie ubica el shot en el baño (o cualquier
-espacio cerrado derivado del venue, ej. ascensor), NO incluyas el trago en
-keptElements ni en accessoryReasoning — el teléfono y el bolso sí pueden
-seguir presentes (son objetos que alguien realmente se lleva), la copa se
-queda en la mesa. Si el candidato elegido tiene un trago en la pose
-original, marcalo en discardedElements, no en keptElements.
+NO DUPLICAR "DE PIE, FRONTAL, CUERPO ENTERO" (bug real: 2 fotos casi
+idénticas en el mismo set — de pie, torso derecho a cámara, sonriendo, sin
+interacción). Válido UNA vez por set como máximo (típicamente el shot que
+muestra el outfit completo, no necesariamente el primero — ver LÍNEA DE
+TIEMPO, no hay orden fijo) — el siguiente shot de pie necesita algo real
+que lo diferencie: giro de torso/mirada, interacción con el entorno, u
+ángulo distinto.
 
-SELFIE DE BRAZO EXTENDIDO — TIPO DE SHOT ESPECÍFICO QUE FALTABA (bug real
-confirmado, prueba 14 ago 2026: un set de 7 shots completo no incluyó NI UN
-SOLO plano de selfie de brazo extendido — el tipo de foto más natural y
-frecuente de un rollo real de salida nocturna, la que alguien se toma sola
-sosteniendo el celular con el brazo estirado, sin espejo). Esto es distinto
-del mirror selfie (que sí requiere un espejo real del venue) y distinto de
-un plano posado captado por otra persona. Para un set de 5+ shots, el
-panorama tiene candidatos reales de sobra (grupos shot_type "selfie_frontal"
-y "close_up" — revisalos abajo) — a menos que el brief o las referencias
-hagan literalmente imposible este tipo de foto (ej. brief que no tiene
-ningún momento de soledad plausible), el plan DEBE incluir al menos 1 shot
-de este tipo. Cuando elijas uno, dejalo explícito en vehicleLabel (ej.
-"selfie de brazo extendido mirando a la vista") para que el redactor lo
-resuelva con la regla de mecánica física de selfie (nunca mostrar el
-teléfono en cuadro, solo el ángulo/postura que lo delata).
-
-UN SELFIE REAL DE BRAZO EXTENDIDO ES SIEMPRE UN PLANO CERCANO — NUNCA DE
-CUERPO ENTERO (bug real confirmado, prueba 17 ago 2026: se eligió un
-selfie para un shot cuyo objetivo real era mostrar el outfit completo, y
-el resultado terminó siendo un cuerpo entero visto desde una distancia que
-ningún brazo humano puede alcanzar — no es un selfie creíble, es una foto
-de outfit forzada a leerse como selfie). Por la distancia física real del
-brazo, un selfie de brazo extendido SOLO puede mostrar rostro, hombros y
-como mucho el torso superior — nunca piernas, calzado, ni el outfit
-completo. Si el objetivo de un shot es mostrar el outfit completo/de
-cuerpo entero, ESE shot no puede ser un selfie — tiene que resolverse como
-plano posado (captado por otra persona o con la cámara apoyada) o mirror
-selfie (que sí puede mostrar cuerpo entero porque la cámara está lejos, no
-en la mano). No fuerces las dos cosas juntas en el mismo shot.
-
-NO DUPLICAR EL MISMO TIPO DE PLANO "DE PIE, FRONTAL, CUERPO ENTERO" (bug
-real confirmado, prueba 15 ago 2026: un set de 7 shots incluyó 2 fotos casi
-idénticas en estructura — de pie, cuerpo entero, torso derecho a cámara,
-sonriendo, brazos en posición similar — una de ellas encima sin ninguna
-interacción con el entorno ni prop, aportando muy poco al set). Este tipo
-de plano (de pie, frontal, sin sentarse/apoyarse/interactuar con nada) es
-válido UNA vez por set como máximo, típicamente el shot que muestra el
-outfit completo de cuerpo entero (no necesariamente el primero del set ni
-uno de "llegada" — ver LÍNEA DE TIEMPO arriba, no hay orden narrativo fijo)
-— si ya usaste este tipo de composición en un shot anterior del mismo set,
-el siguiente shot de la protagonista de pie tiene que
-diferenciarse con algo real: un giro de torso/mirada hacia otro punto, una
-interacción con un objeto o el entorno (apoyarse, sostener algo, mirar la
-vista), o un ángulo de cámara distinto — nunca repitas la misma fórmula de
-"de pie, sonriendo de frente" solo para sumar un shot más.
-
-CUIDADO: EL TEXTO DEL ANÁLISIS DE UN CANDIDATO PUEDE "APLANAR" UNA POSE QUE
-EN LA FOTO REAL ES VIVA (bug real confirmado, ago 2026): el campo
-subject_pose de un candidato puede describir algo como "de pie, torso
-ligeramente girado, manos a la altura de la cintura sujetando el borde de
-la falda, mirada neutra directo a cámara" — una descripción que suena a
-pose de documento (carnet), simétrica y sin vida. Pero varias veces esa
-descripción resultó ser un resumen pobre de una foto real que SÍ tenía
-piernas cruzadas o una adelantada, codos marcados hacia afuera con actitud,
-mentón levantado — vida real que el análisis de texto perdió al resumir.
-NUNCA copies literal una pose descrita en términos neutros/simétricos sin
-razonar primero si probablemente estás perdiendo matices reales de la
-foto — si el resto del candidato (outfit, encuadre, fondo) es fuerte pero
-la descripción de subject_pose suena plana/simétrica/sin interacción,
-redactá la pose heredada agregando explícitamente al menos un elemento de
-vida real que ese tipo de foto casi siempre tiene aunque el texto no lo
-capture: peso cargado en una pierna (no parejo), un quiebre de cadera, un
-codo marcado hacia afuera o atrás (no solo brazos pegados al cuerpo), o el
-mentón/mirada con actitud en vez de neutra. El objetivo no es inventar una
-pose distinta a la del candidato — es no dejar que un resumen de texto
-pobre termine produciendo, en la imagen final, algo más plano que la foto
-real que inspiró la elección.
+CUIDADO: EL TEXTO DEL ANÁLISIS PUEDE "APLANAR" UNA POSE QUE EN LA FOTO REAL
+ES VIVA (ver también la regla de "pose mugshot" en las reglas no
+negociables arriba — ese es el patrón textual exacto a evitar). subject_pose
+a veces resume una foto con piernas cruzadas, codos marcados, actitud real,
+en términos neutros/simétricos ("de pie, manos en la cintura, mirada
+neutra") — pérdida de matiz al resumir, no la pose real. Si el resto del
+candidato es fuerte pero subject_pose suena plano, redactá la pose heredada
+agregando el elemento de vida que probablemente se perdió: peso cargado en
+una pierna, quiebre de cadera, codo marcado, mentón/mirada con actitud.
 
 REGLA ANTI-ALUCINACIÓN — verificación obligatoria antes de responder: cada
 shot debe usar un itemId DISTINTO del panorama (nunca repitas
