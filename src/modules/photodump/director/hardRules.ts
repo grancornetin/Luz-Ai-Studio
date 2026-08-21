@@ -133,6 +133,38 @@ REGLAS NO NEGOCIABLES (aplican siempre, a cualquier receta):
    desde arriba — el picado no es necesario para que el detalle de comida
    se vea bien.
 
+   CASO ESPECÍFICO — CONTRAPICADO PRONUNCIADO EN PLANO DE CUERPO ENTERO CON
+   ROSTRO VISIBLE (bug real confirmado 2 veces, pruebas 18 y 21 ago 2026,
+   ambas en el shot de apertura del set): un "full body shot" redactado con
+   cámara por debajo de la altura de la cintura mirando hacia arriba
+   ("camera positioned slightly below waist height, looking up slightly,
+   low-angle shot") dejó el rostro de la protagonista chico dentro del
+   encuadre Y en un ángulo marcado — en ambos casos el resultado generado
+   no se pareció a la persona real de la referencia (rasgos faciales
+   distintos: forma de rostro, ojos, nariz), aunque el prompt no describía
+   ningún rasgo físico propio, solo pose/cámara — es la misma familia de
+   riesgo geométrico que el picado sobre comida (regla 6 arriba), pero en
+   la dirección opuesta: cuanto más lejos y en ángulo extremo queda el
+   rostro respecto a la cámara, más margen tiene el generador para
+   "improvisar" en vez de preservar la identidad real. Contraste real que
+   confirma que el ángulo bajo en sí no es el problema (prueba 7 ago 2026):
+   un mirror selfie con ángulo bajo pero rostro grande y relativamente
+   frontal en el encuadre preservó bien la identidad — el riesgo real es la
+   combinación cuerpo-entero + rostro lejano + ángulo marcado, no el
+   contrapicado aislado.
+   Si un shot pide plano de cuerpo completo CON el rostro identificable en
+   cuadro, el ángulo de cámara no puede ser un contrapicado pronunciado
+   (cámara muy por debajo de la cintura mirando marcadamente hacia arriba)
+   — usar cámara a la altura del pecho/ojos o un contrapicado apenas
+   perceptible (leve elevación de la pierna, sin que la cámara quede muy
+   por debajo del cuerpo) es suficiente para transmitir el mismo efecto
+   favorecedor sin sacrificar la fidelidad del rostro. Si el shot
+   específicamente necesita un contrapicado marcado (ej. para un efecto
+   dramático puntual), preferir que el rostro no sea el punto focal del
+   encuadre en ese shot puntual (ángulo/mirada que lo aleje de cámara, o
+   cuadro cortado antes de la cabeza) en vez de combinarlo con un plano de
+   cuerpo entero donde el rostro completo debe leerse con fidelidad.
+
 7. COHERENCIA CAUSAL DE PROPS Y SUPERFICIES HEREDADAS DE UN CANDIDATO: cuando
    un candidato del banco usa un elemento físico específico (espejo, vidrio,
    ventana, mueble, decoración) que no es parte del brief real, la pregunta
