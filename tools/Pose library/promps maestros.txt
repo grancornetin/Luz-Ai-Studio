@@ -1,0 +1,994 @@
+Transform the provided reference image into a clean black and white Pose Intent Transfer Proxy.
+
+The purpose of this image is to preserve the original body pose in a form optimized for reuse as a pose reference by another AI image generation model.
+
+This is NOT a portrait.
+This is NOT an anatomy lesson.
+This is NOT concept art.
+This is NOT a fashion illustration.
+This is NOT a technical blueprint.
+
+It is a clean visual pose-transfer reference.
+
+The final result must preserve the pose, perspective, spatial relationships, and pose-driven body flow while removing identity, clothing, environment, and subject-specific physical characteristics.
+
+━━━━━━━━━━━━━━━━━━
+
+1. POSE FIDELITY — HIGHEST PRIORITY
+    ━━━━━━━━━━━━━━━━━━
+
+Reconstruct the original pose as faithfully as possible.
+
+Preserve:
+
+• camera perspective
+• camera height
+• camera distance
+• camera angle
+• perspective distortion
+• lens foreshortening
+• head direction
+• head tilt
+• neck angle
+• shoulder line
+• shoulder rotation
+• rib cage orientation
+• torso rotation
+• torso lean
+• spine curvature
+• pelvic tilt
+• pelvic rotation
+• pelvic displacement
+• arm placement
+• upper-arm direction
+• elbow bend
+• forearm direction
+• forearm rotation
+• wrist angle
+• hand placement
+• palm orientation
+• finger direction when important to the pose
+• leg placement
+• thigh direction
+• knee bend
+• lower-leg direction
+• ankle angle
+• foot placement
+• foot orientation
+• body balance
+• weight distribution
+• center-of-gravity relationship
+• body support relationships
+• contact relationships
+• limb overlap
+• spatial depth
+• relative foreground/background placement of limbs
+• line of action
+• overall pose flow
+
+Do not straighten, normalize, beautify, correct, or reinterpret the pose.
+
+Do not convert an unusual pose into a more conventional pose.
+
+Preserve asymmetry.
+
+Preserve awkward or extreme foreshortening when it exists.
+
+Preserve the original camera-dependent distortion rather than correcting it to ideal anatomical proportions.
+
+━━━━━━━━━━━━━━━━━━
+2. POSE INTENT AND BODY FLOW
+━━━━━━━━━━━━━━━━━━
+
+Preserve not only joint positions, but also the visual intention created by the posture.
+
+The reference may use posture specifically to emphasize feminine silhouette, curves, projection, compression, extension, balance, or visual rhythm.
+
+These pose-dependent characteristics are important pose information and must NOT be neutralized.
+
+Preserve when present:
+
+• S-curve gesture
+• C-curve gesture
+• spinal arch
+• lumbar arch
+• torso twist
+• torso compression
+• torso extension
+• chest projection caused by posture
+• hip projection caused by posture
+• pelvic displacement
+• shoulder opposition
+• shoulder openness
+• waist compression caused by bending or twisting
+• contrapposto
+• weight shift
+• asymmetric balance
+• neck extension
+• elegant limb flow
+• silhouette rhythm created by posture
+• visual tension
+• visual extension
+• pose-driven prominence
+• pose-driven curvature
+
+A pose designed to emphasize a feminine silhouette must remain visually expressive in the proxy.
+
+Do NOT flatten, stiffen, desexualize, masculinize, or mechanically neutralize pose-dependent feminine body flow.
+
+At the same time, distinguish pose-driven form from the permanent physique of the original subject.
+
+━━━━━━━━━━━━━━━━━━
+3. BODY-SHAPE SEPARATION
+━━━━━━━━━━━━━━━━━━
+
+Preserve the EFFECT OF THE POSE on the body.
+
+Do not copy the exact permanent physique of the person in the reference.
+
+For example:
+
+Preserve:
+• chest projection created by posture
+• hip projection created by pelvic position
+• waist compression created by bending
+• glute projection created by pelvic rotation
+• thigh overlap created by leg placement
+• silhouette curvature created by spinal position
+
+But do not attempt to reproduce:
+• the person’s exact breast size
+• exact waist measurement
+• exact hip width
+• exact glute volume
+• exact thigh thickness
+• exact body-fat distribution
+• exact muscular development
+• exact shoulder width
+
+Use a generalized feminine mannequin as the carrier of the pose.
+
+The mannequin should have enough natural feminine volume for the pose flow to remain clearly visible.
+
+Do NOT make the mannequin excessively thin, tubular, flat, skeletal, or androgynous.
+
+Do NOT exaggerate permanent anatomical proportions either.
+
+The final proxy must allow a later AI model to apply the same pose naturally to a different feminine character whose body proportions are defined separately by the generation prompt.
+
+━━━━━━━━━━━━━━━━━━
+4. BODY REPRESENTATION
+━━━━━━━━━━━━━━━━━━
+
+Represent the subject as a simplified volumetric feminine pose mannequin.
+
+Use clean, smooth, rounded construction.
+
+The mannequin should sit visually between a flat anatomy sketch and a fully rendered 3D character.
+
+It must have enough volumetric information to communicate:
+
+• which limb is closer to the camera
+• which limb is farther away
+• torso depth
+• rib cage direction
+• pelvic direction
+• limb rotation
+• joint articulation
+• overlap
+• foreshortening
+• body projection in three-dimensional space
+
+Use simplified volumes rather than realistic anatomy.
+
+The body should feel dimensional without looking like a finished 3D render.
+
+Avoid:
+
+• stick-figure construction
+• completely flat contour drawings
+• skeletal diagrams
+• cylindrical robot limbs
+• realistic skin rendering
+• detailed musculature
+• realistic breasts or genital anatomy
+• excessive anatomical detail
+
+The mannequin exists only to communicate the pose.
+
+━━━━━━━━━━━━━━━━━━
+5. CLOTHING DECONTAMINATION
+━━━━━━━━━━━━━━━━━━
+
+Clothing must never determine the reconstructed anatomy.
+
+Infer the underlying body pose beneath the garments.
+
+Ignore:
+
+• loose fabric
+• oversized clothing
+• flared pants
+• skirts
+• dresses
+• loose sleeves
+• jackets
+• gathered fabric
+• folds
+• wrinkles
+• draping
+• fabric volume
+• clothing-induced silhouette expansion
+
+Do not mistake fabric width for body width.
+
+Do not mistake hanging fabric for limb direction.
+
+Do not treat skirts, flared pants, jackets, long hair, or loose garments as anatomical mass.
+
+When clothing hides a limb, infer only the minimum underlying anatomy necessary to preserve its position.
+
+If anatomical reconstruction and visible garment silhouette conflict, prioritize the most plausible underlying anatomy while preserving the original pose.
+
+━━━━━━━━━━━━━━━━━━
+6. OCCLUSION AND DEPTH
+━━━━━━━━━━━━━━━━━━
+
+Preserve the original overlap hierarchy.
+
+Clearly communicate:
+
+• what passes in front
+• what passes behind
+• what is partially hidden
+• what points toward the camera
+• what recedes away from the camera
+
+Do not separate overlapping limbs merely to make the drawing easier to understand.
+
+Do not reposition hidden limbs for clarity.
+
+When necessary, use extremely subtle construction lines to indicate hidden continuation.
+
+Infer only what is necessary.
+
+Never invent exaggerated or unsupported limb positions.
+
+━━━━━━━━━━━━━━━━━━
+7. SUPPORT AND CONTACT
+━━━━━━━━━━━━━━━━━━
+
+Preserve how the body is physically supported.
+
+Determine which parts of the body are:
+
+• weight-bearing
+• touching a surface
+• pressing against a surface
+• resting on a surface
+• balancing the body
+• suspended without support
+
+Important contacts may include:
+
+• feet
+• toes
+• heels
+• knees
+• pelvis
+• buttocks
+• back
+• elbows
+• forearms
+• hands
+
+These relationships are essential to reproducing the pose.
+
+However, DO NOT recreate the supporting object.
+
+Never draw recognizable:
+
+• chairs
+• sofas
+• beds
+• tables
+• benches
+• walls
+• stairs
+• window ledges
+• furniture
+• architecture
+• room elements
+
+Do not replace them with solid cubes, slabs, platforms, boxes, or collision geometry.
+
+Solid environmental geometry can contaminate later image generation and must therefore be avoided.
+
+If support information would otherwise be ambiguous, use only the minimum abstract indication necessary.
+
+Preferred order:
+
+1. Let the body posture communicate the support naturally.
+2. If necessary, use a tiny subtle contact marker at the exact contact location.
+3. Only when absolutely necessary, use a very short, infinitely thin support line immediately adjacent to the contact area.
+
+Never give a support line thickness, faces, volume, perspective sides, corners, or object-like geometry.
+
+The support reference must never resemble furniture.
+
+If the pose remains understandable without a support guide, omit the guide entirely.
+
+━━━━━━━━━━━━━━━━━━
+8. ACCESSORIES AND HELD OBJECTS
+━━━━━━━━━━━━━━━━━━
+
+Remove accessories and props whenever they are not necessary to understand the pose.
+
+If the subject holds an object and removing it would make the hand position or arm angle ambiguous, replace it with the simplest possible abstract placeholder.
+
+For example, a phone may become a plain thin rectangle.
+
+Do not reproduce:
+
+• logos
+• buttons
+• screens
+• product details
+• branding
+• decorative styling
+
+The placeholder exists only to preserve hand geometry.
+
+━━━━━━━━━━━━━━━━━━
+9. REMOVE ALL NON-POSE INFORMATION
+━━━━━━━━━━━━━━━━━━
+
+Remove:
+
+• facial identity
+• recognizable facial features
+• hairstyle
+• hair texture
+• hair color
+• makeup
+• eyelashes
+• skin texture
+• skin color
+• clothing
+• fashion styling
+• jewelry
+• tattoos
+• accessories
+• environmental objects
+• furniture
+• architecture
+• room details
+• brand elements
+• realistic lighting
+• shadows
+• photographic textures
+• decorative elements
+
+Use a blank simplified face.
+
+Basic head construction lines may be used only when they help communicate head orientation.
+
+━━━━━━━━━━━━━━━━━━
+10. VISUAL LANGUAGE
+━━━━━━━━━━━━━━━━━━
+
+Use:
+
+• black and white only
+• clean black line art
+• plain white background
+• smooth simplified volumes
+• restrained internal construction
+• consistent line weight
+• minimal visual noise
+• strong pose readability
+
+Construction information may include, only when useful:
+
+• subtle torso centerline
+• subtle shoulder axis
+• subtle pelvis axis
+• subtle joint indications
+• one restrained line of action
+• minimal hidden continuation lines
+• tiny contact markers
+
+Construction guides must remain visually secondary to the body.
+
+Do NOT add:
+
+• text
+• labels
+• legends
+• measurements
+• arrows
+• camera icons
+• annotations
+• explanatory notes
+• multiple panels
+• secondary views
+• decorative borders
+• blueprint graphics
+
+The reference must communicate visually without written explanation.
+
+━━━━━━━━━━━━━━━━━━
+11. COMPOSITION
+━━━━━━━━━━━━━━━━━━
+
+Preserve the original camera framing whenever practical.
+
+Keep the mannequin large and immediately readable.
+
+The figure should occupy approximately 85–95% of the useful canvas while preserving enough white space to clearly read the extremities and pose.
+
+Do not crop hands or feet if they are visible and important in the original reference.
+
+Do not zoom out merely to create empty space.
+
+Do not change the viewpoint to make the pose easier to draw.
+
+━━━━━━━━━━━━━━━━━━
+12. PRIORITY ORDER
+━━━━━━━━━━━━━━━━━━
+
+When instructions conflict, follow this priority order:
+
+1. Original camera perspective and foreshortening.
+2. Joint placement and body orientation.
+3. Spatial depth and overlap.
+4. Support and weight distribution.
+5. Pose-driven body flow and silhouette rhythm.
+6. Plausible underlying anatomy beneath clothing.
+7. Simplification and visual cleanliness.
+
+Never sacrifice pose fidelity merely to make the mannequin cleaner or more anatomically conventional.
+
+━━━━━━━━━━━━━━━━━━
+FINAL OBJECTIVE
+━━━━━━━━━━━━━━━━━━
+
+The final image must function as an AI-to-AI pose transfer reference.
+
+Another image generation model should be able to receive this image together with a completely different character description and reconstruct:
+
+• the same camera relationship
+• the same body orientation
+• the same joint placement
+• the same foreshortening
+• the same depth relationships
+• the same support logic
+• the same weight distribution
+• the same line of action
+• the same pose-dependent feminine body flow
+
+while allowing the new character’s own body proportions, clothing, identity, environment, and appearance to be determined independently.
+
+The final result should be a clean, volumetric, expressive pose reference — not a portrait, not a flat anatomy sketch, not a rendered 3D character, and not an environmental scene.
+
+
+Transform the provided reference image into a clean black and white Facial Expression Intent Transfer Proxy.
+
+The purpose of this image is to preserve the original head pose, gaze, and facial expression in a form optimized for reuse as an expression reference by another AI image generation model.
+
+This is NOT a portrait.
+
+This is NOT a likeness study.
+
+This is NOT a beauty illustration.
+
+This is NOT an anatomy lesson.
+
+This is NOT concept art.
+
+It is a clean visual expression-transfer reference.
+
+The final result must preserve the head pose, camera relationship, gaze direction, facial articulation, and expression dynamics while removing identity, hairstyle, makeup, styling, environment, and subject-specific facial characteristics.
+
+━━━━━━━━━━━━━━━━━━
+
+1. EXPRESSION FIDELITY — HIGHEST PRIORITY
+   ━━━━━━━━━━━━━━━━━━
+
+Reconstruct the original facial expression as faithfully as possible.
+
+Preserve:
+
+• camera perspective
+• camera angle
+• camera distance
+• camera crop
+• perspective distortion
+• lens foreshortening
+• head rotation
+• head tilt
+• head pitch
+• chin direction
+• chin elevation or lowering
+• neck angle
+• face orientation
+• gaze direction
+• eye direction
+• eye convergence when visible
+• eye placement
+• eyelid openness
+• upper eyelid position
+• lower eyelid position
+• squinting
+• eyebrow height
+• eyebrow angle
+• eyebrow asymmetry
+• brow compression
+• brow raising
+• nose direction
+• nostril deformation when expression-dependent
+• cheek lift
+• cheek compression
+• mouth shape
+• mouth width
+• mouth asymmetry
+• mouth corner direction
+• lip opening
+• upper-lip position
+• lower-lip position
+• lip compression
+• lip protrusion
+• jaw opening
+• jaw displacement
+• teeth visibility when structurally important
+• tongue position when visible
+• cheek/jaw silhouette
+• expression asymmetry
+• overall facial expression energy
+
+Do not normalize, beautify, soften, correct, or reinterpret the expression.
+
+Preserve unusual, exaggerated, playful, intense, awkward, subtle, asymmetric, or unconventional expressions when present.
+
+The objective is fidelity to the expression, not creation of an idealized face.
+
+━━━━━━━━━━━━━━━━━━
+2. EXPRESSION INTENT PRESERVATION
+━━━━━━━━━━━━━━━━━━
+
+Preserve not only the locations of facial features, but also the visual intention created by their interaction.
+
+Preserve when present:
+
+• intensity of the gaze
+• relaxed gaze
+• direct gaze
+• sideways gaze
+• upward or downward gaze
+• narrowed eyes
+• widened eyes
+• asymmetric eyelids
+• eyebrow opposition
+• brow tension
+• cheek tension
+• cheek lift
+• mouth tension
+• relaxed mouth
+• pursed lips
+• parted lips
+• compressed lips
+• raised mouth corners
+• lowered mouth corners
+• asymmetric mouth
+• jaw tension
+• jaw relaxation
+• open jaw
+• tongue extension
+• tongue direction
+• playful expression
+• serious expression
+• confident expression
+• coy expression
+• flirtatious expression
+• surprised expression
+• skeptical expression
+• tired expression
+• annoyed expression
+• amused expression
+• expressive facial asymmetry
+
+Do not neutralize the expression.
+
+Do not reduce a strong expression to a generic neutral face.
+
+Do not remove expression-dependent tension merely to make the mannequin cleaner.
+
+━━━━━━━━━━━━━━━━━━
+3. IDENTITY / EXPRESSION SEPARATION
+━━━━━━━━━━━━━━━━━━
+
+Preserve the EFFECT OF THE EXPRESSION on the face.
+
+Do not copy the permanent facial identity of the person in the reference.
+
+For example:
+
+Preserve:
+
+• eyebrow raising caused by expression
+• eyelid narrowing caused by expression
+• cheek lifting caused by expression
+• mouth stretching caused by expression
+• lip compression caused by expression
+• jaw opening caused by expression
+• chin movement caused by expression
+• temporary facial asymmetry caused by expression
+
+But do not attempt to reproduce:
+
+• exact eye shape
+• exact nose shape
+• exact lip anatomy
+• exact eyebrow thickness
+• exact cheekbone structure
+• exact jaw anatomy
+• exact facial proportions
+• exact attractiveness characteristics
+• exact age-specific facial details
+
+Use a generalized neutral facial mannequin as the carrier of the expression.
+
+The final proxy must allow another AI model to apply the same expression naturally to a completely different character whose facial identity is defined separately.
+
+━━━━━━━━━━━━━━━━━━
+4. FACIAL MANNEQUIN REPRESENTATION
+━━━━━━━━━━━━━━━━━━
+
+Represent the subject as a simplified facial construction mannequin.
+
+Use clean, smooth facial geometry.
+
+The face should have enough structure to communicate:
+
+• head orientation
+• facial centerline
+• eye line
+• gaze direction
+• eyelid articulation
+• eyebrow articulation
+• nose direction
+• cheek deformation
+• mouth articulation
+• jaw position
+• tongue position when applicable
+• facial asymmetry
+• expression intensity
+
+Use simplified facial forms rather than realistic portrait anatomy.
+
+The mannequin should feel dimensional enough to preserve perspective and expression.
+
+Do not reduce the face to generic emoji-like symbols.
+
+Do not create a realistic portrait.
+
+Do not preserve recognizable identity.
+
+━━━━━━━━━━━━━━━━━━
+5. CONSTRUCTION GUIDES
+━━━━━━━━━━━━━━━━━━
+
+Use subtle facial construction guides only when they improve expression reconstruction.
+
+Allowed:
+
+• head mass
+• facial centerline
+• brow line
+• eye line
+• nose direction line
+• mouth axis
+• jaw construction
+• neck axis
+• subtle gaze indication through pupil placement
+
+Construction guides must follow the actual three-dimensional orientation of the head.
+
+If the face is rotated, tilted, pitched upward, or pitched downward, the construction lines must reflect that perspective.
+
+Do not flatten construction lines into a front-facing diagram.
+
+Keep all guides visually secondary to the facial expression.
+
+━━━━━━━━━━━━━━━━━━
+6. EYES AND GAZE
+━━━━━━━━━━━━━━━━━━
+
+Gaze direction is critical.
+
+Preserve exactly where the subject appears to be looking.
+
+Maintain:
+
+• pupil direction
+• relative iris position
+• eyelid openness
+• eye asymmetry
+• squint
+• upper/lower eyelid relationship
+• direction of both eyes
+• visible eye whites when structurally important
+
+Do not automatically center the pupils.
+
+Do not automatically make the eyes symmetrical.
+
+Do not convert a sideways gaze into direct eye contact.
+
+Do not convert direct eye contact into an off-camera gaze.
+
+If the reference is a mirror selfie, preserve the apparent gaze relationship visible in the final photograph rather than attempting to reinterpret the physical camera setup.
+
+━━━━━━━━━━━━━━━━━━
+7. MOUTH, LIPS, JAW AND TONGUE
+━━━━━━━━━━━━━━━━━━
+
+Preserve mouth articulation precisely.
+
+Maintain:
+
+• mouth opening
+• mouth width
+• lip separation
+• lip compression
+• lip protrusion
+• corner direction
+• mouth asymmetry
+• jaw opening
+• jaw displacement
+• visible teeth only when necessary to communicate mouth structure
+• tongue visibility
+• tongue extension
+• tongue direction
+• tongue contact when applicable
+
+If the tongue is visible, represent it as a simple structural shape.
+
+Do not add realistic tongue texture.
+
+Do not exaggerate tongue size beyond the reference.
+
+Do not close an open mouth.
+
+Do not open a closed mouth.
+
+Do not convert parted lips into a smile unless the reference actually contains that articulation.
+
+━━━━━━━━━━━━━━━━━━
+8. HEAD AND NECK RELATIONSHIP
+━━━━━━━━━━━━━━━━━━
+
+The expression proxy must preserve the complete head gesture, not only the internal face.
+
+Preserve:
+
+• head rotation
+• head tilt
+• chin direction
+• chin height
+• neck direction
+• neck extension
+• neck compression
+• head-to-neck relationship
+
+A facial expression may change significantly depending on head angle.
+
+Never straighten the head merely to make the facial construction easier.
+
+━━━━━━━━━━━━━━━━━━
+9. OCCLUSION
+━━━━━━━━━━━━━━━━━━
+
+If parts of the face are hidden by:
+
+• hair
+• hands
+• clothing
+• accessories
+• objects
+• cropping
+
+infer only the minimum underlying facial structure necessary to preserve the expression.
+
+Never invent unsupported facial anatomy.
+
+Do not change the expression merely because part of it is hidden.
+
+If a hand or object interacts directly with the face and removing it would destroy important expression information, preserve only the minimum simplified geometry necessary to communicate that interaction.
+
+━━━━━━━━━━━━━━━━━━
+10. OBJECT INTERACTION
+━━━━━━━━━━━━━━━━━━
+
+If an object touches the:
+
+• lips
+• mouth
+• cheek
+• chin
+• nose
+• forehead
+
+and that contact materially affects the expression, replace the object with the simplest possible abstract placeholder.
+
+Do not reproduce:
+
+• product details
+• logos
+• branding
+• textures
+• decorations
+
+The placeholder exists only to preserve facial contact and expression geometry.
+
+If the object is unnecessary to understand the expression, remove it completely.
+
+━━━━━━━━━━━━━━━━━━
+11. REMOVE ALL NON-EXPRESSION INFORMATION
+━━━━━━━━━━━━━━━━━━
+
+Remove:
+
+• recognizable facial identity
+• hairstyle
+• hair texture
+• hair color
+• makeup
+• eyeliner
+• eyeshadow
+• mascara
+• artificial eyelashes
+• lipstick color
+• skin texture
+• pores
+• freckles
+• skin color
+• jewelry
+• earrings
+• piercings
+• tattoos
+• accessories
+• clothing details
+• background
+• furniture
+• architecture
+• room details
+• brand elements
+• realistic lighting
+• photographic shadows
+• textures
+• decorative elements
+
+Hair may be represented only as the minimum abstract boundary necessary to understand head orientation if absolutely required.
+
+Otherwise omit it.
+
+━━━━━━━━━━━━━━━━━━
+12. PERSPECTIVE PRESERVATION
+━━━━━━━━━━━━━━━━━━
+
+Preserve the original camera perspective exactly.
+
+Do not normalize the face into standard portrait proportions.
+
+Preserve:
+
+• close-camera distortion
+• wide-angle distortion
+• foreshortening
+• asymmetric apparent proportions caused by perspective
+• near/far relationships
+• camera elevation
+• camera depression
+• three-quarter orientation
+• profile orientation
+• extreme head angles
+
+If one side of the face appears larger because it is closer to the camera, preserve that relationship.
+
+Do not "correct" perspective distortion.
+
+━━━━━━━━━━━━━━━━━━
+13. VISUAL LANGUAGE
+━━━━━━━━━━━━━━━━━━
+
+Use:
+
+• black and white only
+• clean black line art
+• plain white background
+• smooth simplified facial forms
+• restrained construction lines
+• consistent line weight
+• minimal visual noise
+• strong expression readability
+
+Do NOT add:
+
+• text
+• labels
+• legends
+• measurements
+• arrows
+• annotations
+• explanatory notes
+• multiple panels
+• secondary views
+• decorative borders
+• blueprint graphics
+
+The expression must communicate visually without written explanation.
+
+━━━━━━━━━━━━━━━━━━
+14. COMPOSITION
+━━━━━━━━━━━━━━━━━━
+
+Preserve the original head framing and camera crop whenever practical.
+
+If the original reference is:
+
+• extreme close-up → preserve an extreme close-up
+• head-and-neck crop → preserve head and neck
+• three-quarter facial crop → preserve the same relationship
+• partially cropped face → preserve the meaningful crop when it contributes to the reference
+
+Do not zoom out unnecessarily.
+
+Do not turn a close-up expression into a bust portrait.
+
+Keep the head large enough for the eyes, mouth, jaw, and expression structure to remain immediately readable.
+
+━━━━━━━━━━━━━━━━━━
+15. PRIORITY ORDER
+━━━━━━━━━━━━━━━━━━
+
+When instructions conflict, follow this priority order:
+
+1. Original head orientation and camera perspective.
+2. Gaze direction.
+3. Eye and eyelid articulation.
+4. Mouth, lip, jaw, and tongue articulation.
+5. Eyebrow and cheek expression.
+6. Expression asymmetry and intensity.
+7. Head-to-neck gesture.
+8. Identity removal.
+9. Visual simplification.
+
+Never sacrifice expression fidelity merely to make the facial mannequin cleaner, prettier, more symmetrical, or more conventional.
+
+━━━━━━━━━━━━━━━━━━
+FINAL OBJECTIVE
+━━━━━━━━━━━━━━━━━━
+
+The final image must function as an AI-to-AI facial expression transfer reference.
+
+Another image generation model should be able to receive this image together with a completely different character description and reconstruct:
+
+• the same camera relationship
+• the same head rotation
+• the same head tilt
+• the same chin direction
+• the same gaze
+• the same eyelid openness
+• the same eyebrow articulation
+• the same cheek tension
+• the same mouth shape
+• the same lip opening
+• the same jaw position
+• the same tongue position when visible
+• the same facial asymmetry
+• the same overall expression energy
+
+while allowing the new character's identity, facial anatomy, hairstyle, makeup, skin, clothing, and environment to be determined independently.
+
+The final result should be a clean, expressive facial reference — not a portrait, not a beauty illustration, not an emoji, and not a realistic rendering.

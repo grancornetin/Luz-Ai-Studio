@@ -1,0 +1,472 @@
+﻿Transform the provided reference image into a clean black and white Pose Intent Transfer Proxy.
+
+The purpose of this image is to preserve the original body pose in a form optimized for reuse as a pose reference by another AI image generation model.
+
+This is NOT a portrait.
+This is NOT an anatomy lesson.
+This is NOT concept art.
+This is NOT a fashion illustration.
+This is NOT a technical blueprint.
+
+It is a clean visual pose-transfer reference.
+
+The final result must preserve the pose, perspective, spatial relationships, and pose-driven body flow while removing identity, clothing, environment, and subject-specific physical characteristics.
+
+━━━━━━━━━━━━━━━━━━
+
+1. POSE FIDELITY — HIGHEST PRIORITY
+    ━━━━━━━━━━━━━━━━━━
+
+Reconstruct the original pose as faithfully as possible.
+
+Preserve:
+
+• camera perspective
+• camera height
+• camera distance
+• camera angle
+• perspective distortion
+• lens foreshortening
+• head direction
+• head tilt
+• neck angle
+• shoulder line
+• shoulder rotation
+• rib cage orientation
+• torso rotation
+• torso lean
+• spine curvature
+• pelvic tilt
+• pelvic rotation
+• pelvic displacement
+• arm placement
+• upper-arm direction
+• elbow bend
+• forearm direction
+• forearm rotation
+• wrist angle
+• hand placement
+• palm orientation
+• finger direction when important to the pose
+• leg placement
+• thigh direction
+• knee bend
+• lower-leg direction
+• ankle angle
+• foot placement
+• foot orientation
+• body balance
+• weight distribution
+• center-of-gravity relationship
+• body support relationships
+• contact relationships
+• limb overlap
+• spatial depth
+• relative foreground/background placement of limbs
+• line of action
+• overall pose flow
+
+Do not straighten, normalize, beautify, correct, or reinterpret the pose.
+
+Do not convert an unusual pose into a more conventional pose.
+
+Preserve asymmetry.
+
+Preserve awkward or extreme foreshortening when it exists.
+
+Preserve the original camera-dependent distortion rather than correcting it to ideal anatomical proportions.
+
+━━━━━━━━━━━━━━━━━━
+2. POSE INTENT AND BODY FLOW
+━━━━━━━━━━━━━━━━━━
+
+Preserve not only joint positions, but also the visual intention created by the posture.
+
+The reference may use posture specifically to create curvature, structural emphasis, compression, extension, balance, or visual rhythm across the torso and limbs.
+
+These pose-dependent characteristics are important pose information and must NOT be neutralized.
+
+Preserve when present:
+
+• S-curve gesture
+• C-curve gesture
+• spinal arch
+• lumbar arch
+• torso twist
+• torso compression
+• torso extension
+• torso volume shift caused by posture
+• pelvic angle shift caused by posture
+• pelvic displacement
+• shoulder opposition
+• shoulder openness
+• waist compression caused by bending or twisting
+• contrapposto
+• weight shift
+• asymmetric balance
+• neck extension
+• elegant limb flow
+• silhouette rhythm created by posture
+• visual tension
+• visual extension
+• pose-driven volume shift
+• pose-driven curvature
+
+A pose with strong structural rhythm must remain visually expressive in the proxy.
+
+Do NOT flatten, stiffen, or mechanically neutralize pose-dependent body flow.
+
+At the same time, distinguish pose-driven form from the permanent physique of the original subject.
+
+━━━━━━━━━━━━━━━━━━
+3. BODY-SHAPE SEPARATION
+━━━━━━━━━━━━━━━━━━
+
+Preserve the EFFECT OF THE POSE on the body.
+
+Do not copy the exact permanent physique of the person in the reference.
+
+For example:
+
+Preserve:
+• upper-torso volume shift created by posture
+• pelvic-region volume shift created by pelvic position
+• waist compression created by bending
+• lower-torso volume shift created by pelvic rotation
+• thigh overlap created by leg placement
+• silhouette curvature created by spinal position
+
+But do not attempt to reproduce:
+• the person's exact body measurements
+• exact waist measurement
+• exact hip width
+• exact lower-torso volume
+• exact thigh thickness
+• exact body-fat distribution
+• exact muscular development
+• exact shoulder width
+
+Use a generalized mannequin as the carrier of the pose.
+
+The mannequin should have enough natural volume for the pose flow to remain clearly visible.
+
+Do NOT make the mannequin excessively thin, tubular, flat, skeletal, or androgynous.
+
+Do NOT exaggerate permanent anatomical proportions either.
+
+The final proxy must allow a later AI model to apply the same pose naturally to a different character whose body proportions are defined separately by the generation prompt.
+
+━━━━━━━━━━━━━━━━━━
+4. BODY REPRESENTATION
+━━━━━━━━━━━━━━━━━━
+
+Represent the subject as a simplified volumetric pose mannequin.
+
+Use clean, smooth, rounded construction.
+
+The mannequin should sit visually between a flat anatomy sketch and a fully rendered 3D character.
+
+It must have enough volumetric information to communicate:
+
+• which limb is closer to the camera
+• which limb is farther away
+• torso depth
+• rib cage direction
+• pelvic direction
+• limb rotation
+• joint articulation
+• overlap
+• foreshortening
+• body projection in three-dimensional space
+
+Use simplified volumes rather than realistic anatomy.
+
+The body should feel dimensional without looking like a finished 3D render.
+
+Avoid:
+
+• stick-figure construction
+• completely flat contour drawings
+• skeletal diagrams
+• cylindrical robot limbs
+• realistic skin rendering
+• detailed musculature
+• explicit anatomical detail of intimate body regions
+• excessive anatomical detail
+
+The mannequin exists only to communicate the pose.
+
+━━━━━━━━━━━━━━━━━━
+5. CLOTHING DECONTAMINATION
+━━━━━━━━━━━━━━━━━━
+
+Clothing must never determine the reconstructed anatomy.
+
+Infer the underlying body pose beneath the garments.
+
+Ignore:
+
+• loose fabric
+• oversized clothing
+• flared pants
+• skirts
+• dresses
+• loose sleeves
+• jackets
+• gathered fabric
+• folds
+• wrinkles
+• draping
+• fabric volume
+• clothing-induced silhouette expansion
+
+Do not mistake fabric width for body width.
+
+Do not mistake hanging fabric for limb direction.
+
+Do not treat skirts, flared pants, jackets, long hair, or loose garments as anatomical mass.
+
+When clothing hides a limb, infer only the minimum underlying anatomy necessary to preserve its position.
+
+If anatomical reconstruction and visible garment silhouette conflict, prioritize the most plausible underlying anatomy while preserving the original pose.
+
+━━━━━━━━━━━━━━━━━━
+6. OCCLUSION AND DEPTH
+━━━━━━━━━━━━━━━━━━
+
+Preserve the original overlap hierarchy.
+
+Clearly communicate:
+
+• what passes in front
+• what passes behind
+• what is partially hidden
+• what points toward the camera
+• what recedes away from the camera
+
+Do not separate overlapping limbs merely to make the drawing easier to understand.
+
+Do not reposition hidden limbs for clarity.
+
+When necessary, use extremely subtle construction lines to indicate hidden continuation.
+
+Infer only what is necessary.
+
+Never invent exaggerated or unsupported limb positions.
+
+━━━━━━━━━━━━━━━━━━
+7. SUPPORT AND CONTACT
+━━━━━━━━━━━━━━━━━━
+
+Preserve how the body is physically supported.
+
+Determine which parts of the body are:
+
+• weight-bearing
+• touching a surface
+• pressing against a surface
+• resting on a surface
+• balancing the body
+• suspended without support
+
+Important contacts may include:
+
+• feet
+• toes
+• heels
+• knees
+• pelvis
+• buttocks
+• back
+• elbows
+• forearms
+• hands
+
+These relationships are essential to reproducing the pose.
+
+However, DO NOT recreate the supporting object.
+
+Never draw recognizable:
+
+• chairs
+• sofas
+• beds
+• tables
+• benches
+• walls
+• stairs
+• window ledges
+• furniture
+• architecture
+• room elements
+
+Do not replace them with solid cubes, slabs, platforms, boxes, or collision geometry.
+
+Solid environmental geometry can contaminate later image generation and must therefore be avoided.
+
+If support information would otherwise be ambiguous, use only the minimum abstract indication necessary.
+
+Preferred order:
+
+1. Let the body posture communicate the support naturally.
+2. If necessary, use a tiny subtle contact marker at the exact contact location.
+3. Only when absolutely necessary, use a very short, infinitely thin support line immediately adjacent to the contact area.
+
+Never give a support line thickness, faces, volume, perspective sides, corners, or object-like geometry.
+
+The support reference must never resemble furniture.
+
+If the pose remains understandable without a support guide, omit the guide entirely.
+
+━━━━━━━━━━━━━━━━━━
+8. ACCESSORIES AND HELD OBJECTS
+━━━━━━━━━━━━━━━━━━
+
+Remove accessories and props whenever they are not necessary to understand the pose.
+
+If the subject holds an object and removing it would make the hand position or arm angle ambiguous, replace it with the simplest possible abstract placeholder.
+
+For example, a phone may become a plain thin rectangle.
+
+Do not reproduce:
+
+• logos
+• buttons
+• screens
+• product details
+• branding
+• decorative styling
+
+The placeholder exists only to preserve hand geometry.
+
+━━━━━━━━━━━━━━━━━━
+9. REMOVE ALL NON-POSE INFORMATION
+━━━━━━━━━━━━━━━━━━
+
+Remove:
+
+• facial identity
+• recognizable facial features
+• hairstyle
+• hair texture
+• hair color
+• makeup
+• eyelashes
+• skin texture
+• skin color
+• clothing
+• fashion styling
+• jewelry
+• tattoos
+• accessories
+• environmental objects
+• furniture
+• architecture
+• room details
+• brand elements
+• realistic lighting
+• shadows
+• photographic textures
+• decorative elements
+
+Use a blank simplified face.
+
+Basic head construction lines may be used only when they help communicate head orientation.
+
+━━━━━━━━━━━━━━━━━━
+10. VISUAL LANGUAGE
+━━━━━━━━━━━━━━━━━━
+
+Use:
+
+• black and white only
+• clean black line art
+• plain white background
+• smooth simplified volumes
+• restrained internal construction
+• consistent line weight
+• minimal visual noise
+• strong pose readability
+
+Construction information may include, only when useful:
+
+• subtle torso centerline
+• subtle shoulder axis
+• subtle pelvis axis
+• subtle joint indications
+• one restrained line of action
+• minimal hidden continuation lines
+• tiny contact markers
+
+Construction guides must remain visually secondary to the body.
+
+Do NOT add:
+
+• text
+• labels
+• legends
+• measurements
+• arrows
+• camera icons
+• annotations
+• explanatory notes
+• multiple panels
+• secondary views
+• decorative borders
+• blueprint graphics
+
+The reference must communicate visually without written explanation.
+
+━━━━━━━━━━━━━━━━━━
+11. COMPOSITION
+━━━━━━━━━━━━━━━━━━
+
+Preserve the original camera framing whenever practical.
+
+Keep the mannequin large and immediately readable.
+
+The figure should occupy approximately 85–95% of the useful canvas while preserving enough white space to clearly read the extremities and pose.
+
+Do not crop hands or feet if they are visible and important in the original reference.
+
+Do not zoom out merely to create empty space.
+
+Do not change the viewpoint to make the pose easier to draw.
+
+━━━━━━━━━━━━━━━━━━
+12. PRIORITY ORDER
+━━━━━━━━━━━━━━━━━━
+
+When instructions conflict, follow this priority order:
+
+1. Original camera perspective and foreshortening.
+2. Joint placement and body orientation.
+3. Spatial depth and overlap.
+4. Support and weight distribution.
+5. Pose-driven body flow and silhouette rhythm.
+6. Plausible underlying anatomy beneath clothing.
+7. Simplification and visual cleanliness.
+
+Never sacrifice pose fidelity merely to make the mannequin cleaner or more anatomically conventional.
+
+━━━━━━━━━━━━━━━━━━
+FINAL OBJECTIVE
+━━━━━━━━━━━━━━━━━━
+
+The final image must function as an AI-to-AI pose transfer reference.
+
+Another image generation model should be able to receive this image together with a completely different character description and reconstruct:
+
+• the same camera relationship
+• the same body orientation
+• the same joint placement
+• the same foreshortening
+• the same depth relationships
+• the same support logic
+• the same weight distribution
+• the same line of action
+• the same pose-dependent body flow
+
+while allowing the new character’s own body proportions, clothing, identity, environment, and appearance to be determined independently.
+
+The final result should be a clean, volumetric, expressive pose reference — not a portrait, not a flat anatomy sketch, not a rendered 3D character, and not an environmental scene.

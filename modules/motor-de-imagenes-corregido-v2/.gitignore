@@ -7,3 +7,8 @@ Luz IA secrets/*.json
 .env
 .server-batch-data/
 exports/
+
+# Pose Library: fallback local de datos (imágenes, sketches, bank.json) —
+# el modo recomendado usa POSE_LIBRARY_DATA_DIR fuera del repo, esta entrada
+# es la red de seguridad para cuando esa env var no está seteada.
+pose-library-data/
