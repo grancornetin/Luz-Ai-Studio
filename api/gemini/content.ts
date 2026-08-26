@@ -901,7 +901,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // openBankPromptBuilders.ts buildOpenBankVenueAwareRewritePrompt).
     if (body.action === 'analyzeOpenBankVenue') {
       const { imageData, mimeType } = body.payload || {};
-      const response = await ai.models.generateContent({
+      // BUG REAL corregido (prueba 23, 27 ago 2026): esta era la única
+      // llamada a Gemini de todo el archivo sin generateContentWithRetry —
+      // se dispara sincrónicamente durante el loop de generación de shots,
+      // en la misma ventana en que otras llamadas de imagen ya están
+      // consumiendo cuota, así que es la más propensa a un 429. Sin retry,
+      // el 429 se propagaba sin capturar hasta el catch más externo del
+      // handler (responde 500 genérico) — confirmado en consola.txt de
+      // producción: 6/6 llamadas fallaron con "el endpoint devolvió 500" en
+      // la misma sesión. Mismo mecanismo de retry que ya usa
+      // redactOpenBankSingleShot más abajo.
+      const response = await generateContentWithRetry(ai, {
         model: 'gemini-2.5-flash',
         contents: [
           { role: 'user', parts: [

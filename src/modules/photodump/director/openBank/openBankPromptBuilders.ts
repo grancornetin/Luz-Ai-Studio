@@ -527,6 +527,26 @@ a esa misma experiencia. Un shot puede tener needsVenueAnchor=true (aporta
 continuidad de venue con el resto) e isMainVenue=false a la vez NUNCA — si
 comparte venue con otros shots, es porque es parte del venue principal.
 
+NO ABANDONAR UN SUB-ESPACIO CERRADO APENAS ENTRADO (bug real confirmado,
+prueba 23 ago 2026, reacción textual del usuario: "sin sentido, de pronto
+está frente a un espejo tomándose la selfie en la terraza, hubiera
+funcionado mejor dentro del mismo baño como continuidad... se siente fuera
+de lugar e ilógico para la historia"): si un shot entra a un sub-espacio
+cerrado del venue (baño, vestidor, ascensor — ver isEnclosedSubSpace) para
+un mirror selfie o un momento íntimo, el shot INMEDIATAMENTE siguiente no
+puede volver de golpe a un área abierta del venue sin ninguna razón
+narrativa — ese salto se lee como que nunca estuvo ahí, no como una
+transición real de la noche. Si el candidato elegido para el sub-espacio es
+fuerte, preferí sacarle más de un shot ahí antes de salir (ej. un mirror
+selfie de cuerpo entero seguido de un selfie de brazo/close-up en el mismo
+baño, mismo espejo, ángulo distinto) — el banco tiene variedad real de
+encuadres dentro de un mismo tipo de espacio para esto. Si narrativamente
+hace falta volver al área abierta después, dejá al menos un shot de
+transición entre medio (o una nota explícita en shotReasoning de por qué
+sale, ej. "vuelve a la mesa con sus amigas") — nunca un salto directo de
+"selfie en el baño" a "selfie en la terraza" sin ningún shot ni mención que
+lo explique.
+
 Devolvé el resultado en el formato JSON pedido.`;
 }
 
@@ -596,6 +616,20 @@ REGLAS DURAS DE REDACCIÓN:
    a) Selfie de brazo extendido (SIN espejo en el encuadre): el ángulo/encuadre debe leerse como autocaptura (perspectiva ligeramente elevada, como fotografiándose a sí misma) — pero NUNCA muestres el teléfono en cuadro ni la mano sosteniéndolo; se resuelve solo con el ángulo de cámara y la postura del brazo, nunca describiendo el objeto. GEOMETRÍA DEL BRAZO (bug real confirmado: un selfie de auto redactado como "medium shot, upper torso and face" igual terminó con el brazo estirado lejos del cuerpo, mostrando de más el interior del auto/asiento en vez de un encuadre cercano) — el codo del brazo que sostiene el teléfono está DOBLADO y cerca del propio cuerpo/rostro, nunca extendido lejos hacia el frente; especificalo explícitamente en la descripción ("elbow bent, arm close to her body/face") para que el encuadre resultante sea realmente cercano, no solo decirlo en el tipo de plano.
    b) Mirror selfie (el shot muestra un espejo/reflejo real, ver regla 6 de las reglas no negociables sobre cuándo un espejo es creíble en el venue): acá el teléfono SÍ debe describirse, sostenido por la mano levantada hacia el rostro, visible EN EL REFLEJO — es lo que explica físicamente por qué existe esa imagen reflejada. Nunca omitas el teléfono en un mirror selfie: sin él, el reflejo queda sin justificación.
    c) Gesto posado captado por otra persona (compañía real presente, o casual/candid, SIN espejo ni selfie): la mano puede estar cerca de la cara con total naturalidad (tocándose el pelo, la mejilla, el cuello) porque hay alguien más sosteniendo la cámara — plano normal de tercero, sin ángulo elevado ni espejo.
+      SOLO VÁLIDA CON UNA RAZÓN REAL DE QUIÉN TOMA LA FOTO (bug real
+      confirmado, prueba 23 ago 2026, reacción textual del usuario: "se
+      siente fingido y poco natural, no aporta mucho, no se ve como una foto
+      instagram que alguien subiría naturalmente, aparece más bien una foto
+      editorial de una campaña"): esta lectura NUNCA es el default cuando el
+      shot no tiene compañía — si companionVisible=false y el shotReasoning
+      no da una razón candid explícita (ej. "se la tomó una desconocida que
+      le ofreció sacarle la foto", "está foto la sacó su amiga antes de
+      irse"), un plano posado y mirando fijo a cámara con ambas manos/brazos
+      en una pose deliberada no tiene quién lo haya tomado — se lee como una
+      foto de campaña/editorial, no como un momento real de esa noche. En
+      ese caso, resolvé el shot como (a) o (b) en vez de (c): una selfie de
+      brazo real (con el ángulo elevado y sin mostrar el teléfono, ver arriba)
+      es la lectura por default para un momento solitario sin compañía.
    Nunca mezcles estas lecturas en el mismo shot (ej. mano posada "libre" en la cara pero con ángulo de selfie, o un mirror selfie sin el teléfono en el reflejo) — esa mezcla es la ambigüedad real que rompe la sensación de "esta foto existe porque..." del manifiesto.
 6. SOLO DESCRIPCIÓN VISUAL LITERAL — NUNCA LENGUAJE INFERENCIAL O NARRATIVO: el finalPrompt lo lee un generador de imágenes, no un humano que entiende contexto — cualquier frase que describa un ESTADO o una HISTORIA inferida en vez de algo literalmente visible en el frame es ruido que el generador no puede ejecutar (no puede dibujar "parece que", solo puede dibujar objetos/poses/luces concretas). Los campos shotReasoning/existenceReason que recibiste arriba SON narrativos a propósito (explican la psicología del shot) — son insumo para que entiendas la intención, nunca texto a trasladar literal al finalPrompt. Ejemplos de lo que NO va en el finalPrompt: "she seems to have moved to a different part of the venue", "as if she just finished dinner", "suggesting a shift in the night", "implying she recently arrived" — todo esto se resuelve describiendo directamente lo que está en cuadro (ej. en vez de "parece que terminó de cenar": "an empty wine glass and a plate with food remnants are on the table"). Antes de escribir cualquier frase del finalPrompt, preguntate: ¿esto describe algo que la cámara literalmente ve, o es mi inferencia de qué pasó/está por pasar? Si es lo segundo, reescribilo como el objeto/pose/detalle concreto que sostiene esa inferencia.
    OJO CON LA VERSIÓN CORTA DEL MISMO ERROR — es la más frecuente y la más fácil de dejar pasar (bug real confirmado 2 veces en la misma sesión, en 2 formas distintas: "an empty wine glass and a plate with food remnants... suggesting the end of dinner"; "her gaze is downcast... implying a moment of personal enjoyment or contemplation"). En ambos casos la PRIMERA mitad de la frase es descripción visual literal perfecta — el problema es la coletilla pegada al final que la traduce a significado. REGLA MECÁNICA: después de escribir cualquier frase del finalPrompt, buscá si termina en "suggesting...", "implying...", "indicating...", "hinting at...", "as if...", "characteristic of..." (cuando se usa para justificar una emoción/momento, no una textura/material) — si aparece cualquiera de esas construcciones, BORRÁ esa parte de la frase y dejá solo la descripción física de antes. Esto aplica en particular a la dirección de la mirada (gaze) y a la expresión facial: "she looks slightly downward and to the left" es literal y correcta, agregarle "implying contemplation" o "suggesting she's lost in thought" no lo es — la mirada y expresión ya comunican eso por sí solas en la imagen, no hace falta explicarlo en el texto.
@@ -693,7 +727,7 @@ REGLAS DURAS DE REDACCIÓN:
 1. NUNCA describas ninguna prenda, color de ropa, o cómo cae/se acomoda la ropa del candidato del banco — el outfit lo resuelve la imagen de referencia del usuario. Tampoco inventes prendas nuevas que no están en ninguna referencia (bug real: "her jacket slips" describiendo una chaqueta inexistente) — si no podés confirmar que la prenda existe en la referencia real del outfit, no la menciones.
 2. La ILUMINACIÓN debe corresponder a la observación real de arriba (misma familia de luz que el resto del set), no al candidato del banco.
 3. FIDELIDAD DE PROPORCIÓN CORPORAL (misma prioridad que la identidad): no endereces, adelgaces, ni le agregues curvas a la protagonista que la referencia real de cuerpo no tiene.
-4. MECÁNICA FÍSICA DE CÓMO SE TOMÓ LA FOTO: si hay un gesto con la mano cerca del rostro o un espejo/reflejo, resolvé sin ambigüedad si es selfie de brazo extendido (sin mostrar el teléfono), mirror selfie (teléfono SÍ visible en el reflejo), o gesto captado por otra persona (mano libre, sin ángulo de selfie) — nunca mezclar estas 3 lecturas. En un selfie de brazo extendido, el codo va DOBLADO y cerca del cuerpo/rostro, nunca extendido lejos hacia el frente (bug real: un selfie de auto terminó mostrando de más el interior/asiento por un brazo estirado en vez de un encuadre cercano) — especificalo en la descripción ("elbow bent, arm close to her body/face").
+4. MECÁNICA FÍSICA DE CÓMO SE TOMÓ LA FOTO: si hay un gesto con la mano cerca del rostro o un espejo/reflejo, resolvé sin ambigüedad si es selfie de brazo extendido (sin mostrar el teléfono), mirror selfie (teléfono SÍ visible en el reflejo), o gesto captado por otra persona (mano libre, sin ángulo de selfie) — nunca mezclar estas 3 lecturas. En un selfie de brazo extendido, el codo va DOBLADO y cerca del cuerpo/rostro, nunca extendido lejos hacia el frente (bug real: un selfie de auto terminó mostrando de más el interior/asiento por un brazo estirado en vez de un encuadre cercano) — especificalo en la descripción ("elbow bent, arm close to her body/face"). "Gesto captado por otra persona" SOLO es válida si hay compañía real (companionVisible=true) o el shotReasoning da una razón candid explícita — sin eso, un plano posado mirando fijo a cámara no tiene quién lo haya tomado y se lee como foto de campaña/editorial, no como un momento real (bug real confirmado, prueba 23 ago 2026); en ese caso resolvé como selfie de brazo extendido en su lugar.
 5. SOLO DESCRIPCIÓN VISUAL LITERAL — NUNCA LENGUAJE INFERENCIAL O NARRATIVO: el finalPrompt lo lee un generador de imágenes, no puede ejecutar frases como "she seems to have moved to a different part of the venue" o "as if she just finished dinner" — describí directamente lo que está en cuadro (ej. "an empty wine glass and a plate with food remnants are on the table" en vez de "parece que terminó de cenar"). shotReasoning/existenceReason son insumo para entender la intención, nunca texto a trasladar literal. Ojo con la versión corta del mismo error (bug real confirmado: describir bien el objeto/mirada/expresión literal y después agregarle una coletilla tipo "suggesting the end of dinner" o "implying a moment of contemplation" pegada al final) — si ya describiste algo con precisión física, PARÁ ahí, no le agregues "suggesting...", "implying...", "indicating..." que lo traduzca a significado; esto aplica en particular a la dirección de la mirada y la expresión facial, que ya comunican la emoción por sí solas en la imagen.
 
 ACCESORIOS NO-ESENCIALES — REGLA DE SILENCIO POR DEFAULT: no menciones el accesorio salvo que el razonamiento haya dado una razón real.
