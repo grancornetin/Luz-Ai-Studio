@@ -206,7 +206,32 @@ export async function runDirector(
 // buildOpenBankVenueAwareRewritePrompt (openBankPromptBuilders.ts) para el
 // bug real que esto corrige.
 
+/**
+ * BUG REAL corregido (prueba 22, 26 ago 2026, confirmado por consola.txt en
+ * producción): venueAnchorUrl casi siempre YA es una data URL
+ * (imageApiService.generateImage devuelve el resultado de Gemini directo en
+ * base64, ver services/imageApiService.ts línea ~306) — nunca una URL http
+ * real. El código anterior siempre intentaba `fetch(imageUrl)` primero, y
+ * hacer fetch de una data: URL viola la Content Security Policy del sitio
+ * ("Refused to connect because it violates the document's Content Security
+ * Policy") — esto fallaba SIEMPRE, en el 100% de los shots de la sesión real
+ * (6/6 en consola.txt), no de forma intermitente. Como el catch silencioso ya
+ * existía, el bug nunca se vio hasta agregar el logging (sesión anterior) —
+ * la re-redacción individual con imagen real jamás corrió en producción
+ * mientras venueAnchorUrl fuera una data URL, cayendo siempre al prompt
+ * batch genérico ("reuse the exact same background") sin ningún anclaje
+ * visual real — la causa directa del mobiliario/props que aparecen "de la
+ * nada" en shots intermedios (ver openBankPromptBuilders.ts, comentario de
+ * cabecera de buildOpenBankVenueAwareRewritePrompt).
+ * Fix: parsear como data URL primero (sin red, nunca choca con CSP) — solo
+ * cae a fetch() si de verdad es una URL http real (ej. una imagen ya subida
+ * a Storage en algún flujo futuro).
+ */
 async function extractImageParts(imageUrl: string): Promise<{ data: string; mimeType: string } | null> {
+  const directMatch = imageUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/);
+  if (directMatch) {
+    return { mimeType: directMatch[1], data: directMatch[2] };
+  }
   try {
     const res = await fetch(imageUrl);
     if (!res.ok) {

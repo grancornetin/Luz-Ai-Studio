@@ -310,6 +310,20 @@ evidencia real de sobra para esto (grupos "detail_closeup"/"flat_lay").
   un solo vaso, sin comunicar cena/salida en grupo). Si el contexto sugiere
   compañía, preferí un candidato o describí el detalle con 2+ tragos/platos
   en vez de uno solo.
+- QUÉ NO CALIFICA COMO DETAIL SHOT VÁLIDO (bug real confirmado, prueba 22
+  ago 2026, reacción textual del usuario: "WTF, es una aberración, qué
+  aporta, qué lo justifica, es absurda"): un plano cenital de sus propios
+  pies/piernas apoyados en una mesa (grupo "pov_down" del banco) NO tiene
+  el mismo valor narrativo que comida/trago/vista/outfit sobre una
+  superficie — no transmite ni "la noche fue memorable" ni "se veía
+  increíble en el outfit" (el calzado normalmente ni siquiera es
+  identificable en ese encuadre), es un plano que existe en el banco por
+  variedad fotográfica pura, no porque alguien publicaría genuinamente esa
+  foto de una noche de salida. Antes de elegir un candidato de detail shot,
+  aplicá el mismo filtro de existenceReason que a cualquier otro shot: si
+  no podés completar "esta foto existe porque..." con una razón real y
+  específica (no genérica), no es un detail shot válido para este set —
+  preferí quedarte con menos shots totales antes que sumar uno así.
 
 SI UN MIRROR SELFIE OCURRE EN EL BAÑO/ASCENSOR, NO LLEVES EL TRAGO (bug
 real confirmado: keptElements incluyó "holding a drink" para un mirror
@@ -332,6 +346,27 @@ objetivo de un shot es mostrar el outfit completo, ESE shot no puede ser
 selfie de brazo — usá plano posado o mirror selfie. Cuando elijas uno,
 dejalo explícito en vehicleLabel (ej. "selfie de brazo extendido mirando a
 la vista").
+
+DÓNDE SE TOMA UN SELFIE (bug real confirmado, prueba 22 ago 2026): tanto el
+selfie de brazo extendido como el mirror selfie tienen una lógica social real
+detrás de POR QUÉ se eligen para publicar — nadie se saca este tipo de foto
+en cualquier parte del venue, se busca un momento/rincón donde no haya
+desconocidos ni elementos de fondo que compitan por la atención con la
+protagonista (bug real: un selfie de brazo terminó con 8+ comensales
+desconocidos llenando todo el fondo, una mesa concurrida y sin ninguna
+privacidad — el resultado se siente como una foto robada en medio de una
+cena ajena, no como el momento personal que un selfie real transmite). El
+banco tiene decenas de ejemplos reales de este patrón (selfies en fondos
+despejados, rincones bonitos, vistas, o con como mucho 1-2 personas
+reconocibles y desenfocadas, nunca una multitud nítida) — al elegir
+candidato y redactar el fondo, priorizá un sector del venue real que esté
+efectivamente despejado (la baranda/vista, un rincón decorado, el pasillo,
+el baño) por sobre el área central concurrida (la mesa grupal, la barra
+llena, el salón principal) para CUALQUIER shot tipo selfie. Esto no es
+"borrar gente de la imagen" — es elegir QUÉ PARTE del venue sirve de fondo
+para este tipo de foto puntual, la misma lógica que ya aplica el director a
+otros shots (ver DIVERSIDAD REAL arriba: escaleras, barandas, umbrales,
+rincones con textura propia).
 
 NO DUPLICAR "DE PIE, FRONTAL, CUERPO ENTERO" (bug real: 2 fotos casi
 idénticas en el mismo set — de pie, torso derecho a cámara, sonriendo, sin
