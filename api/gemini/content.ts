@@ -347,7 +347,12 @@ async function runOpenBankDirector(
   if (!totalShotsRequested) throw new Error(`Nivel inválido para banco abierto: ${level}`);
 
   const snapshot = loadPhotodumpBankSnapshot();
-  const widePool = buildWideCandidatePool(snapshot.items, 25);
+  // Seed real por sesión (no por brief — el mismo brief se repite entre
+  // pruebas del usuario) para que buildWideCandidatePool muestree una
+  // porción distinta del banco cada vez (ver bug real corregido en su
+  // comentario de cabecera, openBankFilter.ts).
+  const wideSeed = `${Date.now()}::${Math.random()}`;
+  const widePool = buildWideCandidatePool(snapshot.items, 25, wideSeed);
 
   const decidePrompt = buildOpenBankDecidePrompt(brief, totalShotsRequested, widePool, undefined, energy);
   const decideResponse = await generateContentWithRetry(

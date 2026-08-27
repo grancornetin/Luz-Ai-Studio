@@ -106,6 +106,14 @@ function toWideCandidate(item: OpenBankAnalysisItem): WideCandidate {
   };
 }
 
+function hashString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
 /**
  * Arma el panorama amplio: TODO el banco utilizable, agrupado por shotType
  * normalizado, en formato comprimido (1 línea por candidato) — sin filtrar
@@ -116,6 +124,22 @@ function toWideCandidate(item: OpenBankAnalysisItem): WideCandidate {
  * al panorama, para controlar tamaño de prompt sin perder cobertura de la
  * VARIEDAD de tipos (todo shotType con contenido real queda representado).
  *
+ * BUG REAL corregido (prueba 24, 27 ago 2026, diagnóstico del usuario): el
+ * corte `< maxPerType` siempre tomaba los candidatos en el mismo orden fijo
+ * del banco compilado — para un shotType con muchos más items reales que el
+ * tope (ej. selfie_frontal: 118 reales, tope 25), el director SIEMPRE veía
+ * exactamente los mismos primeros 25 en TODAS las sesiones, sin importar
+ * cuántas veces se corriera, y por lo tanto tendía a repetir el mismo puñado
+ * de poses de selfie una y otra vez — el banco tenía variedad real (~100
+ * candidatos más) que nunca llegaba siquiera a mostrarse. Mismo patrón ya
+ * identificado antes para "vetas de escena" (ver detectSceneTag/
+ * detectPreparationScene abajo) pero sin resolver para el caso general del
+ * corte por shotType. Fix: mezclar `usable` con un hash determinístico por
+ * `seed` (mismo mecanismo que nightMoments.ts hashString/sort-by-hash-key)
+ * ANTES de agrupar — con seed distinta cada sesión, cada corte de
+ * maxPerType expone una porción distinta de los candidatos reales del
+ * shotType, sin perder el control de tamaño del prompt.
+ *
  * Además de por shotType, el pool incluye grupos extra por ESCENA detectada
  * (ver SCENE_KEYWORDS/detectSceneTag) con prefijo "escena:" — garantiza que
  * vetas de contenido temáticamente coherentes (club real, transición en
@@ -125,8 +149,15 @@ function toWideCandidate(item: OpenBankAnalysisItem): WideCandidate {
 export function buildWideCandidatePool(
   bankItems: OpenBankAnalysisItem[],
   maxPerType: number = 25,
+  seed?: string,
 ): WideCandidatePool {
-  const usable = bankItems.filter(isUsable);
+  const usableUnordered = bankItems.filter(isUsable);
+  const usable = seed
+    ? usableUnordered
+        .map(item => ({ item, key: hashString(`${seed}::widepool::${item.itemId}`) }))
+        .sort((a, b) => a.key - b.key)
+        .map(({ item }) => item)
+    : usableUnordered;
   const pool: WideCandidatePool = {};
 
   for (const item of usable) {

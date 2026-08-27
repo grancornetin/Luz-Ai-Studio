@@ -595,12 +595,22 @@ export async function generateOutfitNightOutShot(
       openBankContract, refs, destino, basePrompt, sessionParams, shotIndex, totalShots,
       { venueAnchorUrl, companionRef },
     );
-    // Solo actualiza el ancla si este shot es del venue principal — nunca
-    // con un shot de otra etapa (auto, casa antes de salir). Si todavía no
-    // había ancla fijada (ningún shot anterior fue isMainVenue=true) y este
-    // sí lo es, este shot la fija por primera vez. isMainVenue !== false
-    // (no === true) como red de seguridad ante planes viejos sin el campo.
-    if (shotDecision?.isMainVenue !== false) venueAnchorCache.set(key, result);
+    // BUG REAL corregido (prueba 24, 27 ago 2026): faltaba la condición
+    // "!venueAnchorCache.has(key)" — sin ella, CUALQUIER shot posterior con
+    // isMainVenue !== false volvía a sobreescribir el ancla (ej. un mirror
+    // selfie de baño, también isMainVenue=true por diseño, ver comentario de
+    // isMainVenue en openBankPromptBuilders.ts), convirtiendo esto en una
+    // cadena "shot N-1" en vez del ancla FIJA al primer shot isMainVenue=true
+    // que el comentario de arriba y el resto de esta arquitectura asumían.
+    // Confirmado en producción: el lavabo del baño (shot 4) se coló como
+    // fondo en los shots 5, 6 y 7 — todos posteriores heredaban visualmente
+    // el ancla más reciente (el baño), no el rooftop original del shot 1.
+    // Fix: solo fija el ancla la PRIMERA vez que un shot isMainVenue=true
+    // aparece en la sesión — todos los siguientes la usan sin modificarla,
+    // sin importar cuántos otros shots isMainVenue=true vengan después.
+    if (shotDecision?.isMainVenue !== false && !venueAnchorCache.has(key)) {
+      venueAnchorCache.set(key, result);
+    }
     return result;
   }
 
