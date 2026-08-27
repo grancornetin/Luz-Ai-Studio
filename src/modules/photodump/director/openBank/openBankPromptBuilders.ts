@@ -53,13 +53,14 @@ export const OPEN_BANK_PLAN_SCHEMA = {
           companionVisible: { type: 'boolean' },
           footwearVisible: { type: 'boolean' },
           protagonistVisible: { type: 'boolean' },
+          outfitFramingVisible: { type: 'boolean' },
         },
         required: [
           'vehicleLabel', 'narrativeAxis', 'psychologicalDrive', 'psychologicalReasoning',
           'chosenCandidateId', 'shotReasoning',
           'keptElements', 'discardedElements', 'needsVenueAnchor', 'continuityNote', 'isMainVenue',
           'accessoryReasoning', 'timelineStage', 'existenceReason',
-          'companionVisible', 'footwearVisible', 'protagonistVisible',
+          'companionVisible', 'footwearVisible', 'protagonistVisible', 'outfitFramingVisible',
         ],
       },
     },
@@ -438,6 +439,20 @@ razón real para que esté en la escena" (nunca dejes un accesorio
 "estacionado" en la escena sin que nadie lo sostenga ni haya una razón
 narrativa real para que esté ahí).
 
+CONTINUIDAD DEL TRAGO/BEBIDA ENTRE SHOTS DEL MISMO SET (bug real confirmado
+2 veces, pruebas 25 y 26 ago 2026): si más de un shot del set muestra a la
+protagonista con un trago en mano, o un detail shot del trago sobre la
+mesa, ese trago tiene que ser el MISMO en todos esos shots — mismo tipo de
+copa, mismo color/contenido (ej. si en un shot ella bebe un cóctel verde
+con lima, el detail shot de la mesa y cualquier otro shot con trago en
+mano deben describir ESE MISMO cóctel verde con lima, no un Negroni rojo
+o un trago distinto inventado por el redactor de ese shot puntual). Esto
+es el mismo principio de "reusar lo ya establecido" que ya aplica al
+mobiliario del venue (ver ANCLAJE ESPACIAL DEL MOBILIARIO más abajo), pero
+para un objeto personal en vez de un elemento fijo del lugar — declará en
+keptElements/shotReasoning qué trago específico corresponde reusar cuando
+el shot lo amerite.
+
 MOTIVO DE EXISTENCIA (existenceReason, obligatorio): completá "esta foto
 existe porque..." con la razón concreta por la que la PROTAGONISTA
 publicaría esta foto — nunca una respuesta genérica tipo "para mostrar el
@@ -466,6 +481,23 @@ referencia reales se usan para generar la imagen, no son solo descriptivos):
   candidato real) muestra los pies/calzado de la protagonista dentro del
   plano — false si es un encuadre que corta antes (close-up de rostro,
   medio cuerpo, plano de manos/objeto).
+- outfitFramingVisible (bug real confirmado, prueba 26 ago 2026): false SOLO
+  para un close-up real donde el encuadre corta a la altura del pecho/cuello
+  hacia arriba — la prenda apenas se ve o no se ve en absoluto (ej. un selfie
+  de brazo extendido mostrando solo rostro/hombros, un close-up de auto desde
+  el pecho hacia arriba). true para cualquier encuadre que sí muestre el
+  torso/prenda con claridad (medio cuerpo, cuerpo entero, sentada a la mesa
+  con el top visible) — la mayoría de shots. Esta señal decide si se manda o
+  no la foto de referencia de outfit completo (cuerpo entero) al generador:
+  cuando un shot pide un close-up de rostro EN TEXTO pero igual recibe esa
+  referencia de cuerpo entero, el generador tiende a copiar su composición y
+  termina produciendo un plano de cuerpo entero en vez del close-up pedido
+  (bug real confirmado 2 veces en la misma sesión: un selfie de auto y un
+  selfie de brazo, ambos redactados correctamente como close-up, salieron
+  como cuerpo entero de todas formas). Declarar outfitFramingVisible=false en
+  un close-up real evita esa competencia visual. Si tenés dudas sobre si la
+  prenda es visible en el encuadre, dejalo en true (el default seguro que
+  prioriza fidelidad de outfit).
 
 LÍNEA DE TIEMPO (timelineStages, 2 a 4 bloques amplios) — solo para evitar
 contradicciones groseras de continuidad (un shot de "yéndose" seguido de
@@ -717,6 +749,28 @@ CONTINUIDAD DE VENUE — ESTO NO ES UNA INSTRUCCIÓN ABSTRACTA, ES UNA OBSERVACI
 Cómo usar esta observación depende de si el director marcó continuidad explícita (ver arriba):
 - Si SÍ la marcó ("Sí — ..."): este shot comparte el mismo encuadre/mobiliario que otro shot puntual del set — describí el venue USANDO los elementos reales de la observación — mismo material, mismo estilo, misma posición relativa — en vez de inventar tu propia versión de la baranda/mesa/mobiliario. Si tu pose necesita que la protagonista esté cerca de un elemento (ej. apoyada en una baranda), usá el elemento real descrito arriba y su posición real en el encuadre — si hace falta, ajustá la pose para que sea coherente con dónde está realmente ese elemento, nunca inventes uno nuevo donde te convenga para la pose.
 - Si NO la marcó explícitamente: este shot puede ser otro rincón/ángulo del MISMO venue (ej. la barra en vez de la mesa, otro lado de la terraza) — no estás obligado a mostrar exactamente el mismo mueble, pero SÍ tenés que mantener el mismo estilo/material/paleta que la observación describe (si el venue tiene mesas de madera oscura y luz cálida, este rincón nuevo también, aunque no sea literalmente la misma mesa) — nunca contradigas el estilo ya establecido inventando una estética distinta.
+
+DENSIDAD DE GENTE DEL VENUE, NO SOLO EL MOBILIARIO (bug real confirmado,
+prueba 26 ago 2026): si la observación de arriba menciona comensales/gente
+real de fondo, ese mismo nivel de actividad tiene que mantenerse en este
+shot (salvo que el shot ocurra en un espacio interior cerrado distinto, ver
+más abajo) — un venue que se ve concurrido en un shot y completamente
+desierto en el siguiente, con el mismo mobiliario exacto, se lee como que
+el lugar cerró entre una foto y la otra. Si la observación no menciona gente
+(o dice explícitamente que está vacío), no inventes gente nueva tampoco —
+reflejá lo que la observación realmente describe, en cualquiera de las 2
+direcciones.
+
+ESTILO DE MATERIALES DEL VENUE TAMBIÉN APLICA A MARCOS/DETALLES DECORATIVOS,
+NO SOLO AL FONDO (bug real confirmado, prueba 25 ago 2026): si un shot usa
+un espejo/marco/objeto decorativo que no es parte del mobiliario principal
+ya observado, ese objeto también tiene que matchear el estilo general del
+venue (ej. un venue con estética industrial/moderna — metal negro mate,
+líneas simples — no debería tener un espejo con marco dorado ornamentado
+tipo antigüedad, aunque el resto del encuadre esté bien resuelto). No
+alcanza con que el FONDO reflejado coincida — cualquier objeto/marco nuevo
+que se introduzca en el shot debe ser del mismo lenguaje visual que ya
+estableció la observación.
 
 COPIÁ LOS DATOS CONCRETOS DE LA OBSERVACIÓN, NO LA PARAFRASEÉS EN ABSTRACTO (aplica sobre todo cuando SÍ hay continuidad explícita marcada): si la observación dice un material/color/posición específico, ese texto (o su traducción literal al inglés) tiene que aparecer en el finalPrompt — no la reemplaces por una descripción genérica tipo "an elegant railing" ni por una alternativa ("a city view or a railing"). Nunca escribas "X or Y" en la descripción del venue: la observación de arriba ya te dice qué hay, elegí eso y solo eso, sin ofrecer alternativas al generador de imágenes.
 ${venueObservation.isEnclosedSubSpace ? `

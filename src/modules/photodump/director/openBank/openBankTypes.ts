@@ -118,6 +118,22 @@ export interface OpenBankShotDecision {
   // Si el encuadre elegido muestra los pies/calzado de la protagonista — reemplaza el
   // valor fijo por shotId que usa el modo categorized (footwearVisible en ShotContract).
   footwearVisible: boolean;
+  // Si el encuadre elegido muestra la prenda/outfit con claridad suficiente como para
+  // que la referencia real de outfit completo (foto de cuerpo entero) aporte fidelidad
+  // — false para un close-up de rostro/selfie donde apenas se ve un hombro o nada de
+  // la ropa. Bug real confirmado (prueba 26, 27 ago 2026): un selfie de auto y un
+  // selfie de brazo, ambos redactados correctamente en texto como close-up ("face in
+  // the upper central third", "occupying most of the frame from chest to just above
+  // her head"), terminaron generados como plano de cuerpo entero de todas formas — la
+  // referencia de outfit completo que igual se mandaba (useOutfitRefs no distinguía
+  // por encuadre) competía visualmente con la instrucción de encuadre del texto y el
+  // generador terminó reproduciendo la composición de la referencia. Cuando es false,
+  // openBankToShotContract omite useOutfitRefs — el outfit para ESE shot puntual se
+  // resuelve solo por identidad/cuerpo + lo que el texto describe, sin la referencia
+  // de cuerpo entero compitiendo con el encuadre cercano. Default esperado: true (la
+  // mayoría de shots sí necesita fidelidad de outfit) — false solo para close-ups
+  // reales donde el encuadre ya excluye la prenda por diseño.
+  outfitFramingVisible: boolean;
   // Si la protagonista aparece en cuadro (rostro, cuerpo o parte identificable de
   // ella) en ESTE shot. Default esperado: true (la gran mayoría de un rollo real
   // sigue siendo fotos de ella). false habilita "detail shots" reales sin

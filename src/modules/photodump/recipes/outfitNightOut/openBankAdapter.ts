@@ -61,13 +61,26 @@ export function openBankToShotContract(shot: OpenBankShotDecision, index: number
   // openBankPromptBuilders.ts) — no tiene sentido enrutar sus referencias de
   // identidad/cuerpo/outfit a una imagen que no debería mostrarla.
   const protagonistVisible = shot.protagonistVisible !== false;
+  // BUG REAL corregido (prueba 26, 27 ago 2026): useOutfitRefs era true para
+  // CUALQUIER shot con protagonista visible, incluidos close-ups de rostro
+  // donde el texto pedía explícitamente un encuadre cercano (ej. "face in
+  // the upper central third of the frame") — la referencia de outfit
+  // completo (cuerpo entero) igual se mandaba, y el generador de imagen
+  // terminó copiando su composición en vez de seguir el encuadre del texto,
+  // produciendo un plano de cuerpo entero en 2 selfies distintas de la misma
+  // sesión real. outfitFramingVisible (declarado por el director viendo el
+  // candidato real) es la señal de si la prenda es identificable en ESTE
+  // encuadre puntual — solo entonces vale la pena mandar la referencia de
+  // cuerpo entero. Default true (!== false) como red de seguridad ante
+  // planes viejos sin el campo, mismo patrón que footwearVisible.
+  const outfitFramingVisible = shot.outfitFramingVisible !== false;
   return {
     shotId: openBankShotId(index),
     cameraGrammar: { framing: 'DIRECTOR_DEFINED', angle: 'DIRECTOR_DEFINED', composition: 'DIRECTOR_DEFINED' },
     referencePolicy: {
       useIdentityRef: protagonistVisible,
       useBodyRef: protagonistVisible,
-      useOutfitRefs: protagonistVisible,
+      useOutfitRefs: protagonistVisible && outfitFramingVisible,
       useCompanionRef: protagonistVisible && shot.companionVisible,
     },
     hpiPoseFamily: null,
