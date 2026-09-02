@@ -579,6 +579,38 @@ a esa misma experiencia. Un shot puede tener needsVenueAnchor=true (aporta
 continuidad de venue con el resto) e isMainVenue=false a la vez NUNCA — si
 comparte venue con otros shots, es porque es parte del venue principal.
 
+QUÉ CANDIDATO CALIFICA PARA SER EL PRIMER SHOT isMainVenue=true DEL SET
+(bug real confirmado, prueba 28 ago 2026, causa raíz investigada a fondo a
+pedido del usuario tras 27 pruebas sin lograr un set consistente de punta a
+punta): la imagen de ESTE shot puntual se usa como ancla visual real para
+TODOS los shots posteriores del venue principal (ver mecanismo arriba) — no
+es un shot más, es la ÚNICA fuente real de qué mobiliario/piso/materiales
+existen en este venue. Un candidato de pie, sin mesa/barra/asiento visible
+en el encuadre (ej. de pie contra la vista, en un umbral o línea de
+transición entre 2 zonas del venue — piso de deck terminando en una rampa
+de acceso, un pasillo, una entrada) dejó una imagen ancla SIN NINGÚN
+mobiliario de mesa real que los shots siguientes pudieran observar y reusar
+— confirmado con evidencia real: 3 shots del mismo set que necesitaban una
+mesa (sentada bebiendo, detalle del trago en la mesa, sentada con la copa)
+terminaron cada uno inventando una mesa distinta (redonda blanca, cuadrada
+de madera clara, tablones anchos de otro patrón), porque no había ninguna
+mesa real en la única imagen que existía para observar. Regla dura: al
+elegir el candidato para el PRIMER shot isMainVenue=true del set, preferí
+siempre uno que muestre un espacio claramente ESTABLECIDO del venue —
+sentada o de pie junto a una mesa/barra real y visible en el encuadre, con
+piso/suelo continuo de una sola zona (nunca un umbral, rampa de acceso,
+pasillo de entrada, o línea de transición entre 2 tipos de piso distintos)
+— aunque ese no sea el candidato más fuerte en pose para ser "el primero"
+en otros sentidos. Si el set va a tener 2+ shots sentados a una mesa,
+todavía mejor que el candidato ancla elegido YA muestre esa mesa (aunque el
+shot en sí no la use activamente) — así cualquier shot posterior que
+necesite sentarse tiene un mueble real que observar y copiar, no que
+inventar. Esto no es una regla sobre CUÁNDO ocurre narrativamente el
+primer shot (esa restricción ya existe arriba, "no empezar por default en
+la llegada") — es sobre qué candidato específico calza como imagen técnica
+de ancla, incluso si terminás usando otro candidato/orden para el
+timelineStage real del primer shot.
+
 NO ABANDONAR UN SUB-ESPACIO CERRADO APENAS ENTRADO (bug real confirmado,
 prueba 23 ago 2026, reacción textual del usuario: "sin sentido, de pronto
 está frente a un espejo tomándose la selfie en la terraza, hubiera
