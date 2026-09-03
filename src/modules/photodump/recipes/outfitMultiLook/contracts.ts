@@ -18,23 +18,61 @@
  * determinísticamente por look.sourceIndex, mismo principio que
  * NEUTRAL_POSE_VARIANTS en intelligenceLayer.ts, para que ningún set repita
  * el mismo ángulo de variación en dos looks consecutivos.
+ *
+ * Grupos de variación enriquecidos con el banco real (sep 2026, aplicando
+ * la misma disciplina que outfit_check/poseClient.ts): se auditó volumen
+ * real del banco de 733 fotos ANTES de elegir estos 3 grupos, y se verificó
+ * el TEXTO de una muestra real de cada uno (no solo el conteo) — keywords
+ * sueltas dieron falsos positivos en 2 rondas distintas: "espalda" solo
+ * capturaba "espalda apoyada contra una pared" (no vista trasera del
+ * outfit); "inclinad"/"apoyad" sueltas capturaban micro-giros de cabeza
+ * ("cabeza ligeramente inclinada"), no la actitud corporal completa. Con
+ * las frases exactas verificadas: back_view: 11 candidatos ("de espaldas a
+ * la cámara"), side_profile: 31 ("de perfil derecho/izquierdo"),
+ * alt_pose: 206 ("sentada"/"agachada"/"recostada", participio completo).
+ * El 3er ángulo original ("fabric_detail_closeup") se descartó: solo 2
+ * candidatos en todo el banco Y ya tenía un bug real documentado de
+ * fidelidad de color (ver manifiesto 12_ESTADO_ACTUAL_retomar_aqui.md) —
+ * en vez de forzarlo, se reemplazó por alt_pose (actitud corporal distinta
+ * — sentada/agachada/recostada — mismo mirror-selfie, sigue mostrando el
+ * outfit completo).
  */
 import type {
   LookItem, MultiLookIntent, MultiLookAccessory, ShotContract, ReferencePolicy,
   CameraGrammarRef, LookPoseIntensity, MultiLookShotAngle,
 } from './types';
+import { fetchPoseCandidatesByKeyword, pickOneCandidate, buildPoseAttitudeLine } from '../outfitCheck/poseClient';
 
 // Ángulos de variación disponibles para curated_ideas — rotados por posición
 // del look, no elegidos al azar (reproducible, sin depender de Math.random).
 const VARIATION_ANGLES: CameraGrammarRef[] = [
   { framing: 'MEDIUM_FULL', angle: 'eye_level', composition: 'mirror_selfie_back_view' },
   { framing: 'MEDIUM_FULL', angle: 'eye_level', composition: 'mirror_selfie_side_profile' },
-  { framing: 'CLOSE_UP',    angle: 'eye_level', composition: 'fabric_detail_closeup' },
+  { framing: 'MEDIUM_FULL', angle: 'eye_level', composition: 'mirror_selfie_alt_pose' },
 ];
+
+// Palabras clave por grupo — cada una respaldada por el conteo real citado
+// arriba. Ver getOutfitCheckPoseCandidates en api/gemini/content.ts (modo
+// poseKeywordGroups) para el filtro real sobre subject_pose.
+const POSE_KEYWORD_GROUPS: Record<string, string[]> = {
+  mirror_selfie_back_view:    ['de espaldas'],
+  mirror_selfie_side_profile: ['de perfil'],
+  mirror_selfie_alt_pose:     ['sentada', 'sentado', 'agachada', 'agachado', 'recostada', 'recostado'],
+};
 
 function variationAngleFor(look: LookItem): CameraGrammarRef {
   const idx = ((look.sourceIndex % VARIATION_ANGLES.length) + VARIATION_ANGLES.length) % VARIATION_ANGLES.length;
   return VARIATION_ANGLES[idx];
+}
+
+// Una sola llamada de red por sesión (los 3 grupos juntos), mismo criterio
+// que outfitCheckPoseCandidates — nunca una llamada por shot. Devuelve mapa
+// vacío (nunca lanza) si falla; el caller cae a los textos genéricos ya
+// validados de promptBuilder.ts, nunca bloquea la generación por esto.
+export async function fetchMultiLookVariationPoses(
+  seed: string,
+): Promise<Record<string, import('../outfitCheck/poseClient').OutfitCheckPoseCandidate[]>> {
+  return fetchPoseCandidatesByKeyword(POSE_KEYWORD_GROUPS, seed, 5);
 }
 
 function cameraGrammarFor(intent: MultiLookIntent, look: LookItem, angle: MultiLookShotAngle): CameraGrammarRef {
@@ -73,11 +111,12 @@ function accessoryUrlsFor(look: LookItem, accessories: MultiLookAccessory[]): st
 }
 
 export function buildShotContract(
-  look:            LookItem,
-  intent:          MultiLookIntent,
-  angle:           MultiLookShotAngle = 'frontal',
-  chainAnchorUrl?: string,
-  accessories:     MultiLookAccessory[] = [],
+  look:              LookItem,
+  intent:            MultiLookIntent,
+  angle:             MultiLookShotAngle = 'frontal',
+  chainAnchorUrl?:   string,
+  accessories:       MultiLookAccessory[] = [],
+  poseAttitudeLine?: string,
 ): ShotContract {
   return {
     shotId:          angle === 'frontal' ? `shot_${look.id}` : `shot_${look.id}_${angle}`,
@@ -87,21 +126,33 @@ export function buildShotContract(
     poseIntensity:   poseIntensityFor(intent, look),
     angle,
     chainAnchorUrl,
+    poseAttitudeLine,
   };
 }
 
-export function buildShotContracts(
+export async function buildShotContracts(
   looks:       LookItem[],
   intent:      MultiLookIntent,
   chainAnchorByLookId?: Map<string, string>,
   accessories: MultiLookAccessory[] = [],
-): ShotContract[] {
+  seedKey?:    string,
+): Promise<ShotContract[]> {
+  // Una sola llamada de red para todo el set (nunca por shot) — solo se usa
+  // en curated_ideas, único caso con shots de variación.
+  const variationPoses = (intent === 'curated_ideas' && seedKey)
+    ? await fetchMultiLookVariationPoses(seedKey)
+    : {};
+
   const contracts: ShotContract[] = [];
   for (const look of looks) {
     const chainAnchorUrl = chainAnchorByLookId?.get(look.id);
     contracts.push(buildShotContract(look, intent, 'frontal', chainAnchorUrl, accessories));
     if (intent === 'curated_ideas') {
-      contracts.push(buildShotContract(look, intent, 'variation', chainAnchorUrl, accessories));
+      const composition = variationAngleFor(look).composition;
+      const candidates = variationPoses[composition] ?? [];
+      const chosen = pickOneCandidate(candidates, `${seedKey ?? ''}::${look.id}`);
+      const poseAttitudeLine = buildPoseAttitudeLine(chosen) || undefined;
+      contracts.push(buildShotContract(look, intent, 'variation', chainAnchorUrl, accessories, poseAttitudeLine));
     }
   }
   return contracts;

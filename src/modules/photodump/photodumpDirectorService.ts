@@ -968,7 +968,7 @@ export async function buildPhotodumpSessionPlan(
   // ancla (fija vs. cadena) se deriva directamente de la intención, sin
   // detección de estilo por IA de por medio.
   if (recipe === 'outfit_multi_look' && refs) {
-    const { directives } = buildOutfitMultiLookDirectives(refs, count);
+    const { directives } = await buildOutfitMultiLookDirectives(refs, count, sessionId || basePrompt);
     const shots: PhotodumpShotDirective[] = directives.map((d, i) => ({
       ...d,
       arcPosition: i + 1,

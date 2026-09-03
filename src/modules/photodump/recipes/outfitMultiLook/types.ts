@@ -89,6 +89,11 @@ export interface ShotContract {
   angle:           MultiLookShotAngle;
   // Solo poblado para trip_recap — la imagen de ancla de ESTE eslabón de la cadena.
   chainAnchorUrl?: string;
+  // Solo curated_ideas, shot de variación (sep 2026): línea de actitud real
+  // del banco (pose/gesto/mirada) para el grupo que le tocó rotar — ver
+  // fetchPoseCandidatesByKeyword en outfitCheck/poseClient.ts. undefined si
+  // no hay candidato disponible (el shot cae a su texto genérico).
+  poseAttitudeLine?: string;
 }
 
 // ── Validación ────────────────────────────────────────────────────────────
@@ -117,6 +122,11 @@ export interface OutfitMultiLookShotPlan {
   lookId: string;
   intent: MultiLookIntent;
   angle:  MultiLookShotAngle;
+  // Solo curated_ideas, angle==='variation' (sep 2026): línea de actitud
+  // real del banco ya resuelta en buildOutfitMultiLookDirectives — viaja acá
+  // para que generateOutfitMultiLookShot no repita la llamada de red al
+  // generar la imagen real (misma llamada de sesión, nunca una por shot).
+  poseAttitudeLine?: string;
 }
 
 // ── Debug ─────────────────────────────────────────────────────────────────

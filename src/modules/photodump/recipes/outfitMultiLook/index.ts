@@ -61,13 +61,14 @@ export interface OutfitMultiLookPlan {
   shotContracts: ShotContract[];
 }
 
-export function buildOutfitMultiLookDirectives(
+export async function buildOutfitMultiLookDirectives(
   refs:           PhotodumpRefs,
   requestedCount: number,
-): { directives: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[]; plan: OutfitMultiLookPlan } {
+  seedKey?:       string,
+): Promise<{ directives: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[]; plan: OutfitMultiLookPlan }> {
   const manifest = buildMultiLookManifest(refs);
   const allocation = allocateLookShots(manifest.looks, requestedCountToLookCount(requestedCount, manifest.intent));
-  const shotContracts = buildShotContracts(allocation.looksToShoot, manifest.intent, undefined, manifest.accessories);
+  const shotContracts = await buildShotContracts(allocation.looksToShoot, manifest.intent, undefined, manifest.accessories, seedKey);
 
   const directives = shotContracts.map((contract): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> => {
     const plan: OutfitMultiLookShotPlan = {
@@ -75,6 +76,7 @@ export function buildOutfitMultiLookDirectives(
       lookId: contract.look.id,
       intent: manifest.intent,
       angle:  contract.angle,
+      poseAttitudeLine: contract.poseAttitudeLine,
     };
     return {
       key:                contract.shotId,
@@ -237,7 +239,10 @@ export async function generateOutfitMultiLookShot(
     return { imageUrl: anchorImageUrl, prompt: 'trip_recap chain link', refsCount: 1, debug };
   }
 
-  const contract = buildShotContract(look, manifest.intent, angle, undefined, manifest.accessories);
+  // poseAttitudeLine ya se resolvió UNA vez en buildOutfitMultiLookDirectives
+  // (ver contracts.ts) y viaja en el plan guardado — nunca se repite la
+  // llamada de red al generar la imagen real.
+  const contract = buildShotContract(look, manifest.intent, angle, undefined, manifest.accessories, shot.outfitMultiLookPlan?.poseAttitudeLine);
 
   const contractValidation = validateShotContract(contract, manifest.intent);
   if (!contractValidation.passed) {

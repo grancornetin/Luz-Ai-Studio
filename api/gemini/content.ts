@@ -1120,42 +1120,78 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // "estructurado y confiable" ya validado ahí: shot_type normalizado,
     // nunca category/search_tags de texto libre).
     if (body.action === 'getOutfitCheckPoseCandidates') {
-      const { shotTypes, perType, seed } = body.payload || {};
-      if (!Array.isArray(shotTypes) || shotTypes.length === 0) {
-        return res.status(400).json({ error: 'Falta shotTypes (array no vacío)' });
+      const { shotTypes, poseKeywordGroups, perType, seed } = body.payload || {};
+      const hasShotTypes = Array.isArray(shotTypes) && shotTypes.length > 0;
+      const hasKeywordGroups = poseKeywordGroups && typeof poseKeywordGroups === 'object'
+        && Object.keys(poseKeywordGroups).length > 0;
+      if (!hasShotTypes && !hasKeywordGroups) {
+        return res.status(400).json({ error: 'Falta shotTypes o poseKeywordGroups (al menos uno no vacío)' });
       }
       const takePerType = Math.min(Math.max(Number(perType) || 3, 1), 10);
       const snapshot = loadPhotodumpBankSnapshot();
-      const wantedTypes = new Set(shotTypes.map((t: string) => normalizeShotType(t)));
 
-      const byType = new Map<string, { itemId: string; pose: string; gesture: string; gaze: string }[]>();
-      for (const item of snapshot.items) {
-        const d = (item as any).analysis?.raw_visual_description;
-        if (!d) continue;
-        const st = normalizeShotType(d.shot_type);
-        if (!wantedTypes.has(st)) continue;
-        if (!byType.has(st)) byType.set(st, []);
-        byType.get(st)!.push({
-          itemId: item.itemId,
-          pose: d.subject_pose || '',
-          gesture: d.subject_gesture || '',
-          gaze: d.subject_gaze || '',
-        });
+      const byGroup = new Map<string, { itemId: string; pose: string; gesture: string; gaze: string }[]>();
+
+      // Modo 1: shot_type normalizado — estructurado, confiable (ver
+      // comentario arriba: nunca category/search_tags de texto libre).
+      if (hasShotTypes) {
+        const wantedTypes = new Set(shotTypes.map((t: string) => normalizeShotType(t)));
+        for (const item of snapshot.items) {
+          const d = (item as any).analysis?.raw_visual_description;
+          if (!d) continue;
+          const st = normalizeShotType(d.shot_type);
+          if (!wantedTypes.has(st)) continue;
+          if (!byGroup.has(st)) byGroup.set(st, []);
+          byGroup.get(st)!.push({
+            itemId: item.itemId,
+            pose: d.subject_pose || '',
+            gesture: d.subject_gesture || '',
+            gaze: d.subject_gaze || '',
+          });
+        }
+      }
+
+      // Modo 2: keyword sobre subject_pose (sep 2026, outfit_multi_look/
+      // curated_ideas) — shot_type no distingue actitud corporal (sentada/
+      // inclinada/apoyada), solo tipo de encuadre. A diferencia de category/
+      // search_tags (descartados en julio por no confiables), acá cada
+      // grupo se valida con volumen real ANTES de usarse como filtro — ver
+      // recipes/outfitMultiLook/contracts.ts para el detalle de qué grupos
+      // están respaldados por evidencia. poseKeywordGroups: { groupKey:
+      // string[] de palabras, todas en minúscula } — un candidato entra en
+      // el grupo si subject_pose contiene alguna de sus palabras.
+      if (hasKeywordGroups) {
+        for (const [groupKey, keywords] of Object.entries(poseKeywordGroups as Record<string, string[]>)) {
+          if (!Array.isArray(keywords) || keywords.length === 0) continue;
+          for (const item of snapshot.items) {
+            const d = (item as any).analysis?.raw_visual_description;
+            if (!d) continue;
+            const poseText = (d.subject_pose || '').toLowerCase();
+            if (!keywords.some(k => poseText.includes(k))) continue;
+            if (!byGroup.has(groupKey)) byGroup.set(groupKey, []);
+            byGroup.get(groupKey)!.push({
+              itemId: item.itemId,
+              pose: d.subject_pose || '',
+              gesture: d.subject_gesture || '',
+              gaze: d.subject_gaze || '',
+            });
+          }
+        }
       }
 
       const result: Record<string, { itemId: string; pose: string; gesture: string; gaze: string }[]> = {};
-      for (const [shotType, candidates] of byType.entries()) {
+      for (const [groupKey, candidates] of byGroup.entries()) {
         // Mezcla determinística por seed (mismo mecanismo que
         // buildWideCandidatePool) — sin seed, siempre devuelve los mismos
         // primeros N candidatos del banco compilado, sin importar cuántas
         // veces se pida.
         const ordered = seed
           ? candidates
-              .map(c => ({ c, key: hashString(`${seed}::outfitCheckPose::${shotType}::${c.itemId}`) }))
+              .map(c => ({ c, key: hashString(`${seed}::outfitCheckPose::${groupKey}::${c.itemId}`) }))
               .sort((a, b) => a.key - b.key)
               .map(({ c }) => c)
           : candidates;
-        result[shotType] = ordered.slice(0, takePerType);
+        result[groupKey] = ordered.slice(0, takePerType);
       }
 
       return res.status(200).json({ candidatesByType: result });

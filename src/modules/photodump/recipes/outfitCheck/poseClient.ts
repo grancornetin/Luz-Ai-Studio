@@ -73,6 +73,45 @@ export async function fetchOutfitCheckPoseCandidates(
 }
 
 /**
+ * Mismo endpoint que fetchOutfitCheckPoseCandidates, pero filtrando por
+ * palabra clave sobre subject_pose en vez de shot_type — necesario cuando lo
+ * que hace falta distinguir es ACTITUD CORPORAL (sentada/inclinada/apoyada),
+ * algo que shot_type no captura (solo tipo de encuadre: full_body,
+ * mirror_selfie, close_up...). A diferencia de category/search_tags
+ * (descartados en julio 2026 por no confiables, ver openBankFilter.ts),
+ * cada grupo de palabras debe validarse con volumen real ANTES de usarse
+ * (ver recipes/outfitMultiLook/contracts.ts para el caso real que motivó
+ * esto). Devuelve mapa vacío (nunca lanza) si la llamada falla — mismo
+ * contrato que fetchOutfitCheckPoseCandidates.
+ */
+export async function fetchPoseCandidatesByKeyword(
+  keywordGroups: Record<string, string[]>,
+  seed: string,
+  perType: number = 3,
+): Promise<Record<string, OutfitCheckPoseCandidate[]>> {
+  if (Object.keys(keywordGroups).length === 0) return {};
+  try {
+    const res = await fetch(CONTENT_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
+      body: JSON.stringify({
+        action: 'getOutfitCheckPoseCandidates',
+        payload: { poseKeywordGroups: keywordGroups, seed, perType },
+      }),
+    });
+    if (!res.ok) {
+      console.warn(`[outfitMultiLook] fetchPoseCandidatesByKeyword: el endpoint devolvió ${res.status}`);
+      return {};
+    }
+    const data = await res.json();
+    return (data?.candidatesByType && typeof data.candidatesByType === 'object') ? data.candidatesByType : {};
+  } catch (err) {
+    console.warn('[outfitMultiLook] fetchPoseCandidatesByKeyword: excepción en la llamada', err);
+    return {};
+  }
+}
+
+/**
  * Elige UN candidato determinístico de la lista (mismo shot del mismo brief
  * → mismo candidato, para que plan y prompt final no diverjan si se llama
  * más de una vez) — nunca aleatorio con Math.random(), mismo hashString que

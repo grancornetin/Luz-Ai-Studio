@@ -50,20 +50,25 @@ function mirrorSelfieBlock(hasAnchor: boolean): string {
 }
 
 // curated_ideas, shot de variación — mismo espacio que el ancla (fondo
-// idéntico), pero un ángulo/encuadre distinto al frontal, según la
-// composición que le tocó rotar en contracts.ts.
-function variationBlock(composition: string): string {
+// idéntico), pero un ángulo/encuadre o actitud distinta al frontal, según
+// la composición que le tocó rotar en contracts.ts. poseAttitudeLine (sep
+// 2026, ver poseClient.ts) aporta pose/gesto/mirada real del banco cuando
+// hay un candidato disponible — el texto fijo sigue siendo el que define el
+// encuadre físico, poseAttitudeLine solo agrega la actitud corporal
+// concreta encima; sin candidato, el shot cae al texto genérico solo.
+function variationBlock(composition: string, poseAttitudeLine?: string): string {
+  const attitudeSuffix = poseAttitudeLine ? `\n${poseAttitudeLine}` : '';
   switch (composition) {
     case 'mirror_selfie_back_view':
       return 'A full-body mirror selfie from behind — she has turned around to show the back of the outfit in the mirror reflection, same room as the anchor reference. ' +
-        'No mirror frame needs to be visible; the raised arm holding the phone is what reads clearly as a self-taken mirror photo, seen from behind.\n' + NO_STUDIO_BACKDROP_LINE;
+        'No mirror frame needs to be visible; the raised arm holding the phone is what reads clearly as a self-taken mirror photo, seen from behind.\n' + NO_STUDIO_BACKDROP_LINE + attitudeSuffix;
     case 'mirror_selfie_side_profile':
       return 'A full-body mirror selfie from a side profile angle — she has turned to a three-quarter or full side view in the mirror reflection, same room as the anchor reference. ' +
-        'No mirror frame needs to be visible; the raised arm holding the phone is what reads clearly as a self-taken mirror photo, seen from the side.\n' + NO_STUDIO_BACKDROP_LINE;
-    case 'fabric_detail_closeup':
-      return 'A close-up detail shot of the outfit\'s fabric, texture, and silhouette — framed from roughly chest/waist height down to mid-thigh, no mirror needed for this shot. ' +
-        'The focus is the garment itself: fabric texture, how it drapes, stitching or embellishment detail — a genuine close-up, not a full-body shot cropped tighter. ' +
-        'CRITICAL: the garment\'s exact color, shade, and material shown in the outfit reference image must be preserved precisely in this close-up — do not shift, reinterpret, or lighten/darken the color under close framing.';
+        'No mirror frame needs to be visible; the raised arm holding the phone is what reads clearly as a self-taken mirror photo, seen from the side.\n' + NO_STUDIO_BACKDROP_LINE + attitudeSuffix;
+    case 'mirror_selfie_alt_pose':
+      return 'A full-body mirror selfie with a different body attitude than the frontal shot — same room as the anchor reference, full outfit still clearly visible. ' +
+        'No mirror frame needs to be visible; the raised arm holding the phone is what reads clearly as a self-taken mirror photo.\n' + NO_STUDIO_BACKDROP_LINE + attitudeSuffix +
+        (poseAttitudeLine ? '' : '\nShe adopts a different pose than a plain frontal stand — for example sitting, leaning, or resting against something in the room — while keeping the full outfit clearly visible.');
     default:
       return '';
   }
@@ -102,7 +107,7 @@ export function buildShotPrompt(
   const hasLinkedAccessory = (contract.referencePolicy.linkedAccessoryUrls?.length ?? 0) > 0;
 
   const lines = [
-    isVariation ? variationBlock(contract.cameraGrammar.composition) : mirrorSelfieBlock(hasAnchor),
+    isVariation ? variationBlock(contract.cameraGrammar.composition, contract.poseAttitudeLine) : mirrorSelfieBlock(hasAnchor),
     outfitLine(intent),
     accessoryLine(intent, hasLinkedAccessory),
     intelligence.poseLine,
