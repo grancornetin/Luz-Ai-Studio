@@ -106,7 +106,10 @@ function toWideCandidate(item: OpenBankAnalysisItem): WideCandidate {
   };
 }
 
-function hashString(s: string): number {
+// Exportada (no solo local a este archivo) porque getOutfitCheckPoseCandidates
+// (api/gemini/content.ts) la reusa para el mismo propósito — mezcla
+// determinística por seed de sesión — sin duplicar la implementación.
+export function hashString(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) {
     h = (h * 31 + s.charCodeAt(i)) | 0;

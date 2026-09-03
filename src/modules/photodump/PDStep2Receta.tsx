@@ -61,6 +61,9 @@ interface PDStep2RecetaProps {
 const MIN_COUNT = 3;
 const MAX_COUNT = 20;
 const OUTFIT_CHECK_MAX_COUNT = 8;
+// outfit_check permite 1 sola foto (sep 2026, pedido explícito del usuario)
+// — el resto de recetas del bloque genérico mantiene el mínimo de 3.
+const OUTFIT_CHECK_MIN_COUNT = 1;
 
 const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   recipe, count, basePrompt, refs, outfitMode, onCount, onPrompt, onRefs, onOutfitMode,
@@ -71,6 +74,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
 
   const isOutfitRecipe = recipe === 'outfit_check' || recipe === 'outfit_haul' || recipe === 'outfit_week';
   const maxCount = recipe === 'outfit_check' ? OUTFIT_CHECK_MAX_COUNT : MAX_COUNT;
+  const minCount = recipe === 'outfit_check' ? OUTFIT_CHECK_MIN_COUNT : MIN_COUNT;
 
   // outfit_multi_look: el TOPE de fotos lo define la cantidad de looks
   // subidos (ver recipes/outfitMultiLook/allocator.ts, que nunca genera más
@@ -619,8 +623,8 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => onCount(Math.max(MIN_COUNT, count - 1))}
-                    disabled={count <= MIN_COUNT}
+                    onClick={() => onCount(Math.max(minCount, count - 1))}
+                    disabled={count <= minCount}
                     className="w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold text-lg flex items-center justify-center hover:border-slate-300 disabled:opacity-30 disabled:pointer-events-none transition-all"
                   >
                     −
@@ -640,7 +644,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                 </div>
                 <p className="text-[9px] text-slate-400 mt-1.5">
                   {recipe === 'outfit_check'
-                    ? 'Outfit check permite hasta 8 imágenes para mantener coherencia de look y escena.'
+                    ? 'Outfit check permite entre 1 y 8 imágenes — con 1 sola foto, esa foto cuenta toda la historia.'
                     : 'Mínimo 3 · El género del avatar se detecta automáticamente'}
                 </p>
               </>

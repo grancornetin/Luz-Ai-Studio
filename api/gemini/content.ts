@@ -27,7 +27,7 @@ import { resolveEnergyFromBrief } from '../../src/modules/photodump/recipes/outf
 // Vive en archivos nuevos bajo director/openBank/, sin tocar ni importar
 // nada de bankFilter.ts/recipeContracts.ts/promptBuilders.ts. El único punto
 // de contacto con el pipeline actual es el flag directorMode, leído acá.
-import { buildWideCandidatePool } from '../../src/modules/photodump/director/openBank/openBankFilter.js';
+import { buildWideCandidatePool, normalizeShotType, hashString } from '../../src/modules/photodump/director/openBank/openBankFilter.js';
 import {
   OPEN_BANK_PLAN_SCHEMA,
   OPEN_BANK_PROMPTS_SCHEMA,
@@ -107,7 +107,8 @@ interface ContentRequest {
     | 'photodumpDirectorStatus'
     | 'runPhotodumpDirectorJob'
     | 'analyzeOpenBankVenue'
-    | 'redactOpenBankSingleShot';
+    | 'redactOpenBankSingleShot'
+    | 'getOutfitCheckPoseCandidates';
   images?: string[];
   mimeTypes?: string[];
   prompt?: string;
@@ -655,7 +656,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const payloadOnlyActions = ['analyzeREF0', 'inferGender', 'analyzeAnchor', 'analyzeProductRelevance', 'analyzeUGCOutfit', 'analyzeScene', 'getContentJobStatus', 'photodumpDirector', 'photodumpDirectorStart', 'photodumpDirectorStatus', 'analyzeOpenBankVenue', 'redactOpenBankSingleShot'];
+    const payloadOnlyActions = ['analyzeREF0', 'inferGender', 'analyzeAnchor', 'analyzeProductRelevance', 'analyzeUGCOutfit', 'analyzeScene', 'getContentJobStatus', 'photodumpDirector', 'photodumpDirectorStart', 'photodumpDirectorStatus', 'analyzeOpenBankVenue', 'redactOpenBankSingleShot', 'getOutfitCheckPoseCandidates'];
     if (!body.action || (!body.prompt && !payloadOnlyActions.includes(body.action))) {
       return res.status(400).json({ error: 'Missing action or prompt' });
     }
@@ -953,6 +954,59 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       const { finalPrompt } = JSON.parse(extractText(response)) as { finalPrompt: string };
       return res.status(200).json({ finalPrompt });
+    }
+
+    // outfit_check — candidatos de pose/actitud reales del banco por
+    // shot_type, sin ninguna llamada a Gemini (a diferencia de open_bank,
+    // outfit_check no razona sobre el banco: solo necesita "un puñado de
+    // poses reales de este tipo de encuadre" para no inventar la actitud de
+    // cero cada vez). A diferencia de open_bank, outfit_check corre 100%
+    // client-side (photodumpDirectorService.ts) — este endpoint es su única
+    // puerta al banco, que solo existe server-side (ver
+    // loadPhotodumpBankSnapshot). Reusa normalizeShotType/hashString de
+    // openBankFilter.ts en vez de duplicar esa lógica (mismo criterio de
+    // "estructurado y confiable" ya validado ahí: shot_type normalizado,
+    // nunca category/search_tags de texto libre).
+    if (body.action === 'getOutfitCheckPoseCandidates') {
+      const { shotTypes, perType, seed } = body.payload || {};
+      if (!Array.isArray(shotTypes) || shotTypes.length === 0) {
+        return res.status(400).json({ error: 'Falta shotTypes (array no vacío)' });
+      }
+      const takePerType = Math.min(Math.max(Number(perType) || 3, 1), 10);
+      const snapshot = loadPhotodumpBankSnapshot();
+      const wantedTypes = new Set(shotTypes.map((t: string) => normalizeShotType(t)));
+
+      const byType = new Map<string, { itemId: string; pose: string; gesture: string; gaze: string }[]>();
+      for (const item of snapshot.items) {
+        const d = (item as any).analysis?.raw_visual_description;
+        if (!d) continue;
+        const st = normalizeShotType(d.shot_type);
+        if (!wantedTypes.has(st)) continue;
+        if (!byType.has(st)) byType.set(st, []);
+        byType.get(st)!.push({
+          itemId: item.itemId,
+          pose: d.subject_pose || '',
+          gesture: d.subject_gesture || '',
+          gaze: d.subject_gaze || '',
+        });
+      }
+
+      const result: Record<string, { itemId: string; pose: string; gesture: string; gaze: string }[]> = {};
+      for (const [shotType, candidates] of byType.entries()) {
+        // Mezcla determinística por seed (mismo mecanismo que
+        // buildWideCandidatePool) — sin seed, siempre devuelve los mismos
+        // primeros N candidatos del banco compilado, sin importar cuántas
+        // veces se pida.
+        const ordered = seed
+          ? candidates
+              .map(c => ({ c, key: hashString(`${seed}::outfitCheckPose::${shotType}::${c.itemId}`) }))
+              .sort((a, b) => a.key - b.key)
+              .map(({ c }) => c)
+          : candidates;
+        result[shotType] = ordered.slice(0, takePerType);
+      }
+
+      return res.status(200).json({ candidatesByType: result });
     }
 
     if (body.action === 'inferGender') {

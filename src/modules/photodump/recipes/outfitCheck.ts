@@ -22,6 +22,26 @@ import {
   PhotodumpShotDirective, MomentType, OutfitPresentationStyle, SceneFingerprint,
   resolveWearState, resolveCameraMode, getDestinationDescription,
 } from './shared';
+import type { OutfitCheckPoseCandidate } from './outfitCheck/poseClient';
+import { pickOneCandidate, buildPoseAttitudeLine } from './outfitCheck/poseClient';
+
+// ── Banco: shot_type real por vehículo (ver poseClient.ts) ────────────────
+// Mapea cada shotKey fijo de esta receta al shot_type normalizado del banco
+// que mejor describe ese encuadre — filtro estructurado (mismo criterio que
+// open_bank: shot_type es la única señal confiable, nunca category/
+// search_tags de texto libre). ACCESSORY_CLOSEUP no tiene entrada: es un
+// objeto sin persona, no hay actitud corporal que transferir.
+const SHOT_KEY_TO_BANK_SHOT_TYPE: Partial<Record<string, string>> = {
+  OUTFIT_MIRROR_CHECK:   'mirror_selfie',
+  OUTFIT_DESTINATION:    'full_body',
+  OUTFIT_READY:          'selfie_frontal',
+  OUTFIT_SECOND_ANGLE:   'medio_cuerpo',
+  OUTFIT_DETAIL_WORN:    'detail_closeup',
+};
+
+export function outfitCheckBankShotTypes(): string[] {
+  return Array.from(new Set(Object.values(SHOT_KEY_TO_BANK_SHOT_TYPE)));
+}
 
 // Para shots de PREPARACIÓN en outfit_check: ancla la locación del shot
 // al espacio de REF0 (nunca al venue del brief).
@@ -798,20 +818,32 @@ function getArrivingVariants(style: OutfitPresentationStyle): {
       };
 
     case 'rack_haul':
+      // Bug real reportado (prueba de usuario, sep 2026): este vehículo
+      // siempre terminaba forzando un rack metálico, mostrando el outfit
+      // como si fuera 1 sola prenda — poco común (un outfit real se compone
+      // de varias prendas, tomadas de donde estén guardadas). El mueble
+      // correcto depende del mundo real de REF0 (ver GLOBAL_SCENE_LOCK en
+      // shared.ts: "Racks: allowed ONLY if REF0 shows a rack" — mismo
+      // principio acá, solo que a la inversa: el TEXTO no debe asumir rack
+      // si el cuarto real no tiene uno) — closet, walk-in closet, armario
+      // abierto, percha de pared, o un rack real, son todos válidos. La idea
+      // central se mantiene: tomar las prendas de donde estaban organizadas,
+      // no de un mueble impuesto que puede no combinar con la decoración
+      // del resto del cuarto.
       return {
-        purpose: 'Las prendas colgadas en rack o perchero real — apertura del set. Manos acomodando, separando o señalando las prendas. El rack es el protagonista visual. Ambiente real visible de fondo.',
+        purpose: 'Las prendas del look tomadas de donde estaban guardadas/organizadas en el cuarto real — closet, armario, walk-in closet, percha de pared, o un rack si el cuarto realmente tiene uno. Apertura del set. Manos tomando o acomodando VARIAS prendas del look (no una sola pieza aislada) — el mueble de guardado es el protagonista visual, coherente con el resto de la decoración del cuarto. Ambiente real visible de fondo.',
         variationSpace: [
-          'prendas colgadas en rack, mano separando o señalando la prenda principal — luz natural, ambiente del cuarto visible',
-          'medium shot del rack con todas las prendas colgadas, manos parcialmente visibles acomodando — sin cara',
-          'close-up de las prendas colgadas desde el costado — hangers visibles, telas con volumen, luz que muestra texturas',
-          'persona de pie junto al rack (cara parcialmente visible o de espaldas) revisando las prendas colgadas',
+          'closet o armario abierto con varias prendas del look visibles colgadas — mano tomando o separando la prenda principal, luz natural, mueble real acorde a la decoración del cuarto',
+          'medium shot del mueble de guardado (closet, rack o percha — el que exista en este cuarto real) con varias prendas del outfit visibles juntas, manos parcialmente visibles acomodando — sin cara',
+          'close-up de 2-3 prendas del look colgadas juntas desde el costado — hangers o ganchos de pared visibles, telas con volumen, luz que muestra texturas',
+          'persona de pie junto al closet/armario/rack (cara parcialmente visible o de espaldas) revisando varias prendas del look colgadas',
         ],
-        detailPurpose: 'Close-up de la textura de una prenda colgada o de un accesorio apoyado cerca del rack. Continuidad visual con el formato rack del set.',
+        detailPurpose: 'Close-up de la textura de una prenda del look tomada del mueble de guardado, o de un accesorio apoyado cerca. Continuidad visual con el formato del set — mismo mueble ya establecido, no uno nuevo.',
         detailVariationSpace: [
-          'close-up de una prenda colgada en el rack — textura de tela, color y terminaciones bajo luz natural',
-          'accesorio (zapatos, cartera) apoyado debajo del rack o sobre una silla cercana — close-up del objeto',
-          'detalle del hanger y la prenda — el metal del gancho, la caída de la tela, la etiqueta visible',
-          'fragmento del rack con dos prendas colgadas juntas — comparación de texturas o colores',
+          'close-up de una prenda del look colgada en el mueble de guardado ya establecido — textura de tela, color y terminaciones bajo luz natural',
+          'accesorio (zapatos, cartera) apoyado debajo del closet/rack o sobre una silla cercana — close-up del objeto',
+          'detalle del gancho o hanger y la prenda — el material del gancho, la caída de la tela, la etiqueta visible',
+          'fragmento del mueble de guardado con 2 prendas del look colgadas juntas — comparación de texturas o colores',
         ],
       };
 
@@ -863,6 +895,13 @@ export function buildOutfitCheckShotPool(
   inferredDest?: InferredDestination,
   hasDestinoRef?: boolean,
   briefCtx?: OutfitBriefContext,
+  // Candidatos reales del banco por shot_type (ver poseClient.ts) — opcional
+  // y sin efecto si no se pasa (fallback silencioso al variationSpace
+  // genérico ya validado, nunca bloquea la generación por esto). seedKey
+  // hace la elección determinística: mismo brief/sesión → mismo candidato,
+  // nunca Math.random().
+  poseCandidatesByType?: Record<string, OutfitCheckPoseCandidate[]>,
+  seedKey?: string,
 ): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
   const arrivingVariants = getArrivingVariants(presentationStyle);
   const wearArriving     = resolveWearState('OUTFIT_ARRIVING', presentationStyle);
@@ -886,7 +925,7 @@ export function buildOutfitCheckShotPool(
         `llegando al lugar, outfit completo visible, ambiente destino de fondo orgánico`,
       ];
 
-  return [
+  const pool: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] = [
     {
       key:              'OUTFIT_ARRIVING',
       beat:             'context',
@@ -1174,20 +1213,44 @@ export function buildOutfitCheckShotPool(
       subjectPresence: 'objects_only',
     },
   ];
+
+  // Inyectar actitud real del banco (ver poseClient.ts) en el shot que
+  // corresponda a cada shotKey mapeado — se agrega al FRENTE de
+  // variationSpace (el redactor real del prompt puede usarla o combinarla
+  // con las variantes ya validadas, nunca las reemplaza del todo: si el
+  // banco no tuvo candidato para ese shot_type, el shot queda exactamente
+  // igual que antes de este cambio).
+  if (poseCandidatesByType) {
+    for (const shot of pool) {
+      const bankShotType = SHOT_KEY_TO_BANK_SHOT_TYPE[shot.key];
+      if (!bankShotType) continue;
+      const candidates = poseCandidatesByType[bankShotType];
+      if (!candidates || candidates.length === 0) continue;
+      const chosen = pickOneCandidate(candidates, `${seedKey ?? ''}::${shot.key}`);
+      const line = buildPoseAttitudeLine(chosen);
+      if (line) shot.variationSpace = [line, ...shot.variationSpace];
+    }
+  }
+
+  return pool;
 }
 
 // Distribuye los shots de outfit_check según el count pedido.
 //
-// Arco narrativo correcto con detailKind ordering:
+// count 1-4: composición libre por vehículo (ver comentario extenso dentro
+// de la función) — reescrito sep 2026 a pedido explícito del usuario, ya no
+// fuerza OUTFIT_ARRIVING como primer shot obligatorio ni una lista fija.
+//
+// count >= 5: arco completo heredado, sin cambios — secuencia con nombre
+// fijo, útil para quien pide un set más largo y detallado:
 //   ARRIVING (prenda como objeto, pre_wear)
 //   → OUTFIT_DETAIL (detalle pre_wear — antes del reveal)
 //   → MIRROR_CHECK (reveal: outfit completo)
 //   → OUTFIT_DETAIL_WORN (detalle ya puesto — después del reveal)
 //   → READY
 //   → DESTINATION (cierre)
-//
-// Si count < arco completo, se eliminan shots en orden de menor valor narrativo:
-//   Primero: OUTFIT_DETAIL_WORN, luego READY, luego OUTFIT_DETAIL
+// Si count < arco completo (pero >= 5), se eliminan shots en orden de menor
+// valor narrativo: primero OUTFIT_DETAIL_WORN, luego READY, luego OUTFIT_DETAIL.
 //
 // hasDestinationClosure: true si hay destino inferido en brief O si el usuario subió sceneDestinoRef.
 export function distributeOutfitCheckShots(count: number, hasDestinationClosure: boolean): string[] {
@@ -1232,19 +1295,67 @@ export function distributeOutfitCheckShots(count: number, hasDestinationClosure:
     ].filter((k, i, arr) => arr.indexOf(k) === i);
   }
 
-  // 4 story shots (5 visibles): sin detail ni detail_worn
-  if (count === 4) {
-    return [
-      'OUTFIT_ARRIVING',
-      'OUTFIT_MIRROR_CHECK',
-      'OUTFIT_READY',
-      closingShot,
-    ].filter((k, i, arr) => arr.indexOf(k) === i);
+  // 1-4 story shots: composición libre por vehículo — reescrito a pedido del
+  // usuario (sep 2026, evidencia de una prueba real de la receta). El diseño
+  // anterior forzaba OUTFIT_ARRIVING como primer shot SIEMPRE, en todos los
+  // tamaños — el usuario señaló que ese vehículo (el "rack") es el que menos
+  // le gusta visualmente y no debería ser obligatorio; la historia real
+  // ("me veía increíble para X, así que quise mostrarlo") se puede contar
+  // mezclando libremente los vehículos disponibles, sin casillero fijo por
+  // posición.
+  //
+  // Lo que SÍ se mantiene (corrección explícita del usuario a la primera
+  // versión de este diseño, que proponía orden completamente libre): esto NO
+  // es una secuencia desordenada. Reglas duras de secuencia narrativa:
+  //   1. Los vehículos de preparación (flat lay / rack-closet / mirror check
+  //      en casa) van SIEMPRE antes que el destino — nunca después.
+  //   2. Un set que ya mostró el destino NUNCA vuelve a un shot de
+  //      preparación — la historia no retrocede.
+  //   3. El destino puede aparecer sin ningún shot de preparación previo
+  //      (set directo al momento vivido) — la preparación es opcional, no
+  //      obligatoria.
+  //   4. Continuidad de mundo entre shots del mismo estadio (todos los shots
+  //      de prep comparten el mismo cuarto, todos los de destino comparten
+  //      el mismo lugar) ya la resuelve sceneLockPolicy/venueAnchorCache más
+  //      abajo — no es responsabilidad de esta función.
+  //
+  // Con 1 sola foto, no hay "antes/después" que combinar — se elige el
+  // vehículo más fuerte para contar la historia completa en una sola imagen:
+  // el destino real si existe (nada cuenta mejor "me veía increíble para X"
+  // que estar efectivamente en X), o el mirror check si no hay destino claro
+  // (el vehículo más universal, siempre disponible sin depender de que el
+  // brief mencione un lugar).
+  if (count === 1) {
+    return [closingShot];
   }
 
-  // 3 story shots (4 visibles)
-  if (count === 3) return ['OUTFIT_ARRIVING', 'OUTFIT_MIRROR_CHECK', closingShot];
+  // 2 fotos: un vehículo de prep (el más universal — mirror check, funciona
+  // para cualquier ocasión sin depender del tipo de mueble de guardado) +
+  // el cierre (destino si existe, si no ready/selfie).
+  if (count === 2) {
+    return ['OUTFIT_MIRROR_CHECK', closingShot].filter((k, i, arr) => arr.indexOf(k) === i);
+  }
 
-  // 2 mínimo (3 visibles)
-  return ['OUTFIT_ARRIVING', closingShot];
+  // 3 fotos: agrega el vehículo de "cómo se armó el look" antes del mirror
+  // check — flat lay / closet-rack / manos / persona con hangers, según
+  // presentationStyle. Ejemplo del usuario: flat lay + mirror selfie +
+  // viviendo el momento.
+  if (count === 3) {
+    return ['OUTFIT_ARRIVING', 'OUTFIT_MIRROR_CHECK', closingShot].filter((k, i, arr) => arr.indexOf(k) === i);
+  }
+
+  // 4 fotos: suma un detalle/selfie extra. Si el cierre YA es OUTFIT_READY
+  // (sin destino), el extra es OUTFIT_DETAIL_WORN (detalle del look ya
+  // puesto) para no repetir el mismo vehículo de selfie dos veces en el
+  // mismo set — si el cierre es destino, el extra es OUTFIT_READY (selfie
+  // "lista para salir", distinto del mirror check y del destino).
+  if (count === 4) {
+    const extraVehicle = closingShot === 'OUTFIT_READY' ? 'OUTFIT_DETAIL_WORN' : 'OUTFIT_READY';
+    return ['OUTFIT_ARRIVING', 'OUTFIT_MIRROR_CHECK', extraVehicle, closingShot]
+      .filter((k, i, arr) => arr.indexOf(k) === i);
+  }
+
+  // count <= 0 (no debería ocurrir, la UI fuerza mínimo 1) — mismo fallback
+  // que el caso de 1 foto.
+  return [closingShot];
 }

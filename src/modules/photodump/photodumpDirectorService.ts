@@ -62,7 +62,9 @@ import {
   buildOutfitCompatibleHpiBlock, buildSafeOutfitFamilyStyleHint, filterHpiForOutfitCheck,
   detectContradictions, PREP_SHOT_KEYS,
   resolveOutfitPresentationStyle, buildOutfitCheckShotPool, distributeOutfitCheckShots,
+  outfitCheckBankShotTypes,
 } from './recipes/outfitCheck';
+import { fetchOutfitCheckPoseCandidates } from './recipes/outfitCheck/poseClient';
 import { buildUnboxingShotPool, distributeUnboxingShots } from './recipes/unboxing';
 import { resolveReferenceTagsFromBrief, PAIRING_CONNECTORS } from './recipes/briefTags';
 import {
@@ -363,6 +365,12 @@ function buildStoryDirectives(
   refs?:      { avatarRef?: string | null; outfitRefs?: (string | null)[]; accesorioRefs?: (string | null)[]; accesorioCloseup?: boolean[]; sceneDestinoRef?: string | null; scenePruebaRef?: string | null; sceneRef?: string | null; gender?: 'female' | 'male' | 'neutral' },
   presentationStyle?: OutfitPresentationStyle,
   basePrompt?: string,
+  // outfit_check — candidatos reales del banco por shot_type (ver
+  // poseClient.ts/outfitCheckBankShotTypes), resueltos por el caller ANTES
+  // de llamar acá (esta función sigue siendo síncrona, sin await). Opcional
+  // y sin efecto en ninguna otra receta.
+  outfitCheckPoseCandidates?: Record<string, import('./recipes/outfitCheck/poseClient').OutfitCheckPoseCandidate[]>,
+  outfitCheckSeedKey?: string,
 ): PhotodumpShotDirective[] {
 
   const ar = destino === 'feed' ? '4/5' : '9/16';
@@ -395,7 +403,7 @@ function buildStoryDirectives(
     const shouldUseDestinationClosure =
       hasDestino ||
       (briefCtx.destinationClass !== 'none' && briefCtx.destinationClass !== 'generic_outing');
-    const pool           = buildOutfitCheckShotPool(style, inferredDest, hasDestino, briefCtx);
+    const pool           = buildOutfitCheckShotPool(style, inferredDest, hasDestino, briefCtx, outfitCheckPoseCandidates, outfitCheckSeedKey);
     const baseKeys       = distributeOutfitCheckShots(count, shouldUseDestinationClosure);
     // Accesorios antes del closing shot
     const closeupIndexes = (refs?.accesorioCloseup ?? [])
@@ -1029,7 +1037,21 @@ export async function buildPhotodumpSessionPlan(
   const presentationStyle = isOutfitRecipe
     ? resolveOutfitPresentationStyle(basePrompt, refs)
     : undefined;
-  const shots           = buildStoryDirectives(count, protagonist, destino, narrative, recipe, refs, presentationStyle, basePrompt);
+
+  // outfit_check — poses/actitudes reales del banco (ver poseClient.ts).
+  // Una sola llamada de red por sesión (todos los shot_type del set juntos),
+  // ANTES de armar los shots — buildStoryDirectives sigue siendo síncrona.
+  // seedKey usa sessionId cuando existe (mismo criterio que el resto del
+  // pipeline) — sin sessionId, usa basePrompt como fallback determinístico
+  // (nunca Math.random(): mismo brief en la misma sesión de pruebas debe
+  // poder reproducirse). Si la llamada falla, sigue con un objeto vacío —
+  // nunca bloquea la generación por esto (ver fetchOutfitCheckPoseCandidates).
+  const outfitCheckSeedKey = sessionId || basePrompt;
+  const outfitCheckPoseCandidates = recipe === 'outfit_check'
+    ? await fetchOutfitCheckPoseCandidates(outfitCheckBankShotTypes(), outfitCheckSeedKey)
+    : undefined;
+
+  const shots           = buildStoryDirectives(count, protagonist, destino, narrative, recipe, refs, presentationStyle, basePrompt, outfitCheckPoseCandidates, outfitCheckSeedKey);
   const sessionFamilies = selectSessionFamilies();
   const assignedFamilies = [...sessionFamilies.storySupport, ...sessionFamilies.creatorAesthetic];
   return {
@@ -1156,6 +1178,12 @@ export async function generatePhotodumpREF0(
   basePrompt:  string,
   sessionParams: { uid?: string; sessionId?: string },
   recipe?:     string,
+  // outfit_check con count=1 (visibleCount, incluye REF0): mismo patrón que
+  // outfit_night_out/level='una_foto' — el ÚNICO shot del set ES el ancla,
+  // en vez de sumar un story shot aparte al mirror-check genérico de REF0.
+  // Opcional y sin efecto en ninguna otra receta ni en outfit_check con más
+  // de 1 foto — el resto del pipeline sigue exactamente igual.
+  visibleCount?: number,
 ): Promise<PhotodumpREF0Result> {
 
   // weeklyFavoritesV2 — motor nuevo, foto ancla resuelta por completo en su
@@ -1230,6 +1258,19 @@ export async function generatePhotodumpREF0(
     }
   })() : undefined;
 
+  // outfit_check, count=1: detección liviana (solo el booleano, el texto
+  // completo de destino se arma más abajo en outfitCheckSingleShot) — usada
+  // acá para decidir si refsToPass debe incluir sceneDestinoRef en vez de
+  // scenePruebaRef/sceneRef, ANTES de que briefCtxForRef0 exista (se calcula
+  // más abajo). Evita duplicar parseOutfitBriefContext 2 veces en la misma
+  // función.
+  const outfitCheckSingleShotDestinationCheck = (recipe === 'outfit_check' && visibleCount === 1)
+    ? (() => {
+        const ctx = parseOutfitBriefContext(basePrompt);
+        return !!refs.sceneDestinoRef || (ctx.destinationClass !== 'none' && ctx.destinationClass !== 'generic_outing');
+      })()
+    : false;
+
   if (isUnboxing) {
     // Unboxing REF0: si hay avatar → ancla con persona sosteniendo/interactuando con el producto.
     // El avatar se pasa x2 (identidad suficiente sin dominar el presupuesto).
@@ -1265,9 +1306,15 @@ export async function generatePhotodumpREF0(
       const allOutfitRefs = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
       allOutfitRefs.slice(0, 3).forEach(r => refsToPass.push(r));
     }
-    // Escena: outfit_check usa scenePruebaRef primero, las demás usan sceneRef
+    // Escena: outfit_check usa scenePruebaRef primero, las demás usan sceneRef.
+    // Excepción (count=1 con destino, ver outfitCheckSingleShotDestinationCheck
+    // arriba): la ÚNICA foto del set ocurre en el destino, no en el cuarto de
+    // preparación — si el usuario subió una foto real del lugar destino, esa
+    // es la referencia visual correcta acá, no la de preparación.
     const sceneForRef0 = recipe === 'outfit_check'
-      ? (refs.scenePruebaRef ?? refs.sceneRef)
+      ? (outfitCheckSingleShotDestinationCheck && refs.sceneDestinoRef
+          ? refs.sceneDestinoRef
+          : (refs.scenePruebaRef ?? refs.sceneRef))
       : refs.sceneRef;
     if (sceneForRef0) refsToPass.push(sceneForRef0);
   } else {
@@ -1338,8 +1385,44 @@ ${!refs.packagingRef ? `No packaging reference provided — create a packaging c
     : briefCtxForRef0.timeSignal === 'afternoon' ? 'AFTERNOON — natural daylight'
     : 'AMBIENT — match the context of the prep space';
 
+  // outfit_check, count=1 (visibleCount incluye REF0): el ÚNICO shot del set
+  // ES el ancla — mismo patrón que outfit_night_out/level='una_foto'. Sin
+  // esto, REF0 siempre sería el mirror-check genérico en el cuarto de
+  // preparación, aunque el brief describa un destino real ("me veía
+  // increíble para la cena en tal restaurante") — con 1 sola foto, esa es
+  // precisamente la foto que mejor cuenta la historia completa, no el paso
+  // intermedio de "antes de salir". hasDestination/destDesc/destShotOptions
+  // reusan exactamente el mismo criterio que ya usa el story shot
+  // OUTFIT_DESTINATION (buildOutfitCheckShotPool) — nunca se duplica lógica
+  // de inferencia de destino en 2 lugares distintos.
+  const outfitCheckSingleShot = (recipe === 'outfit_check' && visibleCount === 1) ? (() => {
+    const hasDestino = !!refs.sceneDestinoRef;
+    const hasDestination = hasDestino || (briefCtxForRef0.destinationClass !== 'none' && briefCtxForRef0.destinationClass !== 'generic_outing');
+    const destDesc = briefCtxForRef0.destinationLabel ||
+      (briefCtxForRef0.destinationClass !== 'none' ? briefCtxForRef0.destinationLabel : 'lifestyle setting — street, entrance, or ambient exterior that matches the outfit mood');
+    const destShotOptions = briefCtxForRef0.destinationShotOptions?.length
+      ? briefCtxForRef0.destinationShotOptions
+      : [`full body en ${destDesc} — outfit completo visible, actitud natural, ambiente claramente reconocible`];
+    return { hasDestination, destDesc, destShotOptions };
+  })() : null;
+
   const outfitRecipeDesc: Record<string, string> = {
-    outfit_check: `SHOT: Full body of the person with the COMPLETE OUTFIT on, in the getting-ready space.
+    outfit_check: outfitCheckSingleShot
+      ? (outfitCheckSingleShot.hasDestination
+        ? `SHOT: This is the ONLY photo of this set — it must tell the complete story by itself: "I chose this outfit and I looked incredible for this occasion, so I wanted to show it."
+The person is AT THE DESTINATION with the COMPLETE OUTFIT on: ${outfitCheckSingleShot.destDesc}.
+${outfitCheckSingleShot.destShotOptions[0]}
+Full body or medium-to-full framing — the outfit must be clearly readable, but the FEELING (confident, "I looked incredible") matters more than a rigid head-to-toe checklist. A strong pose with character, a real sense of the destination, and visible outfit together tell this story better than a neutral centered full-body shot.
+Time of day: ${timeLabel}
+iPhone photo quality — candid, not a catalog shot. This establishes the person's identity, the outfit, AND closes the story in a single frame — there is no other shot to complete it.`
+        : `SHOT: This is the ONLY photo of this set — it must tell the complete story by itself: "I chose this outfit and I looked incredible for this occasion, so I wanted to show it."
+Full body mirror check with the COMPLETE OUTFIT on, in the getting-ready space — the look must be readable from head to toe, but the FEELING (confident, "I looked incredible") matters as much as showing every piece. Face visible, authentic attitude, not a catalog stance.
+Time of day: ${timeLabel}
+
+${prepEnvDirective}
+
+iPhone photo quality. This establishes the person's identity, the outfit, AND closes the story in a single frame — there is no other shot to complete it.`)
+      : `SHOT: Full body of the person with the COMPLETE OUTFIT on, in the getting-ready space.
 Full body visible — the look must be readable from head to toe. Face visible, natural expression.
 Time of day: ${timeLabel}
 
@@ -2301,6 +2384,17 @@ export async function generatePhotodumpShot(
       shot, refs, destino, sessionParams, shot.arcPosition - 1, totalShots, totalShots,
     );
     return { imageUrl: result.imageUrl, prompt: result.prompt, refsCount: result.refsCount };
+  }
+
+  // outfit_check, count=1 (totalShots===1): mismo patrón que
+  // outfit_multi_look/outfit_reveal_basic/outfit_night_out — el ÚNICO story
+  // shot del plan resuelve al mismo vehículo (mirror check o destino) que ya
+  // se generó como REF0 (ver outfitCheckSingleShot en generatePhotodumpREF0)
+  // — devuelve esa imagen ya generada en vez de gastar una segunda
+  // generación real que nunca se muestra (PhotodumpModule.tsx trata este
+  // caso con ref0IsFirstShot=true, sin recuadro de ancla aparte).
+  if (recipe === 'outfit_check' && totalShots === 1) {
+    return { imageUrl: ref0Url, prompt: '(mismo shot que el ancla — ver generatePhotodumpREF0)', refsCount: 0 };
   }
 
   // outfit_multi_look — motor propio (ver recipes/outfitMultiLook/). Cada
