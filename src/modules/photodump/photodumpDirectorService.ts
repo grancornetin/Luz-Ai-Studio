@@ -10,6 +10,9 @@
 import { ugcApiService } from '../../services/ugcApiService';
 import { imageApiService } from '../../services/imageApiService';
 import { geminiService } from '../../services/geminiService';
+import { compressImageForUpload } from '../../utils/imageUtils';
+import { runGenericDirector, type GenericDirectorReferenceImage } from './director/generic/genericClient';
+import { buildOutfitCheckDirectorDirectives } from './recipes/outfitCheck/directorAdapter';
 import {
   PhotodumpNarrative, PhotodumpProtagonist, PhotodumpDestino,
   PhotodumpRefs, PhotodumpOutfitMode, NARRATIVE_META,
@@ -1051,7 +1054,52 @@ export async function buildPhotodumpSessionPlan(
     ? await fetchOutfitCheckPoseCandidates(outfitCheckBankShotTypes(), outfitCheckSeedKey)
     : undefined;
 
-  const shots           = buildStoryDirectives(count, protagonist, destino, narrative, recipe, refs, presentationStyle, basePrompt, outfitCheckPoseCandidates, outfitCheckSeedKey);
+  // outfit_check — Director Creativo GENÉRICO (ver director/generic/),
+  // pedido explícito del usuario (sep 2026): "¿por qué no podría armar un
+  // set entero acá si la herramienta está?" — en vez de reusar el director
+  // solo para resolver el destino, la receta entera pasa a razonar con el
+  // mismo Director Creativo que usaba outfit_night_out (banco real +
+  // Gemini decidiendo/redactando libremente), con su propio
+  // RecipeDirectorContract (ver recipes/outfitCheck/directorContract.ts).
+  // Camino liviano (decisión del usuario): se enchufa DENTRO de este flujo
+  // genérico en vez de replicar la arquitectura aislada de night_out — si
+  // el director falla por cualquier motivo, cae al arco de vehículos fijos
+  // ya existente (buildOutfitCheckShotPool/distributeOutfitCheckShots) sin
+  // romper la generación, mismo principio de fallback no-negociable que ya
+  // usaba night_out.
+  let directorShots: PhotodumpShotDirective[] | null = null;
+  if (recipe === 'outfit_check' && refs) {
+    try {
+      const referenceEntries: Array<{ role: string; url: string | null | undefined }> = [
+        { role: 'identidad/rostro', url: refs.avatarRef },
+        { role: 'cuerpo', url: refs.bodyRef },
+        { role: 'outfit', url: refs.outfitRef },
+        ...(refs.outfitRefs ?? []).map(url => ({ role: 'outfit', url })),
+        { role: 'escena/destino', url: refs.sceneDestinoRef ?? refs.scenePruebaRef ?? refs.sceneRef },
+      ];
+      const referenceImages: GenericDirectorReferenceImage[] = [];
+      for (const entry of referenceEntries) {
+        if (!entry.url) continue;
+        try {
+          const compressed = await compressImageForUpload(entry.url, 768, 0.72);
+          const extracted = extractImageData(compressed);
+          if (extracted) referenceImages.push({ role: entry.role, data: extracted.data, mimeType: extracted.mimeType });
+        } catch {
+          // No bloquear el director por una imagen individual que falle en comprimir.
+        }
+      }
+      const { plan, finalPrompts } = await runGenericDirector(basePrompt, 'outfit_check', count, referenceImages);
+      const directives = buildOutfitCheckDirectorDirectives(plan.shots, finalPrompts, getAspectRatio(destino));
+      if (directives.length > 0) {
+        directorShots = directives.map((d, i) => ({ ...d, arcPosition: i + 1 }));
+      }
+    } catch (err) {
+      console.warn('[outfit_check] Director Creativo falló, cayendo al arco de vehículos fijos:', err);
+    }
+  }
+
+  const shots = directorShots
+    ?? buildStoryDirectives(count, protagonist, destino, narrative, recipe, refs, presentationStyle, basePrompt, outfitCheckPoseCandidates, outfitCheckSeedKey);
   const sessionFamilies = selectSessionFamilies();
   const assignedFamilies = [...sessionFamilies.storySupport, ...sessionFamilies.creatorAesthetic];
   return {
@@ -2786,8 +2834,11 @@ export async function generatePhotodumpShot(
       allOutfits.slice(0, 2).forEach(r => refsToPass.push(r));
     }
 
-    // Escena: outfit_check usa scenePrueba/Destino según el shot
-    const isLastShot = shot.key === 'OUTFIT_DESTINATION';
+    // Escena: outfit_check usa scenePrueba/Destino según el shot.
+    // Director genérico (ver outfitCheckDirectorAdapter.ts): sus shots
+    // sintéticos declaran narrativeStage='destination' en vez de usar el
+    // shotKey fijo OUTFIT_DESTINATION — mismo criterio, otro campo.
+    const isLastShot = shot.key === 'OUTFIT_DESTINATION' || shot.narrativeStage === 'destination';
     const sceneRef   = isLastShot
       ? (refs.sceneDestinoRef ?? refs.scenePruebaRef ?? refs.sceneRef)
       : (refs.scenePruebaRef ?? refs.sceneRef);
@@ -3631,9 +3682,18 @@ Do NOT paste reference images into the output. Use them only as visual constrain
 
 ${NEGATIVE_SHORT}`;
 
+  // Director Creativo GENÉRICO (ver directorFinalPrompt en shared.ts): si
+  // este shot ya trae un prompt completo redactado por el director, se usa
+  // TAL CUAL — el director ya incluye PHOTODUMP_HARD_RULES_TEXT y sus
+  // propias reglas de redacción, ensamblar el prompt genérico de arriba
+  // encima sería redundante y podría contradecirlo. refsToPass/preparedRefs
+  // siguen viniendo del mecanismo normal de la receta (identidad/cuerpo/
+  // outfit/escena) — solo el TEXTO cambia, nunca las referencias reales.
+  const finalPrompt = shot.directorFinalPrompt ?? prompt;
+
   const preparedRefs = await prepareRefs(refsToPass);
   const imageUrl = await imageApiService.generateImage({
-    prompt,
+    prompt: finalPrompt,
     negative:        NEGATIVE_SHORT,
     referenceImages: preparedRefs,
     aspectRatio:     getAspectRatio(destino),
@@ -3648,7 +3708,7 @@ ${NEGATIVE_SHORT}`;
   });
   return {
     imageUrl,
-    prompt,
+    prompt: finalPrompt,
     refsCount:      preparedRefs.length,
     hpiSource,
     familyBlockMode: recipe === 'outfit_check'

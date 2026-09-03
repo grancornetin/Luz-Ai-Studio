@@ -39,6 +39,26 @@ import {
 } from '../../src/modules/photodump/director/openBank/openBankPromptBuilders.js';
 import type { OpenBankPlan, OpenBankFinalPromptShot } from '../../src/modules/photodump/director/openBank/openBankTypes.js';
 
+// Director Creativo GENÉRICO (ver src/modules/photodump/director/generic/)
+// — sucesor de openBank/, generalizado a cualquier receta que declare su
+// propio RecipeDirectorContract (outfit_night_out se retira del producto;
+// outfit_check es la primera receta nueva que lo usa). No reemplaza los
+// imports de openBank/ de arriba mientras night_out siga presente.
+import {
+  buildWideCandidatePool as buildGenericWideCandidatePool,
+} from '../../src/modules/photodump/director/generic/genericFilter.js';
+import {
+  buildGenericPlanSchema,
+  GENERIC_PROMPTS_SCHEMA,
+  GENERIC_SINGLE_SHOT_SCHEMA,
+  buildGenericDecidePrompt,
+  buildRichDetailBlock as buildGenericRichDetailBlock,
+  buildGenericWritePrompt,
+  buildGenericPlaceAwareRewritePrompt,
+} from '../../src/modules/photodump/director/generic/genericPromptBuilders.js';
+import type { GenericPlan, GenericFinalPromptShot, RecipeDirectorContract } from '../../src/modules/photodump/director/generic/genericTypes.js';
+import { OUTFIT_CHECK_DIRECTOR_CONTRACT } from '../../src/modules/photodump/recipes/outfitCheck/directorContract.js';
+
 interface PhotodumpDirectorPayload {
   brief?: string;
   recipe?: string;
@@ -48,7 +68,14 @@ interface PhotodumpDirectorPayload {
   // Toggle discreto en la UI de Photodump (solo el usuario dueño de la app
   // lo ve/usa) — default 'categorized' si no viene, así cualquier payload
   // viejo/externo sigue corriendo el pipeline actual sin cambios.
-  directorMode?: 'categorized' | 'open_bank';
+  // 'generic': Director Creativo genérico (ver director/generic/) —
+  // despacha por `recipe` a su RecipeDirectorContract propio. No usa
+  // `level` (sistema categorized viejo, nombres de nivel fijos) — usa
+  // `count` directo, la cantidad exacta que la UI de esa receta ya
+  // controla (decisión del usuario: el selector de cantidad se queda en
+  // la receta, el director solo arma esa cantidad exacta).
+  directorMode?: 'categorized' | 'open_bank' | 'generic';
+  count?: number;
 }
 
 // BUG REAL corregido: `import photodumpBankSnapshot from '....json'` rompía
@@ -108,7 +135,9 @@ interface ContentRequest {
     | 'runPhotodumpDirectorJob'
     | 'analyzeOpenBankVenue'
     | 'redactOpenBankSingleShot'
-    | 'getOutfitCheckPoseCandidates';
+    | 'getOutfitCheckPoseCandidates'
+    | 'analyzeGenericPlace'
+    | 'redactGenericSingleShot';
   images?: string[];
   mimeTypes?: string[];
   prompt?: string;
@@ -144,8 +173,8 @@ interface PhotodumpDirectorJob {
   uid: string;
   createdAt: number;
   updatedAt: number;
-  plan?: PhotodumpDirectorPlan | OpenBankPlan;
-  finalPrompts?: PhotodumpFinalPromptShot[] | OpenBankFinalPromptShot[];
+  plan?: PhotodumpDirectorPlan | OpenBankPlan | GenericPlan;
+  finalPrompts?: PhotodumpFinalPromptShot[] | OpenBankFinalPromptShot[] | GenericFinalPromptShot[];
   error?: string;
   // Diagnóstico de reintentos por 429 — visible en Redis aunque la función
   // muera a mitad de un backoff (ver generateContentWithRetry). Nunca
@@ -388,17 +417,91 @@ async function runOpenBankDirector(
   return { plan, finalPrompts };
 }
 
+// Director Creativo GENÉRICO (ver src/modules/photodump/director/generic/) —
+// sucesor de runOpenBankDirector, generalizado a cualquier receta que
+// declare su propio RecipeDirectorContract. A diferencia de
+// runOpenBankDirector (que toma totalShotsRequested de un `level` con
+// nombre fijo del sistema categorized viejo, específico de
+// outfit_night_out), acá el conteo llega directo — cada receta que use
+// este director controla su propio selector de cantidad en la UI (ver
+// decisión del usuario: "el usuario sigue eligiendo la cantidad").
+async function runGenericDirector(
+  ai: GoogleGenAI,
+  contract: RecipeDirectorContract,
+  brief: string,
+  totalShotsRequested: number,
+  energy: 'elegante' | 'fiesta',
+  onRetry?: (stage: 'decidir' | 'redactar', attempt: number, backoffMs: number) => Promise<void>,
+): Promise<{ plan: GenericPlan; finalPrompts: GenericFinalPromptShot[] }> {
+  const snapshot = loadPhotodumpBankSnapshot();
+  const wideSeed = `${Date.now()}::${Math.random()}`;
+  const widePool = buildGenericWideCandidatePool(snapshot.items, 25, wideSeed);
+
+  const decidePrompt = buildGenericDecidePrompt(contract, brief, totalShotsRequested, widePool, undefined, energy);
+  const decideResponse = await generateContentWithRetry(
+    ai,
+    {
+      model: 'gemini-2.5-flash',
+      contents: [{ role: 'user', parts: [{ text: decidePrompt }] }],
+      config: { responseMimeType: 'application/json', responseSchema: buildGenericPlanSchema(contract) },
+    },
+    4,
+    onRetry ? (attempt, backoffMs) => onRetry('decidir', attempt, backoffMs) : undefined,
+  );
+  const plan = JSON.parse(extractText(decideResponse)) as GenericPlan;
+
+  await new Promise(resolve => setTimeout(resolve, 15000));
+
+  const chosenIds = plan.shots.map(s => s.chosenCandidateId).filter(Boolean);
+  const richDetailBlock = buildGenericRichDetailBlock(chosenIds, snapshot.items);
+  const writePrompt = buildGenericWritePrompt(contract, brief, plan, richDetailBlock, energy);
+  const writeResponse = await generateContentWithRetry(
+    ai,
+    {
+      model: 'gemini-2.5-flash',
+      contents: [{ role: 'user', parts: [{ text: writePrompt }] }],
+      config: { responseMimeType: 'application/json', responseSchema: GENERIC_PROMPTS_SCHEMA },
+    },
+    4,
+    onRetry ? (attempt, backoffMs) => onRetry('redactar', attempt, backoffMs) : undefined,
+  );
+  const { shots: finalPrompts } = JSON.parse(extractText(writeResponse)) as { shots: GenericFinalPromptShot[] };
+
+  return { plan, finalPrompts };
+}
+
+// Contratos disponibles del director genérico, por recipeId — agregar acá
+// cualquier receta nueva que declare su propio RecipeDirectorContract.
+// Único lugar donde el servidor "sabe" qué recetas usan el modo generic.
+const GENERIC_DIRECTOR_CONTRACTS: Record<string, RecipeDirectorContract> = {
+  outfit_check: OUTFIT_CHECK_DIRECTOR_CONTRACT,
+};
+
 async function runPhotodumpDirector(
   ai: GoogleGenAI,
   payload: PhotodumpDirectorPayload,
   onRetry?: (stage: 'decidir' | 'redactar', attempt: number, backoffMs: number) => Promise<void>,
-): Promise<{ plan: PhotodumpDirectorPlan | OpenBankPlan; finalPrompts: PhotodumpFinalPromptShot[] | OpenBankFinalPromptShot[] }> {
-  const { brief, recipe, level, referenceImages, directorMode } = payload;
-  if (!brief || !recipe || !level) {
-    throw new Error('Faltan campos: brief, recipe, level');
+): Promise<{ plan: PhotodumpDirectorPlan | OpenBankPlan | GenericPlan; finalPrompts: PhotodumpFinalPromptShot[] | OpenBankFinalPromptShot[] | GenericFinalPromptShot[] }> {
+  const { brief, recipe, level, referenceImages, directorMode, count } = payload;
+  if (!brief || !recipe) {
+    throw new Error('Faltan campos: brief, recipe');
   }
 
   const energy = resolveEnergyFromBrief(brief);
+
+  // Director Creativo GENÉRICO (ver director/generic/) — cualquier receta
+  // con contrato propio en GENERIC_DIRECTOR_CONTRACTS. No usa `level`
+  // (sistema categorized viejo) — usa `count` directo.
+  if (directorMode === 'generic') {
+    const contract = GENERIC_DIRECTOR_CONTRACTS[recipe];
+    if (!contract) throw new Error(`No hay RecipeDirectorContract registrado para la receta: ${recipe}`);
+    if (!count || count < 1) throw new Error('Falta count (cantidad de shots) para el director genérico.');
+    return runGenericDirector(ai, contract, brief, count, energy, onRetry);
+  }
+
+  if (!level) {
+    throw new Error('Faltan campos: brief, recipe, level');
+  }
 
   // Modo "banco abierto" — bypass aislado y reversible (ver plan de
   // sesión). Toggle de la UI de Photodump, default 'categorized'. No toca
@@ -656,7 +759,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const payloadOnlyActions = ['analyzeREF0', 'inferGender', 'analyzeAnchor', 'analyzeProductRelevance', 'analyzeUGCOutfit', 'analyzeScene', 'getContentJobStatus', 'photodumpDirector', 'photodumpDirectorStart', 'photodumpDirectorStatus', 'analyzeOpenBankVenue', 'redactOpenBankSingleShot', 'getOutfitCheckPoseCandidates'];
+    const payloadOnlyActions = ['analyzeREF0', 'inferGender', 'analyzeAnchor', 'analyzeProductRelevance', 'analyzeUGCOutfit', 'analyzeScene', 'getContentJobStatus', 'photodumpDirector', 'photodumpDirectorStart', 'photodumpDirectorStatus', 'analyzeOpenBankVenue', 'redactOpenBankSingleShot', 'getOutfitCheckPoseCandidates', 'analyzeGenericPlace', 'redactGenericSingleShot'];
     if (!body.action || (!body.prompt && !payloadOnlyActions.includes(body.action))) {
       return res.status(400).json({ error: 'Missing action or prompt' });
     }
@@ -678,9 +781,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (body.action === 'photodumpDirectorStart') {
-      const { brief, recipe, level, hasCompanion, referenceImages, directorMode } = body.payload || {};
-      if (!brief || !recipe || !level) {
-        return res.status(400).json({ error: 'Faltan campos: brief, recipe, level' });
+      const { brief, recipe, level, hasCompanion, referenceImages, directorMode, count } = body.payload || {};
+      // directorMode='generic' usa count en vez de level (ver
+      // runPhotodumpDirector) — cada modo valida sus propios campos
+      // requeridos, en vez de exigir level también para el modo nuevo.
+      if (!brief || !recipe || (directorMode === 'generic' ? !count : !level)) {
+        return res.status(400).json({ error: directorMode === 'generic' ? 'Faltan campos: brief, recipe, count' : 'Faltan campos: brief, recipe, level' });
       }
       const jobId = generateDirectorJobId();
       const job: PhotodumpDirectorJob = {
@@ -692,7 +798,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
       await Promise.all([
         saveDirectorJob(job),
-        redis.set(`photodump_director_payload:${jobId}`, JSON.stringify({ brief, recipe, level, hasCompanion, referenceImages, directorMode }), { ex: 3600 }),
+        redis.set(`photodump_director_payload:${jobId}`, JSON.stringify({ brief, recipe, level, hasCompanion, referenceImages, directorMode, count }), { ex: 3600 }),
       ]);
 
       const proto = req.headers['x-forwarded-proto'] || 'https';
@@ -951,6 +1057,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         model: 'gemini-2.5-flash',
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         config: { responseMimeType: 'application/json', responseSchema: OPEN_BANK_SINGLE_SHOT_SCHEMA },
+      });
+      const { finalPrompt } = JSON.parse(extractText(response)) as { finalPrompt: string };
+      return res.status(200).json({ finalPrompt });
+    }
+
+    // Director Creativo GENÉRICO — observación real del lugar de una imagen
+    // YA generada, mismo mecanismo que analyzeOpenBankVenue (ver ese
+    // comentario para el bug real que esto corrige), generalizado de
+    // vocabulario ("venue nocturno" → el placeAnchorLabel del contrato de
+    // la receta, ej. "destino" para outfit_check).
+    if (body.action === 'analyzeGenericPlace') {
+      const { imageData, mimeType, recipe } = body.payload || {};
+      const contract = GENERIC_DIRECTOR_CONTRACTS[recipe];
+      if (!contract) return res.status(400).json({ error: `No hay RecipeDirectorContract registrado para la receta: ${recipe}` });
+      const response = await generateContentWithRetry(ai, {
+        model: 'gemini-2.5-flash',
+        contents: [
+          { role: 'user', parts: [
+            { text: `Analizá esta foto real de un ${contract.placeAnchorLabel}. Describí en español, en 1-2 frases concretas, QUÉ elementos arquitectónicos/mobiliario son visibles Y DÓNDE están posicionados en el encuadre (ej. "baranda de vidrio con marco negro, visible en el borde izquierdo del encuadre a la altura de la cintura; mesas de madera oscura con sillas de cuerda beige ocupadas por comensales al fondo derecho"). Sé específico con material, color y posición — esto se va a usar para que otro shot del mismo set reuse EXACTAMENTE estos mismos elementos, no unos inventados. INCLUÍ SIEMPRE si hay otras personas reales visibles de fondo (cuántos aproximadamente, ocupado o vacío) — es tan parte de la continuidad del lugar como el mobiliario. También indicá si esta imagen muestra un espacio interior cerrado derivado del ${contract.placeAnchorLabel} principal (ej. un baño) donde no correspondería ver el resto del lugar por una puerta/ventana. Respondé SOLO con JSON.` },
+            { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
+            { text: '{"observedElements": "string", "isEnclosedSubSpace": "boolean"}' },
+          ]},
+        ],
+        config: { responseMimeType: 'application/json' },
+      });
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      return res.status(200).json(JSON.parse(text.replace(/```json|```/g, '').trim()));
+    }
+
+    // Director Creativo GENÉRICO — re-redacta UN shot puntual con
+    // continuidad de lugar real, mismo mecanismo que
+    // redactOpenBankSingleShot generalizado por contrato de receta.
+    if (body.action === 'redactGenericSingleShot') {
+      const { brief, shot, placeObservation, energy, recipe } = body.payload || {};
+      const contract = GENERIC_DIRECTOR_CONTRACTS[recipe];
+      if (!contract) return res.status(400).json({ error: `No hay RecipeDirectorContract registrado para la receta: ${recipe}` });
+      if (!brief || !shot || !placeObservation) {
+        return res.status(400).json({ error: 'Faltan campos: brief, shot, placeObservation' });
+      }
+      const snapshot = loadPhotodumpBankSnapshot();
+      const richDetailBlock = shot.chosenCandidateId ? buildGenericRichDetailBlock([shot.chosenCandidateId], snapshot.items) : '';
+      const prompt = buildGenericPlaceAwareRewritePrompt(contract, brief, shot, richDetailBlock, placeObservation, energy);
+      const response = await generateContentWithRetry(ai, {
+        model: 'gemini-2.5-flash',
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: { responseMimeType: 'application/json', responseSchema: GENERIC_SINGLE_SHOT_SCHEMA },
       });
       const { finalPrompt } = JSON.parse(extractText(response)) as { finalPrompt: string };
       return res.status(200).json({ finalPrompt });

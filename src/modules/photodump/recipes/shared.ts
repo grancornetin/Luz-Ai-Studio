@@ -83,6 +83,15 @@ export interface PhotodumpShotDirective {
   outfitRevealBasicPlan?:    import('./outfitRevealBasic/types').OutfitRevealBasicShotPlan;
   // outfit_night_out: qué shot (fijo o del banco de momentos de noche) corresponde a este shot
   outfitNightOutPlan?:       import('./outfitNightOut/types').OutfitNightOutShotPlan;
+  // Director Creativo GENÉRICO (ver director/generic/): cuando este shot
+  // viene del director (Decidir+Redactar sobre el banco real), el prompt ya
+  // fue redactado completo por Gemini — generatePhotodumpShot lo usa TAL
+  // CUAL como prompt final en vez de ensamblar desde purpose/variationSpace/
+  // requiredElements, mismo principio que directorSceneBlock en
+  // outfitNightOut/promptBuilder.ts. undefined/ausente = comportamiento sin
+  // cambios (ensamblaje normal), nunca afecta recetas que no usan el
+  // director.
+  directorFinalPrompt?:      string;
 }
 
 // Estilo visual de presentación para recetas outfit.

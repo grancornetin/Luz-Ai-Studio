@@ -6,6 +6,11 @@
  * particular. Se le pasan al director como contexto fijo en cada llamada de
  * razonamiento. Portado desde scripts/photodump-director/hardRules.js.
  *
+ * Generalizado de vocabulario (sep 2026, director genérico — ver
+ * director/generic/): las menciones a "venue" se cambiaron a "lugar" —
+ * el contenido de las reglas ya era agnóstico de receta, solo el ejemplo
+ * usaba lenguaje de outfit_night_out. Sin cambio de significado.
+ *
  * Corre server-side (importado por api/photodump/director.ts).
  */
 
@@ -31,39 +36,39 @@ REGLAS NO NEGOCIABLES (aplican siempre, a cualquier receta):
    usuario o por el brief). Nunca copiar un candidato entero solo porque
    tiene buen puntaje — extraer las piezas útiles y descartar el resto.
 
-4. CONTINUIDAD: si varios shots del set comparten el mismo lugar/mundo (ej.
-   el mismo venue de la noche), ese lugar debe describirse de forma
-   consistente entre todos esos shots — mismo estilo, misma decoración,
-   mismos elementos visibles — no puede cambiar de estética entre un shot y
-   el siguiente sin que el brief lo pida explícitamente. Esto incluye el
-   MOBILIARIO Y CUALQUIER ELEMENTO ARQUITECTÓNICO específico (mesa, sillas,
-   barra, baranda, columna, escalera, puerta): si un shot ya describió un
-   elemento concreto (tipo, material, color), cualquier shot siguiente que
-   comparta esa misma continuidad de venue debe reusar EXACTAMENTE ese mismo
-   elemento, no describir uno nuevo — nunca resolver esto con la instrucción
-   contraria de "no menciones/no describas la mesa" (eso abre la puerta a
-   otro error: un shot sin ningún mueble descrito, cuando el encuadre
+4. CONTINUIDAD: si varios shots del set comparten el mismo lugar/mundo, ese
+   lugar debe describirse de forma consistente entre todos esos shots —
+   mismo estilo, misma decoración, mismos elementos visibles — no puede
+   cambiar de estética entre un shot y el siguiente sin que el brief lo
+   pida explícitamente. Esto incluye el MOBILIARIO Y CUALQUIER ELEMENTO
+   ARQUITECTÓNICO específico (mesa, sillas, barra, baranda, columna,
+   escalera, puerta): si un shot ya describió un elemento concreto (tipo,
+   material, color), cualquier shot siguiente que comparta esa misma
+   continuidad de lugar debe reusar EXACTAMENTE ese mismo elemento, no
+   describir uno nuevo — nunca resolver esto con la instrucción contraria
+   de "no menciones/no describas la mesa" (eso abre la puerta a otro
+   error: un shot sin ningún mueble descrito, cuando el encuadre
    claramente necesita uno). La regla es "reusá lo ya establecido", no
    "evitá mencionarlo".
    Caso inverso (bug real confirmado): el candidato del banco elegido para UN
    shot puntual puede tener un elemento propio (ej. una baranda/reja
-   metálica) que NINGÚN shot anterior de ese mismo venue estableció — copiar
+   metálica) que NINGÚN shot anterior de ese mismo lugar estableció — copiar
    ese elemento literal introduce algo que "aparece de la nada" en medio de
    un set por lo demás consistente (mesas y sillas ya establecidas en varios
    shots, y de repente una baranda nueva en uno solo, sin que ningún otro
    shot la muestre antes o después). Si el elemento del candidato no fue
    parte de la continuidad ya establecida por shots anteriores del mismo
-   venue, tenés 2 opciones válidas — nunca copiarlo sin más: (a) descartalo
+   lugar, tenés 2 opciones válidas — nunca copiarlo sin más: (a) descartalo
    y resolvé la misma pose/gesto contra el mobiliario/fondo ya establecido,
    o (b) si el elemento es genuinamente necesario para la pose (ej. la pose
    depende físicamente de apoyarse en algo), incorporalo como parte NUEVA y
-   permanente de ese venue — y entonces cualquier shot posterior que
+   permanente de ese lugar — y entonces cualquier shot posterior que
    comparta esa continuidad también debería poder reusarlo, no que aparezca
    en un único shot aislado del set.
    Tercer caso (bug real confirmado, distinto de los 2 anteriores): el
    mueble SÍ es consistente entre shots (ej. "reuse the same table and
    chairs"), pero su UBICACIÓN respecto a otros elementos ya establecidos
-   del venue (la baranda, otras mesas ocupadas, un pasillo) nunca queda
+   del lugar (la baranda, otras mesas ocupadas, un pasillo) nunca queda
    anclada — solo se nombra el mueble, nunca dónde queda parado dentro del
    layout ya visible en shots anteriores. Resultado real: una silla junto a
    la baranda, sin mesa propia visible ni ningún otro mueble alrededor,
@@ -77,7 +82,7 @@ REGLAS NO NEGOCIABLES (aplican siempre, a cualquier receta):
    contra ninguna mesa en primer plano, es la misma falta de anclaje
    espacial. Regla: cuando un shot reusa mobiliario de continuidad, ubicalo
    explícitamente respecto al elemento fijo más cercano ya establecido del
-   venue (ej. "the same table, positioned right against the railing, part
+   lugar (ej. "the same table, positioned right against the railing, part
    of the same row of tables visible in the background") — no alcanza con
    nombrar el mueble suelto.
 
@@ -169,18 +174,18 @@ REGLAS NO NEGOCIABLES (aplican siempre, a cualquier receta):
    un candidato del banco usa un elemento físico específico (espejo, vidrio,
    ventana, mueble, decoración) que no es parte del brief real, la pregunta
    NUNCA es "¿este tipo de elemento está prohibido?" — es "¿dónde y cómo
-   existiría este elemento, de forma creíble, en el venue real de este
+   existiría este elemento, de forma creíble, en el lugar real de este
    brief?". Ejemplo con espejos (el mismo razonamiento aplica a cualquier
    prop heredado, no es una regla exclusiva de espejos): un candidato de
    mirror selfie de interior doméstico no se descarta ni se copia literal —
    se razona en qué forma un espejo (o su equivalente) tendría sentido en
-   ESTE venue puntual: puede ser el espejo real de un baño del lugar (y
+   ESTE lugar puntual: puede ser el espejo real de un baño del lugar (y
    entonces deben aparecer elementos de baño reales — loza, iluminación
-   cerrada — no el resto del venue de fondo), puede ser un espejo decorativo
-   real de un rincón del venue (y entonces el fondo reflejado debe mostrar el
-   venue mismo, no un interior doméstico inventado), o puede ser el reflejo
-   de un vidrio/ventana/baranda que el venue ya tiene. Si ninguna de esas
-   variantes es creíble para el venue descrito, se descarta el elemento
+   cerrada — no el resto del lugar de fondo), puede ser un espejo decorativo
+   real de un rincón del lugar (y entonces el fondo reflejado debe mostrar el
+   lugar mismo, no un interior doméstico inventado), o puede ser el reflejo
+   de un vidrio/ventana/baranda que el lugar ya tiene. Si ninguna de esas
+   variantes es creíble para el lugar descrito, se descarta el elemento
    entero y se resuelve la misma pose con una superficie reflectante real
    del lugar o sin ninguna — nunca insertando un mueble/objeto flotante que
    no tiene ningún lugar lógico donde existir.
@@ -194,13 +199,13 @@ REGLAS NO NEGOCIABLES (aplican siempre, a cualquier receta):
    candidato del banco sin adaptar). Esta regla no aplica solo a props
    individuales (espejo, mueble): si el candidato elegido es de un
    shot_type/escena que ocurre en un lugar estructuralmente distinto al
-   venue real (ej. un pasillo/hall interior cuando el venue real es un
-   rooftop exterior), NO alcanza con la instrucción "mismo venue, no
+   lugar real (ej. un pasillo/hall interior cuando el lugar real es un
+   rooftop exterior), NO alcanza con la instrucción "mismo lugar, no
    inventes otro lugar" — hay que reescribir explícitamente el fondo
-   completo en términos del venue real (qué se ve, qué materiales, qué
+   completo en términos del lugar real (qué se ve, qué materiales, qué
    mobiliario), nunca dejar que el fondo original del candidato quede
    implícito o se filtre por default. Si no es posible adaptar creíblemente
-   ese fondo al venue real, se descarta el candidato entero y se elige otro
+   ese fondo al lugar real, se descarta el candidato entero y se elige otro
    con un shot_type/escena más cercana al lugar real del brief.
 
 8. FIDELIDAD DE PROPORCIÓN CORPORAL: la silueta y proporción física real de
