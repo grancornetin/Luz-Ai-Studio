@@ -114,6 +114,23 @@ import {
 
 initHpiService();
 
+// ── Caché en memoria: ancla de outfit_check fusionada con la foto 1 ────────
+// (sep 2026, pedido del usuario tras prueba 3: "siento que ref0 sobra, es
+// pagar demás por ella"). Mismo motivo/patrón que fixedAnchorCache en
+// recipes/outfitMultiLook/index.ts — generatePhotodumpREF0 y
+// generatePhotodumpShot son llamadas separadas sin otro lugar para pasarse
+// el resultado. Para outfit_check con count>1, generatePhotodumpREF0 genera
+// la imagen del shot 1 real (Director o arco legado, lo que haya armado
+// buildStoryDirectives) en vez de un mirror-check genérico aparte — la
+// cachea acá, y generatePhotodumpShot la devuelve tal cual para
+// arcPosition===1 en vez de generarla de nuevo. count===1 no usa esta
+// caché (ver outfitCheckSingleShot, camino ya resuelto antes).
+const outfitCheckAnchorCache = new Map<string, string>();
+function outfitCheckAnchorCacheKey(refs: PhotodumpRefs, basePrompt: string): string {
+  const urls = [refs.avatarRef, refs.bodyRef, refs.outfitRef].filter(Boolean);
+  return `${urls.join('|')}::${basePrompt}`;
+}
+
 // ── Tipos ─────────────────────────────────────────────────────
 //
 // MomentType, StoryBeat, PhotodumpShotDirective, OutfitPresentationStyle,
@@ -1232,6 +1249,14 @@ export async function generatePhotodumpREF0(
   // Opcional y sin efecto en ninguna otra receta ni en outfit_check con más
   // de 1 foto — el resto del pipeline sigue exactamente igual.
   visibleCount?: number,
+  // outfit_check con count>1 (sep 2026, pedido del usuario tras prueba 3:
+  // "siento que ref0 sobra, es pagar demás por ella"): shots[0] del plan ya
+  // armado (Director o arco legado) — cuando viene presente, generatePhotodumpREF0
+  // genera ESA foto como ancla real en vez de un mirror-check genérico
+  // aparte, mismo principio que outfit_multi_look/generateFixedAnchor.
+  // Opcional y sin efecto en ninguna otra receta ni en outfit_check con
+  // count===1 (ese caso ya resuelto por outfitCheckSingleShot más abajo).
+  firstShot?: PhotodumpShotDirective,
 ): Promise<PhotodumpREF0Result> {
 
   // weeklyFavoritesV2 — motor nuevo, foto ancla resuelta por completo en su
@@ -1266,6 +1291,23 @@ export async function generatePhotodumpREF0(
 
   if (recipe === 'outfit_night_out') {
     return generateOutfitNightOutREF0(refs, destino, basePrompt, sessionParams);
+  }
+
+  // outfit_check, count>1: la foto 1 real (Director o arco legado) ES el
+  // ancla — se genera acá mismo (sin ref0Url propio, no lo necesita: el
+  // Director ya resuelve continuidad con isMainPlace/needsPlaceAnchor sobre
+  // fotos reales del banco, y el arco legado no depende de un REF0 previo
+  // para su primer shot) y se cachea para que el loop principal, al llegar
+  // a arcPosition===1, devuelva esta misma imagen en vez de generarla de
+  // nuevo (ver chequeo espejo en generatePhotodumpShot).
+  if (recipe === 'outfit_check' && firstShot && (visibleCount ?? 0) > 1) {
+    const result = await generatePhotodumpShot(
+      firstShot, refs, '', null, basePrompt, narrative, destino, sessionParams,
+      [], { storySupport: [], creatorAesthetic: [] }, visibleCount, protagonist, recipe,
+      undefined, undefined,
+    );
+    outfitCheckAnchorCache.set(outfitCheckAnchorCacheKey(refs, basePrompt), result.imageUrl);
+    return { imageUrl: result.imageUrl, ref0Analysis: null, prompt: result.prompt, refsCount: result.refsCount };
   }
 
   const aspectInstr = getAspectInstruction(destino);
@@ -2443,6 +2485,18 @@ export async function generatePhotodumpShot(
   // caso con ref0IsFirstShot=true, sin recuadro de ancla aparte).
   if (recipe === 'outfit_check' && totalShots === 1) {
     return { imageUrl: ref0Url, prompt: '(mismo shot que el ancla — ver generatePhotodumpREF0)', refsCount: 0 };
+  }
+
+  // outfit_check, count>1: la foto 1 (shot.arcPosition===1) YA se generó
+  // como ancla dentro de generatePhotodumpREF0 (ver bloque firstShot ahí) —
+  // devuelve esa misma imagen cacheada en vez de generarla de nuevo. Red de
+  // seguridad: si por algún motivo la caché no tiene el valor (llamada fuera
+  // de orden), sigue de largo y genera normal — nunca bloquea el set por esto.
+  if (recipe === 'outfit_check' && totalShots > 1 && shot.arcPosition === 1) {
+    const cached = outfitCheckAnchorCache.get(outfitCheckAnchorCacheKey(refs, basePrompt));
+    if (cached) {
+      return { imageUrl: cached, prompt: '(mismo shot que el ancla — ver generatePhotodumpREF0)', refsCount: 0 };
+    }
   }
 
   // outfit_multi_look — motor propio (ver recipes/outfitMultiLook/). Cada
