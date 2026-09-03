@@ -526,7 +526,13 @@ export const RECIPE_META: Record<PhotodumpRecipe, {
     label:       'Unboxing / Producto',
     description: 'El producto y su packaging como protagonistas. Podés agregar tu persona.',
     icon:        'Package',
-    refs:        { avatar: 'optional', outfit: 'none', accesorios: 'none', producto: 'required', empaque: 'optional', escena: 'optional', escena_prueba: 'none', escena_destino: 'none' },
+    // outfit: 'optional' — bug real confirmado (prueba de usuario, sep 2026): sin este
+    // slot, la ropa que trae puesta el avatar de referencia se heredaba igual en todo
+    // el set (era la única ropa visible en cualquier referencia), sin que la usuaria
+    // pudiera elegir otra. Decisión del usuario: mantener ese heredado como default
+    // (no suprimirlo) y agregar este slot SOLO para cuando quiera reemplazarlo por una
+    // prenda distinta — ver outfitRefForUnboxing en photodumpDirectorService.ts.
+    refs:        { avatar: 'optional', outfit: 'optional', accesorios: 'none', producto: 'required', empaque: 'optional', escena: 'optional', escena_prueba: 'none', escena_destino: 'none' },
     narrative:   'product_hero',
     protagonist: 'product',
   },

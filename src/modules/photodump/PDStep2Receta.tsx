@@ -256,6 +256,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   const getSlotMax = (key: string): number => {
     if (key === 'avatar')         return 2;
     if (key === 'outfit') {
+      if (recipe === 'unboxing') return 1;     // reemplazo opcional de la ropa del avatar, no un look armado por partes
       if (recipe === 'outfit_haul') return 10; // hasta 10 prendas (MAX_REFS - avatar slots)
       if (recipe === 'outfit_week' || recipe === 'outfit_multi_look') return 7;  // hasta 7 outfits/looks
       return 4;                                // outfit_check: hasta 4 prendas del mismo look
@@ -470,7 +471,9 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
 
   const slotSubLabels: Record<string, string[]> = {
     avatar:         ['Cara / identidad', 'Cuerpo (opcional)'],
-    outfit:         recipe === 'outfit_haul'
+    outfit:         recipe === 'unboxing'
+      ? ['Ropa a usar (reemplaza la del avatar)']
+      : recipe === 'outfit_haul'
       ? ['Prenda 1', 'Prenda 2', 'Prenda 3', 'Prenda 4', 'Prenda 5', 'Prenda 6', 'Prenda 7', 'Prenda 8', 'Prenda 9', 'Prenda 10']
       : recipe === 'outfit_week'
         ? ['Outfit 1', 'Outfit 2', 'Outfit 3', 'Outfit 4', 'Outfit 5', 'Outfit 6', 'Outfit 7']
@@ -497,6 +500,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
       return 'La foto del rostro ancla la identidad facial en todas las imágenes.';
     }
     if (key === 'outfit') {
+      if (recipe === 'unboxing') return 'Opcional: si no subís nada, la persona usa la ropa de tu foto de referencia (Persona). Subí esto solo si querés que use una prenda distinta en el unboxing.';
       if (recipe === 'outfit_check') return 'Sube las prendas del look por separado: una foto clara de cada pieza. Puedes usar Separar prendas o Fotos de producto para obtener mejores resultados. Evita fotos con personas para no mezclar identidades.';
       if (recipe === 'outfit_haul') return 'Sube una imagen por prenda o accesorio. Indica qué tipo de artículo aparece en cada imagen para crear una historia más precisa. Evita fotos con personas para no mezclar identidades.';
       if (recipe === 'outfit_week') return 'Sube una imagen por artículo: looks, prendas, bolsos, calzado, joyería o productos de belleza. Aparecerán en este mismo orden.';

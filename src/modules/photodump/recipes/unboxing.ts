@@ -9,7 +9,23 @@
  */
 import { PhotodumpShotDirective } from './shared';
 
-export function buildUnboxingShotPool(hasAvatar: boolean): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
+// Bug real reportado (prueba de usuario, sep 2026): sin avatar, los shots "solo manos"
+// (opening moment, product in use) no especificaban de quién eran esas manos — el
+// modelo generó manos masculinas para un producto de skincare/belleza femenino, sin
+// ninguna referencia real que las justificara. genderLabel se inyecta en el texto de
+// cada shot que usa manos sin persona, para que la anatomía sea coherente con el
+// género inferido de la sesión (avatar si hay, o el default de PhotodumpModule.tsx).
+function handsGenderLabel(gender: 'female' | 'male' | 'neutral'): string {
+  return gender === 'male' ? 'male hands (visible knuckle structure, no manicure)'
+    : gender === 'neutral' ? 'hands with a neutral, unremarkable appearance'
+    : 'female hands (manicured nails, slender fingers)';
+}
+
+export function buildUnboxingShotPool(
+  hasAvatar: boolean,
+  gender: 'female' | 'male' | 'neutral' = 'female',
+): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
+  const handsLabel = handsGenderLabel(gender);
   const pool: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] = [
     {
       key:   'UNBOXING_PACKAGING_CLOSED',
@@ -22,7 +38,7 @@ export function buildUnboxingShotPool(hasAvatar: boolean): Omit<PhotodumpShotDir
         'empaque sobre superficie de madera o mármol, luz lateral suave que muestra volumen y textura',
         'overhead del empaque centrado con sombra natural, fondo de superficie texturada',
         'empaque en ángulo de tres cuartos, luz de ventana, fondo desenfocado del ambiente',
-        'empaque sostenido desde abajo por manos (sin cara), luz desde arriba, ambiente visible',
+        `empaque sostenido desde abajo por manos (sin cara) — ${handsLabel}, luz desde arriba, ambiente visible`,
       ],
       framing:     'MEDIUM_OR_CLOSE_UP',
       composition: 'PACKAGING_FILLS_70_PERCENT',
@@ -32,16 +48,18 @@ export function buildUnboxingShotPool(hasAvatar: boolean): Omit<PhotodumpShotDir
       key:   'UNBOXING_OPENING_MOMENT',
       beat:  'action',
       role:  'OPENING MOMENT',
-      purpose: 'El momento de apertura — manos interactuando con el empaque. La anticipación en el gesto. Puede ser el avatar o solo manos si no hay avatar. El empaque se abre, el producto asoma.',
-      requiredElements: ['hands_opening_or_interacting_with_packaging', 'packaging_partially_open', 'product_beginning_to_emerge', 'real_surface_visible'],
+      purpose: `El momento de apertura — manos interactuando con el empaque. La anticipación en el gesto. Puede ser el avatar o solo manos si no hay avatar${hasAvatar ? '' : ` (en ese caso, ${handsLabel})`}. El empaque se abre, el producto asoma.`,
+      requiredElements: hasAvatar
+        ? ['hands_opening_or_interacting_with_packaging', 'packaging_partially_open', 'product_beginning_to_emerge', 'real_surface_visible']
+        : [`hands_opening_or_interacting_with_packaging (${handsLabel})`, 'packaging_partially_open', 'product_beginning_to_emerge', 'real_surface_visible'],
       forbiddenElements: ['packaging_fully_closed', 'product_fully_extracted', 'studio_backdrop', 'catalog_composition', 'forced_demonstration'],
       variationSpace: [
-        'manos levantando la tapa o solapa del empaque, producto asomando dentro, luz natural',
-        'overhead de manos abriendo la caja, primer vistazo del interior con el producto',
-        'close-up de las manos en el momento exacto de la apertura, empaque visible a los costados',
+        `manos levantando la tapa o solapa del empaque (${handsLabel}), producto asomando dentro, luz natural`,
+        `overhead de manos abriendo la caja (${handsLabel}), primer vistazo del interior con el producto`,
+        `close-up de las manos en el momento exacto de la apertura (${handsLabel}), empaque visible a los costados`,
         hasAvatar
           ? 'avatar desde ángulo lateral abriendo el empaque, cara parcialmente visible, expresión de anticipación'
-          : 'manos sosteniendo ambos lados del empaque abierto, producto visible, superficie real de fondo',
+          : `manos sosteniendo ambos lados del empaque abierto (${handsLabel}), producto visible, superficie real de fondo`,
       ],
       framing:     'MEDIUM_OR_CLOSE_UP',
       composition: 'HANDS_AND_PACKAGING',
@@ -60,7 +78,7 @@ export function buildUnboxingShotPool(hasAvatar: boolean): Omit<PhotodumpShotDir
         'producto en mano frente al empaque abierto de fondo, luz lateral que resalta forma y acabado',
         hasAvatar
           ? 'avatar sosteniendo el producto recién extraído, expresión genuina de descubrimiento, empaque visible de fondo'
-          : 'producto junto al empaque abierto, ambos sobre superficie real, composición orgánica',
+          : 'producto junto al empaque abierto, ambos sobre superficie real, composición orgánica (sin manos en este encuadre)',
       ],
       framing:     'MEDIUM',
       composition: 'PRODUCT_AND_PACKAGING_TOGETHER',
@@ -87,18 +105,20 @@ export function buildUnboxingShotPool(hasAvatar: boolean): Omit<PhotodumpShotDir
       key:   'UNBOXING_PRODUCT_IN_USE',
       beat:  'action',
       role:  'PRODUCT IN USE',
-      purpose: 'El producto siendo usado de forma natural y real. Si hay avatar, es el momento donde el producto pasa de objeto a parte de su vida. Manos activas, uso genuino, contexto real.',
-      requiredElements: ['product_being_used_naturally', 'hands_or_person_interacting', 'real_context_of_use', 'authentic_not_staged'],
+      purpose: `El producto siendo usado de forma natural y real. Si hay avatar, es el momento donde el producto pasa de objeto a parte de su vida. Manos activas${hasAvatar ? '' : ` (${handsLabel})`}, uso genuino, contexto real.`,
+      requiredElements: hasAvatar
+        ? ['product_being_used_naturally', 'hands_or_person_interacting', 'real_context_of_use', 'authentic_not_staged']
+        : ['product_being_used_naturally', `hands_or_person_interacting (${handsLabel})`, 'real_context_of_use', 'authentic_not_staged'],
       forbiddenElements: ['product_static_display', 'forced_demonstration', 'catalog_feel', 'studio_lighting', 'product_floating'],
       variationSpace: [
         hasAvatar
           ? 'avatar usando el producto en su contexto natural — gesto real, no pose para cámara'
-          : 'manos usando el producto activamente, gesto natural, contexto visible',
-        'close-up de manos interactuando con el producto en uso, detalle del gesto',
+          : `manos usando el producto activamente (${handsLabel}), gesto natural, contexto visible`,
+        `close-up de manos interactuando con el producto en uso (${handsLabel}), detalle del gesto`,
         hasAvatar
           ? 'medium shot del avatar con el producto en uso, ambiente real de fondo, mirada no forzada'
           : 'producto en su lugar natural de uso, environment real, sin persona',
-        'overhead de manos usando el producto, acción clara, superficie de uso visible',
+        `overhead de manos usando el producto (${handsLabel}), acción clara, superficie de uso visible`,
       ],
       framing:     'MEDIUM_OR_CLOSE_UP',
       composition: 'ACTION_IN_CONTEXT',

@@ -360,7 +360,7 @@ function buildStoryDirectives(
   destino:    PhotodumpDestino,
   narrative:  PhotodumpNarrative,
   recipe?:    string,
-  refs?:      { avatarRef?: string | null; outfitRefs?: (string | null)[]; accesorioRefs?: (string | null)[]; accesorioCloseup?: boolean[]; sceneDestinoRef?: string | null; scenePruebaRef?: string | null; sceneRef?: string | null },
+  refs?:      { avatarRef?: string | null; outfitRefs?: (string | null)[]; accesorioRefs?: (string | null)[]; accesorioCloseup?: boolean[]; sceneDestinoRef?: string | null; scenePruebaRef?: string | null; sceneRef?: string | null; gender?: 'female' | 'male' | 'neutral' },
   presentationStyle?: OutfitPresentationStyle,
   basePrompt?: string,
 ): PhotodumpShotDirective[] {
@@ -370,7 +370,12 @@ function buildStoryDirectives(
   // Receta unboxing: arco lineal fijo con pool dedicado
   if (recipe === 'unboxing') {
     const hasAvatar = !!refs?.avatarRef;
-    const pool      = buildUnboxingShotPool(hasAvatar);
+    // Sin avatar, el vehículo de "opening/in use" son manos solas (ver unboxing.ts) —
+    // bug real reportado: sin especificar de quién, el modelo generó manos masculinas
+    // para un producto de skincare/belleza sin ninguna razón narrativa. refs.gender ya
+    // se calcula en PhotodumpModule.tsx (inferido del avatar si hay, 'female' por
+    // default si no) — antes llegaba hasta acá y se descartaba sin usar.
+    const pool      = buildUnboxingShotPool(hasAvatar, refs?.gender ?? 'female');
     const keys      = distributeUnboxingShots(count, hasAvatar);
     return keys.map((key, i) => {
       const shot = pool.find(s => s.key === key) ?? pool[i % pool.length];
@@ -1232,6 +1237,11 @@ export async function generatePhotodumpREF0(
     if (refs.avatarRef) {
       refsToPass.push(refs.avatarRef, refs.avatarRef);
     }
+    // outfitRef opcional (decisión del usuario, sep 2026): por default unboxing hereda
+    // la ropa que trae puesta el avatar de referencia — este slot solo entra si la
+    // usuaria sube una prenda distinta para reemplazarla. Ver identityBlock/anchorShotDesc
+    // más abajo para el texto que resuelve cuál de las 2 fuentes manda.
+    if (refs.outfitRef) refsToPass.push(refs.outfitRef);
     // Empaque principal primero (es el protagonista visual de REF0 en unboxing)
     if (refs.packagingRef) refsToPass.push(refs.packagingRef);
     const extraPackaging = (refs.packagingRefs ?? []).filter(Boolean) as string[];
@@ -1443,7 +1453,7 @@ Environment is real, light is natural or ambient, mood is aspirational but authe
 
   // Instrucción de outfit para las recetas outfit — prendas solas como referencia de identidad
   const allOutfitRefs = [refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean) as string[];
-  const outfitRefInstruction = isOutfitRecipe && allOutfitRefs.length > 0
+  const outfitRefInstruction = (isOutfitRecipe || isUnboxing) && allOutfitRefs.length > 0
     ? `OUTFIT REFERENCE (${allOutfitRefs.length} garment${allOutfitRefs.length > 1 ? 's' : ''} provided):
 - The outfit reference image${allOutfitRefs.length > 1 ? 's show' : ' shows'} the exact garment${allOutfitRefs.length > 1 ? 's' : ''} the person wears in this set.
 - Copy the garments EXACTLY: same color, fabric, cut, fit, silhouette, and details.
@@ -1454,9 +1464,22 @@ Environment is real, light is natural or ambient, mood is aspirational but authe
 ${allOutfitRefs.length > 1 ? `- Multiple garments provided — in REF0, the person should wear the COMPLETE look (all or most pieces together).` : ''}`
     : '';
 
+  // unboxing sin outfitRef: decisión explícita del usuario (sep 2026) — a diferencia de
+  // TODAS las demás recetas con persona (donde la ropa del avatar es solo identidad, ver
+  // GLOBAL_AVATAR_SUPPRESSION), acá el default es heredarla tal cual aparece en la
+  // referencia. Antes esto pasaba de forma implícita y sin control (ninguna instrucción
+  // lo pedía ni lo prohibía, simplemente era la única ropa visible en cualquier
+  // referencia) — ahora queda explícito para que sea un comportamiento intencional y
+  // no dependa de que el modelo "adivine" qué hacer con una imagen sin instrucción.
+  const unboxingInheritAvatarClothingInstruction = (isUnboxing && refs.avatarRef && allOutfitRefs.length === 0)
+    ? `WARDROBE: No separate outfit reference was provided — the person wears the SAME clothing visible in the face/avatar reference image, copied faithfully (same garment, color, fit). This is the intended default for this session, not a fallback to avoid.`
+    : '';
+
   const identityBlock = isUnboxing
     ? refs.avatarRef
       ? `IDENTITY: Copy the face, hair, skin tone, and physical features EXACTLY from the face reference images.
+${outfitRefInstruction}
+${unboxingInheritAvatarClothingInstruction}
 ${productInstruction}
 ${packagingInstruction}`
       : `${productInstruction}
@@ -2387,9 +2410,13 @@ export async function generatePhotodumpShot(
 
   if (isUnboxing) {
     // Unboxing: producto y empaque son protagonistas, avatar es secundario.
-    // Slots: ref0(1) + avatar x2 si existe(2) + empaque(1-2) + producto(1-2) + escena(1) = máx 9
+    // Slots: ref0(1) + avatar x2 si existe(2) + outfit(0-1) + empaque(1-2) + producto(1-2) + escena(1) = máx 10
     refsToPass.push(ref0Url);
     if (refs.avatarRef) refsToPass.push(refs.avatarRef, refs.avatarRef);
+    // outfitRef opcional (ver identityBlock del REF0 más arriba) — se repite acá además
+    // de la continuidad visual con ref0Url para reforzar fidelidad de la prenda en
+    // shots donde se ve de cerca (ej. PRODUCT_IN_USE), mismo patrón que isOutfitRecipe.
+    if (refs.outfitRef) refsToPass.push(refs.outfitRef);
     if (refs.packagingRef) refsToPass.push(refs.packagingRef);
     const extraPackaging = (refs.packagingRefs ?? []).filter(Boolean) as string[];
     // En shots de detalle de producto, no pasar empaque extra para dar espacio al producto
@@ -3053,6 +3080,8 @@ When the referenced haul item is the hero, it must visually dominate.`
     ? `SHOT IDENTITY — UNBOXING SET:
 - REF0 is the visual anchor — same light, same surface, same color temperature across all shots.
 ${refs.avatarRef ? `- Face reference (appears twice): EXACT identity — same bone structure, same hair, same skin tone. The person is a GUIDE in this unboxing, not the star. Keep face authentic, no beautification.` : '- No person in this set — product and packaging are the sole protagonists.'}
+${refs.avatarRef && refs.outfitRef ? `- WARDROBE: The person wears the garment shown in the outfit reference (NOT the clothing visible in the face/avatar reference) — same color, fabric, cut, fit across every shot.` : ''}
+${refs.avatarRef && !refs.outfitRef ? `- WARDROBE: No separate outfit reference — the person wears the SAME clothing already established in REF0 (inherited from the face/avatar reference), consistent across every shot.` : ''}
 - PRODUCT: Reproduce faithfully — same shape, color, finish, and proportions as the reference.
 ${refs.packagingRef ? `- PACKAGING: Reproduce faithfully — same box/container shape, color, design, and materials.` : `- PACKAGING: No reference provided — maintain whatever packaging was established in REF0 consistently.`}
 ${extraProducts.length > 0 ? `- Product shown from multiple angles in references — same object. Use all angles to understand it fully.` : ''}
@@ -3397,7 +3426,9 @@ ALWAYS stay in the REF0 environment — that is the ONLY allowed capture locatio
   // ── Global Stability Blocks — selección condicional por receta y contexto ─────
   //
   // GLOBAL_SCENE_LOCK: todas las recetas excepto outfit_check (ya tiene ref0HardLock/sceneContinuity)
-  // GLOBAL_AVATAR_SUPPRESSION: todas las recetas con persona (no faceless)
+  // GLOBAL_AVATAR_SUPPRESSION: todas las recetas con persona (no faceless), EXCEPTO unboxing
+  //   sin outfitRef — ver unboxingInheritsAvatarClothing abajo, decisión explícita del
+  //   usuario de invertir el comportamiento default solo para ese caso puntual.
   // GLOBAL_WARDROBE_PHYSICS: todos los shots con garment — omitir en overview/product-only
   // GLOBAL_ANATOMY_SAFETY: todos los shots con persona
   // GLOBAL_VISUAL_FIDELITY: todos los shots con slot item
@@ -3407,8 +3438,16 @@ ALWAYS stay in the REF0 environment — that is the ONLY allowed capture locatio
   const isOverviewShot  = (shot.key ?? '').includes('OVERVIEW') || (shot.key ?? '').includes('ANCHOR') || (shot.key ?? '').includes('INTRO');
   const hasGarmentSlot  = !isOverviewShot || recipe === 'outfit_haul' || recipe === 'product_haul';  // overview de haul/product haul también tiene refs de ítems
 
+  // unboxing sin outfitRef: el avatar SÍ debe vestir con su propia ropa (heredada, ver
+  // shotIdentityBlock/identityBlock del REF0) — GLOBAL_AVATAR_SUPPRESSION diría
+  // exactamente lo contrario ("no dejes que la ropa del avatar se vuelva el wardrobe
+  // dominante"), así que se omite solo en este caso puntual. Con outfitRef sí se
+  // mantiene: ahí la prenda subida debe ganarle a la ropa del avatar, como en cualquier
+  // otra receta.
+  const unboxingInheritsAvatarClothing = isUnboxing && !refs.outfitRef;
+
   const globalSceneLock        = (recipe !== 'outfit_check') ? GLOBAL_SCENE_LOCK : '';
-  const globalAvatarSuppression = hasPersonInShot ? GLOBAL_AVATAR_SUPPRESSION : '';
+  const globalAvatarSuppression = (hasPersonInShot && !unboxingInheritsAvatarClothing) ? GLOBAL_AVATAR_SUPPRESSION : '';
   const globalWardrobePhysics   = (hasPersonInShot && hasGarmentSlot) ? GLOBAL_WARDROBE_PHYSICS : '';
   const globalAnatomySafety     = hasPersonInShot ? GLOBAL_ANATOMY_SAFETY : '';
   const globalVisualFidelity    = hasGarmentSlot ? GLOBAL_VISUAL_FIDELITY : '';

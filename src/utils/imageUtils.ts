@@ -220,23 +220,35 @@ export async function downloadAsZip(
 ): Promise<void> {
   if (!images.length) return;
 
-  // Intentar importar dinámicamente JSZip
+  // Intentar importar dinámicamente JSZip. jszip SÍ está declarado como dependencia
+  // real del proyecto (package.json) — el mensaje anterior de este catch ("JSZip no
+  // está instalado") era engañoso: culpaba siempre a una dependencia faltante y
+  // descartaba el error real (`importError` nunca se logueaba), aunque la causa más
+  // probable en producción sea un fallo transitorio de red al cargar el chunk del
+  // bundle (bug real reportado: el botón "Guardar como ZIP" descargaba archivos
+  // sueltos sin avisar por qué). Un reintento cubre ese caso transitorio; si vuelve a
+  // fallar, ahora sí queda el error real en consola para diagnosticar la causa.
   let JSZip: any;
   try {
     JSZip = (await import('jszip')).default;
-  } catch (importError) {
-    console.warn(
-      'JSZip no está instalado. Por favor, ejecuta: npm install jszip\n' +
-      'Mientras tanto, se descargarán las imágenes individualmente.'
-    );
-    // Fallback: descargar una por una
-    for (let i = 0; i < images.length; i++) {
-      const ext = images[i].startsWith('data:') 
-        ? images[i].split(';')[0].split('/')[1] || 'jpg'
-        : 'jpg';
-      await downloadImage(images[i], `${imageNamePrefix}_${i + 1}.${ext}`);
+  } catch (firstError) {
+    console.warn('Primer intento de cargar JSZip falló, reintentando una vez:', firstError);
+    try {
+      JSZip = (await import('jszip')).default;
+    } catch (importError) {
+      console.error(
+        'No se pudo cargar JSZip tras reintentar — se descargarán las imágenes individualmente. Error real:',
+        importError
+      );
+      // Fallback: descargar una por una
+      for (let i = 0; i < images.length; i++) {
+        const ext = images[i].startsWith('data:')
+          ? images[i].split(';')[0].split('/')[1] || 'jpg'
+          : 'jpg';
+        await downloadImage(images[i], `${imageNamePrefix}_${i + 1}.${ext}`);
+      }
+      return;
     }
-    return;
   }
 
   const zip = new JSZip();
