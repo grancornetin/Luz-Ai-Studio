@@ -89,12 +89,22 @@ async function generateFromContract(
 
 // ── Plan de sesión ──────────────────────────────────────────────────────
 
-function seedFor(refs: PhotodumpRefs): string {
-  return cacheKey(refs);
+// El seed de VARIANTES (qué 2 de las 5 opciones de renderVariants.ts le
+// tocan a este set) es distinto del cacheKey de la imagen ancla — antes
+// eran la misma función, y eso significaba que el mismo avatar/outfit daba
+// SIEMPRE la misma combinación de variantes entre sesiones distintas (bug
+// real confirmado sep 2026: 2 pruebas reales del usuario con las mismas refs
+// dieron three_quarter_showcase+back_view las 2 veces). sessionId varía
+// entre sesiones aunque las refs sean las mismas — mismo criterio que ya
+// usan outfit_check/outfit_multi_look para esto. Dentro de la MISMA sesión
+// sigue siendo 100% determinístico (plan y generación real nunca divergen,
+// ver nota de archivo arriba); solo cambia el resultado ENTRE sesiones.
+function variantSeedFor(refs: PhotodumpRefs, sessionId?: string): string {
+  return `${cacheKey(refs)}::${sessionId ?? ''}`;
 }
 
-export function buildOutfitRevealBasicDirectives(refs: PhotodumpRefs): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
-  const contracts = buildShotContracts(seedFor(refs));
+export function buildOutfitRevealBasicDirectives(refs: PhotodumpRefs, sessionId?: string): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
+  const contracts = buildShotContracts(variantSeedFor(refs, sessionId));
   return contracts.map((contract): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> => {
     const plan: OutfitRevealBasicShotPlan = { shotId: contract.shotId, variantIndex: contract.variantIndex };
     return {

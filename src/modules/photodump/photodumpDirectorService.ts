@@ -1012,7 +1012,7 @@ export async function buildPhotodumpSessionPlan(
   // 2 variaciones elegidas del banco de renderVariants.ts), sin importar
   // count ni looks — no pasa por buildStoryDirectives.
   if (recipe === 'outfit_reveal_basic' && refs) {
-    const directives = buildOutfitRevealBasicDirectives(refs);
+    const directives = buildOutfitRevealBasicDirectives(refs, sessionId);
     const shots: PhotodumpShotDirective[] = directives.map((d, i) => ({
       ...d,
       arcPosition: i + 1,
