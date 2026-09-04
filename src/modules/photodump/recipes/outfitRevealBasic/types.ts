@@ -44,6 +44,12 @@ export interface ShotContract {
   // fetchPoseCandidatesByKeyword en outfitCheck/poseClient.ts. undefined si
   // no hay candidato disponible (el shot cae al sceneBlock genérico solo).
   poseAttitudeLine?: string;
+  // TODOS los shots (sep 2026): lugares coherentes con el registro/
+  // formalidad real del outfit (ver outfitRegisterClient.ts) — un vestido
+  // de gala no debe terminar en un lugar campestre solo porque tiene
+  // espejo. undefined = fallback genérico (mismo texto ya validado, sin
+  // restricción de registro).
+  coherentPlaces?: string;
 }
 
 export interface ValidationResult {
@@ -72,6 +78,9 @@ export interface OutfitRevealBasicShotPlan {
   // generateOutfitRevealBasicShot no repita la llamada de red al generar la
   // imagen real (misma llamada de sesión, nunca una por shot).
   poseAttitudeLine?: string;
+  // TODOS los shots (sep 2026): lugares coherentes con el registro del
+  // outfit, ya resueltos una vez — ver ShotContract.coherentPlaces arriba.
+  coherentPlaces?: string;
 }
 
 export interface OutfitRevealBasicShotDebug {

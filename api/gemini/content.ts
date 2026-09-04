@@ -137,7 +137,8 @@ interface ContentRequest {
     | 'redactOpenBankSingleShot'
     | 'getOutfitCheckPoseCandidates'
     | 'analyzeGenericPlace'
-    | 'redactGenericSingleShot';
+    | 'redactGenericSingleShot'
+    | 'analyzeOutfitRegister';
   images?: string[];
   mimeTypes?: string[];
   prompt?: string;
@@ -759,7 +760,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const payloadOnlyActions = ['analyzeREF0', 'inferGender', 'analyzeAnchor', 'analyzeProductRelevance', 'analyzeUGCOutfit', 'analyzeScene', 'getContentJobStatus', 'photodumpDirector', 'photodumpDirectorStart', 'photodumpDirectorStatus', 'analyzeOpenBankVenue', 'redactOpenBankSingleShot', 'getOutfitCheckPoseCandidates', 'analyzeGenericPlace', 'redactGenericSingleShot'];
+    const payloadOnlyActions = ['analyzeREF0', 'inferGender', 'analyzeAnchor', 'analyzeProductRelevance', 'analyzeUGCOutfit', 'analyzeScene', 'getContentJobStatus', 'photodumpDirector', 'photodumpDirectorStart', 'photodumpDirectorStatus', 'analyzeOpenBankVenue', 'redactOpenBankSingleShot', 'getOutfitCheckPoseCandidates', 'analyzeGenericPlace', 'redactGenericSingleShot', 'analyzeOutfitRegister'];
     if (!body.action || (!body.prompt && !payloadOnlyActions.includes(body.action))) {
       return res.status(400).json({ error: 'Missing action or prompt' });
     }
@@ -1292,6 +1293,33 @@ Respond ONLY with JSON: { "isRelevant": boolean, "suggestion": "string", "produc
             { text: 'Analyze this outfit. Respond ONLY with JSON.' },
             { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
             { text: '{ "hasJacket": "boolean", "hasPants": "boolean", "hasShoes": "boolean", "hasAccessories": "boolean", "hasDetail": "boolean", "fabricType": "string", "colors": ["string"], "hasTop": "boolean", "hasBottom": "boolean", "hasBelt": "boolean", "hasBag": "boolean", "hasHat": "boolean", "hasNecklace": "boolean", "bottomType": "shorts|pants|skirt|unknown" }' },
+          ]},
+        ],
+        config: { responseMimeType: 'application/json' },
+      });
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      return res.status(200).json(JSON.parse(text.replace(/```json|```/g, '').trim()));
+    }
+
+    // outfit_reveal_basic (sep 2026, pregunta real del usuario: "si la
+    // referencia del outfit es un vestido tipo met gala, no lo vas a poner
+    // en un lugar campestre aunque el lugar tenga un espejo"): esta receta
+    // no lee el brief de texto en absoluto (basePrompt no se usa en ningún
+    // punto de recipes/outfitRevealBasic/) — la única fuente confiable de
+    // qué tipo de lugar tiene sentido para el outfit es la FOTO del outfit
+    // en sí. Análisis liviano de registro/formalidad (no de prendas —
+    // analyzeUGCOutfit ya cubre eso, es estructural, no de ocasión), con un
+    // set de lugares coherentes por registro para que MIRROR_ANYWHERE_LINE
+    // siga siendo libre DENTRO de esa categoría, no un lugar único fijo.
+    if (body.action === 'analyzeOutfitRegister') {
+      const { imageData, mimeType } = body.payload || {};
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          { role: 'user', parts: [
+            { text: 'Look at this outfit reference photo and classify its formality/occasion register. Respond ONLY with JSON.' },
+            { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
+            { text: '{ "register": "formal_evening" | "smart_casual" | "everyday_casual" | "athletic_sport" | "beach_resort", "reasoning": "one short sentence in Spanish explaining why" }' },
           ]},
         ],
         config: { responseMimeType: 'application/json' },

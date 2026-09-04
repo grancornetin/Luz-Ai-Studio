@@ -22,19 +22,12 @@ import type { ShotContract, RevealShotId } from './types';
 import { pickVariantsForSet, REVEAL_VARIANTS } from './renderVariants';
 import { fetchPoseCandidatesByKeyword, pickOneCandidate, buildPoseAttitudeLine } from '../outfitCheck/poseClient';
 
-const MIRROR_CHECK_CONTRACT: ShotContract = {
-  shotId: 'mirror_check',
-  cameraGrammar: { framing: 'FULL_BODY', angle: 'eye_level', composition: 'mirror_selfie' },
-  poseFamily: 'standing_anchor',
-  referencePolicy: { useIdentityRef: true, useBodyRef: true, useOutfitRefs: true },
-};
-
 function variantIndexOf(id: string): number {
   const idx = REVEAL_VARIANTS.findIndex(v => v.id === id);
   return idx === -1 ? 0 : idx;
 }
 
-export function buildVariationContract(shotId: RevealShotId, variantIndex: number, poseAttitudeLine?: string): ShotContract {
+export function buildVariationContract(shotId: RevealShotId, variantIndex: number, poseAttitudeLine?: string, coherentPlaces?: string): ShotContract {
   const variant = REVEAL_VARIANTS[variantIndex];
   return {
     shotId,
@@ -43,11 +36,18 @@ export function buildVariationContract(shotId: RevealShotId, variantIndex: numbe
     referencePolicy: { useIdentityRef: true, useBodyRef: true, useOutfitRefs: true },
     variantIndex,
     poseAttitudeLine,
+    coherentPlaces,
   };
 }
 
-export function buildMirrorCheckContract(): ShotContract {
-  return MIRROR_CHECK_CONTRACT;
+export function buildMirrorCheckContract(coherentPlaces?: string): ShotContract {
+  return {
+    shotId: 'mirror_check',
+    cameraGrammar: { framing: 'FULL_BODY', angle: 'eye_level', composition: 'mirror_selfie' },
+    poseFamily: 'standing_anchor',
+    referencePolicy: { useIdentityRef: true, useBodyRef: true, useOutfitRefs: true },
+    coherentPlaces,
+  };
 }
 
 // Keywords verificadas a mano contra el banco real, RESTRINGIDO a
@@ -70,7 +70,7 @@ const VARIANT_POSE_KEYWORDS: Partial<Record<string, string[]>> = {
 };
 
 /** Solo se llama una vez, al armar el plan completo de la sesión. */
-export async function buildShotContracts(seed: string): Promise<ShotContract[]> {
+export async function buildShotContracts(seed: string, coherentPlaces?: string): Promise<ShotContract[]> {
   const [v1, v2] = pickVariantsForSet(seed);
 
   // Una sola llamada de red para todo el set (nunca por shot).
@@ -90,8 +90,8 @@ export async function buildShotContracts(seed: string): Promise<ShotContract[]> 
   };
 
   return [
-    MIRROR_CHECK_CONTRACT,
-    buildVariationContract('variation_1', variantIndexOf(v1.id), poseAttitudeLineFor(v1.id)),
-    buildVariationContract('variation_2', variantIndexOf(v2.id), poseAttitudeLineFor(v2.id)),
+    buildMirrorCheckContract(coherentPlaces),
+    buildVariationContract('variation_1', variantIndexOf(v1.id), poseAttitudeLineFor(v1.id), coherentPlaces),
+    buildVariationContract('variation_2', variantIndexOf(v2.id), poseAttitudeLineFor(v2.id), coherentPlaces),
   ];
 }

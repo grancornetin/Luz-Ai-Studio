@@ -32,6 +32,7 @@ import { buildShotPrompt } from './promptBuilder';
 import { buildShotDebug } from './debug';
 import { applyIntelligence } from './intelligenceLayer';
 import { imageApiService } from '../../../../services/imageApiService';
+import { analyzeOutfitRegister, placesForRegister } from './outfitRegisterClient';
 import type { OutfitRevealBasicShotPlan, OutfitRevealBasicShotDebug, ShotContract } from './types';
 
 // ── Caché en memoria del shot mirror_check por sesión ───────────────────
@@ -43,6 +44,24 @@ const mirrorCheckCache = new Map<string, { imageUrl: string; prompt: string; ref
 function cacheKey(refs: PhotodumpRefs): string {
   const urls = [refs.avatarRef, refs.bodyRef, refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean);
   return urls.join('|');
+}
+
+// ── Caché en memoria del análisis de registro/formalidad del outfit ─────
+// buildOutfitRevealBasicDirectives (arma el plan) y generateOutfitRevealBasicREF0
+// (genera el shot 1 real) son llamadas separadas del Director sin un lugar
+// compartido — mismo patrón que mirrorCheckCache. Resuelto UNA vez (quien
+// llegue primero) y reusado por el otro lado sin repetir la llamada a Gemini.
+const coherentPlacesCache = new Map<string, string>();
+
+async function resolveCoherentPlaces(refs: PhotodumpRefs): Promise<string> {
+  const key = cacheKey(refs);
+  const cached = coherentPlacesCache.get(key);
+  if (cached) return cached;
+  const outfitRefUrl = refs.outfitRef ?? refs.outfitRefs?.[0];
+  const register = outfitRefUrl ? await analyzeOutfitRegister(outfitRefUrl) : null;
+  const places = placesForRegister(register);
+  coherentPlacesCache.set(key, places);
+  return places;
 }
 
 function garmentCountFor(refs: PhotodumpRefs): number {
@@ -65,7 +84,8 @@ async function generateFromContract(
   }
 
   const intelligence = applyIntelligence(contract.poseFamily, contract.variantIndex, refs.gender ?? 'female');
-  const { prompt, negative } = buildShotPrompt(contract.shotId, contract.variantIndex, garmentCountFor(refs), intelligence, Boolean(anchorImageUrl), contract.poseAttitudeLine);
+  const coherentPlaces = contract.coherentPlaces ?? await resolveCoherentPlaces(refs);
+  const { prompt, negative } = buildShotPrompt(contract.shotId, contract.variantIndex, garmentCountFor(refs), intelligence, Boolean(anchorImageUrl), contract.poseAttitudeLine, coherentPlaces);
   const preparedRefs = await prepareRefs(routed.orderedUrls);
 
   const imageUrl = await imageApiService.generateImage({
@@ -104,9 +124,10 @@ function variantSeedFor(refs: PhotodumpRefs, sessionId?: string): string {
 }
 
 export async function buildOutfitRevealBasicDirectives(refs: PhotodumpRefs, sessionId?: string): Promise<Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[]> {
-  const contracts = await buildShotContracts(variantSeedFor(refs, sessionId));
+  const coherentPlaces = await resolveCoherentPlaces(refs);
+  const contracts = await buildShotContracts(variantSeedFor(refs, sessionId), coherentPlaces);
   return contracts.map((contract): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> => {
-    const plan: OutfitRevealBasicShotPlan = { shotId: contract.shotId, variantIndex: contract.variantIndex, poseAttitudeLine: contract.poseAttitudeLine };
+    const plan: OutfitRevealBasicShotPlan = { shotId: contract.shotId, variantIndex: contract.variantIndex, poseAttitudeLine: contract.poseAttitudeLine, coherentPlaces: contract.coherentPlaces };
     return {
       key:                contract.shotId,
       beat:               'reveal',
@@ -175,10 +196,10 @@ export async function generateOutfitRevealBasicShot(
   }
 
   const variantIndex = shot.outfitRevealBasicPlan?.variantIndex ?? 0;
-  // poseAttitudeLine ya se resolvió UNA vez en buildOutfitRevealBasicDirectives
-  // (ver contracts.ts) y viaja en el plan guardado — nunca se repite la
-  // llamada de red al generar la imagen real.
-  const contract = buildVariationContract(shotId, variantIndex, shot.outfitRevealBasicPlan?.poseAttitudeLine);
+  // poseAttitudeLine y coherentPlaces ya se resolvieron UNA vez en
+  // buildOutfitRevealBasicDirectives (ver contracts.ts) y viajan en el plan
+  // guardado — nunca se repite la llamada de red al generar la imagen real.
+  const contract = buildVariationContract(shotId, variantIndex, shot.outfitRevealBasicPlan?.poseAttitudeLine, shot.outfitRevealBasicPlan?.coherentPlaces);
   const anchorImageUrl = mirrorCheckCache.get(cacheKey(refs))?.imageUrl;
   return generateFromContract(contract, refs, destino, sessionParams, shotIndex, totalShots, anchorImageUrl);
 }
