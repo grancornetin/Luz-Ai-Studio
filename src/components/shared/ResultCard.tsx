@@ -82,6 +82,13 @@ export interface ResultCardProps {
   // Callback rápido de eliminar (genera acción danger automáticamente si actions está vacío)
   onDelete?: (e: React.MouseEvent) => void;
   deleting?: boolean;
+
+  // Selección múltiple (opt-in — el módulo decide cuándo mostrar el
+  // checkbox, ej. tras activar un "modo selección" con un botón propio).
+  // Sin selectable, la tarjeta se comporta exactamente igual que antes.
+  selectable?:      boolean;
+  selected?:        boolean;
+  onToggleSelect?:  (e: React.MouseEvent) => void;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -185,17 +192,37 @@ export const ResultCard: React.FC<ResultCardProps> = ({
   onClick,
   onDelete,
   deleting,
+  selectable,
+  selected,
+  onToggleSelect,
 }) => {
   const resolvedActions: ResultCardAction[] = actions ?? (onDelete ? [{
     label: '', icon: <Trash2 size={12} />, onClick: onDelete,
     variant: 'danger', loading: deleting, title: 'Eliminar',
   }] : []);
 
+  // En modo selección, el click en la tarjeta selecciona en vez de abrir —
+  // mismo patrón que la galería de fotos del sistema operativo (tap para
+  // marcar, no para abrir, mientras el modo está activo).
+  const handleCardClick = selectable ? onToggleSelect : onClick;
+
   return (
     <div
-      className={`bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm transition-all duration-200 ${onClick ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5 hover:border-brand-200 group' : ''}`}
-      onClick={onClick}
+      className={`relative bg-white border rounded-2xl overflow-hidden shadow-sm transition-all duration-200 ${selected ? 'border-brand-400 ring-2 ring-brand-200' : 'border-slate-200'} ${handleCardClick ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5 hover:border-brand-200 group' : ''}`}
+      onClick={handleCardClick}
     >
+      {selectable && (
+        <div className="absolute top-2.5 left-2.5 z-10">
+          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${selected ? 'bg-brand-600 border-brand-600' : 'bg-white/90 border-slate-300 backdrop-blur-sm'}`}>
+            {selected && (
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M2.5 6L4.8 8.5L9.5 3.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Barra de acento superior */}
       <div className={`h-1 ${ACCENT_STRIP[accentColor]}`} />
 

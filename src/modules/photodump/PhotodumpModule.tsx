@@ -187,6 +187,40 @@ const PhotodumpModule: React.FC = () => {
   const [loadingSets, setLoadingSets] = useState(false);
   const [deletingId,  setDeletingId]  = useState<string | null>(null);
 
+  // Selección y borrado en masa (sep 2026, pedido real del usuario: borrar
+  // uno por uno "es lentísimo"). bulkSelectMode y selectedSetIds se limpian
+  // al desactivar el modo o al terminar un borrado, para que no quede
+  // seleccionado algo que ya no está en la lista.
+  const [bulkSelectMode, setBulkSelectMode] = useState(false);
+  const [selectedSetIds, setSelectedSetIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting,   setBulkDeleting]   = useState(false);
+
+  const toggleBulkSelectMode = () => {
+    setBulkSelectMode(prev => !prev);
+    setSelectedSetIds(new Set());
+  };
+
+  const toggleSetSelected = (id: string) => {
+    setSelectedSetIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const deleteSelectedSets = async () => {
+    if (selectedSetIds.size === 0) return;
+    setBulkDeleting(true);
+    try {
+      await photodumpStorage.deleteMany(Array.from(selectedSetIds));
+      await loadSets();
+      setSelectedSetIds(new Set());
+      setBulkSelectMode(false);
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   // ── Lightbox ──────────────────────────────────────────────
   const [lightboxOpen,   setLightboxOpen]   = useState(false);
   const [lightboxIndex,  setLightboxIndex]  = useState(0);
@@ -2135,6 +2169,13 @@ const PhotodumpModule: React.FC = () => {
             emptyIcon={<Images className="w-10 h-10 text-slate-300" />}
             onEmpty={() => setActiveTab('create')}
             primaryAction={{ label: 'Crear set', onClick: () => setActiveTab('create'), icon: <Sparkles size={13} /> }}
+            bulkActions={{
+              active:           bulkSelectMode,
+              onToggleActive:   toggleBulkSelectMode,
+              selectedCount:    selectedSetIds.size,
+              onDeleteSelected: deleteSelectedSets,
+              deleting:         bulkDeleting,
+            }}
           >
             {sets.map(set => (
               <ResultCard
@@ -2154,8 +2195,11 @@ const PhotodumpModule: React.FC = () => {
                   ...(set.refs?.outfitRef   ? [{ label: 'Outfit',   src: set.refs.outfitRef   }] : []),
                   ...(set.refs?.sceneRef    ? [{ label: 'Escena',   src: set.refs.sceneRef    }] : []),
                 ]}
+                selectable={bulkSelectMode}
+                selected={selectedSetIds.has(set.id)}
+                onToggleSelect={() => toggleSetSelected(set.id)}
                 onClick={() => openSetFromLibrary(set)}
-                actions={[
+                actions={bulkSelectMode ? [] : [
                   { label: 'Ver →',  onClick: e => { e.stopPropagation(); openSetFromLibrary(set); }, variant: 'primary'   },
                   { label: '↓ ZIP',  onClick: e => { e.stopPropagation(); downloadSetZip(set); },     variant: 'secondary' },
                   { label: '', icon: <Trash2 size={12} />, onClick: async e => { e.stopPropagation(); setDeletingId(set.id); await photodumpStorage.delete(set.id); await loadSets(); setDeletingId(null); }, variant: 'danger', loading: deletingId === set.id, title: 'Eliminar' },

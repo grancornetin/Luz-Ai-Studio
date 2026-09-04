@@ -25,7 +25,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Search, SlidersHorizontal } from 'lucide-react';
+import { Search, SlidersHorizontal, CheckSquare, X, Trash2 } from 'lucide-react';
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -76,6 +76,19 @@ export interface ResultLibraryGridProps {
 
   // Número de columnas en desktop (default 3)
   columns?: 1 | 2 | 3 | 4;
+
+  // Selección y borrado en masa (opt-in — sin bulkActions, la toolbar y el
+  // grid se comportan exactamente igual que antes). El módulo controla el
+  // estado real de selección en sus propios items (mismo criterio que
+  // selectable/selected/onToggleSelect en ResultCard) — este componente
+  // solo muestra el botón que activa el modo y la barra con el conteo.
+  bulkActions?: {
+    active:           boolean;
+    onToggleActive:   () => void;
+    selectedCount:    number;
+    onDeleteSelected: () => void;
+    deleting?:        boolean;
+  };
 }
 
 // ── Componente ───────────────────────────────────────────────────────────────
@@ -96,6 +109,7 @@ export const ResultLibraryGrid: React.FC<ResultLibraryGridProps> = ({
   onEmpty,
   primaryAction,
   columns = 3,
+  bulkActions,
 }) => {
   const [query, setQuery] = useState('');
 
@@ -157,6 +171,22 @@ export const ResultLibraryGrid: React.FC<ResultLibraryGridProps> = ({
           </div>
         )}
 
+        {/* Selección en masa — botón que activa/desactiva el modo */}
+        {bulkActions && (
+          <button
+            type="button"
+            onClick={bulkActions.onToggleActive}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold transition-colors flex-shrink-0 border ${
+              bulkActions.active
+                ? 'bg-slate-700 text-white border-slate-700 hover:bg-slate-800'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+            }`}
+          >
+            {bulkActions.active ? <X size={13} /> : <CheckSquare size={13} />}
+            {bulkActions.active ? 'Cancelar' : 'Seleccionar'}
+          </button>
+        )}
+
         {/* Acción principal */}
         {primaryAction && (
           <button
@@ -169,6 +199,28 @@ export const ResultLibraryGrid: React.FC<ResultLibraryGridProps> = ({
           </button>
         )}
       </div>
+
+      {/* ── Barra de selección activa ── */}
+      {bulkActions?.active && (
+        <div className="flex items-center justify-between gap-3 mb-5 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl flex-wrap">
+          <span className="text-[12px] font-semibold text-slate-600">
+            {bulkActions.selectedCount === 0
+              ? 'Tocá las tarjetas para seleccionarlas'
+              : `${bulkActions.selectedCount} seleccionado${bulkActions.selectedCount === 1 ? '' : 's'}`}
+          </span>
+          <button
+            type="button"
+            onClick={bulkActions.onDeleteSelected}
+            disabled={bulkActions.selectedCount === 0 || bulkActions.deleting}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-100 rounded-xl text-[12px] font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+          >
+            {bulkActions.deleting
+              ? <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              : <Trash2 size={13} />}
+            Eliminar {bulkActions.selectedCount > 0 ? `(${bulkActions.selectedCount})` : ''}
+          </button>
+        </div>
+      )}
 
       {/* ── Stats ── */}
       {stats && stats.length > 0 && (
