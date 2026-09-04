@@ -27,6 +27,22 @@ REGLAS NO NEGOCIABLES (aplican siempre, a cualquier receta):
    banco si el usuario ya subió su propio outfit real: el outfit real del
    usuario SIEMPRE reemplaza al outfit del candidato del banco.
 
+2bis. LA ROPA DE LA FOTO DE REFERENCIA DE IDENTIDAD/AVATAR NUNCA ES EL
+   OUTFIT (bug real confirmado, prueba 4 sep 2026: un shot salió con ropa
+   técnica/deportiva genérica en vez del top y pantalón cargo reales que el
+   usuario subió como outfit — el prompt final nunca mencionó qué ropa
+   llevar puesta, y sin esa instrucción explícita el generador copió la
+   ropa visible en la foto de referencia de identidad/cuerpo en su lugar).
+   Las imágenes de referencia de identidad/rostro/cuerpo sirven SOLO para
+   cara, tono de piel, pelo, estructura ósea y proporciones corporales — la
+   ropa que esa persona lleva puesta en esa foto NUNCA es una prenda a usar
+   en el resultado, ni siquiera como base o accesorio, aunque el brief no
+   mencione explícitamente qué ropa llevar. Si hay un outfit real subido
+   por el usuario, TODO shot con la protagonista visible debe describir
+   explícitamente que lleva puesto ESE outfit (o la prenda/look que
+   corresponda a ese shot) — nunca dejarlo implícito o sin mencionar,
+   porque la ausencia de esa instrucción es exactamente lo que causó este bug.
+
 3. QUÉ ES REUTILIZABLE DE UN CANDIDATO DEL BANCO: cuando un candidato del
    banco es útil pero no calza entero con lo que pide el brief, hay que
    identificar EXACTAMENTE qué partes sirven (pose, gesto, expresión, forma
@@ -169,6 +185,30 @@ REGLAS NO NEGOCIABLES (aplican siempre, a cualquier receta):
    encuadre en ese shot puntual (ángulo/mirada que lo aleje de cámara, o
    cuadro cortado antes de la cabeza) en vez de combinarlo con un plano de
    cuerpo entero donde el rostro completo debe leerse con fidelidad.
+
+   CASO ESPECÍFICO — TORSIÓN DE TORSO + CABEZA HACIA EL HOMBRO CONTRARIO EN
+   PLANO DE CUERPO ENTERO (bug real confirmado, prueba 4 sep 2026): un shot
+   redactado como "body turned 45 degrees to the right, looking over their
+   left shoulder towards the camera... weight is shifted to one leg" — 3
+   elementos de torsión combinados a la vez en un plano de cuerpo completo
+   (torso girado en una dirección, cabeza vuelta hacia el hombro OPUESTO a
+   ese giro, más peso asimétrico en una pierna) — resultó en una pierna con
+   orientación incoherente con el resto del cuerpo (un pie apuntando en una
+   dirección que no correspondía a la postura de perfil del torso). Es la
+   misma familia de riesgo que el resto de esta regla: cuantos más ejes de
+   torsión se piden a la vez en un plano de cuerpo entero, menos margen
+   tiene el generador para resolver la geometría de las piernas de forma
+   coherente. "Peso cargado en una pierna" (elemento de vida real, ver
+   regla 9 más abajo) SIGUE siendo válido y deseable — el riesgo específico
+   es sumarlo a la vez que un giro de torso Y una cabeza vuelta al hombro
+   contrario en el MISMO shot. Si un shot de cuerpo entero pide mirar por
+   encima del hombro, preferir que el torso gire HACIA ESE MISMO lado (torso
+   y cabeza en la misma dirección general, un giro de perfil o 3/4 coherente
+   con la mirada) en vez de en direcciones opuestas — y describir
+   explícitamente que ambos pies apuntan en la misma dirección de avance del
+   cuerpo (nunca dejarlo implícito cuando el shot ya combina 2 o más ejes de
+   torsión), salvo que el shot sea genuinamente un giro completo captado a
+   mitad de movimiento, donde eso debe declararse explícitamente como tal.
 
 7. COHERENCIA CAUSAL DE PROPS Y SUPERFICIES HEREDADAS DE UN CANDIDATO: cuando
    un candidato del banco usa un elemento físico específico (espejo, vidrio,
