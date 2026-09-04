@@ -1,11 +1,27 @@
 /**
  * recipes/outfitMultiLook/intelligenceLayer.ts
  *
- * Conecta HPI real (pose/gesto/expresión) en vez de describir posturas de
- * memoria. La intensidad de pose (neutral / low_presence / high_impact)
- * viene del contrato (ver contracts.ts, derivada de era en then_vs_now) y
- * decide qué tan performática pedirle a HPI que sea la pose — nunca decide
- * contenido de referencia, solo dirección actoral.
+ * HPI DESCONECTADO (sep 2026, decisión del usuario: "hay que desconectar
+ * HPI y dejamos solo el banco funcional, en todas las recetas"). Causa raíz
+ * confirmada acá: STANDING_ASYMMETRIC_FASHION_POSE (la pose fija que usaban
+ * TODOS los shots de esta receta) sí describía bien la mecánica del selfie
+ * ("left hand holding phone at chest level") — pero CLOSED_OR_CONFIDENT_ARM_PLACEMENT
+ * (el gesto que se sumaba encima vía includeGesture) decía "arms crossed,
+ * hands tucked in pockets" — contradice directamente esa misma mano.
+ * Mismo tipo de bug ya confirmado hoy en outfitRevealBasic/renderVariants.ts
+ * (familias HPI sin concepto de "esto es una selfie").
+ *
+ * La mecánica del selfie (brazo/teléfono) ya vive en promptBuilder.ts
+ * (mirrorSelfieBlock/variationBlock — "the raised arm holding the phone...
+ * is what reads clearly as a self-taken mirror photo"), sin depender de
+ * HPI. poseLineFor de abajo (escrito a mano, no viene de HPI) sigue
+ * resolviendo la ACTITUD corporal (peso, ángulo, mirada) — nunca menciona
+ * manos, así que no compite con la mecánica del selfie.
+ *
+ * La intensidad de pose (neutral / low_presence / high_impact) viene del
+ * contrato (ver contracts.ts, derivada de era en then_vs_now) y decide qué
+ * tan performática es la actitud — nunca decide contenido de referencia,
+ * solo dirección actoral.
  *
  * Validado manualmente (ver manifiesto sección 6bis): para low_presence NO
  * alcanza con "energía relajada" en abstracto — hace falta texto explícito
@@ -24,42 +40,14 @@
  * determinística por la posición del look en el set (look.sourceIndex) —
  * así cada shot del mismo set pide una postura distinta sin depender de
  * aleatoriedad no reproducible.
- *
- * Bug real reportado en producción (curated_ideas, ronda 3): el HPI genérico
- * (buildHpiBlock) elige entre las 9 familias de poseBanks sin filtrar —
- * varias son "seated_pose"/"reclined_pose"/gimnasio (ej.
- * SEATED_EDITORIAL_OR_LIFESTYLE_POSE, ACTIVE_FITNESS_FORM_DISPLAY), que
- * contradicen directamente el poseLine escrito a mano ("standing mirror
- * selfie"). Resultado observado: el modelo recibía "standing" y "seated on
- * the floor doing a lat pulldown" en el mismo prompt. Se restringe el HPI a
- * las únicas familias con tag standing/full-body real, por banco.
  */
-import { buildHpiBlock, getHpiNegatives, type HpiConfig, type HpiGender } from '../../../../services/hpiService';
 import type { ShotContract, LookPoseIntensity } from './types';
-
-// Familias verificadas contra el banco HPI real (03_reglas_director_hpi_mujer_151.json)
-// como las únicas de pie / cuerpo completo, sin sentada/reclinada/piso/gimnasio mezclado.
-const STANDING_FULL_BODY_FAMILIES = {
-  pose:    ['STANDING_ASYMMETRIC_FASHION_POSE'],
-  camera:  ['MIRROR_SELFIE_REFLECTION'],
-  gesture: ['CLOSED_OR_CONFIDENT_ARM_PLACEMENT'],
-};
+import type { HpiGender } from '../../../../services/hpiService';
 
 export interface AppliedIntelligence {
   hpiBlock:     string;
   hpiNegatives: string[];
   poseLine:     string;
-}
-
-function hpiConfigFor(intensity: LookPoseIntensity, gender: HpiGender): HpiConfig {
-  return {
-    enabled:            true,
-    gender,
-    modoVisual:         'ugc',
-    includeGesture:      true,
-    includePerformance:  intensity === 'high_impact',
-    allowedFamilies:     STANDING_FULL_BODY_FAMILIES,
-  };
 }
 
 // Variantes de pose neutral con intención real (peso del cuerpo, ángulo de
@@ -97,8 +85,10 @@ function poseLineFor(intensity: LookPoseIntensity, variantIndex: number): string
 }
 
 export function applyIntelligence(contract: ShotContract, gender: HpiGender): AppliedIntelligence {
-  const hpiBlock     = buildHpiBlock(hpiConfigFor(contract.poseIntensity, gender));
-  const hpiNegatives = getHpiNegatives(gender);
-  const poseLine     = poseLineFor(contract.poseIntensity, contract.look.sourceIndex);
-  return { hpiBlock, hpiNegatives, poseLine };
+  const poseLine = poseLineFor(contract.poseIntensity, contract.look.sourceIndex);
+  // gender no se usa hoy (HPI desconectado) — se mantiene en la firma para
+  // no romper a los 2 callers (index.ts, anchorFixed.ts) y por si algún día
+  // vuelve a hacer falta variar poseLine por género.
+  void gender;
+  return { hpiBlock: '', hpiNegatives: [], poseLine };
 }
