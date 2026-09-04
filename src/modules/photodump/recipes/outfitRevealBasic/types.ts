@@ -39,6 +39,11 @@ export interface ShotContract {
   // de RevealVariant (ver renderVariants.ts), evita repetir la misma
   // variante dos veces en el mismo set de 3.
   variantIndex?:   number;
+  // Solo shots de variación (sep 2026): línea de actitud real citada del
+  // banco de fotos (openbank) para la composición que le tocó — ver
+  // fetchPoseCandidatesByKeyword en outfitCheck/poseClient.ts. undefined si
+  // no hay candidato disponible (el shot cae al sceneBlock genérico solo).
+  poseAttitudeLine?: string;
 }
 
 export interface ValidationResult {
@@ -62,6 +67,11 @@ export interface OutfitRevealBasicShotPlan {
   // EXACTAMENTE la misma variante que se planificó, sin recalcular (evita que
   // el plan diga una variante y la generación real use otra).
   variantIndex?: number;
+  // Solo shots de variación (sep 2026): línea de actitud real ya resuelta en
+  // buildOutfitRevealBasicDirectives — viaja acá para que
+  // generateOutfitRevealBasicShot no repita la llamada de red al generar la
+  // imagen real (misma llamada de sesión, nunca una por shot).
+  poseAttitudeLine?: string;
 }
 
 export interface OutfitRevealBasicShotDebug {

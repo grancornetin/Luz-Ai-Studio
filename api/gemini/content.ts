@@ -1120,7 +1120,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // "estructurado y confiable" ya validado ahí: shot_type normalizado,
     // nunca category/search_tags de texto libre).
     if (body.action === 'getOutfitCheckPoseCandidates') {
-      const { shotTypes, poseKeywordGroups, perType, seed } = body.payload || {};
+      const { shotTypes, poseKeywordGroups, restrictShotTypes, perType, seed } = body.payload || {};
       const hasShotTypes = Array.isArray(shotTypes) && shotTypes.length > 0;
       const hasKeywordGroups = poseKeywordGroups && typeof poseKeywordGroups === 'object'
         && Object.keys(poseKeywordGroups).length > 0;
@@ -1129,6 +1129,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const takePerType = Math.min(Math.max(Number(perType) || 3, 1), 10);
       const snapshot = loadPhotodumpBankSnapshot();
+
+      // Modo 2 combinable con un sub-filtro de shot_type (sep 2026,
+      // outfit_reveal_basic): una keyword de actitud ("apoyad", "sentad")
+      // sola matchea CUALQUIER encuadre del banco, incluido medio_cuerpo/
+      // close_up que cortan antes del calzado — para recetas que exigen
+      // cuerpo completo visible (footwearVisible), restrictShotTypes acota
+      // el modo keyword a los shot_type normalizados dados, sin volver a
+      // pasar por el modo 1 (que devolvería TODO ese shot_type, no solo los
+      // que además matchean la keyword).
+      const restrictSet = Array.isArray(restrictShotTypes) && restrictShotTypes.length > 0
+        ? new Set(restrictShotTypes.map((t: string) => normalizeShotType(t)))
+        : null;
 
       const byGroup = new Map<string, { itemId: string; pose: string; gesture: string; gaze: string }[]>();
 
@@ -1166,6 +1178,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           for (const item of snapshot.items) {
             const d = (item as any).analysis?.raw_visual_description;
             if (!d) continue;
+            if (restrictSet && !restrictSet.has(normalizeShotType(d.shot_type))) continue;
             const poseText = (d.subject_pose || '').toLowerCase();
             if (!keywords.some(k => poseText.includes(k))) continue;
             if (!byGroup.has(groupKey)) byGroup.set(groupKey, []);

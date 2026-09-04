@@ -88,6 +88,13 @@ export async function fetchPoseCandidatesByKeyword(
   keywordGroups: Record<string, string[]>,
   seed: string,
   perType: number = 3,
+  // Acota el modo keyword a estos shot_type normalizados (AND, no reemplaza
+  // la keyword) — necesario para recetas que exigen cuerpo completo visible
+  // (ej. outfit_reveal_basic, footwearVisible): una keyword de actitud sola
+  // matchea cualquier encuadre del banco, incluidos close-ups que cortan
+  // antes del calzado. Sin esto, el modo keyword no filtra por encuadre en
+  // absoluto (ver getOutfitCheckPoseCandidates en api/gemini/content.ts).
+  restrictShotTypes?: string[],
 ): Promise<Record<string, OutfitCheckPoseCandidate[]>> {
   if (Object.keys(keywordGroups).length === 0) return {};
   try {
@@ -96,7 +103,7 @@ export async function fetchPoseCandidatesByKeyword(
       headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
       body: JSON.stringify({
         action: 'getOutfitCheckPoseCandidates',
-        payload: { poseKeywordGroups: keywordGroups, seed, perType },
+        payload: { poseKeywordGroups: keywordGroups, restrictShotTypes, seed, perType },
       }),
     });
     if (!res.ok) {

@@ -65,7 +65,7 @@ async function generateFromContract(
   }
 
   const intelligence = applyIntelligence(contract.poseFamily, contract.variantIndex, refs.gender ?? 'female');
-  const { prompt, negative } = buildShotPrompt(contract.shotId, contract.variantIndex, garmentCountFor(refs), intelligence, Boolean(anchorImageUrl));
+  const { prompt, negative } = buildShotPrompt(contract.shotId, contract.variantIndex, garmentCountFor(refs), intelligence, Boolean(anchorImageUrl), contract.poseAttitudeLine);
   const preparedRefs = await prepareRefs(routed.orderedUrls);
 
   const imageUrl = await imageApiService.generateImage({
@@ -103,10 +103,10 @@ function variantSeedFor(refs: PhotodumpRefs, sessionId?: string): string {
   return `${cacheKey(refs)}::${sessionId ?? ''}`;
 }
 
-export function buildOutfitRevealBasicDirectives(refs: PhotodumpRefs, sessionId?: string): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[] {
-  const contracts = buildShotContracts(variantSeedFor(refs, sessionId));
+export async function buildOutfitRevealBasicDirectives(refs: PhotodumpRefs, sessionId?: string): Promise<Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[]> {
+  const contracts = await buildShotContracts(variantSeedFor(refs, sessionId));
   return contracts.map((contract): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> => {
-    const plan: OutfitRevealBasicShotPlan = { shotId: contract.shotId, variantIndex: contract.variantIndex };
+    const plan: OutfitRevealBasicShotPlan = { shotId: contract.shotId, variantIndex: contract.variantIndex, poseAttitudeLine: contract.poseAttitudeLine };
     return {
       key:                contract.shotId,
       beat:               'reveal',
@@ -175,7 +175,10 @@ export async function generateOutfitRevealBasicShot(
   }
 
   const variantIndex = shot.outfitRevealBasicPlan?.variantIndex ?? 0;
-  const contract = buildVariationContract(shotId, variantIndex);
+  // poseAttitudeLine ya se resolvió UNA vez en buildOutfitRevealBasicDirectives
+  // (ver contracts.ts) y viaja en el plan guardado — nunca se repite la
+  // llamada de red al generar la imagen real.
+  const contract = buildVariationContract(shotId, variantIndex, shot.outfitRevealBasicPlan?.poseAttitudeLine);
   const anchorImageUrl = mirrorCheckCache.get(cacheKey(refs))?.imageUrl;
   return generateFromContract(contract, refs, destino, sessionParams, shotIndex, totalShots, anchorImageUrl);
 }

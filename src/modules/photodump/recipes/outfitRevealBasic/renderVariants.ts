@@ -72,6 +72,32 @@ export const REVEAL_VARIANTS: RevealVariant[] = [
     hpiCameraFamily: 'DIRECT_CLOSEUP_PORTRAIT',
     footwearVisible: false, // close-up de torso/rostro, los pies no entran en el encuadre por diseño
   },
+  // 2 variantes nuevas (sep 2026) — enriquecidas con el banco REAL de fotos
+  // (bank-snapshot.json, 733 items), no con familias HPI (ver
+  // fetchPoseCandidatesByKeyword en outfitCheck/poseClient.ts — el mismo
+  // mecanismo ya usado en outfit_multi_look/contracts.ts). Se auditó volumen
+  // real ANTES de sumarlas — mismo criterio que las demás vetas de este
+  // módulo: filtrado a full_body/mirror_selfie sin acompañante (292 items),
+  // y verificado a mano el texto de la muestra (no solo el conteo, la
+  // primera pasada con keywords sueltas dio falsos positivos — "caminando"
+  // real resultó ser solo 2 candidatos genuinos, descartada). hpiPoseFamily
+  // queda null a propósito: el openbank resuelve la pose real, no hace
+  // falta una familia HPI genérica encima (evita el mismo problema que ya
+  // sacó a genuine_pov del banco — sin candidato real, HPI no aporta nada).
+  {
+    id: 'seated_showcase',
+    sceneBlock: 'A full-body mirror selfie, seated — she is sitting on a real piece of furniture or surface in the room (bed edge, chair, bench, counter), full outfit still clearly visible head to toe including footwear.',
+    cameraGrammar: { framing: 'FULL_BODY', angle: 'eye_level', composition: 'seated_showcase' },
+    hpiPoseFamily: null,
+    footwearVisible: true,
+  },
+  {
+    id: 'leaning_wall',
+    sceneBlock: 'A full-body mirror selfie, standing but leaning casually against a real wall or piece of furniture in the room — a relaxed, off-guard stance rather than a plain centered stand. Full body visible head to toe, including footwear.',
+    cameraGrammar: { framing: 'FULL_BODY', angle: 'eye_level', composition: 'leaning_wall' },
+    hpiPoseFamily: null,
+    footwearVisible: true,
+  },
 ];
 
 // Hash simple y determinístico de un string — para variar la selección

@@ -53,7 +53,7 @@ function outfitLine(garmentCount: number, footwearVisible: boolean): string {
   return `${base} The footwear from the reference does not need to be visible in this framing, but every other piece of the outfit must match the reference exactly.`;
 }
 
-function shotBlockFor(shotId: RevealShotId, variantIndex: number | undefined, hasSceneAnchor: boolean): string {
+function shotBlockFor(shotId: RevealShotId, variantIndex: number | undefined, hasSceneAnchor: boolean, poseAttitudeLine?: string): string {
   const sceneAnchorLine = hasSceneAnchor
     ? 'SCENE CONTINUITY: this is the SAME room, shown in the scene reference image — reuse the exact same background, furniture, walls, and lighting. Do not invent a different room.'
     : '';
@@ -66,7 +66,7 @@ function shotBlockFor(shotId: RevealShotId, variantIndex: number | undefined, ha
     ].filter(Boolean).join('\n');
   }
   const variant = REVEAL_VARIANTS[variantIndex ?? 0];
-  return [variant.sceneBlock, sceneAnchorLine, NO_STUDIO_BACKDROP_LINE].filter(Boolean).join('\n');
+  return [variant.sceneBlock, sceneAnchorLine, poseAttitudeLine, NO_STUDIO_BACKDROP_LINE].filter(Boolean).join('\n');
 }
 
 export function buildShotPrompt(
@@ -75,11 +75,12 @@ export function buildShotPrompt(
   garmentCount:  number,
   intelligence:  AppliedIntelligence,
   hasSceneAnchor: boolean = false,
+  poseAttitudeLine?: string,
 ): BuiltPrompt {
   const footwearVisible = shotId === 'mirror_check' ? true : (REVEAL_VARIANTS[variantIndex ?? 0]?.footwearVisible ?? true);
 
   const lines = [
-    shotBlockFor(shotId, variantIndex, hasSceneAnchor),
+    shotBlockFor(shotId, variantIndex, hasSceneAnchor, poseAttitudeLine),
     outfitLine(garmentCount, footwearVisible),
     intelligence.hpiBlock,
     NO_WALKING_LINE,
