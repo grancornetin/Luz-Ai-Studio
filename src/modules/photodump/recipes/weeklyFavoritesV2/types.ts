@@ -181,6 +181,11 @@ export interface ShotContract {
   coverageLevel:      CoverageLevel;
   // true = segunda toma del mismo item (ver AllocatedShotSlot.isAdditionalDetail).
   isAdditionalDetail?: boolean;
+  // Solo shots con persona posando (outfit_hero/outfit_integrated, sep
+  // 2026): línea de actitud real citada del banco de fotos (openbank) — ver
+  // fetchOutfitCheckPoseCandidates en outfitCheck/poseClient.ts. undefined
+  // si no hay candidato disponible o el rol no aplica.
+  poseAttitudeLine?: string;
 }
 
 // ── Validación ──────────────────────────────────────────────────────────

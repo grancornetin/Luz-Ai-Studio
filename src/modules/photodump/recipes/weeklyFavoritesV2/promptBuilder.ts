@@ -81,6 +81,7 @@ export function buildShotPrompt(
       : '',
     forbiddenLine(contract),
     intelligence.ugcBlock,
+    contract.poseAttitudeLine,
     intelligence.hpiBlock,
     'Natural iPhone quality, candid UGC feel. One photo, not a collage.',
   ].filter(Boolean);

@@ -28,6 +28,7 @@ import { validateRouting } from './routingValidator';
 import { buildShotPrompt } from './promptBuilder';
 import { buildShotDebug } from './debug';
 import { applyIntelligence } from './intelligenceLayer';
+import { fetchOutfitCheckPoseCandidates, pickOneCandidate, buildPoseAttitudeLine } from '../outfitCheck/poseClient';
 import type {
   AnchorContract, WeeklyManifestV2, ShotContract, WeeklyFavoritesV2ShotPlan, WeeklyV2ShotDebug,
 } from './types';
@@ -52,6 +53,46 @@ function anchorCacheKey(refs: PhotodumpRefs): string {
   return `${urls.join('|')}::${refs.avatarHasDefinitiveOutfit ? 'base' : 'auto'}`;
 }
 
+// ── Caché en memoria de poses citadas del banco (sep 2026, desconexión de
+// HPI) ────────────────────────────────────────────────────────────────────
+// outfit_hero/outfit_integrated (persona con el outfit puesto, encuadre
+// person_centered — NO es mirror selfie, a diferencia de outfit_multi_look/
+// outfit_reveal_basic) dependían 100% de HPI para la dirección de pose —
+// sin ningún texto escrito a mano de respaldo. HPI elegía libremente entre
+// las 28 familias de poseBanks sin ningún filtro de compatibilidad con este
+// encuadre (mismo tipo de bug ya confirmado en outfitMultiLook: familias
+// "seated"/"reclined" mezclándose con un plano de pie). Reemplazado por
+// pose real citada del banco (fetchOutfitCheckPoseCandidates, shot_type
+// full_body+medio_cuerpo — 370 candidatos reales verificados), UNA sola
+// llamada de red por sesión (mismo motivo que anchorCache: el contract se
+// reconstruye por cada shot en generateWeeklyFavoritesV2Shot, así que sin
+// este caché la llamada se repetiría por foto).
+const poseAttitudeCache = new Map<string, Record<string, string | undefined>>();
+
+const WEEKLY_POSE_SHOT_TYPES = ['full_body', 'medio_cuerpo'];
+const POSE_ELIGIBLE_ROLES = new Set(['outfit_hero', 'outfit_integrated']);
+
+async function attachPoseAttitudes(contracts: ShotContract[], seedKey: string): Promise<ShotContract[]> {
+  const eligible = contracts.filter(c => POSE_ELIGIBLE_ROLES.has(c.role));
+  if (eligible.length === 0) return contracts;
+
+  let byShotId = poseAttitudeCache.get(seedKey);
+  if (!byShotId) {
+    const candidatesByType = await fetchOutfitCheckPoseCandidates(WEEKLY_POSE_SHOT_TYPES, seedKey, 8);
+    const pooled = WEEKLY_POSE_SHOT_TYPES.flatMap(t => candidatesByType[t] ?? []);
+    byShotId = {};
+    for (const contract of eligible) {
+      const chosen = pickOneCandidate(pooled, `${seedKey}::${contract.shotId}`);
+      byShotId[contract.shotId] = buildPoseAttitudeLine(chosen) || undefined;
+    }
+    poseAttitudeCache.set(seedKey, byShotId);
+  }
+
+  return contracts.map(c => POSE_ELIGIBLE_ROLES.has(c.role)
+    ? { ...c, poseAttitudeLine: byShotId![c.shotId] }
+    : c);
+}
+
 // ── Plan de sesión ──────────────────────────────────────────────────────
 // Construye el catálogo y el reparto de fotos, y expone ambos junto a las
 // directivas mínimas que espera PhotodumpShotDirective.
@@ -61,14 +102,16 @@ export interface WeeklyFavoritesV2Plan {
   shotContracts: ShotContract[];
 }
 
-export function buildWeeklyFavoritesV2Directives(
+export async function buildWeeklyFavoritesV2Directives(
   refs:            PhotodumpRefs,
   requestedCount:  number,
   anchor:          AnchorContract,
-): { directives: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[]; plan: WeeklyFavoritesV2Plan } {
+  sessionId?:      string,
+): Promise<{ directives: Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[]; plan: WeeklyFavoritesV2Plan }> {
   const manifest = buildWeeklyFavoritesV2Manifest(refs);
   const allocation = allocateShots(manifest, requestedCount);
-  const shotContracts = buildShotContracts(allocation.shots, anchor, allocation.itemCoverageLevel, manifest.items);
+  const rawContracts = buildShotContracts(allocation.shots, anchor, allocation.itemCoverageLevel, manifest.items);
+  const shotContracts = await attachPoseAttitudes(rawContracts, `${anchorCacheKey(refs)}::${sessionId ?? ''}`);
 
   const directives = shotContracts.map((contract): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> => {
     const plan: WeeklyFavoritesV2ShotPlan = {
@@ -192,9 +235,11 @@ export async function generateWeeklyFavoritesV2Shot(
   }
 
   // El plan de contratos depende solo de refs + requestedCount + anchor —
-  // reconstruirlo por cada shot es barato (sin llamadas a IA) y evita tener
-  // que pasar el plan completo a través de la cadena del Director.
-  const { plan } = buildWeeklyFavoritesV2Directives(refs, requestedCount, anchor);
+  // reconstruirlo por cada shot es barato (sin llamadas a IA, salvo la
+  // primera vez: attachPoseAttitudes cachea por seedKey, ver
+  // poseAttitudeCache arriba) y evita tener que pasar el plan completo a
+  // través de la cadena del Director.
+  const { plan } = await buildWeeklyFavoritesV2Directives(refs, requestedCount, anchor, sessionParams.sessionId);
 
   const contract = plan.shotContracts.find(c => c.shotId === shot.key);
   if (!contract) {

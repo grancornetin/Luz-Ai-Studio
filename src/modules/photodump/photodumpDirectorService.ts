@@ -943,7 +943,7 @@ export async function buildPhotodumpSessionPlan(
   // outfit definitivo / con outfit por estilo) está resuelto.
   if (recipe === 'outfit_week' && refs) {
     const provisionalAnchor: WeeklyFavoritesV2AnchorContract = { mode: 'world_only' };
-    const { directives } = buildWeeklyFavoritesV2Directives(refs, count, provisionalAnchor);
+    const { directives } = await buildWeeklyFavoritesV2Directives(refs, count, provisionalAnchor, sessionId);
     const shots: PhotodumpShotDirective[] = directives.map((d, i) => ({
       ...d,
       arcPosition: i + 1,
