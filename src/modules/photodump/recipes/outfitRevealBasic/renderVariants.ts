@@ -36,7 +36,7 @@ export interface RevealVariant {
 export const REVEAL_VARIANTS: RevealVariant[] = [
   {
     id: 'lateral_silhouette',
-    sceneBlock: 'A full-body mirror selfie from a side profile angle — she has turned to show the silhouette of the outfit from the side, same room as the anchor. Full body visible head to toe, including footwear.',
+    sceneBlock: 'A full-body mirror selfie from a side profile angle — she has turned to show the silhouette of the outfit from the side, same place as the anchor. Full body visible head to toe, including footwear.',
     cameraGrammar: { framing: 'FULL_BODY', angle: 'eye_level', composition: 'lateral_silhouette' },
     hpiPoseFamily: 'STANDING_LATERAL_SILHOUETTE_POSE',
     footwearVisible: true,
@@ -86,14 +86,14 @@ export const REVEAL_VARIANTS: RevealVariant[] = [
   // sacó a genuine_pov del banco — sin candidato real, HPI no aporta nada).
   {
     id: 'seated_showcase',
-    sceneBlock: 'A full-body mirror selfie, seated — she is sitting on a real piece of furniture or surface in the room (bed edge, chair, bench, counter), full outfit still clearly visible head to toe including footwear.',
+    sceneBlock: 'A full-body mirror selfie, seated — she is sitting on a real piece of furniture or surface in this place (bed edge, chair, bench, counter, ledge), full outfit still clearly visible head to toe including footwear.',
     cameraGrammar: { framing: 'FULL_BODY', angle: 'eye_level', composition: 'seated_showcase' },
     hpiPoseFamily: null,
     footwearVisible: true,
   },
   {
     id: 'leaning_wall',
-    sceneBlock: 'A full-body mirror selfie, standing but leaning casually against a real wall or piece of furniture in the room — a relaxed, off-guard stance rather than a plain centered stand. Full body visible head to toe, including footwear.',
+    sceneBlock: 'A full-body mirror selfie, standing but leaning casually against a real wall or piece of furniture in this place — a relaxed, off-guard stance rather than a plain centered stand. Full body visible head to toe, including footwear.',
     cameraGrammar: { framing: 'FULL_BODY', angle: 'eye_level', composition: 'leaning_wall' },
     hpiPoseFamily: null,
     footwearVisible: true,

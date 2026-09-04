@@ -1848,7 +1848,7 @@ const PhotodumpModule: React.FC = () => {
                             </div>
                           </div>
                         )}
-                        {recipe !== 'outfit_multi_look' && recipe !== 'outfit_reveal_basic' && recipe !== 'outfit_night_out' && !partialImages[0] && progressStepIndex >= 1 && (
+                        {recipe !== 'outfit_multi_look' && recipe !== 'outfit_reveal_basic' && recipe !== 'outfit_night_out' && recipe !== 'outfit_check' && !partialImages[0] && progressStepIndex >= 1 && (
                           <div
                             style={{ aspectRatio: DESTINO_META[destino].aspectRatio }}
                             className="relative rounded-2xl overflow-hidden border-2 border-violet-300 bg-violet-50 animate-pulse"

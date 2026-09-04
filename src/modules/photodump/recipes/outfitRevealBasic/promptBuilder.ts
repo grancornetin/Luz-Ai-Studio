@@ -31,11 +31,26 @@
  */
 import { NEGATIVE_SHORT } from '../shared';
 import {
-  IPHONE_CAMERA_ROLL_LINE, NO_STUDIO_BACKDROP_LINE, NO_WALKING_LINE, AVOID_EDITORIAL_LINE,
+  IPHONE_CAMERA_ROLL_LINE, NO_WALKING_LINE, AVOID_EDITORIAL_LINE,
 } from '../shared';
 import type { RevealShotId } from './types';
 import type { AppliedIntelligence } from './intelligenceLayer';
 import { REVEAL_VARIANTS } from './renderVariants';
+
+// El único elemento fijo de esta receta es EL ESPEJO — un mirror selfie
+// puede pasar en cualquier lugar real donde exista uno: una habitación, un
+// probador de tienda, el baño de un restaurante, el hall de un hotel, un
+// centro comercial, un gimnasio (pregunta real del usuario sep 2026: "el
+// elemento ancla debería ser solo frente a un espejo... lo único que
+// manda es que es mirror selfie" — confirmado, no había ninguna razón de
+// diseño para restringirlo a espacio doméstico). Reemplaza
+// NO_STUDIO_BACKDROP_LINE (compartida por todo el módulo, sesgada a
+// "bedroom/bathroom/an ordinary room... where someone actually lives")
+// SOLO para esta receta — las demás recetas del módulo siguen usando la
+// línea compartida sin cambios.
+const MIRROR_ANYWHERE_LINE =
+  'The background is a real, believable place where a mirror naturally exists — a bedroom, a bathroom, a store fitting room, a restaurant or bar bathroom, a hotel hallway or lobby, a mall, a gym, or any other real everyday space — never a photography studio, never a seamless backdrop, never a plain concrete or cyclorama floor. ' +
+  'The specific place is free to vary shot to shot within what the brief and references support — it does not have to be a home or bedroom. It must look like a real, ordinary place, with a few real, natural details (furniture, wall texture, a mirror frame, ambient light) — not a blank staged set.';
 
 export interface BuiltPrompt {
   prompt:   string;
@@ -55,18 +70,18 @@ function outfitLine(garmentCount: number, footwearVisible: boolean): string {
 
 function shotBlockFor(shotId: RevealShotId, variantIndex: number | undefined, hasSceneAnchor: boolean, poseAttitudeLine?: string): string {
   const sceneAnchorLine = hasSceneAnchor
-    ? 'SCENE CONTINUITY: this is the SAME room, shown in the scene reference image — reuse the exact same background, furniture, walls, and lighting. Do not invent a different room.'
+    ? 'SCENE CONTINUITY: this is the SAME place, shown in the scene reference image — reuse the exact same background, furniture/fixtures, and lighting. Do not invent a different place.'
     : '';
 
   if (shotId === 'mirror_check') {
     return [
       `A full-body mirror selfie, from head to toe, the complete outfit clearly readable. ` +
       `No mirror frame needs to be visible; the raised arm holding the phone, partially covering part of her face, is what reads clearly as a self-taken mirror photo.`,
-      NO_STUDIO_BACKDROP_LINE,
+      MIRROR_ANYWHERE_LINE,
     ].filter(Boolean).join('\n');
   }
   const variant = REVEAL_VARIANTS[variantIndex ?? 0];
-  return [variant.sceneBlock, sceneAnchorLine, poseAttitudeLine, NO_STUDIO_BACKDROP_LINE].filter(Boolean).join('\n');
+  return [variant.sceneBlock, sceneAnchorLine, poseAttitudeLine, MIRROR_ANYWHERE_LINE].filter(Boolean).join('\n');
 }
 
 export function buildShotPrompt(
