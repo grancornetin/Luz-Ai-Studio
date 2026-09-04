@@ -4,16 +4,24 @@
  * Conecta HPI real por shot:
  *  - mirror_check (standing_anchor): HPI STANDING_ASYMMETRIC_FASHION_POSE +
  *    MIRROR_SELFIE_REFLECTION — mismas familias ya verificadas y filtradas
- *    para outfit_multi_look.
- *  - variation shots: la familia HPI viene de la variante elegida en
- *    renderVariants.ts (RevealVariant.hpiPoseFamily/hpiCameraFamily) — cada
- *    variante ya trae su propia familia real, verificada contra el banco
- *    JSON antes de escribirse ahí. Si la variante no tiene familia de pose
- *    (ej. genuine_pov, sin equivalente real en el banco), se deshabilita el
- *    HPI para ese shot en vez de dejar que pickFamily elija al azar entre
- *    familias incompatibles (bug ya corregido una vez para outfit_multi_look,
- *    y que rompió el shot self_pov original de esta receta — el HPI
- *    describía "seated on floor" sobre un prompt de pie).
+ *    para outfit_multi_look. MIRROR_SELFIE_REFLECTION sí describe el
+ *    teléfono correctamente ("phone visible or implied in the reflection").
+ *  - variation shots: HPI DESCONECTADO a propósito (sep 2026, bug real
+ *    confirmado en producción: el shot back_view/over_shoulder_candid salió
+ *    con una mano apoyada en la cadera y ninguna sosteniendo la toma —
+ *    leído como foto tomada por otra persona, no como selfie de espaldas).
+ *    Causa raíz: las familias de poseBanks/cameraRelationshipBanks (banco
+ *    HPI genérico, compartido con otros módulos como Content Studio/UGC) no
+ *    tienen ningún concepto de "esto es una selfie, necesita el teléfono
+ *    visible" — describen mecánica corporal/de cámara en términos
+ *    editoriales abstractos (ej. OBSERVED_PROFILE_OR_CANDID literalmente
+ *    dice "observed", la mecánica de una cámara externa). Las 7 variantes
+ *    de renderVariants.ts ahora describen la mecánica física del selfie
+ *    (brazo/teléfono) directamente en su propio sceneBlock — mismo criterio
+ *    que ya usa hardRules.ts (regla 5) para el Director genérico de
+ *    outfit_check/outfit_night_out. hpiPoseFamily/hpiCameraFamily quedan en
+ *    el tipo por si algún día se resuelve esto con familias HPI reales que
+ *    sí incluyan el teléfono — hoy las 7 variantes los dejan en null.
  *
  * includeGesture: true (reactivado 2026-07-23, ver hpiService.ts): el banco
  * gestureBanks se curó — cada basePromptBlock ahora describe SOLO el gesto

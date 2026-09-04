@@ -36,40 +36,46 @@ export interface RevealVariant {
 export const REVEAL_VARIANTS: RevealVariant[] = [
   {
     id: 'lateral_silhouette',
-    sceneBlock: 'A full-body mirror selfie from a side profile angle — she has turned to show the silhouette of the outfit from the side, same place as the anchor. Full body visible head to toe, including footwear.',
+    sceneBlock: 'A full-body mirror selfie from a side profile angle — she has turned to show the silhouette of the outfit from the side, same place as the anchor. The raised arm holding the phone is visible in the mirror reflection, angled toward her own face — this is what reads clearly as a self-taken photo, not a photo taken by someone else. Full body visible head to toe, including footwear.',
     cameraGrammar: { framing: 'FULL_BODY', angle: 'eye_level', composition: 'lateral_silhouette' },
-    hpiPoseFamily: 'STANDING_LATERAL_SILHOUETTE_POSE',
+    hpiPoseFamily: null,
     footwearVisible: true,
   },
   {
     id: 'three_quarter_showcase',
-    sceneBlock: 'A full-body mirror selfie from a three-quarter angle — a natural turn showing more depth and dimension of the outfit than a straight-on shot. Full body visible head to toe, including footwear.',
+    sceneBlock: 'A full-body mirror selfie from a three-quarter angle — a natural turn showing more depth and dimension of the outfit than a straight-on shot. The raised arm holding the phone is visible in the mirror reflection, angled toward her own face — this is what reads clearly as a self-taken photo, not a photo taken by someone else. Full body visible head to toe, including footwear.',
     cameraGrammar: { framing: 'FULL_BODY', angle: 'three_quarter', composition: 'three_quarter_showcase' },
-    hpiPoseFamily: 'STANDING_THREE_QUARTER_LANDMARK_POSE',
+    hpiPoseFamily: null,
     footwearVisible: true,
   },
   {
     id: 'back_view',
-    sceneBlock: 'A full-body mirror selfie from behind — she has turned around to show the back of the outfit in the mirror reflection. Full body visible head to toe, including footwear.',
+    // bug real confirmado sep 2026: sin el teléfono explícito, este ángulo
+    // (cuerpo de espaldas, cabeza vuelta mirando a cámara) se resolvió con
+    // una mano apoyada en la cadera y la otra sin nada — se leyó como una
+    // foto tomada por otra persona, no como una selfie de espaldas al
+    // espejo. El teléfono en la mano que sostiene la toma es el ancla
+    // física que explica por qué existe la foto — nunca omitirlo.
+    sceneBlock: 'A full-body mirror selfie from behind — she has turned around to show the back of the outfit in the mirror reflection, glancing back over her shoulder toward the mirror. One arm is raised holding the phone up near her own face/shoulder height, angled toward the mirror to take the photo — this is what reads clearly as a self-taken photo, not a photo taken by someone else. The other hand may rest naturally on her hip. Full body visible head to toe, including footwear.',
     cameraGrammar: { framing: 'FULL_BODY', angle: 'eye_level', composition: 'back_view' },
-    hpiPoseFamily: 'MIRROR_SELFIE_STANDING_POSE',
-    hpiCameraFamily: 'POSTERIOR_BACK_VIEW_FRAMING',
+    hpiPoseFamily: null,
     footwearVisible: true,
   },
   {
     id: 'over_shoulder_candid',
-    sceneBlock: 'A candid mirror selfie glancing back over her shoulder — a natural, unposed moment, not a straight frontal stance. Full body or near-full body visible, including footwear if the pose allows it.',
+    // mismo bug que back_view: "glancing back over her shoulder" sin el
+    // teléfono explícito se resolvió con la mano apoyada en una superficie
+    // en vez de sosteniendo la toma — leído como foto de tercero.
+    sceneBlock: 'A candid mirror selfie glancing back over her shoulder toward the mirror — a natural, unposed moment, not a straight frontal stance. The arm holding the phone is raised toward the mirror, at least partially visible in the reflection near her face — this is what reads clearly as a self-taken photo, not a photo taken by someone else. Full body or near-full body visible, including footwear if the pose allows it.',
     cameraGrammar: { framing: 'FULL_BODY', angle: 'over_shoulder', composition: 'over_shoulder_candid' },
-    hpiPoseFamily: 'OVER_SHOULDER_HIP_HAND_POSE',
-    hpiCameraFamily: 'OBSERVED_PROFILE_OR_CANDID',
+    hpiPoseFamily: null,
     footwearVisible: true,
   },
   {
     id: 'close_detail_hair',
     sceneBlock: 'A close, genuine selfie — framed from roughly the top of the head to the chest/upper torso, phone visible in hand. One hand casually touches her own hair. Natural, unposed, intimate framing — not a beauty portrait.',
     cameraGrammar: { framing: 'CLOSE_UP', angle: 'eye_level', composition: 'close_selfie_hair' },
-    hpiPoseFamily: 'UPPER_BODY_SELFIE_POSE',
-    hpiCameraFamily: 'DIRECT_CLOSEUP_PORTRAIT',
+    hpiPoseFamily: null,
     footwearVisible: false, // close-up de torso/rostro, los pies no entran en el encuadre por diseño
   },
   // 2 variantes nuevas (sep 2026) — enriquecidas con el banco REAL de fotos
