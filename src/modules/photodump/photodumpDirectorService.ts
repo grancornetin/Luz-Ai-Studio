@@ -1058,18 +1058,7 @@ export async function buildPhotodumpSessionPlan(
     ? resolveOutfitPresentationStyle(basePrompt, refs)
     : undefined;
 
-  // outfit_check — poses/actitudes reales del banco (ver poseClient.ts).
-  // Una sola llamada de red por sesión (todos los shot_type del set juntos),
-  // ANTES de armar los shots — buildStoryDirectives sigue siendo síncrona.
-  // seedKey usa sessionId cuando existe (mismo criterio que el resto del
-  // pipeline) — sin sessionId, usa basePrompt como fallback determinístico
-  // (nunca Math.random(): mismo brief en la misma sesión de pruebas debe
-  // poder reproducirse). Si la llamada falla, sigue con un objeto vacío —
-  // nunca bloquea la generación por esto (ver fetchOutfitCheckPoseCandidates).
   const outfitCheckSeedKey = sessionId || basePrompt;
-  const outfitCheckPoseCandidates = recipe === 'outfit_check'
-    ? await fetchOutfitCheckPoseCandidates(outfitCheckBankShotTypes(), outfitCheckSeedKey)
-    : undefined;
 
   // outfit_check — Director Creativo GENÉRICO (ver director/generic/),
   // pedido explícito del usuario (sep 2026): "¿por qué no podría armar un
@@ -1114,6 +1103,20 @@ export async function buildPhotodumpSessionPlan(
       console.warn('[outfit_check] Director Creativo falló, cayendo al arco de vehículos fijos:', err);
     }
   }
+
+  // Poses/actitudes reales del banco para el arco legado (ver poseClient.ts)
+  // — SOLO si el Director falló (sep 2026: antes se pedía siempre, incluso
+  // cuando directorShots ya tenía éxito y este resultado nunca se usaba —
+  // una llamada de red desperdiciada en el camino feliz). Una sola llamada
+  // por sesión, ANTES de armar los shots — buildStoryDirectives sigue
+  // siendo síncrona. seedKey usa sessionId cuando existe (mismo criterio
+  // que el resto del pipeline) — sin sessionId, usa basePrompt como
+  // fallback determinístico (nunca Math.random(): mismo brief en la misma
+  // sesión de pruebas debe poder reproducirse). Si la llamada falla, sigue
+  // con un objeto vacío — nunca bloquea la generación por esto.
+  const outfitCheckPoseCandidates = (recipe === 'outfit_check' && !directorShots)
+    ? await fetchOutfitCheckPoseCandidates(outfitCheckBankShotTypes(), outfitCheckSeedKey)
+    : undefined;
 
   const shots = directorShots
     ?? buildStoryDirectives(count, protagonist, destino, narrative, recipe, refs, presentationStyle, basePrompt, outfitCheckPoseCandidates, outfitCheckSeedKey);
