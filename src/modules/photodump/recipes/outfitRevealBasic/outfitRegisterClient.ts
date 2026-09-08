@@ -46,20 +46,65 @@ async function extractImageParts(imageUrl: string): Promise<{ data: string; mime
 
 export type OutfitRegister = 'formal_evening' | 'smart_casual' | 'everyday_casual' | 'athletic_sport' | 'beach_resort';
 
-// Lugares coherentes por registro — cada uno mantiene la premisa original
-// del usuario ("lo único que manda es que es mirror selfie"): el lugar
-// sigue siendo libre DENTRO de la categoría, nunca un lugar único fijo.
-const PLACES_BY_REGISTER: Record<OutfitRegister, string> = {
-  formal_evening:   'a hotel hallway or lobby mirror, an elegant bathroom (restaurant, hotel, event venue), a bedroom or dressing area getting ready for a formal event — never a gym, a casual store fitting room, or an outdoor/campestre setting',
-  smart_casual:     'a bedroom, a store fitting room, an office bathroom, a nice restaurant or bar bathroom, a hotel hallway — a polished everyday setting, not athletic or beachwear-coded',
-  everyday_casual:  'a bedroom, a bathroom, a store fitting room, a hallway, a casual café or shop bathroom — any ordinary real place, athletic or beach settings excluded',
-  athletic_sport:   'a gym locker room or mirror, a yoga/pilates studio mirror, a home gym corner, a sports club bathroom — never a formal venue, elegant hotel, or beachwear setting',
-  beach_resort:     'a beach house or resort room mirror, a pool house or cabana bathroom, a resort hallway — never a gym, office, or formal evening venue',
+// Lugares coherentes por registro, como LISTA de opciones concretas (no una
+// sola frase con varios lugares separados por coma) — sep 2026, bug real
+// confirmado en weeklyLooks: con la frase libre, un set de varios shots
+// convergía siempre al mismo lugar "más obvio" de la lista (pasillo de
+// hotel, repetido en 4/4 shots) porque no había nada empujando variedad
+// real entre shots. PLACES_BY_REGISTER_LIST es la fuente de verdad; el
+// string libre de abajo (placesForRegister) se sigue generando desde esta
+// misma lista, para no duplicar contenido entre los dos formatos.
+const PLACES_BY_REGISTER_LIST: Record<OutfitRegister, string[]> = {
+  formal_evening: [
+    'a hotel hallway with sconce lighting',
+    'an elegant hotel or restaurant bathroom',
+    'a bedroom or dressing area getting ready for a formal event',
+    'a hotel lobby mirror',
+  ],
+  smart_casual: [
+    'a bedroom',
+    'a store fitting room',
+    'an office bathroom',
+    'a nice restaurant or bar bathroom',
+    'a hotel hallway',
+  ],
+  everyday_casual: [
+    'a bedroom',
+    'a bathroom',
+    'a store fitting room',
+    'a hallway',
+    'a casual café or shop bathroom',
+  ],
+  athletic_sport: [
+    'a gym locker room',
+    'a yoga or pilates studio mirror',
+    'a home gym corner',
+    'a sports club bathroom',
+  ],
+  beach_resort: [
+    'a beach house or resort room mirror',
+    'a pool house or cabana bathroom',
+    'a resort hallway',
+  ],
 };
 
+const EXCLUSION_BY_REGISTER: Record<OutfitRegister, string> = {
+  formal_evening:   'never a gym, a casual store fitting room, or an outdoor/campestre setting',
+  smart_casual:     'not athletic or beachwear-coded',
+  everyday_casual:  'athletic or beach settings excluded',
+  athletic_sport:   'never a formal venue, elegant hotel, or beachwear setting',
+  beach_resort:     'never a gym, office, or formal evening venue',
+};
+
+export function placesListForRegister(register: OutfitRegister | null): string[] {
+  if (!register) return ['a bedroom', 'a bathroom', 'a store fitting room', 'a restaurant or bar bathroom', 'a hotel hallway or lobby', 'a mall', 'a gym'];
+  return PLACES_BY_REGISTER_LIST[register];
+}
+
 export function placesForRegister(register: OutfitRegister | null): string {
-  if (!register) return 'a bedroom, a bathroom, a store fitting room, a restaurant or bar bathroom, a hotel hallway or lobby, a mall, a gym, or any other real everyday space';
-  return PLACES_BY_REGISTER[register];
+  const list = placesListForRegister(register);
+  const exclusion = register ? EXCLUSION_BY_REGISTER[register] : 'coherent with an ordinary everyday setting';
+  return `${list.join(', ')} — ${exclusion}`;
 }
 
 async function getAuthHeader(): Promise<Record<string, string>> {

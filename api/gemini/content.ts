@@ -1121,7 +1121,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // "estructurado y confiable" ya validado ahí: shot_type normalizado,
     // nunca category/search_tags de texto libre).
     if (body.action === 'getOutfitCheckPoseCandidates') {
-      const { shotTypes, poseKeywordGroups, restrictShotTypes, restrictCaptureSignatures, perType, seed } = body.payload || {};
+      const { shotTypes, poseKeywordGroups, restrictShotTypes, restrictCaptureSignatures, excludeCompanion, perType, seed } = body.payload || {};
       const hasShotTypes = Array.isArray(shotTypes) && shotTypes.length > 0;
       const hasKeywordGroups = poseKeywordGroups && typeof poseKeywordGroups === 'object'
         && Object.keys(poseKeywordGroups).length > 0;
@@ -1167,6 +1167,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const st = normalizeShotType(d.shot_type);
           if (!wantedTypes.has(st)) continue;
           if (restrictCaptureSet && !restrictCaptureSet.has(d.capture_signature)) continue;
+          // excludeCompanion (sep 2026, weeklyLooks): bug real confirmado —
+          // un candidato con companion_present=true citó "otras figuras
+          // dispersas alrededor de una piscina... mira hacia el grupo de
+          // personas" como REAL ATTITUDE REFERENCE, y el modelo generó un
+          // tercero real en cuadro gesticulando hacia ella. companion_present
+          // es una señal estructurada confiable (a diferencia de category/
+          // search_tags de texto libre) — filtrar por ella evita que un
+          // candidato de fiesta/grupo contamine una foto que debe ser de una
+          // sola persona.
+          if (excludeCompanion && (item as any).analysis?.companion_present) continue;
           if (!byGroup.has(st)) byGroup.set(st, []);
           byGroup.get(st)!.push({
             itemId: item.itemId,
@@ -1194,6 +1204,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             if (!d) continue;
             if (restrictSet && !restrictSet.has(normalizeShotType(d.shot_type))) continue;
             if (restrictCaptureSet && !restrictCaptureSet.has(d.capture_signature)) continue;
+            if (excludeCompanion && (item as any).analysis?.companion_present) continue;
             const poseText = (d.subject_pose || '').toLowerCase();
             if (!keywords.some(k => poseText.includes(k))) continue;
             if (!byGroup.has(groupKey)) byGroup.set(groupKey, []);

@@ -49,7 +49,11 @@ async function getCandidatePool(captureStyle: CaptureStyle, seedKey: string) {
   if (cached) return cached;
 
   const filter = CAPTURE_STYLE_FILTER[captureStyle];
-  const pool = await fetchOutfitCheckPoseCandidates(filter.shotTypes, seedKey, 10, filter.captureSignatures);
+  // excludeCompanion=true: bug real confirmado (sep 2026) — un candidato de
+  // fiesta/grupo (companion_present=true) citó "mira hacia el grupo de
+  // personas" y el modelo generó un tercero real en la foto. weeklyLooks es
+  // siempre una sola persona en cuadro, nunca grupo.
+  const pool = await fetchOutfitCheckPoseCandidates(filter.shotTypes, seedKey, 10, filter.captureSignatures, true);
   candidatePoolCache.set(cacheKey, pool);
   return pool;
 }

@@ -54,6 +54,11 @@ export async function fetchOutfitCheckPoseCandidates(
   // sobre shotTypes, no lo reemplaza. Ver capture_signature en la auditoría
   // de weeklyLooks/poseSelection.ts.
   restrictCaptureSignatures?: string[],
+  // weeklyLooks (sep 2026, bug real): excluye candidatos con
+  // companion_present=true — un candidato de fiesta/grupo citó "mira hacia
+  // el grupo de personas" como REAL ATTITUDE REFERENCE y el modelo generó
+  // un tercero real en la foto. Ver nota completa en api/gemini/content.ts.
+  excludeCompanion?: boolean,
 ): Promise<Record<string, OutfitCheckPoseCandidate[]>> {
   if (shotTypes.length === 0) return {};
   try {
@@ -62,7 +67,7 @@ export async function fetchOutfitCheckPoseCandidates(
       headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
       body: JSON.stringify({
         action: 'getOutfitCheckPoseCandidates',
-        payload: { shotTypes, seed, perType, restrictCaptureSignatures },
+        payload: { shotTypes, seed, perType, restrictCaptureSignatures, excludeCompanion },
       }),
     });
     if (!res.ok) {

@@ -31,7 +31,7 @@ import { routeReferences } from './referenceRouter';
 import { buildShotPrompt } from './promptBuilder';
 import { buildShotDebug } from './debug';
 import { selectPoseAttitudeLine } from './poseSelection';
-import { analyzeOutfitRegister, placesForRegister } from '../outfitRevealBasic/outfitRegisterClient';
+import { analyzeOutfitRegister, placesListForRegister } from '../outfitRevealBasic/outfitRegisterClient';
 import type {
   AnchorContract, ShotContract, WeeklyLooksShotPlan, WeeklyLooksShotDebug,
   CaptureStyle, PlaceMode, WeeklyLooksConfig,
@@ -48,8 +48,14 @@ function resolveConfig(refs: PhotodumpRefs): WeeklyLooksConfig {
 // Mismo motivo que outfitRevealBasic/outfitMultiLook: build.../generate...REF0/
 // generate...Shot son llamadas separadas del Director sin estado compartido.
 const anchorImageCache = new Map<string, { imageUrl: string; prompt: string; refsCount: number }>();
-// Caché del análisis de registro/formalidad del primer look (varied_place).
-const coherentPlacesCache = new Map<string, string>();
+// Caché de la LISTA de lugares coherentes del primer look (varied_place) —
+// sep 2026, bug real corregido: antes se cacheaba un string libre único
+// ("a bedroom, a store fitting room..."), y con varios shots en el mismo
+// set el modelo convergía siempre al lugar "más obvio" de esa frase
+// (pasillo de hotel, repetido en 4/4 shots del mismo set real). Ahora se
+// cachea la LISTA y cada shot recibe UN lugar concreto y distinto (ver
+// assignPlacesToShots), nunca la frase libre completa.
+const coherentPlacesListCache = new Map<string, string[]>();
 
 function cacheKey(refs: PhotodumpRefs): string {
   const urls = [refs.avatarRef, refs.bodyRef, refs.outfitRef, ...(refs.outfitRefs ?? [])].filter(Boolean);
@@ -57,15 +63,24 @@ function cacheKey(refs: PhotodumpRefs): string {
   return `${urls.join('|')}::${cfg.captureStyle}::${cfg.placeMode}`;
 }
 
-async function resolveCoherentPlaces(refs: PhotodumpRefs): Promise<string> {
+async function resolveCoherentPlacesList(refs: PhotodumpRefs): Promise<string[]> {
   const key = cacheKey(refs);
-  const cached = coherentPlacesCache.get(key);
+  const cached = coherentPlacesListCache.get(key);
   if (cached) return cached;
   const firstLookUrl = refs.outfitRef ?? refs.outfitRefs?.[0];
   const register = firstLookUrl ? await analyzeOutfitRegister(firstLookUrl) : null;
-  const places = placesForRegister(register);
-  coherentPlacesCache.set(key, places);
-  return places;
+  const list = placesListForRegister(register);
+  coherentPlacesListCache.set(key, list);
+  return list;
+}
+
+// Asigna un lugar CONCRETO y distinto a cada shot, en el orden de la lista
+// (no aleatorio, no repetido mientras alcancen las opciones) — si hay más
+// shots que lugares disponibles, rota desde el principio (mejor repetir un
+// lugar ya usado que quedarse sin ninguno).
+function assignPlacesToShots(contracts: ShotContract[], places: string[]): ShotContract[] {
+  if (places.length === 0) return contracts;
+  return contracts.map((c, i) => ({ ...c, coherentPlaces: places[i % places.length] }));
 }
 
 async function attachPoseAndPlace(
@@ -75,12 +90,13 @@ async function attachPoseAndPlace(
   seedKey:      string,
   refs:         PhotodumpRefs,
 ): Promise<ShotContract[]> {
-  const coherentPlaces = placeMode === 'varied_place' ? await resolveCoherentPlaces(refs) : undefined;
-  return Promise.all(contracts.map(async (c): Promise<ShotContract> => ({
+  const withPose = await Promise.all(contracts.map(async (c): Promise<ShotContract> => ({
     ...c,
     poseAttitudeLine: await selectPoseAttitudeLine(captureStyle, seedKey, c.shotId),
-    coherentPlaces,
   })));
+  if (placeMode !== 'varied_place') return withPose;
+  const places = await resolveCoherentPlacesList(refs);
+  return assignPlacesToShots(withPose, places);
 }
 
 async function generateFromContract(

@@ -31,13 +31,18 @@ function anchorOutfitLine(anchor: AnchorContract, isAnchorShot: boolean): string
   }
 }
 
+// coherentPlaces: en varied_place es UN lugar concreto por shot (ver
+// assignPlacesToShots en index.ts) — nunca la lista completa como texto
+// libre. Bug real corregido (sep 2026): con la lista completa repetida en
+// cada shot, el modelo convergía siempre al mismo lugar más obvio de la
+// lista (4/4 shots del mismo set salieron en el mismo pasillo de hotel).
 function placeLine(placeMode: 'same_place' | 'varied_place', isAnchorShot: boolean, coherentPlaces?: string): string {
   if (placeMode === 'same_place') {
     return isAnchorShot
-      ? `The background is a real, believable, ordinary place${coherentPlaces ? `, coherent with how formal or casual this outfit is: ${coherentPlaces}` : ''} — a real room with natural details (furniture, wall texture, light), not a studio backdrop.`
+      ? `The background is ${coherentPlaces ?? 'a real, believable, ordinary place'} — a real room with natural details (furniture, wall texture, light), not a studio backdrop.`
       : 'SCENE CONTINUITY: this is the SAME exact place shown in the scene reference image — reuse the same background, furniture/fixtures, and lighting. Do not invent a different place.';
   }
-  return `The background is a real, believable place${coherentPlaces ? `, coherent with how formal or casual this outfit is: ${coherentPlaces}` : ''} — a real, ordinary place with natural details, not a studio backdrop. The specific place is free to vary shot to shot within that coherent range.`;
+  return `The background is ${coherentPlaces ?? 'a real, believable, ordinary place'} — a real, believable place with natural details, not a studio backdrop, not a photography set.`;
 }
 
 export interface BuiltPrompt {
