@@ -138,7 +138,8 @@ interface ContentRequest {
     | 'getOutfitCheckPoseCandidates'
     | 'analyzeGenericPlace'
     | 'redactGenericSingleShot'
-    | 'analyzeOutfitRegister';
+    | 'analyzeOutfitRegister'
+    | 'analyzeWeeklyLooksPlaces';
   images?: string[];
   mimeTypes?: string[];
   prompt?: string;
@@ -760,7 +761,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const payloadOnlyActions = ['analyzeREF0', 'inferGender', 'analyzeAnchor', 'analyzeProductRelevance', 'analyzeUGCOutfit', 'analyzeScene', 'getContentJobStatus', 'photodumpDirector', 'photodumpDirectorStart', 'photodumpDirectorStatus', 'analyzeOpenBankVenue', 'redactOpenBankSingleShot', 'getOutfitCheckPoseCandidates', 'analyzeGenericPlace', 'redactGenericSingleShot', 'analyzeOutfitRegister'];
+    const payloadOnlyActions = ['analyzeREF0', 'inferGender', 'analyzeAnchor', 'analyzeProductRelevance', 'analyzeUGCOutfit', 'analyzeScene', 'getContentJobStatus', 'photodumpDirector', 'photodumpDirectorStart', 'photodumpDirectorStatus', 'analyzeOpenBankVenue', 'redactOpenBankSingleShot', 'getOutfitCheckPoseCandidates', 'analyzeGenericPlace', 'redactGenericSingleShot', 'analyzeOutfitRegister', 'analyzeWeeklyLooksPlaces'];
     if (!body.action || (!body.prompt && !payloadOnlyActions.includes(body.action))) {
       return res.status(400).json({ error: 'Missing action or prompt' });
     }
@@ -1347,6 +1348,42 @@ Respond ONLY with JSON: { "isRelevant": boolean, "suggestion": "string", "produc
             { text: '{ "register": "formal_evening" | "smart_casual" | "everyday_casual" | "athletic_sport" | "beach_resort", "reasoning": "one short sentence in Spanish explaining why" }' },
           ]},
         ],
+        config: { responseMimeType: 'application/json' },
+      });
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      return res.status(200).json(JSON.parse(text.replace(/```json|```/g, '').trim()));
+    }
+
+    // weeklyLooks, modo 'varied_place' (sep 2026, corrección real pedida por
+    // el usuario tras ver el resultado en producción: "las 4 fotos en
+    // prácticamente el mismo pasillo de hotel" — la lista fija de
+    // PLACES_BY_REGISTER era genérica y poco variada). El usuario pidió
+    // explícitamente pensar la SITUACIÓN real ("vio un reflejo de cómo se
+    // veía y tomó una mirror selfie ahí") en vez de una lista cerrada de
+    // categorías — así que este análisis, a diferencia de
+    // analyzeOutfitRegister (register enum fijo), le pide a Gemini una
+    // lista libre y concreta de 6-8 lugares reales, combinando la foto del
+    // outfit (registro/formalidad) CON el brief de texto del usuario (qué
+    // hizo esta semana) cuando esté disponible. mirrorNeeded=true (captureStyle
+    // mirror_selfie) empuja a pensar en cualquier superficie reflectante real
+    // (ascensor, vidriera, hall, vidrio de auto, baño, probador) — no solo
+    // dormitorios/baños genéricos.
+    if (body.action === 'analyzeWeeklyLooksPlaces') {
+      const { imageData, mimeType, briefText, mirrorNeeded } = body.payload || {};
+      const mirrorInstruction = mirrorNeeded
+        ? `This must be a MIRROR SELFIE — she saw her reflection somewhere and took a photo of how she looked. Think beyond bedrooms/bathrooms: any real place with a mirror or reflective surface counts (an elevator, a store window/glass storefront, a building lobby, a mall corridor with glass, a car window, a gym mirror, a hallway mirror, a fitting room, a bathroom). Each place in the list must plausibly have a mirror or reflective glass surface.`
+        : `This is a photo taken by someone else (or a timer) — no mirror needed. Think of real places where someone would naturally be photographed going about a normal week.`;
+      const briefInstruction = briefText
+        ? `The user described what this week was about: "${briefText}". Prioritize places that make sense for that — if it mentions work, dinner, a trip, an event, etc., reflect that in the places you choose, without inventing details not implied by it.`
+        : 'No specific brief was given — infer purely from how formal or casual the outfit looks.';
+      const parts: any[] = [
+        { text: `You are picking real-world locations for a weekly outfit photo dump (UGC style, not editorial). ${mirrorInstruction} ${briefInstruction}\n\nLook at this outfit reference photo to judge its formality/register.` },
+        { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
+        { text: 'Respond ONLY with JSON: { "places": ["short phrase describing a specific real place", ... 6 to 8 items], "reasoning": "one short sentence in Spanish explaining the choices" }. Each place must be a short, concrete, varied phrase (not a generic category) — e.g. "a hotel elevator mirror", "a boutique store window reflection", "an office building lobby with glass walls", not just "a hallway".' },
+      ];
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [{ role: 'user', parts }],
         config: { responseMimeType: 'application/json' },
       });
       const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';

@@ -31,7 +31,7 @@ import { routeReferences } from './referenceRouter';
 import { buildShotPrompt } from './promptBuilder';
 import { buildShotDebug } from './debug';
 import { selectPoseAttitudeLine } from './poseSelection';
-import { analyzeOutfitRegister, placesListForRegister } from '../outfitRevealBasic/outfitRegisterClient';
+import { analyzeWeeklyLooksPlaces, fallbackPlacesList } from './placesClient';
 import type {
   AnchorContract, ShotContract, WeeklyLooksShotPlan, WeeklyLooksShotDebug,
   CaptureStyle, PlaceMode, WeeklyLooksConfig,
@@ -63,13 +63,14 @@ function cacheKey(refs: PhotodumpRefs): string {
   return `${urls.join('|')}::${cfg.captureStyle}::${cfg.placeMode}`;
 }
 
-async function resolveCoherentPlacesList(refs: PhotodumpRefs): Promise<string[]> {
+async function resolveCoherentPlacesList(refs: PhotodumpRefs, config: WeeklyLooksConfig, basePrompt?: string): Promise<string[]> {
   const key = cacheKey(refs);
   const cached = coherentPlacesListCache.get(key);
   if (cached) return cached;
   const firstLookUrl = refs.outfitRef ?? refs.outfitRefs?.[0];
-  const register = firstLookUrl ? await analyzeOutfitRegister(firstLookUrl) : null;
-  const list = placesListForRegister(register);
+  const mirrorNeeded = config.captureStyle === 'mirror_selfie';
+  const analyzed = firstLookUrl ? await analyzeWeeklyLooksPlaces(firstLookUrl, mirrorNeeded, basePrompt) : null;
+  const list = analyzed ?? fallbackPlacesList();
   coherentPlacesListCache.set(key, list);
   return list;
 }
@@ -85,17 +86,17 @@ function assignPlacesToShots(contracts: ShotContract[], places: string[]): ShotC
 
 async function attachPoseAndPlace(
   contracts:    ShotContract[],
-  captureStyle: CaptureStyle,
-  placeMode:    PlaceMode,
+  config:       WeeklyLooksConfig,
   seedKey:      string,
   refs:         PhotodumpRefs,
+  basePrompt?:  string,
 ): Promise<ShotContract[]> {
   const withPose = await Promise.all(contracts.map(async (c): Promise<ShotContract> => ({
     ...c,
-    poseAttitudeLine: await selectPoseAttitudeLine(captureStyle, seedKey, c.shotId),
+    poseAttitudeLine: await selectPoseAttitudeLine(config.captureStyle, seedKey, c.shotId),
   })));
-  if (placeMode !== 'varied_place') return withPose;
-  const places = await resolveCoherentPlacesList(refs);
+  if (config.placeMode !== 'varied_place') return withPose;
+  const places = await resolveCoherentPlacesList(refs, config, basePrompt);
   return assignPlacesToShots(withPose, places);
 }
 
@@ -136,14 +137,15 @@ async function generateFromContract(
 // ── Plan de sesión ──────────────────────────────────────────────────────
 
 export async function buildWeeklyLooksDirectives(
-  refs:       PhotodumpRefs,
-  sessionId?: string,
+  refs:        PhotodumpRefs,
+  sessionId?:  string,
+  basePrompt?: string,
 ): Promise<Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'>[]> {
   const config = resolveConfig(refs);
   const manifest = buildWeeklyLooksManifest(refs);
   const rawContracts = buildShotContracts(manifest);
   const seedKey = `${cacheKey(refs)}::${sessionId ?? ''}`;
-  const contracts = await attachPoseAndPlace(rawContracts, config.captureStyle, config.placeMode, seedKey, refs);
+  const contracts = await attachPoseAndPlace(rawContracts, config, seedKey, refs, basePrompt);
 
   return contracts.map((contract): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> => {
     const plan: WeeklyLooksShotPlan = {
@@ -173,6 +175,7 @@ export async function generateWeeklyLooksREF0(
   refs:           PhotodumpRefs,
   destino:        PhotodumpDestino,
   sessionParams:  { uid?: string; sessionId?: string },
+  basePrompt?:    string,
 ): Promise<PhotodumpREF0Result> {
   const config = resolveConfig(refs);
   const manifest = buildWeeklyLooksManifest(refs);
@@ -183,7 +186,7 @@ export async function generateWeeklyLooksREF0(
 
   const rawContract = buildShotContracts(manifest)[0];
   const seedKey = `${cacheKey(refs)}::${sessionParams.sessionId ?? ''}`;
-  const [contract] = await attachPoseAndPlace([rawContract], config.captureStyle, config.placeMode, seedKey, refs);
+  const [contract] = await attachPoseAndPlace([rawContract], config, seedKey, refs, basePrompt);
 
   // same_place con lugar subido por el usuario: reusa el slot genérico
   // "Escena" (refs.sceneRef) — mismo slot que trip_recap/outfit_check ya
@@ -214,6 +217,7 @@ export async function generateWeeklyLooksShot(
   sessionParams:  { uid?: string; sessionId?: string },
   shotIndex:      number,
   totalShots:     number,
+  basePrompt?:    string,
 ): Promise<WeeklyLooksShotResult> {
   const plan = shot.weeklyLooksPlan;
   if (!plan) {
@@ -231,7 +235,7 @@ export async function generateWeeklyLooksShot(
       return { imageUrl: cached.imageUrl, prompt: cached.prompt, refsCount: cached.refsCount, debug };
     }
     // Red de seguridad: si por algún motivo el REF0 no se generó antes.
-    return generateWeeklyLooksREF0(refs, destino, sessionParams).then(r => ({
+    return generateWeeklyLooksREF0(refs, destino, sessionParams, basePrompt).then(r => ({
       imageUrl: r.imageUrl, prompt: r.prompt, refsCount: r.refsCount,
       debug: buildShotDebug(buildShotContracts(buildWeeklyLooksManifest(refs))[0], config.captureStyle, config.placeMode, r.prompt),
     }));
@@ -240,7 +244,7 @@ export async function generateWeeklyLooksShot(
   const manifest = buildWeeklyLooksManifest(refs);
   const rawContracts = buildShotContracts(manifest);
   const seedKey = `${cacheKey(refs)}::${sessionParams.sessionId ?? ''}`;
-  const contracts = await attachPoseAndPlace(rawContracts, config.captureStyle, config.placeMode, seedKey, refs);
+  const contracts = await attachPoseAndPlace(rawContracts, config, seedKey, refs, basePrompt);
   const contract = contracts.find(c => c.shotId === plan.shotId);
   if (!contract) {
     throw new Error(`No se encontró el contrato para el shot "${plan.shotId}".`);

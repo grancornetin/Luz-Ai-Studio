@@ -952,7 +952,7 @@ export async function buildPhotodumpSessionPlan(
   // propio (ver nota en recipes/weeklyLooks/index.ts). Se revisa ANTES de la
   // rama weeklyFavoritesV2 de abajo para no ejecutar ese motor por error.
   if (recipe === 'outfit_week' && refs?.weeklyMode === 'looks') {
-    const directives = await buildWeeklyLooksDirectives(refs, sessionId);
+    const directives = await buildWeeklyLooksDirectives(refs, sessionId, basePrompt);
     const shots: PhotodumpShotDirective[] = directives.map((d, i) => ({
       ...d,
       arcPosition: i + 1,
@@ -1310,7 +1310,7 @@ export async function generatePhotodumpREF0(
   // weeklyLooks — FASE DE PRUEBA, revisado antes que la rama weeklyFavoritesV2
   // de abajo (ver nota de dispatch en buildPhotodumpSessionPlan).
   if (recipe === 'outfit_week' && refs.weeklyMode === 'looks') {
-    return generateWeeklyLooksREF0(refs, destino, sessionParams);
+    return generateWeeklyLooksREF0(refs, destino, sessionParams, basePrompt);
   }
 
   if (recipe === 'outfit_week') {
@@ -2511,7 +2511,7 @@ export async function generatePhotodumpShot(
   // de abajo (ver nota de dispatch en buildPhotodumpSessionPlan).
   if (recipe === 'outfit_week' && refs.weeklyMode === 'looks') {
     const result = await generateWeeklyLooksShot(
-      shot, refs, destino, sessionParams, shot.arcPosition - 1, totalShots,
+      shot, refs, destino, sessionParams, shot.arcPosition - 1, totalShots, basePrompt,
     );
     return { imageUrl: result.imageUrl, prompt: result.prompt, refsCount: result.refsCount };
   }
