@@ -381,6 +381,33 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   // ver manifest.ts). No hace falta un handler propio acá, se usa el
   // handleSlotChange('escena', ...) genérico que ya existe más abajo.
 
+  // ── Handlers de weeklyLooks (FASE DE PRUEBA — sep 2026, controles simples
+  // hasta que se rediseñe con cards + ejemplo visual + tooltip, ver nota en
+  // recipes/weeklyLooks/index.ts) ─────────────────────────────────
+  const WEEKLY_MODE_OPTIONS: { value: 'looks' | 'products'; label: string; hint: string }[] = [
+    { value: 'looks',    label: 'Ropa',      hint: 'Varios looks completos — "esta ropa usé esta semana".' },
+    { value: 'products', label: 'Productos', hint: 'Bolsos, joyería, maquillaje, skincare — vitrina de lo que probaste.' },
+  ];
+
+  const handleWeeklyModeChange = (mode: 'looks' | 'products') => {
+    onRefs({ ...refs, weeklyMode: mode });
+  };
+
+  const CAPTURE_STYLE_OPTIONS: { value: 'mirror_selfie' | 'third_person'; label: string; hint: string }[] = [
+    { value: 'mirror_selfie', label: 'Selfie de espejo',    hint: 'El celular se ve siempre en la mano, reflejado en el espejo.' },
+    { value: 'third_person',  label: 'Foto de tercero',     hint: 'Como si alguien más tomara la foto — sin celular en la imagen.' },
+  ];
+
+  const PLACE_MODE_OPTIONS: { value: 'same_place' | 'varied_place'; label: string; hint: string }[] = [
+    { value: 'same_place',    label: 'Mismo lugar',  hint: 'Todos los looks en el mismo lugar — distintos días, distinta ropa.' },
+    { value: 'varied_place',  label: 'Lugar variado', hint: 'Cada look en un lugar distinto, acorde a qué tan formal es el outfit.' },
+  ];
+
+  const handleWeeklyLooksConfigChange = (patch: Partial<NonNullable<PhotodumpRefs['weeklyLooksConfig']>>) => {
+    const current = refs.weeklyLooksConfig ?? { captureStyle: 'mirror_selfie' as const, placeMode: 'varied_place' as const };
+    onRefs({ ...refs, weeklyLooksConfig: { ...current, ...patch } });
+  };
+
   const handleCloseupToggle = (accIndex: number) => {
     const slots = recipe === 'outfit_haul' ? 5 : recipe === 'outfit_week' ? 4 : 3;
     const closeups = [...(refs.accesorioCloseup ?? Array(slots).fill(false))];
@@ -796,6 +823,94 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                   Experimental: director con banco abierto (sin categorías fijas — genera las imágenes reales con este razonamiento)
                 </span>
               </label>
+            </div>
+          )}
+
+          {/* outfit_week: FASE DE PRUEBA (sep 2026) — toggle ropa/producto y,
+              si es ropa, estilo de cámara + modo de lugar. Controles simples
+              a propósito (texto/botón, sin imagen de ejemplo ni tooltip
+              todavía) — se rediseña con cards + hover una vez validado el
+              enfoque, ver nota en recipes/weeklyLooks/index.ts. */}
+          {recipe === 'outfit_week' && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-2">
+                  ¿Ropa o productos? <span className="text-brand-600">*</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {WEEKLY_MODE_OPTIONS.map(opt => {
+                    const sel = (refs.weeklyMode ?? 'products') === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => handleWeeklyModeChange(opt.value)}
+                        className={`text-left px-4 py-2.5 rounded-xl border transition-all ${
+                          sel ? 'border-brand-500 bg-brand-50/60 ring-2 ring-brand-100' : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="text-sm font-bold text-slate-900">{opt.label}</div>
+                        <div className="text-[11px] text-slate-500 mt-0.5">{opt.hint}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {refs.weeklyMode === 'looks' && (
+                <>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-2">
+                      Estilo de cámara <span className="text-brand-600">*</span>
+                    </label>
+                    <div className="grid grid-cols-1 gap-2">
+                      {CAPTURE_STYLE_OPTIONS.map(opt => {
+                        const sel = (refs.weeklyLooksConfig?.captureStyle ?? 'mirror_selfie') === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => handleWeeklyLooksConfigChange({ captureStyle: opt.value })}
+                            className={`text-left px-4 py-2.5 rounded-xl border transition-all ${
+                              sel ? 'border-brand-500 bg-brand-50/60 ring-2 ring-brand-100' : 'border-slate-200 bg-white hover:border-slate-300'
+                            }`}
+                          >
+                            <div className="text-sm font-bold text-slate-900">{opt.label}</div>
+                            <div className="text-[11px] text-slate-500 mt-0.5">{opt.hint}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-2">
+                      Lugar <span className="text-brand-600">*</span>
+                    </label>
+                    <div className="grid grid-cols-1 gap-2">
+                      {PLACE_MODE_OPTIONS.map(opt => {
+                        const sel = (refs.weeklyLooksConfig?.placeMode ?? 'varied_place') === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => handleWeeklyLooksConfigChange({ placeMode: opt.value })}
+                            className={`text-left px-4 py-2.5 rounded-xl border transition-all ${
+                              sel ? 'border-brand-500 bg-brand-50/60 ring-2 ring-brand-100' : 'border-slate-200 bg-white hover:border-slate-300'
+                            }`}
+                          >
+                            <div className="text-sm font-bold text-slate-900">{opt.label}</div>
+                            <div className="text-[11px] text-slate-500 mt-0.5">{opt.hint}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-2 leading-snug">
+                      "Mismo lugar" genera el lugar en el primer look y lo reutiliza en el resto del set — o, si subís una foto en el slot <b>Escena</b> más abajo, usa ese lugar real en vez de generar uno nuevo.
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           )}
 

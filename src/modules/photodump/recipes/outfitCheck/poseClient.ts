@@ -49,6 +49,11 @@ export async function fetchOutfitCheckPoseCandidates(
   shotTypes: string[],
   seed: string,
   perType: number = 3,
+  // weeklyLooks (sep 2026): filtra además por capture_signature real del
+  // banco ('mirror_selfie_phone' | 'handheld_phone_natural' | ...) — AND
+  // sobre shotTypes, no lo reemplaza. Ver capture_signature en la auditoría
+  // de weeklyLooks/poseSelection.ts.
+  restrictCaptureSignatures?: string[],
 ): Promise<Record<string, OutfitCheckPoseCandidate[]>> {
   if (shotTypes.length === 0) return {};
   try {
@@ -57,7 +62,7 @@ export async function fetchOutfitCheckPoseCandidates(
       headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
       body: JSON.stringify({
         action: 'getOutfitCheckPoseCandidates',
-        payload: { shotTypes, seed, perType },
+        payload: { shotTypes, seed, perType, restrictCaptureSignatures },
       }),
     });
     if (!res.ok) {

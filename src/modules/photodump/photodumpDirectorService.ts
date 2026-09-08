@@ -87,6 +87,13 @@ import {
   type WeeklyFavoritesV2Plan,
 } from './recipes/weeklyFavoritesV2';
 import type { AnchorContract as WeeklyFavoritesV2AnchorContract } from './recipes/weeklyFavoritesV2/types';
+// weeklyLooks — FASE DE PRUEBA (sep 2026, ver nota en recipes/weeklyLooks/index.ts):
+// mitad "ropa" de la separación de weeklyFavoritesV2. Se despacha como un
+// modo interno de 'outfit_week' (refs.weeklyMode === 'looks'), no como
+// PhotodumpRecipe propio todavía — cero cambios en RECIPE_META/selector.
+import {
+  buildWeeklyLooksDirectives, generateWeeklyLooksREF0, generateWeeklyLooksShot,
+} from './recipes/weeklyLooks';
 // day_in_life — receta multi-mundo, misma forma de despacho que weeklyFavoritesV2:
 // 3 funciones autónomas que no pasan por buildStoryDirectives/generatePhotodumpREF0/
 // generatePhotodumpShot genéricos. Ver recipes/dayInLife.ts para el detalle.
@@ -941,6 +948,28 @@ export async function buildPhotodumpSessionPlan(
   // definitiva de cada foto se recalcula en generatePhotodumpShot, una vez
   // que la foto ancla ya se generó y su modo real (identidad neutra / con
   // outfit definitivo / con outfit por estilo) está resuelto.
+  // weeklyLooks — FASE DE PRUEBA: modo interno de outfit_week, no un recipe
+  // propio (ver nota en recipes/weeklyLooks/index.ts). Se revisa ANTES de la
+  // rama weeklyFavoritesV2 de abajo para no ejecutar ese motor por error.
+  if (recipe === 'outfit_week' && refs?.weeklyMode === 'looks') {
+    const directives = await buildWeeklyLooksDirectives(refs, sessionId);
+    const shots: PhotodumpShotDirective[] = directives.map((d, i) => ({
+      ...d,
+      arcPosition: i + 1,
+      aspectRatio: getAspectRatio(destino),
+    }));
+    const sessionFamilies = { storySupport: [], creatorAesthetic: [] };
+    return {
+      narrative,
+      protagonist,
+      destino,
+      storyTheme: `${NARRATIVE_META[narrative].label} · ${basePrompt.slice(0, 50)}`,
+      shots,
+      assignedFamilies: [],
+      sessionFamilies,
+    };
+  }
+
   if (recipe === 'outfit_week' && refs) {
     const provisionalAnchor: WeeklyFavoritesV2AnchorContract = { mode: 'world_only' };
     const { directives } = await buildWeeklyFavoritesV2Directives(refs, count, provisionalAnchor, sessionId);
@@ -1276,6 +1305,12 @@ export async function generatePhotodumpREF0(
       manifest, refs, narrative, protagonist, destino, basePrompt, sessionParams,
     );
     return chainResult.primaryResult;
+  }
+
+  // weeklyLooks — FASE DE PRUEBA, revisado antes que la rama weeklyFavoritesV2
+  // de abajo (ver nota de dispatch en buildPhotodumpSessionPlan).
+  if (recipe === 'outfit_week' && refs.weeklyMode === 'looks') {
+    return generateWeeklyLooksREF0(refs, destino, sessionParams);
   }
 
   if (recipe === 'outfit_week') {
@@ -2472,6 +2507,15 @@ export async function generatePhotodumpShot(
   // recipes/weeklyFavoritesV2/). recipes/outfitWeek.ts (generateOutfitWeekShot)
   // queda importado más arriba pero desconectado — no se ejecuta para esta
   // receta mientras este return esté activo.
+  // weeklyLooks — FASE DE PRUEBA, revisado antes que la rama weeklyFavoritesV2
+  // de abajo (ver nota de dispatch en buildPhotodumpSessionPlan).
+  if (recipe === 'outfit_week' && refs.weeklyMode === 'looks') {
+    const result = await generateWeeklyLooksShot(
+      shot, refs, destino, sessionParams, shot.arcPosition - 1, totalShots,
+    );
+    return { imageUrl: result.imageUrl, prompt: result.prompt, refsCount: result.refsCount };
+  }
+
   if (recipe === 'outfit_week') {
     const result = await generateWeeklyFavoritesV2Shot(
       shot, refs, destino, sessionParams, shot.arcPosition - 1, totalShots, totalShots,

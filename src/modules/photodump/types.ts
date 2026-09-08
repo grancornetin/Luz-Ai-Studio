@@ -726,6 +726,16 @@ export interface PhotodumpRefs {
   // generación de imágenes, solo al razonamiento de texto. Default
   // 'categorized' si no se especifica.
   directorMode?: 'categorized' | 'open_bank';
+  // outfit_week — FASE DE PRUEBA (sep 2026, "hay que dejar un favoritos de
+  // la semana para ropa y otro para productos"): weeklyMode elige el motor
+  // interno sin crear un PhotodumpRecipe nuevo todavía (ver nota de fase de
+  // prueba en recipes/weeklyLooks/index.ts). 'looks' → recipes/weeklyLooks/
+  // (solo outfits, historia "esta ropa usé"). Ausente/'products' →
+  // recipes/weeklyFavoritesV2/ (comportamiento actual sin cambios).
+  weeklyMode?: 'looks' | 'products';
+  // Config de recipes/weeklyLooks/ — mismo motivo que directorMode: viaja
+  // en refs porque no hay UI final todavía (controles simples de prueba).
+  weeklyLooksConfig?: import('./recipes/weeklyLooks/types').WeeklyLooksConfig;
 }
 
 // ── Tipos modo libre ───────────────────────────────────────────

@@ -1121,7 +1121,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // "estructurado y confiable" ya validado ahí: shot_type normalizado,
     // nunca category/search_tags de texto libre).
     if (body.action === 'getOutfitCheckPoseCandidates') {
-      const { shotTypes, poseKeywordGroups, restrictShotTypes, perType, seed } = body.payload || {};
+      const { shotTypes, poseKeywordGroups, restrictShotTypes, restrictCaptureSignatures, perType, seed } = body.payload || {};
       const hasShotTypes = Array.isArray(shotTypes) && shotTypes.length > 0;
       const hasKeywordGroups = poseKeywordGroups && typeof poseKeywordGroups === 'object'
         && Object.keys(poseKeywordGroups).length > 0;
@@ -1143,6 +1143,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? new Set(restrictShotTypes.map((t: string) => normalizeShotType(t)))
         : null;
 
+      // Sub-filtro de capture_signature (sep 2026, weeklyLooks): distingue
+      // mecánica de cámara real — "mirror_selfie_phone" (celular visible en
+      // mano/reflejo) vs "handheld_phone_natural" (alguien más o timer, sin
+      // celular en cuadro). Igual que restrictShotTypes, es un AND sobre
+      // cualquiera de los 2 modos — necesario porque shot_type por sí solo
+      // NO separa estas dos mecánicas de forma confiable (ver auditoría real:
+      // shot_type "mirror_selfie" mezcla capture_signature mirror_selfie_phone
+      // con algunos handheld_phone_natural sueltos).
+      const restrictCaptureSet = Array.isArray(restrictCaptureSignatures) && restrictCaptureSignatures.length > 0
+        ? new Set(restrictCaptureSignatures as string[])
+        : null;
+
       const byGroup = new Map<string, { itemId: string; pose: string; gesture: string; gaze: string }[]>();
 
       // Modo 1: shot_type normalizado — estructurado, confiable (ver
@@ -1154,6 +1166,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (!d) continue;
           const st = normalizeShotType(d.shot_type);
           if (!wantedTypes.has(st)) continue;
+          if (restrictCaptureSet && !restrictCaptureSet.has(d.capture_signature)) continue;
           if (!byGroup.has(st)) byGroup.set(st, []);
           byGroup.get(st)!.push({
             itemId: item.itemId,
@@ -1180,6 +1193,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const d = (item as any).analysis?.raw_visual_description;
             if (!d) continue;
             if (restrictSet && !restrictSet.has(normalizeShotType(d.shot_type))) continue;
+            if (restrictCaptureSet && !restrictCaptureSet.has(d.capture_signature)) continue;
             const poseText = (d.subject_pose || '').toLowerCase();
             if (!keywords.some(k => poseText.includes(k))) continue;
             if (!byGroup.has(groupKey)) byGroup.set(groupKey, []);

@@ -81,6 +81,9 @@ export interface PhotodumpShotDirective {
   outfitMultiLookPlan?:      import('./outfitMultiLook/types').OutfitMultiLookShotPlan;
   // outfit_reveal_basic: qué shot fijo del pool de 3 corresponde a este shot
   outfitRevealBasicPlan?:    import('./outfitRevealBasic/types').OutfitRevealBasicShotPlan;
+  // weeklyLooks (mitad "ropa" de weeklyFavoritesV2, ver nota de fase de
+  // prueba en weeklyLooks/index.ts): qué look corresponde a este shot.
+  weeklyLooksPlan?:          import('./weeklyLooks/types').WeeklyLooksShotPlan;
   // outfit_night_out: qué shot (fijo o del banco de momentos de noche) corresponde a este shot
   outfitNightOutPlan?:       import('./outfitNightOut/types').OutfitNightOutShotPlan;
   // Director Creativo GENÉRICO (ver director/generic/): cuando este shot
