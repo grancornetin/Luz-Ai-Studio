@@ -153,10 +153,21 @@ export function pickOneCandidate<T extends { itemId: string }>(
  * candidato (eso lo resuelve el brief real + la referencia de outfit del
  * usuario). Sin candidato disponible, devuelve '' — el shot cae a su
  * variationSpace genérico ya validado, nunca se bloquea por esto.
+ *
+ * Objetos ajenos sostenidos en la mano (sep 2026, bug real confirmado en
+ * weeklyLooks): un candidato de "trabajo remoto" citó "mano derecha
+ * sosteniendo una laptop pegada al costado del cuerpo", y esa laptop se
+ * generó literalmente en una foto de calle sin ninguna oficina/escritorio
+ * cerca — sin lógica alguna de por qué la traería consigo. Excluir SOLO por
+ * keyword ("laptop", "bolso"...) es frágil (un bolso puede ser un accesorio
+ * real válido) — en cambio se instruye explícitamente que el brazo/mano se
+ * transfiere en su POSICIÓN pero cualquier objeto sostenido en ella se
+ * ignora, dejando que el outfit/brief reales decidan qué sostiene (nada, el
+ * celular del selfie, o un accesorio que sí viene de sus referencias).
  */
 export function buildPoseAttitudeLine(candidate: OutfitCheckPoseCandidate | null): string {
   if (!candidate) return '';
   const parts = [candidate.pose, candidate.gesture, candidate.gaze].filter(Boolean);
   if (parts.length === 0) return '';
-  return `REAL ATTITUDE REFERENCE (pose/gesture/gaze only — ignore any outfit, scene, or lighting implied by this description, those come from the brief and the outfit reference): ${parts.join(' — ')}`;
+  return `REAL ATTITUDE REFERENCE (pose/gesture/gaze only — ignore any outfit, scene, or lighting implied by this description, those come from the brief and the outfit reference; if this description mentions an object held in a hand — a laptop, a cup, a bag, a notebook, etc. — ignore that specific object too, keep only the arm/hand POSITION, never invent a prop that has no reason to be in this scene): ${parts.join(' — ')}`;
 }

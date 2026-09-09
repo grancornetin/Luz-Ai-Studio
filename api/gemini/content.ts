@@ -1379,7 +1379,7 @@ Respond ONLY with JSON: { "isRelevant": boolean, "suggestion": "string", "produc
       const parts: any[] = [
         { text: `You are picking real-world locations for a weekly outfit photo dump (UGC style, not editorial). ${mirrorInstruction} ${briefInstruction}\n\nLook at this outfit reference photo to judge its formality/register.` },
         { inlineData: { mimeType: mimeType || 'image/jpeg', data: cleanBase64(imageData) } },
-        { text: 'Respond ONLY with JSON: { "places": ["short phrase describing a specific real place", ... 6 to 8 items], "reasoning": "one short sentence in Spanish explaining the choices" }. Each place must be a short, concrete, varied phrase (not a generic category) — e.g. "a hotel elevator mirror", "a boutique store window reflection", "an office building lobby with glass walls", not just "a hallway".' },
+        { text: 'Respond ONLY with JSON: { "places": ["short phrase describing a specific real place", ... 6 to 8 items], "reasoning": "one short sentence in Spanish explaining the choices" }. Each "places" item MUST be written in ENGLISH (the rest of the image prompt this feeds into is in English) — short, concrete, and varied (not a generic category) — e.g. "a hotel elevator mirror", "a boutique store window reflection", "an office building lobby with glass walls", not just "a hallway".' },
       ];
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',

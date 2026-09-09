@@ -31,6 +31,29 @@ function anchorOutfitLine(anchor: AnchorContract, isAnchorShot: boolean): string
   }
 }
 
+// Un lugar de reflejo que NO es un espejo tradicional (vidriera, ventanal,
+// vidrio de auto, puerta de vidrio) necesita geometría explícita — sep
+// 2026, bug real confirmado: sin esto, el modelo dibujó a la persona como
+// si estuviera PARADA ADENTRO del local mirando hacia afuera, con el
+// interior nítido detrás de ella en vez de reflejado — no leía como una
+// selfie tomada desde la vereda. reglas espejo/mirror caen en la línea de
+// arriba (captureStyleMechanicsLine ya cubre esa mecánica).
+// Bilingüe como red de seguridad — el endpoint (analyzeWeeklyLooksPlaces)
+// pide la respuesta en inglés, pero un candidato del fallback estático o
+// una respuesta que no respete la instrucción de idioma puede venir en
+// español (bug real visto: "Reflejo en el escaparate de una cafetería").
+const REFLECTIVE_GLASS_KEYWORDS = [
+  'window', 'glass', 'storefront', 'display case', 'shop front', 'car window', 'elevator door',
+  'vidrio', 'vidriera', 'escaparate', 'ventanal', 'cristal',
+];
+const MIRROR_KEYWORDS = ['mirror', 'espejo'];
+
+function isReflectiveGlassPlace(coherentPlaces?: string): boolean {
+  if (!coherentPlaces) return false;
+  const lower = coherentPlaces.toLowerCase();
+  return REFLECTIVE_GLASS_KEYWORDS.some(k => lower.includes(k)) && !MIRROR_KEYWORDS.some(k => lower.includes(k));
+}
+
 // coherentPlaces: en varied_place es UN lugar concreto por shot (ver
 // assignPlacesToShots en index.ts) — nunca la lista completa como texto
 // libre. Bug real corregido (sep 2026): con la lista completa repetida en
@@ -42,7 +65,9 @@ function placeLine(placeMode: 'same_place' | 'varied_place', isAnchorShot: boole
       ? `The background is ${coherentPlaces ?? 'a real, believable, ordinary place'} — a real room with natural details (furniture, wall texture, light), not a studio backdrop.`
       : 'SCENE CONTINUITY: this is the SAME exact place shown in the scene reference image — reuse the same background, furniture/fixtures, and lighting. Do not invent a different place.';
   }
-  return `The background is ${coherentPlaces ?? 'a real, believable, ordinary place'} — a real, believable place with natural details, not a studio backdrop, not a photography set.`;
+  const base = `The background is ${coherentPlaces ?? 'a real, believable, ordinary place'} — a real, believable place with natural details, not a studio backdrop, not a photography set.`;
+  if (!isReflectiveGlassPlace(coherentPlaces)) return base;
+  return `${base} REFLECTION GEOMETRY: she is standing OUTSIDE on the sidewalk/street, facing the glass, taking a photo of her own reflection in it — the glass acts like a mirror. What's behind the glass (the shop's interior, other objects) is seen faintly THROUGH and behind her reflection, softer and slightly less sharp than her — never as a clear, sharply-lit space she appears to be standing inside of. She is not inside the store.`;
 }
 
 export interface BuiltPrompt {
