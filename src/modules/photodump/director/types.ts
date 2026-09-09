@@ -16,6 +16,8 @@ export interface BankAnalysisItem {
   itemId: string;
   analysis: {
     raw_visual_description?: {
+      shot_type?: string;
+      capture_signature?: string;
       subject_pose?: string;
       subject_gesture?: string;
       subject_gaze?: string;
@@ -36,6 +38,14 @@ export interface BankAnalysisItem {
       setting?: string[];
       time_of_day_guess?: string;
       narrative_beat_fit?: string[];
+      // Campos nuevos de re-auditoría del banco (sep 2026,
+      // PROMPT_REAUDITORIA_BANCO.md) — enum cerrado y confiable. Opcionales:
+      // items del banco todavía no reprocesados no los tienen.
+      capture_signature?: string;
+      body_visibility?: string;
+      hand_occupancy?: string;
+      reflection_surface_type?: string;
+      companion_prominence?: string;
     };
     prohibited_commercial_signals?: unknown;
   };

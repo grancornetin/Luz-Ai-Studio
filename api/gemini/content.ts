@@ -56,8 +56,9 @@ import {
   buildGenericWritePrompt,
   buildGenericPlaceAwareRewritePrompt,
 } from '../../src/modules/photodump/director/generic/genericPromptBuilders.js';
-import type { GenericPlan, GenericFinalPromptShot, RecipeDirectorContract } from '../../src/modules/photodump/director/generic/genericTypes.js';
+import type { GenericPlan, GenericFinalPromptShot, RecipeDirectorContract, GenericAnalysisItem } from '../../src/modules/photodump/director/generic/genericTypes.js';
 import { OUTFIT_CHECK_DIRECTOR_CONTRACT } from '../../src/modules/photodump/recipes/outfitCheck/directorContract.js';
+import { buildWeeklyLooksDirectorContract } from '../../src/modules/photodump/recipes/weeklyLooks/directorContract.js';
 
 interface PhotodumpDirectorPayload {
   brief?: string;
@@ -76,6 +77,14 @@ interface PhotodumpDirectorPayload {
   // la receta, el director solo arma esa cantidad exacta).
   directorMode?: 'categorized' | 'open_bank' | 'generic';
   count?: number;
+  // weeklyLooks (sep 2026): restricciones duras del usuario, resueltas
+  // ANTES de invocar el director — nunca inferidas por Gemini. captureStyle
+  // filtra el pool de candidatos server-side (ver runGenericDirector) antes
+  // de que Gemini lo vea; placeMode ajusta el contrato dinámicamente (ver
+  // buildWeeklyLooksDirectorContract en recipes/weeklyLooks/directorContract.ts)
+  // para decidir si todos los shots comparten lugar o cada uno es libre.
+  captureStyle?: 'mirror_selfie' | 'third_person';
+  placeMode?: 'same_place' | 'varied_place';
 }
 
 // BUG REAL corregido: `import photodumpBankSnapshot from '....json'` rompía
@@ -427,6 +436,38 @@ async function runOpenBankDirector(
 // outfit_night_out), acá el conteo llega directo — cada receta que use
 // este director controla su propio selector de cantidad en la UI (ver
 // decisión del usuario: "el usuario sigue eligiendo la cantidad").
+// weeklyLooks (sep 2026): pre-filtra el banco por captureStyle ANTES de
+// armar el widePool que ve Gemini — decisión explícita del usuario: el
+// estilo de cámara (mirror_selfie | third_person) ya lo eligió el usuario
+// antes de generar, nunca debe quedar librado a que Gemini respete una
+// instrucción de texto para esto (mismo principio de "filtro duro, no
+// instrucción de texto" que ya costó 3 rondas de fixes aprender con el
+// motor de texto fijo de weeklyLooks). Mismo criterio de shot_type +
+// capture_signature ya validado en poseSelection.ts/getOutfitCheckPoseCandidates
+// — reusa CAPTURE_STYLE_FILTER equivalente acá porque este archivo no
+// importa código de src/modules/photodump/recipes/ para el filtro en sí
+// (solo el contrato, que sí es intencional — ver import de arriba).
+const CAPTURE_STYLE_SHOT_TYPES: Record<string, { shotTypes: string[]; captureSignatures: string[] }> = {
+  mirror_selfie: { shotTypes: ['mirror_selfie'], captureSignatures: ['mirror_selfie_phone'] },
+  third_person:  { shotTypes: ['full_body'], captureSignatures: ['handheld_phone_natural'] },
+};
+
+function filterBankItemsForCaptureStyle(
+  items: PhotodumpBankSnapshot['items'],
+  captureStyle: 'mirror_selfie' | 'third_person',
+): PhotodumpBankSnapshot['items'] {
+  const filter = CAPTURE_STYLE_SHOT_TYPES[captureStyle];
+  const wantedTypes = new Set(filter.shotTypes.map(normalizeShotType));
+  const wantedSignatures = new Set(filter.captureSignatures);
+  return items.filter(item => {
+    const d = item.analysis.raw_visual_description;
+    if (!d) return false;
+    if (!wantedTypes.has(normalizeShotType(d.shot_type))) return false;
+    if (d.capture_signature && !wantedSignatures.has(d.capture_signature)) return false;
+    return true;
+  });
+}
+
 async function runGenericDirector(
   ai: GoogleGenAI,
   contract: RecipeDirectorContract,
@@ -434,10 +475,14 @@ async function runGenericDirector(
   totalShotsRequested: number,
   energy: 'elegante' | 'fiesta',
   onRetry?: (stage: 'decidir' | 'redactar', attempt: number, backoffMs: number) => Promise<void>,
+  captureStyle?: 'mirror_selfie' | 'third_person',
 ): Promise<{ plan: GenericPlan; finalPrompts: GenericFinalPromptShot[] }> {
   const snapshot = loadPhotodumpBankSnapshot();
+  const bankItems = captureStyle
+    ? filterBankItemsForCaptureStyle(snapshot.items, captureStyle)
+    : snapshot.items;
   const wideSeed = `${Date.now()}::${Math.random()}`;
-  const widePool = buildGenericWideCandidatePool(snapshot.items, 25, wideSeed);
+  const widePool = buildGenericWideCandidatePool(bankItems as unknown as GenericAnalysisItem[], 25, wideSeed);
 
   const decidePrompt = buildGenericDecidePrompt(contract, brief, totalShotsRequested, widePool, undefined, energy);
   const decideResponse = await generateContentWithRetry(
@@ -475,8 +520,13 @@ async function runGenericDirector(
 // Contratos disponibles del director genérico, por recipeId — agregar acá
 // cualquier receta nueva que declare su propio RecipeDirectorContract.
 // Único lugar donde el servidor "sabe" qué recetas usan el modo generic.
-const GENERIC_DIRECTOR_CONTRACTS: Record<string, RecipeDirectorContract> = {
+// weeklyLooks (sep 2026): su contrato depende de placeMode (elegido por el
+// usuario ANTES de generar — mismo/varios lugares) — por eso el valor
+// puede ser una función además de un objeto estático, resuelta con el
+// payload real más abajo.
+const GENERIC_DIRECTOR_CONTRACTS: Record<string, RecipeDirectorContract | ((payload: PhotodumpDirectorPayload) => RecipeDirectorContract)> = {
   outfit_check: OUTFIT_CHECK_DIRECTOR_CONTRACT,
+  weekly_looks: (payload: PhotodumpDirectorPayload) => buildWeeklyLooksDirectorContract(payload.placeMode ?? 'varied_place'),
 };
 
 async function runPhotodumpDirector(
@@ -484,7 +534,7 @@ async function runPhotodumpDirector(
   payload: PhotodumpDirectorPayload,
   onRetry?: (stage: 'decidir' | 'redactar', attempt: number, backoffMs: number) => Promise<void>,
 ): Promise<{ plan: PhotodumpDirectorPlan | OpenBankPlan | GenericPlan; finalPrompts: PhotodumpFinalPromptShot[] | OpenBankFinalPromptShot[] | GenericFinalPromptShot[] }> {
-  const { brief, recipe, level, referenceImages, directorMode, count } = payload;
+  const { brief, recipe, level, referenceImages, directorMode, count, captureStyle } = payload;
   if (!brief || !recipe) {
     throw new Error('Faltan campos: brief, recipe');
   }
@@ -495,10 +545,11 @@ async function runPhotodumpDirector(
   // con contrato propio en GENERIC_DIRECTOR_CONTRACTS. No usa `level`
   // (sistema categorized viejo) — usa `count` directo.
   if (directorMode === 'generic') {
-    const contract = GENERIC_DIRECTOR_CONTRACTS[recipe];
-    if (!contract) throw new Error(`No hay RecipeDirectorContract registrado para la receta: ${recipe}`);
+    const contractOrFn = GENERIC_DIRECTOR_CONTRACTS[recipe];
+    if (!contractOrFn) throw new Error(`No hay RecipeDirectorContract registrado para la receta: ${recipe}`);
+    const contract = typeof contractOrFn === 'function' ? contractOrFn(payload) : contractOrFn;
     if (!count || count < 1) throw new Error('Falta count (cantidad de shots) para el director genérico.');
-    return runGenericDirector(ai, contract, brief, count, energy, onRetry);
+    return runGenericDirector(ai, contract, brief, count, energy, onRetry, captureStyle);
   }
 
   if (!level) {
@@ -783,7 +834,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (body.action === 'photodumpDirectorStart') {
-      const { brief, recipe, level, hasCompanion, referenceImages, directorMode, count } = body.payload || {};
+      const { brief, recipe, level, hasCompanion, referenceImages, directorMode, count, captureStyle, placeMode } = body.payload || {};
       // directorMode='generic' usa count en vez de level (ver
       // runPhotodumpDirector) — cada modo valida sus propios campos
       // requeridos, en vez de exigir level también para el modo nuevo.
@@ -800,7 +851,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
       await Promise.all([
         saveDirectorJob(job),
-        redis.set(`photodump_director_payload:${jobId}`, JSON.stringify({ brief, recipe, level, hasCompanion, referenceImages, directorMode, count }), { ex: 3600 }),
+        redis.set(`photodump_director_payload:${jobId}`, JSON.stringify({ brief, recipe, level, hasCompanion, referenceImages, directorMode, count, captureStyle, placeMode }), { ex: 3600 }),
       ]);
 
       const proto = req.headers['x-forwarded-proto'] || 'https';
@@ -1070,9 +1121,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // vocabulario ("venue nocturno" → el placeAnchorLabel del contrato de
     // la receta, ej. "destino" para outfit_check).
     if (body.action === 'analyzeGenericPlace') {
-      const { imageData, mimeType, recipe } = body.payload || {};
-      const contract = GENERIC_DIRECTOR_CONTRACTS[recipe];
-      if (!contract) return res.status(400).json({ error: `No hay RecipeDirectorContract registrado para la receta: ${recipe}` });
+      const { imageData, mimeType, recipe, placeMode } = body.payload || {};
+      const contractOrFn = GENERIC_DIRECTOR_CONTRACTS[recipe];
+      if (!contractOrFn) return res.status(400).json({ error: `No hay RecipeDirectorContract registrado para la receta: ${recipe}` });
+      const contract = typeof contractOrFn === 'function' ? contractOrFn({ placeMode } as PhotodumpDirectorPayload) : contractOrFn;
       const response = await generateContentWithRetry(ai, {
         model: 'gemini-2.5-flash',
         contents: [
@@ -1092,9 +1144,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // continuidad de lugar real, mismo mecanismo que
     // redactOpenBankSingleShot generalizado por contrato de receta.
     if (body.action === 'redactGenericSingleShot') {
-      const { brief, shot, placeObservation, energy, recipe } = body.payload || {};
-      const contract = GENERIC_DIRECTOR_CONTRACTS[recipe];
-      if (!contract) return res.status(400).json({ error: `No hay RecipeDirectorContract registrado para la receta: ${recipe}` });
+      const { brief, shot, placeObservation, energy, recipe, placeMode } = body.payload || {};
+      const contractOrFn = GENERIC_DIRECTOR_CONTRACTS[recipe];
+      if (!contractOrFn) return res.status(400).json({ error: `No hay RecipeDirectorContract registrado para la receta: ${recipe}` });
+      const contract = typeof contractOrFn === 'function' ? contractOrFn({ placeMode } as PhotodumpDirectorPayload) : contractOrFn;
       if (!brief || !shot || !placeObservation) {
         return res.status(400).json({ error: 'Faltan campos: brief, shot, placeObservation' });
       }
@@ -1122,7 +1175,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // "estructurado y confiable" ya validado ahí: shot_type normalizado,
     // nunca category/search_tags de texto libre).
     if (body.action === 'getOutfitCheckPoseCandidates') {
-      const { shotTypes, poseKeywordGroups, restrictShotTypes, restrictCaptureSignatures, excludeCompanion, perType, seed } = body.payload || {};
+      const { shotTypes, poseKeywordGroups, restrictShotTypes, restrictCaptureSignatures, excludeCompanion, restrictBodyVisibility, maxCompanionProminence, restrictHandOccupancy, restrictReflectionSurface, perType, seed } = body.payload || {};
       const hasShotTypes = Array.isArray(shotTypes) && shotTypes.length > 0;
       const hasKeywordGroups = poseKeywordGroups && typeof poseKeywordGroups === 'object'
         && Object.keys(poseKeywordGroups).length > 0;
@@ -1156,6 +1209,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? new Set(restrictCaptureSignatures as string[])
         : null;
 
+      // Filtros nuevos (sep 2026, re-auditoría del banco — PROMPT_REAUDITORIA_BANCO.md):
+      // a diferencia de category/search_tags de texto libre (descartado arriba por
+      // no confiable), estos 4 SÍ son enum cerrado validado en el análisis del banco
+      // (system-prompt.txt del entrenador) — por eso, a diferencia del resto de
+      // search_tags, son seguros para filtrar acá. Todos opcionales/retrocompatibles:
+      // un candidato sin el campo (banco viejo aún no re-analizado) no se descarta por
+      // un filtro que no viene en el payload, pero si el filtro SÍ viene y el campo
+      // del candidato está ausente, se descarta (mejor perder un candidato dudoso que
+      // colar uno que no se puede verificar contra el criterio pedido).
+      const restrictBodyVisibilitySet = Array.isArray(restrictBodyVisibility) && restrictBodyVisibility.length > 0
+        ? new Set(restrictBodyVisibility as string[])
+        : null;
+      const restrictHandOccupancySet = Array.isArray(restrictHandOccupancy) && restrictHandOccupancy.length > 0
+        ? new Set(restrictHandOccupancy as string[])
+        : null;
+      const restrictReflectionSurfaceSet = Array.isArray(restrictReflectionSurface) && restrictReflectionSurface.length > 0
+        ? new Set(restrictReflectionSurface as string[])
+        : null;
+      // maxCompanionProminence: tope de qué tan protagonista puede ser un acompañante —
+      // 'background_incidental' (el más estricto, excluye cualquier acompañante notable
+      // o interactuando) | 'background_notable' (permite de fondo, excluye interactuando)
+      // | 'foreground_interacting' (permite cualquier prominencia, no filtra nada extra).
+      // Reemplaza/complementa a excludeCompanion (boolean crudo) con el matiz real que
+      // pedía el bug de la fiesta de 15 personas citada como pose de "una sola persona".
+      const prominenceOrder = ['background_incidental', 'background_notable', 'foreground_interacting'];
+      const maxProminenceIdx = typeof maxCompanionProminence === 'string' ? prominenceOrder.indexOf(maxCompanionProminence) : -1;
+
+      const passesNewFilters = (item: any): boolean => {
+        const tags = item.analysis?.search_tags;
+        if (restrictBodyVisibilitySet) {
+          if (!tags?.body_visibility || !restrictBodyVisibilitySet.has(tags.body_visibility)) return false;
+        }
+        if (restrictHandOccupancySet) {
+          if (!tags?.hand_occupancy || !restrictHandOccupancySet.has(tags.hand_occupancy)) return false;
+        }
+        if (restrictReflectionSurfaceSet) {
+          if (!tags?.reflection_surface_type || !restrictReflectionSurfaceSet.has(tags.reflection_surface_type)) return false;
+        }
+        if (maxProminenceIdx >= 0 && item.analysis?.companion_present) {
+          const itemProminenceIdx = prominenceOrder.indexOf(tags?.companion_prominence);
+          // Sin dato de prominencia en un candidato con acompañante: se trata como el
+          // caso más permisivo posible para no perder candidatos válidos de golpe, salvo
+          // que el tope pedido sea el más estricto (ahí si no se puede verificar, se descarta).
+          if (itemProminenceIdx === -1) { if (maxProminenceIdx === 0) return false; }
+          else if (itemProminenceIdx > maxProminenceIdx) return false;
+        }
+        return true;
+      };
+
       const byGroup = new Map<string, { itemId: string; pose: string; gesture: string; gaze: string }[]>();
 
       // Modo 1: shot_type normalizado — estructurado, confiable (ver
@@ -1178,6 +1280,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           // candidato de fiesta/grupo contamine una foto que debe ser de una
           // sola persona.
           if (excludeCompanion && (item as any).analysis?.companion_present) continue;
+          if (!passesNewFilters(item as any)) continue;
           if (!byGroup.has(st)) byGroup.set(st, []);
           byGroup.get(st)!.push({
             itemId: item.itemId,
@@ -1206,6 +1309,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             if (restrictSet && !restrictSet.has(normalizeShotType(d.shot_type))) continue;
             if (restrictCaptureSet && !restrictCaptureSet.has(d.capture_signature)) continue;
             if (excludeCompanion && (item as any).analysis?.companion_present) continue;
+            if (!passesNewFilters(item as any)) continue;
             const poseText = (d.subject_pose || '').toLowerCase();
             if (!keywords.some(k => poseText.includes(k))) continue;
             if (!byGroup.has(groupKey)) byGroup.set(groupKey, []);

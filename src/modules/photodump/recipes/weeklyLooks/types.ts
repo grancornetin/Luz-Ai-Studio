@@ -103,6 +103,11 @@ export interface WeeklyLooksShotPlan {
   shotId:      string;
   lookItemId:   string;
   isAnchorShot: boolean;
+  // Presente solo si el Director Creativo (ver directorAdapter.ts) armó
+  // este shot con éxito — el prompt final ya viene redactado tal cual,
+  // saltea buildShotPrompt del motor de texto fijo. undefined = motor de
+  // texto fijo (fallback si el Director falló o no se intentó).
+  directorFinalPrompt?: string;
 }
 
 // ── Debug ───────────────────────────────────────────────────────────────

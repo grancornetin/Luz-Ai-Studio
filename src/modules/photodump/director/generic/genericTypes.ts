@@ -24,6 +24,7 @@ export interface GenericAnalysisItem {
   analysis: {
     raw_visual_description?: {
       shot_type?: string;
+      capture_signature?: string;
       subjects_visible?: number;
       subject_pose?: string;
       subject_gesture?: string;

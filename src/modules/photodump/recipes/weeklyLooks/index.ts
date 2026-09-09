@@ -32,9 +32,10 @@ import { buildShotPrompt } from './promptBuilder';
 import { buildShotDebug } from './debug';
 import { selectPoseAttitudeLine } from './poseSelection';
 import { analyzeWeeklyLooksPlaces, fallbackPlacesList } from './placesClient';
+import { runWeeklyLooksDirector, type WeeklyLooksDirectorShot } from './directorAdapter';
 import type {
   AnchorContract, ShotContract, WeeklyLooksShotPlan, WeeklyLooksShotDebug,
-  CaptureStyle, PlaceMode, WeeklyLooksConfig,
+  CaptureStyle, PlaceMode, WeeklyLooksConfig, WeeklyLooksManifest,
 } from './types';
 
 // ── Config por defecto (fase de prueba: sin UI final todavía) ─────────────
@@ -42,6 +43,35 @@ const DEFAULT_CONFIG: WeeklyLooksConfig = { captureStyle: 'mirror_selfie', place
 
 function resolveConfig(refs: PhotodumpRefs): WeeklyLooksConfig {
   return refs.weeklyLooksConfig ?? DEFAULT_CONFIG;
+}
+
+// ── Director Creativo (sep 2026) ────────────────────────────────────────
+// Intento ÚNICO por sesión, cacheado — buildWeeklyLooksDirectives/
+// generate...REF0/generate...Shot son llamadas separadas del Director de
+// arriba (photodumpDirectorService.ts) sin estado compartido, mismo motivo
+// que el resto de los cachés de este archivo. null = el Director falló (o
+// nunca se intentó, ej. sin API key/timeout) — el caller cae al motor de
+// texto fijo sin romper la generación, mismo principio de fallback
+// no-negociable que ya usa outfit_check.
+const directorShotsCache = new Map<string, WeeklyLooksDirectorShot[] | null>();
+
+async function resolveDirectorShots(
+  refs:       PhotodumpRefs,
+  manifest:   WeeklyLooksManifest,
+  config:     WeeklyLooksConfig,
+  basePrompt: string,
+  seedKey:    string,
+): Promise<WeeklyLooksDirectorShot[] | null> {
+  if (directorShotsCache.has(seedKey)) return directorShotsCache.get(seedKey)!;
+  try {
+    const shots = await runWeeklyLooksDirector(refs, manifest, basePrompt, config.captureStyle, config.placeMode);
+    directorShotsCache.set(seedKey, shots);
+    return shots;
+  } catch (err) {
+    console.warn('[weeklyLooks] Director Creativo falló, cayendo al motor de texto fijo:', err);
+    directorShotsCache.set(seedKey, null);
+    return null;
+  }
 }
 
 // ── Caché en memoria del shot ancla (imagen real ya generada) por sesión ──
@@ -110,9 +140,15 @@ async function generateFromContract(
   shotIndex:     number,
   totalShots:    number,
   sceneAnchorImageUrl?: string,
+  // Director Creativo (ver directorAdapter.ts): si viene, se usa TAL CUAL
+  // como prompt final — saltea buildShotPrompt del motor de texto fijo.
+  // Las referencias (routeReferences) siguen resolviéndose igual en ambos
+  // casos — el Director nunca decide qué outfit/imagen citar, solo texto.
+  directorFinalPrompt?: string,
 ): Promise<{ imageUrl: string; prompt: string; refsCount: number; debug: WeeklyLooksShotDebug }> {
   const routed = routeReferences(contract, refs, sceneAnchorImageUrl);
-  const { prompt, negative } = buildShotPrompt(contract, anchor, config.captureStyle, config.placeMode);
+  const { prompt: builtPrompt, negative } = buildShotPrompt(contract, anchor, config.captureStyle, config.placeMode);
+  const prompt = directorFinalPrompt ?? builtPrompt;
   const preparedRefs = await prepareRefs(routed.orderedUrls);
 
   const imageUrl = await imageApiService.generateImage({
@@ -145,13 +181,29 @@ export async function buildWeeklyLooksDirectives(
   const manifest = buildWeeklyLooksManifest(refs);
   const rawContracts = buildShotContracts(manifest);
   const seedKey = `${cacheKey(refs)}::${sessionId ?? ''}`;
-  const contracts = await attachPoseAndPlace(rawContracts, config, seedKey, refs, basePrompt);
+
+  // Director Creativo primero (ver directorAdapter.ts) — si tiene éxito,
+  // cada contrato lleva su directorFinalPrompt ya redactado; si falla,
+  // directorShots queda null y el resto del flujo sigue exactamente igual
+  // que antes de esta migración (motor de texto fijo). Con el Director
+  // activo se salta attachPoseAndPlace por completo — pose/lugar ya los
+  // resolvió el Director razonando, llamarlo igual sería una llamada de
+  // red desperdiciada (mismo principio que el fix de "no pedir poses del
+  // banco al arco legado si el Director tuvo éxito" en outfit_check).
+  const directorShots = await resolveDirectorShots(refs, manifest, config, basePrompt ?? '', seedKey);
+  const directorByLookId = new Map((directorShots ?? []).map(s => [s.lookItemId, s]));
+
+  const contracts = directorShots
+    ? rawContracts
+    : await attachPoseAndPlace(rawContracts, config, seedKey, refs, basePrompt);
 
   return contracts.map((contract): Omit<PhotodumpShotDirective, 'arcPosition' | 'aspectRatio'> => {
+    const directorShot = directorByLookId.get(contract.lookItem.id);
     const plan: WeeklyLooksShotPlan = {
       shotId:       contract.shotId,
       lookItemId:    contract.lookItem.id,
       isAnchorShot:  contract.isAnchorShot,
+      directorFinalPrompt: directorShot?.finalPrompt,
     };
     return {
       key:               contract.shotId,
@@ -186,17 +238,24 @@ export async function generateWeeklyLooksREF0(
 
   const rawContract = buildShotContracts(manifest)[0];
   const seedKey = `${cacheKey(refs)}::${sessionParams.sessionId ?? ''}`;
-  const [contract] = await attachPoseAndPlace([rawContract], config, seedKey, refs, basePrompt);
+  const directorShots = await resolveDirectorShots(refs, manifest, config, basePrompt ?? '', seedKey);
+  const [contract] = directorShots
+    ? [rawContract]
+    : await attachPoseAndPlace([rawContract], config, seedKey, refs, basePrompt);
+  const directorFinalPrompt = directorShots?.find(s => s.lookItemId === contract.lookItem.id)?.finalPrompt;
 
   // same_place con lugar subido por el usuario: reusa el slot genérico
   // "Escena" (refs.sceneRef) — mismo slot que trip_recap/outfit_check ya
   // usan para "subí una foto real del lugar" — en vez de un campo de
   // subida propio (fase de prueba: menos UI nueva, mismo slot conocido).
   // Si no subió nada, se pasa undefined y el lugar se GENERA en este mismo
-  // shot (ver anchorOutfitLine/placeLine en promptBuilder.ts).
+  // shot (ver anchorOutfitLine/placeLine en promptBuilder.ts). Con Director
+  // activo y same_place, el lugar SIEMPRE se genera acá (nunca lo redacta
+  // el Director en texto, ver directorContract.ts) salvo que el usuario
+  // haya subido su propio lugar.
   const uploadedPlace = config.placeMode === 'same_place' ? (refs.sceneRef ?? undefined) : undefined;
 
-  const result = await generateFromContract(contract, refs, destino, config, anchor, sessionParams, 0, manifest.items.length, uploadedPlace);
+  const result = await generateFromContract(contract, refs, destino, config, anchor, sessionParams, 0, manifest.items.length, uploadedPlace, directorFinalPrompt);
   anchorImageCache.set(cacheKey(refs), result);
   return { imageUrl: result.imageUrl, ref0Analysis: null, prompt: result.prompt, refsCount: result.refsCount };
 }
@@ -244,7 +303,12 @@ export async function generateWeeklyLooksShot(
   const manifest = buildWeeklyLooksManifest(refs);
   const rawContracts = buildShotContracts(manifest);
   const seedKey = `${cacheKey(refs)}::${sessionParams.sessionId ?? ''}`;
-  const contracts = await attachPoseAndPlace(rawContracts, config, seedKey, refs, basePrompt);
+  // plan.directorFinalPrompt (resuelto en buildWeeklyLooksDirectives) ya
+  // indica si el Director tuvo éxito para este shot — si vino, no hace
+  // falta attachPoseAndPlace (pose/lugar de texto fijo nunca se usan).
+  const contracts = plan.directorFinalPrompt
+    ? rawContracts
+    : await attachPoseAndPlace(rawContracts, config, seedKey, refs, basePrompt);
   const contract = contracts.find(c => c.shotId === plan.shotId);
   if (!contract) {
     throw new Error(`No se encontró el contrato para el shot "${plan.shotId}".`);
@@ -253,5 +317,8 @@ export async function generateWeeklyLooksShot(
   const anchor = buildAnchorContract(refs, manifest);
   const sceneAnchorImageUrl = config.placeMode === 'same_place' ? anchorImageCache.get(cacheKey(refs))?.imageUrl : undefined;
 
-  return generateFromContract(contract, refs, destino, config, anchor, sessionParams, shotIndex, totalShots, sceneAnchorImageUrl);
+  // plan.directorFinalPrompt ya viene resuelto desde buildWeeklyLooksDirectives
+  // (el Director corre UNA vez por sesión, cacheado por seedKey) — nunca se
+  // vuelve a llamar acá.
+  return generateFromContract(contract, refs, destino, config, anchor, sessionParams, shotIndex, totalShots, sceneAnchorImageUrl, plan.directorFinalPrompt);
 }

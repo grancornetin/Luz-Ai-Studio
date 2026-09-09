@@ -57,13 +57,18 @@ async function startGenericDirectorJob(
   recipe: string,
   count: number,
   referenceImages: GenericDirectorReferenceImage[],
+  // weeklyLooks (sep 2026): restricciones duras ya elegidas por el usuario
+  // — ver directorContract.ts. undefined para recetas que no las usan
+  // (ej. outfit_check), el server las ignora si no vienen.
+  captureStyle?: 'mirror_selfie' | 'third_person',
+  placeMode?: 'same_place' | 'varied_place',
 ): Promise<string> {
   const res = await fetch(CONTENT_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
     body: JSON.stringify({
       action: 'photodumpDirectorStart',
-      payload: { brief, recipe, referenceImages, directorMode: 'generic', count },
+      payload: { brief, recipe, referenceImages, directorMode: 'generic', count, captureStyle, placeMode },
     }),
   });
   if (!res.ok) {
@@ -104,8 +109,10 @@ export async function runGenericDirector(
   recipe: string,
   count: number,
   referenceImages: GenericDirectorReferenceImage[] = [],
+  captureStyle?: 'mirror_selfie' | 'third_person',
+  placeMode?: 'same_place' | 'varied_place',
 ): Promise<GenericDirectorResponse> {
-  const jobId = await startGenericDirectorJob(brief, recipe, count, referenceImages);
+  const jobId = await startGenericDirectorJob(brief, recipe, count, referenceImages, captureStyle, placeMode);
   const maxAttempts = maxPollAttemptsForCount(count);
 
   let consecutivePollErrors = 0;
@@ -170,14 +177,14 @@ async function extractImageParts(imageUrl: string): Promise<{ data: string; mime
   }
 }
 
-export async function analyzeGenericPlace(recipe: string, imageUrl: string): Promise<PlaceObservation | null> {
+export async function analyzeGenericPlace(recipe: string, imageUrl: string, placeMode?: 'same_place' | 'varied_place'): Promise<PlaceObservation | null> {
   const parts = await extractImageParts(imageUrl);
   if (!parts) return null;
   try {
     const res = await fetch(CONTENT_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
-      body: JSON.stringify({ action: 'analyzeGenericPlace', payload: { ...parts, recipe } }),
+      body: JSON.stringify({ action: 'analyzeGenericPlace', payload: { ...parts, recipe, placeMode } }),
     });
     if (!res.ok) {
       console.warn(`[genericDirector] analyzeGenericPlace: el endpoint devolvió ${res.status}`);
@@ -198,6 +205,7 @@ export async function redactGenericSingleShot(
   shot: GenericShotDecision,
   placeObservation: PlaceObservation,
   energy: 'elegante' | 'fiesta',
+  placeMode?: 'same_place' | 'varied_place',
 ): Promise<string | null> {
   try {
     const res = await fetch(CONTENT_ENDPOINT, {
@@ -205,7 +213,7 @@ export async function redactGenericSingleShot(
       headers: { 'Content-Type': 'application/json', ...(await getAuthHeader()) },
       body: JSON.stringify({
         action: 'redactGenericSingleShot',
-        payload: { brief, shot, placeObservation, energy, recipe },
+        payload: { brief, shot, placeObservation, energy, recipe, placeMode },
       }),
     });
     if (!res.ok) {
