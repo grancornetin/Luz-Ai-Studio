@@ -1370,8 +1370,16 @@ Respond ONLY with JSON: { "isRelevant": boolean, "suggestion": "string", "produc
     // dormitorios/baños genéricos.
     if (body.action === 'analyzeWeeklyLooksPlaces') {
       const { imageData, mimeType, briefText, mirrorNeeded } = body.payload || {};
+      // Sin car window (sep 2026, bug real confirmado con imagen): esta
+      // receta SIEMPRE exige cuerpo completo visible (ver anchorOutfitLine
+      // en weeklyLooks/promptBuilder.ts, "head to toe" en todo shot) — una
+      // ventanilla de auto es demasiado chica para un reflejo de cuerpo
+      // completo creíble, y el modelo de imagen terminó "alejando"
+      // ópticamente a la persona de forma forzada/desproporcionada para que
+      // entrara en el marco. Reemplazada por superficies con espacio real
+      // para reflejar una figura completa.
       const mirrorInstruction = mirrorNeeded
-        ? `This must be a MIRROR SELFIE — she saw her reflection somewhere and took a photo of how she looked. Think beyond bedrooms/bathrooms: any real place with a mirror or reflective surface counts (an elevator, a store window/glass storefront, a building lobby, a mall corridor with glass, a car window, a gym mirror, a hallway mirror, a fitting room, a bathroom). Each place in the list must plausibly have a mirror or reflective glass surface.`
+        ? `This must be a MIRROR SELFIE — she saw her reflection somewhere and took a photo of how she looked. Think beyond bedrooms/bathrooms: any real place with a mirror or reflective surface LARGE ENOUGH to show her FULL BODY head to toe counts (an elevator, a store window/glass storefront, a building lobby, a mall corridor with glass, a gym mirror, a hallway or lobby mirror, a fitting room, a bathroom). Never a car window or any small/narrow reflective surface — those are too small to naturally show a full-body reflection without forcing an unrealistic distance or perspective. Each place in the list must plausibly have a mirror or reflective glass surface large enough for a full-body reflection.`
         : `This is a photo taken by someone else (or a timer) — no mirror needed. Think of real places where someone would naturally be photographed going about a normal week.`;
       const briefInstruction = briefText
         ? `The user described what this week was about: "${briefText}". Prioritize places that make sense for that — if it mentions work, dinner, a trip, an event, etc., reflect that in the places you choose, without inventing details not implied by it.`
