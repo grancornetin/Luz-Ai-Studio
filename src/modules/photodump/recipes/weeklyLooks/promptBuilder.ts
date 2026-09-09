@@ -54,25 +54,29 @@ function isReflectiveGlassPlace(coherentPlaces?: string): boolean {
   return REFLECTIVE_GLASS_KEYWORDS.some(k => lower.includes(k)) && !MIRROR_KEYWORDS.some(k => lower.includes(k));
 }
 
-// Geometría de reflejo en vidrio real — reescrita DOS veces a partir de
+// Geometría de reflejo en vidrio real — reescrita TRES veces a partir de
 // evidencia real:
 //  v1 ("faintly through and behind her, softer"): demasiado tímida, no
 //     mostraba la superposición real de doble exposición ni el texto
 //     espejado (fotos reales que el usuario mandó lo mostraban con fuerza).
-//  v2 (esta versión): v1 fijaba "she is standing OUTSIDE on the
-//     sidewalk/street" como si TODO lugar de vidrio fuera una vidriera de
-//     calle — bug real confirmado: un lugar real generado fue "office
-//     building lobby glass wall" (vidrio INTERIOR), y la instrucción de
-//     "parada afuera en la calle" contradijo directamente ese lugar. El
-//     modelo intentó conciliar ambas cosas y el resultado fue un espacio
-//     mezclado y confuso (interior nítido y sólido en vez de reflejado). La
-//     geometría del fenómeno (doble transparencia, texto espejado, marco de
-//     vidrio visible) es la MISMA esté ella parada en la calle o en un
-//     pasillo interior — lo único que cambia es qué hay "del otro lado del
-//     vidrio", y eso ya lo define coherentPlaces. Esta versión no asume
-//     ninguna posición absoluta.
+//  v2: v1 fijaba "she is standing OUTSIDE on the sidewalk/street" como si
+//     TODO lugar de vidrio fuera una vidriera de calle — bug real
+//     confirmado: un lugar real generado fue "office building lobby glass
+//     wall" (vidrio INTERIOR), contradiciendo la posición fija. Reescrita
+//     para no asumir ninguna posición absoluta (calle vs. interior) — la
+//     geometría del fenómeno es la misma, solo cambia qué hay del otro
+//     lado del vidrio.
+//  v3 (esta versión): v2 resolvió bien la geometría (texto espejado,
+//     transparencia entre planos, marco visible) pero dejó pasar la
+//     CALIDAD DE LUZ del sujeto reflejado — bug real confirmado con
+//     captura real: texto perfecto, marco visible, interior correctamente
+//     opaco de fondo, pero ELLA se veía tan nítida y con tanto contraste/
+//     modelado de luz directa que se leía como si estuviera parada del
+//     lado de ADENTRO, no como su propio reflejo. Faltaba instruir cómo se
+//     ve ÓPTICAMENTE una persona reflejada en vidrio (nunca la misma
+//     nitidez/contraste que una foto directa) — agregado explícitamente.
 const REFLECTION_GEOMETRY_LINE =
-  'REFLECTION GEOMETRY: this is a real glass reflection, not a window view — she is standing in front of the glass surface described above (whichever side of it that place implies), and her reflection appears ON the glass. Two layers overlap with real see-through transparency: her reflected figure (and whatever is directly behind HER, on her own side of the glass) AND whatever is visible through the glass, on the OTHER side of it, bleed through each other simultaneously, like a double exposure — neither layer is simply "sharp foreground, blurry background"; both are semi-transparent where they overlap. Any text, signage, or lettering seen through the glass from the other side reads BACKWARDS/MIRRORED. The physical edge or frame of the glass (a storefront frame, a door edge, a window mullion, a wall corner) is visible somewhere in the shot, grounding it as a real pane of glass, not open air.';
+  'REFLECTION GEOMETRY: this is a real glass reflection, not a window view — she is standing in front of the glass surface described above (whichever side of it that place implies), and her reflection appears ON the glass. Two layers overlap with real see-through transparency: her reflected figure (and whatever is directly behind HER, on her own side of the glass) AND whatever is visible through the glass, on the OTHER side of it, bleed through each other simultaneously, like a double exposure — neither layer is simply "sharp foreground, blurry background"; both are semi-transparent where they overlap. Any text, signage, or lettering seen through the glass from the other side reads BACKWARDS/MIRRORED. The physical edge or frame of the glass (a storefront frame, a door edge, a window mullion, a wall corner) is visible somewhere in the shot, grounding it as a real pane of glass, not open air. HER REFLECTION ITSELF must look optically like a reflection, not a direct photo of her: slightly lower contrast and slightly desaturated compared to a normal photo, a faint soft glare/sheen across her figure from the glass surface, edges of her silhouette a touch softer than the sharpest details in the scene, and her lighting coming from HER OWN side of the glass (matching whatever ambient light exists where she is standing) — never lit as if a light source were placed directly in front of her face like a studio photo. If her reflection looks crisper, better-lit, or higher-contrast than the glass and what is seen through it, that is wrong — it should read as ON the glass, not standing behind it.';
 
 // Tono/situación de la selfie — el usuario señaló que fotos reales de este
 // tipo varían entre "de paso, espontánea" y "lugar de rutina/favorito,
