@@ -155,19 +155,22 @@ export function pickOneCandidate<T extends { itemId: string }>(
  * variationSpace genérico ya validado, nunca se bloquea por esto.
  *
  * Objetos ajenos sostenidos en la mano (sep 2026, bug real confirmado en
- * weeklyLooks): un candidato de "trabajo remoto" citó "mano derecha
- * sosteniendo una laptop pegada al costado del cuerpo", y esa laptop se
- * generó literalmente en una foto de calle sin ninguna oficina/escritorio
- * cerca — sin lógica alguna de por qué la traería consigo. Excluir SOLO por
- * keyword ("laptop", "bolso"...) es frágil (un bolso puede ser un accesorio
- * real válido) — en cambio se instruye explícitamente que el brazo/mano se
- * transfiere en su POSICIÓN pero cualquier objeto sostenido en ella se
- * ignora, dejando que el outfit/brief reales decidan qué sostiene (nada, el
- * celular del selfie, o un accesorio que sí viene de sus referencias).
+ * weeklyLooks, 2 rondas): un candidato de "trabajo remoto" citó "mano
+ * derecha sosteniendo una laptop", y otro citó "sosteniendo una copa de
+ * vino" — ambos objetos se generaron literalmente sin ninguna razón en la
+ * escena (laptop en plena calle, copa de vino en un ascensor de camino a
+ * ningún lado). Excluir SOLO por keyword ("laptop", "copa"...) es frágil
+ * (un bolso puede ser un accesorio real válido) — en cambio se instruye
+ * explícitamente que el brazo/mano se transfiere en su POSICIÓN pero
+ * cualquier objeto sostenido en ella se ignora. Primera versión de esta
+ * instrucción (solo funcionó para "laptop", no generalizó a "copa de
+ * vino"): la exclusión iba enterrada a mitad de un paréntesis largo, antes
+ * de la cita textual — reescrita como una frase corta y aislada, DESPUÉS de
+ * la cita, para que no compita por atención con el resto del texto.
  */
 export function buildPoseAttitudeLine(candidate: OutfitCheckPoseCandidate | null): string {
   if (!candidate) return '';
   const parts = [candidate.pose, candidate.gesture, candidate.gaze].filter(Boolean);
   if (parts.length === 0) return '';
-  return `REAL ATTITUDE REFERENCE (pose/gesture/gaze only — ignore any outfit, scene, or lighting implied by this description, those come from the brief and the outfit reference; if this description mentions an object held in a hand — a laptop, a cup, a bag, a notebook, etc. — ignore that specific object too, keep only the arm/hand POSITION, never invent a prop that has no reason to be in this scene): ${parts.join(' — ')}`;
+  return `REAL ATTITUDE REFERENCE (pose/gesture/gaze only — ignore any outfit, scene, or lighting implied by this description, those come from the brief and the outfit reference): ${parts.join(' — ')}\nIMPORTANT: if that description mentions ANY object held, carried, or resting in a hand — a laptop, a cup, a wine glass, a drink, a bag, a notebook, food, or anything else — do NOT include that object in the image. Transfer only the arm/hand POSITION from the description. Never invent a prop, drink, or object that has no reason to exist in this specific scene.`;
 }

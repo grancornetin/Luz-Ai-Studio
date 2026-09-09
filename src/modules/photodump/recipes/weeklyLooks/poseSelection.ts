@@ -43,6 +43,22 @@ const CAPTURE_STYLE_FILTER: Record<CaptureStyle, { shotTypes: string[]; captureS
 // weeklyFavoritesV2/index.ts).
 const candidatePoolCache = new Map<string, Awaited<ReturnType<typeof fetchOutfitCheckPoseCandidates>>>();
 
+// mirror_selfie citando una postura sentada/en el piso (sep 2026, bug real
+// confirmado): un candidato "sentada en el suelo, mano en la mejilla" se
+// citó para un shot de reflejo de vidrio de pie — el resultado mezcló una
+// pose de piso con un fondo de pie, sumando confusión a la geometría de
+// reflejo que ya venía forzada. shot_type 'mirror_selfie' no distingue
+// postura (de pie vs. sentada) — volumen real verificado: 9 de 115
+// candidatos son sentada/suelo/arrodillada, volumen bajo, se excluyen por
+// keyword en vez de filtrar del lado del endpoint (caso puntual de esta
+// receta, no vale la pena un modo de exclusión genérico todavía).
+const SEATED_POSE_KEYWORDS = ['sentad', 'suelo', 'piso', 'acostad', 'recostad', 'reclinad', 'arrodillad'];
+
+function isSeatedPose(candidate: { pose: string }): boolean {
+  const pose = candidate.pose.toLowerCase();
+  return SEATED_POSE_KEYWORDS.some(k => pose.includes(k));
+}
+
 async function getCandidatePool(captureStyle: CaptureStyle, seedKey: string) {
   const cacheKey = `${captureStyle}::${seedKey}`;
   const cached = candidatePoolCache.get(cacheKey);
@@ -53,7 +69,11 @@ async function getCandidatePool(captureStyle: CaptureStyle, seedKey: string) {
   // fiesta/grupo (companion_present=true) citó "mira hacia el grupo de
   // personas" y el modelo generó un tercero real en la foto. weeklyLooks es
   // siempre una sola persona en cuadro, nunca grupo.
-  const pool = await fetchOutfitCheckPoseCandidates(filter.shotTypes, seedKey, 10, filter.captureSignatures, true);
+  const rawPool = await fetchOutfitCheckPoseCandidates(filter.shotTypes, seedKey, 10, filter.captureSignatures, true);
+  const pool: typeof rawPool = {};
+  for (const [shotType, candidates] of Object.entries(rawPool)) {
+    pool[shotType] = candidates.filter(c => !isSeatedPose(c));
+  }
   candidatePoolCache.set(cacheKey, pool);
   return pool;
 }
