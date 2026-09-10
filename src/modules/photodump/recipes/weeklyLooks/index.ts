@@ -148,7 +148,19 @@ async function generateFromContract(
 ): Promise<{ imageUrl: string; prompt: string; refsCount: number; debug: WeeklyLooksShotDebug }> {
   const routed = routeReferences(contract, refs, sceneAnchorImageUrl);
   const { prompt: builtPrompt, negative } = buildShotPrompt(contract, anchor, config.captureStyle, config.placeMode);
-  const prompt = directorFinalPrompt ?? builtPrompt;
+  const basePromptForShot = directorFinalPrompt ?? builtPrompt;
+
+  // same_place, shot NO ancla: la última referencia de imagen es la foto ya
+  // generada del shot ancla — se pasa SOLO para fijar el lugar/fondo. Pero
+  // esa imagen también muestra el outfit del shot 1, y sin una instrucción
+  // explícita el modelo mezcla ese outfit con el de este look (bug real
+  // confirmado prueba 6 sep 2026: shot 2 con outfits mezclados; shot 3 en
+  // otro lugar porque el texto de continuidad era vago). Este bloque nombra
+  // qué ES cada referencia y qué ignorar de la del lugar.
+  const sceneVsOutfitLine = sceneAnchorImageUrl
+    ? `REFERENCE IMAGES — READ CAREFULLY: the LAST reference image is a photo of the EXACT SAME PLACE this shot happens in. Use it ONLY to copy the location: the same walls, floor, furniture, fixtures, architecture and lighting — this shot must look like it was taken in that identical spot, same angle of the room, nothing invented. IGNORE completely the outfit, clothes, shoes, pose, body position and framing shown in that place photo — those belong to a different day. The outfit for THIS shot comes exclusively from the OTHER reference images (the person and the garment references) and the pose comes from the text below. Do not blend the two outfits; do not carry any clothing item from the place photo into this shot.\n\n`
+    : '';
+  const prompt = `${sceneVsOutfitLine}${basePromptForShot}`;
   const preparedRefs = await prepareRefs(routed.orderedUrls);
 
   const imageUrl = await imageApiService.generateImage({

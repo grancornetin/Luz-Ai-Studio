@@ -121,6 +121,16 @@ esta sesión — nunca las reinterpretes ni las cambies):
   objeto en sí. Ya se confirmó en producción que dejar pasar esto genera
   props sin ninguna razón de estar en la escena (una laptop en plena
   calle, una copa de vino en un ascensor).
+- NUNCA UN ACCESORIO PUESTO QUE NO ESTÉ EN LAS REFERENCIAS DEL USUARIO:
+  lentes de sol, sombrero, gorra, bufanda, guantes, joyas puntuales,
+  accesorios de pelo que aparezcan en la descripción del candidato del
+  banco NO se heredan — van a discardedElements. El outfit y sus accesorios
+  salen SOLO de las imágenes de referencia del usuario. Bug real confirmado
+  sep 2026: shots salieron con lentes de sol en la cabeza y "ajustándose los
+  lentes" como gesto central, sin que ninguna referencia ni el brief los
+  pidiera — solo porque el candidato del banco los tenía. Si al describir la
+  pose necesitás una razón para la posición de la mano cerca de la cabeza,
+  usá "acomodándose el pelo", nunca un accesorio inventado.
 - NUNCA UN TERCERO REAL EN CUADRO: cada shot es de una sola persona. Si el
   candidato elegido tiene companionPresent=true o describe a otras
   personas relevantes en la escena (no solo paisaje humano de fondo muy
@@ -216,7 +226,13 @@ export function buildWeeklyLooksDirectorContract(
 look/outfit distinto pero TODOS ocurren en el mismo lugar físico exacto
 (mismo cuarto, mismo pasillo, mismo lugar de siempre) — distintos días,
 misma ubicación. El primer shot fija ese lugar; todos los demás deben
-marcar needsPlaceAnchor=true y describir el MISMO lugar, nunca uno nuevo.`
+marcar needsPlaceAnchor=true. NO describas el lugar en texto para ningún
+shot: el primer shot genera la foto real del lugar y esa foto se pasa como
+referencia visual a los demás. Tu trabajo para los shots 2+ es SOLO la pose
+y la actitud, con una línea de continuidad fija (ver reglas de redacción).
+El único riesgo real acá es que un shot 2+ se vaya a otro lugar por una
+línea de continuidad débil — la regla de redacción da la línea exacta a
+usar, no la cambies.`
       : `EL USUARIO YA ELIGIÓ "LUGAR VARIADO" — cada shot de este set es un look
 y un momento INDEPENDIENTE de los demás, en un lugar real DISTINTO cada
 vez, coherente con qué tan formal o casual es ESE outfit puntual y con el
@@ -253,7 +269,15 @@ ${sharedPlace
 el texto — la imagen ya generada del lugar se pasa como referencia visual
 directa a cada shot (fuera de este texto), y el generador la reusa sola.
 Tu texto describe SOLO pose, gesto, mirada y mecánica de cámara — cero
-menciones de escenario, mobiliario o iluminación ambiental.`
+menciones de escenario, mobiliario o iluminación ambiental.
+Para los shots que NO son el primero, empezá el finalPrompt con esta línea
+EXACTA y nada más de continuidad (no la parafrasees, no agregues "reuse the
+furniture described above" porque no describiste ninguna): "SAME LOCATION as
+the attached place reference image — same room, same walls, same floor, same
+furniture and fixtures, same angle of the space. Only the outfit and the
+pose change." Después seguí directo con la pose. NUNCA escribas una línea de
+continuidad que mencione mobiliario "ya descrito" — no describiste nada, el
+lugar entra por la imagen.`
   : `LUGAR VARIADO: SÍ describí el lugar de este shot en el texto — un lugar
 real, concreto y COTIDIANO (nunca "a real place" genérico), sacado de la
 vida real de la persona que describe el brief, no un escenario de sesión de
