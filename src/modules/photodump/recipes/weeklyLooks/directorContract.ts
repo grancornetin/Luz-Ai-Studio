@@ -69,6 +69,37 @@ esta sesión — nunca las reinterpretes ni las cambies):
   personas relevantes en la escena (no solo paisaje humano de fondo muy
   lejano e incidental), descartalo — no es válido para esta receta.
 
+ESTO NO ES UNA SESIÓN DE FOTOS — EL LUGAR ES LA VIDA REAL DE LA PERSONA, NO
+UN SET (bug real confirmado sep 2026: shots que salían como portada de
+revista aunque el prompt final tenía todas las reglas de "camera roll" —
+porque el LUGAR y la POSE elegidos ya eran de producción editorial, y ni la
+mejor regla de textura arregla eso):
+- El brief describe el CONTEXTO DE VIDA de la persona (su trabajo, su viaje,
+  su semana), NO el escenario literal de cada foto. Un brief "looks de
+  oficina" NO significa "todos los shots en la oficina" — significa la vida
+  de alguien que trabaja en oficina: el espejo del cuarto antes de salir,
+  el ascensor del edificio, el baño del piso, la vereda de camino al metro,
+  a veces sí la oficina. Elegí para cada shot un lugar REAL Y COTIDIANO de
+  esa vida, y VARIALO — el lugar literal del brief es UNO de los válidos,
+  nunca el default de todos.
+- PROHIBIDOS los lugares que existen "para sacar fotos": terraza lounge de
+  diseño, rooftop con vista panorámica, pasillo de arquitectura minimalista,
+  jardín con macetero escultórico, pared de color liso tipo estudio, café
+  de estética curada. Si el lugar suena a locación de campaña o a "spot
+  instagrameable", está mal. Lugares válidos: un dormitorio real y
+  desordenado, un pasillo de edificio común, un ascensor, un baño, una
+  cocina, la vereda de una calle cualquiera, un estacionamiento, la entrada
+  de un supermercado, una parada de bus — lugares donde la gente REALMENTE
+  está mientras hace su día, no adonde va a producir contenido.
+- PROHIBIDO el vocabulario de pose editorial al elegir el candidato o
+  describir su actitud: "elegante", "sofisticada", "poised", pie apoyado en
+  el borde de un macetero/escalón "de forma elegante", torso en contrapposto
+  marcado, barbilla en alto, una mano en la cadera "con actitud". La pose se
+  hereda CRUDA de una foto casual real del banco — la mecánica corporal tal
+  cual, sin embellecerla ni darle intención de modelo. Si al describir la
+  pose te salen adjetivos de revista, estás componiendo una sesión, no
+  heredando un momento real.
+
 SI EL SHOT ES UN MIRROR SELFIE — REGLAS DE LUGAR APRENDIDAS EN PRODUCCIÓN
 (bugs reales ya confirmados, no las repitas):
 - La superficie reflectante (espejo, vidriera, vidrio interior) debe ser
@@ -142,8 +173,21 @@ directa a cada shot (fuera de este texto), y el generador la reusa sola.
 Tu texto describe SOLO pose, gesto, mirada y mecánica de cámara — cero
 menciones de escenario, mobiliario o iluminación ambiental.`
   : `LUGAR VARIADO: SÍ describí el lugar de este shot en el texto — un lugar
-real y concreto (nunca "a real place" genérico), coherente con el brief y
-con el registro del outfit real de este look. Si el shot es un mirror
-selfie en vidrio, aplicá las reglas de geometría de reflejo de arriba.`}`,
+real, concreto y COTIDIANO (nunca "a real place" genérico), sacado de la
+vida real de la persona que describe el brief, no un escenario de sesión de
+fotos. Repasá la regla de arriba "ESTO NO ES UNA SESIÓN DE FOTOS": nada de
+terraza lounge, rooftop con vista, arquitectura minimalista, jardín de
+diseño, café de estética curada — sí un dormitorio real, un pasillo de
+edificio, un ascensor, un baño, una vereda cualquiera. El brief da el
+contexto de vida (qué hace la persona), no el set literal de esta foto —
+elegí un lugar donde esa persona realmente estaría, y que sea DISTINTO al
+de los otros shots del set. Si el shot es un mirror selfie en vidrio,
+aplicá las reglas de geometría de reflejo de arriba.
+Al describir la pose: trasladá la mecánica corporal cruda del candidato
+real, sin adjetivos de revista ("elegante", "poised", "con actitud") ni
+apoyos escenográficos inventados (pie en el borde de un macetero, mano
+"posada" sobre una baranda de diseño). Si ya describiste dónde está cada
+brazo/pierna con precisión física, PARÁ ahí — no le agregues intención de
+modelo.`}`,
   };
 }

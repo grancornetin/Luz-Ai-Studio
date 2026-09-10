@@ -1287,8 +1287,13 @@ const PhotodumpModule: React.FC = () => {
           : undefined,
         avatarBaseClothingUsedAsWeeklyItem: recipe === 'outfit_week' ? false : undefined,
         indexRoutingUsed: recipe === 'outfit_week' || recipe === 'outfit_haul',
-        // Weekly manifest debug (solo outfit_week) — construido una sola vez y reutilizado
-        ...(recipe === 'outfit_week' ? (() => {
+        // Weekly manifest debug (solo outfit_week, motor viejo weeklyFavoritesV2) —
+        // NO se construye para weeklyMode === 'looks': ese modo usa el motor
+        // weeklyLooks + Director, que no arma weeklyManifest. Sin este guard,
+        // buildWeeklyManifest corría igual y el debug mostraba
+        // weeklyManifest/weeklyCoverageMap aunque las imágenes las hubiera
+        // generado weeklyLooks — dato falso que hizo perder tiempo de diagnóstico.
+        ...(recipe === 'outfit_week' && refs.weeklyMode !== 'looks' ? (() => {
           try {
             const wm = buildWeeklyManifest(refs, count, basePrompt);
             return {
