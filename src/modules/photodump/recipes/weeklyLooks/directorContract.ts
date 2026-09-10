@@ -155,7 +155,28 @@ mejor regla de textura arregla eso):
   hereda CRUDA de una foto casual real del banco — la mecánica corporal tal
   cual, sin embellecerla ni darle intención de modelo. Si al describir la
   pose te salen adjetivos de revista, estás componiendo una sesión, no
-  heredando un momento real.`;
+  heredando un momento real.
+
+CADA SHOT NECESITA ACTITUD — NUNCA UNA POSE FOFA/DE FOTO DE DOCUMENTO (bug
+real confirmado sep 2026: en un set de 3, un shot salió de frente a cámara,
+piernas juntas y rectas, bolso agarrado con las dos manos frente al cuerpo,
+cara neutra — una pose rígida y sin vida que desentonaba con los otros 2 y
+que "nadie subiría"). Esto NO contradice la regla de no-editorial de arriba:
+- La línea entre "editorial" y "fofo" es real y hay un punto medio, que es
+  el que buscamos: una persona real parada con naturalidad SIEMPRE tiene el
+  peso en una pierna, el torso o la cadera con algo de giro/asimetría, los
+  brazos haciendo algo (uno en el bolsillo, ajustándose el pelo, el bolso
+  colgado de un hombro) — no está en posición de firmes.
+- PROHIBIDO: pose simétrica y frontal a cámara con las dos piernas juntas y
+  rectas; los dos brazos pegados al cuerpo o sosteniendo algo con las dos
+  manos frente al torso (lectura defensiva, "de escudo"); cara
+  completamente neutra sin ninguna micro-expresión.
+- El bolso, si aparece, va colgado del hombro o del antebrazo, o sostenido
+  con UNA mano al costado del cuerpo — nunca abrazado con las dos manos
+  adelante.
+- Descartá un candidato del banco cuya actitud sea plana aunque el encuadre
+  sea correcto — en un set de varios shots, la variedad de actitud entre
+  ellos es parte de lo que hace creíble que son días distintos.`;
 
 export function buildWeeklyLooksDirectorContract(
   placeMode:    PlaceMode,
@@ -248,6 +269,14 @@ real, sin adjetivos de revista ("elegante", "poised", "con actitud") ni
 apoyos escenográficos inventados (pie en el borde de un macetero, mano
 "posada" sobre una baranda de diseño). Si ya describiste dónde está cada
 brazo/pierna con precisión física, PARÁ ahí — no le agregues intención de
-modelo.`}`,
+modelo.
+PERO tampoco la dejes fofa: repasá la regla de arriba "CADA SHOT NECESITA
+ACTITUD". Toda persona real parada con naturalidad tiene el peso en una
+pierna y algo de asimetría en torso/cadera/brazos — nunca de firmes,
+frontal y simétrica. Prohibido: piernas juntas y rectas de frente a cámara;
+los dos brazos pegados al cuerpo o sosteniendo algo con las dos manos
+frente al torso; el bolso abrazado adelante (va al hombro o en una mano al
+costado); cara 100% neutra. Si el candidato del banco elegido tiene una
+actitud plana, elegí otro — no "arregles" una pose muerta con texto.`}`,
   };
 }
