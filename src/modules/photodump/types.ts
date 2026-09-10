@@ -1096,6 +1096,9 @@ export interface PhotodumpShotDebug {
 export interface PhotodumpDebugData {
   generatedAt:  string;
   recipe:       string;
+  // Diagnóstico weeklyLooks (sep 2026) — eco de lo que el motor recibió
+  weeklyModeReceived?:        'looks' | 'products' | null;
+  weeklyLooksConfigReceived?: import('./recipes/weeklyLooks/types').WeeklyLooksConfig | null;
   basePrompt:   string;
   inferredGender: string;
   inferredDestination?: InferredDestination;

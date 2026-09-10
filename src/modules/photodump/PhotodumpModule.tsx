@@ -1025,6 +1025,12 @@ const PhotodumpModule: React.FC = () => {
       const debugData: PhotodumpDebugData | undefined = isAdmin ? {
         generatedAt:         new Date().toISOString(),
         recipe,
+        // Diagnóstico weeklyLooks (sep 2026): eco directo de lo que el motor
+        // recibió — si el usuario eligió "Ropa" en la UI pero acá sale
+        // undefined/'products', el bug está entre el toggle y esta lectura
+        // (preset viejo que pisa refs, closure viejo), no en el motor.
+        weeklyModeReceived:       (refs as any).weeklyMode ?? null,
+        weeklyLooksConfigReceived: (refs as any).weeklyLooksConfig ?? null,
         basePrompt,
         inferredGender:      inferredGender,
         inferredDestination: inferredDest,
