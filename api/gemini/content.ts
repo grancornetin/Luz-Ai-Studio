@@ -526,7 +526,7 @@ async function runGenericDirector(
 // payload real más abajo.
 const GENERIC_DIRECTOR_CONTRACTS: Record<string, RecipeDirectorContract | ((payload: PhotodumpDirectorPayload) => RecipeDirectorContract)> = {
   outfit_check: OUTFIT_CHECK_DIRECTOR_CONTRACT,
-  weekly_looks: (payload: PhotodumpDirectorPayload) => buildWeeklyLooksDirectorContract(payload.placeMode ?? 'varied_place'),
+  weekly_looks: (payload: PhotodumpDirectorPayload) => buildWeeklyLooksDirectorContract(payload.placeMode ?? 'varied_place', payload.captureStyle ?? 'mirror_selfie'),
 };
 
 async function runPhotodumpDirector(

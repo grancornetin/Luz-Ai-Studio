@@ -39,18 +39,75 @@
  * usuario ya eligió.
  */
 import type { RecipeDirectorContract } from '../../director/generic/genericTypes';
-import type { PlaceMode } from './types';
+import type { PlaceMode, CaptureStyle } from './types';
+
+// ── Mecánica de cámara — DECIDIDA POR EL USUARIO, no inferible del brief ──
+// El pool de candidatos ya viene pre-filtrado por captureStyle antes de que
+// el Director lo vea (filterBankItemsForCaptureStyle en api/gemini/content.ts).
+// PERO el filtro de pool NO alcanza: el prompt genérico compartido
+// (buildGenericWritePrompt) tiene su propia lógica que, ante un plano posado
+// sin compañía visible, "resuelve como selfie de brazo extendido en su lugar"
+// — empuja ACTIVAMENTE hacia la selfie. Sin una regla dura en texto que diga
+// qué mecánica es y cuál está PROHIBIDA, el Director redacta mirror selfies
+// aunque el usuario haya elegido "foto de tercero" (bug real confirmado,
+// prueba 4 sep 2026: captureStyle 'third_person' llegó bien al backend y los
+// 3 shots salieron redactados como "taking a mirror selfie ... smartphone
+// visible in the reflection"). Por eso va también como bloque de texto.
+const CAMERA_MECHANICS_RULE: Record<CaptureStyle, string> = {
+  mirror_selfie: `MECÁNICA DE CÁMARA DE ESTE SET — MIRROR SELFIE (el usuario la eligió, es
+fija para TODOS los shots, nunca la cambies ni mezcles con otra):
+- Cada shot es un mirror selfie: la protagonista se fotografía a sí misma en
+  el reflejo de un espejo (o vidriera/vidrio grande). El celular SIEMPRE
+  visible en su mano levantada, en el reflejo, cerca del rostro — es lo que
+  explica físicamente por qué existe la imagen.
+- La superficie reflectante debe ser lo bastante GRANDE para reflejar un
+  cuerpo completo de forma natural — nunca un vidrio de auto ni una
+  superficie chica/angosta (fuerza al generador a alejar ópticamente a la
+  persona de forma desproporcionada para que "entre" en el marco).
+- Si el reflejo es en VIDRIO (vidriera, ventanal, pared de vidrio — no un
+  espejo tradicional): son DOS planos reales superpuestos con transparencia
+  — su reflejo Y lo que hay del otro lado del vidrio se ven simultáneamente,
+  ninguno completamente nítido sobre el otro. Cualquier texto/cartel visible
+  a través del vidrio desde el otro lado se lee AL REVÉS (espejado). El marco
+  físico del vidrio debe verse en algún punto del encuadre. Su propio reflejo
+  se ve con MENOS contraste/saturación que una foto directa, con un leve
+  brillo del vidrio superpuesto, iluminada por la luz de SU PROPIO lado del
+  vidrio — nunca con la nitidez/modelado de luz de una foto tomada de frente.`,
+
+  third_person: `MECÁNICA DE CÁMARA DE ESTE SET — FOTO TOMADA POR OTRA PERSONA (el usuario
+la eligió, es fija para TODOS los shots, nunca la cambies ni mezcles con
+otra):
+- Cada shot es una foto que le sacó ALGUIEN MÁS (una amiga, la pareja) o un
+  timer/trípode. Plano normal de tercero, a la altura del pecho o los ojos,
+  a un par de metros de distancia.
+- PROHIBIDO cualquier espejo o reflejo como mecanismo de la foto. Una foto
+  de tercero frente a un espejo mostraría el reflejo de quien la toma — es
+  un absurdo lógico. Si el candidato del banco elegido implica un espejo o
+  un mirror selfie, descartá esa parte: la pose se adapta a un plano de
+  tercero directo, sin ninguna superficie reflectante en el encuadre.
+- PROHIBIDO el celular en la mano de la protagonista o en cuadro — nadie se
+  fotografía a sí misma en este modo. Sus dos manos están libres (o
+  sosteniendo como mucho su propio bolso).
+- PROHIBIDO el ángulo/encuadre de selfie de brazo extendido (plano cerrado
+  al rostro, brazo saliendo hacia la cámara). Es siempre un plano abierto,
+  cuerpo completo, tomado desde la distancia a la que estaría parada otra
+  persona.
+- La mirada puede ir a cámara (le pidió a la amiga "sacame una") o perdida
+  hacia un lado con naturalidad — las dos son válidas para un plano de
+  tercero. Lo que NO va es la pose rígida de "posar para el lente" con
+  barbilla en alto y contrapposto marcado (eso lo vuelve editorial).`,
+};
 
 const SHARED_TONE_RULES = `La pregunta correcta para cada candidato es: "¿esta pose/actitud es
-plausible en un mirror-selfie rápido de alguien mostrando su outfit del
+plausible en una foto rápida y casual de alguien mostrando su outfit del
 día?", no "¿es la pose más dramática posible?".
 
 RESTRICCIONES DURAS DE ESTA RECETA (ya decididas por el usuario ANTES de
 esta sesión — nunca las reinterpretes ni las cambies):
 - El pool de candidatos que ves ya viene filtrado a UN SOLO estilo de
-  cámara (mirror selfie con celular visible, O foto tomada por un
-  tercero/timer sin celular en cuadro) — mantené esa misma mecánica en
-  TODOS los shots del set, nunca mezcles ambas.
+  cámara — mantené esa misma mecánica en TODOS los shots del set, nunca
+  mezcles. La regla de mecánica de cámara puntual de este set está más
+  abajo, es una restricción DURA.
 - CUERPO COMPLETO SIEMPRE: cada shot debe mostrar a la protagonista de
   pie, de cabeza a pies, calzado incluido — nunca un plano que la corte
   antes de los pies o que la muestre sentada/en cuclillas/recostada. Un
@@ -98,28 +155,14 @@ mejor regla de textura arregla eso):
   hereda CRUDA de una foto casual real del banco — la mecánica corporal tal
   cual, sin embellecerla ni darle intención de modelo. Si al describir la
   pose te salen adjetivos de revista, estás componiendo una sesión, no
-  heredando un momento real.
+  heredando un momento real.`;
 
-SI EL SHOT ES UN MIRROR SELFIE — REGLAS DE LUGAR APRENDIDAS EN PRODUCCIÓN
-(bugs reales ya confirmados, no las repitas):
-- La superficie reflectante (espejo, vidriera, vidrio interior) debe ser
-  lo bastante GRANDE para reflejar un cuerpo completo de forma natural —
-  nunca un vidrio de auto ni ninguna superficie chica/angosta: eso fuerza
-  al generador a alejar ópticamente a la persona de forma desproporcionada
-  para que "entre" en el marco.
-- Si el reflejo es en VIDRIO (vidriera, ventanal, pared de vidrio — no un
-  espejo tradicional): son DOS planos reales superpuestos con
-  transparencia — su reflejo Y lo que hay del otro lado del vidrio se ven
-  simultáneamente, ninguno completamente nítido sobre el otro. Cualquier
-  texto/cartel visible a través del vidrio desde el otro lado se lee AL
-  REVÉS (espejado). El marco físico del vidrio debe verse en algún punto
-  del encuadre. Su propio reflejo debe verse con MENOS contraste/
-  saturación que una foto directa, con un leve brillo del vidrio
-  superpuesto, iluminada por la luz de SU PROPIO lado del vidrio — nunca
-  con la nitidez/modelado de luz de una foto tomada de frente.`;
-
-export function buildWeeklyLooksDirectorContract(placeMode: PlaceMode): RecipeDirectorContract {
+export function buildWeeklyLooksDirectorContract(
+  placeMode:    PlaceMode,
+  captureStyle: CaptureStyle,
+): RecipeDirectorContract {
   const sharedPlace = placeMode === 'same_place';
+  const isMirror = captureStyle === 'mirror_selfie';
 
   return {
     recipeId: 'weekly_looks',
@@ -142,7 +185,7 @@ export function buildWeeklyLooksDirectorContract(placeMode: PlaceMode): RecipeDi
   — es la selfie rápida de "ya estoy lista, así me veía hoy", no una
   sesión con intención de generar contenido.`,
 
-    toneRulesText: SHARED_TONE_RULES,
+    toneRulesText: `${CAMERA_MECHANICS_RULE[captureStyle]}\n\n${SHARED_TONE_RULES}`,
 
     usesSharedPlaceAnchor: sharedPlace,
     placeAnchorLabel: 'lugar',
@@ -166,6 +209,24 @@ siquiera como base: el outfit real de este shot puede ser completamente
 distinto en formalidad al del candidato citado (solo se hereda pose/
 gesto/mecánica de cámara, nunca outfit).
 
+MECÁNICA DE CÁMARA — RESTRICCIÓN DURA DE ESTE SET (el usuario la eligió,
+no la cambies aunque el candidato del banco implique otra cosa):
+${isMirror
+  ? `Todos los shots son MIRROR SELFIE: el celular SIEMPRE visible en la mano
+levantada de la protagonista, en el reflejo, cerca del rostro. Hay un
+espejo (o vidrio/vidriera grande) real en el encuadre. Nunca redactes este
+shot como una foto tomada por otra persona.`
+  : `Todos los shots son FOTO TOMADA POR OTRA PERSONA (amiga/pareja) o
+timer/trípode. PROHIBIDO: cualquier espejo o reflejo como mecanismo de la
+foto (una foto de tercero frente a un espejo mostraría a quien la toma —
+absurdo lógico); el celular en la mano de la protagonista o en cuadro; el
+ángulo/encuadre de selfie de brazo extendido. Es siempre un plano abierto,
+cuerpo completo, desde la distancia a la que estaría parada otra persona,
+con las dos manos de la protagonista libres. Si el candidato del banco
+elegido implica un espejo/selfie, adaptá SOLO la mecánica corporal de la
+pose a un plano de tercero directo — descartá el espejo, el celular y el
+ángulo de selfie.`}
+
 ${sharedPlace
   ? `MISMO LUGAR PARA TODO EL SET: nunca describas ni inventes el lugar/fondo en
 el texto — la imagen ya generada del lugar se pasa como referencia visual
@@ -181,8 +242,7 @@ diseño, café de estética curada — sí un dormitorio real, un pasillo de
 edificio, un ascensor, un baño, una vereda cualquiera. El brief da el
 contexto de vida (qué hace la persona), no el set literal de esta foto —
 elegí un lugar donde esa persona realmente estaría, y que sea DISTINTO al
-de los otros shots del set. Si el shot es un mirror selfie en vidrio,
-aplicá las reglas de geometría de reflejo de arriba.
+de los otros shots del set.${isMirror ? ' Si el shot es un mirror selfie en vidrio, aplicá las reglas de geometría de reflejo de arriba.' : ''}
 Al describir la pose: trasladá la mecánica corporal cruda del candidato
 real, sin adjetivos de revista ("elegante", "poised", "con actitud") ni
 apoyos escenográficos inventados (pie en el borde de un macetero, mano
