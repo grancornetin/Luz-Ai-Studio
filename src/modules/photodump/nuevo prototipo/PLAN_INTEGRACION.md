@@ -136,11 +136,29 @@ sección 2bis, que sí es compartido a propósito):
   mini-stack de miniaturas quedaba feo, mucho scroll vertical para llegar a
   las 7 recetas). En mobile (`<md`) se reemplaza por
   `RecipeCardCarouselMobile` — carrusel horizontal de 1 card a pantalla con
-  scroll-snap nativo + dots de navegación, sin librería. Desktop (`md+`)
-  conserva el grid de 2-3 columnas sin cambios. Este es el primer caso real
-  de scroll-snap + dots en el módulo — vale la pena que el patrón quede
-  prolijo acá porque el `ResultCarousel` compartido (sección 2bis) va a
-  reusar la misma técnica.
+  scroll-snap nativo + dots de navegación, sin librería. Este es el primer
+  caso real de scroll-snap + dots en el módulo — vale la pena que el patrón
+  quede prolijo acá porque el `ResultCarousel` compartido (sección 2bis) va
+  a reusar la misma técnica.
+
+  **Corrección de densidad — desktop Y mobile** (segundo round de feedback,
+  mismo día): en desktop las cards de 3 columnas + `aspect-[4/5]` (alto)
+  quedaban gigantes — "el scroll hasta el botón de continuar es
+  considerable aun en pc". **Principio general que aplica a partir de acá a
+  TODO el rediseño, no solo esta pantalla**: minimizar el scroll vertical
+  siempre, en pc y en mobile, buscando que los componentes y opciones
+  quepan en una sola vista cuando sea posible. Cambios concretos en esta
+  pantalla: `RecipeCard` bajó de `aspect-[4/5]` a `aspect-[4/3]` (más
+  apaisada), el mini-stack de miniaturas pasó de columna vertical a fila
+  horizontal compacta (`-space-x`, sin ganar altura), se sacó la
+  descripción larga del overlay (solo label — la descripción completa
+  queda para un tooltip futuro, ver Fase 5/UI final con hover), y el grid
+  de desktop subió de 2-3 a 4-5 columnas. También se eliminó el bloque
+  "Qué vas a necesitar" que quedaba después del grid — era 100% redundante
+  con el pie "necesitás" que ya muestra cada card, puro scroll extra sin
+  información nueva. El bloque de destino se compactó (menos padding, sin
+  subtítulo `hint`). Tener este principio presente en las Fases 2-4
+  siguientes, no solo como parche puntual de esta pantalla.
 - `SlotCard` — envoltorio visual del slot (icono en badge, badge
   requerido/recomendado/opcional, estado subido con check) — **NO
   reemplaza `ImageSlot`, lo envuelve**: tras auditar `ImageSlot.tsx` (340

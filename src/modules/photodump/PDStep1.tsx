@@ -97,23 +97,23 @@ const PDStep1: React.FC<PDStep1Props> = ({
   const isFree = recipe === 'free';
 
   return (
-    <div className="fade-in p-4 md:p-8">
+    <div className="fade-in p-4 md:p-6">
 
-      <div className="mb-7">
+      <div className="mb-4">
         <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Paso 1 · Tipo de contenido</div>
-        <h2 className="t-display text-[28px] md:text-[34px] text-slate-900 mt-2.5 leading-[1.05]">
-          ¿Qué historia<br /><span className="text-brand-600 italic normal-case">querés contar?</span>
+        <h2 className="t-display text-[22px] md:text-[26px] text-slate-900 mt-1.5 leading-[1.1]">
+          ¿Qué historia <span className="text-brand-600 italic normal-case">querés contar?</span>
         </h2>
-        <p className="text-sm text-slate-500 mt-2 leading-[1.55]">
-          Elige el tipo de historia y la guía se adaptará a lo que necesitas.
-        </p>
       </div>
 
       {/* Recetas — card de resultado real, imagen/gradiente protagonista.
           Mobile: carrusel horizontal de 1 card a pantalla + dots (2 columnas
           apretaba demasiado el mini-stack de miniaturas de cada card, ver
-          feedback real de producción). Desktop (md+): grid de 2-3 columnas,
-          sin carrusel — hay espacio de sobra para verlas todas a la vez. */}
+          feedback real de producción). Desktop (md+): grid de 4-5 columnas
+          con cards compactas (aspect-[4/3], no 4/5) — bajado de 3 columnas
+          tras feedback real: "en pc las tarjetas son muy grandes... el
+          scroll hasta el botón de continuar es considerable... prioricemos
+          siempre mantener el scroll vertical en lo mínimo posible". */}
       <RecipeCardCarouselMobile
         recipes={REGULAR_RECIPES}
         recipe={recipe}
@@ -122,7 +122,7 @@ const PDStep1: React.FC<PDStep1Props> = ({
         gradients={RECIPE_GRADIENTS}
         requiredSlotsLabel={requiredSlotsLabel}
       />
-      <div className="hidden md:grid grid-cols-2 lg:grid-cols-3 gap-3.5">
+      <div className="hidden md:grid grid-cols-4 xl:grid-cols-5 gap-2.5">
         {REGULAR_RECIPES.map(r => {
           const meta = RECIPE_META[r];
           return (
@@ -141,7 +141,7 @@ const PDStep1: React.FC<PDStep1Props> = ({
       </div>
 
       {/* Separador antes de Modo libre */}
-      <div className="flex items-center gap-3 my-5">
+      <div className="flex items-center gap-3 my-3">
         <div className="flex-1 h-px bg-slate-200" />
         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">o</span>
         <div className="flex-1 h-px bg-slate-200" />
@@ -151,7 +151,7 @@ const PDStep1: React.FC<PDStep1Props> = ({
           Ancho completo en mobile (grid de 2 la dejaría chica con espacio
           vacío al lado), tamaño de grid normal en desktop.
           Accent violeta: es información real (camino distinto), no decoración. */}
-      <div className="max-w-[220px] md:max-w-none md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-3.5">
+      <div className="max-w-[220px] md:max-w-none md:grid md:grid-cols-4 xl:grid-cols-5 md:gap-2.5">
         <RecipeCard
           icon={RECIPE_ICONS['free']}
           label={RECIPE_META['free'].label}
@@ -164,11 +164,11 @@ const PDStep1: React.FC<PDStep1Props> = ({
       </div>
 
       {/* ── Destino de publicación ───────────────────────────────── */}
-      <div className="mt-8">
-        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-3">
+      <div className="mt-5">
+        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-2">
           ¿Dónde vas a publicar?
         </label>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           {(Object.keys(DESTINO_META) as PhotodumpDestino[]).map(d => {
             const meta = DESTINO_META[d];
             const sel  = destino === d;
@@ -177,23 +177,22 @@ const PDStep1: React.FC<PDStep1Props> = ({
                 key={d}
                 type="button"
                 onClick={() => onDestino(d)}
-                className={`flex items-center gap-3 p-3 rounded-2xl border text-left transition-all ${
+                className={`flex items-center gap-2.5 py-2 px-2.5 rounded-xl border text-left transition-all ${
                   sel
                     ? 'border-2 border-brand-600 bg-brand-50'
                     : 'border border-slate-200 bg-white hover:border-slate-300'
                 }`}
               >
-                <span className="text-lg flex-shrink-0">{meta.icon}</span>
+                <span className="text-base flex-shrink-0">{meta.icon}</span>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-[12px] font-bold truncate ${sel ? 'text-brand-900' : 'text-slate-800'}`}>
+                  <p className={`text-[11px] font-bold truncate ${sel ? 'text-brand-900' : 'text-slate-800'}`}>
                     {meta.label}
                   </p>
-                  <p className="text-[10px] text-slate-500 mt-0.5 truncate">{meta.hint}</p>
                 </div>
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
+                <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${
                   sel ? 'bg-brand-600 text-white' : 'border-2 border-slate-200'
                 }`}>
-                  {sel && <Check size={10} strokeWidth={3} />}
+                  {sel && <Check size={9} strokeWidth={3} />}
                 </div>
               </button>
             );
@@ -201,32 +200,12 @@ const PDStep1: React.FC<PDStep1Props> = ({
         </div>
       </div>
 
-      {/* Tip contextual según receta */}
-      {recipe !== 'free' ? (
-        <div className="mt-5 bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            Qué vas a necesitar
-          </p>
-          <div className="flex flex-wrap gap-x-5 gap-y-1.5">
-            {(Object.entries(RECIPE_META[recipe].refs) as [string, string][])
-              .filter(([, v]) => v !== 'none')
-              .map(([key, req]) => (
-                <div key={key} className="flex items-center gap-2">
-                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                    req === 'required' ? 'bg-brand-500' : 'bg-slate-300'
-                  }`} />
-                  <span className="text-[11px] text-slate-600 capitalize">{key}</span>
-                  <span className={`text-[10px] font-bold ${
-                    req === 'required' ? 'text-brand-500' : 'text-slate-400'
-                  }`}>
-                    {req === 'required' ? 'Necesario' : 'Recomendado'}
-                  </span>
-                </div>
-              ))}
-          </div>
-        </div>
-      ) : (
-        <div className="mt-5 bg-violet-50 border border-violet-100 rounded-2xl p-4">
+      {/* Tip de modo libre — solo acá: para el resto de recetas esta info
+          ya la muestra el pie "necesitás" de cada RecipeCard, repetirla acá
+          abajo era vertical extra sin aportar nada nuevo (ver feedback de
+          scroll vertical arriba). */}
+      {recipe === 'free' && (
+        <div className="mt-4 bg-violet-50 border border-violet-100 rounded-2xl p-4">
           <p className="text-[12px] font-bold text-violet-900 mb-1">Modo avanzado</p>
           <p className="text-[11px] text-violet-700 leading-relaxed">
             Cada foto tiene su propia descripción y referencias. Puedes relacionar fotos para mantener la continuidad visual.

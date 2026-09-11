@@ -75,55 +75,54 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
       }`}
     >
       {/* ── Imagen/gradiente protagonista ─────────────────────────── */}
-      <div className={`relative aspect-[4/5] bg-gradient-to-br ${placeholderGradient} overflow-hidden`}>
+      <div className={`relative aspect-[4/3] bg-gradient-to-br ${placeholderGradient} overflow-hidden`}>
         {mainImg && (
           <img src={mainImg} alt={label} className="absolute inset-0 w-full h-full object-cover" />
         )}
 
         {/* Icono de la receta, esquina superior izquierda */}
-        <div className="absolute top-3 left-3 w-8 h-8 rounded-full bg-white/85 backdrop-blur-sm flex items-center justify-center text-slate-700 shadow-sm">
+        <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-white/85 backdrop-blur-sm flex items-center justify-center text-slate-700 shadow-sm">
           {icon}
         </div>
 
         {/* Check de selección, esquina superior derecha */}
-        <div className={`absolute top-3 right-3 w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+        <div className={`absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center transition-all ${
           selected ? `${ACCENT_BADGE[accent]} text-white` : 'bg-white/70 backdrop-blur-sm border border-white/60'
         }`}>
-          {selected && <Check size={12} strokeWidth={3} />}
+          {selected && <Check size={10} strokeWidth={3} />}
         </div>
 
-        {/* Mini-stack de miniaturas simulando el carrusel de resultados */}
-        <div className="absolute top-14 right-3 flex flex-col gap-1.5">
-          {(hasReal ? stackImgs : [0, 1]).map((img, i) => (
-            <div key={i} className="w-8 h-8 rounded-full ring-2 ring-white/80 overflow-hidden bg-white/30 backdrop-blur-sm">
+        {/* Mini-stack de miniaturas simulando el carrusel de resultados —
+            una fila horizontal chica en vez de columna apilada, para no
+            ganar altura (bug real: las cards ocupaban demasiado alto en
+            desktop, scroll vertical excesivo para llegar al botón
+            continuar, feedback directo del usuario sep 2026). */}
+        <div className="absolute bottom-2 right-2 flex items-center -space-x-1.5">
+          {(hasReal ? stackImgs : [0]).map((img, i) => (
+            <div key={i} className="w-5 h-5 rounded-full ring-2 ring-white/90 overflow-hidden bg-white/30 backdrop-blur-sm">
               {typeof img === 'string' && (
                 <img src={img} alt="" className="w-full h-full object-cover" />
               )}
             </div>
           ))}
-          {(hasReal ? extraCount > 0 : true) && (
-            <div className="w-8 h-8 rounded-full bg-white/85 backdrop-blur-sm ring-2 ring-white/80 flex items-center justify-center text-[10px] font-bold text-slate-700">
-              {hasReal ? `+${extraCount}` : '···'}
-            </div>
-          )}
+          <div className="w-5 h-5 rounded-full bg-white/85 backdrop-blur-sm ring-2 ring-white/90 flex items-center justify-center text-[8px] font-bold text-slate-700">
+            {hasReal ? `+${extraCount}` : '···'}
+          </div>
         </div>
 
         {/* Overlay de texto — degradado hacia abajo para legibilidad */}
-        <div className="absolute inset-x-0 bottom-0 p-3.5 pt-10 bg-gradient-to-t from-black/55 via-black/10 to-transparent">
-          <p className="text-[13px] font-bold text-white leading-snug drop-shadow-sm">
+        <div className="absolute inset-x-0 bottom-0 p-2.5 pt-7 bg-gradient-to-t from-black/60 via-black/15 to-transparent">
+          <p className="text-[12px] font-bold text-white leading-snug drop-shadow-sm">
             {label}
-          </p>
-          <p className="text-[11px] text-white/85 mt-0.5 leading-snug line-clamp-2 drop-shadow-sm">
-            {description}
           </p>
         </div>
       </div>
 
       {/* ── Pie: "necesitás" ───────────────────────────────────────── */}
       {need && (
-        <div className="px-3.5 py-2.5 bg-white flex items-center gap-1.5">
+        <div className="px-2.5 py-1.5 bg-white flex items-center gap-1.5">
           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${selected ? ACCENT_BADGE[accent] : 'bg-slate-300'}`} />
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.04em] truncate">
+          <span className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.02em] truncate">
             {need}
           </span>
         </div>
