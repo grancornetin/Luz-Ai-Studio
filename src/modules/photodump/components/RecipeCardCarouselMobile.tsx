@@ -34,12 +34,14 @@ interface RecipeCardCarouselMobileProps {
   gradients: Partial<Record<PhotodumpRecipe, string>>;
   /** Accent por receta — ej. modo libre usa 'violet' para diferenciarse (información real, no decoración). Default 'brand'. */
   accents?: Partial<Record<PhotodumpRecipe, RecipeCardAccent>>;
+  /** Imágenes reales de la biblioteca del usuario, agrupadas por receta — reemplaza el gradiente placeholder cuando existen (ver PDStep1.tsx). */
+  previews?: Partial<Record<PhotodumpRecipe, string[]>>;
   /** Alto de cada card — clase Tailwind, ej. "h-[52vh]". El caller controla esto porque depende de cuánto más contenido va debajo (título, dots, separador). */
   cardHeightClass: string;
 }
 
 export const RecipeCardCarouselMobile: React.FC<RecipeCardCarouselMobileProps> = ({
-  recipes, recipe, onRecipe, icons, gradients, accents, cardHeightClass,
+  recipes, recipe, onRecipe, icons, gradients, accents, previews, cardHeightClass,
 }) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(() => Math.max(0, recipes.indexOf(recipe)));
@@ -87,6 +89,7 @@ export const RecipeCardCarouselMobile: React.FC<RecipeCardCarouselMobileProps> =
                 selected={recipe === r}
                 onSelect={() => { onRecipe(r); setActiveIndex(i); }}
                 placeholderGradient={gradients[r] ?? 'from-slate-200 to-slate-300'}
+                previewImages={previews?.[r]}
                 accent={accents?.[r] ?? 'brand'}
                 variant="fullscreen"
               />

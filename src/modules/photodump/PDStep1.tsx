@@ -20,6 +20,13 @@
  * destino queda con su valor por default ('feed') hasta que la Fase 2 del
  * plan lo reincorpore como control real en el paso 2 — PDStep1 ya no lo
  * recibe ni lo usa.
+ *
+ * v5 — previews reales (sep 2026): las cards ya no dependen solo del
+ * gradiente placeholder. PhotodumpModule.tsx arma `previews` agrupando la
+ * biblioteca real del usuario (`sets`, ya cargada al montar el módulo) por
+ * receta y pasa las imageUrl más recientes de cada una. RecipeCard hace el
+ * resto (usa la imagen real si existe, si no cae al gradiente) — cero
+ * cambios de estructura, solo la prop que ya estaba prevista.
  */
 import React from 'react';
 import {
@@ -71,6 +78,8 @@ const RECIPE_GRADIENTS: Partial<Record<PhotodumpRecipe, string>> = {
 interface PDStep1Props {
   recipe:    PhotodumpRecipe;
   onRecipe:  (r: PhotodumpRecipe) => void;
+  /** Imágenes reales de sets ya generados por el usuario, agrupadas por receta — reemplazan el gradiente placeholder cuando existen (PhotodumpModule.tsx las arma desde `sets`, su biblioteca real). */
+  previews?: Partial<Record<PhotodumpRecipe, string[]>>;
 }
 
 const RECIPES = Object.keys(RECIPE_META) as PhotodumpRecipe[];
@@ -104,7 +113,7 @@ function requiredSlotsLabel(refs: RecipeRefConfig): string {
 }
 
 const PDStep1: React.FC<PDStep1Props> = ({
-  recipe, onRecipe,
+  recipe, onRecipe, previews,
 }) => {
   return (
     <div className="fade-in p-3 md:p-6 md:h-auto flex flex-col">
@@ -132,6 +141,7 @@ const PDStep1: React.FC<PDStep1Props> = ({
         icons={RECIPE_ICONS}
         gradients={RECIPE_GRADIENTS}
         accents={{ free: 'violet' }}
+        previews={previews}
         cardHeightClass="h-[65dvh] min-h-[380px] max-h-[560px]"
       />
       <div className="hidden md:grid grid-cols-4 xl:grid-cols-5 gap-2.5">
@@ -147,6 +157,7 @@ const PDStep1: React.FC<PDStep1Props> = ({
               selected={recipe === r}
               onSelect={() => onRecipe(r)}
               placeholderGradient={RECIPE_GRADIENTS[r] ?? 'from-slate-200 to-slate-300'}
+              previewImages={previews?.[r]}
               accent={r === 'free' ? 'violet' : 'brand'}
             />
           );

@@ -530,6 +530,33 @@ documentó completo, con la causa raíz ya identificada en el código real,
 en `PROMPT_REDISENO_SHELL_PWA.md` (raíz del repo) para el agente que tome
 el rediseño del shell general. No se toca en este plan.
 
+## 8. Previews reales de la biblioteca reemplazan el gradiente placeholder (sep 2026)
+
+Mientras el trabajo de shell/PWA queda para otro agente (sección 7), se
+resolvió en paralelo el placeholder pendiente desde la sección de
+`RecipeCard` (ver comentario original en `components/RecipeCard.tsx`):
+cada card de receta en el paso 1 ahora muestra imágenes reales de sets ya
+generados por el usuario, en vez del gradiente, cuando existen.
+
+**Cómo funciona:** `PhotodumpModule.tsx` ya cargaba toda la biblioteca del
+usuario al montar el módulo (`sets`, vía `photodumpStorage.list()` en
+`loadSets()`). Se agregó un `useMemo` (`previewsByRecipe`) que agrupa
+`sets` por `PhotodumpSet.recipe`, ordena por `createdAt` descendente y
+toma hasta 3 `imageUrl` por receta — se pasa como prop `previews` a
+`PDStep1` → `RecipeCardCarouselMobile`/`RecipeCard` (grid desktop), que ya
+tenían la prop `previewImages` prevista desde que se construyeron (no fue
+necesario cambiar su estructura, solo conectar el dato real). Sets legado
+sin `recipe` (campo opcional, ver `types.ts`) no aportan a ningún grupo —
+esas recetas siguen con el gradiente hasta que el usuario genere un set
+nuevo con esa receta.
+
+**Resultado:** en cuanto el usuario tiene al menos un set generado con una
+receta dada, esa card pasa a mostrar la imagen real (protagonista + hasta
+2 en el mini-stack) automáticamente, sin acción manual — no hace falta que
+el usuario "traiga" nada, es la misma biblioteca que ya ve en la pestaña
+Biblioteca. Recetas sin sets generados todavía siguen con su gradiente
+distintivo.
+
 ---
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>

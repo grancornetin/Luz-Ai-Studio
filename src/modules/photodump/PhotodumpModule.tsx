@@ -4,7 +4,9 @@
  * Modo recetas: 2 pasos → generación batch → resultados
  * Modo libre:   2 pasos → generación por escena individual → resultados
  */
-import React, { useState, useEffect, useRef } from 'react';
+import React, {
+  useState, useEffect, useRef, useMemo,
+} from 'react';
 import { ResultCard } from '../../components/shared/ResultCard';
 import { ResultLibraryGrid } from '../../components/shared/ResultLibraryGrid';
 import {
@@ -296,6 +298,26 @@ const PhotodumpModule: React.FC = () => {
     setLoadingSets(false);
   };
   useEffect(() => { loadSets(); }, []);
+
+  // Previews reales por receta para las cards del paso 1 (sep 2026): de la
+  // biblioteca ya cargada (`sets`), agrupa las imageUrl de sets con receta
+  // conocida — más recientes primero, hasta 3 por receta (RecipeCard usa
+  // como máximo 1 imagen protagonista + 2 en el mini-stack). Sets viejos
+  // sin `recipe` (legado, ver PhotodumpSet.recipe?) no aportan a ningún
+  // grupo, cae al gradiente placeholder igual que hoy.
+  const previewsByRecipe = useMemo(() => {
+    const byRecipe: Partial<Record<PhotodumpRecipe, string[]>> = {};
+    const sorted = [...sets].sort((a, b) => b.createdAt - a.createdAt);
+    for (const set of sorted) {
+      if (!set.recipe) continue;
+      const urls = set.images.map(img => img.imageUrl).filter(Boolean);
+      if (urls.length === 0) continue;
+      const existing = byRecipe[set.recipe] ?? [];
+      if (existing.length >= 3) continue;
+      byRecipe[set.recipe] = [...existing, ...urls].slice(0, 3);
+    }
+    return byRecipe;
+  }, [sets]);
 
   // ── Helpers UI ────────────────────────────────────────────
   const copyText = (text: string, key: string) => {
@@ -1734,6 +1756,7 @@ const PhotodumpModule: React.FC = () => {
               {step === 1 && (
                 <PDStep1
                   recipe={recipe}
+                  previews={previewsByRecipe}
                   // Auto-avance al elegir receta (sep 2026, pedido directo
                   // del usuario: "seria mejor tocar la receta y que
                   // automaticamente avance, es un flujo mas intuitivo y
