@@ -131,6 +131,16 @@ sección 2bis, que sí es compartido a propósito):
   franja debajo (más chica, ya no protagonista — las cards de receta ahora
   son el foco visual principal de la pantalla).
   **IMPLEMENTADO** (`photodump/components/RecipeCard.tsx` + `PDStep1.tsx`).
+  **Corrección mobile** (feedback real de producción tras el primer deploy):
+  el grid de 2 columnas apretaba demasiado la card en pantallas chicas (el
+  mini-stack de miniaturas quedaba feo, mucho scroll vertical para llegar a
+  las 7 recetas). En mobile (`<md`) se reemplaza por
+  `RecipeCardCarouselMobile` — carrusel horizontal de 1 card a pantalla con
+  scroll-snap nativo + dots de navegación, sin librería. Desktop (`md+`)
+  conserva el grid de 2-3 columnas sin cambios. Este es el primer caso real
+  de scroll-snap + dots en el módulo — vale la pena que el patrón quede
+  prolijo acá porque el `ResultCarousel` compartido (sección 2bis) va a
+  reusar la misma técnica.
 - `SlotCard` — envoltorio visual del slot (icono en badge, badge
   requerido/recomendado/opcional, estado subido con check) — **NO
   reemplaza `ImageSlot`, lo envuelve**: tras auditar `ImageSlot.tsx` (340

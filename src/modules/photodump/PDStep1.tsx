@@ -20,6 +20,7 @@ import {
   PhotodumpRecipe, PhotodumpDestino, RECIPE_META, DESTINO_META, RecipeRefConfig,
 } from './types';
 import { RecipeCard } from './components/RecipeCard';
+import { RecipeCardCarouselMobile } from './components/RecipeCardCarouselMobile';
 
 const RECIPE_ICONS: Partial<Record<PhotodumpRecipe, React.ReactNode>> = {
   unboxing:     <Package    size={16} strokeWidth={1.5} />,
@@ -108,10 +109,20 @@ const PDStep1: React.FC<PDStep1Props> = ({
         </p>
       </div>
 
-      {/* Recetas — grid de cards grandes, imagen de ejemplo protagonista.
-          2 columnas en mobile, 3 en desktop (pedido del usuario: "grid de
-          2-3 columnas, scroll si hace falta"). */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3.5">
+      {/* Recetas — card de resultado real, imagen/gradiente protagonista.
+          Mobile: carrusel horizontal de 1 card a pantalla + dots (2 columnas
+          apretaba demasiado el mini-stack de miniaturas de cada card, ver
+          feedback real de producción). Desktop (md+): grid de 2-3 columnas,
+          sin carrusel — hay espacio de sobra para verlas todas a la vez. */}
+      <RecipeCardCarouselMobile
+        recipes={REGULAR_RECIPES}
+        recipe={recipe}
+        onRecipe={onRecipe}
+        icons={RECIPE_ICONS}
+        gradients={RECIPE_GRADIENTS}
+        requiredSlotsLabel={requiredSlotsLabel}
+      />
+      <div className="hidden md:grid grid-cols-2 lg:grid-cols-3 gap-3.5">
         {REGULAR_RECIPES.map(r => {
           const meta = RECIPE_META[r];
           return (
@@ -136,8 +147,11 @@ const PDStep1: React.FC<PDStep1Props> = ({
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
-      {/* Modo libre — accent violeta, es información real (camino distinto), no decoración */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3.5">
+      {/* Modo libre — una sola card, no necesita carrusel en ningún tamaño.
+          Ancho completo en mobile (grid de 2 la dejaría chica con espacio
+          vacío al lado), tamaño de grid normal en desktop.
+          Accent violeta: es información real (camino distinto), no decoración. */}
+      <div className="max-w-[220px] md:max-w-none md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-3.5">
         <RecipeCard
           icon={RECIPE_ICONS['free']}
           label={RECIPE_META['free'].label}
