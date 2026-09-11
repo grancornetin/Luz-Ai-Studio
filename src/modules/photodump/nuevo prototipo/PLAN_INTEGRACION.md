@@ -453,6 +453,45 @@ específico de Photodump:
 - El flujo de generación (`buildPhotodumpSessionPlan` →
   `generatePhotodumpREF0` → `generatePhotodumpShot`) no se toca.
 
+## 5. Ajustes v4 — auto-avance + header compactado (sep 2026, mismo día)
+
+Dos pedidos del usuario que adelantaron parte de la Fase 2 y tocaron
+`PhotodumpModule.tsx` fuera del paso 1 puntual:
+
+**Auto-avance al elegir receta**: "sería mejor tocar la receta y que
+automáticamente avance, es un flujo más intuitivo y ágil". `PDStep1` ya no
+tiene footer con "Continuar" en el paso 1 — `onRecipe` en
+`PhotodumpModule.tsx` hace `setRecipe(r); setStep(2)` directo. Consecuencia
+necesaria: el selector de destino/formato se sacó del paso 1 por completo
+(no solo oculto en mobile como en el ajuste anterior) — si siguiera visible
+en desktop, auto-avanzar se lo cortaría a mitad de camino. `destino` queda
+con su valor por default (`'feed'`) hasta que la Fase 2 real lo reincorpore
+como control en el paso 2. `PDStep1Props` perdió `destino`/`onDestino`.
+`canStep1` (siempre `true`, nunca bloqueaba nada real) se eliminó junto con
+el `WizardFooter` del paso 1.
+
+**Header interno de Photodump compactado en mobile**: el usuario pidió "en
+móvil esto debe sentirse como una app nativa a pantalla completa, sin
+desbordarse y sin crecer verticalmente" — un estándar más estricto que
+"menos scroll", ver memoria `project_pwa_mobile_shell.md`. Al investigar
+el header grande de las capturas ("Historia en fotos / Crear / Biblioteca"),
+se confirmó que **no es un shell compartido de la app** — vive dentro de
+`PhotodumpModule.tsx` mismo (`<header>` propio, línea ~1667), así que sí
+estaba en el alcance de este plan. Se compactó: título corto en una línea
+en mobile (el subtítulo largo + tutorial quedan solo en desktop), tabs
+Crear/Biblioteca y badge de sesiones más chicos, `min-h-[640px]` del
+contenedor del wizard bajado a `min-h-0` en mobile (antes forzaba un
+mínimo de alto que no tenía sentido en pantallas chicas). Desktop no
+cambió en ninguno de los dos casos.
+
+**Lo que queda realmente fuera de alcance**: la barra de navegación del
+navegador/sistema operativo (URL bar, gestos de Safari/iOS — no es UI de
+esta app) y la eventual conversión real a PWA (manifest.json, service
+worker, instalabilidad) — eso sí sigue siendo el pendiente grande separado,
+ver `project_pwa_mobile_shell.md`.
+
+npx tsc --noEmit y npm run build verificados en verde tras estos cambios.
+
 ---
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>

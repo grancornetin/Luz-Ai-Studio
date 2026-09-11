@@ -1,6 +1,6 @@
 /**
  * PDStep1.tsx — Paso 1 del wizard Photodump Fase 4
- * Selector de receta · Cantidad de imágenes · Destino
+ * Selector de receta
  *
  * Rediseño (sep 2026, plan de integración del nuevo prototipo — ver
  * "nuevo prototipo/PLAN_INTEGRACION.md"): las cards de receta usan
@@ -10,21 +10,23 @@
  * selector se vea como una card de resultado real. Grid en desktop,
  * carrusel horizontal fullscreen en mobile.
  *
- * v3 mobile (sep 2026, feedback real sobre capturas de pantalla): destino/
- * formato y el bloque "necesitás" se ocultan en mobile (`hidden md:block`)
- * — quedan pendientes de moverse al paso 2 en la Fase 2 del plan (decisión
- * ya tomada, todavía no ejecutada). Mostrarlos acá en mobile forzaba scroll
- * vertical extra que compite con el carrusel de cards — "las selecciones de
- * formato que se pasarán al step 2 también quitan espacio o obligan a
- * scroll vertical". En desktop siguen visibles porque ahí sí entran sin
- * problema.
+ * v4 — auto-avance + destino removido (sep 2026, pedido directo del
+ * usuario: "seria mejor tocar la receta y que automaticamente avance, es
+ * un flujo mas intuitivo y agil"). El paso 1 ahora es SOLO elegir receta —
+ * tocar una card avanza directo al paso 2 (el auto-avance vive en
+ * PhotodumpModule.tsx: onRecipe hace setRecipe + setStep(2)). El selector
+ * de destino/formato que vivía acá se sacó por completo: si siguiera
+ * visible, auto-avanzar se lo cortaría a mitad de camino al usuario.
+ * destino queda con su valor por default ('feed') hasta que la Fase 2 del
+ * plan lo reincorpore como control real en el paso 2 — PDStep1 ya no lo
+ * recibe ni lo usa.
  */
 import React from 'react';
 import {
-  Package, Shirt, Sun, ShoppingBag, Clapperboard, Plane, Wand2, Check, Images, Sparkles, Martini,
+  Package, Shirt, Sun, ShoppingBag, Clapperboard, Plane, Wand2, Images, Sparkles, Martini,
 } from 'lucide-react';
 import {
-  PhotodumpRecipe, PhotodumpDestino, RECIPE_META, DESTINO_META, RecipeRefConfig,
+  PhotodumpRecipe, RECIPE_META, RecipeRefConfig,
 } from './types';
 import { RecipeCard } from './components/RecipeCard';
 import { RecipeCardCarouselMobile } from './components/RecipeCardCarouselMobile';
@@ -68,9 +70,7 @@ const RECIPE_GRADIENTS: Partial<Record<PhotodumpRecipe, string>> = {
 
 interface PDStep1Props {
   recipe:    PhotodumpRecipe;
-  destino:   PhotodumpDestino;
   onRecipe:  (r: PhotodumpRecipe) => void;
-  onDestino: (d: PhotodumpDestino) => void;
 }
 
 const RECIPES = Object.keys(RECIPE_META) as PhotodumpRecipe[];
@@ -99,7 +99,7 @@ function requiredSlotsLabel(refs: RecipeRefConfig): string {
 }
 
 const PDStep1: React.FC<PDStep1Props> = ({
-  recipe, destino, onRecipe, onDestino,
+  recipe, onRecipe,
 }) => {
   const isFree = recipe === 'free';
 
@@ -126,7 +126,7 @@ const PDStep1: React.FC<PDStep1Props> = ({
         onRecipe={onRecipe}
         icons={RECIPE_ICONS}
         gradients={RECIPE_GRADIENTS}
-        cardHeightClass="h-[58vh] min-h-[340px] max-h-[480px]"
+        cardHeightClass="h-[65dvh] min-h-[380px] max-h-[560px]"
       />
       <div className="hidden md:grid grid-cols-4 xl:grid-cols-5 gap-2.5">
         {REGULAR_RECIPES.map(r => {
@@ -157,7 +157,7 @@ const PDStep1: React.FC<PDStep1Props> = ({
           carrusel de arriba, ancho completo (no necesita swipe, es 1 sola).
           Desktop: tamaño de grid normal.
           Accent violeta: es información real (camino distinto), no decoración. */}
-      <div className="h-[58vh] min-h-[340px] max-h-[480px] md:h-auto md:grid md:grid-cols-4 xl:grid-cols-5 md:gap-2.5">
+      <div className="h-[65dvh] min-h-[380px] max-h-[560px] md:h-auto md:grid md:grid-cols-4 xl:grid-cols-5 md:gap-2.5">
         <RecipeCard
           icon={RECIPE_ICONS['free']}
           label={RECIPE_META['free'].label}
@@ -170,58 +170,6 @@ const PDStep1: React.FC<PDStep1Props> = ({
         />
       </div>
 
-      {/* ── Destino de publicación — SOLO DESKTOP por ahora ─────────
-          En mobile este bloque forzaba scroll vertical extra ("las
-          selecciones de formato que se pasarán al step 2 también quitan
-          espacio"). Pendiente real: moverlo al paso 2 para ambos tamaños
-          (Fase 2 del plan, decisión ya tomada, no ejecutada todavía) — acá
-          solo se oculta en mobile mientras tanto, la lógica/estado no
-          cambia. */}
-      <div className="hidden md:block mt-5">
-        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-2">
-          ¿Dónde vas a publicar?
-        </label>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          {(Object.keys(DESTINO_META) as PhotodumpDestino[]).map(d => {
-            const meta = DESTINO_META[d];
-            const sel  = destino === d;
-            return (
-              <button
-                key={d}
-                type="button"
-                onClick={() => onDestino(d)}
-                className={`flex items-center gap-2.5 py-2 px-2.5 rounded-xl border text-left transition-all ${
-                  sel
-                    ? 'border-2 border-brand-600 bg-brand-50'
-                    : 'border border-slate-200 bg-white hover:border-slate-300'
-                }`}
-              >
-                <span className="text-base flex-shrink-0">{meta.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-[11px] font-bold truncate ${sel ? 'text-brand-900' : 'text-slate-800'}`}>
-                    {meta.label}
-                  </p>
-                </div>
-                <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  sel ? 'bg-brand-600 text-white' : 'border-2 border-slate-200'
-                }`}>
-                  {sel && <Check size={9} strokeWidth={3} />}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Tip de modo libre — SOLO DESKTOP, mismo motivo que destino arriba. */}
-      {recipe === 'free' && (
-        <div className="hidden md:block mt-4 bg-violet-50 border border-violet-100 rounded-2xl p-4">
-          <p className="text-[12px] font-bold text-violet-900 mb-1">Modo avanzado</p>
-          <p className="text-[11px] text-violet-700 leading-relaxed">
-            Cada foto tiene su propia descripción y referencias. Puedes relacionar fotos para mantener la continuidad visual.
-          </p>
-        </div>
-      )}
     </div>
   );
 };

@@ -283,7 +283,9 @@ const PhotodumpModule: React.FC = () => {
   const creditsAfter    = Math.max(0, (credits?.available ?? 0) - imageCreditCost);
 
   // ── Validaciones por paso ─────────────────────────────────
-  const canStep1 = true; // siempre hay una receta seleccionada
+  // canStep1 se eliminó (sep 2026): el paso 1 ya no tiene footer con
+  // "Continuar" — auto-avanza al tocar una receta (siempre había una
+  // seleccionada de todas formas, así que nunca bloqueaba nada real).
   const canStep2Receta = basePrompt.trim().length >= 5;
   // En modo libre no hay un botón global de generar — cada escena se genera por separado
 
@@ -1662,35 +1664,43 @@ const PhotodumpModule: React.FC = () => {
     <>
       <div className="max-w-7xl mx-auto pb-20 animate-in fade-in duration-500">
 
-        {/* ── HEADER ──────────────────────────────────────── */}
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-5 px-1 mb-6 md:mb-8">
-          <div>
-            <h1 className="t-display text-3xl text-slate-900">
-              Historia <span className="text-brand-600">en fotos</span>
+        {/* ── HEADER ──────────────────────────────────────────────────
+            Compactado en mobile (sep 2026, pedido explícito: "en móvil
+            esto debe sentirse como una app nativa a pantalla completa, sin
+            desbordarse y sin crecer verticalmente"). Título/subtítulo
+            largo + tutorial solo en desktop (md:); en mobile queda un
+            título corto en una línea. Tabs y badge de sesiones más chicos
+            en mobile — misma función, menos alto. Desktop no cambia. */}
+        <header className="flex items-center justify-between gap-3 px-1 mb-3 md:mb-8 md:flex-row md:gap-5">
+          <div className="min-w-0">
+            <h1 className="t-display text-lg md:text-3xl text-slate-900 truncate">
+              <span className="md:hidden">Historia en fotos</span>
+              <span className="hidden md:inline">Historia <span className="text-brand-600">en fotos</span></span>
             </h1>
-            <div className="flex items-center gap-2 mt-2">
+            <div className="hidden md:flex items-center gap-2 mt-2">
               <p className="text-slate-500 font-medium italic text-xs md:text-sm">
                 Diario visual orgánico · Historia → Referencias → Set listo
               </p>
               <ModuleTutorial moduleId="photodumpMode" steps={TUTORIAL_CONFIGS.photodumpMode} />
             </div>
           </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-1.5 bg-brand-50 border border-brand-100 rounded-2xl px-3 py-2">
+          <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+            <div className="hidden sm:flex items-center gap-1.5 bg-brand-50 border border-brand-100 rounded-2xl px-3 py-2">
               <Sparkles className="w-3.5 h-3.5 text-brand-600" />
               <span className="text-xs font-black text-brand-700">{isAdmin ? '∞' : proCredits}</span>
               <span className="t-meta text-brand-500">sesiones</span>
             </div>
-            <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-slate-100 gap-1">
+            <div className="flex bg-white p-1 rounded-xl md:rounded-2xl shadow-sm border border-slate-100 gap-1">
               <button
                 onClick={() => { setActiveTab('create'); resetCreator(); window.scrollTo(0, 0); }}
-                className={`px-5 md:px-8 py-2 md:py-3 rounded-xl t-meta transition-colors duration-150 ${activeTab === 'create' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700'}`}>
+                className={`px-3 md:px-8 py-1.5 md:py-3 rounded-lg md:rounded-xl text-[11px] md:text-xs font-bold transition-colors duration-150 ${activeTab === 'create' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700'}`}>
                 Crear
               </button>
               <button
                 onClick={() => { setActiveTab('library'); window.scrollTo(0, 0); }}
-                className={`px-5 md:px-8 py-2 md:py-3 rounded-xl t-meta transition-colors duration-150 ${activeTab === 'library' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700'}`}>
-                Biblioteca ({sets.length})
+                className={`px-3 md:px-8 py-1.5 md:py-3 rounded-lg md:rounded-xl text-[11px] md:text-xs font-bold transition-colors duration-150 ${activeTab === 'library' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700'}`}>
+                <span className="md:hidden">Biblio.</span>
+                <span className="hidden md:inline">Biblioteca</span> ({sets.length})
               </button>
             </div>
           </div>
@@ -1703,9 +1713,12 @@ const PhotodumpModule: React.FC = () => {
           </div>
         )}
 
-        {/* ══════════════ WIZARD ══════════════ */}
+        {/* ══════════════ WIZARD ══════════════
+            min-h más bajo en mobile (antes 640px fijo en toda plataforma
+            — en pantallas chicas eso solo o forzaba scroll extra o dejaba
+            hueco vacío según el contenido del paso). Desktop no cambia. */}
         {hasProCredits && activeTab === 'create' && (
-          <div className="bg-white rounded-[28px] md:rounded-[36px] shadow-sm border border-slate-100 overflow-hidden flex flex-col min-h-[640px]">
+          <div className="bg-white rounded-[28px] md:rounded-[36px] shadow-sm border border-slate-100 overflow-hidden flex flex-col min-h-0 md:min-h-[640px]">
             <PhotodumpWizardStepper
               steps={wizardSteps}
               current={Math.min(step, wizardSteps.length) as any}
@@ -1721,9 +1734,16 @@ const PhotodumpModule: React.FC = () => {
               {step === 1 && (
                 <PDStep1
                   recipe={recipe}
-                  destino={destino}
-                  onRecipe={r => { setRecipe(r); }}
-                  onDestino={setDestino}
+                  // Auto-avance al elegir receta (sep 2026, pedido directo
+                  // del usuario: "seria mejor tocar la receta y que
+                  // automaticamente avance, es un flujo mas intuitivo y
+                  // agil"). Va junto con sacar el selector de destino del
+                  // paso 1 (ver PDStep1.tsx) — si el usuario pudiera seguir
+                  // cambiando destino ahí, auto-avanzar se lo cortaría a
+                  // mitad de camino. destino queda con su valor por
+                  // default ('feed') hasta que la Fase 2 del plan lo
+                  // reincorpore como control real en el paso 2.
+                  onRecipe={r => { setRecipe(r); setStep(2); }}
                 />
               )}
 
@@ -2142,14 +2162,8 @@ const PhotodumpModule: React.FC = () => {
             </div>
 
             {/* ── WIZARD FOOTER ─────────────────────────── */}
-            {/* Paso 1 siempre muestra footer */}
-            {step === 1 && (
-              <WizardFooter
-                onContinue={() => setStep(2)}
-                continueLabel="Continuar"
-                disabled={!canStep1}
-              />
-            )}
+            {/* Paso 1: sin footer — auto-avanza al tocar una receta (ver
+                PDStep1.tsx), el usuario nunca llega a ver este botón. */}
             {/* Paso 2 modo recetas */}
             {step === 2 && !isFree && (
               <WizardFooter
