@@ -1,14 +1,22 @@
 /**
  * PDStep1.tsx — Paso 1 del wizard Photodump Fase 4
  * Selector de receta · Cantidad de imágenes · Destino
+ *
+ * Rediseño (sep 2026, plan de integración del nuevo prototipo — ver
+ * "nuevo prototipo/PLAN_INTEGRACION.md"): las cards de receta ahora usan
+ * RecipeCard (photodump/components/), envoltorio visual nuevo con el mismo
+ * layout de icono+label+descripción+"necesitás" del mock, pero con la
+ * paleta/tipografía actuales de la app — sin cambiar ninguna lógica de
+ * selección ni el contrato de props de este componente.
  */
 import React from 'react';
 import {
   Package, Shirt, Sun, ShoppingBag, Clapperboard, Plane, Wand2, Check, Images, Sparkles, Martini,
 } from 'lucide-react';
 import {
-  PhotodumpRecipe, PhotodumpDestino, RECIPE_META, DESTINO_META,
+  PhotodumpRecipe, PhotodumpDestino, RECIPE_META, DESTINO_META, RecipeRefConfig,
 } from './types';
+import { RecipeCard } from './components/RecipeCard';
 
 const RECIPE_ICONS: Partial<Record<PhotodumpRecipe, React.ReactNode>> = {
   unboxing:     <Package    size={20} strokeWidth={1.5} />,
@@ -35,6 +43,28 @@ interface PDStep1Props {
 
 const RECIPES = Object.keys(RECIPE_META) as PhotodumpRecipe[];
 const REGULAR_RECIPES = RECIPES.filter(r => r !== 'free' && r !== 'outfit');
+
+// Etiqueta corta de "qué necesitás" para la card — mismo dato que ya existe
+// en RECIPE_META[r].refs (usado también en el tip contextual de abajo),
+// resumido a los slots 'required' en una sola línea (patrón del prototipo:
+// "NECESITAS: Tu foto · Look"). No inventa datos nuevos, solo los resume.
+const SLOT_LABELS: Record<keyof RecipeRefConfig, string> = {
+  avatar:         'Tu foto',
+  outfit:         'Look',
+  accesorios:     'Accesorios',
+  producto:       'Producto',
+  empaque:        'Packaging',
+  escena:         'Escena',
+  escena_prueba:  'Lugar de prueba',
+  escena_destino: 'Destino',
+};
+
+function requiredSlotsLabel(refs: RecipeRefConfig): string {
+  return (Object.entries(refs) as [keyof RecipeRefConfig, string][])
+    .filter(([, req]) => req === 'required')
+    .map(([key]) => SLOT_LABELS[key])
+    .join(' · ');
+}
 
 const PDStep1: React.FC<PDStep1Props> = ({
   recipe, destino, onRecipe, onDestino,
@@ -65,38 +95,17 @@ const PDStep1: React.FC<PDStep1Props> = ({
             </label>
             <div className="grid grid-cols-1 gap-2">
               {REGULAR_RECIPES.map(r => {
-                const sel = recipe === r;
                 const meta = RECIPE_META[r];
                 return (
-                  <button
+                  <RecipeCard
                     key={r}
-                    type="button"
-                    onClick={() => onRecipe(r)}
-                    className={`flex items-center gap-3.5 p-3.5 rounded-2xl border text-left transition-all ${
-                      sel
-                        ? 'border-2 border-brand-600 bg-brand-50'
-                        : 'border border-slate-200 bg-white hover:border-slate-300'
-                    }`}
-                  >
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                      sel ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-500'
-                    }`}>
-                      {RECIPE_ICONS[r]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-[13px] font-bold ${sel ? 'text-brand-900' : 'text-slate-800'}`}>
-                        {meta.label}
-                      </p>
-                      <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                        {meta.description}
-                      </p>
-                    </div>
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
-                      sel ? 'bg-brand-600 text-white' : 'border-2 border-slate-200'
-                    }`}>
-                      {sel && <Check size={10} strokeWidth={3} />}
-                    </div>
-                  </button>
+                    icon={RECIPE_ICONS[r]}
+                    label={meta.label}
+                    description={meta.description}
+                    need={requiredSlotsLabel(meta.refs)}
+                    selected={recipe === r}
+                    onSelect={() => onRecipe(r)}
+                  />
                 );
               })}
 
@@ -107,41 +116,15 @@ const PDStep1: React.FC<PDStep1Props> = ({
                 <div className="flex-1 h-px bg-slate-200" />
               </div>
 
-              {/* Modo libre */}
-              {(() => {
-                const sel = recipe === 'free';
-                const meta = RECIPE_META['free'];
-                return (
-                  <button
-                    type="button"
-                    onClick={() => onRecipe('free')}
-                    className={`flex items-center gap-3.5 p-3.5 rounded-2xl border text-left transition-all ${
-                      sel
-                        ? 'border-2 border-violet-600 bg-violet-50'
-                        : 'border border-slate-200 bg-white hover:border-violet-200'
-                    }`}
-                  >
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                      sel ? 'bg-violet-600 text-white' : 'bg-violet-50 text-violet-500'
-                    }`}>
-                      {RECIPE_ICONS['free']}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-[13px] font-bold ${sel ? 'text-violet-900' : 'text-slate-800'}`}>
-                        {meta.label}
-                      </p>
-                      <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                        {meta.description}
-                      </p>
-                    </div>
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
-                      sel ? 'bg-violet-600 text-white' : 'border-2 border-slate-200'
-                    }`}>
-                      {sel && <Check size={10} strokeWidth={3} />}
-                    </div>
-                  </button>
-                );
-              })()}
+              {/* Modo libre — accent violeta, es información real (camino distinto), no decoración */}
+              <RecipeCard
+                icon={RECIPE_ICONS['free']}
+                label={RECIPE_META['free'].label}
+                description={RECIPE_META['free'].description}
+                selected={isFree}
+                onSelect={() => onRecipe('free')}
+                accent="violet"
+              />
             </div>
           </div>
 

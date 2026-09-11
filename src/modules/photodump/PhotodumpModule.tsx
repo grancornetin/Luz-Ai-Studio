@@ -51,7 +51,7 @@ import {
 } from './photodumpDirectorService';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
-import { WizardStepper } from '../../components/shared/WizardStepper';
+import { PhotodumpWizardStepper } from './components/PhotodumpWizardStepper';
 import { WizardFooter } from '../../components/shared/WizardFooter';
 import { GenerationProgress as GenProgress, type ProgressStep } from '../../components/shared/GenerationProgress';
 import PDStep1 from './PDStep1';
@@ -1706,7 +1706,7 @@ const PhotodumpModule: React.FC = () => {
         {/* ══════════════ WIZARD ══════════════ */}
         {hasProCredits && activeTab === 'create' && (
           <div className="bg-white rounded-[28px] md:rounded-[36px] shadow-sm border border-slate-100 overflow-hidden flex flex-col min-h-[640px]">
-            <WizardStepper
+            <PhotodumpWizardStepper
               steps={wizardSteps}
               current={Math.min(step, wizardSteps.length) as any}
               onJump={(s) => {
