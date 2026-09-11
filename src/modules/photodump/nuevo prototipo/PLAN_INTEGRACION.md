@@ -108,10 +108,29 @@ Todo vive en `src/modules/photodump/components/` (namespace propio del
 módulo, no en `components/shared/` — salvo el carrusel de galería, ver
 sección 2bis, que sí es compartido a propósito):
 
-- `RecipeCard` — la card de receta con icono, label, descripción, "qué
-  necesitás", estado seleccionado (reemplaza el `<button>` inline de
-  `PDStep1.tsx`), coloreada con `brand-*` en vez del verde del mock.
-  **IMPLEMENTADO** (`photodump/components/RecipeCard.tsx`).
+- `RecipeCard` — **v2** (la v1 era una fila angosta icono+texto; el
+  usuario pidió explícitamente que se vea como una card de resultado real
+  — referencia: card de "Image Generation" con imagen protagonista + mini-
+  stack de miniaturas "+N" simulando un carrusel + texto en overlay sobre
+  gradiente). Ahora es: imagen/gradiente `aspect-[4/5]` protagonista, icono
+  de la receta en badge circular arriba-izquierda, check de selección
+  arriba-derecha, mini-stack de 2 miniaturas + contador debajo del check
+  (simulando el carrusel de resultados), label+descripción en overlay con
+  degradado inferior, y el "necesitás" en un pie separado debajo de la
+  imagen. Coloreada con `brand-*`/`violet-*` (accent), NO con el verde del
+  mock. **Imágenes reales: pendiente** — el usuario va a traer sets
+  generados reales por receta más adelante; por ahora cada receta tiene su
+  propio gradiente placeholder (`RECIPE_GRADIENTS` en `PDStep1.tsx`) para
+  poder diferenciarse visualmente sin tener la imagen todavía. El
+  componente ya soporta `previewImages?: string[]` — cuando lleguen las
+  imágenes reales, se pasan ahí y reemplazan el gradiente automáticamente,
+  sin tocar la estructura del componente.
+  Layout de `PDStep1.tsx` también cambió: pasó de 2 columnas (recetas en
+  lista angosta a la izquierda, destino a la derecha) a un grid de 2-3
+  columnas de cards grandes a ancho completo, con el destino movido a una
+  franja debajo (más chica, ya no protagonista — las cards de receta ahora
+  son el foco visual principal de la pantalla).
+  **IMPLEMENTADO** (`photodump/components/RecipeCard.tsx` + `PDStep1.tsx`).
 - `SlotCard` — envoltorio visual del slot (icono en badge, badge
   requerido/recomendado/opcional, estado subido con check) — **NO
   reemplaza `ImageSlot`, lo envuelve**: tras auditar `ImageSlot.tsx` (340
