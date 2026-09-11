@@ -7,10 +7,17 @@
  * RecipeCard (photodump/components/) — segunda versión del componente,
  * card visual con imagen/gradiente de ejemplo protagonista en vez de una
  * fila angosta con icono, pedido explícito del usuario para que el
- * selector se vea como una card de resultado real (ver historial del
- * componente). Grid de 2-3 columnas en vez de lista vertical de una
- * columna. Sin cambiar ninguna lógica de selección ni el contrato de props
- * de este componente respecto al resto de PhotodumpModule.tsx.
+ * selector se vea como una card de resultado real. Grid en desktop,
+ * carrusel horizontal fullscreen en mobile.
+ *
+ * v3 mobile (sep 2026, feedback real sobre capturas de pantalla): destino/
+ * formato y el bloque "necesitás" se ocultan en mobile (`hidden md:block`)
+ * — quedan pendientes de moverse al paso 2 en la Fase 2 del plan (decisión
+ * ya tomada, todavía no ejecutada). Mostrarlos acá en mobile forzaba scroll
+ * vertical extra que compite con el carrusel de cards — "las selecciones de
+ * formato que se pasarán al step 2 también quitan espacio o obligan a
+ * scroll vertical". En desktop siguen visibles porque ahí sí entran sin
+ * problema.
  */
 import React from 'react';
 import {
@@ -97,30 +104,29 @@ const PDStep1: React.FC<PDStep1Props> = ({
   const isFree = recipe === 'free';
 
   return (
-    <div className="fade-in p-4 md:p-6">
+    <div className="fade-in p-3 md:p-6 md:h-auto flex flex-col">
 
-      <div className="mb-4">
-        <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Paso 1 · Tipo de contenido</div>
-        <h2 className="t-display text-[22px] md:text-[26px] text-slate-900 mt-1.5 leading-[1.1]">
+      <div className="mb-3 md:mb-4 flex-shrink-0">
+        <div className="text-[9px] md:text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Paso 1 · Tipo de contenido</div>
+        <h2 className="t-display text-[19px] md:text-[26px] text-slate-900 mt-1 md:mt-1.5 leading-[1.1]">
           ¿Qué historia <span className="text-brand-600 italic normal-case">querés contar?</span>
         </h2>
       </div>
 
       {/* Recetas — card de resultado real, imagen/gradiente protagonista.
-          Mobile: carrusel horizontal de 1 card a pantalla + dots (2 columnas
-          apretaba demasiado el mini-stack de miniaturas de cada card, ver
-          feedback real de producción). Desktop (md+): grid de 4-5 columnas
-          con cards compactas (aspect-[4/3], no 4/5) — bajado de 3 columnas
-          tras feedback real: "en pc las tarjetas son muy grandes... el
-          scroll hasta el botón de continuar es considerable... prioricemos
-          siempre mantener el scroll vertical en lo mínimo posible". */}
+          Mobile: carrusel horizontal fullscreen (1 card ocupando casi toda
+          la altura disponible) + dots — aprovecha el formato vertical del
+          teléfono en vez de una card chica con blanco alrededor. Desktop
+          (md+): grid de 4-5 columnas con cards compactas apaisadas — bajado
+          de 3 columnas y de aspect-[4/5] a 4/3 tras feedback real de
+          scroll vertical excesivo. */}
       <RecipeCardCarouselMobile
         recipes={REGULAR_RECIPES}
         recipe={recipe}
         onRecipe={onRecipe}
         icons={RECIPE_ICONS}
         gradients={RECIPE_GRADIENTS}
-        requiredSlotsLabel={requiredSlotsLabel}
+        cardHeightClass="h-[58vh] min-h-[340px] max-h-[480px]"
       />
       <div className="hidden md:grid grid-cols-4 xl:grid-cols-5 gap-2.5">
         {REGULAR_RECIPES.map(r => {
@@ -147,11 +153,11 @@ const PDStep1: React.FC<PDStep1Props> = ({
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
-      {/* Modo libre — una sola card, no necesita carrusel en ningún tamaño.
-          Ancho completo en mobile (grid de 2 la dejaría chica con espacio
-          vacío al lado), tamaño de grid normal en desktop.
+      {/* Modo libre — una sola card. Mobile: mismo alto fullscreen que el
+          carrusel de arriba, ancho completo (no necesita swipe, es 1 sola).
+          Desktop: tamaño de grid normal.
           Accent violeta: es información real (camino distinto), no decoración. */}
-      <div className="max-w-[220px] md:max-w-none md:grid md:grid-cols-4 xl:grid-cols-5 md:gap-2.5">
+      <div className="h-[58vh] min-h-[340px] max-h-[480px] md:h-auto md:grid md:grid-cols-4 xl:grid-cols-5 md:gap-2.5">
         <RecipeCard
           icon={RECIPE_ICONS['free']}
           label={RECIPE_META['free'].label}
@@ -160,11 +166,18 @@ const PDStep1: React.FC<PDStep1Props> = ({
           onSelect={() => onRecipe('free')}
           accent="violet"
           placeholderGradient={RECIPE_GRADIENTS['free']!}
+          variant="grid"
         />
       </div>
 
-      {/* ── Destino de publicación ───────────────────────────────── */}
-      <div className="mt-5">
+      {/* ── Destino de publicación — SOLO DESKTOP por ahora ─────────
+          En mobile este bloque forzaba scroll vertical extra ("las
+          selecciones de formato que se pasarán al step 2 también quitan
+          espacio"). Pendiente real: moverlo al paso 2 para ambos tamaños
+          (Fase 2 del plan, decisión ya tomada, no ejecutada todavía) — acá
+          solo se oculta en mobile mientras tanto, la lógica/estado no
+          cambia. */}
+      <div className="hidden md:block mt-5">
         <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-2">
           ¿Dónde vas a publicar?
         </label>
@@ -200,12 +213,9 @@ const PDStep1: React.FC<PDStep1Props> = ({
         </div>
       </div>
 
-      {/* Tip de modo libre — solo acá: para el resto de recetas esta info
-          ya la muestra el pie "necesitás" de cada RecipeCard, repetirla acá
-          abajo era vertical extra sin aportar nada nuevo (ver feedback de
-          scroll vertical arriba). */}
+      {/* Tip de modo libre — SOLO DESKTOP, mismo motivo que destino arriba. */}
       {recipe === 'free' && (
-        <div className="mt-4 bg-violet-50 border border-violet-100 rounded-2xl p-4">
+        <div className="hidden md:block mt-4 bg-violet-50 border border-violet-100 rounded-2xl p-4">
           <p className="text-[12px] font-bold text-violet-900 mb-1">Modo avanzado</p>
           <p className="text-[11px] text-violet-700 leading-relaxed">
             Cada foto tiene su propia descripción y referencias. Puedes relacionar fotos para mantener la continuidad visual.

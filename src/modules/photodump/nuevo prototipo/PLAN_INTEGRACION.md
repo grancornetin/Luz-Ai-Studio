@@ -159,6 +159,38 @@ sección 2bis, que sí es compartido a propósito):
   información nueva. El bloque de destino se compactó (menos padding, sin
   subtítulo `hint`). Tener este principio presente en las Fases 2-4
   siguientes, no solo como parche puntual de esta pantalla.
+
+  **v3 mobile — cards de tamaño inconsistente + scroll aún alto** (tercer
+  round de feedback, mismo día, 3 capturas reales de un iPhone): causa raíz
+  del tamaño inconsistente entre cards del carrusel: el label dentro del
+  overlay no tenía altura fija (`line-clamp`), así que un label de 1 línea
+  vs. 2 líneas ("Haul de ropa" vs. "Unboxing / Producto") hacía que la card
+  entera midiera distinto pese al mismo `aspect-ratio` en la imagen — el pie
+  "necesitás" de abajo se corría según cuánto ocupara el label arriba. Fix:
+  `line-clamp-1`/`line-clamp-2` fijo según variante.
+  `RecipeCard` ganó un prop `variant: 'grid' | 'fullscreen'` — `'grid'`
+  (default) es la card compacta apaisada de desktop sin cambios; `'fullscreen'`
+  es nueva, para el carrusel mobile: ocupa casi toda la altura disponible
+  (`flex-1` dentro de un contenedor con altura fija en vh), oculta el pie
+  "necesitás", y sí muestra la descripción completa (en grid no entraba,
+  acá con más alto disponible sí). Pedido explícito del usuario: "las
+  tarjetas [deben] tener un formato más vertical de pantalla completa, para
+  aprovechar el formato móvil".
+  `RecipeCardCarouselMobile` recibe `cardHeightClass` (antes decidía su
+  propio alto) — el caller (`PDStep1.tsx`) controla el alto real porque
+  depende de cuánto más contenido hay debajo (dots, separador, modo libre).
+  En `PDStep1.tsx`: destino/formato y el tip de modo libre pasaron a
+  `hidden md:block` — en mobile competían por scroll vertical con el
+  carrusel ("las selecciones de formato que se pasarán al step 2 también
+  quitan espacio o obligan a scroll vertical"); quedan visibles solo en
+  desktop hasta que la Fase 2 los mueva de verdad al paso 2 para ambos
+  tamaños (decisión ya tomada, sección "Decisiones" punto 5, pendiente de
+  ejecutar). El wording de "obligan a scroll" apunta a un problema mayor
+  fuera de este componente — el header/shell general de la app también come
+  pantalla en mobile en TODOS los módulos, no solo acá; ese punto se separó
+  como pendiente aparte, ver memoria del proyecto
+  `project_pwa_mobile_shell.md` (potencial conversión a PWA), confirmado
+  explícitamente con el usuario que NO es parte del alcance de este plan.
 - `SlotCard` — envoltorio visual del slot (icono en badge, badge
   requerido/recomendado/opcional, estado subido con check) — **NO
   reemplaza `ImageSlot`, lo envuelve**: tras auditar `ImageSlot.tsx` (340

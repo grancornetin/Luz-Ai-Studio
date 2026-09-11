@@ -3,10 +3,18 @@
  *
  * Carrusel horizontal de RecipeCard, solo para mobile (el caller lo oculta
  * en md+ con className, este componente no sabe de breakpoints). Reemplaza
- * el grid de 2 columnas en pantallas chicas — feedback real de producción
- * (sep 2026): "en móvil se ven afectadas por el espacio pequeño... debería
- * verse solo una tarjeta y una barra de puntitos que permita hacer swipe
- * horizontal y menos scroll vertical".
+ * el grid de 2 columnas en pantallas chicas.
+ *
+ * v2 (sep 2026, feedback real sobre v1 desplegada): las cards antes medían
+ * distinto entre sí (el label de 1 línea vs 2 líneas cambiaba la altura
+ * total, arreglado en RecipeCard con line-clamp fijo) y el carrusel
+ * competía por espacio vertical con el bloque "necesitás" de cada card y
+ * con destino/formato debajo — ambos se movieron/ocultaron para este modo
+ * (ver PDStep1.tsx: destino+"necesitás" solo se muestran en desktop, en
+ * mobile van al paso 2 dentro del flujo normal). Ahora usa
+ * variant="fullscreen" de RecipeCard: card alta, casi toda la altura
+ * disponible, aprovechando el formato vertical del teléfono en vez de una
+ * card chica con mucho blanco alrededor.
  *
  * Scroll-snap nativo (sin librería) + dots que reflejan la card centrada —
  * mismo patrón que va a reusar el carrusel de resultados compartido
@@ -15,7 +23,7 @@
  */
 import React, { useRef, useState, useCallback } from 'react';
 import type { PhotodumpRecipe } from '../types';
-import { RECIPE_META, type RecipeRefConfig } from '../types';
+import { RECIPE_META } from '../types';
 import { RecipeCard } from './RecipeCard';
 
 interface RecipeCardCarouselMobileProps {
@@ -24,11 +32,12 @@ interface RecipeCardCarouselMobileProps {
   onRecipe: (r: PhotodumpRecipe) => void;
   icons:    Partial<Record<PhotodumpRecipe, React.ReactNode>>;
   gradients: Partial<Record<PhotodumpRecipe, string>>;
-  requiredSlotsLabel: (refs: RecipeRefConfig) => string;
+  /** Alto de cada card — clase Tailwind, ej. "h-[52vh]". El caller controla esto porque depende de cuánto más contenido va debajo (título, dots, separador). */
+  cardHeightClass: string;
 }
 
 export const RecipeCardCarouselMobile: React.FC<RecipeCardCarouselMobileProps> = ({
-  recipes, recipe, onRecipe, icons, gradients, requiredSlotsLabel,
+  recipes, recipe, onRecipe, icons, gradients, cardHeightClass,
 }) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(() => Math.max(0, recipes.indexOf(recipe)));
@@ -63,20 +72,20 @@ export const RecipeCardCarouselMobile: React.FC<RecipeCardCarouselMobileProps> =
       <div
         ref={trackRef}
         onScroll={handleScroll}
-        className="flex gap-3.5 overflow-x-auto snap-x snap-mandatory pb-1 -mx-4 px-4 scrollbar-hide"
+        className={`flex gap-3 overflow-x-auto snap-x snap-mandatory -mx-4 px-4 scrollbar-hide ${cardHeightClass}`}
       >
         {recipes.map((r, i) => {
           const meta = RECIPE_META[r];
           return (
-            <div key={r} className="snap-center shrink-0 w-[78%] first:ml-0">
+            <div key={r} className="snap-center shrink-0 w-[88%] h-full">
               <RecipeCard
                 icon={icons[r]}
                 label={meta.label}
                 description={meta.description}
-                need={requiredSlotsLabel(meta.refs)}
                 selected={recipe === r}
                 onSelect={() => { onRecipe(r); setActiveIndex(i); }}
                 placeholderGradient={gradients[r] ?? 'from-slate-200 to-slate-300'}
+                variant="fullscreen"
               />
             </div>
           );
