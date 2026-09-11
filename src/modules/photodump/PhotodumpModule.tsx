@@ -21,6 +21,7 @@ import { ImageLightbox } from '../../components/shared/ImageLightbox';
 import { newSessionId } from '../../services/imageApiService';
 import { geminiService } from '../../services/geminiService';
 import { photodumpStorage } from './photodumpStorage';
+import { SEED_PREVIEWS_BY_RECIPE } from './seedPreviews';
 import {
   PhotodumpSet, PhotodumpDestino, PhotodumpRefs, PhotodumpOutfitMode,
   PhotodumpRecipe, FreeScene, PhotodumpDebugData, PhotodumpShotDebug,
@@ -318,6 +319,18 @@ const PhotodumpModule: React.FC = () => {
     }
     return byRecipe;
   }, [sets]);
+
+  // Fallback de imágenes semilla (sep 2026): cuando el usuario todavía no
+  // tiene sets propios de una receta, se usan estas antes de caer al
+  // gradiente — curadas globalmente, ver seedPreviews.ts. Las del usuario
+  // siempre tienen prioridad sobre las semilla.
+  const displayPreviewsByRecipe = useMemo(() => {
+    const merged: Partial<Record<PhotodumpRecipe, string[]>> = { ...SEED_PREVIEWS_BY_RECIPE };
+    for (const key of Object.keys(previewsByRecipe) as PhotodumpRecipe[]) {
+      merged[key] = previewsByRecipe[key];
+    }
+    return merged;
+  }, [previewsByRecipe]);
 
   // ── Helpers UI ────────────────────────────────────────────
   const copyText = (text: string, key: string) => {
@@ -1756,7 +1769,7 @@ const PhotodumpModule: React.FC = () => {
               {step === 1 && (
                 <PDStep1
                   recipe={recipe}
-                  previews={previewsByRecipe}
+                  previews={displayPreviewsByRecipe}
                   // Auto-avance al elegir receta (sep 2026, pedido directo
                   // del usuario: "seria mejor tocar la receta y que
                   // automaticamente avance, es un flujo mas intuitivo y
