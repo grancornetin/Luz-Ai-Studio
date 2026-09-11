@@ -24,7 +24,7 @@
 import React, { useRef, useState, useCallback } from 'react';
 import type { PhotodumpRecipe } from '../types';
 import { RECIPE_META } from '../types';
-import { RecipeCard } from './RecipeCard';
+import { RecipeCard, type RecipeCardAccent } from './RecipeCard';
 
 interface RecipeCardCarouselMobileProps {
   recipes: PhotodumpRecipe[];
@@ -32,12 +32,14 @@ interface RecipeCardCarouselMobileProps {
   onRecipe: (r: PhotodumpRecipe) => void;
   icons:    Partial<Record<PhotodumpRecipe, React.ReactNode>>;
   gradients: Partial<Record<PhotodumpRecipe, string>>;
+  /** Accent por receta — ej. modo libre usa 'violet' para diferenciarse (información real, no decoración). Default 'brand'. */
+  accents?: Partial<Record<PhotodumpRecipe, RecipeCardAccent>>;
   /** Alto de cada card — clase Tailwind, ej. "h-[52vh]". El caller controla esto porque depende de cuánto más contenido va debajo (título, dots, separador). */
   cardHeightClass: string;
 }
 
 export const RecipeCardCarouselMobile: React.FC<RecipeCardCarouselMobileProps> = ({
-  recipes, recipe, onRecipe, icons, gradients, cardHeightClass,
+  recipes, recipe, onRecipe, icons, gradients, accents, cardHeightClass,
 }) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(() => Math.max(0, recipes.indexOf(recipe)));
@@ -85,6 +87,7 @@ export const RecipeCardCarouselMobile: React.FC<RecipeCardCarouselMobileProps> =
                 selected={recipe === r}
                 onSelect={() => { onRecipe(r); setActiveIndex(i); }}
                 placeholderGradient={gradients[r] ?? 'from-slate-200 to-slate-300'}
+                accent={accents?.[r] ?? 'brand'}
                 variant="fullscreen"
               />
             </div>

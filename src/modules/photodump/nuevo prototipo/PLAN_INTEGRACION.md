@@ -492,6 +492,44 @@ ver `project_pwa_mobile_shell.md`.
 
 npx tsc --noEmit y npm run build verificados en verde tras estos cambios.
 
+## 6. Modo libre integrado a la galería (sep 2026, mismo día — v5)
+
+Feedback tras probar v4 en el teléfono real: "el botón atrás del navegador
+te devuelve al dashboard [confirmó el problema 1.1 del documento de shell,
+ver sección 7], y pienso que Modo libre debería estar al final de la lista
+de recetas en la misma galería" (antes tenía su propia fila con separador
+"o", forzando una segunda pantalla de swipe/scroll solo para verlo).
+
+`ALL_RECIPES = [...REGULAR_RECIPES, 'free']` reemplaza el patrón anterior
+de dos listas separadas. `RecipeCardCarouselMobile` ganó un prop
+`accents?: Partial<Record<PhotodumpRecipe, RecipeCardAccent>>` para que
+Modo libre siga distinguiéndose con violeta dentro del mismo carrusel
+(`accents={{ free: 'violet' }}`) — el accent es información real (camino
+distinto al resto), no decoración, así que no se perdió al fusionar las
+listas. El grid de desktop usa el mismo `ALL_RECIPES.map` con
+`accent={r === 'free' ? 'violet' : 'brand'}`.
+
+**Idea del usuario, anotada pero NO implementada**: marcar recetas como
+favoritas con una estrella, para que las favoritas aparezcan primero en la
+lista (menos scroll/swipe para lo que se usa seguido). Queda como mejora de
+UX real a considerar — también documentada en
+`PROMPT_REDISENO_SHELL_PWA.md` porque aplicaría a cualquier selector largo
+de opciones, no solo a este.
+
+## 7. El botón atrás del navegador rompe el wizard — fuera de alcance, documentado aparte
+
+Confirmado con feedback real: "la única forma de volver atrás es
+deslizando hasta el fondo de la página y apretar en la flecha para volver
+atrás, porque si aprietan la flecha del navegador, te devuelve al
+dashboard." Causa raíz: `PhotodumpModule.tsx` (y probablemente otros
+módulos con wizard) guarda el paso actual en `useState` local, nunca en la
+URL — el navegador no tiene noción de "un paso atrás del wizard", solo de
+"salir de la ruta `/photodump` completa". Esto es un problema de
+arquitectura de routing que excede el rediseño visual de Photodump — se
+documentó completo, con la causa raíz ya identificada en el código real,
+en `PROMPT_REDISENO_SHELL_PWA.md` (raíz del repo) para el agente que tome
+el rediseño del shell general. No se toca en este plan.
+
 ---
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>

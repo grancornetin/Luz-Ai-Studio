@@ -75,6 +75,11 @@ interface PDStep1Props {
 
 const RECIPES = Object.keys(RECIPE_META) as PhotodumpRecipe[];
 const REGULAR_RECIPES = RECIPES.filter(r => r !== 'free' && r !== 'outfit');
+// Modo libre va AL FINAL de la misma galería, no en una fila separada
+// (sep 2026, feedback real: "pienso que debería estar al final de la lista
+// de recetas en la misma galería" — antes tenía separador "o" + bloque
+// aparte, forzando una segunda fila de scroll/swipe solo para 1 card).
+const ALL_RECIPES = [...REGULAR_RECIPES, 'free' as const];
 
 // Etiqueta corta de "qué necesitás" para la card — mismo dato que ya existe
 // en RECIPE_META[r].refs (usado también en el tip contextual de abajo),
@@ -101,8 +106,6 @@ function requiredSlotsLabel(refs: RecipeRefConfig): string {
 const PDStep1: React.FC<PDStep1Props> = ({
   recipe, onRecipe,
 }) => {
-  const isFree = recipe === 'free';
-
   return (
     <div className="fade-in p-3 md:p-6 md:h-auto flex flex-col">
 
@@ -114,22 +117,25 @@ const PDStep1: React.FC<PDStep1Props> = ({
       </div>
 
       {/* Recetas — card de resultado real, imagen/gradiente protagonista.
-          Mobile: carrusel horizontal fullscreen (1 card ocupando casi toda
-          la altura disponible) + dots — aprovecha el formato vertical del
-          teléfono en vez de una card chica con blanco alrededor. Desktop
-          (md+): grid de 4-5 columnas con cards compactas apaisadas — bajado
-          de 3 columnas y de aspect-[4/5] a 4/3 tras feedback real de
-          scroll vertical excesivo. */}
+          Modo libre va AL FINAL de esta misma galería, no en fila aparte
+          (feedback real: "debería estar al final de la lista de recetas en
+          la misma galería"). Mobile: carrusel horizontal fullscreen (1 card
+          ocupando casi toda la altura disponible) + dots — aprovecha el
+          formato vertical del teléfono en vez de una card chica con blanco
+          alrededor. Desktop (md+): grid de 4-5 columnas con cards
+          compactas apaisadas — bajado de 3 columnas y de aspect-[4/5] a
+          4/3 tras feedback real de scroll vertical excesivo. */}
       <RecipeCardCarouselMobile
-        recipes={REGULAR_RECIPES}
+        recipes={ALL_RECIPES}
         recipe={recipe}
         onRecipe={onRecipe}
         icons={RECIPE_ICONS}
         gradients={RECIPE_GRADIENTS}
+        accents={{ free: 'violet' }}
         cardHeightClass="h-[65dvh] min-h-[380px] max-h-[560px]"
       />
       <div className="hidden md:grid grid-cols-4 xl:grid-cols-5 gap-2.5">
-        {REGULAR_RECIPES.map(r => {
+        {ALL_RECIPES.map(r => {
           const meta = RECIPE_META[r];
           return (
             <RecipeCard
@@ -137,37 +143,14 @@ const PDStep1: React.FC<PDStep1Props> = ({
               icon={RECIPE_ICONS[r]}
               label={meta.label}
               description={meta.description}
-              need={requiredSlotsLabel(meta.refs)}
+              need={r === 'free' ? undefined : requiredSlotsLabel(meta.refs)}
               selected={recipe === r}
               onSelect={() => onRecipe(r)}
               placeholderGradient={RECIPE_GRADIENTS[r] ?? 'from-slate-200 to-slate-300'}
+              accent={r === 'free' ? 'violet' : 'brand'}
             />
           );
         })}
-      </div>
-
-      {/* Separador antes de Modo libre */}
-      <div className="flex items-center gap-3 my-3">
-        <div className="flex-1 h-px bg-slate-200" />
-        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">o</span>
-        <div className="flex-1 h-px bg-slate-200" />
-      </div>
-
-      {/* Modo libre — una sola card. Mobile: mismo alto fullscreen que el
-          carrusel de arriba, ancho completo (no necesita swipe, es 1 sola).
-          Desktop: tamaño de grid normal.
-          Accent violeta: es información real (camino distinto), no decoración. */}
-      <div className="h-[65dvh] min-h-[380px] max-h-[560px] md:h-auto md:grid md:grid-cols-4 xl:grid-cols-5 md:gap-2.5">
-        <RecipeCard
-          icon={RECIPE_ICONS['free']}
-          label={RECIPE_META['free'].label}
-          description={RECIPE_META['free'].description}
-          selected={isFree}
-          onSelect={() => onRecipe('free')}
-          accent="violet"
-          placeholderGradient={RECIPE_GRADIENTS['free']!}
-          variant="grid"
-        />
       </div>
 
     </div>
