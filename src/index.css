@@ -11,6 +11,9 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background-color: #f8fafc;
+    /* El scroll horizontal nunca es intencional en esta app — si aparece
+       es un elemento que se desborda del ancho, no algo para navegar. */
+    overflow-x: hidden;
   }
   body {
     margin: 0;
