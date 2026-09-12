@@ -11,6 +11,10 @@ interface WizardFooterProps {
   /** Llama la atención sobre el botón cuando el paso ya está completo —
    * un pulso suave, no un avance automático. El usuario decide cuándo tocar. */
   pulse?: boolean;
+  /** Acción secundaria opcional (ej. "Descargar todo") que convive junto al
+   * botón principal — evita que un módulo tenga que sumar una segunda barra
+   * flotante aparte cuando ya hay algo generado para descargar. */
+  secondaryAction?: { label: string; icon?: React.ReactNode; onClick: () => void };
 }
 
 export const WizardFooter: React.FC<WizardFooterProps> = ({
@@ -21,6 +25,7 @@ export const WizardFooter: React.FC<WizardFooterProps> = ({
   costInfo,
   loading = false,
   pulse = false,
+  secondaryAction,
 }) => {
   return (
     <div
@@ -52,6 +57,18 @@ export const WizardFooter: React.FC<WizardFooterProps> = ({
 
       <div className="flex-1" />
 
+      {secondaryAction && (
+        <button
+          type="button"
+          onClick={secondaryAction.onClick}
+          style={{ touchAction: 'manipulation' }}
+          className="flex items-center gap-1.5 bg-slate-100 active:bg-slate-200 text-slate-700 rounded-xl px-3.5 md:px-5 py-3 md:py-3.5 min-h-12 text-sm font-semibold transition-colors duration-150 flex-shrink-0"
+        >
+          {secondaryAction.icon}
+          <span className="hidden sm:inline">{secondaryAction.label}</span>
+        </button>
+      )}
+
       {costInfo && (
         <div className="hidden md:block text-right mr-1">
           <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
@@ -76,7 +93,7 @@ export const WizardFooter: React.FC<WizardFooterProps> = ({
         style={{ touchAction: 'manipulation' }}
         className={`
           flex flex-col items-center justify-center gap-0.5 rounded-xl transition-colors duration-150
-          px-5 md:px-7 py-3 md:py-3.5 min-h-12 min-w-[140px] md:min-w-[180px]
+          px-4 md:px-7 py-3 md:py-3.5 min-h-12 ${secondaryAction ? 'flex-1 md:flex-none md:min-w-[180px]' : 'min-w-[140px] md:min-w-[180px]'}
           text-sm font-semibold
           ${
             disabled || loading

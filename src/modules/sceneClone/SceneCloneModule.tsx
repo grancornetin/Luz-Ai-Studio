@@ -1051,8 +1051,8 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                   else if (step === 4) handleApplyOutfitsAndProducts();
                 }}
                 continueLabel={
-                  step === 3 ? `Crear primera versión · ${baseGenerationCost} cr` :
-                  step === 4 ? `Aplicar Cambios · ${CLONE_COST} cr` :
+                  step === 3 ? `Crear versión · ${baseGenerationCost} cr` :
+                  step === 4 ? `Aplicar · ${CLONE_COST} cr` :
                   'Continuar'
                 }
                 disabled={
@@ -1068,6 +1068,11 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                   step === 2 ? canGoToBase :
                   step === 4 ? canApplyFinalChanges :
                   false
+                }
+                secondaryAction={
+                  (baseComposition || finalImage) && !loading
+                    ? { label: 'Descargar todo', icon: <i className="fa-solid fa-file-zipper text-sm"></i>, onClick: handleDownloadZip }
+                    : undefined
                 }
               />
             </section>
@@ -1199,8 +1204,13 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
           />
         )}
 
+        {/* Solo cuando el wizard no está visible (ej. viendo el historial):
+            ahí no hay WizardFooter que ofrezca la descarga, así que esta
+            barra flotante es la única forma de acceder a ella. Mientras el
+            wizard está activo, la misma acción vive en su footer (ver
+            secondaryAction más arriba) para no apilar dos barras. */}
         <FloatingActionBar
-          isVisible={!!((baseComposition || finalImage) && fabVisible && !loading)}
+          isVisible={!!(showHistory && (baseComposition || finalImage) && fabVisible && !loading)}
           primaryAction={{
             label: 'Descargar todo',
             icon: <i className="fa-solid fa-file-zipper text-sm"></i>,
