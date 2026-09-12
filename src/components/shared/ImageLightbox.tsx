@@ -2,6 +2,7 @@ import React, { useEffect, useCallback, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Download, Share2, MoreVertical, Star } from 'lucide-react';
 import { downloadImage } from '../../utils/imageUtils';
+import { BeforeAfterSlider } from './BeforeAfterSlider';
 
 interface ImageLightboxProps {
   images: string[];
@@ -63,6 +64,17 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
   const hasInfoPanel = !!details;
   const hasActionsPanel = allActions.length > 0;
   const hasAnyPanel = hasInfoPanel || hasComparePanel || hasActionsPanel;
+
+  // Slider "antes/después": solo tiene sentido cuando ambas imágenes
+  // comparten encuadre — se activa únicamente si el módulo marcó una
+  // pareja exacta con esas labels (ej. Clone Image). El resto de las
+  // imágenes del set (ej. "Objetivo") quedan aparte, en miniaturas debajo.
+  const beforeIdx = labels?.findIndex(l => l === 'Antes') ?? -1;
+  const afterIdx = labels?.findIndex(l => l === 'Después') ?? -1;
+  const hasBeforeAfterPair = beforeIdx >= 0 && afterIdx >= 0;
+  const otherIndices = hasBeforeAfterPair
+    ? images.map((_, i) => i).filter(i => i !== beforeIdx && i !== afterIdx)
+    : [];
 
   const goPrev = useCallback(() => {
     if (hasPrev) setCurrentIndex(i => i - 1);
@@ -309,7 +321,37 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
             <div className="overflow-y-auto">
               {activeTab === 'info' && hasInfoPanel && details}
 
-              {activeTab === 'compare' && hasComparePanel && (
+              {activeTab === 'compare' && hasComparePanel && hasBeforeAfterPair && (
+                <div className="space-y-3">
+                  <BeforeAfterSlider
+                    beforeSrc={images[beforeIdx]}
+                    afterSrc={images[afterIdx]}
+                    className="max-h-[46vh]"
+                  />
+                  {otherIndices.length > 0 && (
+                    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${otherIndices.length}, 1fr)` }}>
+                      {otherIndices.map(idx => (
+                        <button
+                          key={idx}
+                          onClick={() => { setCurrentIndex(idx); setPanelOpen(false); }}
+                          className={`relative rounded-xl overflow-hidden aspect-square border-2 transition-all ${
+                            idx === currentIndex ? 'border-brand-500' : 'border-transparent opacity-70'
+                          }`}
+                        >
+                          <img src={images[idx]} alt={label(idx) || `Imagen ${idx + 1}`} className="w-full h-full object-cover" />
+                          {label(idx) && (
+                            <span className="absolute bottom-1 inset-x-0 text-center text-[8px] font-black text-white uppercase tracking-widest drop-shadow">
+                              {label(idx)}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'compare' && hasComparePanel && !hasBeforeAfterPair && (
                 <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${images.length}, 1fr)` }}>
                   {images.map((src, idx) => (
                     <button
