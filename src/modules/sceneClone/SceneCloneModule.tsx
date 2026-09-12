@@ -86,13 +86,13 @@ function cropPersonSlot(input: string): Promise<string> {
 
 // --- COMPONENTS UI PRO ---
 const ProHeader: React.FC<{ title: string; subtitle: string; icon: string }> = ({ title, subtitle, icon }) => (
-  <div className="flex items-center gap-4 mb-6">
-    <div className="w-12 h-12 rounded-2xl bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 shadow-sm">
-      <i className={`fa-solid ${icon} text-xl`}></i>
+  <div className="flex items-center gap-3 md:gap-4 mb-3 md:mb-6">
+    <div className="w-9 h-9 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 shadow-sm flex-shrink-0">
+      <i className={`fa-solid ${icon} text-sm md:text-xl`}></i>
     </div>
     <div>
-      <h2 className="t-display text-xl text-slate-900">{title}</h2>
-      <p className="t-meta mt-1">{subtitle}</p>
+      <h2 className="t-display text-sm md:text-xl text-slate-900">{title}</h2>
+      <p className="t-meta mt-0.5 md:mt-1">{subtitle}</p>
     </div>
   </div>
 );
@@ -630,12 +630,13 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
     <>
       <NoCreditsModal isOpen={showNoCredits} onClose={closeModal} required={requiredCredits} available={0} />
       
-      <div className="max-w-7xl mx-auto space-y-8 pb-24 animate-in fade-in duration-500">
-        
-        {/* Header — una sola fila también en mobile, sin apilarse en 2 líneas */}
-        <header className="flex items-center justify-between gap-3 px-4 pt-2">
+      <div className="max-w-7xl mx-auto space-y-3 md:space-y-8 pb-24 animate-in fade-in duration-500">
+
+        {/* Header — compacto en mobile: solo el título chico y accesos rápidos,
+            sin comerse espacio vertical que le corresponde al contenido del paso */}
+        <header className="flex items-center justify-between gap-3 px-4 pt-2 md:pt-2">
           <div>
-            <h1 className="t-display text-xl md:text-4xl text-slate-900">Recrear <span className="text-brand-600">foto</span></h1>
+            <h1 className="t-display text-[13px] md:text-4xl text-slate-900 leading-none">Recrear <span className="text-brand-600">foto</span></h1>
             <div className="hidden md:flex items-center gap-2 mt-1">
               <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.3em] italic">Usa una foto de inspiración con tu modelo o producto</p>
               <ModuleTutorial moduleId="sceneClone" steps={TUTORIAL_CONFIGS.sceneClone} />
@@ -645,7 +646,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
             {sessions.length > 0 && (
               <button
                 onClick={() => setShowHistory(p => !p)}
-                className={`w-9 h-9 md:w-auto md:px-6 md:py-3 rounded-lg md:rounded-2xl t-meta transition-all flex items-center justify-center gap-2 ${showHistory ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-slate-900'}`}
+                className={`w-8 h-8 md:w-auto md:px-6 md:py-3 rounded-lg md:rounded-2xl t-meta transition-all flex items-center justify-center gap-2 ${showHistory ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-slate-900'}`}
                 aria-label="Historial"
               >
                 <i className="fa-solid fa-clock-rotate-left text-xs"></i>
@@ -653,7 +654,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                 <span className="w-4 h-4 bg-brand-100 text-brand-700 rounded-full text-[8px] font-black flex items-center justify-center">{sessions.length}</span>
               </button>
             )}
-            <button onClick={fullReset} className="w-9 h-9 md:w-auto md:px-8 md:py-3 rounded-lg md:rounded-2xl t-meta text-slate-400 hover:text-slate-900 transition-all flex items-center justify-center" aria-label="Empezar de nuevo">
+            <button onClick={fullReset} className="w-8 h-8 md:w-auto md:px-8 md:py-3 rounded-lg md:rounded-2xl t-meta text-slate-400 hover:text-slate-900 transition-all flex items-center justify-center" aria-label="Empezar de nuevo">
               <i className="fa-solid fa-rotate-right text-xs md:hidden"></i>
               <span className="hidden md:inline">Empezar de nuevo</span>
             </button>
@@ -722,23 +723,23 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
         <div className={`grid grid-cols-1 lg:grid-cols-12 gap-8 px-4 md:px-0 ${loading && (step === 3 || step === 4) ? 'hidden' : ''} ${showHistory ? 'hidden' : ''}`}>
 
           <div className="lg:col-span-4 space-y-6">
-            <section className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+            <section className="bg-white rounded-2xl md:rounded-[40px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
               <WizardStepper
                 steps={CLONE_WIZARD_STEPS}
                 current={step}
                 onJump={(s) => { if (s <= maxStep) setStep(s as Step); }}
               />
-              <div className="p-6 md:p-8 flex-1 overflow-auto">
+              <div className="p-4 md:p-8 flex-1 overflow-auto">
 
               {step === 1 && (
-                <div className="space-y-6 animate-in slide-in-from-left-4">
+                <div className="space-y-3 md:space-y-6 animate-in slide-in-from-left-4">
                   <ProHeader title="Target Blueprint" subtitle="La escena a replicar" icon="fa-bullseye" />
                   <ProUploadCard
                     label="Escena Target"
                     value={targetImage}
                     onChange={(v) => { setTargetImage(v); resetDownstream(1); }}
                     hint="Define la pose, iluminación y encuadre a replicar"
-                    height="h-64"
+                    height="h-40 md:h-64"
                     slotType="target"
                   />
 
