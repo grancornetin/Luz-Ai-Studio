@@ -294,6 +294,7 @@ export default function CloneImageModule() {
   
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
+  const [lightboxLabels, setLightboxLabels] = useState<string[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
   const [sessions, setSessions]         = useState<CloneMasterSession[]>([]);
@@ -566,17 +567,19 @@ export default function CloneImageModule() {
 
   const openLightbox = () => {
     const images: string[] = [];
-    if (targetImage) images.push(targetImage);
-    if (baseComposition) images.push(baseComposition);
-    if (finalImage) images.push(finalImage);
+    const labels: string[] = [];
+    if (targetImage) { images.push(targetImage); labels.push('Objetivo'); }
+    if (baseComposition) { images.push(baseComposition); labels.push('Antes'); }
+    if (finalImage) { images.push(finalImage); labels.push('Después'); }
     if (images.length === 0) return;
-    
+
     let startIndex = 0;
    if (activePreview === finalImage) startIndex = images.indexOf(finalImage!);
 else if (activePreview === baseComposition) startIndex = images.indexOf(baseComposition!);
 else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!);
-    
+
     setLightboxImages(images);
+    setLightboxLabels(labels);
     setLightboxIndex(startIndex >= 0 ? startIndex : 0);
     setLightboxOpen(true);
   };
@@ -1177,7 +1180,20 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                     ...(s.outfit1 ? [{ label: 'Outfit', src: s.outfit1 }] : []),
                   ]}
                   accentColor="fuchsia"
-                  onClick={() => { const imgs = [s.targetImage, s.baseComposition, s.finalImage].filter(Boolean) as string[]; if (imgs.length) { setLightboxImages(imgs); setLightboxIndex(0); setLightboxOpen(true); }}}
+                  onClick={() => {
+                    const entries: { img?: string; label: string }[] = [
+                      { img: s.targetImage, label: 'Objetivo' },
+                      { img: s.baseComposition, label: 'Antes' },
+                      { img: s.finalImage, label: 'Después' },
+                    ];
+                    const present = entries.filter(e => !!e.img);
+                    if (present.length) {
+                      setLightboxImages(present.map(e => e.img as string));
+                      setLightboxLabels(present.map(e => e.label));
+                      setLightboxIndex(0);
+                      setLightboxOpen(true);
+                    }
+                  }}
                   actions={[
                     { label: '↺ Recrear', onClick: e => { e.stopPropagation(); loadSession(s); }, variant: 'primary' },
                     { label: '↓', onClick: e => { e.stopPropagation(); const link = document.createElement('a'); link.href = s.finalImage || s.baseComposition; link.download = `clone_${s.id}.png`; link.click(); }, variant: 'secondary', title: 'Descargar' },
@@ -1201,6 +1217,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
               link.click();
             }}
             metadata={{ label: "Clonación de Escena" }}
+            labels={lightboxLabels}
           />
         )}
 
