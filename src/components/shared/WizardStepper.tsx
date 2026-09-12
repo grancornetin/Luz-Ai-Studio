@@ -21,7 +21,7 @@ export const WizardStepper: React.FC<WizardStepperProps> = ({ steps, current, on
       {/* Mobile — "Paso N de M" + barra de progreso */}
       <div className="md:hidden px-4 pt-3 pb-2">
         <div className="flex justify-between items-baseline mb-2">
-          <span className="text-[10px] font-black text-pink-600 uppercase tracking-widest">
+          <span className="text-[10px] font-black text-brand-600 uppercase tracking-widest">
             Paso {current} de {steps.length}
           </span>
           <span className="text-[11px] font-semibold text-slate-500">
@@ -30,7 +30,7 @@ export const WizardStepper: React.FC<WizardStepperProps> = ({ steps, current, on
         </div>
         <div className="h-[3px] bg-slate-100 rounded-full overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-violet-600 to-pink-600 rounded-full transition-all duration-500 ease-out"
+            className="h-full bg-gradient-to-r from-brand-400 to-brand-600 rounded-full transition-all duration-300 ease-out"
             style={{ width: `${pct}%` }}
           />
         </div>

@@ -77,7 +77,7 @@ export const WizardFooter: React.FC<WizardFooterProps> = ({
           ${
             disabled || loading
               ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-              : 'bg-gradient-to-br from-violet-600 to-pink-600 text-white shadow-[0_12px_28px_rgba(124,58,237,0.32)] active:scale-[0.98]'
+              : 'bg-gradient-to-br from-brand-400 to-brand-600 text-white shadow-[0_12px_28px_rgba(247,44,91,0.32)] active:scale-[0.97]'
           }
         `}
       >

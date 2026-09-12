@@ -1,14 +1,14 @@
 import React from 'react';
-import { X } from 'lucide-react';
+import { X, UserRound, Camera, Smartphone, Sparkles, ImageIcon, Shirt } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const modules = [
-  { name: 'Crear modelo',     tech: 'Model DNA',         icon: '👤', path: '/crear/clonar',      cost: '8 cr' },
-  { name: 'Fotos de producto',tech: '',                  icon: '📸', path: '/productos',          cost: '2 cr' },
-  { name: 'Fotos para redes', tech: '',                  icon: '📱', path: '/studio-pro',         cost: '6-14 cr' },
-  { name: 'Generador con IA', tech: 'Prompt Studio',     icon: '✨', path: '/prompt-studio',      cost: '2 cr' },
-  { name: 'Recrear una foto', tech: '',                  icon: '🖼️', path: '/clonar',             cost: '2 cr' },
-  { name: 'Separar prendas',   tech: '',                  icon: '👕', path: '/outfit-extractor',   cost: '0 cr' },
+  { name: 'Crear modelo',     tech: 'Model DNA',     icon: UserRound,   path: '/crear/clonar',      cost: '8 cr' },
+  { name: 'Fotos de producto',tech: '',              icon: Camera,      path: '/productos',          cost: '2 cr' },
+  { name: 'Fotos para redes', tech: '',              icon: Smartphone,  path: '/studio-pro',         cost: '6-14 cr' },
+  { name: 'Generador con IA', tech: 'Prompt Studio', icon: Sparkles,    path: '/prompt-studio',      cost: '2 cr' },
+  { name: 'Recrear una foto', tech: '',              icon: ImageIcon,   path: '/clonar',             cost: '2 cr' },
+  { name: 'Separar prendas',  tech: '',              icon: Shirt,       path: '/outfit-extractor',   cost: '0 cr' },
 ];
 
 interface BottomSheetProps {
@@ -40,18 +40,23 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ open, onClose }) => {
           </button>
         </div>
         <div className="grid grid-cols-3 gap-3">
-          {modules.map((mod) => (
-            <button
-              key={mod.path}
-              onClick={() => handleModuleClick(mod.path)}
-              className="flex flex-col items-center gap-2 p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 active:scale-95 transition-all"
-            >
-              <span className="text-3xl">{mod.icon}</span>
-              <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight text-center leading-tight">{mod.name}</span>
-              <span className="text-[9px] font-medium text-slate-300 normal-case tracking-normal">({mod.tech})</span>
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{mod.cost}</span>
-            </button>
-          ))}
+          {modules.map((mod) => {
+            const Icon = mod.icon;
+            return (
+              <button
+                key={mod.path}
+                onClick={() => handleModuleClick(mod.path)}
+                className="flex flex-col items-center gap-2 p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 active:scale-95 transition-all"
+              >
+                <span className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center text-slate-700 shadow-sm">
+                  <Icon size={22} strokeWidth={1.8} />
+                </span>
+                <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight text-center leading-tight">{mod.name}</span>
+                <span className="text-[9px] font-medium text-slate-300 normal-case tracking-normal">({mod.tech})</span>
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{mod.cost}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
