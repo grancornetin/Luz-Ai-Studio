@@ -139,11 +139,27 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
 
   const handleShare = async () => {
     try {
+      // Las imágenes generadas suelen ser data URLs (base64), no URLs
+      // http reales — navigator.share({ url }) las rechaza en silencio en
+      // Safari/iOS. Compartir el archivo en sí (vía Web Share Level 2)
+      // funciona con ambos casos.
       if (navigator.share) {
-        await navigator.share({ url: currentImage, title: metadata?.label || 'Imagen' });
-      } else {
-        handleDownload();
+        if (currentImage.startsWith('data:') && navigator.canShare) {
+          const res = await fetch(currentImage);
+          const blob = await res.blob();
+          const ext = blob.type.split('/')[1] || 'jpg';
+          const file = new File([blob], `imagen.${ext}`, { type: blob.type });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: metadata?.label || 'Imagen' });
+            return;
+          }
+        }
+        if (!currentImage.startsWith('data:')) {
+          await navigator.share({ url: currentImage, title: metadata?.label || 'Imagen' });
+          return;
+        }
       }
+      handleDownload();
     } catch {
       // El usuario canceló el share sheet — no es un error a mostrar.
     }
@@ -322,14 +338,14 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
               {activeTab === 'info' && hasInfoPanel && details}
 
               {activeTab === 'compare' && hasComparePanel && hasBeforeAfterPair && (
-                <div className="space-y-3">
+                <div className="flex gap-3 items-start">
                   <BeforeAfterSlider
                     beforeSrc={images[beforeIdx]}
                     afterSrc={images[afterIdx]}
-                    className="max-h-[46vh]"
+                    className="flex-1 max-h-[42vh]"
                   />
                   {otherIndices.length > 0 && (
-                    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${otherIndices.length}, 1fr)` }}>
+                    <div className="flex flex-col gap-2 flex-shrink-0" style={{ width: 72 }}>
                       {otherIndices.map(idx => (
                         <button
                           key={idx}
@@ -340,7 +356,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
                         >
                           <img src={images[idx]} alt={label(idx) || `Imagen ${idx + 1}`} className="w-full h-full object-cover" />
                           {label(idx) && (
-                            <span className="absolute bottom-1 inset-x-0 text-center text-[8px] font-black text-white uppercase tracking-widest drop-shadow">
+                            <span className="absolute bottom-1 inset-x-0 text-center text-[7px] font-black text-white uppercase tracking-widest drop-shadow">
                               {label(idx)}
                             </span>
                           )}
