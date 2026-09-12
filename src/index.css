@@ -26,6 +26,20 @@
   -webkit-backdrop-filter: blur(12px);
 }
 
+/* Pulso sutil para el botón principal de un wizard cuando el paso ya
+   está completo — llama la atención sin auto-avanzar ni parpadear
+   como el .animate-pulse de Tailwind (que se lee como "deshabilitado"). */
+@keyframes pulse-cta {
+  0%, 100% { box-shadow: 0 12px 28px rgba(247,44,91,0.32); transform: scale(1); }
+  50% { box-shadow: 0 14px 34px rgba(247,44,91,0.5); transform: scale(1.015); }
+}
+.animate-pulse-cta {
+  animation: pulse-cta 1.8s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse-cta { animation: none; }
+}
+
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }

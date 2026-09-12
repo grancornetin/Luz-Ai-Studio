@@ -106,11 +106,14 @@ const CLONE_WIZARD_STEPS = [
 
 type ProSlotType = 'target' | 'face' | 'body' | 'outfit' | 'generic';
 
+// Un solo color de marca (fucsia) para todos los slots — antes cada tipo
+// tenía su propio color (rosa/violeta/púrpura), lo que competía con la
+// identidad de marca. El ícono distingue el tipo, no el color.
 const PRO_SLOT_CONFIGS: Record<ProSlotType, { icon: string; color: string; bg: string; border: string; hint: string }> = {
-  target:  { icon: 'fa-bullseye',    color: 'text-brand-400',   bg: 'bg-brand-50/60 hover:bg-brand-50',   border: 'hover:border-brand-300',   hint: 'Foto de la escena a replicar' },
-  face:    { icon: 'fa-face-smile',  color: 'text-rose-400',    bg: 'bg-rose-50/60 hover:bg-rose-50',     border: 'hover:border-rose-300',     hint: 'Close-up claro del rostro' },
-  body:    { icon: 'fa-person',      color: 'text-violet-400',  bg: 'bg-violet-50/60 hover:bg-violet-50', border: 'hover:border-violet-300',   hint: 'Foto de cuerpo completo' },
-  outfit:  { icon: 'fa-shirt',       color: 'text-purple-400',  bg: 'bg-purple-50/60 hover:bg-purple-50', border: 'hover:border-purple-300',   hint: 'Foto del outfit a aplicar' },
+  target:  { icon: 'fa-bullseye',    color: 'text-brand-500',   bg: 'bg-brand-50/60 hover:bg-brand-50',   border: 'hover:border-brand-300',   hint: 'Foto de la escena a replicar' },
+  face:    { icon: 'fa-face-smile',  color: 'text-brand-500',   bg: 'bg-brand-50/60 hover:bg-brand-50',   border: 'hover:border-brand-300',   hint: 'Close-up claro del rostro' },
+  body:    { icon: 'fa-person',      color: 'text-brand-500',   bg: 'bg-brand-50/60 hover:bg-brand-50',   border: 'hover:border-brand-300',   hint: 'Foto de cuerpo completo' },
+  outfit:  { icon: 'fa-shirt',       color: 'text-brand-500',   bg: 'bg-brand-50/60 hover:bg-brand-50',   border: 'hover:border-brand-300',   hint: 'Foto del outfit a aplicar' },
   generic: { icon: 'fa-image',       color: 'text-slate-400',   bg: 'bg-slate-50/60 hover:bg-slate-50',   border: 'hover:border-slate-300',    hint: 'Click o arrastra una imagen' },
 };
 
@@ -213,6 +216,11 @@ export default function CloneImageModule() {
   const modelId = 'gemini' as const;
   const [step, setStep] = useState<Step>(1);
   const [maxStep, setMaxStep] = useState<number>(1);
+
+  // Mobile: qué slot se muestra en el selector de tabs (paso 2) y qué
+  // imagen se muestra en el selector de tabs (paso 4). Desktop ignora esto.
+  const [mobileIdentityTab, setMobileIdentityTab] = useState<'face' | 'body'>('face');
+  const [mobileResultTab, setMobileResultTab] = useState<'target' | 'before' | 'after'>('after');
 
   const [cameraStyle, setCameraStyle] = useState<CameraStyle>("iphone_1x");
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("9:16");
@@ -624,26 +632,31 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
       
       <div className="max-w-7xl mx-auto space-y-8 pb-24 animate-in fade-in duration-500">
         
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-4 pt-2">
-          <div className="text-center md:text-left">
-            <h1 className="t-display text-3xl md:text-4xl text-slate-900">Recrear una <span className="text-brand-600">foto</span></h1>
-            <div className="flex items-center justify-center md:justify-start gap-2 mt-1">
-              <p className="text-slate-500 font-bold uppercase text-[8px] md:text-[10px] tracking-[0.3em] italic">Usa una foto de inspiración con tu modelo o producto</p>
+        {/* Header — una sola fila también en mobile, sin apilarse en 2 líneas */}
+        <header className="flex items-center justify-between gap-3 px-4 pt-2">
+          <div>
+            <h1 className="t-display text-xl md:text-4xl text-slate-900">Recrear <span className="text-brand-600">foto</span></h1>
+            <div className="hidden md:flex items-center gap-2 mt-1">
+              <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.3em] italic">Usa una foto de inspiración con tu modelo o producto</p>
               <ModuleTutorial moduleId="sceneClone" steps={TUTORIAL_CONFIGS.sceneClone} />
             </div>
           </div>
-          <div className="flex bg-white p-1 rounded-2xl md:rounded-3xl border border-slate-100 shadow-sm gap-1">
+          <div className="flex bg-white p-1 rounded-xl md:rounded-3xl border border-slate-100 shadow-sm gap-1 flex-shrink-0">
             {sessions.length > 0 && (
               <button
                 onClick={() => setShowHistory(p => !p)}
-                className={`px-4 md:px-6 py-2 md:py-3 rounded-xl md:rounded-2xl t-meta transition-all flex items-center gap-2 ${showHistory ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-slate-900'}`}
+                className={`w-9 h-9 md:w-auto md:px-6 md:py-3 rounded-lg md:rounded-2xl t-meta transition-all flex items-center justify-center gap-2 ${showHistory ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-slate-900'}`}
+                aria-label="Historial"
               >
                 <i className="fa-solid fa-clock-rotate-left text-xs"></i>
                 <span className="hidden md:inline">Historial</span>
                 <span className="w-4 h-4 bg-brand-100 text-brand-700 rounded-full text-[8px] font-black flex items-center justify-center">{sessions.length}</span>
               </button>
             )}
-            <button onClick={fullReset} className="px-6 md:px-8 py-2 md:py-3 rounded-xl md:rounded-2xl t-meta text-slate-400 hover:text-slate-900 transition-all">Empezar de nuevo</button>
+            <button onClick={fullReset} className="w-9 h-9 md:w-auto md:px-8 md:py-3 rounded-lg md:rounded-2xl t-meta text-slate-400 hover:text-slate-900 transition-all flex items-center justify-center" aria-label="Empezar de nuevo">
+              <i className="fa-solid fa-rotate-right text-xs md:hidden"></i>
+              <span className="hidden md:inline">Empezar de nuevo</span>
+            </button>
           </div>
         </header>
 
@@ -660,8 +673,8 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                 {/* Izquierda: pasos narrados */}
                 <div className="md:col-span-5 lg:col-span-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="w-2 h-2 rounded-full bg-pink-500 animate-pulse" />
-                    <span className="text-[10px] font-black text-pink-600 uppercase tracking-[0.18em]">
+                    <div className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
+                    <span className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">
                       Creando · no cierres esta ventana
                     </span>
                   </div>
@@ -678,8 +691,9 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                       etaSeconds={cloneEta}
                     />
                   </div>
-                  <div className="mt-3 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5]">
-                    💡 Puedes cerrar la ventana. Te avisaremos cuando termine.
+                  <div className="mt-3 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5] flex items-start gap-2">
+                    <i className="fa-solid fa-circle-info text-brand-500 mt-0.5"></i>
+                    <span>Puedes cerrar la ventana. Te avisaremos cuando termine.</span>
                   </div>
                 </div>
                 {/* Derecha: tarjeta de imagen en vivo */}
@@ -692,9 +706,9 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                       </h3>
                     </div>
                   </div>
-                  <div className="relative aspect-[3/4] max-w-xs rounded-2xl overflow-hidden border-2 border-pink-500 bg-slate-100 animate-pulse">
+                  <div className="relative aspect-[3/4] max-w-xs rounded-2xl overflow-hidden border-2 border-brand-500 bg-slate-100 animate-pulse">
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="bg-white/95 rounded-full px-3.5 py-1.5 text-[10px] font-bold text-pink-600 tracking-[0.12em] uppercase">
+                      <div className="bg-white/95 rounded-full px-3.5 py-1.5 text-[10px] font-bold text-brand-600 tracking-[0.12em] uppercase">
                         EN VIVO
                       </div>
                     </div>
@@ -727,28 +741,28 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                     height="h-64"
                     slotType="target"
                   />
-                  
+
                   <div className="grid grid-cols-2 gap-3 pt-2">
-                    <ProSelect 
-                      label="Formato" 
-                      value={aspectRatio} 
+                    <ProSelect
+                      label="Formato"
+                      value={aspectRatio}
                       onChange={(v) => setAspectRatio(v as AspectRatio)}
                       options={[
                         { label: "9:16 (Story)", value: "9:16" },
                         { label: "4:5 (Feed)", value: "4:5" },
                         { label: "1:1 (Cuadrado)", value: "1:1" },
                         { label: "16:9 (Cine)", value: "16:9" },
-                      ]} 
+                      ]}
                     />
-                    <ProSelect 
-                      label="Estilo Cámara" 
-                      value={cameraStyle} 
+                    <ProSelect
+                      label="Estilo Cámara"
+                      value={cameraStyle}
                       onChange={(v) => setCameraStyle(v as CameraStyle)}
                       options={[
                         { label: "iPhone 1x", value: "iphone_1x" },
                         { label: "Ultra Wide 0.5x", value: "iphone_05x" },
                         { label: "Selfie Frontal", value: "iphone_selfie" },
-                      ]} 
+                      ]}
                     />
                   </div>
 
@@ -757,10 +771,35 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
               )}
 
               {step === 2 && (
-                <div className="space-y-6 animate-in slide-in-from-left-4">
+                <div className="space-y-4 animate-in slide-in-from-left-4">
                   <ProHeader title="Identidades" subtitle="Tu modelo" icon="fa-user" />
 
-                  <div className="space-y-3">
+                  {/* Mobile: un slot grande a la vez, elegido con tabs — Desktop: los dos lado a lado */}
+                  <div className="md:hidden">
+                    <div className="flex bg-slate-100 rounded-2xl p-1 gap-1 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => setMobileIdentityTab('face')}
+                        className={`flex-1 py-2.5 rounded-xl t-meta transition-all flex items-center justify-center gap-1.5 ${mobileIdentityTab === 'face' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}
+                      >
+                        Rostro {face1 && <i className="fa-solid fa-circle-check text-emerald-500 text-[10px]"></i>}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMobileIdentityTab('body')}
+                        className={`flex-1 py-2.5 rounded-xl t-meta transition-all flex items-center justify-center gap-1.5 ${mobileIdentityTab === 'body' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}
+                      >
+                        Cuerpo {body1 && <i className="fa-solid fa-circle-check text-emerald-500 text-[10px]"></i>}
+                      </button>
+                    </div>
+                    {mobileIdentityTab === 'face' ? (
+                      <ProUploadCard label="Rostro" value={face1} onChange={(v) => { setFace1(v); resetDownstream(2); }} height="h-80" slotType="face" />
+                    ) : (
+                      <ProUploadCard label="Cuerpo" value={body1} onChange={(v) => { setBody1(v); resetDownstream(2); }} height="h-80" slotType="body" />
+                    )}
+                  </div>
+
+                  <div className="hidden md:block space-y-3">
                     <label className="t-meta text-brand-900">Sujeto</label>
                     <div className="grid grid-cols-2 gap-3">
                       <ProUploadCard label="Rostro" value={face1} onChange={(v) => { setFace1(v); resetDownstream(2); }} height="h-36" slotType="face" />
@@ -772,39 +811,68 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
               )}
 
               {step === 3 && !loading && (
-                <div className="space-y-5 animate-in slide-in-from-left-4">
-                  <ProHeader title="Crear primera versión" subtitle="Combina la foto original con tus referencias" icon="fa-wand-magic-sparkles" />
+                <div className="space-y-4 animate-in slide-in-from-left-4">
+                  {/* Mobile: la imagen es protagonista, el costo va en una tira compacta abajo */}
+                  <div className="md:hidden">
+                    <div className="relative w-full aspect-[3/4] rounded-[24px] overflow-hidden bg-slate-100">
+                      {targetImage && (
+                        <img src={targetImage} alt="Vista previa" className="w-full h-full object-cover" />
+                      )}
+                      <div className="absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t from-black/60 to-transparent">
+                        <span className="text-white text-xs font-bold">Listo para crear</span>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center bg-slate-50 border border-slate-200 rounded-2xl py-2.5">
+                      <div className="flex-1 flex flex-col items-center gap-0.5">
+                        <span className="text-[9px] font-black uppercase tracking-wide text-slate-400">Formato</span>
+                        <span className="text-[13px] font-bold text-slate-900">{aspectRatio}</span>
+                      </div>
+                      <div className="w-px h-6 bg-slate-200" />
+                      <div className="flex-1 flex flex-col items-center gap-0.5">
+                        <span className="text-[9px] font-black uppercase tracking-wide text-slate-400">Imágenes</span>
+                        <span className="text-[13px] font-bold text-slate-900">1</span>
+                      </div>
+                      <div className="w-px h-6 bg-slate-200" />
+                      <div className="flex-1 flex flex-col items-center gap-0.5">
+                        <span className="text-[9px] font-black uppercase tracking-wide text-slate-400">Costo</span>
+                        <span className="text-[13px] font-bold text-brand-600">{baseGenerationCost} cr</span>
+                      </div>
+                    </div>
+                  </div>
 
-                  {/* Panel de costo — mismo diseño que Step4Type de Product Generator */}
-                  <div className="relative bg-slate-900 text-white rounded-2xl p-5 overflow-hidden">
-                    <div
-                      className="absolute -top-10 -right-10 w-[140px] h-[140px] rounded-full pointer-events-none"
-                      style={{ background: 'rgba(124,58,237,0.3)', filter: 'blur(40px)' }}
-                    />
-                    <div className="relative">
-                      <div className="text-[10px] font-bold text-pink-300 uppercase tracking-[0.14em] mb-3.5">
-                        Resumen del costo
-                      </div>
-                      <div className="flex flex-col gap-2 mb-3.5 text-[13px]">
-                        <div className="flex justify-between">
-                          <span className="opacity-70">Formato</span>
-                          <span className="font-semibold">{aspectRatio}</span>
+                  {/* Desktop: panel de costo original */}
+                  <div className="hidden md:block space-y-5">
+                    <ProHeader title="Crear primera versión" subtitle="Combina la foto original con tus referencias" icon="fa-wand-magic-sparkles" />
+                    <div className="relative bg-slate-900 text-white rounded-2xl p-5 overflow-hidden">
+                      <div
+                        className="absolute -top-10 -right-10 w-[140px] h-[140px] rounded-full pointer-events-none"
+                        style={{ background: 'rgba(247,44,91,0.3)', filter: 'blur(40px)' }}
+                      />
+                      <div className="relative">
+                        <div className="text-[10px] font-bold text-brand-300 uppercase tracking-[0.14em] mb-3.5">
+                          Resumen del costo
                         </div>
-                        <div className="flex justify-between">
-                          <span className="opacity-70">Imágenes</span>
-                          <span className="font-semibold">1</span>
+                        <div className="flex flex-col gap-2 mb-3.5 text-[13px]">
+                          <div className="flex justify-between">
+                            <span className="opacity-70">Formato</span>
+                            <span className="font-semibold">{aspectRatio}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="opacity-70">Imágenes</span>
+                            <span className="font-semibold">1</span>
+                          </div>
+                          <div className="h-px bg-white/10 my-1.5" />
+                          <div className="flex justify-between items-baseline">
+                            <span className="opacity-85 text-[13px]">Total</span>
+                            <span className="t-display text-[36px] tracking-tight leading-none normal-case not-italic">
+                              {baseGenerationCost}{' '}
+                              <span className="text-sm opacity-70 font-semibold normal-case">cr</span>
+                            </span>
+                          </div>
                         </div>
-                        <div className="h-px bg-white/10 my-1.5" />
-                        <div className="flex justify-between items-baseline">
-                          <span className="opacity-85 text-[13px]">Total</span>
-                          <span className="t-display text-[36px] tracking-tight leading-none normal-case not-italic">
-                            {baseGenerationCost}{' '}
-                            <span className="text-sm opacity-70 font-semibold normal-case">cr</span>
-                          </span>
+                        <div className="text-[11px] leading-[1.5] opacity-70">
+                          Te quedarán {creditsAfter} cr
                         </div>
-                      </div>
-                      <div className="text-[11px] leading-[1.5] opacity-70">
-                        Te quedarán {creditsAfter} cr
                       </div>
                     </div>
                   </div>
@@ -816,16 +884,63 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
               )}
 
               {step === 4 && (
-                <div className="space-y-6 animate-in slide-in-from-left-4">
+                <div className="space-y-4 animate-in slide-in-from-left-4">
+                  {/* Mobile: selector Objetivo/Antes/Después — solo se muestran las vistas que ya existen */}
+                  <div className="md:hidden">
+                    {(() => {
+                      const availableTabs: { id: 'target' | 'before' | 'after'; label: string; img: string | null }[] = [
+                        ...(targetImage ? [{ id: 'target' as const, label: 'Objetivo', img: targetImage }] : []),
+                        ...(baseComposition ? [{ id: 'before' as const, label: 'Antes', img: baseComposition }] : []),
+                        ...(finalImage ? [{ id: 'after' as const, label: 'Después', img: finalImage }] : []),
+                      ];
+                      const activeTab = availableTabs.find(t => t.id === mobileResultTab) || availableTabs[availableTabs.length - 1];
+                      return (
+                        <>
+                          {availableTabs.length > 1 && (
+                            <div className="flex bg-slate-100 rounded-2xl p-1 gap-1 mb-3">
+                              {availableTabs.map(t => (
+                                <button
+                                  key={t.id}
+                                  type="button"
+                                  onClick={() => setMobileResultTab(t.id)}
+                                  className={`flex-1 py-2.5 rounded-xl t-meta transition-all ${activeTab?.id === t.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}
+                                >
+                                  {t.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {activeTab?.img && (
+                            <div className="relative w-full aspect-[3/4] rounded-[24px] overflow-hidden bg-slate-100">
+                              <img src={activeTab.img} alt={activeTab.label} className="w-full h-full object-cover" />
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+
                   <ProHeader title="Outfit & Productos" subtitle="Personalización de elementos" icon="fa-shirt" />
 
-                  <div className="relative bg-slate-900 text-white rounded-2xl p-5 overflow-hidden">
+                  <div className="md:hidden flex items-center bg-slate-50 border border-slate-200 rounded-2xl py-2.5">
+                    <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
+                      <span className="text-[9px] font-black uppercase tracking-wide text-slate-400">Cambios</span>
+                      <span className="text-[12px] font-bold text-slate-900 text-center leading-tight">{finalChangeSummary}</span>
+                    </div>
+                    <div className="w-px h-6 bg-slate-200" />
+                    <div className="flex-1 flex flex-col items-center gap-0.5">
+                      <span className="text-[9px] font-black uppercase tracking-wide text-slate-400">Costo</span>
+                      <span className="text-[13px] font-bold text-brand-600">{CLONE_COST} cr</span>
+                    </div>
+                  </div>
+
+                  <div className="hidden md:block relative bg-slate-900 text-white rounded-2xl p-5 overflow-hidden">
                     <div
                       className="absolute -top-10 -right-10 w-[140px] h-[140px] rounded-full pointer-events-none"
-                      style={{ background: 'rgba(236,72,153,0.28)', filter: 'blur(40px)' }}
+                      style={{ background: 'rgba(247,44,91,0.28)', filter: 'blur(40px)' }}
                     />
                     <div className="relative">
-                      <div className="text-[10px] font-bold text-pink-300 uppercase tracking-[0.14em] mb-3.5">
+                      <div className="text-[10px] font-bold text-brand-300 uppercase tracking-[0.14em] mb-3.5">
                         Imagen final · Consume créditos
                       </div>
                       <div className="flex flex-col gap-2 mb-3.5 text-[13px]">
@@ -947,11 +1062,19 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                   false
                 }
                 loading={loading && (step === 3 || step === 4)}
+                pulse={
+                  step === 1 ? canGoToIdentity :
+                  step === 2 ? canGoToBase :
+                  step === 4 ? canApplyFinalChanges :
+                  false
+                }
               />
             </section>
           </div>
 
-          <div className="lg:col-span-8">
+          {/* Panel de preview grande: solo desktop. En mobile cada paso ya muestra
+              su propia vista inline (ver arriba), esta caja no se duplica. */}
+          <div className="hidden lg:block lg:col-span-8">
             <div className="bg-slate-900 rounded-[48px] p-8 md:p-12 min-h-[600px] md:min-h-[800px] flex flex-col shadow-2xl border-8 border-slate-800 relative overflow-hidden">
               
               <div className="flex justify-between items-center mb-8 relative z-10">
@@ -1002,7 +1125,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                          <div className="text-white/30 text-lg">→</div>
                       </div>
                       <button
-                        className={`flex-1 rounded-xl overflow-hidden border-2 transition-all relative ${activePreview === finalImage ? 'border-accent-400 opacity-100 shadow-[0_0_15px_rgba(228,241,172,0.3)]' : 'border-white/20 opacity-50 hover:opacity-80'}`}
+                        className={`flex-1 rounded-xl overflow-hidden border-2 transition-all relative ${activePreview === finalImage ? 'border-brand-400 opacity-100 shadow-[0_0_15px_rgba(247,44,91,0.35)]' : 'border-white/20 opacity-50 hover:opacity-80'}`}
                         onClick={() => { if (lastFinalImageRef.current) setFinalImage(lastFinalImageRef.current); }}
                         title="Ver imagen final (después)"
                       >

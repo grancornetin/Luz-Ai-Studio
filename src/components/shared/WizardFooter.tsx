@@ -8,6 +8,9 @@ interface WizardFooterProps {
   disabled?: boolean;
   costInfo?: { cost: number; label?: string; proCost?: number; proLabel?: string };
   loading?: boolean;
+  /** Llama la atención sobre el botón cuando el paso ya está completo —
+   * un pulso suave, no un avance automático. El usuario decide cuándo tocar. */
+  pulse?: boolean;
 }
 
 export const WizardFooter: React.FC<WizardFooterProps> = ({
@@ -17,6 +20,7 @@ export const WizardFooter: React.FC<WizardFooterProps> = ({
   disabled = false,
   costInfo,
   loading = false,
+  pulse = false,
 }) => {
   return (
     <div
@@ -79,6 +83,7 @@ export const WizardFooter: React.FC<WizardFooterProps> = ({
               ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
               : 'bg-gradient-to-br from-brand-400 to-brand-600 text-white shadow-[0_12px_28px_rgba(247,44,91,0.32)] active:scale-[0.97]'
           }
+          ${pulse && !disabled && !loading ? 'animate-pulse-cta' : ''}
         `}
       >
         <span className="flex items-center gap-2">
