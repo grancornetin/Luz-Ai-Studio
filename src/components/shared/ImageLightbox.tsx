@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Download, Share2, MoreVertical, Star } from 'lucide-react';
+import { X, Download, Share2, MoreVertical, Star, MoveHorizontal } from 'lucide-react';
 import { downloadImage } from '../../utils/imageUtils';
 import { BeforeAfterSlider } from './BeforeAfterSlider';
 
@@ -44,9 +44,13 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
 }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'info' | 'compare' | 'actions'>(
-    details ? 'info' : 'compare'
+  const [activeTab, setActiveTab] = useState<'info' | 'actions'>(
+    details ? 'info' : 'actions'
   );
+  // Modo comparar: reemplaza la imagen central por el slider a pantalla
+  // casi completa — no vive dentro del panel, que quedaba chico y
+  // compitiendo con la imagen de fondo asomando arriba.
+  const [compareMode, setCompareMode] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   const [dragX, setDragX] = useState(0);
@@ -60,21 +64,18 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
     ...(secondaryActions || []),
     ...(extraButton ? [extraButton] : []),
   ];
-  const hasComparePanel = images.length > 1;
   const hasInfoPanel = !!details;
   const hasActionsPanel = allActions.length > 0;
-  const hasAnyPanel = hasInfoPanel || hasComparePanel || hasActionsPanel;
+  const hasAnyPanel = hasInfoPanel || hasActionsPanel;
 
   // Slider "antes/después": solo tiene sentido cuando ambas imágenes
   // comparten encuadre — se activa únicamente si el módulo marcó una
   // pareja exacta con esas labels (ej. Clone Image). El resto de las
-  // imágenes del set (ej. "Objetivo") quedan aparte, en miniaturas debajo.
+  // imágenes del set (ej. "Objetivo") queda accesible por la tira de
+  // miniaturas normal, no dentro del comparador.
   const beforeIdx = labels?.findIndex(l => l === 'Antes') ?? -1;
   const afterIdx = labels?.findIndex(l => l === 'Después') ?? -1;
   const hasBeforeAfterPair = beforeIdx >= 0 && afterIdx >= 0;
-  const otherIndices = hasBeforeAfterPair
-    ? images.map((_, i) => i).filter(i => i !== beforeIdx && i !== afterIdx)
-    : [];
 
   const goPrev = useCallback(() => {
     if (hasPrev) setCurrentIndex(i => i - 1);
@@ -87,13 +88,17 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
   // Keyboard
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { panelOpen ? setPanelOpen(false) : onClose(); }
+      if (e.key === 'Escape') {
+        if (panelOpen) setPanelOpen(false);
+        else if (compareMode) setCompareMode(false);
+        else onClose();
+      }
       if (e.key === 'ArrowLeft') goPrev();
       if (e.key === 'ArrowRight') goNext();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [goPrev, goNext, onClose, panelOpen]);
+  }, [goPrev, goNext, onClose, panelOpen, compareMode]);
 
   // Lock body scroll
   useEffect(() => {
@@ -195,26 +200,34 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
         <div className="w-9 h-9" />
       </div>
 
-      {/* ── IMAGEN CENTRAL ────────────────────────────────── */}
+      {/* ── IMAGEN CENTRAL (o slider de comparación) ──────── */}
       <div className="flex-1 flex items-center justify-center relative overflow-hidden px-3">
-        <div
-          className="relative max-w-full max-h-full flex items-center justify-center"
-          style={{
-            transform: isDragging ? `translateX(${dragX * 0.3}px)` : 'none',
-            transition: isDragging ? 'none' : 'transform 0.2s ease',
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) onClose();
-          }}
-        >
-          <img
-            key={currentIndex}
-            src={currentImage}
-            alt={label(currentIndex) || `Imagen ${currentIndex + 1}`}
-            className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl select-none animate-in fade-in duration-200"
-            draggable={false}
+        {compareMode && hasBeforeAfterPair ? (
+          <BeforeAfterSlider
+            beforeSrc={images[beforeIdx]}
+            afterSrc={images[afterIdx]}
+            className="max-w-full max-h-full w-auto"
           />
-        </div>
+        ) : (
+          <div
+            className="relative max-w-full max-h-full flex items-center justify-center"
+            style={{
+              transform: isDragging ? `translateX(${dragX * 0.3}px)` : 'none',
+              transition: isDragging ? 'none' : 'transform 0.2s ease',
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) onClose();
+            }}
+          >
+            <img
+              key={currentIndex}
+              src={currentImage}
+              alt={label(currentIndex) || `Imagen ${currentIndex + 1}`}
+              className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl select-none animate-in fade-in duration-200"
+              draggable={false}
+            />
+          </div>
+        )}
 
         {/* Columna de acciones flotantes */}
         <div className="absolute right-4 bottom-4 flex flex-col-reverse gap-2.5 z-[2]">
@@ -227,6 +240,18 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
               }`}
             >
               <MoreVertical size={17} />
+            </button>
+          )}
+          {hasBeforeAfterPair && (
+            <button
+              onClick={() => setCompareMode(v => !v)}
+              aria-label="Comparar antes y después"
+              className={`w-10 h-10 rounded-full backdrop-blur-md flex items-center justify-center text-white transition-colors ${
+                compareMode ? 'bg-gradient-to-br from-brand-400 to-brand-600' : 'bg-white/12 hover:bg-white/20'
+              }`}
+              title="Comparar"
+            >
+              <MoveHorizontal size={17} />
             </button>
           )}
           {allActions.map((action, i) => (
@@ -281,7 +306,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
         </div>
       )}
 
-      {/* ── PANEL DESLIZABLE (Info / Comparar / Acciones) ─── */}
+      {/* ── PANEL DESLIZABLE (Info / Acciones) ────────────── */}
       {hasAnyPanel && (
         <>
           <div
@@ -301,8 +326,8 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
           >
             <div className="w-9 h-1 rounded-full bg-white/20 mx-auto mb-3.5 flex-shrink-0" />
 
-            <div className="flex gap-1 bg-white/[0.06] rounded-xl p-1 mb-3.5 flex-shrink-0">
-              {hasInfoPanel && (
+            {hasInfoPanel && hasActionsPanel && (
+              <div className="flex gap-1 bg-white/[0.06] rounded-xl p-1 mb-3.5 flex-shrink-0">
                 <button
                   onClick={() => setActiveTab('info')}
                   className={`flex-1 py-2 rounded-lg text-[11px] font-bold transition-colors ${
@@ -311,18 +336,6 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
                 >
                   Info
                 </button>
-              )}
-              {hasComparePanel && (
-                <button
-                  onClick={() => setActiveTab('compare')}
-                  className={`flex-1 py-2 rounded-lg text-[11px] font-bold transition-colors ${
-                    activeTab === 'compare' ? 'bg-white/12 text-white' : 'text-white/45'
-                  }`}
-                >
-                  Comparar
-                </button>
-              )}
-              {hasActionsPanel && (
                 <button
                   onClick={() => setActiveTab('actions')}
                   className={`flex-1 py-2 rounded-lg text-[11px] font-bold transition-colors ${
@@ -331,62 +344,11 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
                 >
                   Acciones
                 </button>
-              )}
-            </div>
+              </div>
+            )}
 
             <div className="overflow-y-auto">
               {activeTab === 'info' && hasInfoPanel && details}
-
-              {activeTab === 'compare' && hasComparePanel && hasBeforeAfterPair && (
-                <div className="flex gap-3 items-start">
-                  <BeforeAfterSlider
-                    beforeSrc={images[beforeIdx]}
-                    afterSrc={images[afterIdx]}
-                    className="flex-1 max-h-[42vh]"
-                  />
-                  {otherIndices.length > 0 && (
-                    <div className="flex flex-col gap-2 flex-shrink-0" style={{ width: 72 }}>
-                      {otherIndices.map(idx => (
-                        <button
-                          key={idx}
-                          onClick={() => { setCurrentIndex(idx); setPanelOpen(false); }}
-                          className={`relative rounded-xl overflow-hidden aspect-square border-2 transition-all ${
-                            idx === currentIndex ? 'border-brand-500' : 'border-transparent opacity-70'
-                          }`}
-                        >
-                          <img src={images[idx]} alt={label(idx) || `Imagen ${idx + 1}`} className="w-full h-full object-cover" />
-                          {label(idx) && (
-                            <span className="absolute bottom-1 inset-x-0 text-center text-[7px] font-black text-white uppercase tracking-widest drop-shadow">
-                              {label(idx)}
-                            </span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {activeTab === 'compare' && hasComparePanel && !hasBeforeAfterPair && (
-                <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${images.length}, 1fr)` }}>
-                  {images.map((src, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => { setCurrentIndex(idx); setPanelOpen(false); }}
-                      className={`relative rounded-xl overflow-hidden aspect-square border-2 transition-all ${
-                        idx === currentIndex ? 'border-brand-500' : 'border-transparent opacity-70'
-                      }`}
-                    >
-                      <img src={src} alt={label(idx) || `Imagen ${idx + 1}`} className="w-full h-full object-cover" />
-                      {label(idx) && (
-                        <span className="absolute bottom-1 inset-x-0 text-center text-[8px] font-black text-white uppercase tracking-widest drop-shadow">
-                          {label(idx)}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
 
               {activeTab === 'actions' && hasActionsPanel && (
                 <div className="grid grid-cols-2 gap-2">
