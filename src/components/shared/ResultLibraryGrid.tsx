@@ -228,7 +228,7 @@ export const ResultLibraryGrid: React.FC<ResultLibraryGridProps> = ({
           {stats.map((s, i) => (
             <div key={i} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
               <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">{s.label}</p>
-              <p className={`text-[22px] font-black ${s.color ?? 'text-slate-900'}`} style={{ fontFamily: 'Syne, Inter, sans-serif' }}>
+              <p className={`t-display text-[22px] not-italic normal-case ${s.color ?? 'text-slate-900'}`}>
                 {s.value}
               </p>
               {s.sub && <p className="text-[11px] text-slate-400">{s.sub}</p>}

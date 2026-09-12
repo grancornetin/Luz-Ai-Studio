@@ -642,20 +642,20 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
               <ModuleTutorial moduleId="sceneClone" steps={TUTORIAL_CONFIGS.sceneClone} />
             </div>
           </div>
-          <div className="flex bg-white p-1 rounded-xl md:rounded-3xl border border-slate-100 shadow-sm gap-1 flex-shrink-0">
+          <div className="flex bg-white p-1 rounded-2xl md:rounded-3xl border border-slate-100 shadow-sm gap-1 flex-shrink-0">
             {sessions.length > 0 && (
               <button
                 onClick={() => setShowHistory(p => !p)}
-                className={`w-8 h-8 md:w-auto md:px-6 md:py-3 rounded-lg md:rounded-2xl t-meta transition-all flex items-center justify-center gap-2 ${showHistory ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-slate-900'}`}
-                aria-label="Historial"
+                className={`relative w-10 h-10 md:w-auto md:px-6 md:py-3 rounded-xl md:rounded-2xl t-meta transition-all flex items-center justify-center gap-2 ${showHistory ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-slate-900'}`}
+                aria-label={`Historial (${sessions.length} sesiones)`}
               >
-                <i className="fa-solid fa-clock-rotate-left text-xs"></i>
+                <i className="fa-solid fa-clock-rotate-left text-sm"></i>
                 <span className="hidden md:inline">Historial</span>
-                <span className="w-4 h-4 bg-brand-100 text-brand-700 rounded-full text-[8px] font-black flex items-center justify-center">{sessions.length}</span>
+                <span className="absolute -top-1 -right-1 md:static md:top-auto md:right-auto w-4 h-4 bg-brand-100 text-brand-700 rounded-full text-[8px] font-black flex items-center justify-center ring-2 ring-white md:ring-0">{sessions.length}</span>
               </button>
             )}
-            <button onClick={fullReset} className="w-8 h-8 md:w-auto md:px-8 md:py-3 rounded-lg md:rounded-2xl t-meta text-slate-400 hover:text-slate-900 transition-all flex items-center justify-center" aria-label="Empezar de nuevo">
-              <i className="fa-solid fa-rotate-right text-xs md:hidden"></i>
+            <button onClick={fullReset} className="w-10 h-10 md:w-auto md:px-8 md:py-3 rounded-xl md:rounded-2xl t-meta text-slate-400 hover:text-slate-900 transition-all flex items-center justify-center" aria-label="Empezar de nuevo">
+              <i className="fa-solid fa-rotate-right text-sm md:hidden"></i>
               <span className="hidden md:inline">Empezar de nuevo</span>
             </button>
           </div>
@@ -1176,7 +1176,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                     ...(s.body1   ? [{ label: 'Cuerpo', src: s.body1 }]   : []),
                     ...(s.outfit1 ? [{ label: 'Outfit', src: s.outfit1 }] : []),
                   ]}
-                  accentColor="blue"
+                  accentColor="fuchsia"
                   onClick={() => { const imgs = [s.targetImage, s.baseComposition, s.finalImage].filter(Boolean) as string[]; if (imgs.length) { setLightboxImages(imgs); setLightboxIndex(0); setLightboxOpen(true); }}}
                   actions={[
                     { label: '↺ Recrear', onClick: e => { e.stopPropagation(); loadSession(s); }, variant: 'primary' },
