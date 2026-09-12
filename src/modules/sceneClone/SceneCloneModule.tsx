@@ -1071,7 +1071,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                 }
                 secondaryAction={
                   (baseComposition || finalImage) && !loading
-                    ? { label: 'Descargar todo', icon: <i className="fa-solid fa-file-zipper text-sm"></i>, onClick: handleDownloadZip }
+                    ? { label: 'Descargar todo', icon: <i className="fa-solid fa-download text-sm"></i>, onClick: handleDownloadZip }
                     : undefined
                 }
               />
@@ -1213,7 +1213,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
           isVisible={!!(showHistory && (baseComposition || finalImage) && fabVisible && !loading)}
           primaryAction={{
             label: 'Descargar todo',
-            icon: <i className="fa-solid fa-file-zipper text-sm"></i>,
+            icon: <i className="fa-solid fa-download text-sm"></i>,
             onClick: handleDownloadZip,
           }}
           onClearSelection={fullReset}
