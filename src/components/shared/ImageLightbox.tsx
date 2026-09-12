@@ -1,4 +1,5 @@
 import React, { useEffect, useCallback, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Download, Share2, MoreVertical, Star } from 'lucide-react';
 import { downloadImage } from '../../utils/imageUtils';
 
@@ -138,9 +139,14 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
 
   const label = (i: number) => labels?.[i];
 
-  return (
+  // Portal a document.body: un layout con overflow/transform en algún
+  // ancestro puede convertirlo en el "containing block" de position:fixed,
+  // haciendo que el modal no cubra la pantalla real y quede detrás de otros
+  // elementos fixed (como la navegación). Montar en <body> lo evita del todo.
+  return createPortal(
     <div
       className="fixed inset-0 z-[9999] bg-black flex flex-col"
+      style={{ height: '100dvh' }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -227,7 +233,10 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
 
       {/* ── TIRA DE MINIATURAS ────────────────────────────── */}
       {images.length > 1 && (
-        <div className="flex-shrink-0 px-4 pb-3 pt-1 relative z-[2]">
+        <div
+          className="flex-shrink-0 px-4 pt-1 relative z-[2]"
+          style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+        >
           <div className="flex gap-2 overflow-x-auto">
             {images.map((src, idx) => (
               <button
@@ -339,6 +348,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
           </div>
         </>
       )}
-    </div>
+    </div>,
+    document.body
   );
 };
