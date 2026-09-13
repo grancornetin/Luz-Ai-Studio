@@ -65,7 +65,7 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`relative aspect-[3/4] rounded-2xl overflow-hidden select-none touch-none max-w-full max-h-full ${className}`}
+      className={`relative aspect-[3/4] rounded-2xl overflow-hidden select-none touch-none ${className}`}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}

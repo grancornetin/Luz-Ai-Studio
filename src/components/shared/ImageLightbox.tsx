@@ -206,7 +206,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
           <BeforeAfterSlider
             beforeSrc={images[beforeIdx]}
             afterSrc={images[afterIdx]}
-            className="max-w-full max-h-full w-auto"
+            className="h-full max-w-full"
           />
         ) : (
           <div
