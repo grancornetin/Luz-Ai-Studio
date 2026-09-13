@@ -214,7 +214,23 @@ const ProToggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; la
 export default function CloneImageModule() {
   const { credits, user } = useAuth();
   const modelId = 'gemini' as const;
-  const [step, setStep] = useState<Step>(1);
+
+  // El paso vive en la URL (?paso=2) — no en useState — para que el
+  // botón/gesto "atrás" nativo del navegador retroceda un paso del wizard
+  // en vez de sacar al usuario del módulo entero (recarga la página a
+  // mitad de un paso reinicia el wizard, igual que antes de este cambio;
+  // no se intenta recuperar el estado de las fotos subidas).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const stepFromUrl = Number(searchParams.get('paso'));
+  const step: Step = (stepFromUrl >= 1 && stepFromUrl <= 4 ? stepFromUrl : 1) as Step;
+  const setStep = (next: Step, options?: { replace?: boolean }) => {
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      p.set('paso', String(next));
+      return p;
+    }, { replace: options?.replace ?? false });
+  };
+
   const [maxStep, setMaxStep] = useState<number>(1);
 
   // Mobile: qué slot se muestra en el selector de tabs (paso 2) y qué
@@ -242,7 +258,6 @@ export default function CloneImageModule() {
   const lastFinalImageRef = React.useRef<string | null>(null);
 
   // Retomar sesión desde notificación
-  const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
     const sessionParam = searchParams.get('session');
     if (!sessionParam || !user) return;
@@ -250,7 +265,7 @@ export default function CloneImageModule() {
     (async () => {
       const notif = await getNotification(user.uid, sessionParam);
       if (cancelled || !notif) {
-        setSearchParams({}, { replace: true });
+        setSearchParams(prev => { const p = new URLSearchParams(prev); p.delete('session'); return p; }, { replace: true });
         return;
       }
       const completed = notif.shots.find(s => s.status === 'completed' && s.imageUrl);
@@ -263,9 +278,9 @@ export default function CloneImageModule() {
         }
         if (notif.metadata?.cameraStyle) setCameraStyle(notif.metadata.cameraStyle);
         if (notif.metadata?.aspectRatio) setAspectRatio(notif.metadata.aspectRatio);
-        setStep(4);
+        setStep(4, { replace: true });
       }
-      setSearchParams({}, { replace: true });
+      setSearchParams(prev => { const p = new URLSearchParams(prev); p.delete('session'); return p; }, { replace: true });
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -353,6 +368,19 @@ export default function CloneImageModule() {
     if (canGoToOutfit)   m = 4;
     if (m > maxStep) setMaxStep(m);
   }, [canGoToIdentity, canGoToBase, canGoToOutfit, maxStep]);
+
+  // Si el paso de la URL no es alcanzable con lo que hay en memoria (ej.
+  // recarga de página a mitad del wizard, o alguien pegó/compartió el
+  // link directo) — evita mostrar una pantalla a medias (costo sin
+  // imagen, personalización sin composición base) y vuelve al paso 1.
+  // No aplica mientras se está retomando una sesión desde notificación
+  // (esa carga es async y todavía no completó su propio setStep).
+  useEffect(() => {
+    if (searchParams.get('session')) return;
+    const reachable = step === 1 ? true : step === 2 ? canGoToIdentity : step === 3 ? canGoToBase : canGoToOutfit;
+    if (!reachable) setStep(1, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   function resetDownstream(fromStep: Step) {
     if (fromStep <= 2) {
@@ -609,12 +637,12 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
     setCameraStyle(s.cameraStyle as any);
     setAspectRatio(s.aspectRatio as any);
     setMaxStep(4);
-    setStep(4);
+    setStep(4, { replace: true });
     setShowHistory(false);
   };
 
   const fullReset = () => {
-    setStep(1);
+    setStep(1, { replace: true });
     setTargetImage(null);
     setFace1(null);
     setBody1(null);
