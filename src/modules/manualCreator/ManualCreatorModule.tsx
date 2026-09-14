@@ -311,7 +311,7 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
     <>
       <NoCreditsModal isOpen={showNoCredits} onClose={closeModal} required={requiredCredits} available={0} />
       
-      <div className="md:grid md:grid-cols-2 md:gap-8 animate-in fade-in duration-500 pb-20">
+      <div className="md:grid md:grid-cols-2 md:gap-8 animate-in fade-in duration-500 pb-28 md:pb-20">
         {/* Header + tab mobile (Datos / Vista previa) — en desktop ambos
             paneles conviven lado a lado y este bloque no se muestra. */}
         <div className="md:col-span-2 md:hidden mb-4">
