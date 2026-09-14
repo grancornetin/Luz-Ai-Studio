@@ -54,14 +54,50 @@ function flowToWizardStep(step: FlowStep): number {
 // ── Sub-componente: header de paso ───────────────────────────────────────────
 
 const StepHeader: React.FC<{ title: string; subtitle: string; icon: string }> = ({ title, subtitle, icon }) => (
-  <div className="flex items-center gap-4 mb-6">
-    <div className="w-12 h-12 rounded-2xl bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 shadow-sm flex-shrink-0">
-      <i className={`fa-solid ${icon} text-xl`} />
+  <div className="flex items-center gap-3 md:gap-4 mb-3 md:mb-6">
+    <div className="w-9 h-9 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 shadow-sm flex-shrink-0">
+      <i className={`fa-solid ${icon} text-sm md:text-xl`} />
     </div>
     <div>
-      <h2 className="t-display text-xl text-slate-900">{title}</h2>
-      <p className="t-meta mt-1">{subtitle}</p>
+      <h2 className="t-display text-sm md:text-xl text-slate-900">{title}</h2>
+      <p className="t-meta mt-0.5 md:mt-1">{subtitle}</p>
     </div>
+  </div>
+);
+
+// ── Sub-componente: foto original con marcadores de prendas detectadas ──────
+// Reusado en mobile (dentro del tab "Foto" del paso 2) y en desktop (columna
+// derecha, siempre visible). Tocar una etiqueta selecciona/deselecciona esa
+// prenda — misma acción que la lista.
+
+const ScanOverlay: React.FC<{ kit: OutfitKit; onToggle: (id: string) => void }> = ({ kit, onToggle }) => (
+  <div className="relative aspect-[3/4] mx-auto rounded-[28px] overflow-hidden">
+    <img src={kit.originalImage} className="w-full h-full object-cover opacity-60 grayscale" />
+    <div className="absolute inset-x-0 h-1 bg-brand-400 shadow-[0_0_15px_#FF748B] animate-scan z-30 opacity-50" />
+    <style>{`@keyframes scan { 0% { top: 0%; } 100% { top: 100%; } } .animate-scan { animation: scan 3s linear infinite; }`}</style>
+    <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
+      {kit.items.map(item => {
+        if (!item.selected) return null;
+        const x = `${item.coordinates.x / 10}%`;
+        const y = `${item.coordinates.y / 10}%`;
+        return (
+          <g key={`line-${item.id}`}>
+            <circle cx={x} cy={y} r="5" fill="#FF748B" className="animate-pulse" />
+            <line x1={x} y1={y} x2={x} y2={`${item.coordinates.y / 10 - 4}%`} stroke="#FF748B" strokeWidth="2" strokeDasharray="4" className="opacity-40" />
+          </g>
+        );
+      })}
+    </svg>
+    {kit.items.map(item => (
+      <button
+        key={`label-${item.id}`}
+        onClick={() => onToggle(item.id)}
+        style={{ left: `${item.coordinates.x / 10}%`, top: `${item.coordinates.y / 10}%` }}
+        className={`absolute z-20 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all -translate-x-1/2 -translate-y-8 shadow-2xl border-2 min-w-[44px] min-h-[36px] ${item.selected ? 'bg-brand-600 text-white border-brand-400 scale-110' : 'bg-black/80 text-white/30 border-white/10 scale-90 opacity-60'}`}
+      >
+        {item.name}
+      </button>
+    ))}
   </div>
 );
 
@@ -90,6 +126,9 @@ const OutfitExtractorModule: React.FC = () => {
   const [step, setStep]           = useState<FlowStep>('idle');
   const [mainView, setMainView]   = useState<'main' | 'library'>('main');
   const [libView, setLibView]     = useState<LibraryView>('kits');
+  // Mobile paso 2: elegir prendas por foto (con marcadores) o por lista.
+  // Desktop siempre muestra ambas (columna izquierda = lista, derecha = foto).
+  const [mobileScanTab, setMobileScanTab] = useState<'photo' | 'list'>('photo');
 
   const [sourceImage, setSourceImage]           = useState<string | null>(null);
   const [currentKit, setCurrentKit]             = useState<OutfitKit | null>(null);
@@ -111,7 +150,6 @@ const OutfitExtractorModule: React.FC = () => {
 
   const { isVisible: fabVisible } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: false });
   const { checkAndDeduct, showNoCredits, requiredCredits, closeModal } = useCreditGuard();
-  const containerRef = useRef<HTMLDivElement>(null);
   const renderQueueRunningRef = useRef(false);
 
   // Retomar sesión desde notificación
@@ -576,32 +614,30 @@ const OutfitExtractorModule: React.FC = () => {
 
       <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 pb-24 animate-in fade-in">
 
-        {/* ── Header ─────────────────────────────────────────────────────── */}
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-5 px-1 mb-2">
+        {/* ── Header: una sola fila también en mobile ───────────────────── */}
+        <header className="flex items-center justify-between gap-3 px-1 mb-2">
           <div>
-            <h1 className="t-display text-3xl text-slate-900">Extraer prendas</h1>
-            <div className="flex items-center gap-2 mt-2">
+            <h1 className="t-display text-[13px] md:text-3xl text-slate-900 leading-none">Extraer <span className="text-brand-600">prendas</span></h1>
+            <div className="hidden md:flex items-center gap-2 mt-2">
               <p className="text-slate-500 font-medium italic text-xs md:text-sm">
                 Separa cada prenda de una foto y crea una imagen limpia para tu catálogo.
               </p>
               <ModuleTutorial moduleId="outfitKit" steps={TUTORIAL_CONFIGS.outfitKit} />
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-slate-100 gap-0">
-              <button
-                onClick={() => { setMainView('main'); if (step === 'library' as any) setStep('idle'); }}
-                className={`px-5 md:px-8 py-2 md:py-3 rounded-xl t-meta transition-colors duration-150 ${mainView === 'main' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700'}`}
-              >
-                Extraer
-              </button>
-              <button
-                onClick={() => setMainView('library')}
-                className={`px-5 md:px-8 py-2 md:py-3 rounded-xl t-meta transition-colors duration-150 ${mainView === 'library' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700'}`}
-              >
-                Biblioteca
-              </button>
-            </div>
+          <div className="flex bg-white p-1 rounded-xl md:rounded-2xl shadow-sm border border-slate-100 gap-0 flex-shrink-0">
+            <button
+              onClick={() => { setMainView('main'); if (step === 'library' as any) setStep('idle'); }}
+              className={`px-3.5 md:px-8 py-2 md:py-3 rounded-lg md:rounded-xl t-meta transition-colors duration-150 ${mainView === 'main' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700'}`}
+            >
+              Extraer
+            </button>
+            <button
+              onClick={() => setMainView('library')}
+              className={`px-3.5 md:px-8 py-2 md:py-3 rounded-lg md:rounded-xl t-meta transition-colors duration-150 ${mainView === 'library' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-700'}`}
+            >
+              Biblioteca
+            </button>
           </div>
         </header>
 
@@ -614,8 +650,8 @@ const OutfitExtractorModule: React.FC = () => {
                 {/* Izquierda: estado narrado */}
                 <div className="md:col-span-5 lg:col-span-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="w-2 h-2 rounded-full bg-pink-500 animate-pulse" />
-                    <span className="text-[10px] font-black text-pink-600 uppercase tracking-[0.18em]">
+                    <div className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
+                    <span className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">
                       {step === 'detecting' ? 'Analizando · no cierres esta ventana' : 'Generando · no cierres esta ventana'}
                     </span>
                   </div>
@@ -632,7 +668,7 @@ const OutfitExtractorModule: React.FC = () => {
                   <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-[18px] space-y-3">
                     {loadingProgressSteps.map((s, i) => (
                       <div key={i} className="flex items-center gap-3">
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${s.done ? 'bg-emerald-500' : s.active ? 'bg-pink-500' : 'bg-slate-100'}`}>
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${s.done ? 'bg-emerald-500' : s.active ? 'bg-brand-500' : 'bg-slate-100'}`}>
                           {s.done
                             ? <i className="fa-solid fa-check text-white text-[9px]" />
                             : s.active
@@ -650,8 +686,9 @@ const OutfitExtractorModule: React.FC = () => {
                       {loadingMsg}
                     </div>
                   )}
-                  <div className="mt-3 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5]">
-                    💡 Puedes cerrar la ventana. Te avisaremos cuando termine.
+                  <div className="mt-3 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5] flex items-start gap-2">
+                    <i className="fa-solid fa-circle-info text-brand-500 mt-0.5"></i>
+                    <span>Puedes cerrar la ventana. Te avisaremos cuando termine.</span>
                   </div>
                 </div>
 
@@ -666,9 +703,9 @@ const OutfitExtractorModule: React.FC = () => {
                     </h3>
                   </div>
                   {step === 'detecting' ? (
-                    <div className="relative aspect-[3/4] max-w-xs rounded-2xl overflow-hidden border-2 border-pink-500 bg-slate-100 animate-pulse">
+                    <div className="relative aspect-[3/4] max-w-xs rounded-2xl overflow-hidden border-2 border-brand-500 bg-slate-100 animate-pulse">
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="bg-white/95 rounded-full px-3.5 py-1.5 text-[10px] font-bold text-pink-600 tracking-[0.12em] uppercase">Analizando</div>
+                        <div className="bg-white/95 rounded-full px-3.5 py-1.5 text-[10px] font-bold text-brand-600 tracking-[0.12em] uppercase">Analizando</div>
                       </div>
                     </div>
                   ) : (
@@ -677,7 +714,7 @@ const OutfitExtractorModule: React.FC = () => {
                         const done = item.status === 'done';
                         const doing = item.status === 'generating';
                         return (
-                          <div key={item.id} className={`relative aspect-[3/4] rounded-2xl overflow-hidden transition-all ${done ? 'shadow-md' : doing ? 'border-2 border-pink-500 bg-slate-100 animate-pulse' : 'bg-slate-100'}`}>
+                          <div key={item.id} className={`relative aspect-[3/4] rounded-2xl overflow-hidden transition-all ${done ? 'shadow-md' : doing ? 'border-2 border-brand-500 bg-slate-100 animate-pulse' : 'bg-slate-100'}`}>
                             {done && item.imageUrl ? (
                               <>
                                 <img src={item.imageUrl} className="w-full h-full object-contain bg-slate-50" />
@@ -685,7 +722,7 @@ const OutfitExtractorModule: React.FC = () => {
                               </>
                             ) : doing ? (
                               <div className="absolute inset-0 flex items-center justify-center">
-                                <div className="bg-white/95 rounded-full px-3.5 py-1.5 text-[10px] font-bold text-pink-600 tracking-[0.12em] uppercase">EN VIVO</div>
+                                <div className="bg-white/95 rounded-full px-3.5 py-1.5 text-[10px] font-bold text-brand-600 tracking-[0.12em] uppercase">EN VIVO</div>
                               </div>
                             ) : (
                               <div className="absolute top-2 left-2 text-[10px] text-slate-400 font-semibold">{i + 1}</div>
@@ -708,18 +745,18 @@ const OutfitExtractorModule: React.FC = () => {
 
             {/* Columna izquierda: wizard */}
             <div className="lg:col-span-4 space-y-6">
-              <section className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+              <section className="bg-white rounded-2xl md:rounded-[40px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
                 <WizardStepper
                   steps={OUTFIT_WIZARD_STEPS}
                   current={flowToWizardStep(step)}
                   onJump={undefined}
                 />
 
-                <div className="p-6 md:p-8 flex-1 overflow-auto">
+                <div className="p-4 md:p-8 flex-1 overflow-auto">
 
                   {/* PASO 1: subir foto */}
                   {step === 'idle' && (
-                    <div className="space-y-6 animate-in slide-in-from-left-4">
+                    <div className="space-y-3 md:space-y-6 animate-in slide-in-from-left-4">
                       <StepHeader title="Sube tu foto" subtitle="Usa una foto donde se vea el look completo" icon="fa-camera" />
                       <ImageSlot
                         value={sourceImage}
@@ -740,67 +777,110 @@ const OutfitExtractorModule: React.FC = () => {
 
                   {/* PASO 2: seleccionar prendas */}
                   {step === 'scan_overlay' && currentKit && (
-                    <div className="space-y-5 animate-in slide-in-from-left-4">
+                    <div className="space-y-4 md:space-y-5 animate-in slide-in-from-left-4">
                       <StepHeader title="Elige las prendas" subtitle="Selecciona cuáles quieres separar" icon="fa-shirt" />
 
-                      {/* Botones de selección rápida */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <button onClick={() => quickSelect('clothing')} className="py-3 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-black uppercase text-slate-600 active:scale-95 transition-all">Solo ropa</button>
-                        <button onClick={() => quickSelect('clothing_footwear')} className="py-3 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-black uppercase text-slate-600 active:scale-95 transition-all">Ropa + calzado</button>
-                        <button onClick={() => quickSelect('all')} className="py-3 bg-brand-50 border border-brand-100 rounded-xl text-[10px] font-black uppercase text-brand-600 active:scale-95 transition-all">Todas</button>
-                        <button onClick={() => quickSelect('none')} className="py-3 bg-red-50 border border-red-100 rounded-xl text-[10px] font-black uppercase text-red-600 active:scale-95 transition-all">Ninguna</button>
+                      {/* Mobile: tab para elegir entre ver la foto con marcadores o la lista —
+                          en desktop ambas conviven (lista acá, foto en la columna derecha) */}
+                      <div className="md:hidden flex gap-0.5 bg-brand-50 border border-brand-100 rounded-2xl p-1">
+                        <button
+                          onClick={() => setMobileScanTab('photo')}
+                          className={`flex-1 py-2 rounded-xl text-[11px] font-extrabold flex items-center justify-center gap-1.5 transition-all ${mobileScanTab === 'photo' ? 'bg-white text-brand-600 shadow-sm' : 'text-brand-600/55'}`}
+                        >
+                          <i className="fa-solid fa-camera text-[10px]" /> Foto
+                        </button>
+                        <button
+                          onClick={() => setMobileScanTab('list')}
+                          className={`flex-1 py-2 rounded-xl text-[11px] font-extrabold flex items-center justify-center gap-1.5 transition-all ${mobileScanTab === 'list' ? 'bg-white text-brand-600 shadow-sm' : 'text-brand-600/55'}`}
+                        >
+                          <i className="fa-solid fa-list text-[10px]" /> Lista
+                        </button>
                       </div>
 
-                      {/* Lista de prendas */}
-                      <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
-                        {currentKit.items.map(item => (
-                          <div
-                            key={item.id}
-                            onClick={() => toggleItemSelection(item.id)}
-                            className={`flex items-center gap-3 p-3 rounded-2xl border-2 transition-all cursor-pointer ${item.selected ? 'border-brand-600 bg-brand-50' : 'border-slate-100 bg-slate-50 opacity-50'}`}
-                          >
-                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${item.selected ? 'bg-brand-600 text-white' : 'bg-slate-200 text-slate-400'}`}>
-                              <i className={`fa-solid text-sm ${item.category === 'footwear' ? 'fa-shoe-prints' : item.category === 'bag' ? 'fa-bag-shopping' : 'fa-shirt'}`} />
-                            </div>
-                            <p className="text-[11px] font-black text-slate-900 uppercase truncate flex-1">{item.name}</p>
-                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${item.selected ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-200'}`}>
-                              {item.selected && <i className="fa-solid fa-check text-[9px]" />}
-                            </div>
-                          </div>
-                        ))}
+                      <div className={`md:hidden ${mobileScanTab === 'photo' ? '' : 'hidden'}`}>
+                        <ScanOverlay kit={currentKit} onToggle={toggleItemSelection} />
+                        <p className="mt-3 text-[10px] text-slate-400 text-center leading-relaxed">Tocá una etiqueta sobre la foto para incluir o quitar esa prenda.</p>
                       </div>
 
-                      {/* Panel de costo */}
-                      {selectedItemsCount > 0 && (
-                        <div className="relative bg-slate-900 text-white rounded-2xl p-4 overflow-hidden">
-                          <div className="absolute -top-8 -right-8 w-[120px] h-[120px] rounded-full pointer-events-none" style={{ background: 'rgba(124,58,237,0.3)', filter: 'blur(36px)' }} />
-                          <div className="relative">
-                            <div className="text-[10px] font-bold text-pink-300 uppercase tracking-[0.14em] mb-3">
-                              Resumen del costo
-                            </div>
-                            <div className="flex flex-col gap-1.5 mb-3 text-[12px]">
-                              <div className="flex justify-between">
-                                <span className="opacity-70">{selectedItemsCount} {selectedItemsCount === 1 ? 'prenda' : 'prendas'} × {outfitCostPerItem} cr</span>
-                                <span className="font-semibold">{renderCost} cr</span>
-                              </div>
-                              <div className="flex justify-between opacity-60">
-                                <span>Kit final (imagen compuesta)</span>
-                                <span className="font-semibold">{outfitCostPerItem} cr (opcional)</span>
-                              </div>
-                              <div className="h-px bg-white/10 my-1" />
-                              <div className="flex justify-between items-baseline">
-                                <span className="opacity-85">Solo renders</span>
-                                <span className="t-display text-[28px] tracking-tight leading-none normal-case not-italic">
-                                  {renderCost}{' '}
-                                  <span className="text-xs opacity-70 font-semibold normal-case">cr</span>
-                                </span>
-                              </div>
-                            </div>
-                            <div className="text-[11px] leading-[1.5] opacity-70">
-                              Te quedarán {creditsAfterRender} cr · La imagen final se cobra aparte si decides crearla.
-                            </div>
-                          </div>
+                      <div className={mobileScanTab === 'list' ? '' : 'hidden md:block'}>
+                        {/* Botones de selección rápida */}
+                        <div className="grid grid-cols-2 gap-2 mb-4">
+                          <button onClick={() => quickSelect('clothing')} className="py-3 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-black uppercase text-slate-600 active:scale-95 transition-all">Solo ropa</button>
+                          <button onClick={() => quickSelect('clothing_footwear')} className="py-3 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-black uppercase text-slate-600 active:scale-95 transition-all">Ropa + calzado</button>
+                          <button onClick={() => quickSelect('all')} className="py-3 bg-brand-50 border border-brand-100 rounded-xl text-[10px] font-black uppercase text-brand-600 active:scale-95 transition-all">Todas</button>
+                          <button onClick={() => quickSelect('none')} className="py-3 bg-red-50 border border-red-100 rounded-xl text-[10px] font-black uppercase text-red-600 active:scale-95 transition-all">Ninguna</button>
                         </div>
+
+                        {/* Lista de prendas */}
+                        <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+                          {currentKit.items.map(item => (
+                            <div
+                              key={item.id}
+                              onClick={() => toggleItemSelection(item.id)}
+                              className={`flex items-center gap-3 p-3 rounded-2xl border-2 transition-all cursor-pointer ${item.selected ? 'border-brand-600 bg-brand-50' : 'border-slate-100 bg-slate-50 opacity-50'}`}
+                            >
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${item.selected ? 'bg-brand-600 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                                <i className={`fa-solid text-sm ${item.category === 'footwear' ? 'fa-shoe-prints' : item.category === 'bag' ? 'fa-bag-shopping' : 'fa-shirt'}`} />
+                              </div>
+                              <p className="text-[11px] font-black text-slate-900 uppercase truncate flex-1">{item.name}</p>
+                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${item.selected ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-200'}`}>
+                                {item.selected && <i className="fa-solid fa-check text-[9px]" />}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Panel de costo — tira compacta en mobile, bloque completo en desktop */}
+                      {selectedItemsCount > 0 && (
+                        <>
+                          <div className="md:hidden flex items-center bg-slate-50 border border-slate-200 rounded-2xl py-2.5">
+                            <div className="flex-1 flex flex-col items-center gap-0.5">
+                              <span className="text-[9px] font-black uppercase tracking-wide text-slate-400">Prendas</span>
+                              <span className="text-[13px] font-bold text-slate-900">{selectedItemsCount}</span>
+                            </div>
+                            <div className="w-px h-6 bg-slate-200" />
+                            <div className="flex-1 flex flex-col items-center gap-0.5">
+                              <span className="text-[9px] font-black uppercase tracking-wide text-slate-400">Costo</span>
+                              <span className="text-[13px] font-bold text-brand-600">{renderCost} cr</span>
+                            </div>
+                            <div className="w-px h-6 bg-slate-200" />
+                            <div className="flex-1 flex flex-col items-center gap-0.5">
+                              <span className="text-[9px] font-black uppercase tracking-wide text-slate-400">Kit final</span>
+                              <span className="text-[13px] font-bold text-slate-900">+{outfitCostPerItem} cr</span>
+                            </div>
+                          </div>
+
+                          <div className="hidden md:block relative bg-slate-900 text-white rounded-2xl p-4 overflow-hidden">
+                            <div className="absolute -top-8 -right-8 w-[120px] h-[120px] rounded-full pointer-events-none" style={{ background: 'rgba(247,44,91,0.3)', filter: 'blur(36px)' }} />
+                            <div className="relative">
+                              <div className="text-[10px] font-bold text-brand-300 uppercase tracking-[0.14em] mb-3">
+                                Resumen del costo
+                              </div>
+                              <div className="flex flex-col gap-1.5 mb-3 text-[12px]">
+                                <div className="flex justify-between">
+                                  <span className="opacity-70">{selectedItemsCount} {selectedItemsCount === 1 ? 'prenda' : 'prendas'} × {outfitCostPerItem} cr</span>
+                                  <span className="font-semibold">{renderCost} cr</span>
+                                </div>
+                                <div className="flex justify-between opacity-60">
+                                  <span>Kit final (imagen compuesta)</span>
+                                  <span className="font-semibold">{outfitCostPerItem} cr (opcional)</span>
+                                </div>
+                                <div className="h-px bg-white/10 my-1" />
+                                <div className="flex justify-between items-baseline">
+                                  <span className="opacity-85">Solo renders</span>
+                                  <span className="t-display text-[28px] tracking-tight leading-none normal-case not-italic">
+                                    {renderCost}{' '}
+                                    <span className="text-xs opacity-70 font-semibold normal-case">cr</span>
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="text-[11px] leading-[1.5] opacity-70">
+                                Te quedarán {creditsAfterRender} cr · La imagen final se cobra aparte si decides crearla.
+                              </div>
+                            </div>
+                          </div>
+                        </>
                       )}
 
                     </div>
@@ -913,34 +993,37 @@ const OutfitExtractorModule: React.FC = () => {
                     className="sticky bottom-0 z-10 bg-white border-t border-slate-200 px-4 py-3 flex flex-col gap-2"
                     style={{ boxShadow: '0 -8px 24px rgba(15,23,42,0.04)' }}
                   >
-                    {/* Opción 1: solo guardar prendas, sin kit */}
                     {savedMsg ? (
                       <div className="w-full py-2.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold flex items-center justify-center gap-2">
                         <i className="fa-solid fa-check text-emerald-500" />
                         Prendas guardadas en biblioteca
                       </div>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={saveItemsOnly}
-                        disabled={currentKit?.items.filter(i => i.status === 'done').length === 0}
-                        className="w-full py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      >
-                        <i className="fa-solid fa-floppy-disk text-slate-400" />
-                        Guardar prendas en la biblioteca
-                      </button>
+                      <div className="flex gap-2">
+                        {/* Opción 1: solo guardar prendas, sin kit */}
+                        <button
+                          type="button"
+                          onClick={saveItemsOnly}
+                          disabled={currentKit?.items.filter(i => i.status === 'done').length === 0}
+                          style={{ touchAction: 'manipulation' }}
+                          className="flex-1 py-3 rounded-xl border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                          <i className="fa-solid fa-floppy-disk text-slate-400" />
+                          <span className="hidden sm:inline">Guardar</span>
+                        </button>
+                        {/* Opción 2: generar imagen compuesta + guardar todo */}
+                        <button
+                          type="button"
+                          onClick={composeFinalKit}
+                          disabled={currentKit?.items.filter(i => i.selected && i.status === 'done').length === 0}
+                          style={{ touchAction: 'manipulation' }}
+                          className="flex-[1.3] py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 bg-gradient-to-br from-brand-400 to-brand-600 text-white shadow-[0_12px_28px_rgba(247,44,91,0.32)] active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+                        >
+                          Crear final · {outfitCostPerItem} cr
+                          <i className="fa-solid fa-arrow-right text-sm" />
+                        </button>
+                      </div>
                     )}
-                    {/* Opción 2: generar imagen compuesta + guardar todo */}
-                    <button
-                      type="button"
-                      onClick={composeFinalKit}
-                      disabled={currentKit?.items.filter(i => i.selected && i.status === 'done').length === 0}
-                      style={{ touchAction: 'manipulation' }}
-                      className="w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 bg-gradient-to-br from-violet-600 to-pink-600 text-white shadow-[0_12px_28px_rgba(124,58,237,0.32)] active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
-                    >
-                      Crear imagen final · {outfitCostPerItem} cr
-                      <i className="fa-solid fa-arrow-right text-sm" />
-                    </button>
                     <p className="text-center text-[9px] text-slate-400">
                       Crea una imagen con todas las prendas juntas
                     </p>
@@ -956,8 +1039,10 @@ const OutfitExtractorModule: React.FC = () => {
               </section>
             </div>
 
-            {/* Columna derecha: vista previa / resultados */}
-            <div className="lg:col-span-8">
+            {/* Columna derecha: vista previa / resultados — solo desktop.
+                En mobile, "idle" y "scan_overlay" ya se ven completos en la
+                columna izquierda (tarjeta de subida, tab Foto/Lista). */}
+            <div className="hidden lg:block lg:col-span-8">
 
               {/* Estado idle: placeholder oscuro */}
               {step === 'idle' && (
@@ -975,34 +1060,7 @@ const OutfitExtractorModule: React.FC = () => {
               {/* Scan overlay: imagen original con marcadores */}
               {step === 'scan_overlay' && currentKit && (
                 <div className="bg-slate-900 rounded-[48px] p-4 md:p-6 min-h-[500px] shadow-2xl border-8 border-slate-800 relative overflow-hidden">
-                  <div className="relative aspect-[3/4] mx-auto rounded-[28px] overflow-hidden" ref={containerRef}>
-                    <img src={currentKit.originalImage} className="w-full h-full object-cover opacity-60 grayscale" />
-                    <div className="absolute inset-x-0 h-1 bg-brand-400 shadow-[0_0_15px_#FF748B] animate-scan z-30 opacity-50" />
-                    <style>{`@keyframes scan { 0% { top: 0%; } 100% { top: 100%; } } .animate-scan { animation: scan 3s linear infinite; }`}</style>
-                    <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
-                      {currentKit.items.map(item => {
-                        if (!item.selected) return null;
-                        const x = `${item.coordinates.x / 10}%`;
-                        const y = `${item.coordinates.y / 10}%`;
-                        return (
-                          <g key={`line-${item.id}`}>
-                            <circle cx={x} cy={y} r="5" fill="#FF748B" className="animate-pulse" />
-                            <line x1={x} y1={y} x2={x} y2={`${item.coordinates.y / 10 - 4}%`} stroke="#FF748B" strokeWidth="2" strokeDasharray="4" className="opacity-40" />
-                          </g>
-                        );
-                      })}
-                    </svg>
-                    {currentKit.items.map(item => (
-                      <button
-                        key={`label-${item.id}`}
-                        onClick={() => toggleItemSelection(item.id)}
-                        style={{ left: `${item.coordinates.x / 10}%`, top: `${item.coordinates.y / 10}%` }}
-                        className={`absolute z-20 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all -translate-x-1/2 -translate-y-8 shadow-2xl border-2 min-w-[44px] min-h-[36px] ${item.selected ? 'bg-brand-600 text-white border-brand-400 scale-110' : 'bg-black/80 text-white/30 border-white/10 scale-90 opacity-60'}`}
-                      >
-                        {item.name}
-                      </button>
-                    ))}
-                  </div>
+                  <ScanOverlay kit={currentKit} onToggle={toggleItemSelection} />
                 </div>
               )}
 
@@ -1233,7 +1291,7 @@ const OutfitExtractorModule: React.FC = () => {
 
                 <div className="lg:col-span-5 space-y-5 sticky top-24">
                   <div className="relative bg-slate-900 text-white rounded-[32px] p-6 overflow-hidden shadow-2xl border-4 border-slate-800">
-                    <div className="absolute -top-8 -right-8 w-[120px] h-[120px] rounded-full pointer-events-none" style={{ background: 'rgba(124,58,237,0.3)', filter: 'blur(36px)' }} />
+                    <div className="absolute -top-8 -right-8 w-[120px] h-[120px] rounded-full pointer-events-none" style={{ background: 'rgba(247,44,91,0.3)', filter: 'blur(36px)' }} />
                     <div className="relative space-y-5">
                       <h4 className="text-xl font-black uppercase italic tracking-tighter">Tu nuevo set</h4>
                       <div className="space-y-2">
