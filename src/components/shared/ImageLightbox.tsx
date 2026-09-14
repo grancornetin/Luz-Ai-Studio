@@ -65,7 +65,11 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
   ];
   const hasInfoPanel = !!details;
   const hasActionsPanel = allActions.length > 0;
+  // Mobile: el panel deslizable solo tiene sentido si hay algo para mostrar.
   const hasAnyPanel = hasInfoPanel || hasActionsPanel;
+  // Desktop: el panel lateral siempre se muestra — ahí viven Descargar/Compartir,
+  // que en mobile están siempre visibles como botones flotantes sobre la imagen.
+  const showDesktopPanel = true;
 
   // Slider "antes/después": solo tiene sentido cuando ambas imágenes
   // comparten encuadre — se activa únicamente si el módulo marcó una
@@ -318,7 +322,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
 
           {/* Tira de miniaturas flotante — solo desktop, sobre la imagen */}
           {images.length > 1 && (
-            <div className="hidden lg:flex absolute bottom-14 left-1/2 -translate-x-1/2 z-[2] gap-2">
+            <div className="hidden lg:flex absolute bottom-16 left-1/2 -translate-x-1/2 z-[2] gap-2 bg-black/30 backdrop-blur-md rounded-2xl p-2">
               {images.map((src, idx) => (
                 <button
                   key={idx}
@@ -365,8 +369,11 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
 
       {/* ── PANEL LATERAL FIJO — solo desktop ──────────────
           Reemplaza el panel deslizable de abajo: info + acciones
-          conviven en una columna fija en vez de flotar sobre la imagen. */}
-      {hasAnyPanel && (
+          conviven en una columna fija en vez de flotar sobre la imagen.
+          Siempre visible en desktop (a diferencia del panel mobile, que
+          solo abre si hay contenido extra) porque acá viven Descargar/
+          Compartir, que en mobile están siempre como botones flotantes. */}
+      {showDesktopPanel && (
         <div className="hidden lg:flex w-[340px] flex-shrink-0 bg-slate-900 border-l border-white/10 flex-col p-5 overflow-y-auto">
           {metadata?.label && (
             <div className="flex items-center gap-2.5 pb-4 mb-4 border-b border-white/10">
@@ -382,50 +389,48 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
             <div className="mb-5">{details}</div>
           )}
 
-          {hasActionsPanel && (
-            <div className="flex flex-col gap-2 mt-auto pt-4">
-              {allActions.map((action, i) => (
+          <div className="flex flex-col gap-2 mt-auto pt-4">
+            {hasActionsPanel && allActions.map((action, i) => (
+              <button
+                key={i}
+                onClick={() => action.onClick(currentImage, currentIndex)}
+                className="flex items-center gap-2.5 w-full px-3.5 py-3 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white text-[13px] font-bold transition-transform active:scale-[0.98]"
+              >
+                {action.icon}
+                {action.label}
+              </button>
+            ))}
+            <div className="flex gap-2">
+              {hasBeforeAfterPair && (
                 <button
-                  key={i}
-                  onClick={() => action.onClick(currentImage, currentIndex)}
-                  className="flex items-center gap-2.5 w-full px-3.5 py-3 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white text-[13px] font-bold transition-transform active:scale-[0.98]"
+                  onClick={() => setCompareMode(v => !v)}
+                  aria-label="Comparar antes y después"
+                  className={`flex-1 flex items-center justify-center py-2.5 rounded-xl border border-white/10 transition-colors ${
+                    compareMode ? 'bg-gradient-to-br from-brand-400 to-brand-600 border-transparent' : 'bg-white/[0.06] hover:bg-white/[0.12]'
+                  } text-white`}
+                  title="Comparar"
                 >
-                  {action.icon}
-                  {action.label}
+                  <MoveHorizontal size={15} />
                 </button>
-              ))}
-              <div className="flex gap-2">
-                {hasBeforeAfterPair && (
-                  <button
-                    onClick={() => setCompareMode(v => !v)}
-                    aria-label="Comparar antes y después"
-                    className={`flex-1 flex items-center justify-center py-2.5 rounded-xl border border-white/10 transition-colors ${
-                      compareMode ? 'bg-gradient-to-br from-brand-400 to-brand-600 border-transparent' : 'bg-white/[0.06] hover:bg-white/[0.12]'
-                    } text-white`}
-                    title="Comparar"
-                  >
-                    <MoveHorizontal size={15} />
-                  </button>
-                )}
-                <button
-                  onClick={handleShare}
-                  aria-label="Compartir"
-                  className="flex-1 flex items-center justify-center py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white transition-colors"
-                  title="Compartir"
-                >
-                  <Share2 size={15} />
-                </button>
-                <button
-                  onClick={handleDownload}
-                  aria-label="Descargar"
-                  className="flex-1 flex items-center justify-center py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white transition-colors"
-                  title="Descargar"
-                >
-                  <Download size={15} />
-                </button>
-              </div>
+              )}
+              <button
+                onClick={handleShare}
+                aria-label="Compartir"
+                className="flex-1 flex items-center justify-center py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white transition-colors"
+                title="Compartir"
+              >
+                <Share2 size={15} />
+              </button>
+              <button
+                onClick={handleDownload}
+                aria-label="Descargar"
+                className="flex-1 flex items-center justify-center py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white transition-colors"
+                title="Descargar"
+              >
+                <Download size={15} />
+              </button>
             </div>
-          )}
+          </div>
         </div>
       )}
 
