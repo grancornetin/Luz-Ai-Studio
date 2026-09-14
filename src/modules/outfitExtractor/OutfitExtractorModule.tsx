@@ -24,8 +24,6 @@ import { WizardFooter } from '../../components/shared/WizardFooter';
 import { ImageSlot } from '../../components/shared/ImageSlot';
 import UploadDisclaimer from '../../components/shared/UploadDisclaimer';
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
-import { FloatingActionBar } from '../../components/shared/FloatingActionBar';
-import { useScrollFAB } from '../../hooks/useScrollFAB';
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -140,6 +138,10 @@ const OutfitExtractorModule: React.FC = () => {
   const [loadingMsg, setLoadingMsg]     = useState('');
   const [isZipping, setIsZipping]       = useState(false);
   const [savedMsg, setSavedMsg]         = useState(false);
+  // Evita guardar las mismas prendas 2 veces en la biblioteca: si el usuario
+  // ya tocó "Guardar prendas" para el kit actual, "Crear imagen final" no
+  // las vuelve a guardar (antes cada acción creaba IDs nuevos sin chequear).
+  const [itemsAlreadySaved, setItemsAlreadySaved] = useState(false);
   const [creatorSelectedItems, setCreatorSelectedItems] = useState<SavedOutfitItem[]>([]);
   const [creatorName, setCreatorName]   = useState('Nueva combinación');
 
@@ -148,7 +150,6 @@ const OutfitExtractorModule: React.FC = () => {
   const [lightboxIndex, setLightboxIndex]       = useState(0);
   const [lightboxMetadata, setLightboxMetadata] = useState<{ label: string }>({ label: '' });
 
-  const { isVisible: fabVisible } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: false });
   const { checkAndDeduct, showNoCredits, requiredCredits, closeModal } = useCreditGuard();
   const renderQueueRunningRef = useRef(false);
 
@@ -267,6 +268,7 @@ const OutfitExtractorModule: React.FC = () => {
   const startDetection = async () => {
     if (!sourceImage) return;
     setStep('detecting');
+    setItemsAlreadySaved(false);
     setLoadingMsg('Buscando las prendas de tu foto...');
     try {
       const result = await outfitService.analyzeOutfit(sourceImage);
@@ -482,7 +484,9 @@ const OutfitExtractorModule: React.FC = () => {
       }).catch(console.error);
 
       const finalizedKit = { ...currentKit, finalKitUrl: finalUrl };
-      const itemsToSave: SavedOutfitItem[] = currentKit.items
+      // Si el usuario ya guardó las prendas a mano ("Guardar prendas"), no
+      // volver a crearlas — solo guardar el kit con la imagen final.
+      const itemsToSave: SavedOutfitItem[] = itemsAlreadySaved ? [] : currentKit.items
         .filter(it => it.status === 'done' && it.imageUrl)
         .map(it => ({
           id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
@@ -526,6 +530,7 @@ const OutfitExtractorModule: React.FC = () => {
     if (itemsToSave.length === 0) return;
     await outfitStorage.saveItems(itemsToSave);
     await loadLibrary();
+    setItemsAlreadySaved(true);
     setSavedMsg(true);
     setTimeout(() => setSavedMsg(false), 3000);
   };
@@ -546,12 +551,15 @@ const OutfitExtractorModule: React.FC = () => {
     setSourceImage(null);
     setCurrentKit(null);
     setCurrentCombo(null);
+    setItemsAlreadySaved(false);
   };
 
   const viewFromLibrary = (kit: OutfitKit) => {
     setCurrentKit(kit);
     setStableStep('final_kit', { replace: true });
     setMainView('main');
+    // Un kit cargado desde la biblioteca ya tiene sus prendas guardadas.
+    setItemsAlreadySaved(true);
   };
 
   const openLightbox = (images: string[], initialIndex = 0, label = '') => {
@@ -1079,20 +1087,27 @@ const OutfitExtractorModule: React.FC = () => {
                   <WizardFooter
                     onContinue={reset}
                     continueLabel="Nueva producción"
+                    secondaryAction={{
+                      label: 'Descargar ZIP',
+                      icon: <i className="fa-solid fa-file-zipper text-sm" />,
+                      onClick: () => downloadAll(),
+                    }}
                   />
                 )}
 
               </section>
             </div>
 
-            {/* Columna derecha: vista previa / resultados — solo desktop.
-                En mobile, "idle" y "scan_overlay" ya se ven completos en la
-                columna izquierda (tarjeta de subida, tab Foto/Lista). */}
-            <div className="hidden lg:block lg:col-span-8">
+            {/* Columna derecha: vista previa / resultados.
+                "idle" y "scan_overlay" son solo desktop (en mobile ya se ven
+                completos en la columna izquierda: tarjeta de subida, tab
+                Foto/Lista) — "reviewing_renders" y "final_kit" sí tienen
+                contenido único que también se muestra en mobile. */}
+            <div className="lg:col-span-8">
 
-              {/* Estado idle: placeholder oscuro */}
+              {/* Estado idle: placeholder oscuro — solo desktop */}
               {step === 'idle' && (
-                <div className="bg-slate-900 rounded-[48px] p-8 md:p-12 min-h-[500px] flex flex-col items-center justify-center shadow-2xl border-8 border-slate-800 text-center space-y-6">
+                <div className="hidden lg:flex bg-slate-900 rounded-[48px] p-8 md:p-12 min-h-[500px] flex-col items-center justify-center shadow-2xl border-8 border-slate-800 text-center space-y-6">
                   <i className="fa-solid fa-shirt text-white/5 text-8xl" />
                   <div>
                     <h3 className="text-white text-2xl font-black uppercase italic tracking-tighter">Extractor de prendas</h3>
@@ -1103,9 +1118,9 @@ const OutfitExtractorModule: React.FC = () => {
                 </div>
               )}
 
-              {/* Scan overlay: imagen original con marcadores */}
+              {/* Scan overlay: imagen original con marcadores — solo desktop */}
               {step === 'scan_overlay' && currentKit && (
-                <div className="bg-slate-900 rounded-[48px] p-4 md:p-6 min-h-[500px] shadow-2xl border-8 border-slate-800 relative overflow-hidden">
+                <div className="hidden lg:block bg-slate-900 rounded-[48px] p-4 md:p-6 min-h-[500px] shadow-2xl border-8 border-slate-800 relative overflow-hidden">
                   <ScanOverlay kit={currentKit} onToggle={toggleItemSelection} />
                 </div>
               )}
@@ -1420,20 +1435,10 @@ const OutfitExtractorModule: React.FC = () => {
           />
         )}
 
-        {/* FAB */}
-        {step === 'final_kit' && currentKit && fabVisible && (
-          <FloatingActionBar
-            isVisible={true}
-            primaryAction={{
-              label: 'Descargar ZIP',
-              icon: <i className="fa-solid fa-file-zipper text-sm" />,
-              onClick: () => downloadAll(),
-              loading: isZipping,
-            }}
-            onClearSelection={reset}
-            selectedCount={0}
-          />
-        )}
+        {/* "Descargar ZIP" ahora vive como secondaryAction del WizardFooter de
+            final_kit (ver arriba) — evita la barra flotante aparte que se
+            superponía con la píldora de navegación, mismo fix que en
+            Clone Image. */}
 
       </div>
     </>
