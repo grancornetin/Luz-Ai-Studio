@@ -3,6 +3,7 @@ import {
   onAuthStateChanged,
   getRedirectResult,
   signInAnonymously,
+  signInWithCustomToken,
   User as FirebaseUser,
   signOut as firebaseSignOut
 } from 'firebase/auth';
@@ -105,13 +106,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const setPreviewPlan = (p: string | null) => setPreviewPlanState(p);
 
   useEffect(() => {
-    // Gatillo de debug interno: ?debugAnon=1 en la URL dispara un login
-    // anónimo de Firebase para poder inspeccionar la app sin credenciales
-    // reales. No hay ningún botón ni mención de esto en la UI — solo
-    // funciona pasando el parámetro exacto.
+    // Gatillo de debug interno: ?debugAnon=1 dispara un login anónimo (para
+    // inspeccionar la app sin datos reales). No hay botón ni mención de esto
+    // en la UI — solo funciona pasando el parámetro exacto.
     if (new URLSearchParams(window.location.search).get('debugAnon') === '1' && !auth.currentUser) {
       signInAnonymously(auth).catch(err => console.warn('[AuthContext] debugAnon sign-in failed:', err));
     }
+
+    // Expone signInWithCustomToken en window SOLO para uso de herramientas
+    // de inspección locales (Playwright) — no hay UI ni parámetro de URL
+    // que lo dispare, solo puede invocarse desde la consola/devtools.
+    (window as any).__debugSignInWithCustomToken = (token: string) =>
+      signInWithCustomToken(auth, token);
 
     // En móvil con signInWithRedirect, getRedirectResult debe completar
     // ANTES de que onAuthStateChanged dispare con user=null en el primer render.
