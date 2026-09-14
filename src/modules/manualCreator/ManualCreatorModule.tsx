@@ -75,6 +75,11 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
+  // Mobile: tab para elegir entre el formulario y la vista previa — en
+  // desktop ambos conviven lado a lado, en mobile compiten por el mismo
+  // ancho y el formulario largo empujaba la preview muy abajo del scroll.
+  const [mobileTab, setMobileTab] = useState<'form' | 'preview'>('form');
+
   // FAB scroll detection
   const { isVisible: fabVisible } = useScrollFAB({ threshold: 100, alwaysVisibleOnMobile: false });
 
@@ -196,6 +201,7 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
             createdAt: json.createdAt || Date.now(),
           };
           setPendingAvatarData(avatar);
+          setMobileTab('preview');
         } catch {
           alert('El archivo no es un JSON válido o está corrupto.');
         }
@@ -277,6 +283,7 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
 
       setPendingAvatarData(newAvatar);
       setStatus('Identidad sintetizada correctamente.');
+      setMobileTab('preview');
     } catch (e: any) {
       alert('No pudimos crear el modelo. Inténtalo de nuevo.');
     } finally {
@@ -297,17 +304,45 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
     setProgressStep(0);
     setIsProcessing(false);
     setImportedMode(false);
+    setMobileTab('form');
   };
 
   return (
     <>
       <NoCreditsModal isOpen={showNoCredits} onClose={closeModal} required={requiredCredits} available={0} />
       
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in duration-500 pb-20">
+      <div className="md:grid md:grid-cols-2 md:gap-8 animate-in fade-in duration-500 pb-20">
+        {/* Header + tab mobile (Datos / Vista previa) — en desktop ambos
+            paneles conviven lado a lado y este bloque no se muestra. */}
+        <div className="md:col-span-2 md:hidden mb-4">
+          <header className="mb-3">
+            <h2 className="text-xl font-black text-slate-900 uppercase italic">Crear modelo <span className="text-brand-600">· desde cero</span></h2>
+            <div className="flex items-center gap-3 mt-1">
+              <p className="text-slate-400 text-xs font-medium">Crea una identidad digital 100% nueva desde cero.</p>
+              <ModuleTutorial moduleId="modelDnaManual" steps={TUTORIAL_CONFIGS.modelDnaManual} compact />
+            </div>
+          </header>
+          <div className="flex gap-0.5 bg-brand-50 border border-brand-100 rounded-2xl p-1">
+            <button
+              onClick={() => setMobileTab('form')}
+              className={`flex-1 py-2 rounded-xl text-[11px] font-extrabold flex items-center justify-center gap-1.5 transition-all ${mobileTab === 'form' ? 'bg-white text-brand-600 shadow-sm' : 'text-brand-600/55'}`}
+            >
+              <i className="fa-solid fa-sliders text-[10px]" /> Datos
+            </button>
+            <button
+              onClick={() => setMobileTab('preview')}
+              className={`flex-1 py-2 rounded-xl text-[11px] font-extrabold flex items-center justify-center gap-1.5 transition-all ${mobileTab === 'preview' ? 'bg-white text-brand-600 shadow-sm' : 'text-brand-600/55'}`}
+            >
+              <i className="fa-solid fa-image text-[10px]" /> Vista previa
+              {previews.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-brand-500" />}
+            </button>
+          </div>
+        </div>
+
         {/* Panel izquierdo: formulario */}
-        <div className="space-y-6">
-          <section className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-6">
-            <header className="border-b pb-4">
+        <div className={`space-y-6 ${mobileTab === 'form' ? '' : 'hidden md:block'}`}>
+          <section className="bg-white p-5 md:p-8 rounded-[28px] md:rounded-[40px] border border-slate-100 shadow-sm space-y-4 md:space-y-6">
+            <header className="hidden md:block border-b pb-4">
               <h2 className="text-xl font-black text-slate-900 uppercase italic">Crear modelo <span className="text-brand-600">· desde cero</span></h2>
               <div className="flex items-center gap-3 mt-1">
                 <p className="text-slate-400 text-xs font-medium">Crea una identidad digital 100% nueva desde cero.</p>
@@ -319,113 +354,113 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
             <button
               onClick={handleImportJson}
               disabled={isProcessing}
-              className="w-full flex items-center justify-center gap-2 py-3 px-6 rounded-2xl border-2 border-dashed border-slate-200 text-slate-500 hover:border-brand-400 hover:text-brand-600 hover:bg-brand-50 transition-all text-[11px] font-black uppercase disabled:opacity-40"
+              className="w-full flex items-center justify-center gap-2 py-2.5 md:py-3 px-6 rounded-2xl border-2 border-dashed border-slate-200 text-slate-500 hover:border-brand-400 hover:text-brand-600 hover:bg-brand-50 transition-all text-[10px] md:text-[11px] font-black uppercase disabled:opacity-40"
             >
               <i className="fa-solid fa-file-import text-xs"></i>
               Importar modelo desde JSON
             </button>
 
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-4 md:space-y-6">
+              <div className="grid grid-cols-2 gap-2.5 md:gap-4">
                 <div className="col-span-2">
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2 block">Nombre del modelo</label>
-                  <input 
-                    type="text" 
-                    value={name} 
-                    onChange={e => setName(e.target.value)} 
+                  <label className="text-[9px] md:text-xs font-black uppercase text-slate-400 tracking-widest mb-1 md:mb-2 block">Nombre del modelo</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
                     autoComplete="off"
                     autoCapitalize="words"
-                    className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-800 text-base md:text-sm" 
-                    placeholder="Ej: Alpha v1" 
+                    className="w-full p-3 md:p-4 bg-slate-50 rounded-xl md:rounded-2xl outline-none font-bold text-slate-800 text-sm"
+                    placeholder="Ej: Alpha v1"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2 block">Género</label>
+                  <label className="text-[9px] md:text-xs font-black uppercase text-slate-400 tracking-widest mb-1 md:mb-2 block">Género</label>
                   <div className="flex bg-slate-100 p-1 rounded-xl">
-                    <button onClick={() => handleGenderChange('mujer')} className={`flex-1 py-2 text-xs font-black uppercase rounded-lg transition-all ${data.gender === 'mujer' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-400'}`}>Mujer</button>
-                    <button onClick={() => handleGenderChange('hombre')} className={`flex-1 py-2 text-xs font-black uppercase rounded-lg transition-all ${data.gender === 'hombre' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-400'}`}>Hombre</button>
+                    <button onClick={() => handleGenderChange('mujer')} className={`flex-1 py-2 text-[10px] md:text-xs font-black uppercase rounded-lg transition-all ${data.gender === 'mujer' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-400'}`}>Mujer</button>
+                    <button onClick={() => handleGenderChange('hombre')} className={`flex-1 py-2 text-[10px] md:text-xs font-black uppercase rounded-lg transition-all ${data.gender === 'hombre' ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-400'}`}>Hombre</button>
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2 block">Edad</label>
-                  <select value={data.age} onChange={e => setData({...data, age: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl outline-none text-base md:text-xs font-bold">
+                  <label className="text-[9px] md:text-xs font-black uppercase text-slate-400 tracking-widest mb-1 md:mb-2 block">Edad</label>
+                  <select value={data.age} onChange={e => setData({...data, age: e.target.value})} className="w-full p-3 md:p-4 bg-slate-50 rounded-xl md:rounded-2xl outline-none text-xs font-bold">
                     {AGE_OPTIONS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2 block">Etnia</label>
-                  <select value={data.ethnicity} onChange={e => setData({...data, ethnicity: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl outline-none text-base md:text-xs font-bold">
+                  <label className="text-[9px] md:text-xs font-black uppercase text-slate-400 tracking-widest mb-1 md:mb-2 block">Etnia</label>
+                  <select value={data.ethnicity} onChange={e => setData({...data, ethnicity: e.target.value})} className="w-full p-3 md:p-4 bg-slate-50 rounded-xl md:rounded-2xl outline-none text-xs font-bold">
                     {ETHNICITY_OPTIONS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2 block">Complexión Física</label>
-                  <select value={data.build} onChange={e => setData({...data, build: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl outline-none text-base md:text-xs font-bold">
+                  <label className="text-[9px] md:text-xs font-black uppercase text-slate-400 tracking-widest mb-1 md:mb-2 block">Complexión Física</label>
+                  <select value={data.build} onChange={e => setData({...data, build: e.target.value})} className="w-full p-3 md:p-4 bg-slate-50 rounded-xl md:rounded-2xl outline-none text-xs font-bold">
                     {BUILD_OPTIONS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2 block">Color de Cabello</label>
-                  <select value={data.hairColor} onChange={e => setData({...data, hairColor: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl outline-none text-base md:text-xs font-bold">
+                  <label className="text-[9px] md:text-xs font-black uppercase text-slate-400 tracking-widest mb-1 md:mb-2 block">Color de Cabello</label>
+                  <select value={data.hairColor} onChange={e => setData({...data, hairColor: e.target.value})} className="w-full p-3 md:p-4 bg-slate-50 rounded-xl md:rounded-2xl outline-none text-xs font-bold">
                     {HAIR_COLORS.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2 block">Largo de Pelo</label>
-                  <select value={data.hairLength} onChange={e => setData({...data, hairLength: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl outline-none text-base md:text-xs font-bold">
+                  <label className="text-[9px] md:text-xs font-black uppercase text-slate-400 tracking-widest mb-1 md:mb-2 block">Largo de Pelo</label>
+                  <select value={data.hairLength} onChange={e => setData({...data, hairLength: e.target.value})} className="w-full p-3 md:p-4 bg-slate-50 rounded-xl md:rounded-2xl outline-none text-xs font-bold">
                     {HAIR_LENGTHS.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2 block">Tipo de Pelo</label>
-                  <select value={data.hairType} onChange={e => setData({...data, hairType: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl outline-none text-base md:text-xs font-bold">
+                  <label className="text-[9px] md:text-xs font-black uppercase text-slate-400 tracking-widest mb-1 md:mb-2 block">Tipo de Pelo</label>
+                  <select value={data.hairType} onChange={e => setData({...data, hairType: e.target.value})} className="w-full p-3 md:p-4 bg-slate-50 rounded-xl md:rounded-2xl outline-none text-xs font-bold">
                     {HAIR_TYPES.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2 block">Color de Ojos</label>
-                  <select value={data.eyes} onChange={e => setData({...data, eyes: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl outline-none text-base md:text-xs font-bold">
+                  <label className="text-[9px] md:text-xs font-black uppercase text-slate-400 tracking-widest mb-1 md:mb-2 block">Color de Ojos</label>
+                  <select value={data.eyes} onChange={e => setData({...data, eyes: e.target.value})} className="w-full p-3 md:p-4 bg-slate-50 rounded-xl md:rounded-2xl outline-none text-xs font-bold">
                     {EYE_COLORS.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2 block">Personalidad</label>
-                  <select value={data.personality} onChange={e => setData({...data, personality: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl outline-none text-base md:text-xs font-bold">
+                  <label className="text-[9px] md:text-xs font-black uppercase text-slate-400 tracking-widest mb-1 md:mb-2 block">Personalidad</label>
+                  <select value={data.personality} onChange={e => setData({...data, personality: e.target.value})} className="w-full p-3 md:p-4 bg-slate-50 rounded-xl md:rounded-2xl outline-none text-xs font-bold">
                     {PERSONALITY_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2 block">Expresión</label>
-                  <select value={data.expression} onChange={e => setData({...data, expression: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl outline-none text-base md:text-xs font-bold">
+                  <label className="text-[9px] md:text-xs font-black uppercase text-slate-400 tracking-widest mb-1 md:mb-2 block">Expresión</label>
+                  <select value={data.expression} onChange={e => setData({...data, expression: e.target.value})} className="w-full p-3 md:p-4 bg-slate-50 rounded-xl md:rounded-2xl outline-none text-xs font-bold">
                     {EXPRESSION_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </div>
 
                 <div className="col-span-2">
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2 block">Ropa inicial</label>
-                  <select value={data.outfit} onChange={e => setData({...data, outfit: e.target.value})} className="w-full p-4 bg-slate-50 rounded-2xl outline-none text-base md:text-xs font-bold">
+                  <label className="text-[9px] md:text-xs font-black uppercase text-slate-400 tracking-widest mb-1 md:mb-2 block">Ropa inicial</label>
+                  <select value={data.outfit} onChange={e => setData({...data, outfit: e.target.value})} className="w-full p-3 md:p-4 bg-slate-50 rounded-xl md:rounded-2xl outline-none text-xs font-bold">
                     {(data.gender === 'mujer' ? OUTFITS_MUJER : OUTFITS_HOMBRE).map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </div>
               </div>
             </div>
 
-            <div className="pt-4 space-y-3">
+            <div className="pt-2 md:pt-4 space-y-3">
               {importedMode ? (
                 <button
                   onClick={handleSaveToLibrary}
                   disabled={!pendingAvatarData}
-                  className="w-full py-5 bg-brand-500 text-white rounded-[24px] text-[11px] font-black uppercase shadow-lg hover:bg-brand-400 transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+                  className="w-full py-4 md:py-5 bg-brand-500 text-white rounded-2xl md:rounded-[24px] text-[11px] font-black uppercase shadow-lg hover:bg-brand-400 transition-all disabled:opacity-40 flex items-center justify-center gap-2"
                 >
                   <i className="fa-solid fa-check"></i>
                   Guardar en biblioteca
@@ -440,14 +475,14 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
                   imageCount={4}
                   fixedModel="gemini"
                   creditsAfter={creditsAfter}
-                  className="py-5 rounded-[24px]"
+                  className="py-4 md:py-5 rounded-2xl md:rounded-[24px]"
                 />
               )}
             </div>
           </section>
 
           {isProcessing && (
-            <div className="bg-slate-50 border border-slate-100 rounded-[32px] p-6">
+            <div className="bg-slate-50 border border-slate-100 rounded-[24px] md:rounded-[32px] p-4 md:p-6">
               <GenerationProgress
                 steps={DNA_STEPS}
                 currentStepIndex={progressStep}
@@ -457,24 +492,24 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
         </div>
 
         {/* Panel derecho: resultados */}
-        <div className="bg-slate-900 rounded-[56px] p-8 min-h-[600px] flex flex-col shadow-2xl relative">
+        <div className={`bg-slate-900 rounded-[28px] md:rounded-[56px] p-5 md:p-8 md:min-h-[600px] flex flex-col shadow-2xl relative ${mobileTab === 'preview' ? '' : 'hidden md:flex'}`}>
           {previews.length > 0 ? (
-            <div className="space-y-6 animate-in zoom-in duration-500">
-              <header className="flex flex-col sm:flex-row justify-between items-center gap-4 border-b border-white/10 pb-6">
+            <div className="space-y-4 md:space-y-6 animate-in zoom-in duration-500">
+              <header className="flex flex-col sm:flex-row justify-between items-center gap-4 border-b border-white/10 pb-4 md:pb-6">
                 <div>
-                  <h3 className="text-white font-black text-xl uppercase italic tracking-tighter">{name}</h3>
+                  <h3 className="text-white font-black text-lg md:text-xl uppercase italic tracking-tighter">{name}</h3>
                   <p className="text-brand-400 text-[8px] font-black uppercase tracking-widest">
                     {importedMode ? 'Importado desde un archivo' : 'Modelo creado'}
                   </p>
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
-                  <button 
+                  <button
                     onClick={() => downloadAsZip(previews, `Avatar_DNA_${name}_MasterSet.zip`, `avatar_dna_${name}`)}
                     className="flex-1 sm:flex-none px-5 py-3 bg-white/10 text-white rounded-xl text-[9px] font-black uppercase border border-white/5 hover:bg-white/20 transition-all flex items-center justify-center gap-2"
                   >
                     <i className="fa-solid fa-file-zipper"></i> Descargar todas
                   </button>
-                  <button 
+                  <button
                     onClick={handleSaveToLibrary}
                     className="flex-1 sm:flex-none px-6 py-3 bg-brand-500 text-white rounded-xl text-[9px] font-black uppercase shadow-lg hover:bg-brand-400 transition-all"
                   >
@@ -483,23 +518,23 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
                 </div>
               </header>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3 md:gap-4">
                 {previews.map((p, i) => (
-                  <div 
-                    key={i} 
-                    className="group relative aspect-[3/4] rounded-[32px] overflow-hidden bg-white shadow-xl transition-transform hover:scale-[1.02] duration-300 cursor-zoom-in" 
+                  <div
+                    key={i}
+                    className="group relative aspect-[3/4] rounded-[20px] md:rounded-[32px] overflow-hidden bg-white shadow-xl transition-transform hover:scale-[1.02] duration-300 cursor-zoom-in"
                     onClick={() => openLightbox(i)}
                   >
                     <img src={p} className="w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-3">
-                      <button 
+                      <button
                         onClick={(e) => { e.stopPropagation(); downloadImage(p, `avatar_dna_${name}_plano_${i+1}.png`); }}
                         className="w-10 h-10 bg-white text-slate-900 rounded-full flex items-center justify-center shadow-2xl hover:scale-110 transition-transform"
                       >
                         <i className="fa-solid fa-download"></i>
                       </button>
                     </div>
-                    <div className="absolute top-4 left-4 px-3 py-1 bg-black/40 text-white text-[8px] font-black rounded-full uppercase border border-white/10 backdrop-blur-sm">
+                    <div className="absolute top-3 left-3 md:top-4 md:left-4 px-2.5 py-1 bg-black/40 text-white text-[7.5px] md:text-[8px] font-black rounded-full uppercase border border-white/10 backdrop-blur-sm">
                       {["P1: Frontal Master", "P2: Trasero 180°", "P3: Lateral 90°", "P4: Rostro 1:1"][i]}
                     </div>
                   </div>
@@ -507,13 +542,13 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-12 space-y-6">
-              <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center text-4xl text-white/10 border border-white/10">
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-8 md:p-12 space-y-5 md:space-y-6">
+              <div className="w-20 h-20 md:w-24 md:h-24 bg-white/5 rounded-full flex items-center justify-center text-3xl md:text-4xl text-white/10 border border-white/10">
                 <i className="fa-solid fa-wand-magic-sparkles"></i>
               </div>
-              <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Vista previa de tu modelo</h3>
+              <h3 className="text-lg md:text-xl font-black text-white uppercase italic tracking-tighter">Vista previa de tu modelo</h3>
               <p className="text-slate-500 text-xs font-medium max-w-xs mx-auto italic leading-relaxed">
-                Configura los rasgos para crear las fotos base. Después podrás guardar el modelo y usarlo en tus imágenes.
+                Configura los rasgos en la pestaña Datos y tocá Diseñar modelo para generar las fotos base.
               </p>
             </div>
           )}
