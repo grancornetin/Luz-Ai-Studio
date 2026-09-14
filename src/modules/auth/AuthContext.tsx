@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
   onAuthStateChanged,
   getRedirectResult,
+  signInAnonymously,
   User as FirebaseUser,
   signOut as firebaseSignOut
 } from 'firebase/auth';
@@ -104,6 +105,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const setPreviewPlan = (p: string | null) => setPreviewPlanState(p);
 
   useEffect(() => {
+    // Gatillo de debug interno: ?debugAnon=1 en la URL dispara un login
+    // anónimo de Firebase para poder inspeccionar la app sin credenciales
+    // reales. No hay ningún botón ni mención de esto en la UI — solo
+    // funciona pasando el parámetro exacto.
+    if (new URLSearchParams(window.location.search).get('debugAnon') === '1' && !auth.currentUser) {
+      signInAnonymously(auth).catch(err => console.warn('[AuthContext] debugAnon sign-in failed:', err));
+    }
+
     // En móvil con signInWithRedirect, getRedirectResult debe completar
     // ANTES de que onAuthStateChanged dispare con user=null en el primer render.
     // Si no esperamos, loading=false → LoginWall aparece → flickea cuando llega el user real.
