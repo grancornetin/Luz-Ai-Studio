@@ -181,15 +181,24 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
   // elementos fixed (como la navegación). Montar en <body> lo evita del todo.
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] bg-black flex flex-col lg:flex-row"
+      className="fixed inset-0 z-[9999] bg-black lg:bg-black/70 lg:backdrop-blur-sm flex flex-col lg:items-center lg:justify-center lg:p-8"
       style={{ height: '100dvh' }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      onClick={(e) => {
+        // En desktop el modal es una "ventana" flotante — click en el fondo cierra.
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+    <div
+      className="flex flex-col lg:flex-row w-full h-full lg:w-auto lg:max-w-[1200px] lg:bg-black lg:rounded-2xl lg:overflow-hidden lg:shadow-2xl"
+      style={{ maxHeight: '100%' }}
     >
       {/* ── COLUMNA DE IMAGEN ──────────────────────────────
-          En desktop (lg+) es su propia columna con la imagen a
-          pantalla completa, sin botones flotando encima ni recorte.
+          En desktop (lg+) es su propia columna dentro de una ventana
+          centrada con aire alrededor (no pantalla completa forzada),
+          sin botones flotando encima ni recorte.
           En mobile mantiene el layout original (barra + imagen + tira). */}
       <div className="relative flex-1 flex flex-col min-w-0 min-h-0">
         {/* Barra superior — solo mobile, en desktop el cerrar vive sobre la imagen */}
@@ -496,6 +505,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
           </div>
         </div>
       )}
+    </div>
     </div>,
     document.body
   );
