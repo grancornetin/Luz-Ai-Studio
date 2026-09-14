@@ -197,7 +197,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
+      // Elegir proveedor disponible (circuit breaker automático) — se resuelve
+      // antes de armar la instrucción de texto porque Gemini no tiene un
+      // parámetro nativo de aspect ratio: hay que pedírselo en el prompt.
+      // Seedream/GPT-Image sí lo reciben como parámetro estructurado aparte
+      // (ver workerBody más abajo), así que no lo duplicamos en el texto.
+      const resolvedModel = await resolveProvider(modelId);
+      const isSeedream     = resolvedModel === 'seedream';
+      const isGptImage     = resolvedModel === 'gptimage';
+
       let instruction = prompt;
+      if (!isSeedream && !isGptImage) {
+        instruction += `\nOUTPUT ASPECT RATIO: ${aspectRatio} (strict — the generated image canvas must have this exact width:height ratio, regardless of the aspect ratio of any reference image).`;
+      }
       if (negative) instruction += `\nNEGATIVE: ${negative}`;
       parts.push({ text: instruction });
 
@@ -233,11 +245,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         metadata:    metadata,
         userPlan:    userPlan as string | undefined,
       };
-
-      // Elegir proveedor disponible (circuit breaker automático)
-      const resolvedModel = await resolveProvider(modelId);
-      const isSeedream    = resolvedModel === 'seedream';
-      const isGptImage    = resolvedModel === 'gptimage';
 
       // Guardar parts en Redis para todos los modelos
       await Promise.all([
