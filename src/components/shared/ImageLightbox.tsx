@@ -218,7 +218,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
         </button>
 
         {/* Imagen central (o slider de comparación) */}
-        <div className="flex-1 flex items-center justify-center relative overflow-hidden px-3 lg:px-10 lg:py-10">
+        <div className="flex-1 min-h-0 min-w-0 flex items-center justify-center relative overflow-hidden px-3 lg:px-10 lg:py-10">
           {compareMode && hasBeforeAfterPair ? (
             <BeforeAfterSlider
               beforeSrc={images[beforeIdx]}
@@ -227,7 +227,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
             />
           ) : (
             <div
-              className="relative max-w-full max-h-full flex items-center justify-center"
+              className="relative max-w-full max-h-full min-h-0 flex items-center justify-center"
               style={{
                 transform: isDragging ? `translateX(${dragX * 0.3}px)` : 'none',
                 transition: isDragging ? 'none' : 'transform 0.2s ease',
