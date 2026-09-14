@@ -147,6 +147,7 @@ const OutfitExtractorModule: React.FC = () => {
 
   const [lightboxOpen, setLightboxOpen]         = useState(false);
   const [lightboxImages, setLightboxImages]     = useState<string[]>([]);
+  const [lightboxLabels, setLightboxLabels]     = useState<string[]>([]);
   const [lightboxIndex, setLightboxIndex]       = useState(0);
   const [lightboxMetadata, setLightboxMetadata] = useState<{ label: string }>({ label: '' });
 
@@ -562,8 +563,9 @@ const OutfitExtractorModule: React.FC = () => {
     setItemsAlreadySaved(true);
   };
 
-  const openLightbox = (images: string[], initialIndex = 0, label = '') => {
+  const openLightbox = (images: string[], initialIndex = 0, label = '', labels: string[] = []) => {
     setLightboxImages(images);
+    setLightboxLabels(labels);
     setLightboxIndex(initialIndex);
     setLightboxMetadata({ label });
     setLightboxOpen(true);
@@ -1194,7 +1196,16 @@ const OutfitExtractorModule: React.FC = () => {
                   </div>
                   <div
                     className="max-w-sm mx-auto aspect-[3/4] bg-slate-50 rounded-[40px] overflow-hidden shadow-xl relative group border-8 border-white cursor-pointer"
-                    onClick={() => currentKit.finalKitUrl && openLightbox([currentKit.finalKitUrl], 0, 'Kit Final')}
+                    onClick={() => {
+                      if (!currentKit.finalKitUrl) return;
+                      const detailItems = currentKit.items.filter(it => it.imageUrl);
+                      openLightbox(
+                        [currentKit.finalKitUrl, ...detailItems.map(it => it.imageUrl!)],
+                        0,
+                        'Kit Final',
+                        ['Kit completo', ...detailItems.map(it => it.name)],
+                      );
+                    }}
                   >
                     {currentKit.finalKitUrl
                       ? <img src={currentKit.finalKitUrl} className="w-full h-full object-contain" />
@@ -1432,6 +1443,7 @@ const OutfitExtractorModule: React.FC = () => {
               a.click();
             }}
             metadata={lightboxMetadata}
+            labels={lightboxLabels}
           />
         )}
 
