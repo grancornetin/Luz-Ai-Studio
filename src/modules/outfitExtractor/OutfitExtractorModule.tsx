@@ -152,8 +152,54 @@ const OutfitExtractorModule: React.FC = () => {
   const { checkAndDeduct, showNoCredits, requiredCredits, closeModal } = useCreditGuard();
   const renderQueueRunningRef = useRef(false);
 
-  // Retomar sesión desde notificación
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // El paso "estable" del wizard vive también en la URL (?paso=scan_overlay)
+  // para que el botón/gesto "atrás" nativo retroceda un paso en vez de sacar
+  // al usuario del módulo. Los estados de carga (detecting/generating_renders/
+  // composing) NO se reflejan en la URL — son transiciones automáticas y
+  // breves; si el usuario navega afuera durante una de ellas, la generación
+  // sigue corriendo en segundo plano (igual que ya funciona hoy) y el
+  // resultado aparece en su Biblioteca al terminar, sin necesidad de que la
+  // pantalla de carga sea "un paso" navegable.
+  const STABLE_STEPS: FlowStep[] = ['idle', 'scan_overlay', 'reviewing_renders', 'final_kit'];
+  const setStableStep = (next: FlowStep, options?: { replace?: boolean }) => {
+    setStep(next);
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      p.set('paso', next);
+      return p;
+    }, { replace: options?.replace ?? false });
+  };
+
+  // Al cargar con ?paso=X en la URL (recarga, o volver con "adelante" del
+  // navegador), restaurar ese paso solo si además hay datos reales para
+  // mostrarlo — si no, se ignora y queda "idle" (ver guarda más abajo).
+  useEffect(() => {
+    const stepFromUrl = searchParams.get('paso') as FlowStep | null;
+    if (stepFromUrl && STABLE_STEPS.includes(stepFromUrl) && stepFromUrl !== step) {
+      setStep(stepFromUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.get('paso')]);
+
+  // Guarda: si el paso restaurado desde la URL no es alcanzable con lo que
+  // hay en memoria (recarga a mitad del wizard, o un link directo a
+  // ?paso=reviewing_renders sin haber subido ninguna foto), vuelve a "idle"
+  // en vez de mostrar una pantalla a medias.
+  useEffect(() => {
+    if (searchParams.get('session')) return;
+    const reachable =
+      step === 'idle' ? true :
+      step === 'scan_overlay' ? !!currentKit :
+      step === 'reviewing_renders' ? !!currentKit && currentKit.items.some(i => i.status === 'done' || i.status === 'error') :
+      step === 'final_kit' ? !!currentKit?.finalKitUrl :
+      true; // estados de carga: no aplica la guarda
+    if (!reachable) setStableStep('idle', { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  // Retomar sesión desde notificación
   useEffect(() => {
     const sessionParam = searchParams.get('session');
     if (!sessionParam || !user) return;
@@ -226,14 +272,14 @@ const OutfitExtractorModule: React.FC = () => {
       const result = await outfitService.analyzeOutfit(sourceImage);
       if (!result.items || result.items.length === 0) {
         alert('No encontramos prendas claras. Asegúrate de que la foto muestre el look completo.');
-        setStep('idle');
+        setStableStep('idle', { replace: true });
         return;
       }
       setCurrentKit(result);
-      setStep('scan_overlay');
+      setStableStep('scan_overlay');
     } catch (e: any) {
       alert('No pudimos separar las prendas. Prueba con otra foto.');
-      setStep('idle');
+      setStableStep('idle', { replace: true });
     }
   };
 
@@ -382,7 +428,7 @@ const OutfitExtractorModule: React.FC = () => {
       }
     } finally {
       if (!options.lockAlreadyHeld) renderQueueRunningRef.current = false;
-      setStep('reviewing_renders');
+      setStableStep('reviewing_renders', { replace: true });
       setLoadingMsg('');
     }
   };
@@ -453,10 +499,10 @@ const OutfitExtractorModule: React.FC = () => {
       await Promise.all([outfitStorage.saveKit(finalizedKit), outfitStorage.saveItems(itemsToSave)]);
       setCurrentKit(finalizedKit);
       await loadLibrary();
-      setStep('final_kit');
+      setStableStep('final_kit', { replace: true });
     } catch (e: any) {
       alert('No pudimos preparar las prendas seleccionadas. Inténtalo de nuevo.');
-      setStep('reviewing_renders');
+      setStableStep('reviewing_renders', { replace: true });
     }
   };
 
@@ -496,7 +542,7 @@ const OutfitExtractorModule: React.FC = () => {
 
   const reset = () => {
     setMainView('main');
-    setStep('idle');
+    setStableStep('idle', { replace: true });
     setSourceImage(null);
     setCurrentKit(null);
     setCurrentCombo(null);
@@ -504,7 +550,7 @@ const OutfitExtractorModule: React.FC = () => {
 
   const viewFromLibrary = (kit: OutfitKit) => {
     setCurrentKit(kit);
-    setStep('final_kit');
+    setStableStep('final_kit', { replace: true });
     setMainView('main');
   };
 
@@ -981,7 +1027,7 @@ const OutfitExtractorModule: React.FC = () => {
                 )}
                 {step === 'scan_overlay' && (
                   <WizardFooter
-                    onBack={() => { setStep('idle'); setCurrentKit(null); }}
+                    onBack={() => { setStableStep('idle'); setCurrentKit(null); }}
                     onContinue={confirmSelectionAndRender}
                     continueLabel={`Generar ${selectedItemsCount > 0 ? `(${selectedItemsCount})` : ''}`}
                     disabled={selectedItemsCount === 0}
