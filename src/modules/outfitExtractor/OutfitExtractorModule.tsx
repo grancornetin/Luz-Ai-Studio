@@ -1126,7 +1126,7 @@ const OutfitExtractorModule: React.FC = () => {
 
               {/* Kit final */}
               {step === 'final_kit' && currentKit && (
-                <div className="bg-white p-8 md:p-12 rounded-[48px] border border-slate-100 shadow-lg text-center space-y-8">
+                <div className="bg-white p-5 md:p-12 rounded-2xl md:rounded-[48px] border border-slate-100 shadow-lg text-center space-y-5 md:space-y-8">
                   <div>
                     <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">Imagen lista</h3>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-2">Guardado en tu biblioteca</p>
@@ -1159,21 +1159,21 @@ const OutfitExtractorModule: React.FC = () => {
 
         {/* ── Biblioteca ───────────────────────────────────────────────── */}
         {mainView === 'library' && (
-          <div className="space-y-8 px-4 md:px-0">
-            <nav className="flex items-center gap-2 p-2 bg-slate-100 rounded-3xl w-full overflow-x-auto md:w-fit">
+          <div className="space-y-5 md:space-y-8 px-4 md:px-0">
+            <nav className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl w-full overflow-x-auto">
               {[
-                { id: 'kits',         label: 'Imágenes finales', icon: 'fa-box' },
+                { id: 'kits',         label: 'Imágenes', icon: 'fa-box' },
                 { id: 'items',        label: 'Prendas',      icon: 'fa-shirt' },
-                { id: 'combinations', label: 'Combinaciones',icon: 'fa-user-tie' },
+                { id: 'combinations', label: 'Combos',icon: 'fa-user-tie' },
                 { id: 'creator',      label: 'Crear mix',    icon: 'fa-plus' },
               ].map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setLibView(tab.id as LibraryView)}
-                  className={`px-4 md:px-6 py-3 rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 transition-all whitespace-nowrap ${libView === tab.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`flex-1 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${libView === tab.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                 >
-                  <i className={`fa-solid ${tab.icon}`} />
-                  <span className={libView === tab.id ? '' : 'hidden md:inline'}>{tab.label}</span>
+                  <i className={`fa-solid ${tab.icon} text-[9px]`} />
+                  {tab.label}
                 </button>
               ))}
             </nav>
@@ -1198,7 +1198,7 @@ const OutfitExtractorModule: React.FC = () => {
                     date={kit.createdAt}
                     badge={{ label: `${kit.items?.length ?? 0} prendas`, color: 'fuchsia' }}
                     pills={kit.items?.slice(0, 3).map(i => i.category ?? i.name).filter(Boolean) ?? []}
-                    accentColor="violet"
+                    accentColor="fuchsia"
                     onClick={() => viewFromLibrary(kit)}
                     actions={[
                       { label: 'Ver kit', onClick: e => { e.stopPropagation(); viewFromLibrary(kit); }, variant: 'primary' },
@@ -1210,20 +1210,21 @@ const OutfitExtractorModule: React.FC = () => {
             )}
 
             {libView === 'items' && (
-              <div className="space-y-10">
+              <div className="space-y-6 md:space-y-10">
                 {(Object.entries(categorizedItems) as [string, SavedOutfitItem[]][]).map(([cat, items]) =>
                   items.length > 0 && (
-                    <section key={cat} className="space-y-4">
-                      <h4 className="text-sm font-black text-slate-900 uppercase italic tracking-tighter flex items-center gap-2">
-                        <span className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center text-[10px]"><i className="fa-solid fa-tag" /></span>
+                    <section key={cat} className="space-y-3 md:space-y-4">
+                      <h4 className="text-xs md:text-sm font-black text-slate-900 uppercase italic tracking-tighter flex items-center gap-2">
+                        <span className="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center text-[9px] md:text-[10px]"><i className="fa-solid fa-tag" /></span>
                         {cat === 'top' ? 'Parte superior' : cat === 'bottom' ? 'Parte inferior' : cat === 'footwear' ? 'Calzado' : cat === 'accessory' ? 'Accesorios' : cat === 'bag' ? 'Bolsos' : 'Prendas completas'}
                         <span className="text-slate-400 not-italic ml-2 opacity-50">({items.length})</span>
                       </h4>
-                      <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
+                      {/* Mobile: tira horizontal scrolleable — Desktop: grilla */}
+                      <div className="flex md:grid md:grid-cols-6 gap-3 md:gap-4 overflow-x-auto md:overflow-visible pb-1">
                         {items.map(item => (
-                          <div key={item.id} className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm relative group">
+                          <div key={item.id} className="w-24 md:w-auto flex-shrink-0 bg-white p-2.5 md:p-3 rounded-2xl border border-slate-100 shadow-sm relative group">
                             <img src={item.imageUrl} className="aspect-[3/4] w-full object-contain bg-slate-50 rounded-xl cursor-pointer" onClick={() => openLightbox([item.imageUrl], 0, item.name)} />
-                            <button onClick={e => handleDeleteItem(item.id, e)} className="absolute top-4 right-4 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                            <button onClick={e => handleDeleteItem(item.id, e)} className="absolute top-3.5 right-3.5 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                               <i className="fa-solid fa-trash text-[10px]" />
                             </button>
                           </div>
@@ -1232,56 +1233,70 @@ const OutfitExtractorModule: React.FC = () => {
                     </section>
                   )
                 )}
-                {libraryItems.length === 0 && <div className="py-20 text-center bg-slate-50 rounded-[40px] opacity-60 text-sm text-slate-400">Tu biblioteca de prendas está vacía</div>}
+                {libraryItems.length === 0 && <div className="py-16 md:py-20 text-center bg-slate-50 rounded-2xl md:rounded-[40px] opacity-60 text-sm text-slate-400">Tu biblioteca de prendas está vacía</div>}
               </div>
             )}
 
             {libView === 'combinations' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-8">
                 {libraryCombinations.map(combo => (
-                  <div key={combo.id} className="bg-white p-6 rounded-[40px] border border-slate-100 shadow-lg space-y-6">
-                    <h4 className="text-lg font-black text-slate-900 uppercase italic leading-none">{combo.name}</h4>
-                    <div className="aspect-[3/4] bg-slate-50 rounded-[32px] overflow-hidden cursor-pointer" onClick={() => combo.finalImageUrl && openLightbox([combo.finalImageUrl], 0, combo.name)}>
-                      <img src={combo.finalImageUrl || ''} className="w-full h-full object-contain" />
+                  <div key={combo.id} className="relative rounded-2xl md:rounded-[40px] overflow-hidden aspect-[3/4] shadow-sm md:shadow-lg border border-slate-100 group">
+                    <div className="absolute inset-0 cursor-pointer" onClick={() => combo.finalImageUrl && openLightbox([combo.finalImageUrl], 0, combo.name)}>
+                      <img src={combo.finalImageUrl || ''} className="w-full h-full object-cover" />
                     </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => { const a = document.createElement('a'); a.href = combo.finalImageUrl!; a.download = `${combo.name}.png`; a.click(); }} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all">Descargar</button>
-                      <button onClick={e => handleDeleteCombination(combo.id, e)} className="px-6 bg-red-50 text-red-500 rounded-2xl active:scale-95 transition-all"><i className="fa-solid fa-trash-can" /></button>
+                    <div className="absolute inset-x-0 bottom-0 p-3 md:p-5 bg-gradient-to-t from-black/70 to-transparent pointer-events-none">
+                      <h4 className="text-white text-[11px] md:text-lg font-black uppercase italic leading-tight">{combo.name}</h4>
+                    </div>
+                    <div className="absolute top-2 right-2 flex gap-1.5">
+                      <button
+                        onClick={() => { const a = document.createElement('a'); a.href = combo.finalImageUrl!; a.download = `${combo.name}.png`; a.click(); }}
+                        className="w-8 h-8 rounded-full bg-white/90 text-slate-900 flex items-center justify-center active:scale-95 transition-all"
+                        aria-label="Descargar"
+                      >
+                        <i className="fa-solid fa-download text-[11px]" />
+                      </button>
+                      <button
+                        onClick={e => handleDeleteCombination(combo.id, e)}
+                        className="w-8 h-8 rounded-full bg-white/90 text-red-500 flex items-center justify-center active:scale-95 transition-all"
+                        aria-label="Eliminar"
+                      >
+                        <i className="fa-solid fa-trash-can text-[11px]" />
+                      </button>
                     </div>
                   </div>
                 ))}
-                {libraryCombinations.length === 0 && <div className="col-span-full py-20 text-center bg-slate-50 rounded-[40px] opacity-60 text-sm text-slate-400">Aún no creaste combinaciones</div>}
+                {libraryCombinations.length === 0 && <div className="col-span-full py-16 md:py-20 text-center bg-slate-50 rounded-2xl md:rounded-[40px] opacity-60 text-sm text-slate-400">Aún no creaste combinaciones</div>}
               </div>
             )}
 
             {libView === 'creator' && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                <div className="lg:col-span-7 bg-white p-6 md:p-10 rounded-[40px] border border-slate-100 shadow-sm space-y-10">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 md:gap-8 items-start">
+                <div className="lg:col-span-7 bg-white p-4 md:p-10 rounded-2xl md:rounded-[40px] border border-slate-100 shadow-sm space-y-5 md:space-y-10">
                   <div>
-                    <h3 className="text-xl font-black text-slate-900 uppercase italic">Crear una combinación</h3>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Combina prendas de distintas fotos</p>
+                    <h3 className="text-sm md:text-xl font-black text-slate-900 uppercase italic">Crear una combinación</h3>
+                    <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Combina prendas de distintas fotos</p>
                   </div>
-                  <div className="space-y-10">
+                  <div className="space-y-5 md:space-y-10">
                     {['top', 'bottom', 'footwear', 'accessory'].map(cat => (
-                      <section key={cat} className="space-y-4">
+                      <section key={cat} className="space-y-3 md:space-y-4">
                         <div className="flex items-center justify-between border-b pb-2">
-                          <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">
+                          <span className="text-[9px] md:text-[10px] font-black text-slate-900 uppercase tracking-widest">
                             {cat === 'top' ? 'Parte superior (máx. 3)' : cat === 'bottom' ? 'Parte inferior (máx. 3)' : cat === 'footwear' ? 'Calzado (1)' : 'Accesorios (máx. 6)'}
                           </span>
-                          <span className="text-[10px] font-bold text-slate-400">{categorizedItems[cat]?.length || 0} disponibles</span>
+                          <span className="text-[9px] md:text-[10px] font-bold text-slate-400">{categorizedItems[cat]?.length || 0} disponibles</span>
                         </div>
-                        <div className="flex gap-3 overflow-x-auto pb-4">
+                        <div className="flex gap-2.5 md:gap-3 overflow-x-auto pb-2 md:pb-4">
                           {categorizedItems[cat]?.map(item => {
                             const isSelected = creatorSelectedItems.some(i => i.id === item.id);
                             return (
-                              <div key={item.id} onClick={() => toggleCreatorItem(item)} className={`flex-none w-24 aspect-[3/4] border-4 rounded-2xl overflow-hidden cursor-pointer transition-all relative ${isSelected ? 'border-brand-600 scale-105 shadow-lg' : 'border-slate-100 hover:border-slate-200'}`}>
+                              <div key={item.id} onClick={() => toggleCreatorItem(item)} className={`flex-none w-20 md:w-24 aspect-[3/4] border-4 rounded-2xl overflow-hidden cursor-pointer transition-all relative ${isSelected ? 'border-brand-600 scale-105 shadow-lg' : 'border-slate-100 hover:border-slate-200'}`}>
                                 <img src={item.imageUrl} className="w-full h-full object-contain bg-slate-50" />
                                 {isSelected && <div className="absolute inset-0 bg-brand-600/20 flex items-center justify-center"><i className="fa-solid fa-check text-white text-xl" /></div>}
                               </div>
                             );
                           })}
                           {(!categorizedItems[cat] || categorizedItems[cat].length === 0) && (
-                            <div className="h-24 flex items-center text-slate-300 text-[10px] font-black uppercase px-6 bg-slate-50 rounded-2xl border-2 border-dashed">Sin prendas en esta categoría</div>
+                            <div className="h-20 md:h-24 flex items-center text-slate-300 text-[9px] md:text-[10px] font-black uppercase px-4 md:px-6 bg-slate-50 rounded-2xl border-2 border-dashed">Sin prendas en esta categoría</div>
                           )}
                         </div>
                       </section>
@@ -1289,8 +1304,8 @@ const OutfitExtractorModule: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="lg:col-span-5 space-y-5 sticky top-24">
-                  <div className="relative bg-slate-900 text-white rounded-[32px] p-6 overflow-hidden shadow-2xl border-4 border-slate-800">
+                <div className="lg:col-span-5 space-y-4 md:space-y-5 lg:sticky lg:top-24">
+                  <div className="relative bg-slate-900 text-white rounded-2xl md:rounded-[32px] p-4 md:p-6 overflow-hidden shadow-2xl border-4 border-slate-800">
                     <div className="absolute -top-8 -right-8 w-[120px] h-[120px] rounded-full pointer-events-none" style={{ background: 'rgba(247,44,91,0.3)', filter: 'blur(36px)' }} />
                     <div className="relative space-y-5">
                       <h4 className="text-xl font-black uppercase italic tracking-tighter">Tu nuevo set</h4>
