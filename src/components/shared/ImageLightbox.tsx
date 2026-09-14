@@ -192,7 +192,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
       }}
     >
     <div
-      className="flex flex-col lg:flex-row w-full h-full lg:w-auto lg:max-w-[1200px] lg:bg-black lg:rounded-2xl lg:overflow-hidden lg:shadow-2xl"
+      className="flex flex-col lg:flex-row w-full h-full lg:max-w-[1200px] lg:bg-black lg:rounded-2xl lg:overflow-hidden lg:shadow-2xl"
       style={{ maxHeight: '100%' }}
     >
       {/* ── COLUMNA DE IMAGEN ──────────────────────────────
