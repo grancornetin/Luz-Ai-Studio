@@ -60,7 +60,15 @@ const STORE_NAME = 'records';
 const DB_VERSION = 1;
 const LOCAL_MAX_ENTRIES = 200;
 const HISTORY_MAX_ENTRIES = 400;
-const MIGRATION_CONCURRENCY = 3;
+const MIGRATION_CONCURRENCY = 2;
+// Tope de registros que se migran por sesión/pestaña abierta — evita que un
+// historial local viejo con cientos de registros se suba entero de golpe
+// (esto agotó la cuota diaria de Firestore en un solo día de pruebas). El
+// resto sigue migrando en las siguientes sesiones, unos pocos por vez.
+const MIGRATION_BATCH_PER_SESSION = 20;
+// Pausa entre cada subida — reparte la carga en el tiempo en vez de
+// disparar todas las escrituras/uploads en el mismo instante.
+const MIGRATION_DELAY_MS = 400;
 const LEGACY_LS_KEY = 'luz_generation_history';
 
 // ── IndexedDB por usuario ─────────────────────────────────────────────────────
@@ -335,13 +343,22 @@ async function markMigrated(uid: string, migratedIds: Set<string>): Promise<void
   } catch { /* no bloquea la migración en curso */ }
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // Sube en background los registros locales que todavía no llegaron a la nube
 // (sin syncedAt, o con imageUrl aun en base64). No bloquea al llamador.
+// Migra de a lotes chicos (MIGRATION_BATCH_PER_SESSION) con pausa entre cada
+// subida — un historial viejo con cientos de registros se termina de subir
+// en varias sesiones en vez de disparar todo de una vez.
 async function migrateLocalToCloud(uid: string): Promise<void> {
   try {
     const local = await getLocalRecords(uid);
     const migratedIds = await getMigratedIds(uid);
-    const pending = local.filter(r => !migratedIds.has(r.id) && (!r.syncedAt || r.imageUrl?.startsWith('data:')));
+    const pending = local
+      .filter(r => !migratedIds.has(r.id) && (!r.syncedAt || r.imageUrl?.startsWith('data:')))
+      .slice(0, MIGRATION_BATCH_PER_SESSION);
     if (!pending.length) return;
 
     let cursor = 0;
@@ -355,6 +372,7 @@ async function migrateLocalToCloud(uid: string): Promise<void> {
         } catch (err) {
           console.warn('[History] Migracion de registro fallida, se reintentara despues.', record.id, err);
         }
+        await sleep(MIGRATION_DELAY_MS);
       }
     }
     await Promise.all(Array.from({ length: MIGRATION_CONCURRENCY }, worker));
