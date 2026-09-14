@@ -13,7 +13,6 @@ import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { setCorsHeaders, setSecurityHeaders, verifyAuth } from '../src/server/api/middleware.js';
 import { handleAdminCircuitResetRequest } from '../src/server/api/adminCircuitResetHandler.js';
-import { handleHistoryRequest } from '../src/server/api/historyHandler.js';
 
 // ── Firebase Admin (lazy init) ────────────────────────────────────────────────
 
@@ -74,7 +73,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (setCorsHeaders(req, res)) return;
 
   const route = Array.isArray(req.query.route) ? req.query.route[0] : req.query.route;
-  if (route === 'history') return handleHistoryRequest(req, res);
   if (route === 'admin-circuit-reset') return handleAdminCircuitResetRequest(req, res);
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });

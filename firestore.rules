@@ -188,6 +188,11 @@ service cloud.firestore {
         allow read, write: if isOwner(userId) || isAdmin();
       }
 
+      // Historial de generaciones — imágenes en Storage bajo users/{uid}/generations/{recordId}/
+      match /generations/{recordId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
       // Flags internos (ej: migración)
       match /meta/{docId} {
         allow read, write: if isOwner(userId) || isAdmin();

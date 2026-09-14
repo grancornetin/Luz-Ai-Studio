@@ -114,7 +114,7 @@ export async function readAndCompressFile(file: File): Promise<string> {
 // NUEVAS FUNCIONES PARA DESCARGA INDIVIDUAL Y MASIVA (ZIP)
 // ═══════════════════════════════════════════════════════════════════
 
-function dataUrlToBlob(dataUrl: string): Blob {
+export function dataUrlToBlob(dataUrl: string): Blob {
   const [header, b64] = dataUrl.split(',');
   const mime = header.match(/:(.*?);/)?.[1] ?? 'image/jpeg';
   const bytes = atob(b64);

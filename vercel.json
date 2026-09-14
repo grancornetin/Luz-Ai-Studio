@@ -35,7 +35,6 @@
     }
   },
   "rewrites": [
-    { "source": "/api/history", "destination": "/api/credits?route=history" },
     { "source": "/api/admin/circuit-reset", "destination": "/api/credits?route=admin-circuit-reset" },
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/__/auth/:path*", "destination": "https://gen-lang-client-0895574081.firebaseapp.com/__/auth/:path*" },

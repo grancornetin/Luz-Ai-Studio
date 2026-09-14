@@ -1,11 +1,21 @@
 // src/services/generationHistoryService.ts
 // Historial de generaciones con doble guardado:
 // 1) IndexedDB local por usuario: aislada por uid, se borra al logout.
-// 2) /api/history: sincronizacion remota cuando el usuario esta autenticado.
+// 2) Firestore + Storage: sincronizacion remota cuando el usuario esta autenticado,
+//    para que el historial (con imagenes) este disponible en cualquier dispositivo.
 
 import { getAuth } from 'firebase/auth';
+import { doc, getDocs, getDoc, setDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
+import { db } from '../firebase';
 import { checkFirstGeneration } from './missionsService';
 import { rewardReferrer } from './referralService';
+import {
+  generationsCol,
+  generationDoc,
+  uploadRecordImage,
+  uploadRecordReferences,
+  deleteRecordImages,
+} from './generationCloudStorage';
 
 export interface HistoryReference {
   label?: string;
@@ -46,10 +56,11 @@ export const MODULE_LABELS: Record<string, string> = {
   photodump:          'Photodump',
 };
 
-const API = '/api/history';
 const STORE_NAME = 'records';
 const DB_VERSION = 1;
 const LOCAL_MAX_ENTRIES = 200;
+const HISTORY_MAX_ENTRIES = 400;
+const MIGRATION_CONCURRENCY = 3;
 const LEGACY_LS_KEY = 'luz_generation_history';
 
 // ── IndexedDB por usuario ─────────────────────────────────────────────────────
@@ -263,48 +274,95 @@ function mergeRecords(primary: GenerationRecord[], secondary: GenerationRecord[]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
-function stripHeavyLocalOnlyData(record: GenerationRecord): GenerationRecord {
-  const safeReferences = record.references?.map((ref, index) => ({
-    label: ref.label || `Referencia ${index + 1}`,
-    mimeType: ref.mimeType,
-    role: ref.role,
-    // imageUrl de referencias ya se omite — demasiado pesada para Redis
-  }));
+// ── Firestore remoto ──────────────────────────────────────────────────────────
 
-  // Si imageUrl es base64 (data:...) no se envía al remoto — solo se guarda local.
-  // Upstash tiene límite de 10MB por request y las imágenes generadas pueden pesar
-  // varios MB cada una. El imageKey actúa como fingerprint para dedup remoto.
-  const remoteImageUrl = record.imageUrl?.startsWith('data:')
-    ? ''
-    : (record.imageUrl || '');
-
-  return {
-    ...record,
-    imageUrl:   remoteImageUrl,
-    references: safeReferences,
-  };
+async function fetchRemoteRecords(uid: string): Promise<GenerationRecord[]> {
+  const snap = await getDocs(query(generationsCol(uid), orderBy('createdAt', 'desc')));
+  return snap.docs.map(d => normalizeRecord(d.data() as GenerationRecord));
 }
 
-// ── API remota ────────────────────────────────────────────────────────────────
+async function saveRemoteRecord(uid: string, record: GenerationRecord): Promise<GenerationRecord> {
+  const imageUrl = await uploadRecordImage(uid, record.id, record.imageUrl);
+  const references = await uploadRecordReferences(uid, record.id, record.references);
+  const remoteRecord: GenerationRecord = { ...record, imageUrl, references };
+  await setDoc(generationDoc(uid, record.id), remoteRecord);
+  return remoteRecord;
+}
 
-async function call(action: string, payload: Record<string, unknown> = {}): Promise<any> {
-  const uid = getUid();
-  if (!uid) throw new Error('Usuario no autenticado');
+async function deleteRemoteRecord(uid: string, id: string): Promise<void> {
+  await deleteRecordImages(uid, id);
+  await deleteDoc(generationDoc(uid, id)).catch(() => {});
+}
 
-  const token = await getAuth().currentUser?.getIdToken().catch(() => null);
-  const res = await fetch(API, {
-    method:  'POST',
-    headers: {
-      'Content-Type':  'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-    },
-    body:    JSON.stringify({ action, payload: { uid, ...payload } }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `History API error: ${res.status}`);
+// Aplica el tope de historial: borra (Storage + Firestore + local) los registros
+// más viejos que excedan HISTORY_MAX_ENTRIES. Corre en background, sin bloquear al usuario.
+async function enforceHistoryLimit(uid: string): Promise<void> {
+  try {
+    const remote = await fetchRemoteRecords(uid);
+    const extra = remote.slice(HISTORY_MAX_ENTRIES);
+    if (!extra.length) return;
+    for (const record of extra) {
+      await deleteRemoteRecord(uid, record.id);
+      await deleteLocalRecord(uid, record.id);
+    }
+  } catch (err) {
+    console.warn('[History] No se pudo aplicar el limite de historial.', err);
   }
-  return res.json();
+}
+
+// ── Migración de historial local viejo (base64 sin subir) hacia Storage+Firestore ──
+
+function migrationFlagDoc(uid: string) {
+  return doc(db, 'users', uid, 'meta', 'historyMigration');
+}
+
+async function getMigratedIds(uid: string): Promise<Set<string>> {
+  try {
+    const snap = await getDoc(migrationFlagDoc(uid));
+    const data = snap.data() as { migratedIds?: string[] } | undefined;
+    return new Set(data?.migratedIds || []);
+  } catch {
+    return new Set();
+  }
+}
+
+async function markMigrated(uid: string, migratedIds: Set<string>): Promise<void> {
+  try {
+    await setDoc(migrationFlagDoc(uid), {
+      migratedIds: Array.from(migratedIds),
+      lastAttemptAt: new Date().toISOString(),
+    });
+  } catch { /* no bloquea la migración en curso */ }
+}
+
+// Sube en background los registros locales que todavía no llegaron a la nube
+// (sin syncedAt, o con imageUrl aun en base64). No bloquea al llamador.
+async function migrateLocalToCloud(uid: string): Promise<void> {
+  try {
+    const local = await getLocalRecords(uid);
+    const migratedIds = await getMigratedIds(uid);
+    const pending = local.filter(r => !migratedIds.has(r.id) && (!r.syncedAt || r.imageUrl?.startsWith('data:')));
+    if (!pending.length) return;
+
+    let cursor = 0;
+    async function worker() {
+      while (cursor < pending.length) {
+        const record = pending[cursor++];
+        try {
+          const remoteRecord = await saveRemoteRecord(uid, record);
+          await putLocalRecord(uid, { ...remoteRecord, syncedAt: new Date().toISOString() }).catch(() => {});
+          migratedIds.add(record.id);
+        } catch (err) {
+          console.warn('[History] Migracion de registro fallida, se reintentara despues.', record.id, err);
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: MIGRATION_CONCURRENCY }, worker));
+    await markMigrated(uid, migratedIds);
+    await enforceHistoryLimit(uid);
+  } catch (err) {
+    console.warn('[History] Migracion de historial local fallida.', err);
+  }
 }
 
 // ── API pública ───────────────────────────────────────────────────────────────
@@ -328,8 +386,9 @@ export const generationHistoryService = {
     await putLocalRecord(uid, newRecord).catch(() => {});
 
     try {
-      await call('save', { record: stripHeavyLocalOnlyData(newRecord) });
-      await putLocalRecord(uid, { ...newRecord, syncedAt: new Date().toISOString() }).catch(() => {});
+      const remoteRecord = await saveRemoteRecord(uid, newRecord);
+      await putLocalRecord(uid, { ...remoteRecord, syncedAt: new Date().toISOString() }).catch(() => {});
+      enforceHistoryLimit(uid).catch(() => {});
     } catch (err) {
       console.warn('[History] Remote sync failed; local copy preserved.', err);
     } finally {
@@ -347,9 +406,11 @@ export const generationHistoryService = {
     await migrateLegacyLocalStorage(uid);
     const local = await getLocalRecords(uid);
 
+    // Migración de historial viejo en background — no bloquea la lectura actual.
+    migrateLocalToCloud(uid).catch(() => {});
+
     try {
-      const data = await call('list', { limit, offset });
-      const remote = Array.isArray(data.entries) ? data.entries.map(normalizeRecord) : [];
+      const remote = await fetchRemoteRecords(uid);
       for (const record of remote) {
         await putLocalRecord(uid, { ...record, syncedAt: record.syncedAt || new Date().toISOString() }).catch(() => {});
       }
@@ -361,24 +422,35 @@ export const generationHistoryService = {
 
   async delete(id: string): Promise<void> {
     const uid = getUid();
-    if (uid) await deleteLocalRecord(uid, id);
-    await call('delete', { id });
+    if (!uid) return;
+    await deleteLocalRecord(uid, id);
+    await deleteRemoteRecord(uid, id);
   },
 
   async deleteBatch(ids: string[]): Promise<void> {
     const uid = getUid();
-    if (uid) await Promise.all(ids.map(id => deleteLocalRecord(uid, id)));
-    await call('deleteBatch', { ids });
+    if (!uid) return;
+    await Promise.all(ids.map(async id => {
+      await deleteLocalRecord(uid, id);
+      await deleteRemoteRecord(uid, id);
+    }));
   },
 
   async clear(): Promise<void> {
     const uid = getUid();
-    if (uid) await deleteUserDb(uid);
-    await call('clear');
+    if (!uid) return;
+    const remote = await fetchRemoteRecords(uid).catch(() => []);
+    await Promise.all(remote.map(record => deleteRemoteRecord(uid, record.id)));
+    await deleteUserDb(uid);
   },
 
-  async stats(): Promise<any> {
-    return call('stats');
+  async stats(): Promise<{ total: number; byModule: Record<string, number> }> {
+    const uid = getUid();
+    if (!uid) return { total: 0, byModule: {} };
+    const remote = await fetchRemoteRecords(uid).catch(() => []);
+    const byModule: Record<string, number> = {};
+    remote.forEach(r => { byModule[r.module] = (byModule[r.module] || 0) + 1; });
+    return { total: remote.length, byModule };
   },
 
   // Borra la IndexedDB local del usuario. Llamar en logout antes de firebaseSignOut.
