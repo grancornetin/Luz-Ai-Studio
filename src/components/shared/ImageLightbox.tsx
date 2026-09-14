@@ -181,7 +181,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
   // elementos fixed (como la navegación). Montar en <body> lo evita del todo.
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] bg-black lg:bg-black/70 lg:backdrop-blur-sm flex flex-col lg:items-center lg:justify-center lg:p-8"
+      className="fixed inset-0 z-[9999] bg-black md:bg-black/70 md:backdrop-blur-sm flex flex-col md:items-center md:justify-center md:p-8"
       style={{ height: '100dvh' }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
@@ -192,7 +192,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
       }}
     >
     <div
-      className="flex flex-col lg:flex-row w-full h-full lg:h-[85vh] lg:max-w-[1200px] lg:bg-black lg:rounded-2xl lg:overflow-hidden lg:shadow-2xl"
+      className="flex flex-col md:flex-row w-full h-full md:h-[85vh] md:max-w-[1200px] md:bg-black md:rounded-2xl md:overflow-hidden md:shadow-2xl"
     >
       {/* ── COLUMNA DE IMAGEN ──────────────────────────────
           En desktop (lg+) es su propia columna dentro de una ventana
@@ -201,7 +201,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
           En mobile mantiene el layout original (barra + imagen + tira). */}
       <div className="relative flex-1 flex flex-col min-w-0 min-h-0">
         {/* Barra superior — solo mobile, en desktop el cerrar vive sobre la imagen */}
-        <div className="lg:hidden flex-shrink-0 flex items-center justify-between px-4 pt-4 pb-2 safe-area-top relative z-[2]">
+        <div className="md:hidden flex-shrink-0 flex items-center justify-between px-4 pt-4 pb-2 safe-area-top relative z-[2]">
           <button
             onClick={onClose}
             className="w-9 h-9 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full flex items-center justify-center text-white transition-colors"
@@ -220,13 +220,13 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
         <button
           onClick={onClose}
           aria-label="Cerrar"
-          className="hidden lg:flex absolute top-5 left-5 z-[2] w-9 h-9 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full items-center justify-center text-white transition-colors"
+          className="hidden md:flex absolute top-5 left-5 z-[2] w-9 h-9 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full items-center justify-center text-white transition-colors"
         >
           <X size={16} />
         </button>
 
         {/* Imagen central (o slider de comparación) */}
-        <div className="flex-1 min-h-0 min-w-0 flex items-center justify-center relative overflow-hidden px-3 lg:px-10 lg:py-10">
+        <div className="flex-1 min-h-0 min-w-0 flex items-center justify-center relative overflow-hidden px-3 md:px-10 md:py-10">
           {compareMode && hasBeforeAfterPair ? (
             <BeforeAfterSlider
               beforeSrc={images[beforeIdx]}
@@ -259,7 +259,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
             <button
               onClick={goPrev}
               aria-label="Anterior"
-              className="hidden lg:flex absolute left-5 top-1/2 -translate-y-1/2 z-[2] w-10 h-10 bg-white/10 hover:bg-white/20 active:scale-95 rounded-full items-center justify-center text-white transition-colors"
+              className="hidden md:flex absolute left-5 top-1/2 -translate-y-1/2 z-[2] w-10 h-10 bg-white/10 hover:bg-white/20 active:scale-95 rounded-full items-center justify-center text-white transition-colors"
             >
               <ChevronLeft size={20} />
             </button>
@@ -268,14 +268,14 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
             <button
               onClick={goNext}
               aria-label="Siguiente"
-              className="hidden lg:flex absolute right-5 top-1/2 -translate-y-1/2 z-[2] w-10 h-10 bg-white/10 hover:bg-white/20 active:scale-95 rounded-full items-center justify-center text-white transition-colors"
+              className="hidden md:flex absolute right-5 top-1/2 -translate-y-1/2 z-[2] w-10 h-10 bg-white/10 hover:bg-white/20 active:scale-95 rounded-full items-center justify-center text-white transition-colors"
             >
               <ChevronRight size={20} />
             </button>
           )}
 
           {/* Columna de acciones flotantes — solo mobile. En desktop viven en el panel lateral. */}
-          <div className="lg:hidden absolute right-4 bottom-4 flex flex-col-reverse gap-2.5 z-[2]">
+          <div className="md:hidden absolute right-4 bottom-4 flex flex-col-reverse gap-2.5 z-[2]">
             {hasAnyPanel && (
               <button
                 onClick={() => setPanelOpen(p => !p)}
@@ -330,7 +330,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
 
           {/* Tira de miniaturas flotante — solo desktop, sobre la imagen */}
           {images.length > 1 && (
-            <div className="hidden lg:flex absolute bottom-16 left-1/2 -translate-x-1/2 z-[2] gap-2 bg-black/30 backdrop-blur-md rounded-2xl p-2">
+            <div className="hidden md:flex absolute bottom-16 left-1/2 -translate-x-1/2 z-[2] gap-2 bg-black/30 backdrop-blur-md rounded-2xl p-2">
               {images.map((src, idx) => (
                 <button
                   key={idx}
@@ -346,7 +346,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
           )}
 
           {/* Contador — solo desktop, centrado abajo */}
-          <div className="hidden lg:block absolute bottom-5 left-1/2 -translate-x-1/2 z-[2] text-white/45 text-[10.5px] font-black uppercase tracking-widest">
+          <div className="hidden md:block absolute bottom-5 left-1/2 -translate-x-1/2 z-[2] text-white/45 text-[10.5px] font-black uppercase tracking-widest">
             {currentIndex + 1} / {images.length}
             {label(currentIndex) && <span className="ml-2 text-white/30">· {label(currentIndex)}</span>}
           </div>
@@ -355,7 +355,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
         {/* Tira de miniaturas — solo mobile, franja fija debajo de la imagen */}
         {images.length > 1 && (
           <div
-            className="lg:hidden flex-shrink-0 px-4 pt-1 relative z-[2]"
+            className="md:hidden flex-shrink-0 px-4 pt-1 relative z-[2]"
             style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
           >
             <div className="flex gap-2 overflow-x-auto">
@@ -382,7 +382,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
           solo abre si hay contenido extra) porque acá viven Descargar/
           Compartir, que en mobile están siempre como botones flotantes. */}
       {showDesktopPanel && (
-        <div className="hidden lg:flex w-[340px] flex-shrink-0 bg-slate-900 border-l border-white/10 flex-col p-5 overflow-y-auto">
+        <div className="hidden md:flex w-[340px] flex-shrink-0 bg-slate-900 border-l border-white/10 flex-col p-5 overflow-y-auto">
           {metadata?.label && (
             <div className="flex items-center gap-2.5 pb-4 mb-4 border-b border-white/10">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 flex-shrink-0" />
@@ -444,7 +444,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
 
       {/* ── PANEL DESLIZABLE (Info / Acciones) — solo mobile ─── */}
       {hasAnyPanel && (
-        <div className="lg:hidden">
+        <div className="md:hidden">
           <div
             className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ${
               panelOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
