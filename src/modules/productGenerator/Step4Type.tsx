@@ -70,7 +70,7 @@ export const Step4Type: React.FC<Step4TypeProps> = ({
   return (
     <div className="fade-in p-4 md:p-8">
       <div className="max-w-[720px] mb-6">
-        <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">
+        <div className="hidden md:block text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">
           Paso 4 · Tipo y cantidad
         </div>
         <h2 className="t-display text-[28px] md:text-[36px] text-slate-900 mt-2.5 leading-[1.05]">

@@ -33,7 +33,7 @@ export const Step1Product: React.FC<Step1ProductProps> = ({ state, onChange, dis
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-9 items-start">
         {/* LEFT: copy + form */}
         <div className="md:col-span-6 order-2 md:order-1">
-          <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">
+          <div className="hidden md:block text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">
             Paso 1 · Producto
           </div>
           <h2 className="t-display text-[28px] md:text-[36px] text-slate-900 mt-2.5 leading-[1.05]">

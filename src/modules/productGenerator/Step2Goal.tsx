@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { Check, Layout, Sun, Palette } from 'lucide-react';
 import type { Goal } from './wizardTypes';
 
@@ -86,21 +86,109 @@ const ACCENT_RING: Record<string, string> = {
 };
 
 export const Step2Goal: React.FC<Step2GoalProps> = ({ goal, onChange }) => {
+  // Carrusel mobile: swipe horizontal con scroll-snap + dots — mismo patrón
+  // que RecipeCardCarouselMobile de Photodump, para aprovechar la pantalla
+  // vertical del teléfono en vez de un grid de cards chicas apiladas.
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [activeIndex, setActiveIndex] = useState(() => Math.max(0, GOALS.findIndex(g => g.id === goal)));
+
+  const handleScroll = useCallback(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const trackRect = track.getBoundingClientRect();
+    const centerX = trackRect.left + trackRect.width / 2;
+    let closest = 0;
+    let closestDist = Infinity;
+    Array.from(track.children).forEach((child, i) => {
+      const r = (child as HTMLElement).getBoundingClientRect();
+      const dist = Math.abs((r.left + r.width / 2) - centerX);
+      if (dist < closestDist) { closestDist = dist; closest = i; }
+    });
+    setActiveIndex(closest);
+  }, []);
+
+  const scrollToIndex = (i: number) => {
+    const track = trackRef.current;
+    if (!track) return;
+    const child = track.children[i] as HTMLElement | undefined;
+    if (child) {
+      track.scrollTo({ left: child.offsetLeft - (track.clientWidth - child.clientWidth) / 2, behavior: 'smooth' });
+    }
+  };
+
   return (
-    <div className="fade-in p-4 md:p-8">
-      <div className="max-w-[720px] mb-6">
-        <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">
+    <div className="fade-in p-4 md:p-8 flex flex-col md:block md:min-h-0" style={{ minHeight: 0 }}>
+      <div className="max-w-[720px] mb-4 md:mb-6 flex-shrink-0">
+        <div className="hidden md:block text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">
           Paso 2 · Objetivo del contenido
         </div>
-        <h2 className="t-display text-[28px] md:text-[36px] text-slate-900 mt-2.5 leading-[1.05]">
+        <h2 className="t-display text-[24px] md:text-[36px] text-slate-900 mt-2.5 leading-[1.05]">
           ¿Para qué <span className="text-brand-600 italic normal-case">las vas a usar?</span>
         </h2>
         <p className="text-sm text-slate-500 mt-2 leading-[1.55]">
-          Esto define la composición, el encuadre y el tipo de luz. Cada destino produce un resultado diferente.
+          <span className="md:hidden">Deslizá para ver cada opción. </span>
+          Esto define la composición, el encuadre y el tipo de luz.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+      {/* Mobile: carrusel horizontal de cards grandes */}
+      <div className="md:hidden flex-1 min-h-0 flex flex-col">
+        <div
+          ref={trackRef}
+          onScroll={handleScroll}
+          className="flex-1 min-h-0 flex gap-3 overflow-x-auto snap-x snap-mandatory -mx-4 px-4 scrollbar-hide"
+        >
+          {GOALS.map((g) => {
+            const sel = goal === g.id;
+            return (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() => onChange(g.id)}
+                className={`snap-center shrink-0 w-[86%] h-full relative rounded-[24px] overflow-hidden text-left transition-all border ${
+                  sel ? 'border-2 border-brand-600 shadow-[0_12px_30px_rgba(216,16,73,0.2)]' : 'border-slate-200'
+                }`}
+              >
+                <div className={`absolute inset-0 bg-gradient-to-br ${g.bgGradient}`} />
+                <div className={`absolute top-3.5 right-3.5 w-7 h-7 rounded-full flex items-center justify-center ${
+                  sel ? 'bg-brand-600 text-white' : 'bg-white/80'
+                }`}>
+                  {sel && <Check size={14} strokeWidth={3} />}
+                </div>
+                {g.badge && (
+                  <div className="absolute top-3.5 left-3.5 bg-white text-brand-700 text-[9px] font-black tracking-[0.1em] uppercase px-2 py-1 rounded-full shadow">
+                    {g.badge}
+                  </div>
+                )}
+                <div className="absolute inset-x-0 bottom-0 p-4 pt-14 bg-gradient-to-t from-black/65 via-black/15 to-transparent">
+                  <div className="t-display text-[17px] text-white leading-tight normal-case italic">
+                    {g.title}
+                  </div>
+                  <p className="text-[12px] text-white/85 mt-1 leading-snug">
+                    {g.desc}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex items-center justify-center gap-1.5 mt-3 flex-shrink-0">
+          {GOALS.map((g, i) => (
+            <button
+              key={g.id}
+              type="button"
+              aria-label={`Ver ${g.title}`}
+              onClick={() => scrollToIndex(i)}
+              className={`h-1.5 rounded-full transition-all ${
+                i === activeIndex ? 'w-5 bg-brand-600' : 'w-1.5 bg-slate-300'
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Desktop: grid original de cards con detalle */}
+      <div className="hidden md:grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
         {GOALS.map((g) => {
           const sel = goal === g.id;
           return (

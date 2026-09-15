@@ -854,7 +854,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
         available={credits.available}
       />
 
-      <div className="max-w-7xl mx-auto pb-20 animate-in fade-in duration-500">
+      <div className="max-w-7xl mx-auto pb-28 md:pb-20 animate-in fade-in duration-500">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-5 px-1 mb-4 md:mb-8">
           <div>
             <h1 className="t-display text-xl md:text-3xl text-slate-900">Foto de producto</h1>
