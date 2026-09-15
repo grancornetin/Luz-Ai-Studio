@@ -5,7 +5,7 @@
 //    para que el historial (con imagenes) este disponible en cualquier dispositivo.
 
 import { getAuth } from 'firebase/auth';
-import { doc, getDocs, getDoc, setDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
+import { doc, getDocs, getDoc, setDoc, deleteDoc, query, orderBy, limit, getCountFromServer } from 'firebase/firestore';
 import { db } from '../firebase';
 import { checkFirstGeneration } from './missionsService';
 import { rewardReferrer } from './referralService';
@@ -284,8 +284,16 @@ function mergeRecords(primary: GenerationRecord[], secondary: GenerationRecord[]
 
 // ── Firestore remoto ──────────────────────────────────────────────────────────
 
+// Tope duro en cada lectura de la colección remota — antes no tenía límite,
+// así que traía TODO el historial (potencialmente cientos/miles de
+// documentos) en getAll(), enforceHistoryLimit() y stats(), cada uno
+// facturando 1 lectura por documento. HISTORY_MAX_ENTRIES ya es el tope de
+// cuántos registros conserva el propio historial, así que nunca hace falta
+// traer más que eso de una sola vez.
 async function fetchRemoteRecords(uid: string): Promise<GenerationRecord[]> {
-  const snap = await getDocs(query(generationsCol(uid), orderBy('createdAt', 'desc')));
+  const snap = await getDocs(
+    query(generationsCol(uid), orderBy('createdAt', 'desc'), limit(HISTORY_MAX_ENTRIES))
+  );
   return snap.docs.map(d => normalizeRecord(d.data() as GenerationRecord));
 }
 
@@ -303,13 +311,26 @@ async function deleteRemoteRecord(uid: string, id: string): Promise<void> {
 }
 
 // Aplica el tope de historial: borra (Storage + Firestore + local) los registros
-// más viejos que excedan HISTORY_MAX_ENTRIES. Corre en background, sin bloquear al usuario.
+// más viejos que excedan HISTORY_MAX_ENTRIES. Corre en background, sin bloquear
+// al usuario, DESPUÉS DE CADA imagen generada — por eso es crítico no traer la
+// colección completa acá. getCountFromServer cuenta sin facturar por documento
+// (es 1 sola lectura de agregación); solo si hace falta borrar, se traen los
+// documentos sobrantes con un limit acotado en vez de la colección entera.
 async function enforceHistoryLimit(uid: string): Promise<void> {
   try {
-    const remote = await fetchRemoteRecords(uid);
-    const extra = remote.slice(HISTORY_MAX_ENTRIES);
-    if (!extra.length) return;
-    for (const record of extra) {
+    const col = generationsCol(uid);
+    const countSnap = await getCountFromServer(col);
+    const total = countSnap.data().count;
+    const overflow = total - HISTORY_MAX_ENTRIES;
+    if (overflow <= 0) return;
+
+    // Traer SOLO los `overflow` registros más viejos (orden ascendente +
+    // limit) — nunca la colección completa, aunque haya miles de registros.
+    const oldestSnap = await getDocs(
+      query(col, orderBy('createdAt', 'asc'), limit(overflow))
+    );
+    for (const d of oldestSnap.docs) {
+      const record = normalizeRecord(d.data() as GenerationRecord);
       await deleteRemoteRecord(uid, record.id);
       await deleteLocalRecord(uid, record.id);
     }

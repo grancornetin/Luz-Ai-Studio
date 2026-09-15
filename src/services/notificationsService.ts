@@ -4,11 +4,19 @@
 // el cliente solo lee, marca como leídas, y borra.
 
 import {
-  collection, query, orderBy, onSnapshot,
+  collection, query, orderBy, onSnapshot, limit, where,
   doc, getDoc, updateDoc, deleteDoc, writeBatch, getDocs,
   Unsubscribe,
 } from 'firebase/firestore';
 import { db } from '../firebase';
+
+// Tope de documentos que trae el listener en vivo — sin esto, onSnapshot
+// releía TODA la colección (facturado como 1 lectura por documento) en
+// cada actualización de cualquier shot de cualquier generación, para
+// cualquier sesión con la app abierta. Con la colección creciendo sin
+// límite (semanas de uso), eso agotó la cuota diaria de Firestore en
+// pocas horas de tráfico real, dos días seguidos.
+const NOTIFICATIONS_LISTENER_LIMIT = 30;
 
 // ── Tipos (espejo del schema escrito por api/_notifications.ts) ───────────────
 
@@ -48,7 +56,7 @@ export function subscribeToNotifications(
   onChange: (items: AppNotification[]) => void,
 ): Unsubscribe {
   const ref = collection(db, 'users', uid, 'notifications');
-  const q   = query(ref, orderBy('createdAt', 'desc'));
+  const q   = query(ref, orderBy('createdAt', 'desc'), limit(NOTIFICATIONS_LISTENER_LIMIT));
   return onSnapshot(
     q,
     snap => {
@@ -105,18 +113,19 @@ const RETENTION_MS   = RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
 export async function purgeOldNotifications(uid: string): Promise<void> {
   const ref = collection(db, 'users', uid, 'notifications');
+  const cutoff = Date.now() - RETENTION_MS;
   try {
-    const snap = await getDocs(ref);
-    const cutoff = Date.now() - RETENTION_MS;
-    const expired = snap.docs.filter(d => {
-      const data = d.data() as AppNotification;
-      return data.createdAt && data.createdAt < cutoff;
-    });
-    if (!expired.length) return;
+    // Filtrado en el servidor (where), no en el cliente — antes traía la
+    // colección entera con getDocs(ref) sin filtro solo para descartar la
+    // mayoría en el cliente, facturando 1 lectura por documento viejo cada
+    // vez que cualquier usuario abría la app.
+    const q = query(ref, where('createdAt', '<', cutoff));
+    const snap = await getDocs(q);
+    if (snap.empty) return;
     const batch = writeBatch(db);
-    expired.forEach(d => batch.delete(d.ref));
+    snap.docs.forEach(d => batch.delete(d.ref));
     await batch.commit();
-    console.log(`[notifications] Purged ${expired.length} notification(s) older than ${RETENTION_DAYS} days`);
+    console.log(`[notifications] Purged ${snap.size} notification(s) older than ${RETENTION_DAYS} days`);
   } catch (err: any) {
     console.warn('[notifications] purge failed:', err.message);
   }
