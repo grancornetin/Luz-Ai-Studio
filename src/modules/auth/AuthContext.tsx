@@ -7,7 +7,7 @@ import {
   User as FirebaseUser,
   signOut as firebaseSignOut
 } from 'firebase/auth';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp, type DocumentSnapshot } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
 import { userService, UserCredits, UserStats, PLAN_CREDITS } from '../../services/userService';
 import {
@@ -68,6 +68,9 @@ interface AuthContextType {
   isAdmin: boolean;
   hasCredits: boolean;
   isNewUser: boolean;
+  // true si la última carga del perfil falló incluso tras reintentar —
+  // el rol/créditos mostrados pueden no ser los reales hasta refrescar.
+  profileLoadError: boolean;
   previewPlan: string | null;
   setPreviewPlan: (p: string | null) => void;
   markOnboardingDone: () => Promise<void>;
@@ -102,6 +105,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isNewUser, setIsNewUser] = useState(false);
   const [previewPlan, setPreviewPlanState] = useState<string | null>(null);
   const [proCredits, setProCredits] = useState(0);
+  // true cuando la última carga de perfil falló incluso tras reintentar —
+  // la UI puede avisar ("no pudimos confirmar tu cuenta, reintentá") en vez
+  // de que el usuario pierda privilegios sin explicación.
+  const [profileLoadError, setProfileLoadError] = useState(false);
 
   const setPreviewPlan = (p: string | null) => setPreviewPlanState(p);
 
@@ -143,10 +150,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       try {
         setUser(firebaseUser);
+        setProfileLoadError(false);
 
         // ── Cargar perfil desde Firestore ──
-        const userRef  = doc(db, 'users', firebaseUser.uid);
-        const userSnap = await getDoc(userRef);
+        // Reintenta antes de rendirse: una falla transitoria (cuota,
+        // hiccup de red) no debe degradar a un admin real a "user" en
+        // silencio — eso le hizo perder privilegios sin ningún aviso la
+        // vez que se agotó la cuota diaria de Firestore.
+        const userRef = doc(db, 'users', firebaseUser.uid);
+        let userSnap: DocumentSnapshot | null = null;
+        let lastError: unknown = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            userSnap = await getDoc(userRef);
+            lastError = null;
+            break;
+          } catch (err) {
+            lastError = err;
+            if (attempt < 2) await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+          }
+        }
+        if (lastError) throw lastError;
+        if (!userSnap) throw new Error('No se pudo cargar el perfil de usuario.');
 
         let userProfile: UserProfile;
 
@@ -231,9 +256,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       } catch (err) {
         console.error('[AuthContext] Error loading user data:', err);
-        // Aunque falle la carga de datos, el usuario sigue autenticado
+        setProfileLoadError(true);
+        // Aunque falle la carga de datos, el usuario sigue autenticado.
+        // Importante: NO se pisa un perfil ya cargado en esta sesión — una
+        // falla transitoria posterior (ej. cuota de Firestore agotada) no
+        // debe degradar a un admin real a "user" en silencio, que fue
+        // justo lo que pasó la vez que se agotó la cuota diaria. Solo se
+        // asume "user" cuando es la primera carga y no hay nada mejor.
         setUser(firebaseUser);
-        setProfile({
+        setProfile(prev => prev ?? {
           id:          firebaseUser.uid,
           email:       firebaseUser.email       || '',
           displayName: firebaseUser.displayName || 'Usuario',
@@ -372,7 +403,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <AuthContext.Provider value={{
       user, profile, credits: effectiveCredits, stats, loading,
-      isAdmin, hasCredits, isNewUser,
+      isAdmin, hasCredits, isNewUser, profileLoadError,
       previewPlan, setPreviewPlan,
       markOnboardingDone, updateProfile, deductCredit, deductCredits,
       refreshCredits, signOut,
