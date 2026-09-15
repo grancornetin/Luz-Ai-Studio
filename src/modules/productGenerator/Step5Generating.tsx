@@ -1,4 +1,5 @@
 import React from 'react';
+import { Lightbulb } from 'lucide-react';
 import { GenerationProgress, type ProgressStep } from '../../components/shared/GenerationProgress';
 
 interface Step5GeneratingProps {
@@ -28,8 +29,8 @@ export const Step5Generating: React.FC<Step5GeneratingProps> = ({
         {/* LEFT: timeline */}
         <div className="md:col-span-5 lg:col-span-4">
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-2 h-2 rounded-full bg-pink-500 animate-pulse" />
-            <span className="text-[10px] font-black text-pink-600 uppercase tracking-[0.18em]">
+            <div className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
+            <span className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">
               Generando · no cierres esta ventana
             </span>
           </div>
@@ -54,8 +55,9 @@ export const Step5Generating: React.FC<Step5GeneratingProps> = ({
               {processingStatus}
             </div>
           )}
-          <div className="mt-3 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5]">
-            💡 Podés cerrar la ventana — te avisamos cuando termine.
+          <div className="mt-3 flex items-start gap-2 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5]">
+            <Lightbulb size={14} className="flex-shrink-0 mt-0.5 text-slate-400" />
+            Podés cerrar la ventana — te avisamos cuando termine.
           </div>
         </div>
 
@@ -92,7 +94,7 @@ export const Step5Generating: React.FC<Step5GeneratingProps> = ({
                     done
                       ? 'fade-in shadow-md'
                       : doing
-                      ? 'border-2 border-pink-500 bg-slate-100 animate-pulse'
+                      ? 'border-2 border-brand-500 bg-slate-100 animate-pulse'
                       : 'bg-slate-100'
                   }`}
                 >
@@ -109,7 +111,7 @@ export const Step5Generating: React.FC<Step5GeneratingProps> = ({
                     </>
                   ) : doing ? (
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="bg-white/95 rounded-full px-3.5 py-1.5 text-[10px] font-bold text-pink-600 tracking-[0.12em] uppercase">
+                      <div className="bg-white/95 rounded-full px-3.5 py-1.5 text-[10px] font-bold text-brand-600 tracking-[0.12em] uppercase">
                         EN VIVO
                       </div>
                     </div>

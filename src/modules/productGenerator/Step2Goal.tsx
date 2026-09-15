@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check } from 'lucide-react';
+import { Check, Layout, Sun, Palette } from 'lucide-react';
 import type { Goal } from './wizardTypes';
 
 interface Step2GoalProps {
@@ -80,20 +80,20 @@ const GOALS: GoalDef[] = [
 ];
 
 const ACCENT_RING: Record<string, string> = {
-  violet: 'border-violet-600 shadow-[0_16px_40px_rgba(124,58,237,0.18)]',
-  slate:  'border-violet-600 shadow-[0_16px_40px_rgba(124,58,237,0.18)]',
-  amber:  'border-violet-600 shadow-[0_16px_40px_rgba(124,58,237,0.18)]',
+  violet: 'border-brand-600 shadow-[0_16px_40px_rgba(247,44,91,0.18)]',
+  slate:  'border-brand-600 shadow-[0_16px_40px_rgba(247,44,91,0.18)]',
+  amber:  'border-brand-600 shadow-[0_16px_40px_rgba(247,44,91,0.18)]',
 };
 
 export const Step2Goal: React.FC<Step2GoalProps> = ({ goal, onChange }) => {
   return (
     <div className="fade-in p-4 md:p-8">
       <div className="max-w-[720px] mb-6">
-        <div className="text-[10px] font-black text-pink-600 uppercase tracking-[0.18em]">
+        <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">
           Paso 2 · Objetivo del contenido
         </div>
         <h2 className="t-display text-[28px] md:text-[36px] text-slate-900 mt-2.5 leading-[1.05]">
-          ¿Para qué <span className="text-pink-600 italic normal-case">las vas a usar?</span>
+          ¿Para qué <span className="text-brand-600 italic normal-case">las vas a usar?</span>
         </h2>
         <p className="text-sm text-slate-500 mt-2 leading-[1.55]">
           Esto define la composición, el encuadre y el tipo de luz. Cada destino produce un resultado diferente.
@@ -137,13 +137,13 @@ export const Step2Goal: React.FC<Step2GoalProps> = ({ goal, onChange }) => {
                 </div>
 
                 {g.badge && (
-                  <div className="absolute bottom-3 left-3 bg-white text-violet-700 text-[9px] font-black tracking-[0.1em] uppercase px-2 py-1 rounded-full shadow">
+                  <div className="absolute bottom-3 left-3 bg-white text-brand-700 text-[9px] font-black tracking-[0.1em] uppercase px-2 py-1 rounded-full shadow">
                     {g.badge}
                   </div>
                 )}
 
                 {sel && (
-                  <div className="absolute inset-0 bg-violet-600/10 pointer-events-none" />
+                  <div className="absolute inset-0 bg-brand-600/10 pointer-events-none" />
                 )}
               </div>
 
@@ -160,7 +160,7 @@ export const Step2Goal: React.FC<Step2GoalProps> = ({ goal, onChange }) => {
                   </div>
                   <div
                     className={`w-5.5 h-5.5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 transition-all ${
-                      sel ? 'bg-violet-600 text-white' : 'bg-white border-2 border-slate-200 text-transparent'
+                      sel ? 'bg-brand-600 text-white' : 'bg-white border-2 border-slate-200 text-transparent'
                     }`}
                   >
                     {sel && <Check size={11} strokeWidth={3} />}
@@ -174,13 +174,13 @@ export const Step2Goal: React.FC<Step2GoalProps> = ({ goal, onChange }) => {
                 {/* Tres píldoras: fondo · luz · mood */}
                 <div className="flex flex-wrap gap-1.5">
                   <span className="inline-flex items-center gap-1 bg-slate-50 border border-slate-100 text-slate-500 text-[10px] font-medium px-2 py-0.5 rounded-full normal-case">
-                    <span className="text-[8px] opacity-60">▣</span> {g.mockBg}
+                    <Layout size={9} className="opacity-60" /> {g.mockBg}
                   </span>
                   <span className="inline-flex items-center gap-1 bg-slate-50 border border-slate-100 text-slate-500 text-[10px] font-medium px-2 py-0.5 rounded-full normal-case">
-                    <span className="text-[8px] opacity-60">◎</span> {g.mockLight}
+                    <Sun size={9} className="opacity-60" /> {g.mockLight}
                   </span>
                   <span className="inline-flex items-center gap-1 bg-slate-50 border border-slate-100 text-slate-500 text-[10px] font-medium px-2 py-0.5 rounded-full normal-case">
-                    <span className="text-[8px] opacity-60">◐</span> {g.mockMood}
+                    <Palette size={9} className="opacity-60" /> {g.mockMood}
                   </span>
                 </div>
               </div>

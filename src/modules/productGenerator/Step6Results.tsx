@@ -89,7 +89,7 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
           </div>
           <h2 className="t-display text-[28px] md:text-[34px] text-slate-900 leading-[1.05]">
             {productTitle || 'Tu producto'}{' '}
-            <span className="text-pink-600 italic normal-case">está listo.</span>
+            <span className="text-brand-600 italic normal-case">está listo.</span>
           </h2>
           <p className="text-sm text-slate-500 mt-2 leading-[1.55] max-w-[540px]">
             Toca cualquier imagen para ampliarla. Selecciona varias para crear un collage o descargar lo que elijas.
@@ -154,7 +154,7 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
                     : isEmpty
                     ? 'bg-slate-100 cursor-default'
                     : sel
-                    ? 'cursor-pointer shadow-[0_0_0_3px_rgb(124_58_237),0_16px_40px_rgba(124,58,237,0.25)]'
+                    ? 'cursor-pointer shadow-[0_0_0_3px_rgb(124_58_237),0_16px_40px_rgba(247,44,91,0.25)]'
                     : 'cursor-pointer shadow-[0_8px_20px_rgba(15,23,42,0.06)] md:hover:-translate-y-0.5 md:hover:shadow-md'
                 }`}
               >
@@ -210,7 +210,7 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
                     aria-label={sel ? 'Quitar selección' : 'Seleccionar imagen'}
                     className={`absolute top-2.5 left-2.5 z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow transition-colors duration-150 ${
                       sel
-                        ? 'bg-violet-600 text-white'
+                        ? 'bg-brand-600 text-white'
                         : 'bg-white/95 text-slate-900 opacity-100 md:opacity-0 md:group-hover:opacity-100'
                     }`}
                   >
@@ -221,7 +221,7 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
                 {/* ── Label top-right ────────────────────────────────────── */}
                 {!isRetryingThis && !isError && !isEmpty && (
                   <div className={`absolute top-2.5 right-2.5 text-[9px] font-bold tracking-[0.12em] uppercase px-2 py-1 rounded ${
-                    i === collageIndex ? 'bg-pink-600 text-white' : 'bg-white/95 text-slate-900'
+                    i === collageIndex ? 'bg-brand-600 text-white' : 'bg-white/95 text-slate-900'
                   }`}>
                     {i === collageIndex ? 'Grid final' : i === 0 && total >= 4 ? 'Hero' : `Shot ${i + 1}`}
                   </div>
@@ -255,7 +255,7 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
       {selected.size > 0 && (
         <div className="sticky bottom-4 mt-6 z-20 bg-slate-900 text-white rounded-2xl px-4 py-3 md:px-5 md:py-3.5 shadow-2xl flex items-center gap-3.5 flex-wrap">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-violet-600 text-white flex items-center justify-center text-sm font-bold">
+            <div className="w-8 h-8 rounded-full bg-brand-600 text-white flex items-center justify-center text-sm font-bold">
               {selected.size}
             </div>
             <div>
@@ -281,7 +281,7 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
             onClick={handleCreateGrid}
             className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
               canMakeGrid
-                ? 'bg-gradient-to-br from-violet-600 to-pink-600 text-white shadow-[0_8px_20px_rgba(124,58,237,0.4)]'
+                ? 'bg-gradient-to-br from-brand-600 to-brand-400 text-white shadow-[0_8px_20px_rgba(247,44,91,0.4)]'
                 : 'bg-white/5 text-slate-500 cursor-not-allowed'
             }`}
           >
@@ -299,7 +299,7 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
               type="button"
               onClick={onBackToConfig}
               style={{ touchAction: 'manipulation' }}
-              className="flex items-center gap-1.5 bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-700 rounded-xl px-4 py-3 text-[13px] font-bold transition-colors duration-150"
+              className="flex items-center gap-1.5 bg-brand-50 hover:bg-brand-100 border border-brand-200 text-brand-700 rounded-xl px-4 py-3 text-[13px] font-bold transition-colors duration-150"
             >
               <Sliders size={14} />
               Ajustar y volver a generar

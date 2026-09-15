@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check } from 'lucide-react';
+import { Check, Layout, Sun, Palette } from 'lucide-react';
 import { ImageSlot } from '../../components/shared/ImageSlot';
 import type { StylePreset, WizardStyleState } from './wizardTypes';
 
@@ -128,12 +128,12 @@ const StyleMockup: React.FC<{ preset: PresetDef; isSelected: boolean }> = ({ pre
 
       {/* Overlay seleccionado */}
       {isSelected && (
-        <div className="absolute inset-0 bg-violet-600/15 pointer-events-none" />
+        <div className="absolute inset-0 bg-brand-600/15 pointer-events-none" />
       )}
 
       {/* Check seleccionado */}
       {isSelected && (
-        <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-violet-600 text-white flex items-center justify-center shadow-[0_3px_8px_rgba(124,58,237,0.5)]">
+        <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-brand-600 text-white flex items-center justify-center shadow-[0_3px_8px_rgba(247,44,91,0.5)]">
           <Check size={10} strokeWidth={3.5} />
         </div>
       )}
@@ -155,11 +155,11 @@ export const Step3Style: React.FC<Step3StyleProps> = ({ state, onChange }) => {
   return (
     <div className="fade-in p-4 md:p-8">
       <div className="max-w-[720px] mb-6">
-        <div className="text-[10px] font-black text-pink-600 uppercase tracking-[0.18em]">
+        <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">
           Paso 3 · Estilo
         </div>
         <h2 className="t-display text-[28px] md:text-[36px] text-slate-900 mt-2.5 leading-[1.05]">
-          Elige <span className="text-pink-600 italic normal-case">cómo quieres que se vean tus fotos.</span>
+          Elige <span className="text-brand-600 italic normal-case">cómo quieres que se vean tus fotos.</span>
         </h2>
         <p className="text-sm text-slate-500 mt-2 leading-[1.55]">
           Sube una foto que te inspire <strong>o</strong> elige un estilo.{' '}
@@ -191,7 +191,7 @@ export const Step3Style: React.FC<Step3StyleProps> = ({ state, onChange }) => {
             )}
             {hasRef && (
               <div className="absolute bottom-3 left-3 right-3 bg-white/95 backdrop-blur rounded-xl px-3.5 py-2.5 text-xs text-slate-700 leading-[1.5] pointer-events-none">
-                <strong className="text-violet-600">Modo recrear inspiración activo.</strong>{' '}
+                <strong className="text-brand-600">Modo recrear inspiración activo.</strong>{' '}
                 Usaremos esta imagen como guía visual de escena, luz y composición.
               </div>
             )}
@@ -232,7 +232,7 @@ export const Step3Style: React.FC<Step3StyleProps> = ({ state, onChange }) => {
                   onClick={() => setPreset(p.id)}
                   className={`bg-white rounded-[14px] overflow-hidden text-left transition-all border-2 ${
                     sel
-                      ? 'border-violet-600 shadow-[0_10px_24px_rgba(124,58,237,0.2)]'
+                      ? 'border-brand-600 shadow-[0_10px_24px_rgba(247,44,91,0.2)]'
                       : 'border-slate-100 hover:border-slate-200 hover:shadow-sm'
                   }`}
                 >
@@ -248,14 +248,14 @@ export const Step3Style: React.FC<Step3StyleProps> = ({ state, onChange }) => {
                     </div>
                     {/* Tres pills: fondo / luz / tono */}
                     <div className="flex flex-col gap-1">
-                      <span className="text-[9px] text-slate-400 normal-case leading-[1.3]">
-                        <span className="text-slate-300">▣</span> {p.bgLabel}
+                      <span className="flex items-center gap-1 text-[9px] text-slate-400 normal-case leading-[1.3]">
+                        <Layout size={8} className="text-slate-300 flex-shrink-0" /> {p.bgLabel}
                       </span>
-                      <span className="text-[9px] text-slate-400 normal-case leading-[1.3]">
-                        <span className="text-slate-300">◎</span> {p.lightLabel}
+                      <span className="flex items-center gap-1 text-[9px] text-slate-400 normal-case leading-[1.3]">
+                        <Sun size={8} className="text-slate-300 flex-shrink-0" /> {p.lightLabel}
                       </span>
-                      <span className="text-[9px] text-slate-400 normal-case leading-[1.3]">
-                        <span className="text-slate-300">◐</span> {p.toneLabel}
+                      <span className="flex items-center gap-1 text-[9px] text-slate-400 normal-case leading-[1.3]">
+                        <Palette size={8} className="text-slate-300 flex-shrink-0" /> {p.toneLabel}
                       </span>
                     </div>
                   </div>

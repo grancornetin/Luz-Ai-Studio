@@ -70,11 +70,11 @@ export const Step4Type: React.FC<Step4TypeProps> = ({
   return (
     <div className="fade-in p-4 md:p-8">
       <div className="max-w-[720px] mb-6">
-        <div className="text-[10px] font-black text-pink-600 uppercase tracking-[0.18em]">
+        <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">
           Paso 4 · Tipo y cantidad
         </div>
         <h2 className="t-display text-[28px] md:text-[36px] text-slate-900 mt-2.5 leading-[1.05]">
-          ¿Cómo <span className="text-pink-600 italic normal-case">generamos las fotos?</span>
+          ¿Cómo <span className="text-brand-600 italic normal-case">generamos las fotos?</span>
         </h2>
         <p className="text-sm text-slate-500 mt-2 leading-[1.55]">
           {hasReference
@@ -88,9 +88,9 @@ export const Step4Type: React.FC<Step4TypeProps> = ({
         <div className="flex flex-col gap-3.5">
           {hasReference ? (
             // CASO 1: con referencia
-            <div className="bg-white border-2 border-violet-600 rounded-2xl p-5 md:p-5.5 shadow-[0_16px_40px_rgba(124,58,237,0.12)]">
+            <div className="bg-white border-2 border-brand-600 rounded-2xl p-5 md:p-5.5 shadow-[0_16px_40px_rgba(247,44,91,0.12)]">
               <div className="flex items-center gap-2.5 mb-2.5">
-                <span className="inline-flex items-center text-[10px] font-bold text-violet-600 bg-violet-100 px-2 py-1 rounded-full uppercase tracking-wider">
+                <span className="inline-flex items-center text-[10px] font-bold text-brand-600 bg-brand-100 px-2 py-1 rounded-full uppercase tracking-wider">
                   Modo automático
                 </span>
                 <div className="t-display text-[18px] text-slate-900 normal-case italic">
@@ -151,14 +151,14 @@ export const Step4Type: React.FC<Step4TypeProps> = ({
                       onClick={() => set({ mode: o.id })}
                       className={`bg-white rounded-2xl p-4 md:p-[18px] text-left transition-all ${
                         sel
-                          ? 'border-2 border-violet-600 shadow-[0_12px_28px_rgba(124,58,237,0.18)]'
+                          ? 'border-2 border-brand-600 shadow-[0_12px_28px_rgba(247,44,91,0.18)]'
                           : 'border border-slate-200 hover:border-slate-300 hover:shadow-sm'
                       }`}
                     >
                       <div className="flex justify-between items-start mb-2.5">
                         <div
                           className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                            sel ? 'bg-violet-100 text-violet-600' : 'bg-slate-100 text-slate-400'
+                            sel ? 'bg-brand-100 text-brand-600' : 'bg-slate-100 text-slate-400'
                           }`}
                         >
                           <Icon size={20} strokeWidth={1.8} />
@@ -166,7 +166,7 @@ export const Step4Type: React.FC<Step4TypeProps> = ({
                         <div
                           className={`w-[22px] h-[22px] rounded-full flex items-center justify-center transition-all ${
                             sel
-                              ? 'bg-violet-600 text-white'
+                              ? 'bg-brand-600 text-white'
                               : 'bg-white border-2 border-slate-200 text-transparent'
                           }`}
                         >
@@ -190,13 +190,13 @@ export const Step4Type: React.FC<Step4TypeProps> = ({
                   <div className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-3">
                     Cantidad de imágenes
                   </div>
-                  <div className="flex gap-2.5">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                     {([1, 2, 4, 6] as PackCount[]).map((n) => (
                       <button
                         key={n}
                         type="button"
                         onClick={() => set({ packCount: n })}
-                        className={`flex-1 py-4 rounded-xl flex flex-col items-center gap-0.5 transition-all ${
+                        className={`py-4 rounded-xl flex flex-col items-center gap-0.5 transition-all ${
                           type.packCount === n
                             ? 'bg-slate-900 text-white'
                             : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -216,7 +216,7 @@ export const Step4Type: React.FC<Step4TypeProps> = ({
                   <div className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-3">
                     Estructura del collage
                   </div>
-                  <div className="flex gap-2.5">
+                  <div className="grid grid-cols-3 gap-2.5">
                     {(['1x2', '2x2', '3x3'] as GridSize[]).map((s) => {
                       const [r, c] = s.split('x').map((n) => parseInt(n, 10));
                       const cells = r * c;
@@ -226,7 +226,7 @@ export const Step4Type: React.FC<Step4TypeProps> = ({
                           key={s}
                           type="button"
                           onClick={() => set({ gridSize: s })}
-                          className={`flex-1 py-3.5 rounded-xl flex flex-col items-center gap-1.5 transition-all ${
+                          className={`py-3.5 rounded-xl flex flex-col items-center gap-1.5 transition-all ${
                             sel
                               ? 'bg-slate-900 text-white'
                               : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -275,12 +275,12 @@ export const Step4Type: React.FC<Step4TypeProps> = ({
             <div
               className="absolute -top-10 -right-10 w-[140px] h-[140px] rounded-full pointer-events-none"
               style={{
-                background: 'rgba(124,58,237,0.3)',
+                background: 'rgba(247,44,91,0.3)',
                 filter: 'blur(40px)',
               }}
             />
             <div className="relative">
-              <div className="text-[10px] font-bold text-pink-300 uppercase tracking-[0.14em] mb-3.5">
+              <div className="text-[10px] font-bold text-brand-300 uppercase tracking-[0.14em] mb-3.5">
                 Resumen del costo
               </div>
 

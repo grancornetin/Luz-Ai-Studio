@@ -142,7 +142,18 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
   const { checkAndDeduct, refundCredits, showNoCredits, requiredCredits, closeModal } = useCreditGuard();
 
   const [activeTab, setActiveTab] = useState<'create' | 'library'>('create');
-  const [step, setStep] = useState<WizardStep>(1);
+  // El paso del wizard vive en la URL (?paso=N) para que el botón atrás del
+  // navegador retroceda un paso en vez de sacar al usuario del módulo entero.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const stepFromUrl = Number(searchParams.get('paso'));
+  const step: WizardStep = (stepFromUrl >= 1 && stepFromUrl <= 6 ? stepFromUrl : 1) as WizardStep;
+  const setStep = (next: WizardStep, options?: { replace?: boolean }) => {
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      p.set('paso', String(next));
+      return p;
+    }, { replace: options?.replace ?? false });
+  };
   const [wizard, setWizard] = useState<WizardState>(INITIAL_WIZARD_STATE);
 
   const [progressStepIndex, setProgressStepIndex] = useState(0);
@@ -168,8 +179,8 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
   // ─── Retomar sesión desde notificación (?session=xxx) ───────────────────────
   // Cuando el usuario clickea una notificación, llega acá con el sessionId en
   // la URL. Leemos la notificación de Firestore, reconstruimos los shots y
-  // saltamos al Paso 6 (resultados).
-  const [searchParams, setSearchParams] = useSearchParams();
+  // saltamos al Paso 6 (resultados). Reusa searchParams/setSearchParams
+  // declarados arriba junto con el paso del wizard.
   useEffect(() => {
     const sessionParam = searchParams.get('session');
     if (!sessionParam || !user) return;
@@ -213,9 +224,10 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
         },
       }));
 
-      setStep(6);
-      // Limpiar el query param para que un refresh no vuelva a disparar el efecto
-      setSearchParams({}, { replace: true });
+      // Saltar a Paso 6 y limpiar ?session= en la misma escritura — hacerlo en
+      // dos pasos (setStep + setSearchParams({})) pisaba el ?paso=6 recién
+      // escrito, dejando la URL sin parámetro tras el refresh.
+      setSearchParams({ paso: '6' }, { replace: true });
     })();
 
     return () => { cancelled = true; };
@@ -785,6 +797,27 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
     6: false,
   };
 
+  // Si el paso de la URL no es alcanzable con lo que hay en memoria (ej.
+  // recarga a mitad del wizard, o alguien pegó/compartió el link directo) —
+  // evita mostrar una pantalla a medias y vuelve al paso 1. No aplica
+  // mientras se retoma una sesión desde notificación (carga async propia).
+  const canGoToStep2 = canContinueByStep[1];
+  const canGoToStep3 = canGoToStep2 && canContinueByStep[2];
+  const canGoToStep4 = canGoToStep3 && canContinueByStep[3];
+  useEffect(() => {
+    if (searchParams.get('session')) return;
+    const reachable =
+      step === 1 ? true :
+      step === 2 ? canGoToStep2 :
+      step === 3 ? canGoToStep3 :
+      step === 4 ? canGoToStep4 :
+      // Los pasos 5 (generando) y 6 (resultados) solo son alcanzables si ya
+      // hay shots en curso o generados — si no, no tiene sentido mostrarlos.
+      (generatedShots.length > 0 || isGenerating);
+    if (!reachable) setStep(1, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
   // ─── Footer config ──────────────────────────────────────────────────────────
   const footerCostInfo = step === 4 ? { cost: totalCost, label: 'Costo total' } : undefined;
   const continueLabel = step === 4 ? 'Generar' : 'Continuar';
@@ -822,13 +855,13 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
       />
 
       <div className="max-w-7xl mx-auto pb-20 animate-in fade-in duration-500">
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-5 px-1 mb-6 md:mb-8">
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-5 px-1 mb-4 md:mb-8">
           <div>
-            <h1 className="t-display text-3xl text-slate-900">Foto de producto</h1>
-            <div className="flex items-center gap-2 mt-2">
+            <h1 className="t-display text-xl md:text-3xl text-slate-900">Foto de producto</h1>
+            <div className="flex items-center gap-2 mt-1 md:mt-2">
               <p className="text-slate-500 font-medium italic text-xs md:text-sm">
                 Crea fotos para vender en 6 pasos.{' '}
-                <span className="normal-case font-normal text-slate-300 text-[9px]">
+                <span className="hidden md:inline normal-case font-normal text-slate-300 text-[9px]">
                   (Product Studio)
                 </span>
               </p>

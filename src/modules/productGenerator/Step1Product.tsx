@@ -1,4 +1,5 @@
 import React from 'react';
+import { Check, AlertTriangle } from 'lucide-react';
 import { ImageSlot } from '../../components/shared/ImageSlot';
 import UploadDisclaimer from '../../components/shared/UploadDisclaimer';
 import type { WizardProductState } from './wizardTypes';
@@ -32,11 +33,11 @@ export const Step1Product: React.FC<Step1ProductProps> = ({ state, onChange, dis
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-9 items-start">
         {/* LEFT: copy + form */}
         <div className="md:col-span-6 order-2 md:order-1">
-          <div className="text-[10px] font-black text-pink-600 uppercase tracking-[0.18em]">
+          <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">
             Paso 1 · Producto
           </div>
           <h2 className="t-display text-[28px] md:text-[36px] text-slate-900 mt-2.5 leading-[1.05]">
-            Cuéntanos qué <span className="text-pink-600 italic normal-case">vamos a fotografiar.</span>
+            Cuéntanos qué <span className="text-brand-600 italic normal-case">vamos a fotografiar.</span>
           </h2>
           <p className="text-sm text-slate-500 mt-2 leading-[1.55] max-w-[540px]">
             Sube de 2 a 4 fotos desde distintos ángulos. Más vistas = mejor resultado, porque mantenemos forma y detalles del producto.
@@ -45,7 +46,7 @@ export const Step1Product: React.FC<Step1ProductProps> = ({ state, onChange, dis
           <div className="mt-5 flex flex-col gap-3.5">
             <div>
               <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-2">
-                Título del producto <span className="text-pink-600">*</span>
+                Título del producto <span className="text-brand-600">*</span>
               </label>
               <input
                 type="text"
@@ -55,7 +56,7 @@ export const Step1Product: React.FC<Step1ProductProps> = ({ state, onChange, dis
                 disabled={disabled}
                 autoComplete="off"
                 autoCapitalize="words"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3.5 text-[15px] font-semibold text-slate-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition-all disabled:opacity-60"
+                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3.5 text-[15px] font-semibold text-slate-900 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 transition-all disabled:opacity-60"
               />
             </div>
             <div>
@@ -73,7 +74,7 @@ export const Step1Product: React.FC<Step1ProductProps> = ({ state, onChange, dis
                 disabled={disabled}
                 autoComplete="off"
                 autoCapitalize="sentences"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-700 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition-all resize-y leading-[1.5] disabled:opacity-60"
+                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-700 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 transition-all resize-y leading-[1.5] disabled:opacity-60"
               />
             </div>
           </div>
@@ -86,7 +87,7 @@ export const Step1Product: React.FC<Step1ProductProps> = ({ state, onChange, dis
               Fotos del producto
             </div>
             <span
-              className={`text-[10px] font-black uppercase tracking-wide px-2.5 py-1 rounded-full ${
+              className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wide px-2.5 py-1 rounded-full ${
                 status === 'optimal'
                   ? 'bg-emerald-50 text-emerald-600'
                   : status === 'warning'
@@ -94,10 +95,12 @@ export const Step1Product: React.FC<Step1ProductProps> = ({ state, onChange, dis
                   : 'bg-slate-100 text-slate-500'
               }`}
             >
+              {status === 'optimal' && <Check size={10} strokeWidth={3} />}
+              {status === 'warning' && <AlertTriangle size={10} strokeWidth={2.5} />}
               {status === 'optimal'
-                ? `✓ Óptimo · ${filled}/4`
+                ? `Óptimo · ${filled}/4`
                 : status === 'warning'
-                ? '⚠ 1 más, idealmente'
+                ? '1 más, idealmente'
                 : `${filled}/4`}
             </span>
           </div>
