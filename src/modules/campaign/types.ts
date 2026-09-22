@@ -8,12 +8,14 @@ export type CampaignChannel =
   | 'whatsapp'
   | 'facebook_ads';
 
+// NOTA: "icon" ya no es un emoji — es el nombre de un ícono de lucide-react
+// (ver CHANNEL_ICON_MAP en CampaignModule.tsx para el mapeo a componente).
 export const CAMPAIGN_CHANNEL_META: Record<CampaignChannel, { label: string; icon: string; copyHint: string }> = {
-  instagram_feed:    { label: 'Instagram Feed',     icon: '📸', copyHint: 'Caption largo con hashtags' },
-  instagram_stories: { label: 'Instagram Stories',  icon: '⭕', copyHint: 'Texto corto + CTA directo' },
-  tiktok:            { label: 'TikTok',             icon: '🎵', copyHint: 'Hook + descripción breve' },
-  whatsapp:          { label: 'WhatsApp / Catálogo', icon: '💬', copyHint: 'Mensaje directo y natural' },
-  facebook_ads:      { label: 'Anuncios Facebook',  icon: '📣', copyHint: 'Titular + texto persuasivo' },
+  instagram_feed:    { label: 'Instagram Feed',     icon: 'instagram', copyHint: 'Caption largo con hashtags' },
+  instagram_stories: { label: 'Instagram Stories',  icon: 'circle-dot', copyHint: 'Texto corto + CTA directo' },
+  tiktok:            { label: 'TikTok',             icon: 'music-2', copyHint: 'Hook + descripción breve' },
+  whatsapp:          { label: 'WhatsApp / Catálogo', icon: 'message-circle', copyHint: 'Mensaje directo y natural' },
+  facebook_ads:      { label: 'Anuncios Facebook',  icon: 'target', copyHint: 'Titular + texto persuasivo' },
 };
 
 // ── Slots de imágenes de referencia ──────────────────────────
@@ -21,11 +23,12 @@ export const CAMPAIGN_CHANNEL_META: Record<CampaignChannel, { label: string; ico
 // y para compatibilidad con campañas guardadas en el formato anterior (4 categorías fijas).
 export type ImageSlotRole = 'product' | 'inspiration' | 'brand' | 'model';
 
+// NOTA: "icon" ya no es un emoji — es el nombre de un ícono de lucide-react.
 export const IMAGE_SLOT_META: Record<ImageSlotRole, { label: string; description: string; icon: string }> = {
-  product:     { label: 'Tu producto',     description: 'Foto de lo que querés promocionar', icon: '📦' },
-  inspiration: { label: 'Inspiración',     description: 'Estética o estilo que te gustó',    icon: '🖼️' },
-  brand:       { label: 'Tu marca',        description: 'Logo, packaging o colores de marca', icon: '🎨' },
-  model:       { label: 'Modelo / Avatar', description: 'Quién protagoniza la campaña',       icon: '👤' },
+  product:     { label: 'Tu producto',     description: 'Foto de lo que querés promocionar', icon: 'package' },
+  inspiration: { label: 'Inspiración',     description: 'Estética o estilo que te gustó',    icon: 'image' },
+  brand:       { label: 'Tu marca',        description: 'Logo, packaging o colores de marca', icon: 'palette' },
+  model:       { label: 'Modelo / Avatar', description: 'Quién protagoniza la campaña',       icon: 'user' },
 };
 
 export interface CampaignImageSlot {

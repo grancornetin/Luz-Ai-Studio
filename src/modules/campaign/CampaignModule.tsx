@@ -4,6 +4,8 @@ import {
   Library, Trash2, Copy, ChevronDown, RefreshCw,
   AlertTriangle, Plus, FileText, Calendar, Hash,
   Image as ImageIcon, X, ChevronRight,
+  Instagram, CircleDot, Music2, MessageCircle, Target,
+  Palette, Lightbulb, Archive, ClipboardCheck,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
@@ -31,17 +33,23 @@ import { WizardFooter } from '../../components/shared/WizardFooter';
 import { GenerationProgress as GenProgress, type ProgressStep } from '../../components/shared/GenerationProgress';
 
 // ─── Wizard steps ─────────────────────────────────────────────
-// 1 Brief · 2 Generar Ancla · 3 Aprobar Ancla · 4 Canales · 5 Cantidad · 6 Generar · 7 Resultados
-type WizardStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+// Flujo rediseñado — 2 decisiones reales + 3 pantallas de proceso/resultado:
+//   1 Brief completo (idea + fotos + canales + cantidad, todo junto)
+//   2 Generando ancla       (proceso automático)
+//   3 Elegir estilo         (única decisión creativa intermedia)
+//   4 Generando campaña     (proceso automático)
+//   5 Resultados
+type WizardStep = 1 | 2 | 3 | 4 | 5;
 
+// Solo se muestran 2 posiciones en el stepper visible — las 2 decisiones reales.
+// Los pasos de proceso (2 y 4) y resultados (5) no avanzan el stepper por su cuenta.
 const WIZARD_STEP_DEFS = [
   { id: '1', label: 'Tu campaña' },
-  { id: '2', label: 'Estilo' },    // ancla generada desde el brief
-  { id: '3', label: 'Canales' },
-  { id: '4', label: 'Cantidad' },
-  { id: '5', label: 'Generar' },
-  { id: '6', label: 'Resultados' },
+  { id: '2', label: 'Elegí el estilo' },
 ];
+
+// Mapea el WizardStep interno a la posición (1|2) que debe mostrar el WizardStepper.
+const stepperPositionFor = (step: WizardStep): 1 | 2 => (step <= 2 ? 1 : 2);
 
 const ANCHOR_PROGRESS_STEPS: ProgressStep[] = [
   { id: 'brief',   label: 'Revisando tu idea y referencias' },
@@ -58,6 +66,24 @@ const CAMPAIGN_PROGRESS_STEPS: ProgressStep[] = [
 
 const SLOT_ROLES: ImageSlotRole[] = ['product', 'inspiration', 'brand', 'model'];
 const MAX_TOTAL_SLOTS = 20;
+
+// ─── Mapeo de íconos (reemplaza emojis en types.ts) ──────────
+const CHANNEL_ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: string; strokeWidth?: number }>> = {
+  instagram: Instagram,
+  'circle-dot': CircleDot,
+  'music-2': Music2,
+  'message-circle': MessageCircle,
+  target: Target,
+};
+
+// NOTA: IMAGE_SLOT_META (íconos 'package'/'image'/'palette'/'user') no se
+// renderiza en este módulo — solo se usa en campaignService.ts para lógica
+// interna (buildLockSystem), así que no hace falta mapear esos íconos acá.
+
+const ChannelIcon: React.FC<{ icon: string; size?: number; className?: string }> = ({ icon, size = 12, className }) => {
+  const Cmp = CHANNEL_ICON_MAP[icon] ?? Target;
+  return <Cmp size={size} className={className} />;
+};
 
 // ─── UpgradeWall ──────────────────────────────────────────────
 const UpgradeWall: React.FC<{ proCredits: number }> = ({ proCredits }) => {
@@ -292,7 +318,7 @@ const CampaignModule: React.FC = () => {
     setCampaignPlan(data.campaignPlan ?? null);
     setAnchorOptions(data.anchorOptions ?? []);
     setSelectedAnchor(data.selectedAnchor ?? '');
-    // Volver al paso de aprobación (3) si había al menos 1 ancla válida, si no al paso 1
+    // Volver al paso de elegir estilo (3) si había al menos 1 ancla válida, si no al paso 1 (Brief)
     const recoveredStep: WizardStep = (data.anchorOptions?.some(Boolean)) ? 3 : 1;
     setStep(recoveredStep);
     setSessionRestored(true);
@@ -318,16 +344,20 @@ const CampaignModule: React.FC = () => {
   };
 
   // ── Cálculos de costo ──────────────────────────────────────
-  // Los créditos se cobran en 2 momentos:
-  //   Paso 1 (ancla): 1 pro-credit + anchorCreditCost (4 cr)
-  //   Paso 2 (campaña): imageCreditCost (N×2 cr)
+  // Cobro unificado: TODO se cobra en un solo momento, al confirmar el Brief (paso 1).
+  //   Paso 1 (Brief): 1 pro-credit + totalCreditCost (anchorCreditCost + imageCreditCost)
+  //   Paso 3 (Elegir estilo → Generar campaña): NO cobra de nuevo — ya se cobró todo en el paso 1.
+  //   Regenerar ancla (paso 3, "2 nuevas opciones"): sigue costando anchorCreditCost aparte — esto NO cambió.
   const hasProCredits    = isAdmin || proCredits > 0;
-  const anchorCreditCost = ANCHOR_IMAGE_COUNT * CREDITS_PER_IMAGE;   // 4 cr
-  const imageCreditCost  = imageCount * CREDITS_PER_IMAGE;           // N×2 cr
-  const totalCreditCost  = anchorCreditCost + imageCreditCost;       // total visible en resumen
+  const anchorCreditCost = ANCHOR_IMAGE_COUNT * CREDITS_PER_IMAGE;   // 4 cr — las 2 anclas
+  const imageCreditCost  = imageCount * CREDITS_PER_IMAGE;           // N×2 cr — imágenes de campaña
+  const totalCreditCost  = anchorCreditCost + imageCreditCost;       // cobro único visible en el Brief
   const creditsAfter     = Math.max(0, (credits?.available ?? 0) - totalCreditCost);
-  const insufficientForAnchor      = !isAdmin && (credits?.available ?? 0) < anchorCreditCost;
-  const insufficientForCampaign    = !isAdmin && (credits?.available ?? 0) < imageCreditCost;
+  // Validación única en el paso 1: hay que alcanzar para TODO el costo junto.
+  const insufficientForAnchor      = !isAdmin && (credits?.available ?? 0) < totalCreditCost;
+  // Ya no se valida por separado en el paso de campaña — el costo se cobró en el paso 1.
+  const insufficientForCampaign    = false;
+  // Regenerar ancla sigue siendo un cobro adicional aparte, validado contra el saldo actual.
   const insufficientForAnchorRegen = !isAdmin && (credits?.available ?? 0) < anchorCreditCost;
   // Alias para compatibilidad con referencias existentes en el JSX
   const insufficient = insufficientForAnchor;
@@ -339,9 +369,9 @@ const CampaignModule: React.FC = () => {
   const totalSlotsUsed = moodboard.length;
 
   // ── Validaciones ──────────────────────────────────────────
-  const canStep1 = idea.trim().length >= 10;
-  const canStep2 = canales.length > 0;
-  const canStep3 = !insufficient;
+  // Paso 1 (Brief unificado) reúne todas las validaciones que antes estaban
+  // repartidas en pasos separados: idea, canales elegidos y créditos suficientes.
+  const canStep1 = idea.trim().length >= 10 && canales.length > 0 && !insufficient;
 
   // ── Helpers ───────────────────────────────────────────────
   const loadSets = async () => {
@@ -380,7 +410,7 @@ const CampaignModule: React.FC = () => {
   const openSetFromLibrary = (set: CampaignSet) => {
     setCurrentSet(set);
     setCampaignPlan(set.plan);
-    setStep(7 as WizardStep);
+    setStep(5 as WizardStep);
     setActiveTab('create');
     setActiveTab2('plan');
     setModalPieza(null);
@@ -402,9 +432,10 @@ const CampaignModule: React.FC = () => {
     setDeletingId(null);
   };
 
-  // ── Generar ancla — solo desde el brief (paso 1→2) ────────
-  // Cobra: 1 pro-credit + 4 créditos (las 2 anclas)
-  // NO cobra los créditos de las imágenes de campaña todavía.
+  // ── Generar ancla — desde el Brief unificado (paso 1→2) ───
+  // COBRO UNIFICADO: acá se cobra TODO de una sola vez —
+  // 1 pro-credit + totalCreditCost (anchorCreditCost + imageCreditCost).
+  // El paso 3 (elegir estilo → generar campaña) ya NO vuelve a cobrar.
   const handleGenerateAnchor = async () => {
     if (!hasProCredits) return;
 
@@ -412,13 +443,13 @@ const CampaignModule: React.FC = () => {
       const ok = await deductProCredit();
       if (!ok) { setError('No tienes sesiones Pro disponibles.'); return; }
     }
-    if (!isAdmin && (credits?.available ?? 0) < anchorCreditCost) {
+    if (!isAdmin && (credits?.available ?? 0) < totalCreditCost) {
       if (!isAdmin) await refundProCredit().catch(() => {});
-      setError(`Necesitás ${anchorCreditCost} créditos para generar las propuestas de estilo.`);
+      setError(`Necesitás ${totalCreditCost} créditos para generar tu campaña.`);
       return;
     }
     if (!isAdmin) {
-      const ok = await deductCredits(anchorCreditCost);
+      const ok = await deductCredits(totalCreditCost);
       if (!ok) {
         await refundProCredit().catch(() => {});
         setError('No pudimos confirmar el costo. Tus créditos no cambiaron. Inténtalo de nuevo.');
@@ -477,8 +508,10 @@ const CampaignModule: React.FC = () => {
       console.error('[Campaign] handleGenerateAnchor error:', err);
       setError('No pudimos preparar los estilos. Inténtalo de nuevo; si el problema continúa, contáctanos.');
       if (!isAdmin) {
+        // Reembolso completo: acá se cobró TODO (pro-credit + totalCreditCost), así que
+        // el reembolso también debe cubrir todo lo cobrado, no solo la parte de ancla.
         await refundProCredit().catch(() => {});
-        await deductCredits(-anchorCreditCost).catch(() => {});
+        await deductCredits(-totalCreditCost).catch(() => {});
         await refreshCredits().catch(() => {});
       }
       // Quedarse en step 2 con el error visible + botón de reintentar
@@ -519,8 +552,11 @@ const CampaignModule: React.FC = () => {
     }
   };
 
-  // ── Generar campaña con ancla aprobada (paso 5→6) ─────────
-  // Cobra: N×2 créditos (solo las imágenes de campaña)
+  // ── Generar campaña con estilo elegido (paso 3→4) ─────────
+  // COBRO UNIFICADO: imageCreditCost YA fue cobrado como parte de totalCreditCost
+  // en handleGenerateAnchor (paso 1). Acá NO se cobra de nuevo en el primer intento.
+  // `retryIndexes` sigue siendo el reintento gratuito de piezas fallidas dentro de
+  // la misma generación (ya era gratis antes, y lo sigue siendo).
   // Analiza el ancla real → construye el plan → genera imágenes
   const handleGenerateCampaign = async (retryIndexes?: number[]) => {
     if (!selectedAnchor) return;
@@ -530,25 +566,12 @@ const CampaignModule: React.FC = () => {
     const anchorIndex = anchorOptions.indexOf(selectedAnchor);
     const modoVisual: 'ugc' | 'editorial' = anchorIndex === 1 ? 'editorial' : 'ugc';
 
-    // Solo cobrar créditos de imágenes en el primer intento (no en retry)
-    if (!retryIndexes && !isAdmin) {
-      if (insufficientForCampaign) {
-        setError(`Necesitás ${imageCreditCost} créditos para generar las ${imageCount} imágenes.`);
-        return;
-      }
-      const ok = await deductCredits(imageCreditCost);
-      if (!ok) {
-        setError('No pudimos confirmar el costo. Tus créditos no cambiaron. Inténtalo de nuevo.');
-        return;
-      }
-    }
-
     // Actualizar modoVisual en el plan existente si ya había uno (retry)
     if (campaignPlan) {
       campaignPlan.modoVisual = modoVisual;
     }
 
-    setStep(6);
+    setStep(4);
     setIsGenerating(true);
     setError(null);
     setFailedIndexes([]);
@@ -682,17 +705,21 @@ const CampaignModule: React.FC = () => {
       setCurrentSet(set);
       setFailedIndexes([]);
       setRetryingIndexes([]);
-      setStep(7);
+      setStep(5);
       await refreshCredits();
     } catch (err: any) {
       console.error('[Campaign] handleGenerateCampaign error:', err);
       setError('No pudimos crear la campaña. Inténtalo de nuevo.');
-      // Reembolsar créditos de imágenes si falló en el primer intento
+      // COBRO UNIFICADO: en el primer intento (no retry) todo lo que se cobró
+      // (1 pro-credit + totalCreditCost) se cobró en handleGenerateAnchor, paso 1 —
+      // así que si la generación de campaña falla acá, el reembolso debe cubrir
+      // TODO lo cobrado, no solo la parte de imágenes de campaña.
       if (!retryIndexes && !isAdmin) {
-        await deductCredits(-imageCreditCost).catch(() => {});
+        await refundProCredit().catch(() => {});
+        await deductCredits(-totalCreditCost).catch(() => {});
         await refreshCredits().catch(() => {});
       }
-      setStep(5); // volver a aprobar ancla
+      setStep(3); // volver a elegir estilo
     } finally {
       setIsGenerating(false);
       setProgress(null);
@@ -775,10 +802,11 @@ const CampaignModule: React.FC = () => {
           <div className="bg-white rounded-[28px] md:rounded-[36px] shadow-sm border border-slate-100 overflow-hidden flex flex-col min-h-[640px]">
             <WizardStepper
               steps={WIZARD_STEP_DEFS}
-              current={Math.min(step, 6) as any}
-              onJump={(s) => {
-                const n = Number(s) as WizardStep;
-                if (n < step && !isGenerating) setStep(n);
+              current={stepperPositionFor(step)}
+              onJump={(pos) => {
+                // Solo se puede volver al Brief (posición 1) desde donde sea,
+                // y solo si no hay una generación en curso.
+                if (pos === 1 && step > 1 && !isGenerating) setStep(1);
               }}
             />
 
@@ -788,10 +816,15 @@ const CampaignModule: React.FC = () => {
               {step === 1 && (
                 <div className="fade-in p-4 md:p-8">
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-9 items-start">
-                    <div className="md:col-span-7 order-2 md:order-1 flex flex-col gap-5">
+                    <div className="md:col-span-7 order-2 md:order-1 flex flex-col gap-6">
+
+                      {/* ── Sección 1 · Idea ─────────────────────── */}
                       <div>
-                        <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Paso 1 · Tu campaña</div>
-                        <h2 className="t-display text-[28px] md:text-[34px] text-slate-900 mt-2.5 leading-[1.05]">
+                        <div className="flex items-center gap-2 mb-2.5">
+                          <span className="w-4 h-4 rounded-full bg-slate-900 text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0">1</span>
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.14em]">Tu idea de campaña</span>
+                        </div>
+                        <h2 className="t-display text-[28px] md:text-[34px] text-slate-900 leading-[1.05]">
                           ¿Cuál es tu <span className="text-brand-600 italic normal-case">idea de campaña?</span>
                         </h2>
                         <p className="text-sm text-slate-500 mt-2 leading-[1.55]">
@@ -843,13 +876,15 @@ const CampaignModule: React.FC = () => {
                         </div>
                       </button>
 
+                      {/* ── Sección 2 · Moodboard ─────────────────── */}
                       <div>
-                        <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="w-4 h-4 rounded-full bg-slate-900 text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0">2</span>
                           <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em]">
                             Sumá tus fotos{' '}
                             <span className="text-slate-400 font-medium normal-case tracking-normal">(opcional pero recomendado)</span>
                           </label>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${totalSlotsUsed >= MAX_TOTAL_SLOTS ? 'bg-slate-100 text-slate-500' : totalSlotsUsed > 0 ? 'bg-brand-50 text-brand-600' : 'bg-slate-50 text-slate-400'}`}>
+                          <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${totalSlotsUsed >= MAX_TOTAL_SLOTS ? 'bg-slate-100 text-slate-500' : totalSlotsUsed > 0 ? 'bg-brand-50 text-brand-600' : 'bg-slate-50 text-slate-400'}`}>
                             {totalSlotsUsed}/{MAX_TOTAL_SLOTS}
                           </span>
                         </div>
@@ -859,10 +894,92 @@ const CampaignModule: React.FC = () => {
                         </p>
                         {totalSlotsUsed > 0 && (
                           <div className="mt-3 bg-violet-50 border border-violet-100 rounded-xl px-3.5 py-2.5 text-[11.5px] text-violet-700 font-medium leading-[1.5]">
-                            {totalSlotsUsed} foto{totalSlotsUsed === 1 ? '' : 's'} subida{totalSlotsUsed === 1 ? '' : 's'} → en el paso de cantidad te vamos a sugerir cuántas piezas generar según lo que trajiste.
+                            {totalSlotsUsed} foto{totalSlotsUsed === 1 ? '' : 's'} subida{totalSlotsUsed === 1 ? '' : 's'} → te sugerimos cuántas piezas generar más abajo, según lo que trajiste.
                           </div>
                         )}
                       </div>
+
+                      {/* ── Sección 3 · Canales ───────────────────── */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="w-4 h-4 rounded-full bg-slate-900 text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0">3</span>
+                          <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em]">¿Dónde vas a publicar?</label>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {(Object.keys(CAMPAIGN_CHANNEL_META) as CampaignChannel[]).map(canal => {
+                            const meta = CAMPAIGN_CHANNEL_META[canal];
+                            const sel  = canales.includes(canal);
+                            return (
+                              <button key={canal} type="button" onClick={() => toggleCanal(canal)}
+                                className={`flex items-center gap-2 px-3.5 py-2 rounded-full border text-[12px] font-bold transition-all ${sel ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>
+                                <ChannelIcon icon={meta.icon} size={13} />
+                                {meta.label}
+                                {sel && <Check size={11} strokeWidth={3} />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {canales.length === 0 && (
+                          <p className="text-[12px] text-rose-500 font-medium mt-2">Selecciona al menos un canal para continuar.</p>
+                        )}
+                      </div>
+
+                      {/* ── Sección 4 · Cantidad ──────────────────── */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="w-4 h-4 rounded-full bg-slate-900 text-white text-[9px] font-bold flex items-center justify-center flex-shrink-0">4</span>
+                          <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em]">¿Cuántas imágenes genera la campaña?</label>
+                        </div>
+                        <div className="bg-white border border-slate-200 rounded-2xl p-4">
+                          <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+                            {([1,2,3,4,5,6,7,8] as const).map(n => (
+                              <button key={n} type="button" onClick={() => setImageCount(n)}
+                                className={`py-3.5 rounded-2xl flex flex-col items-center gap-0.5 transition-all ${imageCount === n ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                                <span className="text-lg font-bold">{n}</span>
+                                <span className="text-[9px] opacity-60">img</span>
+                              </button>
+                            ))}
+                          </div>
+                          {totalSlotsUsed > 1 && imageCount < Math.min(totalSlotsUsed, 8) && (
+                            <button type="button" onClick={() => setImageCount(Math.min(totalSlotsUsed, 8) as any)}
+                              className="w-full mt-3 text-[11px] font-semibold text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-xl py-2 transition-all">
+                              Subiste {totalSlotsUsed} fotos → usar {Math.min(totalSlotsUsed, 8)} imágenes para que cada una tenga su momento
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-2 leading-[1.5]">
+                          Cada imagen es una pieza del plan: tiene su canal, su día, su copy y sus instrucciones de publicación.
+                        </p>
+                      </div>
+
+                      {/* ── Costo total unificado ─────────────────── */}
+                      <div className="rounded-2xl bg-slate-900 text-white p-4 md:p-5 flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-[10px] font-bold text-pink-300 uppercase tracking-[0.14em]">Costo total</div>
+                          <p className="text-[11px] opacity-70 mt-0.5">Se cobra una sola vez, al generar.</p>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-display font-extrabold italic text-[28px] md:text-[32px] tracking-tight leading-none" style={{ fontFamily: 'Syne, Inter, sans-serif' }}>
+                            {totalCreditCost}{' '}
+                            <span className="text-sm opacity-70 font-semibold not-italic tracking-normal">cr</span>
+                          </span>
+                          <p className="text-[10px] opacity-60 mt-0.5">+ 1 sesión Pro</p>
+                        </div>
+                      </div>
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3.5 py-2.5 text-[11.5px] text-emerald-900 leading-[1.55] -mt-3">
+                        <strong>Sin sorpresas.</strong> Reembolso automático si algo falla. Tienes <strong>{isAdmin ? '∞' : proCredits} sesiones</strong> disponibles.
+                      </div>
+                      {insufficientForAnchor && (
+                        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-[12px] text-rose-700 font-medium flex items-start gap-2 -mt-2">
+                          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                          Créditos insuficientes. Te faltan {totalCreditCost - (credits?.available ?? 0)} cr para generar esta campaña.
+                        </div>
+                      )}
+                      {error && (
+                        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-[12px] text-rose-700 font-medium flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />{error}
+                        </div>
+                      )}
                     </div>
                     <div className="md:col-span-5 order-1 md:order-2">
                       <div className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-3">Ejemplos de ideas</div>
@@ -882,148 +999,6 @@ const CampaignModule: React.FC = () => {
                             <p className="text-[12px] text-slate-600 leading-snug">{ex.text}</p>
                           </button>
                         ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ── PASO 4: CANALES ──────────────────────── */}
-              {step === 4 && (
-                <div className="fade-in p-4 md:p-8">
-                  <div className="max-w-xl">
-                    <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Paso 3 · Canales</div>
-                    <h2 className="t-display text-[28px] md:text-[34px] text-slate-900 mt-2.5 leading-[1.05]">
-                      ¿Dónde vas a <span className="text-brand-600 italic normal-case">publicar?</span>
-                    </h2>
-                    <p className="text-sm text-slate-500 mt-2 mb-6 leading-[1.55]">
-                      Elige uno o varios canales. Luz adapta el texto, el formato y las indicaciones para cada uno.
-                    </p>
-                    <div className="flex flex-col gap-3">
-                      {(Object.keys(CAMPAIGN_CHANNEL_META) as CampaignChannel[]).map(canal => {
-                        const meta = CAMPAIGN_CHANNEL_META[canal];
-                        const sel  = canales.includes(canal);
-                        return (
-                          <button key={canal} type="button" onClick={() => toggleCanal(canal)}
-                            className={`flex items-center gap-4 p-4 rounded-2xl border text-left transition-all ${sel ? 'border-2 border-brand-600 bg-brand-50' : 'border border-slate-200 bg-white hover:border-slate-300'}`}>
-                            <span className="text-2xl flex-shrink-0">{meta.icon}</span>
-                            <div className="flex-1">
-                              <div className={`text-[14px] font-bold ${sel ? 'text-brand-900' : 'text-slate-800'}`}>{meta.label}</div>
-                              <div className="text-[11px] text-slate-500 mt-0.5">{meta.copyHint}</div>
-                            </div>
-                            <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${sel ? 'bg-brand-600 text-white' : 'border-2 border-slate-200'}`}>
-                              {sel && <Check size={10} strokeWidth={3} />}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {canales.length === 0 && (
-                      <p className="text-[12px] text-rose-500 font-medium mt-3">Selecciona al menos un canal para continuar.</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* ── PASO 5: CANTIDAD + COSTO DE IMÁGENES ─── */}
-              {step === 5 && (
-                <div className="fade-in p-4 md:p-8">
-                  <div className="grid grid-cols-1 md:grid-cols-[1fr_300px] gap-5 md:gap-6 items-start">
-                    <div>
-                      <div className="text-[10px] font-black text-brand-600 uppercase tracking-[0.18em]">Paso 4 · Cantidad</div>
-                      <h2 className="t-display text-[28px] md:text-[34px] text-slate-900 mt-2.5 leading-[1.05]">
-                        ¿Cuántas imágenes <span className="text-brand-600 italic normal-case">genera la campaña?</span>
-                      </h2>
-                      <p className="text-sm text-slate-500 mt-2 mb-6 leading-[1.55] max-w-[500px]">
-                        Cada imagen es una pieza del plan: tiene su canal, su día, su copy y sus instrucciones de publicación.
-                      </p>
-                      <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 mb-5">
-                        <div className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.12em] mb-4">Imágenes de campaña</div>
-                        <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
-                          {([1,2,3,4,5,6,7,8] as const).map(n => (
-                            <button key={n} type="button" onClick={() => setImageCount(n)}
-                              className={`py-4 rounded-2xl flex flex-col items-center gap-0.5 transition-all ${imageCount === n ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-                              <span className="text-lg font-bold">{n}</span>
-                              <span className="text-[9px] opacity-60">img</span>
-                            </button>
-                          ))}
-                        </div>
-                        {totalSlotsUsed > 1 && imageCount < Math.min(totalSlotsUsed, 8) && (
-                          <button type="button" onClick={() => setImageCount(Math.min(totalSlotsUsed, 8) as any)}
-                            className="w-full mt-3 text-[11px] font-semibold text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-xl py-2 transition-all">
-                            Subiste {totalSlotsUsed} fotos → usar {Math.min(totalSlotsUsed, 8)} imágenes para que cada una tenga su momento
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Aviso del flujo */}
-                      <div className="rounded-2xl p-4 bg-violet-50 border border-violet-100 mb-4">
-                        <div className="flex items-start gap-3">
-                          <Sparkles className="w-4 h-4 text-violet-600 flex-shrink-0 mt-0.5" />
-                          <div>
-                            <p className="text-[12px] font-bold text-violet-900 mb-1">Cómo funciona el proceso</p>
-                            <ol className="text-[11px] text-violet-700 leading-[1.6] space-y-1 list-none">
-                              <li><span className="font-bold">1.</span> La IA genera <strong>2 propuestas de estilo visual</strong> para que elijas la que más te gusta</li>
-                              <li><span className="font-bold">2.</span> Con el estilo aprobado, genera las <strong>{imageCount} imágenes de tu campaña</strong> con consistencia visual total</li>
-                              <li><span className="font-bold">3.</span> Recibís el kit completo: imágenes + copy + calendario + PDF</li>
-                            </ol>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl p-4 bg-brand-50 border border-brand-100">
-                        <div className="flex items-start gap-3">
-                          <Zap className="w-4 h-4 text-brand-600 flex-shrink-0 mt-0.5" />
-                          <div>
-                            <p className="text-[12px] font-bold text-brand-900 mb-0.5">Una sesión Pro por campaña</p>
-                            <p className="text-[11px] text-brand-700 leading-[1.5]">
-                              Tienes <strong>{isAdmin ? '∞' : proCredits} sesiones</strong> disponibles.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                      {error && (
-                        <div className="mt-3 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-[12px] text-rose-700 font-medium flex items-start gap-2">
-                          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />{error}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Panel de costo de imágenes (anclas ya pagadas) */}
-                    <div className="md:sticky md:top-4">
-                      <div className="relative bg-slate-900 text-white rounded-2xl p-5 overflow-hidden">
-                        <div className="absolute -top-10 -right-10 w-[140px] h-[140px] rounded-full pointer-events-none"
-                          style={{ background: 'rgba(124,58,237,0.3)', filter: 'blur(40px)' }} />
-                        <div className="relative">
-                          <div className="text-[10px] font-bold text-pink-300 uppercase tracking-[0.14em] mb-3.5">Costo de generación</div>
-                          <div className="flex flex-col gap-2 mb-3.5 text-[13px]">
-                            <div className="flex justify-between items-baseline">
-                              <span className="opacity-70 line-through text-[11px]">2 propuestas de estilo</span>
-                              <span className="font-semibold text-emerald-400 text-[11px]">✓ pagadas</span>
-                            </div>
-                            <div className="flex justify-between items-baseline">
-                              <span className="opacity-70">{imageCount} imágenes campaña</span>
-                              <span className="font-semibold">{imageCreditCost} cr</span>
-                            </div>
-                            <div className="h-px bg-white/10 my-1" />
-                            <div className="flex justify-between items-baseline">
-                              <span className="opacity-85 text-[13px]">A pagar ahora</span>
-                              <span className="font-display font-extrabold italic text-[36px] tracking-tight leading-none" style={{ fontFamily: 'Syne, Inter, sans-serif' }}>
-                                {imageCreditCost}{' '}
-                                <span className="text-sm opacity-70 font-semibold not-italic tracking-normal">cr</span>
-                              </span>
-                            </div>
-                          </div>
-                          <div className="h-px bg-white/10 mb-3" />
-                          <div className={`text-[11px] leading-[1.5] ${insufficientForCampaign ? 'text-rose-300' : 'opacity-70'}`}>
-                            {insufficientForCampaign
-                              ? <><strong>Créditos insuficientes.</strong> Te faltan {imageCreditCost - (credits?.available ?? 0)} cr.</>
-                              : <>Te quedarán <strong>{Math.max(0, (credits?.available ?? 0) - imageCreditCost)} cr</strong> después.</>}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5 text-[11.5px] text-emerald-900 leading-[1.55] mt-3">
-                        <strong>Sin sorpresas.</strong> Solo se descuenta si la generación se completa. Reembolso automático si falla.
                       </div>
                     </div>
                   </div>
@@ -1086,15 +1061,16 @@ const CampaignModule: React.FC = () => {
                                   <GenProgress steps={progressSteps} currentStepIndex={progressStepIndex} completedShots={[]} totalShots={0} />
                                 </div>
                               )}
-                              <div className="mt-3 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5]">
-                                💡 Puedes cerrar la ventana. Te avisaremos cuando termine.
+                              <div className="mt-3 flex items-start gap-2 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5]">
+                                <Lightbulb size={14} className="flex-shrink-0 mt-0.5 text-slate-400" />
+                                Puedes cerrar la ventana. Te avisaremos cuando termine.
                               </div>
                               {anchorsReady && (
                                 <button type="button"
-                                  onClick={() => selectedAnchor && setStep(4)}
+                                  onClick={() => selectedAnchor && setStep(3)}
                                   disabled={!selectedAnchor}
                                   className="mt-3 w-full py-4 bg-brand-600 hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-lg">
-                                  Usar este estilo · Configurar campaña →
+                                  Continuar →
                                 </button>
                               )}
                             </>
@@ -1111,7 +1087,7 @@ const CampaignModule: React.FC = () => {
                           const imgUrl     = anchorOptions[i] ?? '';
                           const isSelected = selectedAnchor === imgUrl && !!imgUrl;
                           const label      = i === 0 ? 'A' : 'B';
-                          const variant    = i === 0 ? '📱 UGC · iPhone orgánico' : '📷 Editorial · lookbook';
+                          const variant    = i === 0 ? 'UGC · iPhone orgánico' : 'Editorial · lookbook';
                           return ready && imgUrl ? (
                             // Tarjeta seleccionable cuando ya terminó
                             <button key={i} type="button" onClick={() => setSelectedAnchor(imgUrl)}
@@ -1130,7 +1106,7 @@ const CampaignModule: React.FC = () => {
                               </div>
                               <div className="absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t from-black/70 to-transparent">
                                 <p className="text-white text-[10px] font-semibold leading-tight">{variant}</p>
-                                {isSelected && <p className="text-brand-300 text-[9px] font-bold uppercase tracking-wider mt-0.5">SELECCIONADA ✓</p>}
+                                {isSelected && <p className="flex items-center gap-1 text-brand-300 text-[9px] font-bold uppercase tracking-wider mt-0.5">SELECCIONADA <Check size={10} strokeWidth={3} /></p>}
                               </div>
                             </button>
                           ) : (
@@ -1185,7 +1161,7 @@ const CampaignModule: React.FC = () => {
                     {anchorOptions.map((url, i) => {
                       if (!url) return null; // omitir slots vacías (ancla que falló)
                       const label     = i === 0 ? 'A' : 'B';
-                      const variant   = i === 0 ? '📱 UGC · iPhone orgánico · personas reales' : '📷 Editorial · revista · lookbook premium';
+                      const variant   = i === 0 ? 'UGC · iPhone orgánico · personas reales' : 'Editorial · revista · lookbook premium';
                       const isSelected = selectedAnchor === url;
                       return (
                         <button key={i} type="button" onClick={() => setSelectedAnchor(url)}
@@ -1207,19 +1183,19 @@ const CampaignModule: React.FC = () => {
                           {/* Footer tipo badge */}
                           <div className="absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t from-black/70 to-transparent">
                             <p className="text-white text-[10px] font-semibold leading-tight">{variant}</p>
-                            {isSelected && <p className="text-brand-300 text-[9px] font-bold uppercase tracking-wider mt-0.5">SELECCIONADA ✓</p>}
+                            {isSelected && <p className="flex items-center gap-1 text-brand-300 text-[9px] font-bold uppercase tracking-wider mt-0.5">SELECCIONADA <Check size={10} strokeWidth={3} /></p>}
                           </div>
                         </button>
                       );
                     })}
                   </div>
 
-                  {/* Botón principal — avanzar a canales */}
+                  {/* Botón principal — generar la campaña completa (ya cobrada en el paso 1) */}
                   <button type="button"
-                    onClick={() => selectedAnchor && setStep(4)}
+                    onClick={() => selectedAnchor && handleGenerateCampaign()}
                     disabled={!selectedAnchor}
                     className="w-full mb-3 py-4 bg-brand-600 hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-lg">
-                    Usar este estilo · Configurar campaña →
+                    Generar mi campaña →
                   </button>
 
                   {/* Regenerar ancla + hint */}
@@ -1240,14 +1216,15 @@ const CampaignModule: React.FC = () => {
                     </button>
                   </div>
 
-                  <div className="px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5]">
-                    💡 Puedes cerrar la ventana. Te avisaremos cuando termine.
+                  <div className="flex items-start gap-2 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5]">
+                    <Lightbulb size={14} className="flex-shrink-0 mt-0.5 text-slate-400" />
+                    Puedes cerrar la ventana. Te avisaremos cuando termine.
                   </div>
                 </div>
               )}
 
-              {/* ── PASO 6: GENERANDO CAMPAÑA ────────────── */}
-              {step === 6 && (
+              {/* ── PASO 4: GENERANDO CAMPAÑA ────────────── */}
+              {step === 4 && (
                 <div className="fade-in p-4 md:p-8">
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-7 items-start">
                     <div className="md:col-span-5 lg:col-span-4">
@@ -1339,7 +1316,7 @@ const CampaignModule: React.FC = () => {
                                 userName: user?.displayName ?? undefined, plan: campaignPlan,
                               };
                               campaignStorage.save(set).then(() => loadSets());
-                              clearSession(); setCurrentSet(set); setFailedIndexes([]); setStep(7);
+                              clearSession(); setCurrentSet(set); setFailedIndexes([]); setStep(5);
                             }}
                             className="w-full py-2 text-[11px] text-rose-500 hover:text-rose-700 font-semibold transition-colors">
                             Continuar igual con las que se generaron →
@@ -1419,12 +1396,12 @@ const CampaignModule: React.FC = () => {
                 </div>
               )}
 
-              {/* ── PASO 7: RESULTADOS ───────────────────── */}
-              {step === 7 && currentSet && (() => {
+              {/* ── PASO 5: RESULTADOS ───────────────────── */}
+              {step === 5 && currentSet && (() => {
                 const plan = currentSet.plan;
                 const allImages = plan.piezas.map(p => p.imageUrl).filter(Boolean);
                 const modalP = modalPieza !== null ? plan.piezas[modalPieza] : null;
-                const modalCm = modalP ? (CAMPAIGN_CHANNEL_META[modalP.canal] ?? { icon: '📢', label: modalP.canal ?? 'Canal' }) : null;
+                const modalCm = modalP ? (CAMPAIGN_CHANNEL_META[modalP.canal] ?? { icon: 'target', label: modalP.canal ?? 'Canal' }) : null;
 
                 return (
                   <div className="fade-in">
@@ -1475,12 +1452,12 @@ const CampaignModule: React.FC = () => {
                             <p className="text-[13px] font-medium text-brand-600 italic">{plan.promesa}</p>
                             <div className="flex flex-wrap gap-1.5 mt-3">
                               {currentSet.canales.map(c => {
-                                const cm = CAMPAIGN_CHANNEL_META[c] ?? { icon: '📢', label: c };
-                                return <span key={c} className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-100">{cm.icon} {cm.label}</span>;
+                                const cm = CAMPAIGN_CHANNEL_META[c] ?? { icon: 'target', label: c };
+                                return <span key={c} className="flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-100"><ChannelIcon icon={cm.icon} size={11} /> {cm.label}</span>;
                               })}
                               {plan.modoVisual && (
                                 <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                                  {plan.modoVisual === 'ugc' ? '📱 UGC' : '📷 Editorial'}
+                                  {plan.modoVisual === 'ugc' ? 'UGC' : 'Editorial'}
                                 </span>
                               )}
                             </div>
@@ -1493,7 +1470,7 @@ const CampaignModule: React.FC = () => {
                                 {/* Ancla elegida siempre primera */}
                                 {currentSet.anchorImage && (
                                   <div className="flex flex-col gap-1.5">
-                                    <p className="text-[9px] font-bold text-brand-600 uppercase tracking-wider">🎯 Ancla visual</p>
+                                    <p className="flex items-center gap-1 text-[9px] font-bold text-brand-600 uppercase tracking-wider"><Target size={10} /> Ancla visual</p>
                                     <div className="aspect-[3/4] rounded-lg overflow-hidden border-2 border-brand-200 cursor-pointer"
                                       onClick={() => openLightbox([currentSet.anchorImage, ...currentSet.slots.map(s => s.base64).filter(Boolean)], 0)}>
                                       <img src={currentSet.anchorImage} alt="Ancla visual" className="w-full h-full object-cover" />
@@ -1556,12 +1533,13 @@ const CampaignModule: React.FC = () => {
                         {/* Tabs */}
                         <div className="flex border-b border-slate-200 mb-5 gap-0">
                           {([
-                            { id: 'plan' as const,      label: '🎨 Piezas',     count: plan.piezas.length },
-                            { id: 'calendario' as const, label: '📅 Calendario', count: null },
-                            { id: 'hashtags' as const,   label: '# Hashtags',   count: (plan.hashtagsComunidad?.length ?? 0) + (plan.hashtagsNicho?.length ?? 0) + (plan.hashtagsColarga?.length ?? 0) },
+                            { id: 'plan' as const,      label: 'Piezas',     icon: Palette,   count: plan.piezas.length },
+                            { id: 'calendario' as const, label: 'Calendario', icon: Calendar, count: null },
+                            { id: 'hashtags' as const,   label: 'Hashtags',   icon: Hash,      count: (plan.hashtagsComunidad?.length ?? 0) + (plan.hashtagsNicho?.length ?? 0) + (plan.hashtagsColarga?.length ?? 0) },
                           ]).map(t => (
                             <button key={t.id} type="button" onClick={() => setActiveTab2(t.id)}
                               className={`flex items-center gap-1.5 px-4 py-2.5 text-[12px] font-semibold border-b-2 transition-all ${activeTab2 === t.id ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+                              <t.icon size={13} />
                               {t.label}
                               {t.count !== null && <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeTab2 === t.id ? 'bg-brand-50 text-brand-600' : 'bg-slate-100 text-slate-400'}`}>{t.count}</span>}
                             </button>
@@ -1572,7 +1550,7 @@ const CampaignModule: React.FC = () => {
                         {activeTab2 === 'plan' && (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {plan.piezas.map((pieza, i) => {
-                              const cm = CAMPAIGN_CHANNEL_META[pieza.canal] ?? { icon: '📢', label: pieza.canal ?? 'Canal' };
+                              const cm = CAMPAIGN_CHANNEL_META[pieza.canal] ?? { icon: 'target', label: pieza.canal ?? 'Canal' };
                               return (
                                 <div key={pieza.id} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-brand-200 transition-all cursor-pointer group"
                                   onClick={() => setModalPieza(i)}>
@@ -1580,7 +1558,7 @@ const CampaignModule: React.FC = () => {
                                   <div className="relative aspect-square bg-slate-100 overflow-hidden">
                                     {pieza.imageUrl
                                       ? <img src={pieza.imageUrl} alt={pieza.rol} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                                      : <div className="w-full h-full flex items-center justify-center text-slate-300 text-4xl">🖼️</div>}
+                                      : <div className="w-full h-full flex items-center justify-center text-slate-300"><ImageIcon size={36} /></div>}
                                     <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm rounded-full px-2.5 py-0.5 text-[10px] font-bold text-slate-600">{pieza.rol}</div>
                                     <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-brand-600 flex items-center justify-center text-[10px] font-black text-white" style={{ fontFamily: 'Syne, Inter, sans-serif' }}>{pieza.dia}</div>
                                     {/* Overlay hover */}
@@ -1597,7 +1575,7 @@ const CampaignModule: React.FC = () => {
                                   </div>
                                   {/* Body */}
                                   <div className="p-3.5">
-                                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">{cm.icon} {cm.label}</p>
+                                    <p className="flex items-center gap-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1"><ChannelIcon icon={cm.icon} size={11} /> {cm.label}</p>
                                     <p className="text-[13px] font-bold text-slate-800 leading-tight mb-2 line-clamp-2">{pieza.titular}</p>
                                     <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-3 mb-3">{pieza.caption}</p>
                                     {/* CTA */}
@@ -1610,7 +1588,7 @@ const CampaignModule: React.FC = () => {
                                     </div>
                                     {/* Instrucción */}
                                     <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
-                                      <p className="text-[9px] font-black text-amber-600 uppercase tracking-wider mb-0.5">📌 Qué hacer</p>
+                                      <p className="flex items-center gap-1 text-[9px] font-black text-amber-600 uppercase tracking-wider mb-0.5"><ClipboardCheck size={10} /> Qué hacer</p>
                                       <p className="text-[10.5px] text-amber-800 leading-snug">{pieza.instruccion}</p>
                                     </div>
                                     {/* Footer pieza */}
@@ -1645,14 +1623,14 @@ const CampaignModule: React.FC = () => {
                                     {piezasDelDia.length === 0
                                       ? <div className="flex items-center h-full px-4 text-[11px] text-slate-400 italic">Día de descanso</div>
                                       : piezasDelDia.map(p => {
-                                          const cm = CAMPAIGN_CHANNEL_META[p.canal] ?? { icon: '📢', label: p.canal ?? 'Canal' };
+                                          const cm = CAMPAIGN_CHANNEL_META[p.canal] ?? { icon: 'target', label: p.canal ?? 'Canal' };
                                           return (
                                             <div key={p.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors cursor-pointer"
                                               onClick={() => setModalPieza(plan.piezas.indexOf(p))}>
                                               {p.imageUrl && <div className="w-9 h-9 rounded-lg overflow-hidden flex-shrink-0 border border-slate-100"><img src={p.imageUrl} alt="" className="w-full h-full object-cover" /></div>}
                                               <div className="flex-1 min-w-0">
                                                 <p className="text-[12px] font-semibold text-slate-800 truncate">{p.titular}</p>
-                                                <p className="text-[10px] text-slate-400">{cm.icon} {cm.label} · {p.horaRecomendada}</p>
+                                                <p className="flex items-center gap-1 text-[10px] text-slate-400"><ChannelIcon icon={cm.icon} size={10} /> {cm.label} · {p.horaRecomendada}</p>
                                               </div>
                                               <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full flex-shrink-0">{p.rol}</span>
                                             </div>
@@ -1669,9 +1647,9 @@ const CampaignModule: React.FC = () => {
                         {activeTab2 === 'hashtags' && (
                           <div className="space-y-4">
                             {[
-                              { title: '🔥 Para llegar a tu público', desc: 'Úsalos en las publicaciones principales de tu feed.', tags: plan.hashtagsNicho, color: 'bg-brand-50 text-brand-700 border-brand-100' },
-                              { title: '🌿 Comunidad', desc: 'Conectan con la comunidad emprendedora latinoamericana.', tags: plan.hashtagsComunidad, color: 'bg-lime-50 text-lime-700 border-lime-200' },
-                              { title: '🎯 Más específicos', desc: 'Ayudan a llegar a personas con una intención de compra más clara.', tags: plan.hashtagsColarga, color: 'bg-slate-100 text-slate-600 border-slate-200' },
+                              { title: 'Para llegar a tu público', desc: 'Úsalos en las publicaciones principales de tu feed.', tags: plan.hashtagsNicho, color: 'bg-brand-50 text-brand-700 border-brand-100' },
+                              { title: 'Comunidad', desc: 'Conectan con la comunidad emprendedora latinoamericana.', tags: plan.hashtagsComunidad, color: 'bg-lime-50 text-lime-700 border-lime-200' },
+                              { title: 'Más específicos', desc: 'Ayudan a llegar a personas con una intención de compra más clara.', tags: plan.hashtagsColarga, color: 'bg-slate-100 text-slate-600 border-slate-200' },
                             ].map(group => (
                               <div key={group.title} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
                                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
@@ -1695,7 +1673,7 @@ const CampaignModule: React.FC = () => {
                               </div>
                             ))}
                             <div className="bg-lime-50 border border-lime-200 rounded-2xl p-4 flex gap-3">
-                              <span className="text-xl flex-shrink-0">💡</span>
+                              <Lightbulb size={20} className="flex-shrink-0 text-lime-600" />
                               <div>
                                 <p className="text-[12px] font-bold text-lime-800 mb-1">Cómo combinarlos</p>
                                 <p className="text-[11px] text-lime-700 leading-relaxed">Combiná 2-3 de nicho + 2-3 de comunidad + 2-3 de cola larga por post. No uses los mismos en todos los posts — rotá para evitar penalizaciones del algoritmo.</p>
@@ -1722,12 +1700,12 @@ const CampaignModule: React.FC = () => {
                         {/* Descargas */}
                         <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
                           <div className="px-4 py-3 border-b border-slate-100">
-                            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">📥 Descargar campaña</p>
+                            <p className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider"><Download size={12} /> Descargar campaña</p>
                           </div>
                           <div className="p-3 space-y-2">
                             <button type="button" onClick={() => handleDownloadPdf(currentSet)} disabled={downloadingPdf || downloadingHtml}
                               className="w-full flex items-center gap-3 p-3 rounded-xl bg-brand-50 border border-brand-100 hover:bg-brand-100 transition-colors disabled:opacity-50 disabled:cursor-wait">
-                              <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center text-base flex-shrink-0">📄</div>
+                              <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center flex-shrink-0"><FileText size={16} className="text-rose-500" /></div>
                               <div className="flex-1 text-left">
                                 <p className="text-[12px] font-semibold text-slate-800">{downloadingPdf ? 'Generando PDF…' : 'PDF de agencia'}</p>
                                 <p className="text-[10px] text-slate-400">Plan, piezas, copy y calendario</p>
@@ -1736,7 +1714,7 @@ const CampaignModule: React.FC = () => {
                             </button>
                             <button type="button" onClick={() => downloadSetZip(currentSet)}
                               className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-slate-300 transition-colors">
-                              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-base flex-shrink-0">🗜️</div>
+                              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0"><Archive size={16} className="text-blue-500" /></div>
                               <div className="flex-1 text-left">
                                 <p className="text-[12px] font-semibold text-slate-800">Todas las imágenes</p>
                                 <p className="text-[10px] text-slate-400">{plan.piezas.length} imágenes en alta calidad</p>
@@ -1745,7 +1723,7 @@ const CampaignModule: React.FC = () => {
                             </button>
                             <button type="button" onClick={() => handleDownloadHtml(currentSet)} disabled={downloadingHtml || downloadingPdf}
                               className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-slate-300 transition-colors disabled:opacity-50 disabled:cursor-wait">
-                              <div className="w-8 h-8 rounded-lg bg-lime-50 flex items-center justify-center text-base flex-shrink-0">☑️</div>
+                              <div className="w-8 h-8 rounded-lg bg-lime-50 flex items-center justify-center flex-shrink-0"><ClipboardCheck size={16} className="text-lime-600" /></div>
                               <div className="flex-1 text-left">
                                 <p className="text-[12px] font-semibold text-slate-800">{downloadingHtml ? 'Preparando…' : 'Guía interactiva'}</p>
                                 <p className="text-[10px] text-slate-400">Guía con tareas y hashtags</p>
@@ -1758,19 +1736,19 @@ const CampaignModule: React.FC = () => {
                         {/* Mini calendario */}
                         <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
                           <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">📅 Publicación</p>
+                            <p className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider"><Calendar size={12} /> Publicación</p>
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 border border-brand-100">{plan.duracionDias} días</span>
                           </div>
                           <div className="p-3 space-y-1.5">
                             {plan.piezas.map((p, i) => {
-                              const cm = CAMPAIGN_CHANNEL_META[p.canal] ?? { icon: '📢', label: p.canal ?? 'Canal' };
+                              const cm = CAMPAIGN_CHANNEL_META[p.canal] ?? { icon: 'target', label: p.canal ?? 'Canal' };
                               return (
                                 <div key={p.id} className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-100 hover:border-brand-200 cursor-pointer transition-colors"
                                   onClick={() => setModalPieza(i)}>
                                   <div className="w-7 h-7 rounded-lg bg-brand-600 flex items-center justify-center text-[11px] font-black text-white flex-shrink-0" style={{ fontFamily: 'Syne, Inter, sans-serif' }}>{p.dia}</div>
                                   <div className="flex-1 min-w-0">
                                     <p className="text-[11px] font-semibold text-slate-700 truncate">{p.titular}</p>
-                                    <p className="text-[9px] text-slate-400">{cm.icon} {cm.label} · {p.horaRecomendada}</p>
+                                    <p className="flex items-center gap-1 text-[9px] text-slate-400"><ChannelIcon icon={cm.icon} size={9} /> {cm.label} · {p.horaRecomendada}</p>
                                   </div>
                                 </div>
                               );
@@ -1819,7 +1797,7 @@ const CampaignModule: React.FC = () => {
                           <div className="relative aspect-square bg-slate-100 overflow-hidden rounded-t-2xl">
                             {modalP.imageUrl
                               ? <img src={modalP.imageUrl} alt={modalP.rol} className="w-full h-full object-cover" />
-                              : <div className="w-full h-full flex items-center justify-center text-6xl">🖼️</div>}
+                              : <div className="w-full h-full flex items-center justify-center text-slate-300"><ImageIcon size={48} /></div>}
                             <button type="button" onClick={() => setModalPieza(null)}
                               className="absolute top-3 right-3 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center text-slate-600 hover:text-slate-900 shadow-sm transition-colors">
                               <X size={14} />
@@ -1828,7 +1806,7 @@ const CampaignModule: React.FC = () => {
                           {/* Contenido modal */}
                           <div className="p-5">
                             <div className="flex items-center gap-2 mb-3">
-                              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-100">{modalCm.icon} {modalCm.label} · Día {modalP.dia}</span>
+                              <span className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-100"><ChannelIcon icon={modalCm.icon} size={11} /> {modalCm.label} · Día {modalP.dia}</span>
                               <span className="text-[10px] font-semibold text-slate-400">{modalP.rol}</span>
                             </div>
                             <h3 className="text-[17px] font-black text-slate-900 mb-4 leading-tight" style={{ fontFamily: 'Syne, Inter, sans-serif' }}>{modalP.titular}</h3>
@@ -1892,41 +1870,17 @@ const CampaignModule: React.FC = () => {
 
             </div>
 
-            {/* ── WIZARD FOOTER — pasos de configuración ── */}
-            {(step === 1 || (step === 2 && !isGenerating && anchorOptions.some(Boolean)) || step === 3 || step === 4 || step === 5) && (
+            {/* ── WIZARD FOOTER — solo en el Brief (paso 1) ──
+                Los pasos 2 (generando ancla) y 3 (elegir estilo) tienen su propio
+                CTA inline (necesitan mostrar las anclas + estado de progreso).
+                Los pasos 4 (generando campaña) y 5 (resultados) no llevan footer. */}
+            {step === 1 && (
               <WizardFooter
-                onBack={step > 1 && !isGenerating ? () => {
-                  if (step === 2) setStep(1);       // propuestas → brief
-                  else if (step === 3) setStep(1);  // aprobar ancla (legacy) → brief
-                  else if (step === 4) setStep(2);  // canales → propuestas
-                  else if (step === 5) setStep(4);  // cantidad → canales
-                  else setStep(s => (s - 1) as WizardStep);
-                } : undefined}
-                onContinue={() => {
-                  if (step === 1 && canStep1) handleGenerateAnchor();
-                  else if (step === 2 && selectedAnchor) setStep(4);
-                  else if (step === 3 && selectedAnchor) setStep(4);
-                  else if (step === 4 && canales.length > 0) setStep(5);
-                  else if (step === 5 && !insufficientForCampaign) handleGenerateCampaign();
-                }}
-                continueLabel={
-                  step === 1 ? `Crear propuestas de estilo · ${anchorCreditCost} cr` :
-                  (step === 2 || step === 3) ? 'Usar este estilo →' :
-                  step === 4 ? 'Continuar →' :
-                  step === 5 ? `Crear campaña · ${imageCreditCost} cr` :
-                  'Continuar'
-                }
-                disabled={
-                  (step === 1 && (!canStep1 || insufficientForAnchor)) ||
-                  ((step === 2 || step === 3) && !selectedAnchor) ||
-                  (step === 4 && canales.length === 0) ||
-                  (step === 5 && insufficientForCampaign)
-                }
-                costInfo={
-                  step === 1 ? { cost: anchorCreditCost, label: 'Propuestas de estilo' } :
-                  step === 5 ? { cost: imageCreditCost, label: `${imageCount} imágenes` } :
-                  undefined
-                }
+                onBack={undefined}
+                onContinue={() => { if (canStep1) handleGenerateAnchor(); }}
+                continueLabel={`Generar propuestas de estilo · ${totalCreditCost} cr`}
+                disabled={!canStep1}
+                costInfo={{ cost: totalCreditCost, label: 'Costo total', proCost: 1, proLabel: 'sesión' }}
                 loading={isGenerating}
               />
             )}
@@ -1997,11 +1951,11 @@ const CampaignModule: React.FC = () => {
                     <div className="grid grid-cols-2 grid-rows-2 h-40 overflow-hidden border-b border-slate-100">
                       <div className="row-span-2 overflow-hidden border-r border-slate-100">
                         {img0 ? <img src={img0} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                          : <div className="w-full h-full bg-slate-50 flex items-center justify-center text-2xl">🖼️</div>}
+                          : <div className="w-full h-full bg-slate-50 flex items-center justify-center text-slate-300"><ImageIcon size={28} /></div>}
                       </div>
                       <div className="overflow-hidden border-b border-slate-100">
                         {img1 ? <img src={img1} alt="" className="w-full h-full object-cover" />
-                          : <div className="w-full h-full bg-slate-50 flex items-center justify-center text-lg">🖼️</div>}
+                          : <div className="w-full h-full bg-slate-50 flex items-center justify-center text-slate-300"><ImageIcon size={18} /></div>}
                       </div>
                       <div className="overflow-hidden">
                         {img2 ? <img src={img2} alt="" className="w-full h-full object-cover" />
@@ -2011,7 +1965,7 @@ const CampaignModule: React.FC = () => {
                     {/* Body */}
                     <div className="p-4">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">✓ Completada</span>
+                        <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full"><Check size={10} strokeWidth={3} /> Completada</span>
                         <span className="text-[10px] text-slate-400">{new Date(set.createdAt).toLocaleDateString('es-CL')}</span>
                       </div>
                       <p className="font-black italic text-[14px] text-slate-900 mb-1 leading-tight" style={{ fontFamily: 'Syne, Inter, sans-serif' }}>{set.plan?.tagline ?? 'Campaña'}</p>
@@ -2026,14 +1980,14 @@ const CampaignModule: React.FC = () => {
                               if (!s) return null;
                               return <div key={role} className="w-7 h-7 rounded-lg overflow-hidden border border-slate-100 flex-shrink-0"><img src={s.base64} alt={role} className="w-full h-full object-cover" /></div>;
                             })}
-                            {modo && <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 self-center">{modo === 'ugc' ? '📱 UGC' : '📷 Editorial'}</span>}
+                            {modo && <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 self-center">{modo === 'ugc' ? 'UGC' : 'Editorial'}</span>}
                           </div>
                         </div>
                       )}
                       {/* Meta pills */}
                       <div className="flex gap-1.5 flex-wrap mb-3">
-                        <span className="text-[10px] text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-full">📸 {piezas.length} piezas</span>
-                        <span className="text-[10px] text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-full">📅 {set.plan?.duracionDias ?? 7} días</span>
+                        <span className="flex items-center gap-1 text-[10px] text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-full"><ImageIcon size={10} /> {piezas.length} piezas</span>
+                        <span className="flex items-center gap-1 text-[10px] text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-full"><Calendar size={10} /> {set.plan?.duracionDias ?? 7} días</span>
                         <span className="text-[10px] text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-full">{set.canales.length} canales</span>
                       </div>
                       {/* Acciones */}
@@ -2048,7 +2002,7 @@ const CampaignModule: React.FC = () => {
                         </button>
                         <button type="button" onClick={() => handleDownloadHtml(set)} disabled={downloadingHtml || downloadingPdf}
                           className="flex-1 py-1.5 rounded-xl text-[11px] font-semibold bg-slate-50 text-slate-600 border border-slate-200 hover:border-slate-300 transition-colors disabled:opacity-50 disabled:cursor-wait">
-                          {downloadingHtml ? '…' : '☑️'}
+                          {downloadingHtml ? '…' : <ClipboardCheck size={12} className="mx-auto" />}
                         </button>
                         <button type="button" onClick={() => downloadSetZip(set)}
                           className="flex-1 py-1.5 rounded-xl text-[11px] font-semibold bg-slate-50 text-slate-600 border border-slate-200 hover:border-slate-300 transition-colors">
