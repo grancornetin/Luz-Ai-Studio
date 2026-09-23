@@ -179,13 +179,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     let finalIdentityPrompt: string;
     let finalNegativePrompt: string;
+    let finalGender: 'hombre' | 'mujer' = gender;
     let refImages: string[] = [];
 
     if (mode === 'image') {
-      // Extraer identidad de las fotos
+      // Extraer identidad de las fotos — Gemini ya detecta el género real de
+      // la persona en la foto (identityData.metadata.gender). Usamos ese valor
+      // en vez del `gender` que llega del cliente (que en modo imagen no es
+      // seleccionable por el usuario y no debe determinar la silueta del clon).
       const identityData = await extractAvatarProfile(files);
       finalIdentityPrompt = identityData.identity_prompt;
       finalNegativePrompt = identityData.negative_prompt;
+      const detectedGender = identityData.metadata?.gender;
+      if (detectedGender === 'hombre' || detectedGender === 'mujer') {
+        finalGender = detectedGender;
+      } else if (typeof detectedGender === 'string') {
+        // Gemini puede devolver variantes en inglés u otras formas — normalizamos
+        // lo esperable ("male"/"man" → hombre, "female"/"woman" → mujer) y si no
+        // reconocemos el valor, se mantiene el fallback recibido del cliente.
+        const normalized = detectedGender.toLowerCase();
+        if (normalized.includes('male') || normalized.includes('man') || normalized === 'hombre') finalGender = 'hombre';
+        else if (normalized.includes('female') || normalized.includes('woman') || normalized === 'mujer') finalGender = 'mujer';
+      }
       refImages = files;
     } else { // manual
       finalIdentityPrompt = identityPrompt;
@@ -196,7 +211,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const resultImages = await generateFullSet(
       finalIdentityPrompt,
       finalNegativePrompt,
-      gender,
+      finalGender,
       refImages,
       null   // sin outfit override
     );
