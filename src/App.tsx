@@ -436,7 +436,7 @@ const AppContent: React.FC = () => {
                   <Route path="/productos"      element={<ProductGeneratorModule saveProduct={saveProduct} products={products} />} />
                   <Route path="/prompt-studio"  element={<PromptStudioView />} />
                   <Route path="/prompt-gallery" element={<PromptGalleryView />} />
-                  <Route path="/studio-pro"     element={<ContentStudioProModule />} />
+                  <Route path="/studio-pro"     element={<ContentStudioProModule avatars={avatars} />} />
                   <Route path="/campaign"       element={<CampaignModule />} />
                   <Route path="/photodump"      element={<PhotodumpModule />} />
                   <Route path="/outfit-extractor" element={<OutfitExtractorModule />} />

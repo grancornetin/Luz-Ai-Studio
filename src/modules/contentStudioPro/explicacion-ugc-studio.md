@@ -7,7 +7,7 @@
 > 4. No borrar secciones — si algo fue eliminado, marcarlo como "Eliminado en [fecha]" y explicar por qué.
 > 5. El objetivo es que otra IA pueda leer este archivo y entender completamente qué hace el módulo, cómo funciona, y en qué estado está, sin necesidad de leer el código.
 
-**Última actualización:** Junio 2026
+**Última actualización:** 29 de septiembre de 2026 (rediseño de la interfaz: wizard de 4 pasos, modelos guardados, varios ángulos y modo colección)
 **Propósito:** Generar contenido visual tipo UGC (User Generated Content) de alta calidad para que emprendedores muestren sus productos de forma auténtica y humana, como si lo publicara un influencer real.
 
 ---
@@ -26,13 +26,53 @@ Genera siempre **6 shots** con roles distintos: HERO, SELFIE, EXPRESSION, DETAIL
 
 ---
 
-## Flujo para el usuario
+## Flujo para el usuario (desde 29-sep-2026)
 
-1. **Configuración** — Elige el enfoque (Avatar/Outfit/Product/Scene) y sube las referencias
-2. **Referencias** — Sube fotos de: cara del modelo (obligatorio), cuerpo, outfit, producto, escena
-3. **Generación** — La IA genera la imagen REF0 (imagen ancla de la sesión) y luego los 5-6 shots derivados
-4. **Resultados** — Biblioteca de sesiones con todas las imágenes, descarga individual o en ZIP
-5. **Biblioteca** — Todas las sesiones guardadas con thumbnails
+Pestañas arriba: **Crear** / **Historial (N)**. En "Crear" hay un wizard de 4 pasos con stepper visible y barra fija abajo (Atrás + Continuar). Una pregunta por pantalla. Mobile-first; en desktop queda centrado con `max-w-2xl`.
+
+1. **Qué mostrar** — Carrusel de 4 tarjetas grandes (en desktop, grilla 2x2): Una persona (AVATAR), Tu producto (PRODUCT), Un look (OUTFIT), Un lugar (SCENE). Arranca con PRODUCT elegido.
+2. **Quién aparece** — Tabs "Mis modelos (N)" / "Subir una foto".
+   - *Mis modelos*: riel de tarjetas altas con los modelos guardados (`avatars` llega por prop desde `App.tsx`). Portada = `baseImages[0]`. Subtítulo "Creado desde fotos" (type `clone`/`reference`) o "Creado desde cero" (`manual`). La última tarjeta "Crear un modelo" lleva a `/crear/clonar`.
+   - Al elegir un modelo, la foto de identidad que se usa es su close-up facial: `baseImages[3] ?? baseImages[último] ?? baseImages[0]` (Model DNA y Manual Creator guardan en orden cuerpo, trasera, lateral, rostro). Se convierte a data URL (el servicio solo acepta base64) y se guarda en `faceRefs[0]`, igual que una foto subida a mano. El nombre del modelo se guarda en el set (`modelName`) y se usa en títulos ("Valentina con tu producto").
+   - *Subir una foto*: un slot grande para el rostro. Si no hay modelos guardados, el paso abre directo acá. Subir a mano siempre sigue disponible.
+3. **Tus fotos** — Depende del enfoque:
+   - PRODUCT: tabs "Un producto" / "Una colección" (ver secciones abajo), tamaño Chico/Mediano/Grande (SMALL/MEDIUM/LARGE) y caja opcional "Sumar más detalles" (ropa y lugar).
+   - OUTFIT: foto del look obligatoria + opcionales lugar y objeto.
+   - SCENE: foto del lugar obligatoria + texto opcional "¿Qué se puede hacer ahí?" + opcionales ropa y objeto.
+   - AVATAR: nada obligatorio; opcionales ropa, lugar y objeto.
+   - El "objeto" en Look/Lugar/Persona se guarda aparte del producto (estado `objectRef`) y, si se sube, se usa. Para OUTFIT/SCENE se corre `analyzeProductRelevance` y se muestra un aviso suave si parece no tener relación.
+4. **Revisar** — Resumen con miniaturas, "Cambiar algo" (vuelve al paso 1), cantidad de fotos (2 Rápida / 4 Media / 6 Completa, recomendada y por defecto), costo total (`costo por foto × (1 + cantidad)`, se cobra una sola vez), y CTA "Crear foto de prueba". En colección no hay selector: la cantidad = número de productos. El selector de motor (Nano Banana 2 / GPT Image 2) solo aparece para admin como fila discreta "Motor (solo admin)"; los usuarios siempre usan `gemini`.
+
+Después del wizard, en el mismo contenedor:
+- **Creando foto de prueba** — línea de tiempo de 3 pasos (mirando tus fotos → creando la primera foto → lista para aprobar).
+- **¿Te gusta cómo se ve?** — la foto de prueba (REF0) grande, chequeos simples, "Probar otra" (gratis, hasta 3 intentos) o "Sí, crear las N fotos".
+- **Creando tus fotos** — grilla compacta de 3 columnas con el estado de cada foto. Se generan de a una con pausa de 15 s y reintento automático por foto (no acelerar: evita 429 en Gemini).
+- **Resultado** — la sesión recién creada: primera foto grande 4:5, el resto en 2 columnas 3:5, la foto de prueba al final. Etiquetas simples según el rol de la directiva (`sessionPlan.shots[i].role`): HERO "Foto principal", SELFIE "Selfie", EXPRESSION "Expresión", DETAIL "Detalle", INTERACTION "En la mano", LIFESTYLE "En uso", ALT_ANGLE "Otro ángulo", CONTEXT "El lugar"; sin rol, "Foto N"; en colección, "Producto N". Descarga individual, "Descargar todas" (ZIP), "Nueva sesión", y botón para crear otra versión de una foto (máx. 3).
+- **Historial** — chips Todas/Persona/Producto/Look/Lugar, tarjetas 2 columnas 3:4 con portada, cantidad de fotos, título y fecha. Al tocar abre la sesión en la vista Resultado. Botón "Elegir" activa la selección múltiple (descargar/borrar varias con la barra flotante).
+
+### Flujo anterior (Eliminado el 29-sep-2026)
+Antes era una sola pantalla de configuración con enfoque, rostro, 3 casilleros de "referencias de contexto", checkbox "¿Es complemento del contexto?", tamaño, selector de motor y cantidad, todo junto. Se reemplazó por el wizard de 4 pasos porque pedía ~8 decisiones a la vez. Al terminar saltaba directo al historial; ahora muestra el Resultado.
+- **Checkbox "¿Es complemento del contexto?" (`isProductComplement`) — Eliminado el 29-sep-2026.** Ahora subir el objeto ya es la decisión: `useProduct = focus === 'PRODUCT' ? true : !!productRef`.
+- **`MasterLoader` y `CostSummary` — Sin uso desde el 29-sep-2026.** Los archivos siguen en `components/`, pero el módulo ya no los monta (la espera y el costo se muestran dentro del wizard).
+- **Estado `batchMode` (modo múltiple admin) — Eliminado el 29-sep-2026.** Era estado sin UI ni lógica (no hacía nada), por eso se quitó.
+
+---
+
+## Producto con varios ángulos (desde 29-sep-2026)
+
+En "Un producto" se sube la foto principal (obligatoria) y hasta 2 ángulos extra opcionales (costado, atrás, detalle). Se guardan en `set.productAngles`. Se pasan a `generateImage0(..., productAngles)` y a cada `generateDerivedShotAsync(..., productOptions: { productAngles })`, así el producto sale más fiel en fotos de detalle y de costado. También se usan al "Probar otra" foto de prueba y al regenerar/reintentar una foto. Solo aplica a PRODUCT.
+
+## Modo colección (desde 29-sep-2026)
+
+En "Una colección" se suben de 2 a 6 productos distintos (`set.collectionRefs`). La sesión tiene una foto por producto (`userShotCount = collectionRefs.length`), con la misma persona, lugar y luz.
+- La foto de prueba (REF0) y `buildSessionPlan` usan `collectionRefs[0]`; `set.productRef` guarda ese primero.
+- La foto derivada `i` (0-based dentro de `set.shots`) usa `collectionRefs[i]` y `productOptions = { isCollection: true }`.
+- Esto se resuelve en un solo helper (`getShotProduct(set, índice)`) que usan la producción normal, `retryFailedShots` (usa el índice real de la foto dentro de `shots`, no el orden del reintento) y `regenerateShot`. Así cada foto usa SU producto también en los reintentos.
+- Con un solo producto no se puede continuar; se sugiere usar "Un producto".
+- Solo aplica a PRODUCT.
+
+## Compatibilidad con sesiones viejas
+Las sesiones guardadas antes de este cambio no tienen `productAngles`, `collectionRefs` ni `modelName`: todos son opcionales y el código cae a los valores por defecto (sin ángulos, sin colección, título "Tu sesión ..."). Las regeneraciones usan el `sessionPlan` guardado en cada set (antes usaban por error el plan de la última sesión creada).
 
 ---
 
@@ -72,7 +112,7 @@ El orden de las referencias importa — las primeras tienen más peso en Gemini:
 ## Archivos del módulo
 
 ### `ContentStudioProModule.tsx`
-Componente principal. Maneja el flujo completo: configuración de referencias → generación → biblioteca. Contiene la UI de los slots de imagen, el panel de progreso de generación, y la galería de sesiones guardadas.
+Componente principal. Recibe `avatars?: AvatarProfile[]` (modelos guardados, default `[]`). Maneja el flujo completo: wizard de 4 pasos → foto de prueba → aprobación → creación de fotos → resultado, más el historial. Reusa `WizardStepper`, `WizardFooter`, `ImageSlot`, `ImageLightbox`, `ErrorDisplay` y `FloatingActionBar`. Íconos con `lucide-react` (sin emojis ni Font Awesome). Mantiene: cobro único con reembolso automático (`REFUNDABLE_ERRORS`), generación gratis de onboarding (`onboarding_free_generation`), retomar sesión desde notificación (`?session=...`, si todas las fotos ya terminaron abre directo el Resultado), modal de fotos incompletas con reintento solo de las fallidas.
 
 ### `service.ts`
 El cerebro del módulo. Contiene:
@@ -107,7 +147,7 @@ Todos los tipos del módulo. Los más importantes:
 Guarda las sesiones completadas en IndexedDB (`app_content_studio_pro`).
 
 ### `components/CostSummary.tsx`
-Panel visual que muestra el costo antes de generar: créditos por shot, total, créditos restantes.
+Panel visual que muestra el costo antes de generar: créditos por shot, total, créditos restantes. **Sin uso desde el 29-sep-2026** (el costo ahora se muestra en el paso "Revisar" del wizard). Igual que `components/MasterLoader.tsx`.
 
 ---
 

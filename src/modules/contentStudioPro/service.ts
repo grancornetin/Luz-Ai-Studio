@@ -88,6 +88,18 @@ function extractImageData(img: string | null | undefined): { data: string; mimeT
   return null;
 }
 
+// Ángulos extra del mismo producto: se achican más que el resto de las
+// referencias (768px) porque suman peso al pedido que queda en Redis mientras
+// espera en la cola, y el ángulo principal ya aporta el detalle fino.
+const MAX_PRODUCT_ANGLES = 2;
+async function compressProductAngles(angles: string[] | undefined): Promise<string[]> {
+  const out: string[] = [];
+  for (const a of (angles ?? []).filter(Boolean).slice(0, MAX_PRODUCT_ANGLES)) {
+    try { out.push(await compressImage(a, 768, 0.7)); } catch { out.push(a); }
+  }
+  return out;
+}
+
 async function prepareReferenceImagesCompressed(refs: (string | null | undefined)[]): Promise<Array<{ data: string; mimeType: string }>> {
   const result: Array<{ data: string; mimeType: string }> = [];
   
@@ -1241,6 +1253,7 @@ export const contentStudioService = {
       shotIndex?: number;
       totalShots?: number;
     },
+    productAngles: string[] = [],
   ): Promise<{ imageUrl: string; analysis: REF0Analysis }> {
     await this.ensureAccess();
 
@@ -1262,6 +1275,8 @@ export const contentStudioService = {
     let finalProductRef = useProduct ? productRef : null;
     if (!finalProductRef && focus === 'PRODUCT') throw new Error("Product reference required for PRODUCT focus");
     refsToPass.push(finalProductRef);
+    const extraAngles = finalProductRef ? await compressProductAngles(productAngles) : [];
+    refsToPass.push(...extraAngles);
 
     let finalSceneRef = sceneRef;
     if (!sceneRef && (focus === 'PRODUCT' || focus === 'OUTFIT' || focus === 'AVATAR')) {
@@ -1332,7 +1347,8 @@ ${ref0PromptByFocus[focus]}
 🔒 LOCK SYSTEM:
 - FACE: IDENTICAL to face reference (refs 1 and 2). Non-negotiable.
 ${finalOutfitRef ? '- OUTFIT: IDENTICAL to outfit reference. Same garments, same fit, same color, same fabric.' : ''}
-${finalProductRef ? `- PRODUCT: IDENTICAL to product reference. Same exact shape, color, material, design details.
+${finalProductRef ? `- PRODUCT: IDENTICAL to product reference. Same exact shape, color, material, design details.${extraAngles.length ? `
+  The product is shown in ${extraAngles.length + 1} reference photos: they are DIFFERENT ANGLES OF THE SAME SINGLE PRODUCT, not different products. Combine them to understand its exact 3D shape and details. Show ONE unit only.` : ''}
   ${focus === 'PRODUCT' ? '  ⚠️ PRODUCT OVERRIDES OUTFIT: If product and outfit both contain footwear, the person wears and shows the PRODUCT footwear — not the outfit footwear.' : ''}` : ''}
 ${finalSceneRef ? '- SCENE: IDENTICAL to scene reference. Person shares the scene\'s light.' : ''}
 
@@ -1410,8 +1426,28 @@ UNIVERSAL RULES:
       metadata?: Record<string, any>;
       userPlan?: string;
     },
+    productOptions?: {
+      // Otros ángulos del MISMO producto (máx. 2).
+      productAngles?: string[];
+      // Modo colección: cada foto muestra un producto distinto; REF0 muestra
+      // otro producto de la colección y no debe copiarse en esta foto.
+      isCollection?: boolean;
+    },
   ): Promise<string> {
     await this.ensureAccess();
+
+    const useProductHere = !!productRef && productIsRelevant !== false;
+    const extraAngles = useProductHere ? await compressProductAngles(productOptions?.productAngles) : [];
+    const isCollection = useProductHere && !!productOptions?.isCollection;
+    const collectionBlock = isCollection ? `
+COLLECTION SESSION — FEATURED PRODUCT OVERRIDE:
+- This session features several DIFFERENT products from the same collection, one per photo.
+- REF0 shows ANOTHER product of the collection. Do NOT reproduce REF0's product in this photo.
+- The ONLY product featured in THIS photo is the PRODUCT REF. Keep everything else from REF0
+  (person, outfit, place, light) exactly the same.` : '';
+    const anglesNote = extraAngles.length
+      ? `\n- The product is shown in ${extraAngles.length + 1} reference photos: DIFFERENT ANGLES OF THE SAME SINGLE PRODUCT. Show ONE unit only.`
+      : '';
 
     const directive = sessionPlan?.shots?.find(s => s.key === shotKey);
     
@@ -1429,14 +1465,15 @@ ONLY change: framing, distance, angle, interaction, expression.
 Keep everything else identical to REF0 and the references.
 
 Same color temperature as REF0. Same ambient light. Same environment.
-Natural UGC aesthetic. NO beautification. NO studio polish.`;
+Natural UGC aesthetic. NO beautification. NO studio polish.${anglesNote}
+${collectionBlock}`;
 
       // Gemini: faceRef x2 para identidad; GPT Image 2: faceRef x1.
       const refs = modelId === 'gptimage'
         ? [faceRef, image0]
         : [faceRef, faceRef, image0];
       if (outfitRef) refs.push(outfitRef);
-      if (productRef && productIsRelevant !== false) refs.push(productRef);
+      if (useProductHere) refs.push(productRef, ...extraAngles);
       if (sceneRef) refs.push(sceneRef);
 
       return generateWithPolling(fallbackPrompt, refs, '', true, shotIndex, totalShots, onStatusChange, modelId, sessionParams);
@@ -1528,7 +1565,8 @@ ${productRef ? `PRODUCT LOCK:
 - The product MUST be IDENTICAL to productRef. Same exact shape, color, material, all design details.
 - PRODUCT OVERRIDES OUTFIT for the featured item: if both contain the same item type (e.g. footwear),
   the PRODUCT reference is what the person presents/wears/features. The outfit provides clothing context only.
-- Do NOT substitute, reinterpret, or generalize the product. It must be recognizably the same item.` : ''}
+- Do NOT substitute, reinterpret, or generalize the product. It must be recognizably the same item.${anglesNote}` : ''}
+${collectionBlock}
 ${sceneRef ? `SCENE LOCK:\n- The scene MUST be IDENTICAL to sceneRef. NO redesign.\n- Person SHARES the scene's lighting — same direction, same color temp.\n- Person at correct scale relative to scene elements.` : ''}
 
 ${ref0AnalysisBlock}
@@ -1551,7 +1589,7 @@ FINAL CHECKLIST (apply before finalizing):
       ? [faceRef, image0]
       : [faceRef, faceRef, image0];
     if (outfitRef) refs.push(outfitRef);
-    if (productRef && productIsRelevant !== false) refs.push(productRef);
+    if (useProductHere) refs.push(productRef, ...extraAngles);
     if (sceneRef) refs.push(sceneRef);
 
     return generateWithPolling(prompt, refs, system, true, shotIndex, totalShots, onStatusChange, modelId, sessionParams);

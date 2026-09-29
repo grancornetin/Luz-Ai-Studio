@@ -142,10 +142,17 @@ export interface ContentStudioProSet {
   productCategory?: ProductCategory;
   faceRefs: string[];
   productRef?: string | null;
+  // Otros ángulos del mismo producto (máx. 2). Ausente en sesiones viejas.
+  productAngles?: string[];
+  // Modo colección: un producto distinto por foto (shot i → collectionRefs[i]).
+  // productRef guarda el primero, que es el que aparece en la foto base.
+  collectionRefs?: string[];
   outfitRef?: string | null;
   sceneRef?: string | null;
   sceneText?: string;
   faceAnchorUrl?: string | null;
+  // Nombre del modelo guardado usado en la sesión, si se eligió uno.
+  modelName?: string;
   image0Url?: string | null;
   ref0Analysis?: REF0Analysis;
   sessionPlan?: any;  // plan de sesión guardado para reintentos coherentes
