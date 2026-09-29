@@ -3,7 +3,7 @@ set -e
 project_dir="$(cd "$(dirname "$0")" && pwd)"
 cd "$project_dir"
 
-export GOOGLE_CLOUD_PROJECT="${GOOGLE_CLOUD_PROJECT:-luz-ai-studio}"
+export GOOGLE_CLOUD_PROJECT="${GOOGLE_CLOUD_PROJECT:-luz-creative-engine-2}"
 export GOOGLE_CLOUD_LOCATION="${GOOGLE_CLOUD_LOCATION:-us-central1}"
 export VERTEX_GEMINI_MODEL="${VERTEX_GEMINI_MODEL:-gemini-2.5-flash}"
 export GOOGLE_APPLICATION_CREDENTIALS="${GOOGLE_APPLICATION_CREDENTIALS:-$project_dir/Luz IA secrets/vertex-service-account.json}"

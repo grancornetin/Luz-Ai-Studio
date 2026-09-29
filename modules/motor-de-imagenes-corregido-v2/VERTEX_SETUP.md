@@ -47,6 +47,19 @@ pero Node no carga archivos `.env` automáticamente.
 
 Abre `http://localhost:3131/api/provider/status`. Debe responder `ready: true`, modelo y región. Luego usa el botón **Probar Vertex** en cada interfaz.
 
+## Cuentas de Google Cloud ya usadas (no repetir)
+
+Estos correos ya se usaron para crear un proyecto de Google Cloud con créditos
+gratis de prueba y **ya no califican** para créditos nuevos. Al crear una
+cuenta de servicio/proyecto nuevo para Vertex, usar un correo que NO esté en
+esta lista:
+
+- bastian.herrera.2a@gmail.com
+- grancornetin@gmail.com
+- nikolazinho.notaloka@gmail.com
+- cosasbasura832@gmail.com
+- herrera.importaciones1@gmail.com (cuenta actual, proyecto `luz-creative-engine-2`)
+
 ## Diseño de seguridad
 
 - La clave JSON queda solo en el equipo/servidor que corre Node.

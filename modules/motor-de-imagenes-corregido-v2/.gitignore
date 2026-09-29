@@ -4,6 +4,7 @@ claude.txt
 service-account*.json
 *service-account*.json
 Luz IA secrets/*.json
+Luz IA secrets/*.bak
 .env
 .server-batch-data/
 exports/

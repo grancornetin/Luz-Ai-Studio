@@ -4,7 +4,7 @@ cd /d "%~dp0"
 
 set "SCRIPT_DIR=%~dp0"
 
-if not defined GOOGLE_CLOUD_PROJECT set "GOOGLE_CLOUD_PROJECT=luz-ai-studio"
+if not defined GOOGLE_CLOUD_PROJECT set "GOOGLE_CLOUD_PROJECT=luz-creative-engine-2"
 if not defined GOOGLE_CLOUD_LOCATION set "GOOGLE_CLOUD_LOCATION=us-central1"
 if not defined VERTEX_GEMINI_MODEL set "VERTEX_GEMINI_MODEL=gemini-2.5-flash"
 if not defined GOOGLE_APPLICATION_CREDENTIALS set "GOOGLE_APPLICATION_CREDENTIALS=%SCRIPT_DIR%Luz IA secrets\vertex-service-account.json"
