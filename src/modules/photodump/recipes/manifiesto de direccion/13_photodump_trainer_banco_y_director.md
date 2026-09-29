@@ -241,3 +241,28 @@ herramientas de generación de imágenes por su cuenta.
   hallazgos de continuidad de venue, sub-zonas, gesto contenido, y variedad de
   shot social (ver sección 4). Cruce con el contrato narrativo real de
   producción (sección 5) identificado pero no ejecutado todavía.
+
+- **2026-09-04** (nota retroactiva, ver `12_ESTADO_ACTUAL_retomar_aqui.md`
+  para el detalle completo): **el cruce descrito en la sección 5 SÍ se
+  ejecutó**, aunque no quedó registrado acá en su momento — este documento
+  quedó desactualizado desde el 31-jul mientras el trabajo real avanzaba.
+  Lo que pasó realmente: el Director Creativo (secciones 1-4 de este
+  documento) se portó de prototipo standalone (`scripts/photodump-director/`)
+  a `src/modules/photodump/director/` y se conectó a producción real el
+  7-ago (`7ce6b45`), primero para `outfit_night_out` (que **mantuvo** su
+  contrato narrativo real ya validado a mano — `recipeContracts.ts` en
+  producción usa los `nightMomentTypes`/`mirror_check` descritos en el
+  manifiesto de validación, no los 7 roles inventados de
+  `recipe-templates.js` que mencionaba la sección 5). Los hallazgos 4 y 5 de
+  esa sección (posición de citas al inicio del prompt, espejo opcional) se
+  incorporaron al razonamiento real del director en los ~40 commits de
+  refinamiento posteriores. Después, el 3-sep (`9a8fa42`), el director se
+  generalizó (`director/generic/`, sucesor de `director/openBank/`) para
+  dejar de asumir vocabulario de `outfit_night_out` y servir a cualquier
+  receta vía `RecipeDirectorContract` — `outfit_check` es la primera receta
+  en usar este modo genérico. **Este documento (13) y `recipe-templates.js`/
+  `creative-director.js` en `modules/motor-de-imagenes-corregido-v2/photodump-trainer/`
+  probablemente quedaron como el prototipo aislado original** — si se
+  retoma este hilo, confirmar si esa carpeta se sigue usando para
+  experimentar antes de portar a producción, o si ya es código muerto ahora
+  que el director real vive en `src/modules/photodump/director/`.

@@ -20,19 +20,34 @@ function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
 let runState = null;
 
-// Items que quedaron en "processing" tras un corte/reinicio del proceso (no
-// hay runState en memoria retomándolos) vuelven a la fase que les
-// corresponde — nunca se pierden ni requieren acción manual. Se decide la
-// fase mirando si ya tienen imageType: si sí, solo faltaba el sketch; si
-// no, ni siquiera llegaron a analizarse.
+// Items que quedaron en "processing" sin un runBatch real detrás vuelven a
+// la fase que les corresponde — nunca se pierden ni requieren acción
+// manual. Se decide la fase mirando si ya tienen imageType: si sí, solo
+// faltaba el sketch; si no, ni siquiera llegaron a analizarse.
+//
+// runBatch es estrictamente secuencial (procesa un item, espera, recién
+// pasa al siguiente), así que dentro de este proceso solo puede haber COMO
+// MÁXIMO un item "processing" genuino a la vez si runState existe. Antes
+// esta función solo actuaba cuando !runState (proceso reiniciado/caído) —
+// pero dos runBatch lanzados en paralelo por un bug de concurrencia (ver
+// launchRunBatch) también dejaban varios items en "processing" a la vez sin
+// que ninguno fuera huérfano en el sentido de "proceso caído". Ahora se
+// reclaman TODOS los "processing" salvo, cuando hay un batch corriendo, el
+// más reciente (ese sí puede ser el genuino en curso).
 function reclaimOrphanedProcessing(bank) {
   let changed = false;
-  bank.items.forEach(item => {
-    if (item.status === 'processing') {
-      item.status = item.imageType ? 'pending_sketch' : 'pending_analysis';
-      changed = true;
-      pushLog(bank, { level: 'warn', itemId: item.id, itemName: item.name, phase: item.status === 'pending_sketch' ? 'sketch' : 'analyze', message: 'Item recuperado tras interrupción del proceso — vuelve a la cola' });
-    }
+  let processingItems = bank.items.filter(it => it.status === 'processing');
+  if (runState && processingItems.length > 0) {
+    // Deja intacto el más reciente (el que el loop activo probablemente
+    // está sosteniendo de verdad); todos los demás son de un loop fantasma.
+    processingItems = processingItems
+      .sort((a, b) => new Date(b.processingSince || 0) - new Date(a.processingSince || 0))
+      .slice(1);
+  }
+  processingItems.forEach(item => {
+    item.status = item.imageType ? 'pending_sketch' : 'pending_analysis';
+    changed = true;
+    pushLog(bank, { level: 'warn', itemId: item.id, itemName: item.name, phase: item.status === 'pending_sketch' ? 'sketch' : 'analyze', message: 'Item recuperado — estaba "processing" sin un proceso activo real, vuelve a la cola' });
   });
   return changed;
 }
@@ -40,11 +55,15 @@ function reclaimOrphanedProcessing(bank) {
 function currentBank() {
   const bank = store.loadBank();
   let changed = false;
-  if (bank.activeBatch && (bank.activeBatch.status === 'running' || bank.activeBatch.status === 'paused') && !runState) {
+  // "queued" incluido: puede quedar así si el proceso se reinicia a mitad
+  // de una subida grande (startBatch fija status:'queued' recién al
+  // terminar de guardar todos los items) — sin esto, el batch quedaba
+  // "queued" para siempre sin que nadie lo retomara automáticamente.
+  if (bank.activeBatch && ['running', 'paused', 'queued'].includes(bank.activeBatch.status) && !runState) {
     bank.activeBatch.status = 'interrupted';
     changed = true;
   }
-  if (!runState && reclaimOrphanedProcessing(bank)) changed = true;
+  if (reclaimOrphanedProcessing(bank)) changed = true;
   if (changed) store.saveBank(bank);
   return bank;
 }
@@ -124,6 +143,7 @@ function extFromMime(mimeType) {
 
 async function processAnalyzeOne(bank, item) {
   item.status = 'processing';
+  item.processingSince = new Date().toISOString();
   store.saveBank(bank);
 
   let hitRateLimit = false;
@@ -163,6 +183,7 @@ async function processAnalyzeOne(bank, item) {
 
 async function processSketchOne(bank, item) {
   item.status = 'processing';
+  item.processingSince = new Date().toISOString();
   store.saveBank(bank);
 
   let hitRateLimit = false;
@@ -326,8 +347,19 @@ function generateMissingTypes() {
 
 // ── Loop principal: drena pending_analysis primero, luego pending_sketch ──
 
+// Procesa por STATUS, no por batchId — cualquier item en pending_analysis/
+// pending_sketch se drena, sin importar de qué batch (o de ningún batch)
+// venga. Antes filtraba por "it.batchId === batchId", así que un item
+// reactivado (retry, tipo secundario, etc.) que pertenecía a un batch ya
+// "completed" quedaba huérfano para siempre: ningún loop activo lo volvía a
+// mirar. batchId sigue existiendo en el item solo para agrupar en la UI de
+// progreso, no como filtro de qué se procesa.
 async function runBatch(initialBank, batchId) {
-  runState = { cancelled: false };
+  // Además de "cancelled", runState lleva el estado de actividad en vivo
+  // que consume activityStatus() para la barra de "qué está pasando ahora"
+  // del frontend: fase actual, item en curso, y cuándo se dispara la
+  // próxima llamada (durante la espera entre sketches).
+  runState = { cancelled: false, phase: null, currentItemId: null, nextCallAt: null, waitingReason: null };
   let bank = initialBank;
   bank.activeBatch.status = 'running';
   store.saveBank(bank);
@@ -338,9 +370,12 @@ async function runBatch(initialBank, batchId) {
     if (!bank.activeBatch || bank.activeBatch.id !== batchId) { runState = null; return; }
     if (runState.cancelled || bank.activeBatch.status !== 'running') { runState = null; return; }
 
-    const item = bank.items.find(it => it.batchId === batchId && it.status === 'pending_analysis');
+    const item = bank.items.find(it => it.status === 'pending_analysis');
     if (!item) break;
 
+    runState.phase = 'analyze';
+    runState.currentItemId = item.id;
+    runState.nextCallAt = null;
     const hitRateLimit = await processAnalyzeOne(bank, item);
     if (hitRateLimit) {
       pushLog(bank, { level: 'warn', itemId: item.id, itemName: item.name, phase: 'analyze', message: 'Límite de cuota alcanzado en análisis — reintentando con backoff' });
@@ -357,9 +392,13 @@ async function runBatch(initialBank, batchId) {
     if (!bank.activeBatch || bank.activeBatch.id !== batchId) { runState = null; return; }
     if (runState.cancelled || bank.activeBatch.status !== 'running') { runState = null; return; }
 
-    const item = bank.items.find(it => it.batchId === batchId && it.status === 'pending_sketch');
+    const item = bank.items.find(it => it.status === 'pending_sketch');
     if (!item) break;
 
+    runState.phase = 'sketch';
+    runState.currentItemId = item.id;
+    runState.nextCallAt = null;
+    runState.waitingReason = null;
     const callStart = Date.now();
     const hitRateLimit = await processSketchOne(bank, item);
     if (hitRateLimit) {
@@ -368,11 +407,15 @@ async function runBatch(initialBank, batchId) {
     }
     store.saveBank(bank);
 
-    const stillPending = bank.items.some(it => it.batchId === batchId && it.status === 'pending_sketch');
+    const stillPending = bank.items.some(it => it.status === 'pending_sketch');
     if (stillPending && bank.activeBatch.status === 'running' && !runState.cancelled) {
       const elapsed = Date.now() - callStart;
       const targetInterval = Math.max(SKETCH_MIN_INTERVAL_MS, sketchIntervalMs);
       const remaining = Math.max(MIN_INTERVAL_MS, targetInterval - elapsed);
+      runState.phase = 'waiting';
+      runState.currentItemId = null;
+      runState.nextCallAt = new Date(Date.now() + remaining).toISOString();
+      runState.waitingReason = hitRateLimit ? 'cuota' : 'espaciado';
       await wait(remaining);
     }
   }
@@ -386,7 +429,95 @@ async function runBatch(initialBank, batchId) {
   runState = null;
 }
 
+// Estado de actividad en vivo para la barra "qué está pasando ahora" del
+// frontend — item en curso, fase, cuándo dispara la próxima llamada, y una
+// vista previa de los próximos items en cola (para pending_analysis primero,
+// luego pending_sketch, igual que el orden real en que runBatch los toma).
+function activityStatus(previewCount = 6) {
+  if (!runState) return { active: false };
+  const bank = store.loadBank();
+  const currentItem = runState.currentItemId ? bank.items.find(i => i.id === runState.currentItemId) : null;
+
+  const analyzeQueue = bank.items.filter(it => it.status === 'pending_analysis');
+  const sketchQueue = bank.items.filter(it => it.status === 'pending_sketch');
+  const upcoming = (runState.phase === 'sketch' || runState.phase === 'waiting' ? sketchQueue : [...analyzeQueue, ...sketchQueue])
+    .filter(it => it.id !== runState.currentItemId)
+    .slice(0, previewCount)
+    .map(it => ({ id: it.id, name: it.name, imageType: it.imageType || null }));
+
+  return {
+    active: true,
+    phase: runState.phase,
+    waitingReason: runState.waitingReason,
+    nextCallAt: runState.nextCallAt,
+    current: currentItem ? { id: currentItem.id, name: currentItem.name, imageType: currentItem.imageType || null } : null,
+    queueCounts: { pendingAnalysis: analyzeQueue.length, pendingSketch: sketchQueue.length },
+    upcoming
+  };
+}
+
+// Único punto de entrada para lanzar runBatch en background. runState es
+// una sola variable global compartida por todo el módulo — antes cada
+// función que podía arrancar un batch (startBatch, startBatchFromPhotodumpImport,
+// resumeBatch, resumePendingWork) llamaba runBatch(...) por su cuenta sin
+// chequear si ya había uno corriendo. Si dos se disparaban casi al mismo
+// tiempo (ej. "Procesar pendientes" y después "Reintentar todos los
+// errores" antes de que el primero terminara), ambos loops corrían en
+// paralelo pisándose la misma runState: el segundo la sobreescribía, y los
+// items que el primer loop ya había puesto en "processing" quedaban
+// huérfanos ahí para siempre — nadie los volvía a tocar ni a marcar error,
+// solo parecían trabados sin explicación. Ahora TODO arranque de batch pasa
+// por acá, que rechaza el segundo intento en vez de dejarlos competir.
+function launchRunBatch(bank, batchId) {
+  if (runState) return; // ya hay un runBatch corriendo, no lanzar otro
+  runBatch(bank, batchId).catch(err => {
+    const b = store.loadBank();
+    if (b.activeBatch) { b.activeBatch.status = 'error'; b.activeBatch.error = err.message; }
+    store.saveBank(b);
+    runState = null;
+  });
+}
+
+// Arranca (o reabre) el batch activo para drenar CUALQUIER item pendiente
+// que haya quedado sin un batch corriendo — cubre tanto el caso "reanudar
+// tras interrupción" como el caso nuevo "hay pending_sketch huérfanos de un
+// batch ya completed". Es el botón "Procesar pendientes" del frontend.
+function resumePendingWork() {
+  if (runState) return currentBank(); // ya hay algo corriendo, no duplicar
+  const bank = store.loadBank();
+  const hasPending = bank.items.some(it => it.status === 'pending_analysis' || it.status === 'pending_sketch');
+  if (!hasPending) return bank;
+
+  if (bank.activeBatch && ['interrupted', 'paused'].includes(bank.activeBatch.status)) {
+    return resumeBatch();
+  }
+
+  // No hay batch reanudable (ej. quedó "completed" con items reactivados
+  // después) — se abre un batch nuevo que apunta a estos pendientes.
+  const pendingIds = bank.items.filter(it => it.status === 'pending_analysis' || it.status === 'pending_sketch').map(it => it.id);
+  bank.activeBatch = { id: 'batch_' + Date.now(), createdAt: new Date().toISOString(), finishedAt: null, status: 'queued', itemIds: pendingIds };
+  pushLog(bank, { level: 'info', message: `Reanudando procesamiento: ${pendingIds.length} imágenes pendientes encontradas` });
+  store.saveBank(bank);
+
+  launchRunBatch(bank, bank.activeBatch.id);
+
+  return bank;
+}
+
 // ── Encolado desde uploads manuales ──
+
+// Cada cuántos items guardados en disco se hace un checkpoint del índice
+// (bank.json) durante una subida grande. Antes el índice completo solo se
+// guardaba UNA vez, al final de procesar TODOS los items del request — con
+// cientos de imágenes eso deja una ventana larga (minutos) donde los
+// archivos ya están en disco pero el índice no los conoce todavía. Si el
+// proceso se reinicia en esa ventana (ej. un restart del servidor para
+// aplicar otro cambio, o el propio proceso reiniciándose por cualquier
+// motivo), esos archivos quedan huérfanos: guardados, pero invisibles para
+// la app. Pasó en la práctica con una subida de 700+ imágenes. Guardando el
+// índice cada BATCH_CHECKPOINT_EVERY items, la pérdida máxima posible ante
+// un corte se reduce a ese puñado, no al batch entero.
+const BATCH_CHECKPOINT_EVERY = 20;
 
 function startBatch(newItems) {
   const bank = store.loadBank();
@@ -395,41 +526,45 @@ function startBatch(newItems) {
   const batchId = isAppendingToRunning ? bank.activeBatch.id : ('batch_' + Date.now());
   const createdAt = isAppendingToRunning ? bank.activeBatch.createdAt : new Date().toISOString();
 
-  const itemsForThisBatch = newItems.map((it, idx) => {
+  // Deja el batch visible y con nombre desde el arranque, ANTES de procesar
+  // el primer archivo — así incluso un corte en el primer item deja rastro
+  // en el índice (antes bank.activeBatch recién se fijaba al final).
+  if (!isAppendingToRunning) {
+    bank.activeBatch = { id: batchId, createdAt, finishedAt: null, status: 'queued', itemIds: [] };
+    pushLog(bank, { level: 'info', message: `Tanda iniciada: subiendo ${newItems.length} imágenes nuevas...` });
+    store.saveBank(bank);
+  }
+
+  const itemsForThisBatch = [];
+  newItems.forEach((it, idx) => {
     const id = 'pose_' + Date.now() + '_' + idx;
     store.saveImage(id, it.buffer, it.ext);
     if (it.thumbBuffer) store.saveThumb(id, it.thumbBuffer, it.ext);
-    return {
+    const item = {
       id, origin: 'upload', sourceRef: null,
       ext: it.ext, mimeType: it.mimeType, name: it.name, contentHash: it.contentHash,
       batchId, createdAt, status: 'pending_analysis', error: null,
       imageType: null, category: null, framing: null, contactPoints: null, supportSurfaceHeight: null,
       tags: null, description: null, sketchExt: null, elapsedMs: null
     };
+    itemsForThisBatch.push(item);
+    bank.items.push(item);
+    bank.activeBatch.itemIds.push(id);
+
+    if (itemsForThisBatch.length % BATCH_CHECKPOINT_EVERY === 0) store.saveBank(bank);
   });
 
-  bank.items = [...bank.items, ...itemsForThisBatch];
-  const newItemIds = itemsForThisBatch.map(it => it.id);
-
   if (isAppendingToRunning) {
-    bank.activeBatch.itemIds = [...bank.activeBatch.itemIds, ...newItemIds];
     pushLog(bank, { level: 'info', message: `${itemsForThisBatch.length} imágenes agregadas a la tanda en curso` });
     store.saveBank(bank);
     return bank;
   }
 
-  bank.activeBatch = {
-    id: batchId, createdAt, finishedAt: null, status: 'queued', itemIds: newItemIds
-  };
-  pushLog(bank, { level: 'info', message: `Tanda iniciada: ${itemsForThisBatch.length} imágenes nuevas` });
+  bank.activeBatch.status = 'queued';
+  pushLog(bank, { level: 'info', message: `Tanda lista: ${itemsForThisBatch.length} imágenes guardadas` });
   store.saveBank(bank);
 
-  runBatch(bank, bank.activeBatch.id).catch(err => {
-    const b = store.loadBank();
-    if (b.activeBatch) { b.activeBatch.status = 'error'; b.activeBatch.error = err.message; }
-    store.saveBank(b);
-    runState = null;
-  });
+  launchRunBatch(bank, bank.activeBatch.id);
 
   return bank;
 }
@@ -477,12 +612,7 @@ function startBatchFromPhotodumpImport(photodumpItemIds) {
   pushLog(bank, { level: 'info', message: `Tanda iniciada: ${itemsForThisBatch.length} imágenes importadas de photodump` });
   store.saveBank(bank);
 
-  runBatch(bank, bank.activeBatch.id).catch(err => {
-    const b = store.loadBank();
-    if (b.activeBatch) { b.activeBatch.status = 'error'; b.activeBatch.error = err.message; }
-    store.saveBank(b);
-    runState = null;
-  });
+  launchRunBatch(bank, bank.activeBatch.id);
 
   return bank;
 }
@@ -493,12 +623,7 @@ function resumeBatch() {
   bank.activeBatch.status = 'queued';
   pushLog(bank, { level: 'info', message: 'Tanda reanudada desde el último checkpoint' });
   store.saveBank(bank);
-  runBatch(bank, bank.activeBatch.id).catch(err => {
-    const b = store.loadBank();
-    if (b.activeBatch) { b.activeBatch.status = 'error'; b.activeBatch.error = err.message; }
-    store.saveBank(b);
-    runState = null;
-  });
+  launchRunBatch(bank, bank.activeBatch.id);
   return bank;
 }
 
@@ -524,6 +649,19 @@ async function retryItem(itemId) {
   item.status = item.imageType ? 'pending_sketch' : 'pending_analysis';
   item.error = null;
   store.saveBank(bank);
+
+  // Si ya hay un runBatch corriendo, NO procesar acá dentro del mismo
+  // request — eso disparaba una llamada de imagen extra en paralelo con la
+  // que el batch activo ya estaba haciendo, sin el espaciado de 60s, además
+  // de dos procesos guardando bank.json casi al mismo tiempo. En vez de
+  // eso, alcanza con dejar el item en pending_* — runBatch busca por
+  // status (no por batchId), así que el loop activo lo va a recoger solo y
+  // procesar en su turno, con el mismo espaciado que el resto.
+  if (runState) {
+    pushLog(bank, { level: 'info', itemId: item.id, itemName: item.name, message: 'Reintento encolado — se procesará en el turno del batch activo' });
+    store.saveBank(bank);
+    return item;
+  }
 
   if (item.status === 'pending_analysis') {
     await processAnalyzeOne(bank, item);
@@ -601,6 +739,7 @@ function reclassifyStatus() {
 
 async function reclassifyFraming() {
   if (reclassifyState && reclassifyState.running) return reclassifyStatus();
+  if (runState) return reclassifyStatus(); // no correr en paralelo con un batch activo
 
   const analyzer = require('./analyzer');
   const bank = store.loadBank();
@@ -706,8 +845,8 @@ function retryAllErrors() {
 }
 
 module.exports = {
-  publicBank, currentBank,
-  startBatch, startBatchFromPhotodumpImport, resumeBatch, pauseBatch,
+  publicBank, currentBank, activityStatus,
+  startBatch, startBatchFromPhotodumpImport, resumeBatch, resumePendingWork, pauseBatch,
   retryItem, editItem, deleteItemsBulk,
   findDuplicateHashes, findDuplicateNames,
   getLog,

@@ -31,6 +31,13 @@ async function handle(req, res, parsed, { sendJson, readJson }) {
     return true;
   }
 
+  // GET /activity — qué se está procesando ahora mismo, fase, próxima
+  // llamada y vista previa de la cola. Para la barra "qué está pasando".
+  if (req.method === 'GET' && pathname === PREFIX + 'activity') {
+    sendJson(res, 200, jobRunner.activityStatus());
+    return true;
+  }
+
   // POST /check-duplicates — body: { hashes: string[], names: string[] }
   if (req.method === 'POST' && pathname === PREFIX + 'check-duplicates') {
     const body = await readJson(req);
@@ -84,6 +91,14 @@ async function handle(req, res, parsed, { sendJson, readJson }) {
   // POST /jobs/resume
   if (req.method === 'POST' && pathname === PREFIX + 'jobs/resume') {
     sendJson(res, 200, jobRunner.publicBank(jobRunner.resumeBatch()));
+    return true;
+  }
+
+  // POST /jobs/resume-pending — arranca cualquier item pending_analysis/pending_sketch
+  // huérfano, sin importar de qué batch (o de ninguno) venga. Cubre el caso de items
+  // reactivados (retry, tipo secundario) que quedaron sin ningún batch corriendo.
+  if (req.method === 'POST' && pathname === PREFIX + 'jobs/resume-pending') {
+    sendJson(res, 200, jobRunner.publicBank(jobRunner.resumePendingWork()));
     return true;
   }
 

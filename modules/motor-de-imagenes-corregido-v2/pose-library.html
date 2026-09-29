@@ -214,6 +214,29 @@
 
   @media (max-width: 640px) { .modal-images { grid-template-columns: 1fr; } }
   @media (prefers-reduced-motion: reduce) { * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+
+  /* ── Barra de actividad "qué está pasando ahora" ── */
+  .activity-bar {
+    display: none; position: sticky; top: 0; z-index: 10;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 18px; margin-bottom: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+  }
+  .activity-bar[data-active="true"] { display: block; }
+  .activity-main { display: flex; align-items: center; gap: 12px; }
+  .activity-thumb { width: 44px; height: 44px; border-radius: 9px; object-fit: cover; background: var(--bg-elevated); flex-shrink: 0; }
+  .activity-thumb.placeholder { display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .activity-info { flex: 1; min-width: 0; }
+  .activity-phase { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); display: flex; align-items: center; gap: 6px; }
+  .activity-phase .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse-dot 1.4s ease-in-out infinite; }
+  @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .activity-name { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
+  .activity-countdown { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; flex-shrink: 0; text-align: right; }
+  .activity-countdown b { color: var(--text); font-size: 15px; }
+  .activity-queue { display: flex; gap: 6px; margin-top: 12px; overflow-x: auto; padding-bottom: 2px; }
+  .activity-queue-item { position: relative; width: 40px; height: 40px; border-radius: 8px; overflow: hidden; background: var(--bg-elevated); flex-shrink: 0; opacity: 0.75; }
+  .activity-queue-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .activity-queue-more { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px; background: var(--bg-elevated); color: var(--text-faint); font-size: 11px; font-weight: 700; flex-shrink: 0; }
 </style>
 </head>
 <body>
@@ -222,6 +245,19 @@
     <h1>Pose Library</h1>
     <div class="sub">Banco de referencias de pose corporal y expresión facial — análisis + sketch B&N por imagen.</div>
   </header>
+
+  <div class="activity-bar" id="activityBar" data-active="false">
+    <div class="activity-main">
+      <img class="activity-thumb" id="activityThumb" alt="" style="display:none" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7" />
+      <div class="activity-thumb placeholder" id="activityThumbPlaceholder">⏳</div>
+      <div class="activity-info">
+        <div class="activity-phase"><span class="dot"></span><span id="activityPhaseLabel">—</span></div>
+        <div class="activity-name" id="activityName">—</div>
+      </div>
+      <div class="activity-countdown" id="activityCountdown"></div>
+    </div>
+    <div class="activity-queue" id="activityQueue"></div>
+  </div>
 
   <section class="card card-compact">
     <div class="tabs-inline">
@@ -308,8 +344,13 @@
           <option value="photodump_import">Importadas</option>
         </select>
         <input type="text" class="filter-select" id="tagSearchInput" placeholder="Buscar en tags/descripción…" style="flex:1; min-width:160px" />
+        <select class="filter-select" id="sortOrder">
+          <option value="newest">Más recientes primero</option>
+          <option value="oldest">Más antiguas primero</option>
+        </select>
       </div>
       <div class="btn-row" style="margin-top:0; margin-bottom:12px">
+        <button class="btn-primary" id="resumePendingBtn" style="display:none">Procesar pendientes</button>
         <button class="btn-secondary" id="retryAllErrorsBtn">Reintentar todos los errores</button>
         <button class="btn-secondary" id="reclassifyFramingBtn">Reclasificar encuadre faltante</button>
         <button class="btn-secondary" id="selectModeBtn">Marcar mal categorizadas</button>
@@ -476,6 +517,13 @@ function renderQueue() {
   ingestActions.style.display = queue.length ? 'flex' : 'none';
 }
 
+// Con cientos de archivos, hashear TODOS en paralelo (Promise.all sobre la
+// lista completa) hace que el navegador lea todos los buffers a memoria a
+// la vez — con fotos de varios MB eso son varios GB de RAM de golpe y traba
+// la pestaña antes de que aparezca cualquier feedback. Se procesa en lotes
+// chicos en su lugar.
+const HASH_CHUNK_SIZE = 20;
+
 async function addFiles(fileList) {
   const files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
   const namesRes = await fetch(`${API}/check-duplicates`, {
@@ -486,11 +534,19 @@ async function addFiles(fileList) {
   const dupNameSet = new Set(duplicateNames || []);
   const newFiles = files.filter(f => !dupNameSet.has(f.name));
 
-  const withHashes = await Promise.all(newFiles.map(async file => ({
-    file, name: file.name, previewUrl: URL.createObjectURL(file), hash: await hashFile(file)
-  })));
-  queue.push(...withHashes);
-  renderQueue();
+  const showProgress = newFiles.length > HASH_CHUNK_SIZE;
+  for (let i = 0; i < newFiles.length; i += HASH_CHUNK_SIZE) {
+    const slice = newFiles.slice(i, i + HASH_CHUNK_SIZE);
+    if (showProgress) {
+      dropzone.querySelector('.dropzone-title').textContent = `Preparando... ${Math.min(i + HASH_CHUNK_SIZE, newFiles.length)}/${newFiles.length}`;
+    }
+    const withHashes = await Promise.all(slice.map(async file => ({
+      file, name: file.name, previewUrl: URL.createObjectURL(file), hash: await hashFile(file)
+    })));
+    queue.push(...withHashes);
+    renderQueue();
+  }
+  if (showProgress) dropzone.querySelector('.dropzone-title').textContent = 'Arrastrá imágenes acá o hacé clic para elegirlas';
 }
 
 dropzone.addEventListener('click', () => fileInput.click());
@@ -530,36 +586,64 @@ function makeThumbBase64(file, maxSize = 160) {
   });
 }
 
+// Con cientos de imágenes, convertir TODO a base64 en memoria antes de
+// mandar un solo POST gigante colgaba la pestaña (RAM) y no daba feedback
+// real de progreso. Ahora se procesa y sube en lotes chicos (UPLOAD_CHUNK_SIZE),
+// cada lote se manda apenas está listo — así el navegador nunca acumula más
+// que un puñado de imágenes en base64 a la vez, y cada lote llega al banco
+// aunque uno posterior falle.
+const UPLOAD_CHUNK_SIZE = 25;
+
 startBtn.addEventListener('click', async () => {
   startBtn.disabled = true;
-  const items = [];
+  clearQueueBtn.disabled = true;
+  const total = queue.length;
+  let prepared = 0;
+  let uploaded = 0;
+  let skipped = 0;
+  let chunk = [];
+
+  async function flushChunk() {
+    if (!chunk.length) return;
+    const toSend = chunk;
+    chunk = [];
+    try {
+      await fetch(`${API}/jobs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: toSend }) });
+      uploaded += toSend.length;
+    } catch (err) {
+      skipped += toSend.length;
+    }
+    startBtn.textContent = `Subiendo... ${uploaded + skipped}/${total} (${skipped} con error)`;
+  }
+
   for (let i = 0; i < queue.length; i++) {
     const q = queue[i];
-    startBtn.textContent = `Preparando... (${i + 1}/${queue.length})`;
+    prepared++;
+    startBtn.textContent = `Preparando y subiendo... ${prepared}/${total}`;
     try {
       const [dataBase64, thumbBase64] = await Promise.all([
         withTimeout(fileToBase64(q.file), 20000, q.name),
         withTimeout(makeThumbBase64(q.file), 20000, q.name)
       ]);
-      items.push({ name: q.name, mimeType: q.file.type || 'image/jpeg', dataBase64, thumbBase64, contentHash: q.hash });
-    } catch (err) { /* se omite esta imagen, no traba el resto */ }
+      chunk.push({ name: q.name, mimeType: q.file.type || 'image/jpeg', dataBase64, thumbBase64, contentHash: q.hash });
+    } catch (err) {
+      skipped++;
+    }
+    if (chunk.length >= UPLOAD_CHUNK_SIZE) await flushChunk();
   }
-  if (!items.length) {
-    startBtn.disabled = false;
-    startBtn.textContent = 'Analizar esta tanda';
-    alert('Ninguna imagen se pudo preparar.');
-    return;
-  }
-  try {
-    await fetch(`${API}/jobs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }) });
-    queue = [];
-    renderQueue();
-    startPolling();
-  } catch (err) {
-    alert('No se pudo conectar con el servidor: ' + err.message);
-  } finally {
-    startBtn.disabled = false;
-    startBtn.textContent = 'Analizar esta tanda';
+  await flushChunk();
+
+  queue = [];
+  renderQueue();
+  startBtn.disabled = false;
+  clearQueueBtn.disabled = false;
+  startBtn.textContent = 'Analizar esta tanda';
+
+  if (uploaded > 0) startPolling();
+  if (skipped > 0) {
+    alert(`${uploaded} imágenes enviadas correctamente. ${skipped} no se pudieron preparar o subir (archivo ilegible o corte de conexión) y se omitieron.`);
+  } else if (uploaded === 0) {
+    alert('Ninguna imagen se pudo subir.');
   }
 });
 
@@ -615,6 +699,13 @@ pauseResumeBtn.addEventListener('click', async () => {
   fetchStatus();
 });
 
+document.getElementById('resumePendingBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('resumePendingBtn');
+  btn.disabled = true;
+  await fetch(`${API}/jobs/resume-pending`, { method: 'POST' });
+  startPolling();
+});
+
 function renderProgress(bank) {
   const batch = bank.activeBatch;
   if (!batch) { progressCard.style.display = 'none'; return; }
@@ -661,7 +752,92 @@ async function fetchStatus() {
     badge.style.display = 'inline-flex';
   }
   if (tabLogsPanel.dataset.active === 'true') fetchLogs();
+
+  // Items en pending_analysis/pending_sketch sin ningún batch corriendo —
+  // pasa cuando un retry/tipo-secundario reactiva items de un batch que ya
+  // estaba "completed". El botón "Procesar pendientes" los arranca.
+  const batchRunning = bank.activeBatch && ['running', 'queued'].includes(bank.activeBatch.status);
+  const hasOrphanedPending = !batchRunning && (bank.pendingAnalysis > 0 || bank.pendingSketch > 0);
+  const resumePendingBtn = document.getElementById('resumePendingBtn');
+  resumePendingBtn.style.display = hasOrphanedPending ? 'inline-block' : 'none';
+  if (hasOrphanedPending) {
+    resumePendingBtn.textContent = `Procesar pendientes (${bank.pendingAnalysis + bank.pendingSketch})`;
+  }
 }
+
+// ── Barra "qué está pasando ahora" ── independiente de si activeBatch está
+// "completed" (justo el caso de items huérfanos reanudados) — se guía por
+// GET /activity, que refleja runState en memoria del servidor, no el batch.
+const ACTIVITY_POLL_MS = 4000;
+let activityPollTimer = null;
+let activityTickTimer = null;
+let activityNextCallAt = null;
+
+const PHASE_LABELS = { analyze: 'Analizando', sketch: 'Generando sketch', waiting: 'Esperando cuota' };
+
+function activityThumbUrl(item) {
+  return item ? `${API}/items/${item.id}/thumb` : '';
+}
+
+function renderActivity(activity) {
+  const bar = document.getElementById('activityBar');
+  if (!activity || !activity.active) {
+    bar.setAttribute('data-active', 'false');
+    activityNextCallAt = null;
+    return;
+  }
+  bar.setAttribute('data-active', 'true');
+
+  const thumb = document.getElementById('activityThumb');
+  const placeholder = document.getElementById('activityThumbPlaceholder');
+  if (activity.current) {
+    thumb.src = activityThumbUrl(activity.current);
+    thumb.style.display = 'block';
+    placeholder.style.display = 'none';
+  } else {
+    thumb.style.display = 'none';
+    placeholder.style.display = 'flex';
+  }
+
+  document.getElementById('activityPhaseLabel').textContent = PHASE_LABELS[activity.phase] || activity.phase || '—';
+  document.getElementById('activityName').textContent = activity.current
+    ? activity.current.name
+    : (activity.phase === 'waiting' ? `Próxima imagen: ${activity.upcoming[0]?.name || '—'}` : '—');
+
+  activityNextCallAt = activity.nextCallAt ? new Date(activity.nextCallAt).getTime() : null;
+  updateActivityCountdown();
+
+  const queueEl = document.getElementById('activityQueue');
+  const totalPending = (activity.queueCounts.pendingAnalysis || 0) + (activity.queueCounts.pendingSketch || 0);
+  const shown = activity.upcoming || [];
+  const extra = Math.max(0, totalPending - shown.length);
+  queueEl.innerHTML = shown.map(it => `<div class="activity-queue-item"><img src="${activityThumbUrl(it)}" loading="lazy" /></div>`).join('')
+    + (extra > 0 ? `<div class="activity-queue-more">+${extra}</div>` : '');
+}
+
+function updateActivityCountdown() {
+  const el = document.getElementById('activityCountdown');
+  if (!activityNextCallAt) { el.innerHTML = ''; return; }
+  const remainingMs = activityNextCallAt - Date.now();
+  if (remainingMs <= 0) { el.innerHTML = ''; return; }
+  const secs = Math.ceil(remainingMs / 1000);
+  el.innerHTML = `próxima llamada en<br><b>${secs}s</b>`;
+}
+
+async function fetchActivity() {
+  try {
+    const res = await fetch(`${API}/activity`);
+    renderActivity(await res.json());
+  } catch (_) { /* siguiente tick lo reintenta */ }
+}
+
+// La barra corre siempre, independiente del polling del banco (que se
+// detiene cuando el batch queda "completed") — así sigue mostrando
+// actividad real incluso en el caso de items huérfanos ya reanudados, y se
+// apaga sola cuando /activity dice active:false.
+fetchActivity();
+setInterval(fetchActivity, ACTIVITY_POLL_MS);
+setInterval(updateActivityCountdown, 1000);
 
 // ── Tabs (Banco / Logs) ──
 const tabBankBtn = document.getElementById('tabBankBtn');
@@ -726,6 +902,7 @@ document.getElementById('categoryFilter').addEventListener('change', e => { cate
 document.getElementById('framingFilter').addEventListener('change', e => { framingFilter = e.target.value; fetchStatus(); });
 document.getElementById('statusFilter').addEventListener('change', e => { statusFilter = e.target.value; fetchStatus(); });
 document.getElementById('originFilter').addEventListener('change', e => { originFilter = e.target.value; fetchStatus(); });
+document.getElementById('sortOrder').addEventListener('change', e => { sortOrder = e.target.value; renderGallery(lastBank); });
 let tagSearchTimer = null;
 document.getElementById('tagSearchInput').addEventListener('input', e => {
   clearTimeout(tagSearchTimer);
@@ -755,6 +932,21 @@ function itemMatchesFilters(item) {
     if (!haystack.includes(tagSearch)) return false;
   }
   return true;
+}
+
+// El id trae el timestamp exacto de creación embebido (pose_<ms>_<idx>) —
+// más preciso que createdAt, que es por-BATCH (todas las imágenes de una
+// misma subida comparten el mismo createdAt aunque se hayan guardado en
+// momentos ligeramente distintos dentro del batch).
+function itemTimestamp(item) {
+  const m = /^pose_(\d+)_/.exec(item.id);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+let sortOrder = 'newest';
+function sortItems(items) {
+  const sorted = items.slice().sort((a, b) => itemTimestamp(a) - itemTimestamp(b));
+  return sortOrder === 'newest' ? sorted.reverse() : sorted;
 }
 
 // ── Galería ──
@@ -801,8 +993,26 @@ function thumbHtml(item) {
   `;
 }
 
+// Firma compacta de todo lo que thumbHtml() usa para pintar un item — si no
+// cambió, el nodo del DOM correspondiente no se toca en absoluto.
+function thumbSignature(item) {
+  return [
+    item.status, item.imageType, item.category, item.framing,
+    item.sketchExt, item.wantsSecondary, !!item.secondary,
+    item.secondary ? item.secondary.imageType : '',
+    selectedForSecondary.has(item.id), selectMode
+  ].join('|');
+}
+
+// Reconcilia la grilla contra el estado anterior en vez de destruir y
+// reconstruir todo en cada poll (cada 3s mientras hay un batch activo). Con
+// un batch corriendo, la mayoría de los items no cambian entre dos polls —
+// recrearlos igual causaba parpadeo/pérdida de scroll y hacía sentir la
+// interfaz "trabada" para navegar el detalle mientras se procesa.
+let galleryThumbSignatures = new Map(); // id -> firma actualmente pintada
+
 function renderGallery(bank) {
-  const filtered = bank.items.filter(itemMatchesFilters);
+  const filtered = sortItems(bank.items.filter(itemMatchesFilters));
   document.getElementById('galleryStats').textContent =
     `${bank.total} en el banco · ${bank.doneCount} listas · ${bank.errorCount} con error · mostrando ${filtered.length}`;
 
@@ -810,9 +1020,33 @@ function renderGallery(bank) {
 
   if (!filtered.length) {
     galleryGrid.innerHTML = '<div class="empty-state">Ninguna imagen coincide con estos filtros.</div>';
+    galleryThumbSignatures = new Map();
     return;
   }
-  galleryGrid.innerHTML = filtered.map(thumbHtml).join('');
+
+  // Si el propio conjunto/orden de ids visibles cambió (filtro distinto,
+  // ítems que entraron/salieron), no vale la pena diffear nodo por nodo —
+  // se reconstruye entero una vez y se recuerda la firma para los próximos polls.
+  const existingChildren = Array.from(galleryGrid.children);
+  const existingIds = existingChildren.map(el => el.dataset.id);
+  const newIds = filtered.map(it => it.id);
+  const sameOrder = existingIds.length === newIds.length && existingIds.every((id, i) => id === newIds[i]);
+
+  if (!sameOrder) {
+    galleryGrid.innerHTML = filtered.map(thumbHtml).join('');
+    galleryThumbSignatures = new Map(filtered.map(it => [it.id, thumbSignature(it)]));
+    return;
+  }
+
+  // Mismo conjunto y orden — actualiza in-place solo los que cambiaron.
+  filtered.forEach((item, i) => {
+    const sig = thumbSignature(item);
+    if (galleryThumbSignatures.get(item.id) === sig) return; // sin cambios, no tocar el nodo
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = thumbHtml(item).trim();
+    existingChildren[i].replaceWith(wrapper.firstElementChild);
+    galleryThumbSignatures.set(item.id, sig);
+  });
 }
 
 function updateSelectModeCount() {

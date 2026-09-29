@@ -29,10 +29,27 @@ function getClient() {
   return clientCache;
 }
 
-function sketchError(finishReason, safetyRatings) {
-  const safetyIssues = (safetyRatings || [])
+// El mensaje anterior solo miraba finishReason/safetyRatings del primer
+// candidate y descartaba todo lo demás — con "UNKNOWN" no había forma de
+// saber si candidates venía vacío, si había un promptFeedback.blockReason
+// (bloqueo de contenido a nivel de prompt completo, distinto de SAFETY por
+// candidate), o si el modelo devolvió texto en vez de imagen. Ahora arma un
+// mensaje con todo lo disponible y además loguea el response crudo
+// (recortado) para poder diagnosticar el patrón real en vez de adivinar.
+function sketchError(response) {
+  const candidates = response.candidates || [];
+  const firstCandidate = candidates[0];
+  const finishReason = firstCandidate?.finishReason;
+  const safetyRatings = firstCandidate?.safetyRatings || [];
+  const promptFeedback = response.promptFeedback;
+
+  const safetyIssues = safetyRatings
     .filter(r => r.blocked || r.probability === 'HIGH' || r.probability === 'MEDIUM')
     .map(r => r.category);
+
+  if (promptFeedback?.blockReason) {
+    return new Error(`Prompt bloqueado por filtros de contenido de Google (blockReason: ${promptFeedback.blockReason}).`);
+  }
   if (finishReason === 'SAFETY' || safetyIssues.length > 0) {
     return new Error(
       'Prompt bloqueado por filtros de contenido de Google' +
@@ -40,7 +57,15 @@ function sketchError(finishReason, safetyRatings) {
       '.'
     );
   }
-  return new Error(`El modelo no generó imagen (finishReason: ${finishReason || 'UNKNOWN'}).`);
+  if (!candidates.length) {
+    return new Error('El modelo no devolvió ningún candidate (respuesta vacía).');
+  }
+
+  // El modelo respondió pero solo con texto, sin imagen — capturamos ese
+  // texto porque suele explicar el motivo real (ej. rechazo explicado).
+  const textParts = (firstCandidate.content?.parts || []).filter(p => p.text).map(p => p.text).join(' ').trim();
+  const textSnippet = textParts ? ` Texto devuelto: "${textParts.slice(0, 200)}"` : '';
+  return new Error(`El modelo no generó imagen (finishReason: ${finishReason || 'UNKNOWN'}).${textSnippet}`);
 }
 
 async function generateSketch(buffer, mimeType, masterPromptText, { model = MODEL_PRIMARY, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
@@ -94,8 +119,32 @@ async function generateSketch(buffer, mimeType, masterPromptText, { model = MODE
     }
   }
 
-  const firstCandidate = candidates[0];
-  throw sketchError(firstCandidate?.finishReason, firstCandidate?.safetyRatings);
+  logFailedResponse(response);
+  throw sketchError(response);
+}
+
+// Log aparte (fuera de bank.json, para no inflarlo) con el response crudo
+// cada vez que no hay imagen — permite diagnosticar el patrón real
+// (¿siempre el mismo blockReason? ¿siempre las mismas poses?) en vez de
+// adivinar a partir de un mensaje de una sola línea.
+const fs = require('fs');
+const path = require('path');
+const store = require('./store');
+function logFailedResponse(response) {
+  try {
+    const logDir = path.join(store.DATA_DIR, 'failed-sketch-logs');
+    fs.mkdirSync(logDir, { recursive: true });
+    const file = path.join(logDir, `${Date.now()}.json`);
+    fs.writeFileSync(file, JSON.stringify({
+      at: new Date().toISOString(),
+      promptFeedback: response.promptFeedback || null,
+      candidates: (response.candidates || []).map(c => ({
+        finishReason: c.finishReason,
+        safetyRatings: c.safetyRatings,
+        textParts: (c.content?.parts || []).filter(p => p.text).map(p => p.text)
+      }))
+    }, null, 2));
+  } catch (_) { /* el log es diagnóstico, nunca debe romper el flujo real */ }
 }
 
 // Intenta MODEL_PRIMARY primero. Ante 429/503 relanza el error (lo maneja el

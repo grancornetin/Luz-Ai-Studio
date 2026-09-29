@@ -29,14 +29,14 @@ echo.
 echo  El motor ya esta prendido en otra ventana (puerto 3131 ocupado).
 echo  Solo abro la pagina en el navegador, sin abrir un segundo motor.
 echo.
-start "" "http://localhost:3131"
+start "" "http://localhost:3131/campaign-trainer.html"
 echo  Podes cerrar esta ventana.
 pause
 exit /b 0
 
 :START_SERVER
 
-start "" "http://localhost:3131"
+start "" "http://localhost:3131/campaign-trainer.html"
 node server.js
 if errorlevel 1 goto SERVER_ERROR
 exit /b 0

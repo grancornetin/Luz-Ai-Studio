@@ -2,12 +2,127 @@
 
 > **Para qué sirve este documento**: si este chat creció demasiado, o el usuario
 > abre un chat nuevo para ahorrar tokens, este archivo debe alcanzar para
-> retomar el trabajo de Photodump / `outfit_multi_look` sin perder acuerdos ni
-> hallazgos. Se actualiza cada vez que hay un cambio de estado relevante
-> (nueva fase completada, bug encontrado, decisión tomada). No reemplaza el
-> resto del manifiesto — es el índice de "dónde vamos" que apunta al resto.
+> retomar el trabajo de Photodump sin perder acuerdos ni hallazgos. Se
+> actualiza cada vez que hay un cambio de estado relevante (nueva fase
+> completada, bug encontrado, decisión tomada). No reemplaza el resto del
+> manifiesto — es el índice de "dónde vamos" que apunta al resto.
 
-Última actualización: 2026-07-22.
+Última actualización: 2026-09-04.
+
+## Cambio de fondo (jul→sep 2026) — el Director Creativo pasó de prototipo aislado a motor en producción
+
+Entre el 22-jul (última actualización de este documento hasta hoy) y ahora, el
+proyecto paralelo descrito en `13_photodump_trainer_banco_y_director.md`
+(banco de +1000 fotos reales + Director Creativo con Gemini, que en su
+momento era "aislado, no toca producción todavía") **se integró a la app
+real y se convirtió en el motor principal de las recetas más complejas**.
+Quien retome desde acá debe saber esto ANTES de leer el resto de esta
+sección, porque buena parte de lo que sigue (bugs 1-6, `outfit_multi_look`
+aprobada) sigue siendo válido tal cual, pero ya no es "todo lo que hay" —
+hay una segunda mitad del proyecto que este documento no cubría.
+
+**Qué es el Director Creativo hoy** (código en `src/modules/photodump/director/`):
+un motor de razonamiento en 2 llamadas a Gemini (Decidir → Redactar, ver
+`13_...md` sección 4 para el porqué de 2 llamadas) que arma el set completo
+de shots consultando un banco real de fotos de creadoras analizadas
+(pose/gesto/escenario real, no generado), en vez de que cada receta tenga su
+propio prompt-builder artesanal shot por shot. Corre server-side
+(`api/gemini/content.ts`, acciones `photodumpDirectorStart`/`photodumpDirectorStatus`,
+fusionadas ahí por el límite de 12 funciones serverless de Vercel Hobby) con
+patrón start→polling vía QStash (`director/client.ts`) porque una sola
+respuesta HTTP síncrona con las 2 llamadas a Gemini superaba el tiempo
+sostenible de una función serverless (504 real en logs, resuelto 7-ago).
+
+**3 variantes del director coexisten hoy, cada una con su propósito**:
+1. **`categorized`** (el original) — shots de un enum fijo por receta
+   (`recipeContracts.ts`: hoy solo `outfit_night_out`, con sus 10
+   `nightMomentTypes` + `mirror_check` fijo). El director elige y redacta
+   dentro de ese catálogo cerrado.
+2. **`open_bank`** (`director/openBank/`, feat 12-ago) — bypass experimental
+   sin categorías fijas: el director compone libremente qué shots tiene
+   sentido generar, sin un catálogo predefinido. Nació como modo aislado y
+   reversible dentro de `outfit_night_out` (`refs.directorMode === 'open_bank'`
+   vs `'categorized'`, ver `outfitNightOut/index.ts` función `tryDirector`).
+3. **`generic`** (`director/generic/`, feat 3-sep) — sucesor de `open_bank`,
+   pero sin ningún conocimiento hardcodeado de receta (`open_bank` todavía
+   hablaba de "venue", "isMainVenue", núcleo narrativo de noche). Cada
+   receta declara su propio `RecipeDirectorContract` (núcleo narrativo,
+   impulsos psicológicos, si usa anclaje de lugar compartido) y el director
+   genérico solo lee ese contrato — nunca tiene un `if (recipe === 'x')`
+   adentro. **`outfit_check` es la primera y única receta que usa este modo
+   hoy** (`photodumpDirectorService.ts` línea ~1074).
+
+`outfit_night_out` sigue con motor propio en `recipes/outfitNightOut/`
+(`categorized`/`open_bank`) — **no** migró al director `generic` todavía, pese
+a que un comentario de diseño en `genericTypes.ts` habla de que
+"`outfit_night_out` se retira" (es la intención de que el director genérico no
+dependa de su vocabulario, no que la receta se haya eliminado — sigue activa).
+
+**Reglas duras compartidas** (`director/hardRules.ts`, portado desde
+`scripts/photodump-director/hardRules.js`, generalizado de vocabulario en
+sep-2026 de "venue" a "lugar" para servir a cualquier receta): identidad
+real de la protagonista, fidelidad exacta de outfit/prenda subida, "qué es
+reutilizable de un candidato del banco" (pose/gesto/encuadre sí, escenario/outfit/comida
+específicos no), continuidad de lugar/mobiliario entre shots del mismo set.
+Hallazgo reciente importante (`c178608`, 4-sep, "prueba 4 de outfit_check"):
+**la ropa que lleva puesta la foto de referencia de identidad/avatar NUNCA
+es el outfit** — si no se instruye explícitamente qué ropa llevar en cada
+shot, el generador copia la ropa visible en la foto de identidad en vez del
+outfit real subido por el usuario. Regla 2bis agregada a `hardRules.ts` por
+este motivo.
+
+**~40 commits de refinamiento** entre el 7-ago y hoy (ver `git log` sobre
+`src/modules/photodump/director/` para el detalle shot por shot) resolvieron,
+entre otros: timeouts/504 y reintentos por cuota compartida de Gemini,
+continuidad de venue/mobiliario entre shots (el ancla se fija solo con el
+primer shot del venue principal, no se sobreescribe), geometría de brazo en
+selfies, prohibición de lenguaje inferencial/narrativo en el prompt final,
+prohibición de pose "mugshot" y de sesgo de "llegada" como marco narrativo
+por defecto, coherencia social en shots grupales, contrapicado no deseado en
+shots de cuerpo completo con rostro visible, CSP bloqueando fetch de data URL
+(rompía continuidad de venue), y — más recientemente (3/9) — la
+generalización a `outfit_check` con composición libre de 1-4 fotos.
+
+**Qué significa esto para retomar**: si el usuario reporta un problema en
+`outfit_check` o en el modo `open_bank`/`generic` de `outfit_night_out`, el
+código a mirar primero es `src/modules/photodump/director/` (client, hardRules,
+recipeContracts, generic/, openBank/) y `photodumpDirectorService.ts` — no
+el manifiesto narrativo de recetas de abajo, que describe el diseño manual
+original pre-director. Este documento no repite el detalle de cada uno de
+esos ~40 commits — para eso está `git log` sobre esa carpeta.
+
+## Cambio reciente — outfit_reveal_basic: ronda de fixes de septiembre (banco real conectado)
+
+Tras la primera integración (ver sección más abajo, 22-jul) y una primera
+tanda de bugs corregidos ese mismo día, `outfit_reveal_basic` recibió una
+segunda ronda de fixes en septiembre, ya con el banco real de poses
+conectado (no solo el banco de 6 variantes original):
+
+- **`41c4ed6`**: mismo avatar/outfit siempre daba la misma combinación de
+  variantes entre sesiones — la selección determinística por seed necesitaba
+  más entropía real de sesión, no solo del avatar/outfit.
+- **`d13fc49`**: 2 variantes nuevas del banco real + poses citadas del
+  openbank (en vez de solo el banco fijo de 6 de `renderVariants.ts`).
+- **`5c80697`**: el espejo NO tiene que estar en una habitación — el prompt
+  asumía implícitamente un dormitorio/baño; se corrigió para permitir
+  cualquier superficie reflectante coherente con el registro real del
+  outfit (vitrina, espejo de pasillo, etc), no solo espacios domésticos
+  cerrados.
+- **`a390ebb`**: el lugar debe ser coherente con el registro real del outfit
+  (ej. no generar un espejo de gimnasio para un outfit de salida de noche).
+- **`b3080eb`** (hoy, 4-sep): desconecta HPI de las variantes — el sistema de
+  HPI (Human Photo Intelligence) no sabía que el shot en cuestión era una
+  selfie y aportaba instrucciones de pose contradictorias; mismo tipo de
+  bug de fondo que motivó `allowedFamilies` en `outfit_multi_look` (ver
+  sección Bug de `curated_ideas` más abajo) — HPI eligiendo entre familias
+  sin filtro de contexto sigue siendo la causa raíz recurrente cuando
+  aparece contradicción de pose en cualquier receta.
+
+**Pendiente**: `outfit_reveal_basic` sigue sin la confirmación visual final
+explícita del usuario mencionada en la sección "Qué falta" de más abajo —
+las rondas de fixes de septiembre sugieren que el usuario SÍ la está usando
+y reportando problemas reales encontrados en uso, pero no hay una entrada
+tipo "aprobada" como la que sí tiene `outfit_multi_look`.
 
 ## Cambio reciente — outfit_reveal_basic: shots de variación, no textos fijos
 
@@ -566,38 +681,129 @@ ronda 3). El usuario confirmó explícitamente: "esta receta y sub
 intenciones quedan aprobadas". No se requieren más cambios en
 `outfit_multi_look` salvo que aparezca un problema nuevo al usarla.
 
-## 6. Qué falta (pendientes explícitos)
+## 6. Qué falta (pendientes explícitos, actualizado 2026-09-04)
 
-1. **Confirmar visualmente `outfit_reveal_basic`** — generar un set real en
-   la app (avatar + 1 o más prendas) y revisar los 3 shots: mirror check
-   completo, POV genuino sin rostro, close-up. Todavía sin ninguna
-   confirmación visual del usuario.
-2. **Integrar la última receta Fashion** (`outfit_night_out`) a la app real
-   — mismo patrón estructural. Es la más compleja de las 3 (7-8 shots, arco
-   narrativo con venue, continuidad de mundo entre escenas) — dejarla para
-   el final fue la decisión correcta.
-3. Agrupar recetas por categoría (Fashion/Shoes/Beauty) en `PDStep1.tsx` —
-   explícitamente diferido hasta que las 3 recetas Fashion estén integradas
-   y probadas. Con 2 de 3 listas, todavía falta `outfit_night_out`.
-3. Formalizar el bloque de composición UGC casual (Finding 005) en
-   `03_photodump_recipe_architecture.md` sección 19, como parte oficial del
-   perfil `iphone_camera_roll` — mencionado en la bitácora pero nunca
-   escrito ahí. Tarea de limpieza de documentación, no bloqueante.
-4. Test B y C (sin avatar / con escenas cargadas) de `outfit_night_out` y
-   `outfit_reveal_basic` — no iniciados, relevante recién cuando se integren.
+**Nota**: esta sección quedó desactualizada entre jul-sep porque el trabajo
+real se movió al Director Creativo (ver sección de arriba) en vez de seguir
+el plan original "integrar receta por receta con motor propio". Los puntos
+1-4 originales (abajo, tachados en espíritu) ya no reflejan el plan vigente
+— se conservan por trazabilidad, con nota de qué pasó realmente en cada uno.
+
+1. ~~Confirmar visualmente `outfit_reveal_basic`~~ → en uso real: recibió una
+   segunda ronda completa de fixes en septiembre (ver sección de arriba),
+   evidencia indirecta de que el usuario la está probando activamente. No
+   hay una entrada explícita de "aprobada" como sí tiene `outfit_multi_look`
+   — si se retoma este hilo, preguntar directamente si ya la considera
+   estable o si sigue apareciendo algo nuevo.
+2. ~~Integrar `outfit_night_out` con motor propio~~ → en cambio, se conectó
+   al Director Creativo (`7ce6b45`, 7-ago) con modos `categorized` y
+   `open_bank`, y siguió recibiendo refinamiento activo (~40 commits,
+   última entrada relevante `28c0df8`, 2-sep). Está en producción, no es
+   un pendiente — puede seguir apareciendo un bug puntual nuevo, pero la
+   integración en sí ya ocurrió.
+3. **`outfit_check`** (no existía como pendiente en la versión anterior de
+   este documento) recibió su propia integración al Director Creativo, esta
+   vez en su versión **genérica** (`director/generic/`, `9a8fa42`, 3-sep) —
+   primera receta en usar ese modo. Sigue activo: `c178608` (4-sep) encontró
+   2 huecos reales en `hardRules.ts` con la "prueba 4" de esta receta. Si se
+   retoma este hilo, preguntar si el usuario ya corrió una "prueba 5" o
+   similar y qué encontró.
+4. Agrupar recetas por categoría (Fashion/Shoes/Beauty) en `PDStep1.tsx` —
+   sigue sin hacerse, y sigue siendo de baja prioridad frente al trabajo real
+   (refinar el Director Creativo receta por receta).
+5. Formalizar el bloque de composición UGC casual (Finding 005) en
+   `03_photodump_recipe_architecture.md` sección 19 — tarea de limpieza de
+   documentación, no bloqueante, sigue sin hacerse.
+6. Test B y C (sin avatar / con escenas cargadas) de `outfit_night_out` y
+   `outfit_reveal_basic` — no iniciados. Con ambas recetas ya en producción
+   y recibiendo prueba real de usuario, probablemente de menor prioridad que
+   seguir el ciclo real de "usuario prueba → bug → fix" que se viene dando.
+7. **Este mismo documento (`12_ESTADO_ACTUAL`) y `13_photodump_trainer...`
+   necesitan una fusión real**, no solo esta sección de parche — `13` sigue
+   describiendo el Director como "proyecto paralelo que no toca producción
+   todavía", lo cual ya no es cierto. La sección 5 de `13` ("El cruce
+   pendiente") también puede estar resuelta o parcialmente resuelta —
+   revisar contra el código real de `recipeContracts.ts` antes de asumir que
+   sigue pendiente tal cual está escrita ahí.
+
+## Cambio reciente — placeholders de las cards del Paso 1 (2026-09-14)
+
+**Nota**: este cambio es de otro hilo de trabajo (UI de selección de receta,
+`PhotodumpModule.tsx` + `PDStep1.tsx`), en paralelo al trabajo del Director
+Creativo descrito arriba. No toca prompts ni motor de generación — se
+documenta acá porque este archivo es el índice general de "dónde vamos".
+
+**Qué se hizo**: las cards de selección de receta (Paso 1) mostraban solo un
+gradiente de color como placeholder. Se armó una cascada de 3 niveles para la
+imagen de preview de cada card:
+
+1. **Sets propios del usuario** (`previewsByRecipe`, ya existía) — si el
+   usuario tiene generaciones guardadas de esa receta en su biblioteca, esas
+   se muestran siempre primero.
+2. **Semillas globales curadas** (`seedPreviews.ts`, nuevo) — imágenes de
+   ejemplo iguales para todos los usuarios, para recetas donde el usuario
+   todavía no generó nada propio. Viven en
+   `src/modules/photodump/assets/recipe-previews/<recipe>/` — el usuario
+   pega archivos ahí directamente (cualquier nombre, png/jpg/webp) y
+   `import.meta.glob` los levanta solo, sin tocar código. Máximo 3 por
+   receta. Carpeta vacía = sigue en gradiente.
+3. **Gradiente** (default de siempre en `RecipeCard.tsx`) — si no hay ni lo
+   uno ni lo otro.
+
+Merge de las dos fuentes en `PhotodumpModule.tsx` (`displayPreviewsByRecipe`,
+`useMemo`): semillas globales como base, sets del usuario encima — lo propio
+siempre gana. Imágenes fuente convertidas a webp calidad 82 (de forma manual,
+puntual, con `sharp` instalado fuera del repo en un temp — no se agregó
+`sharp` como dependencia del proyecto).
+
+**Alcance confirmado con el usuario (recetas activas, 6 + free)**: `unboxing`,
+`outfit_check`, `outfit_haul`, `outfit_week`, `outfit_multi_look`,
+`outfit_reveal_basic`, más `free`. **`outfit_night_out` quedó explícitamente
+fuera** — el usuario aclaró que ya no la considera confirmada por ahora, así
+que no tiene carpeta de semillas (importante: no asumir que sigue en el grupo
+de recetas activas de este mini-proyecto de UI, aunque en el resto del
+manifiesto — Director Creativo — sí sigue activa en producción; son dos
+alcances distintos, no contradictorios).
+
+**Estado de las carpetas de semillas al día de hoy** (deploy `e28952f`,
+producción https://luz-ia-studio-1.vercel.app):
+- Con imágenes reales: `unboxing` (5), `outfit_check` (3), `outfit_week` (3),
+  `outfit_reveal_basic` (3).
+- Vacías, todavía en gradiente: `outfit_haul`, `outfit_multi_look`, `free`.
+
+**Para completarlas**: no requiere código — el usuario pega imágenes en la
+carpeta de la receta que falte y se pide optimizar (webp)/build/deploy de
+nuevo. Sin acción pendiente de mi parte hasta que eso pase.
+
+**Pausado a pedido explícito del usuario — proporción de las cards (3:4)**:
+el usuario propuso acercar el aspect ratio de las cards a 3:4 para que estas
+imágenes nuevas se vean mejor, pero decidió esperar: *"esperemos entonces
+antes de cambiar la proporcion, esperemos el rediseño de la app."* No tocar
+el aspect ratio de `RecipeCard`/`PDStep1` hasta que el rediseño de shell/PWA
+(ver `project_pwa_mobile_shell` en memoria, y el prompt de handoff para el
+otro agente) esté resuelto — es una decisión de secuencia, no técnica.
 
 ## 7. Cómo seguir si este documento se está leyendo desde un chat nuevo
 
-1. Preguntar al usuario si ya probó lo pendiente de la sección 6 (puntos 1 y
-   2 especialmente — son los más recientes y urgentes).
-2. Si reporta un problema nuevo en `outfit_multi_look`, diagnosticar contra
-   `src/modules/photodump/recipes/outfitMultiLook/` y las 3 intercepciones en
-   `photodumpDirectorService.ts` (buscar `outfit_multi_look` en ese archivo)
-   — no releer el manifiesto narrativo completo desde cero.
-3. Si el usuario pide continuar con las recetas 4/5 (integrar
-   `outfit_night_out`/`outfit_reveal_basic`), usar este mismo patrón de
-   carpeta (`recipes/outfitMultiLook/` como plantilla estructural) y seguir
-   el mismo orden: types → manifest/anchor → contracts → prompt → index →
-   intercepción en Director → UI → preset adapter → verificación end-to-end.
-4. Actualizar este archivo (sección 5 con nuevos bugs, sección 6 marcando
-   pendientes como resueltos) cada vez que se cierre un ciclo de prueba real.
+1. Preguntar al usuario qué receta está probando o qué problema encontró
+   recién — el patrón de trabajo actual es iterativo (usuario prueba en la
+   app real → reporta bug puntual → se corrige), no "integrar receta X
+   pendiente" como asumía la versión anterior de este documento.
+2. Si el problema es de **`outfit_multi_look`**: diagnosticar contra
+   `src/modules/photodump/recipes/outfitMultiLook/` y las intercepciones en
+   `photodumpDirectorService.ts` (buscar `outfit_multi_look` ahí). Receta
+   aprobada y estable — motor propio, no usa el Director Creativo.
+3. Si el problema es de **`outfit_night_out`, `outfit_check`, o el modo
+   `open_bank`/`generic`**: el código a mirar primero es
+   `src/modules/photodump/director/` (client.ts, hardRules.ts,
+   recipeContracts.ts, generic/, openBank/) — esta es la parte más activa
+   del proyecto hoy, revisar primero `git log` reciente sobre esa carpeta
+   antes de asumir causa.
+4. Si el problema es de **`outfit_reveal_basic`**: motor propio en
+   `recipes/outfitRevealBasic/`, pero ya cita poses reales del banco
+   (`openbank`) en sus variantes — no es 100% independiente del banco real,
+   revisar ambos lados si el síntoma es de pose/gesto contradictorio.
+5. Actualizar este archivo (nueva sección arriba con fecha, sección 6
+   marcando pendientes como resueltos) cada vez que se cierre un ciclo real
+   de prueba — y considerar en algún momento fusionarlo de verdad con `13`
+   en vez de seguir agregando parches (ver pendiente 7 arriba).

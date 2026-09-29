@@ -20,8 +20,18 @@ function ensureDirs() {
   });
 }
 
+// El sufijo temporal incluye PID + contador + random: si dos saveBank()
+// caen casi al mismo tiempo (ej. dos runBatch corriendo en paralelo por el
+// bug de concurrencia que launchRunBatch corrige, u otra cola futura que se
+// olvide de chequear runState), un nombre de .tmp compartido hacía que la
+// segunda escritura pisara el archivo temporal de la primera a mitad de
+// camino, o que el rename() de una fallara porque la otra ya había movido
+// el archivo — resultado: bank.json corrupto o con una actualización
+// perdida en silencio. Con nombre único por escritura, cada una tiene su
+// propio archivo hasta el rename final (atómico a nivel de SO).
+let writeCounter = 0;
 function atomicWrite(filePath, content) {
-  const tmp = filePath + '.tmp';
+  const tmp = `${filePath}.${process.pid}.${++writeCounter}.${crypto.randomBytes(4).toString('hex')}.tmp`;
   fs.writeFileSync(tmp, content, 'utf8');
   fs.renameSync(tmp, filePath);
 }

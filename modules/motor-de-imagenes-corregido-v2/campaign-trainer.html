@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8" />
-<title>Entrenador Photodump — Luz IA</title>
+<title>Entrenador de Campañas — Luz IA</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
   :root {
@@ -314,6 +314,11 @@
   .modal-title { font-size: 14px; font-weight: 650; }
   .modal-body { padding: 20px; }
   .modal-img { width: 100%; max-height: 320px; object-fit: contain; border-radius: 10px; margin-bottom: 16px; background: var(--bg-elevated); }
+  .modal-world-concept {
+    background: var(--accent-soft); border: 1px solid var(--accent-dim); border-radius: var(--radius-sm);
+    padding: 12px 14px; margin-bottom: 14px; font-size: 13px; color: var(--text); line-height: 1.5;
+  }
+  .modal-world-concept b { color: var(--accent); display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 4px; }
   pre.json-view {
     background: var(--bg-elevated); border: 1px solid var(--border-soft); border-radius: var(--radius-sm);
     padding: 14px; font-size: 11.5px; line-height: 1.6; overflow-x: auto; color: var(--text-dim);
@@ -337,15 +342,15 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>Entrenador Photodump</h1>
-    <div class="sub">Herramienta interna — analiza imágenes reales para extraer conocimiento de dirección reutilizable.</div>
+    <h1>Entrenador de Campañas</h1>
+    <div class="sub">Herramienta interna — analiza referencias de campañas (fotos reales o generadas con prompt) para extraer el "concepto de mundo" reutilizable de cada una.</div>
   </header>
 
   <!-- Ingesta: siempre visible, para poder sumar tandas nuevas sin salir del banco -->
   <section class="card card-compact">
     <div class="dropzone" id="dropzone">
       <div class="dropzone-title">Arrastrá imágenes acá o hacé clic para elegirlas</div>
-      <div class="dropzone-sub">JPG, PNG o WEBP · podés seleccionar cientos a la vez · se suman al banco existente</div>
+      <div class="dropzone-sub">JPG, PNG o WEBP · fotos de campaña reales o capturas con prompt incrustado · se suman al banco existente</div>
     </div>
     <input type="file" id="fileInput" accept="image/*" multiple />
     <div class="skipped-notice" id="skippedNotice" style="display:none"></div>
@@ -375,19 +380,6 @@
     <div id="rateLimitBanner"></div>
   </section>
 
-  <!-- Re-análisis liviano: solo agrega arquetipos + campos de filtrado nuevos a
-       imágenes ya analizadas — no reprocesa el resto del análisis. -->
-  <section class="card card-compact" id="enrichmentCard" style="display:none">
-    <div class="progress-header">
-      <div>
-        <div class="dropzone-title" style="margin-bottom:2px">Re-análisis liviano (arquetipos + campos de filtrado)</div>
-        <div class="dropzone-sub" id="enrichmentSub">—</div>
-      </div>
-      <button class="btn-secondary" id="enrichmentBtn">Actualizar banco existente</button>
-    </div>
-    <div class="progress-track" id="enrichmentTrack" style="display:none"><div class="progress-fill" id="enrichmentFill"></div></div>
-  </section>
-
   <!-- Banco completo (todas las tandas juntas) + Logs -->
   <section class="card">
     <div class="tab-bar">
@@ -397,7 +389,7 @@
 
     <div class="tab-panel" id="tabBankPanel" data-active="true">
       <div class="gallery-header">
-        <div class="gallery-title">Banco de imágenes</div>
+        <div class="gallery-title">Banco de campañas</div>
         <div class="gallery-stats"><span id="curationStats">—</span></div>
       </div>
       <div class="filter-bar" style="margin-bottom:14px">
@@ -406,16 +398,23 @@
         <div class="filter-chip" data-filter="review" data-value="approved">Aprobadas</div>
         <div class="filter-chip" data-filter="review" data-value="rejected">Descartadas</div>
         <div class="filter-chip" data-filter="review" data-value="error">Con error</div>
+        <select class="filter-select" id="relevanceFilter">
+          <option value="">Toda relevancia</option>
+          <option value="campaña_de_marca">Campaña de marca</option>
+          <option value="contenido_personal_sin_marca">Contenido personal (sin marca)</option>
+          <option value="no_determinable">No determinable</option>
+        </select>
         <select class="filter-select" id="categoryFilter">
           <option value="">Todas las categorías</option>
         </select>
-        <select class="filter-select" id="companionFilter">
-          <option value="">Con/sin acompañante</option>
-          <option value="true">Con acompañante</option>
-          <option value="false">Sin acompañante</option>
+        <select class="filter-select" id="formClassFilter">
+          <option value="">Toda forma de producto</option>
         </select>
-        <select class="filter-select" id="archetypeFilter">
-          <option value="">Todos los arquetipos</option>
+        <select class="filter-select" id="emotionFilter">
+          <option value="">Todos los ángulos emocionales</option>
+        </select>
+        <select class="filter-select" id="audienceFilter">
+          <option value="">Todas las audiencias</option>
         </select>
         <button class="btn-ghost" id="selectAllBtn" style="margin-left:auto">Seleccionar todas (según filtro)</button>
         <button class="btn-ghost" id="selectNoneBtn" style="display:none">Deseleccionar todas</button>
@@ -439,6 +438,7 @@
   <span class="bulk-count" id="bulkCount">0 seleccionadas</span>
   <button class="btn-secondary" id="bulkApprove">Aprobar</button>
   <button class="btn-secondary" id="bulkReject">Descartar</button>
+  <button class="btn-secondary" id="bulkRetry">Reintentar</button>
   <button class="btn-danger-ghost" id="bulkDelete">Eliminar</button>
   <button class="btn-ghost" id="bulkClear">Cancelar</button>
 </div>
@@ -451,13 +451,15 @@
     </div>
     <div class="modal-body">
       <img class="modal-img" id="modalImg" alt="" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7" />
+      <div class="modal-world-concept" id="modalWorldConcept" style="display:none"><b>World concept</b><span id="modalWorldConceptText"></span></div>
+      <div class="modal-world-concept" id="modalSetCoherence" style="display:none"><b>Coherencia de set</b><span id="modalSetCoherenceText"></span></div>
       <pre class="json-view" id="modalJson"></pre>
     </div>
   </div>
 </div>
 
 <script>
-const API = '/api/photodump-trainer';
+const API = '/api/campaign-trainer';
 const POLL_MS = 3000;
 
 const dropzone = document.getElementById('dropzone');
@@ -478,10 +480,12 @@ let pollTimer = null;
 let lastBankStatus = null;
 let reviewFilter = 'all';
 let categoryFilter = '';
-let companionFilter = '';
-let archetypeFilter = '';
+let emotionFilter = '';
+let audienceFilter = '';
+let relevanceFilter = '';
+let formClassFilter = '';
 let selectedIds = new Set();
-let lastBank = { items: [] }; // snapshot del último /status recibido, para recalcular "seleccionar según filtro"
+let lastBank = { items: [] };
 
 // ── Hash de contenido (para detectar duplicados antes de subir) ──
 
@@ -506,9 +510,6 @@ function renderQueue() {
 async function addFiles(fileList) {
   const files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
 
-  // Chequeo rápido por nombre de archivo PRIMERO (no requiere leer/hashear el binario) —
-  // así al reenviar un lote de 300 imágenes tras un corte, las ya analizadas se descartan
-  // al instante en vez de esperar a que se calcule el hash de cada una.
   const namesRes = await fetch(`${API}/check-duplicates`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ names: files.map(f => f.name) })
@@ -526,7 +527,6 @@ async function addFiles(fileList) {
   renderQueue();
   if (skippedCount > 0) showSkippedNotice(skippedCount);
 
-  // Chequeo por hash de contenido sobre lo que queda (mismo archivo con otro nombre), no bloquea, solo avisa.
   const res = await fetch(`${API}/check-duplicates`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ hashes: withHashes.map(q => q.hash) })
@@ -559,9 +559,6 @@ dropzone.addEventListener('drop', e => addFiles(e.dataTransfer.files));
 
 clearQueueBtn.addEventListener('click', () => { queue = []; renderQueue(); });
 
-// Toda promesa de preparación tiene un techo de tiempo — sin esto, un solo archivo
-// corrupto o un onload/onerror que nunca dispara (pasa con algunos JPG dañados) cuelga
-// el Promise.all de esa iteración para siempre, y con él TODO el resto del lote detrás.
 function withTimeout(promise, ms, label) {
   return Promise.race([
     promise,
@@ -596,8 +593,6 @@ function makeThumbBase64(file, maxSize = 160) {
   });
 }
 
-// fetch no expone progreso de subida de forma simple — XMLHttpRequest sí, vía upload.onprogress.
-// Con lotes de cientos de MB esto es la diferencia entre "se ve trabado" y "se ve avanzando".
 function uploadWithProgress(url, bodyString, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -619,50 +614,92 @@ function uploadWithProgress(url, bodyString, onProgress) {
   });
 }
 
+// Lotes grandes (100+ fotos, 200MB+) fallaban con "falló la conexión con el servidor" porque
+// el flujo viejo preparaba TODO el lote primero y recién después lo mandaba entero en un único
+// request — si algo se cortaba a mitad de camino (timeout del navegador o del socket) no había
+// forma de saber qué había llegado y qué no, y había que reintentar todo desde cero. Ahora se
+// prepara y sube de a BLOQUES chicos: cada bloque que llega al servidor queda guardado en el
+// banco aunque un bloque posterior falle, y cada bloque fallido se reintenta unas pocas veces
+// antes de saltarlo (en vez de perder toda la tanda).
+const UPLOAD_CHUNK_SIZE = 20;
+const CHUNK_MAX_RETRIES = 3;
+
+function chunkArray(arr, size) {
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+  return chunks;
+}
+
+async function prepareItem(q) {
+  const [dataBase64, thumbBase64] = await Promise.all([
+    withTimeout(fileToBase64(q.file), 20000, q.name),
+    withTimeout(makeThumbBase64(q.file), 20000, q.name)
+  ]);
+  return { name: q.name, mimeType: q.file.type || 'image/jpeg', dataBase64, thumbBase64, contentHash: q.hash };
+}
+
+async function uploadChunkWithRetry(items, onProgress) {
+  let attempt = 0;
+  while (true) {
+    try {
+      await uploadWithProgress(`${API}/jobs`, JSON.stringify({ items }), onProgress);
+      return true;
+    } catch (err) {
+      attempt++;
+      if (attempt >= CHUNK_MAX_RETRIES) return false;
+      await new Promise(r => setTimeout(r, 2000 * attempt));
+    }
+  }
+}
+
 startBtn.addEventListener('click', async () => {
   startBtn.disabled = true;
-  const items = [];
+  const chunks = chunkArray(queue, UPLOAD_CHUNK_SIZE);
   const failedNames = [];
-  for (let i = 0; i < queue.length; i++) {
-    const q = queue[i];
-    startBtn.textContent = `Preparando... (${i + 1}/${queue.length})`;
-    try {
-      const [dataBase64, thumbBase64] = await Promise.all([
-        withTimeout(fileToBase64(q.file), 20000, q.name),
-        withTimeout(makeThumbBase64(q.file), 20000, q.name)
-      ]);
-      items.push({ name: q.name, mimeType: q.file.type || 'image/jpeg', dataBase64, thumbBase64, contentHash: q.hash });
-    } catch (err) {
-      failedNames.push(q.name); // se salta esta imagen en vez de trabar el resto del lote
+  const failedChunkRanges = [];
+  let uploadedCount = 0;
+
+  for (let c = 0; c < chunks.length; c++) {
+    const chunk = chunks[c];
+    const items = [];
+    for (let i = 0; i < chunk.length; i++) {
+      const q = chunk[i];
+      startBtn.textContent = `Preparando bloque ${c + 1}/${chunks.length} (${i + 1}/${chunk.length})...`;
+      try {
+        items.push(await prepareItem(q));
+      } catch (err) {
+        failedNames.push(q.name);
+      }
+    }
+
+    if (!items.length) continue;
+
+    const ok = await uploadChunkWithRetry(items, (sentMB, totalMB, pct) => {
+      startBtn.textContent = `Subiendo bloque ${c + 1}/${chunks.length}... ${pct}% (${sentMB}/${totalMB} MB)`;
+    });
+
+    if (ok) {
+      uploadedCount += items.length;
+    } else {
+      failedChunkRanges.push(c + 1);
+      items.forEach(it => failedNames.push(it.name));
     }
   }
 
   if (failedNames.length) {
     const el = document.getElementById('skippedNotice');
-    el.textContent = `${failedNames.length} imagen(es) no se pudieron preparar y se omitieron: ${failedNames.slice(0, 5).join(', ')}${failedNames.length > 5 ? '...' : ''}`;
+    const chunkNote = failedChunkRanges.length ? ` (bloque${failedChunkRanges.length === 1 ? '' : 's'} ${failedChunkRanges.join(', ')} no se pudo${failedChunkRanges.length === 1 ? '' : 'ieron'} subir tras varios intentos)` : '';
+    el.textContent = `${uploadedCount} imágenes subidas correctamente. ${failedNames.length} no se pudieron subir y se omitieron${chunkNote}: ${failedNames.slice(0, 5).join(', ')}${failedNames.length > 5 ? '...' : ''}`;
     el.style.display = 'block';
   }
 
-  if (!items.length) {
-    startBtn.disabled = false;
-    startBtn.textContent = 'Analizar esta tanda';
-    alert('Ninguna imagen se pudo preparar. Revisá el formato de los archivos.');
-    return;
-  }
+  queue = [];
+  renderQueue();
+  startBtn.disabled = false;
+  startBtn.textContent = 'Analizar esta tanda';
 
-  try {
-    await uploadWithProgress(`${API}/jobs`, JSON.stringify({ items }), (sentMB, totalMB, pct) => {
-      startBtn.textContent = `Enviando al servidor... ${pct}% (${sentMB}/${totalMB} MB)`;
-    });
-    queue = [];
-    renderQueue();
-    startPolling();
-  } catch (err) {
-    alert('No se pudo conectar con el servidor: ' + err.message);
-  } finally {
-    startBtn.disabled = false;
-    startBtn.textContent = 'Analizar esta tanda';
-  }
+  if (uploadedCount > 0) startPolling();
+  else if (!failedNames.length) alert('Ninguna imagen se pudo preparar. Revisá el formato de los archivos.');
 });
 
 // ── Progreso de la tanda activa ──
@@ -727,77 +764,13 @@ function stopPolling() {
   pollTimer = null;
 }
 
-// ── Re-análisis liviano (arquetipos + campos de filtrado nuevos) ──
-
-const enrichmentCard = document.getElementById('enrichmentCard');
-const enrichmentBtn = document.getElementById('enrichmentBtn');
-let enrichmentPollTimer = null;
-
-function renderEnrichmentCard(bank) {
-  const pending = bank.enrichmentPendingCount || 0;
-  if (bank.total === 0) { enrichmentCard.style.display = 'none'; return; }
-  enrichmentCard.style.display = 'block';
-
-  if (pending === 0 && !enrichmentPollTimer) {
-    document.getElementById('enrichmentSub').textContent = 'Todo el banco tiene arquetipos y campos de filtrado asignados.';
-    enrichmentBtn.style.display = 'none';
-    document.getElementById('enrichmentTrack').style.display = 'none';
-    return;
-  }
-  enrichmentBtn.style.display = 'inline-block';
-  document.getElementById('enrichmentSub').textContent =
-    `${pending} imágenes ya analizadas todavía no tienen arquetipo ni los campos nuevos de filtrado.`;
-}
-
-async function fetchEnrichmentStatus() {
-  const res = await fetch(`${API}/enrichment/status`);
-  const status = await res.json();
-  document.getElementById('enrichmentTrack').style.display = status.running ? 'block' : 'none';
-  if (status.running) {
-    enrichmentBtn.textContent = 'Pausar';
-    const total = status.processedThisRun + status.pendingCount;
-    const fraction = total ? status.processedThisRun / total : 0;
-    document.getElementById('enrichmentFill').style.transform = `scaleX(${fraction})`;
-    document.getElementById('enrichmentSub').textContent =
-      `Procesando... ${status.processedThisRun} listas, ${status.pendingCount} pendientes` +
-      (status.failedThisRun ? `, ${status.failedThisRun} con error` : '');
-  } else {
-    enrichmentBtn.textContent = 'Actualizar banco existente';
-    if (!enrichmentPollTimer) return;
-    stopEnrichmentPolling();
-    fetchStatus(); // refresca el contador general (enrichmentPendingCount) al terminar
-  }
-}
-
-function startEnrichmentPolling() {
-  fetchEnrichmentStatus();
-  enrichmentPollTimer = setInterval(fetchEnrichmentStatus, POLL_MS);
-}
-function stopEnrichmentPolling() {
-  if (enrichmentPollTimer) clearInterval(enrichmentPollTimer);
-  enrichmentPollTimer = null;
-}
-
-enrichmentBtn.addEventListener('click', async () => {
-  const isRunning = enrichmentBtn.textContent === 'Pausar';
-  enrichmentBtn.disabled = true;
-  try {
-    await fetch(`${API}/enrichment/${isRunning ? 'pause' : 'start'}`, { method: 'POST' });
-    if (isRunning) { stopEnrichmentPolling(); fetchEnrichmentStatus(); }
-    else startEnrichmentPolling();
-  } finally {
-    enrichmentBtn.disabled = false;
-  }
-});
-
 async function fetchStatus() {
   const res = await fetch(`${API}/status`);
   const bank = await res.json();
   lastBank = bank;
   renderProgress(bank);
   renderGallery(bank);
-  renderEnrichmentCard(bank);
-  populateCategoryFilter(bank);
+  populateFilters(bank);
   if (bank.activeBatch && ['running', 'queued'].includes(bank.activeBatch.status) && !pollTimer) startPolling();
   if (bank.errorCount > 0) {
     const badge = document.getElementById('logErrorBadge');
@@ -817,12 +790,12 @@ document.querySelectorAll('.filter-chip[data-filter="review"]').forEach(chip => 
     fetchStatus();
   });
 });
+document.getElementById('relevanceFilter').addEventListener('change', e => { relevanceFilter = e.target.value; fetchStatus(); });
 document.getElementById('categoryFilter').addEventListener('change', e => { categoryFilter = e.target.value; fetchStatus(); });
-document.getElementById('companionFilter').addEventListener('change', e => { companionFilter = e.target.value; fetchStatus(); });
-document.getElementById('archetypeFilter').addEventListener('change', e => { archetypeFilter = e.target.value; fetchStatus(); });
+document.getElementById('formClassFilter').addEventListener('change', e => { formClassFilter = e.target.value; fetchStatus(); });
+document.getElementById('emotionFilter').addEventListener('change', e => { emotionFilter = e.target.value; fetchStatus(); });
+document.getElementById('audienceFilter').addEventListener('change', e => { audienceFilter = e.target.value; fetchStatus(); });
 
-// Selecciona/deselecciona todo lo que actualmente pasa el filtro activo (no solo lo cargado en pantalla) —
-// evita tener que tildar una por una en bancos de cientos de imágenes.
 document.getElementById('selectAllBtn').addEventListener('click', () => {
   const selectable = lastBank.items.filter(i => itemMatchesFilters(i) && (i.status === 'done' || i.status === 'error'));
   selectable.forEach(i => selectedIds.add(i.id));
@@ -835,33 +808,28 @@ document.getElementById('selectNoneBtn').addEventListener('click', () => {
   renderGallery(lastBank);
 });
 
-function populateCategoryFilter(bank) {
-  const select = document.getElementById('categoryFilter');
-  const current = select.value;
-  const categories = new Set();
-  bank.items.forEach(i => (i.searchTags?.product_categories_present || []).forEach(c => categories.add(c)));
-  const options = ['<option value="">Todas las categorías</option>']
-    .concat([...categories].sort().map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`));
-  const html = options.join('');
-  if (select.innerHTML !== html) {
-    select.innerHTML = html;
-    select.value = current;
-  }
+function populateFilters(bank) {
+  const fillSelect = (selectEl, values) => {
+    const current = selectEl.value;
+    const firstOption = selectEl.querySelector('option').outerHTML;
+    const html = [firstOption].concat([...values].sort().map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`)).join('');
+    if (selectEl.innerHTML !== html) { selectEl.innerHTML = html; selectEl.value = current; }
+  };
 
-  const archetypeSelect = document.getElementById('archetypeFilter');
-  const currentArchetype = archetypeSelect.value;
-  const archetypes = new Set();
+  const categories = new Set();
+  const emotions = new Set();
+  const audiences = new Set();
+  const formClasses = new Set();
   bank.items.forEach(i => {
-    if (i.searchTags?.archetype_primary) archetypes.add(i.searchTags.archetype_primary);
-    (i.searchTags?.archetype_secondary || []).forEach(a => archetypes.add(a));
+    if (i.searchTags?.product_category) categories.add(i.searchTags.product_category);
+    if (i.searchTags?.emotional_angle) emotions.add(i.searchTags.emotional_angle);
+    if (i.searchTags?.target_audience) audiences.add(i.searchTags.target_audience);
+    if (i.searchTags?.product_form_class) formClasses.add(i.searchTags.product_form_class);
   });
-  const archetypeHtml = ['<option value="">Todos los arquetipos</option>']
-    .concat([...archetypes].sort().map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`))
-    .join('');
-  if (archetypeSelect.innerHTML !== archetypeHtml) {
-    archetypeSelect.innerHTML = archetypeHtml;
-    archetypeSelect.value = currentArchetype;
-  }
+  fillSelect(document.getElementById('categoryFilter'), categories);
+  fillSelect(document.getElementById('emotionFilter'), emotions);
+  fillSelect(document.getElementById('audienceFilter'), audiences);
+  fillSelect(document.getElementById('formClassFilter'), formClasses);
 }
 
 function itemMatchesFilters(item) {
@@ -869,13 +837,11 @@ function itemMatchesFilters(item) {
   if (reviewFilter === 'rejected' && item.review !== 'rejected') return false;
   if (reviewFilter === 'pending' && !(item.status === 'done' && item.review === 'pending')) return false;
   if (reviewFilter === 'error' && item.status !== 'error') return false;
-  if (categoryFilter && !(item.searchTags?.product_categories_present || []).includes(categoryFilter)) return false;
-  if (archetypeFilter) {
-    const primary = item.searchTags?.archetype_primary;
-    const secondary = item.searchTags?.archetype_secondary || [];
-    if (primary !== archetypeFilter && !secondary.includes(archetypeFilter)) return false;
-  }
-  if (companionFilter && String(!!item.searchTags?.has_companion) !== companionFilter) return false;
+  if (relevanceFilter && item.searchTags?.content_relevance !== relevanceFilter) return false;
+  if (categoryFilter && item.searchTags?.product_category !== categoryFilter) return false;
+  if (formClassFilter && item.searchTags?.product_form_class !== formClassFilter) return false;
+  if (emotionFilter && item.searchTags?.emotional_angle !== emotionFilter) return false;
+  if (audienceFilter && item.searchTags?.target_audience !== audienceFilter) return false;
   return true;
 }
 
@@ -903,11 +869,14 @@ function thumbStatusLabel(item) {
 function thumbHtml(item) {
   const done = item.status === 'done';
   const isError = item.status === 'error';
+  const relevance = item.searchTags?.content_relevance;
+  const relevanceLabel = relevance === 'contenido_personal_sin_marca' ? '⚠ personal, sin marca'
+    : relevance === 'no_determinable' ? '? relevancia no clara' : '';
   return `
     <div class="thumb ${thumbClassFor(item)}" data-id="${item.id}" data-status="${item.status}" data-review="${item.review || 'pending'}">
       <img src="${API}/items/${item.id}/thumb" loading="lazy" />
       <div class="thumb-spinner"><div class="spinner"></div></div>
-      <div class="thumb-status-label">${thumbStatusLabel(item)}</div>
+      <div class="thumb-status-label">${thumbStatusLabel(item) || escapeHtml(relevanceLabel)}</div>
       ${(done || isError) ? `<div class="thumb-check" data-role="select">✓</div>` : ''}
       ${done ? `<div class="thumb-badge">${item.review === 'approved' ? '✓' : item.review === 'rejected' ? '✕' : ''}</div>
       <div class="thumb-actions">
@@ -1000,6 +969,10 @@ document.getElementById('bulkReject').addEventListener('click', async () => {
   await fetch(`${API}/items/review-bulk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itemIds: [...selectedIds], decision: 'rejected' }) });
   selectedIds.clear(); updateBulkBar(); fetchStatus();
 });
+document.getElementById('bulkRetry').addEventListener('click', async () => {
+  await fetch(`${API}/items/retry-bulk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itemIds: [...selectedIds] }) });
+  selectedIds.clear(); updateBulkBar(); startPolling();
+});
 document.getElementById('bulkDelete').addEventListener('click', async () => {
   if (!confirm(`¿Eliminar definitivamente ${selectedIds.size} imagen(es) y su análisis? No se puede deshacer.`)) return;
   await fetch(`${API}/items/delete-bulk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itemIds: [...selectedIds] }) });
@@ -1015,6 +988,28 @@ async function openModal(id) {
   const { entry } = await res.json();
   document.getElementById('modalTitle').textContent = entry.sourceName || id;
   document.getElementById('modalImg').src = `${API}/items/${id}/thumb`;
+  const worldConceptEl = document.getElementById('modalWorldConcept');
+  const worldConcept = entry.analysis?.world_concept;
+  const relevance = entry.analysis?.content_relevance;
+  const relevanceNote = relevance === 'contenido_personal_sin_marca' ? ' ⚠ Contenido personal, sin marca detrás.'
+    : relevance === 'no_determinable' ? ' ? Relevancia no determinable.' : '';
+  if (worldConcept) {
+    document.getElementById('modalWorldConceptText').textContent = worldConcept + relevanceNote;
+    worldConceptEl.style.display = 'block';
+  } else {
+    worldConceptEl.style.display = 'none';
+  }
+
+  const setCoherenceEl = document.getElementById('modalSetCoherence');
+  const setCoherence = entry.analysis?.set_coherence;
+  if (setCoherence && setCoherence.set_coherence_note) {
+    const anchors = (setCoherence.anchors || []).map(a => a.axis).join(', ') || 'ninguna detectada';
+    document.getElementById('modalSetCoherenceText').textContent =
+      `${setCoherence.set_coherence_note} (anclas: ${anchors})`;
+    setCoherenceEl.style.display = 'block';
+  } else {
+    setCoherenceEl.style.display = 'none';
+  }
   document.getElementById('modalJson').textContent = JSON.stringify(entry.analysis, null, 2);
   modalBackdrop.style.display = 'flex';
   requestAnimationFrame(() => modalBackdrop.setAttribute('data-open', 'true'));
@@ -1084,7 +1079,7 @@ document.getElementById('exportBtn').addEventListener('click', async () => {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `photodump_visual_intelligence_${Date.now()}.json`;
+    a.download = `campaign_visual_intelligence_${Date.now()}.json`;
     a.click();
     statusEl.textContent = `Exportadas ${data.total} entradas aprobadas.`;
     statusEl.className = 'status-line ok';

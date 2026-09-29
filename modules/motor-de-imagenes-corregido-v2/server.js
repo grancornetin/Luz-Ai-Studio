@@ -7,6 +7,7 @@ const vertex = require('./vertex-client');
 const directorLabRoutes = require('./director-lab/http/routes');
 const directorLabSeed = require('./director-lab/seed/seed-t5b');
 const photodumpTrainerRoutes = require('./photodump-trainer/http/routes');
+const campaignTrainerRoutes = require('./campaign-trainer/http/routes');
 
 const PORT = Number(process.env.PORT || 3131);
 const DATA_DIR = path.join(__dirname, '.server-batch-data');
@@ -1154,6 +1155,11 @@ const server = http.createServer(async (req, res) => {
       if (handled) return;
     }
 
+    if (parsed.pathname.startsWith('/api/campaign-trainer/')) {
+      const handled = await campaignTrainerRoutes.handle(req, res, parsed, { vertex, sendJson, readJson });
+      if (handled) return;
+    }
+
     if (req.method === 'GET' && parsed.pathname === '/api/campaign-store/status') {
       ensureCampaignDataDir();
       const records = listCampaignRecords();
@@ -1581,6 +1587,9 @@ const server = http.createServer(async (req, res) => {
       }
       if (parsed.pathname === '/photodump-trainer.html') {
         filename = 'photodump-trainer.html';
+      }
+      if (parsed.pathname === '/campaign-trainer.html') {
+        filename = 'campaign-trainer.html';
       }
       if (filename) {
         const htmlPath = path.join(__dirname, filename);

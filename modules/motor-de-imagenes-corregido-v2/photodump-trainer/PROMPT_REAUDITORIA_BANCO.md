@@ -276,4 +276,227 @@ Confirmado con el banco compilado real (no solo con `system-prompt.txt`):
 
 ---
 
+## 7. IMPLEMENTADO — respuesta del lado del entrenador (10-sep-2026)
+
+> Escrito por la sesión que construyó el Photodump Trainer, en respuesta directa
+> a este documento. Todo lo de abajo YA está en código en `main` (working tree,
+> sin commitear todavía a la espera de revisión). El re-análisis del banco
+> existente está CORRIENDO en segundo plano al momento de escribir esto.
+
+### 7.1 Qué se agregó al `system-prompt.txt` del entrenador
+
+Se agregaron al schema de análisis (campos nuevos, todos dentro de `search_tags`
+para que se copien solos al índice del banco vía `item.searchTags` — mismo
+camino que ya usa el resto de `search_tags`):
+
+- **`body_visibility`** (enum, siempre): `full_body | three_quarter | waist_up | chest_up | face_only`.
+  Independiente de `shot_type` — resuelve el hallazgo 2.1 (mirror_selfie que
+  mezcla encuadres). El prompt le dice explícitamente al modelo que verifique
+  el encuadre real y no asuma `full_body` por el `shot_type`.
+- **`companion_prominence`** (enum, `null` si `companion_present` es false):
+  `background_incidental | background_notable | foreground_interacting`.
+  Resuelve el hallazgo 2.2 (la foto de fiesta de 15 personas citada como pose
+  de "una sola persona"). El prompt instruye a usar `foreground_interacting`
+  también para fotos grupales/de fiesta.
+- **`hand_occupancy`** (enum, `null` si no hay manos visibles):
+  `empty | phone_only | bag_or_accessory | product_or_prop | food_or_drink`.
+  Resuelve el hallazgo 2.3 (la laptop flotando en la calle). `product_or_prop`
+  cubre laptop/libro/maquillaje-en-mano/etc.
+- **`reflection_surface_type`** (enum, `null` si el `shot_type` no involucra
+  reflejo): `traditional_mirror | glass_storefront_or_window | convex_security_mirror | car_window | elevator_or_metal_surface | not_a_reflection`.
+  Resuelve el hallazgo 2.4 (geometría de reflejo en vidriera). Hay un
+  `not_a_reflection` explícito para el caso "el shot_type sugería reflejo pero
+  no hay superficie reflectante real".
+- **Arquetipos de personalidad/vibe** (`archetype_primary` string + `archetype_secondary`
+  array de 0-2) — catálogo cerrado de 30 valores (`clean_girl`, `femme_fatale`,
+  `bombshell_glam`, etc.). Esto es un pedido SEPARADO del usuario, no de este
+  documento, pero entró en la misma pasada de schema porque comparte el mismo
+  principio (enum cerrado filtrable, no texto libre). Filtrable en la galería
+  del entrenador por primario o secundario.
+
+También se agregó al prompt la **sección de auto-verificación de la sección 3**:
+antes de responder, el modelo cruza cada campo estructurado nuevo contra su
+propio texto libre (`subject_gesture`, `outfit_visible`, `background_setting`,
+`shot_type`, `companion_present`) y corrige el campo estructurado si se
+contradice — sin reescribir el texto libre para que encaje.
+
+### 7.2 Re-análisis del banco existente — modo LIVIANO, no re-análisis completo
+
+Decisión explícita del usuario: *"el re analisis del banco debe ser solo para
+incluir la nueva informacion no un analisis completo"*. Por eso NO se re-corre
+el análisis completo sobre las ~915 imágenes del banco. En su lugar:
+
+- **`core/enrichment-prompt.js`** (nuevo) — arma un prompt de re-análisis
+  liviano que le pide al modelo SOLO los 6 campos nuevos (4 de este documento +
+  2 de arquetipos), pasándole como contexto el `raw_visual_description` ya
+  guardado de esa imagen para que no se contradiga. Las definiciones de
+  arquetipos y de los 4 campos se extraen en runtime del `system-prompt.txt`
+  (no se copian a mano) para que nunca queden desincronizadas.
+- **`core/job-runner.js`** — funciones nuevas `startEnrichmentBatch` /
+  `pauseEnrichmentBatch` / `currentEnrichmentStatus`. Recorre solo los items
+  `status === 'done'` cuyo `searchTags.archetype_primary` está `undefined`
+  (los que ya tienen el schema nuevo se saltan), llama al modelo con el prompt
+  liviano, y **mergea** los 6 campos DENTRO del `analyses/<id>.json` existente
+  — nunca toca `raw_visual_description`, `interpreted_signals`, ni ningún otro
+  campo ya guardado. Marca `enrichedAt` en el JSON. Checkpoint por imagen
+  (`bank.json` se persiste tras cada una) — si el proceso se corta, se retoma
+  llamando de nuevo a `enrichment/start`, solo procesa lo que falta. Mismo
+  backoff ante 429/503 que el análisis normal, intervalo de 25s entre imágenes.
+- **`http/routes.js`** — rutas nuevas: `POST /api/photodump-trainer/enrichment/start`,
+  `POST /api/photodump-trainer/enrichment/pause`, `GET /api/photodump-trainer/enrichment/status`.
+- **`photodump-trainer.html`** — panel "Re-análisis liviano" con contador de
+  pendientes, botón iniciar/pausar, barra de progreso; y filtro de arquetipo
+  nuevo en la galería.
+
+**Estado al 10-sep-2026**: batch lanzado, ~911 imágenes pendientes al arrancar,
+corriendo en segundo plano server-side (sobrevive al cierre del navegador).
+`enrichmentPendingCount` en `GET /api/photodump-trainer/status` baja a medida
+que avanza. NO está priorizado por receta activa (sección 5.2 de este doc) —
+va en orden del banco; si se necesita priorizar `weeklyLooks`/`outfitRevealBasic`/
+`outfitMultiLook` primero, avisar y se ajusta el orden de la cola.
+
+### 7.3 Cómo usar los campos nuevos desde producción (YA disponible)
+
+`api/gemini/content.ts`, acción `getOutfitCheckPoseCandidates` — se agregaron
+**4 filtros nuevos al payload, todos opcionales y retrocompatibles**:
+
+| Campo del payload | Tipo | Qué hace |
+|---|---|---|
+| `restrictBodyVisibility` | `string[]` | Solo candidatos cuyo `body_visibility` está en la lista. Ej. `['full_body']` para recetas que exigen calzado visible — reemplaza el hack de `restrictShotTypes` para eso. |
+| `maxCompanionProminence` | `string` | Tope de prominencia de acompañante: `'background_incidental'` (más estricto) / `'background_notable'` / `'foreground_interacting'` (no filtra). Reemplaza/complementa el boolean crudo `excludeCompanion` con el matiz real del hallazgo 2.2. |
+| `restrictHandOccupancy` | `string[]` | Solo candidatos cuyo `hand_occupancy` está en la lista. Ej. `['empty','phone_only']` para "manos libres o solo celular" — filtra en origen la laptop del hallazgo 2.3. |
+| `restrictReflectionSurface` | `string[]` | Solo candidatos cuyo `reflection_surface_type` está en la lista. Ej. `['traditional_mirror']` para `weeklyLooks` cuando el reflejo debe ser espejo plano y no vidriera — hallazgo 2.4. |
+
+Semántica de retrocompatibilidad (importante mientras el enrichment está a
+mitad de camino): si un filtro **no viene** en el payload, no descarta nada. Si
+un filtro **sí viene** pero el candidato todavía no tiene ese campo (banco viejo
+sin re-analizar aún), el candidato se descarta — mejor perder un candidato
+dudoso que colar uno que no se puede verificar contra el criterio pedido. La
+única excepción es `maxCompanionProminence`: un candidato con `companion_present:true`
+sin dato de prominencia se trata como el caso más permisivo (no se descarta),
+salvo que el tope pedido sea `'background_incidental'` (el más estricto), donde
+sí se descarta si no se puede verificar.
+
+El endpoint sigue leyendo estos campos desde `search_tags` del snapshot
+compilado — recordá que `bank-snapshot.json` NO se regenera solo: hay que
+correr `node scripts/compileBankSnapshot.js` una vez que el enrichment del
+banco del trainer haya avanzado lo suficiente, para que los campos nuevos
+lleguen al snapshot que consume producción.
+
+### 7.4 Bitácora de versión de schema (pedido de sección 5.3)
+
+- **Schema v1** (hasta 9-sep-2026): sin arquetipos, sin los 4 campos de este
+  documento. `attractiveness_confidence_level` agregado a mitad de esta era
+  (por eso está en solo 419/733 del snapshot viejo). Techo de ese campo:
+  `insinuante`.
+- **Schema v2** (9-sep-2026): `attractiveness_confidence_level` sube el techo a
+  `explicito_artistico` (nuevo 4º nivel, sigue prohibiendo genitales/actos
+  explícitos).
+- **Schema v3** (10-sep-2026, ESTE cambio): + arquetipos (`archetype_primary` /
+  `archetype_secondary`), + `body_visibility`, + `companion_prominence`, +
+  `hand_occupancy`, + `reflection_surface_type`, + auto-verificación campo-vs-texto.
+  Imágenes analizadas de acá en más nacen con v3 completo. Imágenes v1/v2 del
+  banco se llevan a "v3 parcial" (solo los 6 campos nuevos) vía el re-análisis
+  liviano de 7.2 — el resto de su análisis sigue siendo el original de cuando
+  se analizaron.
+
+### 7.5 Actualización — enrichment TERMINADO (10-sep-2026, más tarde el mismo día)
+
+**El re-análisis liviano del banco del trainer ya terminó.** Estado final
+verificado: `total: 915, doneCount: 915, errorCount: 0, enrichmentPendingCount: 0`
+— las 915 imágenes del banco tienen los 6 campos nuevos.
+
+Detalle de cómo terminó, por transparencia: a mitad de camino (~911/915) el
+proceso `node server.js` del trainer murió sin volcar excepción al log (salió
+con exit code 1, sin stack trace — causa exacta no determinada). El checkpoint
+por imagen funcionó como estaba diseñado: ninguna de las 911 ya enriquecidas
+se perdió ni quedó con JSON corrupto. Al reiniciar el servidor quedaron 4
+items sueltos que NO eran del enrichment sino arrastre de un batch de análisis
+original de julio: 2 con error de red viejo (`getaddrinfo ENOTFOUND`) y 2
+colgados en `status: 'processing'` (el proceso murió mientras el análisis
+completo de esos 2 estaba en curso). Se resolvieron así:
+- Los 2 con error → `POST items/:id/retry` normal, resueltos a la primera.
+- Los 2 en `processing` colgado → no hay ruta HTTP para resetear un item
+  trabado en ese estado (solo existe retry para `status: 'error'`), así que se
+  editó `bank.json` a mano (server detenido un instante) para forzarlos a
+  `error` y habilitar el retry normal. Uno necesitó 2 intentos por timeout de
+  Vertex, el otro salió a la primera. **Nota para el trainer**: si esto se
+  repite seguido, valdría la pena una ruta `items/:id/reset-stuck` o un
+  timeout de guardia en `processOne`/`runBatch` que marque `error` un item
+  que lleva demasiado en `processing` sin que el proceso haya muerto del todo
+  — no se implementó ahora porque no era parte del pedido original de este
+  documento.
+
+Los pasos que siguen pendientes abajo (regenerar snapshot, commitear) NO
+cambiaron de orden, solo que el paso 1 (esperar el enrichment) ya está hecho.
+
+---
+
+### 7.5-original Pasos pendientes (para el auditor — hacer en este orden)
+
+Al 10-sep-2026 el enrichment está corriendo pero NO terminó, y NADA de esto
+está commiteado todavía. Lo que falta, en orden:
+
+1. ~~**Esperar a que termine el enrichment del banco del trainer.**~~ **HECHO**
+   — ver actualización arriba. Chequear con
+   `GET /api/photodump-trainer/enrichment/status` — termina cuando
+   `pendingCount` llega a 0. Son ~911 imágenes a ~25s + backoff → varias horas.
+   Si el servidor del trainer (puerto 3132) se reinicia o se corta a mitad,
+   volver a llamar `POST /api/photodump-trainer/enrichment/start` — retoma solo
+   lo pendiente (checkpoint por imagen, no repite trabajo ni gasta cuota de más).
+   El proceso vive donde se lanzó el trainer; no depende del navegador abierto.
+
+2. ~~**Revisar los `failedThisRun`.**~~ **HECHO** — terminó en `errorCount: 0`
+   sobre las 915. Los 4 casos sueltos que aparecieron a mitad de camino no eran
+   fallos de enrichment sino arrastre de un batch de análisis original viejo
+   (ver actualización arriba) y ya están resueltos. Si en el futuro corre de
+   nuevo (banco nuevo, imágenes agregadas), seguir revisando `failedThisRun`
+   con `GET /api/photodump-trainer/logs` igual que acá abajo se documentaba.
+
+3. **Regenerar el snapshot compilado que consume producción.** El enrichment
+   escribe sobre el banco del trainer (fuera del repo,
+   `C:\Users\Nico Trabajo\Downloads\contenido de prueba\photodump`), NO sobre
+   `src/data/photodump-bank/bank-snapshot.json`. Hasta correr esto, los 4
+   filtros nuevos de 7.3 no ven ningún campo nuevo en producción (y por la
+   semántica de retrocompatibilidad, descartan TODO candidato si se los usa):
+
+   ```
+   node scripts/compileBankSnapshot.js
+   ```
+
+   (Ver `src/data/photodump-bank/COMO_ACTUALIZAR_EL_BANCO.md` — es manual, nunca
+   automático.) Después de esto, `git diff --stat src/data/photodump-bank/bank-snapshot.json`
+   debería mostrar el archivo crecido con los campos nuevos; confirmar que
+   `search_tags.archetype_primary` / `body_visibility` / etc. aparecen en los
+   items del snapshot antes de dar por buena la regeneración.
+
+4. **Commitear.** El working tree tiene sin commitear (ver `git status`):
+   - `modules/motor-de-imagenes-corregido-v2/photodump-trainer/core/system-prompt.txt` (schema v3)
+   - `modules/motor-de-imagenes-corregido-v2/photodump-trainer/core/enrichment-prompt.js` (NUEVO, sin trackear)
+   - `modules/motor-de-imagenes-corregido-v2/photodump-trainer/core/job-runner.js`
+   - `modules/motor-de-imagenes-corregido-v2/photodump-trainer/http/routes.js`
+   - `modules/motor-de-imagenes-corregido-v2/photodump-trainer.html`
+   - `api/gemini/content.ts` (los 4 filtros de 7.3)
+   - `src/data/photodump-bank/bank-snapshot.json` (tras el paso 3)
+   - este documento
+   Nota de scope: hay cambios en `pose-library/*` y en un par de `.md` del
+   manifiesto que son de OTRAS sesiones en paralelo — NO commitearlos junto con
+   esto, tocar solo los archivos de la lista de arriba.
+
+5. **Opcional / cuando haya resultados reales**: afinar los criterios de
+   desambiguación entre arquetipos vecinos que quedaron flojos en el prompt
+   (`romantic_girl` vs `coquette`, `tease_provocateur` vs `coquette`,
+   `wellness_girl` vs `gym_girl`, `dark_academia` vs `edgy_alt`). Están
+   documentados como pendientes en la memoria del proyecto
+   (`project_photodump_arquetipos.md`, sección "Pendiente").
+
+6. **Priorización por receta activa (sección 5.2 de este doc) NO se hizo** — el
+   enrichment va en orden del banco, no priorizando `weeklyLooks` /
+   `outfitRevealBasic` / `outfitMultiLook` primero. Si esas recetas necesitan
+   los campos nuevos antes de que termine todo el banco, avisar y se reordena
+   la cola (hoy `runEnrichmentBatch` toma `pending[0]` — habría que filtrar/
+   ordenar esa lista por las imágenes que esas recetas citan).
+
+---
+
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>

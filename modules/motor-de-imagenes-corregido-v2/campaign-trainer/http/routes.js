@@ -1,11 +1,10 @@
 'use strict';
 
 const fs = require('fs');
-const path = require('path');
 const store = require('../core/store');
 const jobRunner = require('../core/job-runner');
 
-const PREFIX = '/api/photodump-trainer/';
+const PREFIX = '/api/campaign-trainer/';
 
 function extFromMime(mimeType) {
   if (mimeType === 'image/png') return '.png';
@@ -17,17 +16,14 @@ async function handle(req, res, parsed, { sendJson, readJson }) {
   const pathname = parsed.pathname;
   if (!pathname.startsWith(PREFIX)) return false;
 
-  // GET /api/photodump-trainer/status — banco acumulado completo + tanda activa, para el polling del frontend
+  // GET /api/campaign-trainer/status — banco acumulado completo + tanda activa, para el polling del frontend
   if (req.method === 'GET' && pathname === PREFIX + 'status') {
     const bank = jobRunner.currentBank();
     sendJson(res, 200, jobRunner.publicBank(bank));
     return true;
   }
 
-  // POST /api/photodump-trainer/check-duplicates — body: { hashes: string[], names: string[] }
-  // Chequea ANTES de subir si alguno de esos hashes o nombres de archivo ya existe en el banco.
-  // El chequeo por nombre es instantáneo (no requiere leer el archivo) — útil para reenviar
-  // un lote de cientos de imágenes y descartar de una las que ya se analizaron.
+  // POST /api/campaign-trainer/check-duplicates — body: { hashes: string[], names: string[] }
   if (req.method === 'POST' && pathname === PREFIX + 'check-duplicates') {
     const body = await readJson(req);
     const hashes = Array.isArray(body.hashes) ? body.hashes : [];
@@ -38,17 +34,14 @@ async function handle(req, res, parsed, { sendJson, readJson }) {
     return true;
   }
 
-  // GET /api/photodump-trainer/logs — historial de eventos (errores, avisos de rate limit, pausas)
+  // GET /api/campaign-trainer/logs
   if (req.method === 'GET' && pathname === PREFIX + 'logs') {
     sendJson(res, 200, { log: jobRunner.getLog() });
     return true;
   }
 
-  // POST /api/photodump-trainer/jobs — arranca una tanda nueva sobre el banco acumulado
+  // POST /api/campaign-trainer/jobs — arranca una tanda nueva sobre el banco acumulado
   // body: { items: [{ name, mimeType, dataBase64, thumbBase64, contentHash }] }
-  // Límite alto porque un lote de cientos de imágenes en base64 (+33% por la codificación)
-  // puede sumar varios cientos de MB — el default de readJson (12MB) rechazaría cualquier
-  // lote real de más de ~10-15 fotos.
   if (req.method === 'POST' && pathname === PREFIX + 'jobs') {
     const body = await readJson(req, 2 * 1024 * 1024 * 1024);
     const rawItems = Array.isArray(body.items) ? body.items : [];
@@ -73,22 +66,22 @@ async function handle(req, res, parsed, { sendJson, readJson }) {
     return true;
   }
 
-  // POST /api/photodump-trainer/jobs/pause
+  // POST /api/campaign-trainer/jobs/pause
   if (req.method === 'POST' && pathname === PREFIX + 'jobs/pause') {
     const bank = jobRunner.pauseBatch();
     sendJson(res, 200, jobRunner.publicBank(bank));
     return true;
   }
 
-  // POST /api/photodump-trainer/jobs/resume
+  // POST /api/campaign-trainer/jobs/resume
   if (req.method === 'POST' && pathname === PREFIX + 'jobs/resume') {
     const bank = jobRunner.resumeBatch();
     sendJson(res, 200, jobRunner.publicBank(bank));
     return true;
   }
 
-  // GET /api/photodump-trainer/items/:id/thumb
-  const thumbMatch = pathname.match(/^\/api\/photodump-trainer\/items\/([^/]+)\/thumb$/);
+  // GET /api/campaign-trainer/items/:id/thumb
+  const thumbMatch = pathname.match(/^\/api\/campaign-trainer\/items\/([^/]+)\/thumb$/);
   if (req.method === 'GET' && thumbMatch) {
     const bank = jobRunner.currentBank();
     const item = bank.items.find(i => i.id === thumbMatch[1]);
@@ -100,8 +93,8 @@ async function handle(req, res, parsed, { sendJson, readJson }) {
     return true;
   }
 
-  // GET /api/photodump-trainer/items/:id/analysis
-  const analysisMatch = pathname.match(/^\/api\/photodump-trainer\/items\/([^/]+)\/analysis$/);
+  // GET /api/campaign-trainer/items/:id/analysis
+  const analysisMatch = pathname.match(/^\/api\/campaign-trainer\/items\/([^/]+)\/analysis$/);
   if (req.method === 'GET' && analysisMatch) {
     const entry = store.loadAnalysis(analysisMatch[1]);
     if (!entry) { sendJson(res, 404, { error: true, cause: 'Análisis no encontrado (¿todavía está procesando?)' }); return true; }
@@ -109,8 +102,8 @@ async function handle(req, res, parsed, { sendJson, readJson }) {
     return true;
   }
 
-  // POST /api/photodump-trainer/items/:id/review — body: { decision }
-  const reviewMatch = pathname.match(/^\/api\/photodump-trainer\/items\/([^/]+)\/review$/);
+  // POST /api/campaign-trainer/items/:id/review — body: { decision }
+  const reviewMatch = pathname.match(/^\/api\/campaign-trainer\/items\/([^/]+)\/review$/);
   if (req.method === 'POST' && reviewMatch) {
     const body = await readJson(req);
     const item = jobRunner.reviewItem(reviewMatch[1], body.decision);
@@ -119,8 +112,8 @@ async function handle(req, res, parsed, { sendJson, readJson }) {
     return true;
   }
 
-  // POST /api/photodump-trainer/items/:id/retry — reintenta un item en error, sin resubir el archivo
-  const retryMatch = pathname.match(/^\/api\/photodump-trainer\/items\/([^/]+)\/retry$/);
+  // POST /api/campaign-trainer/items/:id/retry
+  const retryMatch = pathname.match(/^\/api\/campaign-trainer\/items\/([^/]+)\/retry$/);
   if (req.method === 'POST' && retryMatch) {
     const item = await jobRunner.retryItem(retryMatch[1]);
     if (!item) { sendJson(res, 400, { error: true, cause: 'No encontrado o no está en error' }); return true; }
@@ -128,7 +121,17 @@ async function handle(req, res, parsed, { sendJson, readJson }) {
     return true;
   }
 
-  // POST /api/photodump-trainer/items/review-bulk — body: { itemIds: string[], decision }
+  // POST /api/campaign-trainer/items/retry-bulk — body: { itemIds: string[] }
+  // Reencola los items con error de vuelta en el batch runner (no reprocesa de forma
+  // síncrona en el mismo request — devuelve enseguida y el progreso se ve por polling normal).
+  if (req.method === 'POST' && pathname === PREFIX + 'items/retry-bulk') {
+    const body = await readJson(req);
+    const { queued, bank } = jobRunner.retryItemsBulk(body.itemIds || []);
+    sendJson(res, 200, { queued, ...jobRunner.publicBank(bank) });
+    return true;
+  }
+
+  // POST /api/campaign-trainer/items/review-bulk — body: { itemIds: string[], decision }
   if (req.method === 'POST' && pathname === PREFIX + 'items/review-bulk') {
     const body = await readJson(req);
     const count = jobRunner.reviewItemsBulk(body.itemIds || [], body.decision);
@@ -136,7 +139,7 @@ async function handle(req, res, parsed, { sendJson, readJson }) {
     return true;
   }
 
-  // POST /api/photodump-trainer/items/delete-bulk — body: { itemIds: string[] } — borra archivo + análisis + índice
+  // POST /api/campaign-trainer/items/delete-bulk
   if (req.method === 'POST' && pathname === PREFIX + 'items/delete-bulk') {
     const body = await readJson(req);
     const count = jobRunner.deleteItemsBulk(body.itemIds || []);
@@ -144,29 +147,7 @@ async function handle(req, res, parsed, { sendJson, readJson }) {
     return true;
   }
 
-  // POST /api/photodump-trainer/enrichment/start — arranca (o retoma) el re-análisis
-  // liviano: solo agrega arquetipos + los 4 campos de filtrado a items ya analizados
-  // que aún no los tienen. No reprocesa raw_visual_description ni gasta cuota de más.
-  if (req.method === 'POST' && pathname === PREFIX + 'enrichment/start') {
-    const status = jobRunner.startEnrichmentBatch();
-    sendJson(res, 200, status);
-    return true;
-  }
-
-  // POST /api/photodump-trainer/enrichment/pause
-  if (req.method === 'POST' && pathname === PREFIX + 'enrichment/pause') {
-    const status = jobRunner.pauseEnrichmentBatch();
-    sendJson(res, 200, status);
-    return true;
-  }
-
-  // GET /api/photodump-trainer/enrichment/status — para polling mientras corre
-  if (req.method === 'GET' && pathname === PREFIX + 'enrichment/status') {
-    sendJson(res, 200, jobRunner.currentEnrichmentStatus());
-    return true;
-  }
-
-  // GET /api/photodump-trainer/export — banco final: todas las entradas aprobadas de todo el historial
+  // GET /api/campaign-trainer/export — banco final: todas las entradas aprobadas de todo el historial
   if (req.method === 'GET' && pathname === PREFIX + 'export') {
     const bank = jobRunner.currentBank();
     const approvedIds = new Set(bank.items.filter(i => i.review === 'approved').map(i => i.id));

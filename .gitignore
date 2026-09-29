@@ -59,6 +59,13 @@ dist-ssr
 # fs.readFileSync en runtime de Vercel, no existe otra forma de que el
 # archivo llegue al deploy sin estar en git.
 !/src/data/photodump-bank/*.json
+
+# Muestras de imágenes reales para validar el catálogo de arquetipos
+# (influencers/outfits/stop crolling, ~1000 archivos, ~200MB) — solo
+# insumo de trabajo local para revisión manual, nunca debe subirse al repo.
+/src/data/photodump-bank/influencers/
+/src/data/photodump-bank/outfits/
+/src/data/photodump-bank/stop crolling/
 # Estado/runtime generado por el uso de la herramienta (proyectos de prueba,
 # notas, casos): NO se versiona, es datos locales, no código.
 /modules/motor-de-imagenes-corregido-v2/director-lab-data/
@@ -70,6 +77,13 @@ dist-ssr
 # locales, no código): NO se versiona.
 /src/data/trainer/photodump/
 /modules/motor-de-imagenes-corregido-v2/photodump-trainer-data/
+
+# Banco del entrenador de Campañas (imágenes + thumbnails, ~920 archivos,
+# ~300MB) — mismo criterio que el banco de Photodump: insumo local, no código.
+/src/data/trainer/campaign/
+
+# Capturas de referencia de diseño (inspiración de UI), no assets de la app.
+/src/data/media/inspo de ui/
 
 # Pruebas y resultados locales (solo para desarrollo en este equipo)
 /pruebas de resultados/

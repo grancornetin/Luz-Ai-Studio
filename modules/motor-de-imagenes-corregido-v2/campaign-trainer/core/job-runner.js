@@ -1,7 +1,6 @@
 const fs = require('fs');
 const vertex = require('../../vertex-client');
 const { getSystemPrompt } = require('./system-prompt');
-const { getEnrichmentPrompt } = require('./enrichment-prompt');
 const store = require('./store');
 
 const MIN_INTERVAL_MS = 2000;
@@ -9,21 +8,6 @@ const START_INTERVAL_MS = 25000;
 const MAX_INTERVAL_MS = 60000;
 const BACKOFF_STEPS = [10000, 20000, 30000, 60000];
 const MAX_LOG_ENTRIES = 300;
-
-// Campos que agrega el modo de re-análisis liviano (enrichment) — se usan para
-// detectar qué items del banco ya fueron enriquecidos (tienen todos estos
-// campos en su search_tags) vs. cuáles quedaron con el schema viejo.
-const ENRICHMENT_FIELDS = [
-  'archetype_primary', 'archetype_secondary',
-  'body_visibility', 'companion_prominence', 'hand_occupancy', 'reflection_surface_type'
-];
-
-function needsEnrichment(item) {
-  if (item.status !== 'done') return false;
-  const tags = item.searchTags;
-  if (!tags) return true;
-  return tags.archetype_primary === undefined;
-}
 
 function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
@@ -42,8 +26,6 @@ function currentBank() {
   return bank;
 }
 
-// Log de eventos (errores y avisos), persistido en el banco para sobrevivir a reinicios.
-// Se recorta a MAX_LOG_ENTRIES para no crecer indefinidamente en tandas largas.
 function pushLog(bank, entry) {
   if (!bank.log) bank.log = [];
   bank.log.unshift({ at: new Date().toISOString(), ...entry });
@@ -59,7 +41,6 @@ function publicBank(bank) {
     errorCount: items.filter(i => i.status === 'error').length,
     approvedCount: items.filter(i => i.review === 'approved').length,
     rejectedCount: items.filter(i => i.review === 'rejected').length,
-    enrichmentPendingCount: items.filter(needsEnrichment).length,
     items: items.map(item => ({
       id: item.id,
       name: item.name,
@@ -82,7 +63,7 @@ async function analyzeOne(item) {
     messages: [{
       role: 'user',
       content: [
-        { type: 'text', text: 'Analiza esta imagen según las instrucciones del sistema. Responde solo el JSON.' },
+        { type: 'text', text: 'Analiza esta imagen de campaña según las instrucciones del sistema. Responde solo el JSON.' },
         { type: 'image', source: { type: 'base64', media_type: item.mimeType, data: base64 } }
       ]
     }],
@@ -148,158 +129,9 @@ async function processOne(bank, item) {
   return hitRateLimit;
 }
 
-// ── Re-análisis liviano (enrichment): solo agrega los campos nuevos del schema ──
-// (arquetipos + los 4 campos de PROMPT_REAUDITORIA_BANCO.md) a imágenes ya
-// analizadas con una versión anterior del prompt — nunca regenera raw_visual_description,
-// interpreted_signals ni el resto del análisis ya guardado y válido.
-
-async function enrichOne(item) {
-  const buffer = fs.readFileSync(store.imagePath(item.id, item.ext));
-  const base64 = buffer.toString('base64');
-  const existingEntry = store.loadAnalysis(item.id);
-  const existingContext = existingEntry?.analysis?.raw_visual_description
-    ? JSON.stringify(existingEntry.analysis.raw_visual_description, null, 2)
-    : '(sin contexto previo disponible — analiza solo con la imagen)';
-
-  const prompt = getEnrichmentPrompt().replace('{{EXISTING_CONTEXT}}', existingContext);
-
-  const result = await vertex.generateAnthropicCompatible({
-    system: prompt,
-    messages: [{
-      role: 'user',
-      content: [
-        { type: 'text', text: 'Completa los campos nuevos según las instrucciones del sistema. Responde solo el JSON.' },
-        { type: 'image', source: { type: 'base64', media_type: item.mimeType, data: base64 } }
-      ]
-    }],
-    response_mime_type: 'application/json',
-    max_tokens: 1200
-  });
-  const text = (result.content || []).map(b => b.text || '').join('');
-  return { text, usage: result.usage };
-}
-
-async function enrichWithRetry(item, onRateLimitHit) {
-  let attempt = 0;
-  while (true) {
-    try {
-      return await enrichOne(item);
-    } catch (err) {
-      const isRateLimit = err.isRateLimit || /429|rate|quota/i.test(err.message || '');
-      const isOverloaded = err.isOverloaded || /503|overload|unavailable/i.test(err.message || '');
-      if (!isRateLimit && !isOverloaded) throw err;
-      onRateLimitHit && onRateLimitHit();
-      const delay = BACKOFF_STEPS[Math.min(attempt, BACKOFF_STEPS.length - 1)];
-      await wait(delay);
-      attempt++;
-    }
-  }
-}
-
-// Mergea los campos nuevos DENTRO del análisis ya guardado — nunca reemplaza
-// raw_visual_description, interpreted_signals ni ningún otro campo existente.
-async function enrichSingleItem(bank, item) {
-  const start = Date.now();
-  try {
-    const { text } = await enrichWithRetry(item, () => {
-      bank.activeBatch && (bank.activeBatch.rateLimitHits = (bank.activeBatch.rateLimitHits || 0) + 1);
-    });
-    let parsed = null;
-    try { parsed = JSON.parse(text); } catch (_) { /* se ignora, se reintenta después vía retry manual */ }
-    if (!parsed) throw new Error('Respuesta de enrichment no es JSON válido');
-
-    const existingEntry = store.loadAnalysis(item.id) || { itemId: item.id, sourceName: item.name, analysis: {} };
-    existingEntry.analysis = existingEntry.analysis || {};
-    existingEntry.analysis.search_tags = existingEntry.analysis.search_tags || {};
-    ENRICHMENT_FIELDS.forEach(field => {
-      existingEntry.analysis.search_tags[field] = parsed[field] !== undefined ? parsed[field] : null;
-    });
-    existingEntry.enrichedAt = new Date().toISOString();
-    store.saveAnalysis(item.id, existingEntry);
-
-    item.searchTags = existingEntry.analysis.search_tags;
-    return { ok: true, elapsedMs: Date.now() - start };
-  } catch (err) {
-    pushLog(bank, { level: 'error', itemId: item.id, itemName: item.name, message: `Enrichment falló: ${err.message}` });
-    return { ok: false, elapsedMs: Date.now() - start, error: err.message };
-  }
-}
-
-let enrichmentRunState = null;
-
-function currentEnrichmentStatus() {
-  const bank = store.loadBank();
-  const pending = (bank.items || []).filter(needsEnrichment);
-  return {
-    running: !!enrichmentRunState && !enrichmentRunState.cancelled,
-    pendingCount: pending.length,
-    totalDone: (bank.items || []).filter(i => i.status === 'done').length,
-    processedThisRun: enrichmentRunState ? enrichmentRunState.processed : 0,
-    failedThisRun: enrichmentRunState ? enrichmentRunState.failed : 0
-  };
-}
-
-// Re-análisis liviano de TODO el banco existente que aún no tiene los campos nuevos —
-// no toca items ya enriquecidos ni items sin terminar/con error del análisis original.
-// Mismo patrón de checkpoint/espaciado que runBatch: se puede interrumpir y retomar
-// (basta con volver a llamar startEnrichmentBatch, que solo procesa lo pendiente).
-async function runEnrichmentBatch() {
-  if (enrichmentRunState && !enrichmentRunState.cancelled) return; // ya corriendo
-  enrichmentRunState = { cancelled: false, processed: 0, failed: 0 };
-  let intervalMs = START_INTERVAL_MS;
-
-  while (true) {
-    const bank = store.loadBank();
-    if (enrichmentRunState.cancelled) break;
-    const pending = bank.items.filter(needsEnrichment);
-    if (!pending.length) break;
-
-    const item = pending[0];
-    const start = Date.now();
-    const result = await enrichSingleItem(bank, item);
-    enrichmentRunState.processed++;
-    if (!result.ok) enrichmentRunState.failed++;
-    store.saveBank(bank); // checkpoint tras cada imagen
-
-    const remaining = pending.length - 1;
-    if (remaining > 0 && !enrichmentRunState.cancelled) {
-      const elapsedThisItem = Date.now() - start;
-      await wait(Math.max(MIN_INTERVAL_MS, intervalMs - elapsedThisItem));
-    }
-  }
-
-  const finalBank = store.loadBank();
-  pushLog(finalBank, {
-    level: 'info',
-    message: `Re-análisis liviano (arquetipos + campos de filtrado) completado: ${enrichmentRunState.processed} imágenes procesadas, ${enrichmentRunState.failed} con error`
-  });
-  store.saveBank(finalBank);
-  enrichmentRunState = null;
-}
-
-function startEnrichmentBatch() {
-  if (enrichmentRunState && !enrichmentRunState.cancelled) {
-    return currentEnrichmentStatus();
-  }
-  runEnrichmentBatch().catch(err => {
-    const b = store.loadBank();
-    pushLog(b, { level: 'error', message: `Re-análisis liviano interrumpido por error: ${err.message}` });
-    store.saveBank(b);
-    enrichmentRunState = null;
-  });
-  return currentEnrichmentStatus();
-}
-
-function pauseEnrichmentBatch() {
-  if (enrichmentRunState) enrichmentRunState.cancelled = true;
-  return currentEnrichmentStatus();
-}
-
 // El batch se procesa por ÍNDICE contra el estado releído de disco en cada vuelta (no un
 // array de itemIds fijo capturado al arrancar) — así, si el usuario agrega imágenes nuevas
-// a la tanda en curso (startBatch con isAppendingToRunning), este loop las recoge solo,
-// sin necesidad de relanzar el runner. batchId ancla qué tanda se está procesando, por si
-// se completa y arranca otra mientras tanto.
+// a la tanda en curso, este loop las recoge solo, sin necesidad de relanzarlo.
 async function runBatch(initialBank, batchId) {
   runState = { cancelled: false };
   let bank = initialBank;
@@ -309,12 +141,12 @@ async function runBatch(initialBank, batchId) {
 
   let i = 0;
   while (true) {
-    bank = store.loadBank(); // releído en cada vuelta: recoge imágenes agregadas a mitad de tanda
-    if (!bank.activeBatch || bank.activeBatch.id !== batchId) break; // otra tanda tomó el lugar
+    bank = store.loadBank();
+    if (!bank.activeBatch || bank.activeBatch.id !== batchId) break;
     if (runState.cancelled || bank.activeBatch.status !== 'running') break;
 
     const itemIds = bank.activeBatch.itemIds;
-    if (i >= itemIds.length) break; // no hay más items — la tanda terminó de verdad
+    if (i >= itemIds.length) break;
 
     const item = bank.items.find(it => it.id === itemIds[i]);
     i++;
@@ -326,7 +158,7 @@ async function runBatch(initialBank, batchId) {
       bank.activeBatch.currentIntervalMs = Math.min(MAX_INTERVAL_MS, bank.activeBatch.currentIntervalMs * 2);
       pushLog(bank, { level: 'warn', itemId: item.id, itemName: item.name, message: `Límite de cuota alcanzado — ritmo ajustado a ${Math.round(bank.activeBatch.currentIntervalMs / 1000)}s` });
     }
-    store.saveBank(bank); // checkpoint: se persiste el avance tras cada imagen, no solo al final de la tanda
+    store.saveBank(bank);
 
     const isLast = i >= itemIds.length;
     if (!isLast && bank.activeBatch.status === 'running' && !runState.cancelled) {
@@ -336,12 +168,6 @@ async function runBatch(initialBank, batchId) {
     }
   }
 
-  // Se relee el estado real desde disco antes de decidir cómo cerrar la tanda: la copia de
-  // `bank` en memoria de este closure puede estar desactualizada si pauseBatch() escribió
-  // 'paused' en disco mientras este loop seguía dando vueltas con su propia copia — sin este
-  // refresh, se podía pisar un 'paused' real con 'completed', dejando items sin terminar
-  // marcados como si la tanda hubiera acabado (bug real observado: 47/80 quedaron pending
-  // pero el batch decía completed).
   const freshBank = store.loadBank();
   if (freshBank.activeBatch && freshBank.activeBatch.id === bank.activeBatch.id && freshBank.activeBatch.status === 'running') {
     freshBank.activeBatch.status = 'completed';
@@ -352,13 +178,6 @@ async function runBatch(initialBank, batchId) {
 }
 
 // newItems: [{ ext, mimeType, name, contentHash, buffer, thumbBuffer }]
-// Guarda el binario de cada imagen usando el mismo id recién generado, en el mismo paso —
-// evita tener que "adivinar" después qué ids se acaban de crear.
-//
-// Si ya hay una tanda corriendo/en cola, las imágenes nuevas se SUMAN a esa misma tanda en
-// vez de crear una tanda paralela — job-runner solo soporta una tanda activa a la vez
-// (bank.activeBatch es un único slot), así que "encolar" en el sentido de esta herramienta
-// significa "agregar al final de la lista de la tanda en curso", no correr dos a la vez.
 function startBatch(newItems) {
   const bank = store.loadBank();
   const isAppendingToRunning = bank.activeBatch && ['running', 'queued', 'paused', 'interrupted'].includes(bank.activeBatch.status);
@@ -367,7 +186,7 @@ function startBatch(newItems) {
   const createdAt = isAppendingToRunning ? bank.activeBatch.createdAt : new Date().toISOString();
 
   const itemsForThisBatch = newItems.map((it, idx) => {
-    const id = 'img_' + Date.now() + '_' + idx;
+    const id = 'camp_' + Date.now() + '_' + idx;
     store.saveImage(id, it.buffer, it.ext);
     if (it.thumbBuffer) store.saveThumb(id, it.thumbBuffer, it.ext);
     return {
@@ -383,9 +202,6 @@ function startBatch(newItems) {
     bank.activeBatch.itemIds = [...bank.activeBatch.itemIds, ...newItemIds];
     pushLog(bank, { level: 'info', message: `${itemsForThisBatch.length} imágenes agregadas a la tanda en curso (sin interrumpirla)` });
     store.saveBank(bank);
-    // Si el runner ya está corriendo, el loop de runBatch va a llegar a estos ids solo
-    // porque itemIds creció — no hace falta relanzarlo. Si estaba pausado/interrumpido,
-    // se deja tal cual: el usuario decide cuándo reanudar.
     return bank;
   }
 
@@ -469,6 +285,53 @@ async function retryItem(itemId) {
   return item;
 }
 
+// Reintento en masa: reinyecta items YA EXISTENTES (con su imagen ya guardada en disco) de
+// vuelta en la cola, en vez de reprocesarlos uno por uno de forma síncrona en el mismo
+// request HTTP (eso colgaría el navegador esperando N llamadas a Gemini seguidas). Se
+// benefician del mismo ritmo anti-rate-limit y preview en vivo que una tanda normal.
+function retryItemsBulk(itemIds) {
+  const bank = store.loadBank();
+  const idSet = new Set(itemIds);
+  const retryable = bank.items.filter(i => idSet.has(i.id) && i.status === 'error');
+  if (!retryable.length) return { queued: 0, bank };
+
+  retryable.forEach(item => { item.status = 'pending'; item.error = null; });
+  const retryIds = retryable.map(i => i.id);
+
+  const isAppendingToRunning = bank.activeBatch && ['running', 'queued', 'paused', 'interrupted'].includes(bank.activeBatch.status);
+
+  if (isAppendingToRunning) {
+    const existingIds = new Set(bank.activeBatch.itemIds);
+    const toAdd = retryIds.filter(id => !existingIds.has(id));
+    bank.activeBatch.itemIds = [...bank.activeBatch.itemIds, ...toAdd];
+    pushLog(bank, { level: 'info', message: `${retryable.length} imágenes con error reencoladas en la tanda en curso` });
+    store.saveBank(bank);
+    return { queued: retryable.length, bank };
+  }
+
+  const batchId = 'batch_' + Date.now();
+  bank.activeBatch = {
+    id: batchId,
+    createdAt: new Date().toISOString(),
+    finishedAt: null,
+    status: 'queued',
+    currentIntervalMs: START_INTERVAL_MS,
+    rateLimitHits: 0,
+    itemIds: retryIds
+  };
+  pushLog(bank, { level: 'info', message: `Tanda de reintento iniciada: ${retryable.length} imágenes con error` });
+  store.saveBank(bank);
+
+  runBatch(bank, batchId).catch(err => {
+    const b = store.loadBank();
+    if (b.activeBatch) { b.activeBatch.status = 'error'; b.activeBatch.error = err.message; }
+    store.saveBank(b);
+    runState = null;
+  });
+
+  return { queued: retryable.length, bank };
+}
+
 function deleteItemsBulk(itemIds) {
   const bank = store.loadBank();
   const idSet = new Set(itemIds);
@@ -488,8 +351,6 @@ function findDuplicateHashes(hashes) {
   return hashes.filter(h => existingHashes.has(h));
 }
 
-// Dedupe por nombre de archivo — más rápido que hashear cientos de imágenes antes de
-// reintentar un lote completo: si el nombre ya existe en el banco, se descarta directo.
 function findDuplicateNames(names) {
   const bank = store.loadBank();
   const existingNames = new Set(bank.items.map(i => i.name).filter(Boolean));
@@ -505,8 +366,7 @@ module.exports = {
   publicBank, currentBank,
   startBatch, resumeBatch, pauseBatch,
   reviewItem, reviewItemsBulk,
-  retryItem, deleteItemsBulk,
+  retryItem, retryItemsBulk, deleteItemsBulk,
   findDuplicateHashes, findDuplicateNames,
-  getLog,
-  needsEnrichment, startEnrichmentBatch, pauseEnrichmentBatch, currentEnrichmentStatus
+  getLog
 };
