@@ -15,6 +15,8 @@ interface WizardFooterProps {
    * botón principal — evita que un módulo tenga que sumar una segunda barra
    * flotante aparte cuando ya hay algo generado para descargar. */
   secondaryAction?: { label: string; icon?: React.ReactNode; onClick: () => void };
+  /** Para pies dentro de una columna angosta: el botón principal ocupa todo el ancho disponible. */
+  block?: boolean;
 }
 
 export const WizardFooter: React.FC<WizardFooterProps> = ({
@@ -26,12 +28,15 @@ export const WizardFooter: React.FC<WizardFooterProps> = ({
   loading = false,
   pulse = false,
   secondaryAction,
+  block = false,
 }) => {
   return (
     <div
-      className="sticky bottom-0 z-10 bg-white border-t border-slate-200 px-4 md:px-7 py-3 md:py-3.5 flex items-center gap-3"
+      className="sticky bottom-0 z-10 bg-white border-t border-slate-200 px-4 md:px-7 py-3 md:py-3.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2.5"
       style={{ boxShadow: '0 -8px 24px rgba(15,23,42,0.04)' }}
     >
+      {(onBack || secondaryAction) && (
+      <div className="flex items-center gap-3 flex-shrink-0">
       {onBack && (
         <>
           <button
@@ -55,8 +60,6 @@ export const WizardFooter: React.FC<WizardFooterProps> = ({
         </>
       )}
 
-      <div className="flex-1" />
-
       {secondaryAction && (
         <button
           type="button"
@@ -68,9 +71,12 @@ export const WizardFooter: React.FC<WizardFooterProps> = ({
           <span className="hidden sm:inline">{secondaryAction.label}</span>
         </button>
       )}
+      </div>
+      )}
 
+      <div className="flex flex-1 items-center justify-end gap-3 min-w-[180px]">
       {costInfo && (
-        <div className="hidden md:block text-right mr-1">
+        <div className="hidden md:block text-right mr-1 flex-shrink-0">
           <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
             {costInfo.label || 'Costo total'}
           </div>
@@ -93,7 +99,7 @@ export const WizardFooter: React.FC<WizardFooterProps> = ({
         style={{ touchAction: 'manipulation' }}
         className={`
           flex flex-col items-center justify-center gap-0.5 rounded-xl transition-colors duration-150
-          px-4 md:px-7 py-3 md:py-3.5 min-h-12 ${secondaryAction ? 'flex-1 md:flex-none md:min-w-[180px]' : 'min-w-[140px] md:min-w-[180px]'}
+          px-4 md:px-7 py-3 md:py-3.5 min-h-12 ${secondaryAction || (block && !onBack) ? 'flex-1' : 'min-w-[140px]'} md:flex-1 ${block ? '' : 'md:max-w-[260px]'} md:min-w-[160px]
           text-sm font-semibold
           ${
             disabled || loading
@@ -115,6 +121,7 @@ export const WizardFooter: React.FC<WizardFooterProps> = ({
           </span>
         )}
       </button>
+      </div>
     </div>
   );
 };

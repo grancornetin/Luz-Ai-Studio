@@ -2,7 +2,7 @@
 // Selector de modelo de generación de imágenes.
 
 import React from 'react';
-import { Zap, Sparkles } from 'lucide-react';
+import { Zap, Sparkles, Target } from 'lucide-react';
 import type { ModelId } from '../../services/imageApiService';
 
 interface ModelSelectorProps {
@@ -12,10 +12,6 @@ interface ModelSelectorProps {
   className?: string;
   exclude?:  ModelId[];
 }
-
-const BananaIcon: React.FC<{ className?: string }> = () => (
-  <span style={{ fontSize: 16, lineHeight: 1 }}>🍌</span>
-);
 
 const MODELS: {
   id:      ModelId;
@@ -31,7 +27,7 @@ const MODELS: {
     label:   'Mayor fidelidad',
     desc:    'Ideal para usar fotos de referencia',
     credits: 2,
-    icon:    <BananaIcon className="w-4 h-4" />,
+    icon:    <Target className="w-4 h-4" />,
     color:   'text-yellow-500',
     ring:    'ring-yellow-400 bg-yellow-50 border-yellow-200',
   },
@@ -66,7 +62,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">
       Opción de calidad · activa: <span className="text-slate-700">{MODELS.find(m => m.id === value)?.label}</span>
     </p>
-    <div className="flex gap-2 min-w-0 overflow-hidden">
+    <div className="flex flex-col gap-2 min-w-0">
       {MODELS.filter(m => !exclude.includes(m.id)).map(m => {
         const active = value === m.id;
         return (
@@ -75,7 +71,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             type="button"
             disabled={disabled}
             onClick={() => onChange(m.id)}
-            className={`flex-1 min-w-0 flex items-center gap-1.5 px-2 py-3 rounded-2xl border-2 transition-all text-left overflow-hidden ${
+            aria-pressed={active}
+            className={`w-full min-w-0 flex items-center gap-3 px-3.5 py-2.5 rounded-2xl border-2 transition-all text-left ${
               active
                 ? `${m.ring} shadow-md`
                 : 'border-slate-100 bg-white hover:border-slate-200'
@@ -84,24 +81,19 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             <div className={`flex-shrink-0 ${active ? m.color : 'text-slate-300'}`}>
               {m.icon}
             </div>
-            <div className="flex-1 min-w-0 overflow-hidden">
-              <div className="flex items-center justify-between gap-1 min-w-0">
-                <span className={`text-[10px] font-black uppercase tracking-wide truncate ${active ? 'text-slate-800' : 'text-slate-400'}`}>
-                  {m.label}
-                </span>
-                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-                  active ? `${m.color} bg-white border border-current` : 'text-slate-300 bg-slate-50'
-                }`}>
-                  {m.credits} cr.
-                </span>
-              </div>
-              <p className={`text-[9px] font-medium leading-tight mt-0.5 truncate ${active ? 'text-slate-500' : 'text-slate-300'}`}>
+            <div className="flex-1 min-w-0">
+              <span className={`block text-[11px] font-black uppercase tracking-wide ${active ? 'text-slate-800' : 'text-slate-500'}`}>
+                {m.label}
+              </span>
+              <p className={`text-[11px] font-medium leading-snug mt-0.5 ${active ? 'text-slate-600' : 'text-slate-400'}`}>
                 {m.desc}
               </p>
             </div>
-            {active && (
-              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${m.id === 'gemini' ? 'bg-yellow-400' : m.id === 'gptimage' ? 'bg-violet-400' : 'bg-emerald-400'} animate-pulse`} />
-            )}
+            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full flex-shrink-0 ${
+              active ? `${m.color} bg-white border border-current` : 'text-slate-400 bg-slate-50'
+            }`}>
+              {m.credits} cr.
+            </span>
           </button>
         );
       })}

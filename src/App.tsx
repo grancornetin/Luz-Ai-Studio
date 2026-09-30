@@ -425,7 +425,7 @@ const AppContent: React.FC = () => {
               </div>
             )}
             <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
-<main className="flex-1 p-4 md:p-10 overflow-x-hidden pb-24 md:pb-10">
+<main className="flex-1 p-4 md:py-10 md:pl-[88px] md:pr-24 overflow-x-hidden pb-24 md:pb-10">
                 <Routes>
                   <Route path="/dashboard"      element={<Dashboard />} />
                   <Route path="/historial"      element={<GenerationHistory />} />

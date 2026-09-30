@@ -90,8 +90,8 @@ const ProHeader: React.FC<{ title: string; subtitle: string; icon: string }> = (
     <div className="w-9 h-9 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 shadow-sm flex-shrink-0">
       <i className={`fa-solid ${icon} text-sm md:text-xl`}></i>
     </div>
-    <div>
-      <h2 className="t-display text-sm md:text-xl text-slate-900">{title}</h2>
+    <div className="min-w-0">
+      <h2 className="t-display text-sm md:text-lg text-slate-900">{title}</h2>
       <p className="t-meta mt-0.5 md:mt-1">{subtitle}</p>
     </div>
   </div>
@@ -256,6 +256,8 @@ export default function CloneImageModule() {
   const [finalImage, setFinalImage] = useState<string | null>(null);
   // Referencia al último finalImage generado, para poder restaurarlo en la comparación antes/después
   const lastFinalImageRef = React.useRef<string | null>(null);
+  const [previewView, setPreviewView] = useState<'target' | 'before' | 'after'>('after');
+  useEffect(() => { if (finalImage) setPreviewView('after'); }, [finalImage]);
 
   // Retomar sesión desde notificación
   useEffect(() => {
@@ -590,7 +592,7 @@ export default function CloneImageModule() {
 
   const activePreview = step === 1 ? targetImage 
                       : step === 3 ? (loading ? null : (baseComposition || targetImage)) 
-                      : step === 4 ? (finalImage || baseComposition) 
+                      : step === 4 ? (previewView === 'target' && targetImage ? targetImage : previewView === 'before' && baseComposition ? baseComposition : (finalImage || baseComposition))
                       : null;
 
   const openLightbox = () => {
@@ -753,7 +755,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
 
         <div className={`grid grid-cols-1 lg:grid-cols-12 gap-8 px-4 md:px-0 ${loading && (step === 3 || step === 4) ? 'hidden' : ''} ${showHistory ? 'hidden' : ''}`}>
 
-          <div className="lg:col-span-4 space-y-6">
+          <div className="lg:col-span-5 xl:col-span-4 space-y-6">
             <section className="bg-white rounded-2xl md:rounded-[40px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
               <WizardStepper
                 steps={CLONE_WIZARD_STEPS}
@@ -1111,7 +1113,7 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
 
           {/* Panel de preview grande: solo desktop. En mobile cada paso ya muestra
               su propia vista inline (ver arriba), esta caja no se duplica. */}
-          <div className="hidden lg:block lg:col-span-8">
+          <div className="hidden lg:block lg:col-span-7 xl:col-span-8">
             <div className="bg-slate-900 rounded-[48px] p-8 md:p-12 min-h-[600px] md:min-h-[800px] flex flex-col shadow-2xl border-8 border-slate-800 relative overflow-hidden">
               
               <div className="flex justify-between items-center mb-8 relative z-10">
@@ -1146,30 +1148,29 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
                  )}
               </div>
 
-              {step === 4 && baseComposition && finalImage && (
-                 <div className="mt-6 space-y-2">
-                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">Antes / Después — toca para comparar</p>
-                   <div className="flex gap-3 h-24">
-                      <button
-                        className={`flex-1 rounded-xl overflow-hidden border-2 transition-all relative ${activePreview === baseComposition ? 'border-white opacity-100 shadow-[0_0_12px_rgba(255,255,255,0.3)]' : 'border-white/20 opacity-50 hover:opacity-80'}`}
-                        onClick={() => setFinalImage(null)}
-                        title="Ver base (antes)"
-                      >
-                         <img src={baseComposition} className="w-full h-full object-cover" />
-                         <span className="absolute bottom-1 inset-x-0 text-center text-[8px] font-black text-white uppercase tracking-widest drop-shadow">Antes</span>
-                      </button>
-                      <div className="flex items-center flex-shrink-0">
-                         <div className="text-white/30 text-lg">→</div>
-                      </div>
-                      <button
-                        className={`flex-1 rounded-xl overflow-hidden border-2 transition-all relative ${activePreview === finalImage ? 'border-brand-400 opacity-100 shadow-[0_0_15px_rgba(247,44,91,0.35)]' : 'border-white/20 opacity-50 hover:opacity-80'}`}
-                        onClick={() => { if (lastFinalImageRef.current) setFinalImage(lastFinalImageRef.current); }}
-                        title="Ver imagen final (después)"
-                      >
-                         <img src={finalImage} className="w-full h-full object-cover" />
-                         <span className="absolute bottom-1 inset-x-0 text-center text-[8px] font-black text-white uppercase tracking-widest drop-shadow">Después</span>
-                      </button>
-                   </div>
+              {step === 4 && baseComposition && (
+                 <div className="mt-6 flex items-end justify-center gap-4">
+                   {([
+                     { id: 'target' as const, label: 'Objetivo', img: targetImage },
+                     { id: 'before' as const, label: 'Antes', img: baseComposition },
+                     { id: 'after' as const, label: 'Después', img: finalImage },
+                   ]).filter(t => !!t.img).map(t => {
+                     const active = activePreview === t.img;
+                     return (
+                       <button
+                         key={t.id}
+                         type="button"
+                         onClick={() => setPreviewView(t.id)}
+                         aria-pressed={active}
+                         className="flex flex-col items-center gap-2 group/thumb"
+                       >
+                         <span className={`block w-28 xl:w-32 aspect-[3/4] rounded-2xl overflow-hidden border-2 transition-all ${active ? 'border-brand-400 shadow-[0_0_18px_rgba(247,44,91,0.4)]' : 'border-white/20 opacity-60 group-hover/thumb:opacity-100'}`}>
+                           <img src={t.img!} alt={t.label} className="w-full h-full object-cover" />
+                         </span>
+                         <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${active ? 'text-white' : 'text-slate-400'}`}>{t.label}</span>
+                       </button>
+                     );
+                   })}
                  </div>
               )}
 

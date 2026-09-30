@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, AlertTriangle } from 'lucide-react';
 
 interface UploadConsentModalProps {
   onAccept: () => void;
@@ -37,9 +37,10 @@ const UploadConsentModal: React.FC<UploadConsentModalProps> = ({ onAccept, onCan
         </p>
       </div>
 
-      <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
-        <p className="text-[10px] font-bold text-amber-700 leading-relaxed">
-          ⚠️ El uso de imágenes de personas reales sin su consentimiento puede
+      <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex items-start gap-2.5">
+        <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-px" />
+        <p className="text-[11px] font-bold text-amber-700 leading-relaxed">
+          El uso de imágenes de personas reales sin su consentimiento puede
           constituir una violación legal. LUZ IA no se responsabiliza por el uso
           indebido del contenido generado.
         </p>

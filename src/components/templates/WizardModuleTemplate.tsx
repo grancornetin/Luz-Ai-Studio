@@ -42,7 +42,7 @@ export const WizardModuleTemplate: React.FC<WizardModuleTemplateProps> = ({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
       {/* ── Columna izquierda: controles ── */}
-      <div className="lg:col-span-4">
+      <div className="lg:col-span-5 xl:col-span-4">
         <div className="bg-white rounded-[28px] md:rounded-[36px] shadow-sm border border-slate-100 overflow-hidden flex flex-col min-h-[580px]">
           {/* Header */}
           <div className="px-6 md:px-8 pt-6 pb-4 border-b border-slate-100">
@@ -86,7 +86,7 @@ export const WizardModuleTemplate: React.FC<WizardModuleTemplateProps> = ({
       </div>
 
       {/* ── Columna derecha: preview ── */}
-      <div className="lg:col-span-8">
+      <div className="lg:col-span-7 xl:col-span-8">
         {previewArea}
       </div>
     </div>

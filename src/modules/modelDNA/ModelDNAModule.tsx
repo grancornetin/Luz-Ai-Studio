@@ -298,16 +298,16 @@ const ModelDNAModule: React.FC<ModelDNAModuleProps> = ({ onSave }) => {
                   </span>
                 </div>
                 {/* Tarjetas grandes y verticales — 2 arriba + 1 opcional abajo a ancho completo */}
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
                   <div className="aspect-[3/5]">
                     <ImageSlot value={files[0] || null} onChange={v => updateFile(0, v)} label="Frontal" hint="Vista principal" aspectRatio="auto" disabled={isLoading} />
                   </div>
                   <div className="aspect-[3/5]">
                     <ImageSlot value={files[1] || null} onChange={v => updateFile(1, v)} label="Lateral" hint="Perfil o 3/4" aspectRatio="auto" disabled={isLoading} />
                   </div>
-                </div>
-                <div className="aspect-[3/5] mt-2.5">
-                  <ImageSlot value={files[2] || null} onChange={v => updateFile(2, v)} label="Extra (opcional)" hint="Otro ángulo o expresión" aspectRatio="auto" disabled={isLoading} />
+                  <div className="aspect-[3/5] col-span-2 md:col-span-1">
+                    <ImageSlot value={files[2] || null} onChange={v => updateFile(2, v)} label="Extra (opcional)" hint="Otro ángulo o expresión" aspectRatio="auto" disabled={isLoading} />
+                  </div>
                 </div>
               </div>
 

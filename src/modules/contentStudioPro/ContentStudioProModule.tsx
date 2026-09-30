@@ -375,8 +375,9 @@ const UploadCard: React.FC<{
   slotType?: SlotType;
   ratio: string; // clase tailwind, ej. 'aspect-[4/5]'
   tag?: string;
-}> = ({ value, onChange, hint, slotType = 'generic', ratio, tag }) => (
-  <div className={`relative ${ratio} [&_.rounded-2xl]:rounded-[22px]`}>
+  className?: string;
+}> = ({ value, onChange, hint, slotType = 'generic', ratio, tag, className = '' }) => (
+  <div className={`relative ${ratio} [&_.rounded-2xl]:rounded-[22px] ${className}`}>
     <ImageSlot value={value} onChange={onChange} hint={hint} slotType={slotType} aspectRatio="auto" />
     {value && tag && (
       <span className="pointer-events-none absolute bottom-3 left-3 text-[10px] font-extrabold uppercase text-white bg-black/55 px-2.5 py-1 rounded-full">
@@ -1657,7 +1658,7 @@ const ContentStudioProModule: React.FC<ContentStudioProModuleProps> = ({ avatars
           <div className="text-[13px] font-extrabold text-slate-700">Sumar más detalles</div>
           <div className="text-[11px] text-slate-400 mt-0.5">Opcional. Si no subís nada, elegimos algo que combine.</div>
         </div>
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-2 gap-2.5 md:max-w-[400px]">
           {slots.map(k => {
             const d = defs[k];
             return (
@@ -1693,28 +1694,34 @@ const ContentStudioProModule: React.FC<ContentStudioProModuleProps> = ({ avatars
 
           {productMode === 'single' ? (
             <div className="flex flex-col gap-3">
-              <FieldLabel right={<RequiredPill />}>Foto principal</FieldLabel>
-              <UploadCard value={productRef} onChange={setProductRef} hint="Subí la foto de tu producto" slotType="product" ratio="aspect-[4/5]" tag="De frente" />
-              <FieldLabel right={<OptionalNote>Opcional · hasta {MAX_PRODUCT_ANGLES} más</OptionalNote>}>Más ángulos</FieldLabel>
-              <div className="grid grid-cols-2 gap-2.5">
-                {angleSlots.map((a, i) => (
-                  <UploadCard
-                    key={i}
-                    value={a}
-                    onChange={v => setAngleAt(i, v)}
-                    hint="Otro ángulo: atrás, detalle o textura"
-                    slotType="product"
-                    ratio="aspect-[3/5]"
-                    tag={`Ángulo ${i + 2}`}
-                  />
-                ))}
+              <div className="flex flex-col gap-3 md:grid md:grid-cols-[1fr_2fr] md:gap-x-4">
+                <div className="flex flex-col gap-3">
+                  <FieldLabel right={<RequiredPill />}>Foto principal</FieldLabel>
+                  <UploadCard value={productRef} onChange={setProductRef} hint="Subí la foto de tu producto" slotType="product" ratio="aspect-[4/5] md:aspect-[3/5]" tag="De frente" />
+                </div>
+                <div className="flex flex-col gap-3">
+                  <FieldLabel right={<OptionalNote>Opcional · hasta {MAX_PRODUCT_ANGLES} más</OptionalNote>}>Más ángulos</FieldLabel>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {angleSlots.map((a, i) => (
+                      <UploadCard
+                        key={i}
+                        value={a}
+                        onChange={v => setAngleAt(i, v)}
+                        hint="Otro ángulo: atrás, detalle o textura"
+                        slotType="product"
+                        ratio="aspect-[3/5]"
+                        tag={`Ángulo ${i + 2}`}
+                      />
+                    ))}
+                  </div>
+                </div>
               </div>
               <Tip>Con más ángulos, el producto sale <b>más fiel</b> en las fotos de detalle y de costado.</Tip>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
               <FieldLabel right={<OptionalNote>Uno por foto · hasta {MAX_COLLECTION}</OptionalNote>}>Tus productos</FieldLabel>
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
                 {collectionRefs.map((ref, i) => (
                   <UploadCard
                     key={`${i}-${ref.length}`}
@@ -1799,7 +1806,7 @@ const ContentStudioProModule: React.FC<ContentStudioProModuleProps> = ({ avatars
           <Title lead="Mostranos" accent="el look." />
           <Desc>Una foto del outfit completo, con buena luz.</Desc>
           <FieldLabel right={<RequiredPill />}>Foto del look</FieldLabel>
-          <UploadCard value={outfitRef} onChange={setOutfitRef} hint="Subí la foto del look" slotType="outfit" ratio="aspect-[4/5]" tag="Look" />
+          <UploadCard value={outfitRef} onChange={setOutfitRef} hint="Subí la foto del look" slotType="outfit" ratio="aspect-[4/5]" tag="Look" className="md:w-full md:max-w-[300px]" />
           {renderMoreDetails(['scene', 'object'])}
           <UploadDisclaimer />
         </div>
@@ -1812,7 +1819,7 @@ const ContentStudioProModule: React.FC<ContentStudioProModuleProps> = ({ avatars
           <Title lead="Mostranos" accent="el lugar." />
           <Desc>Una foto del espacio, como lo ve alguien que entra.</Desc>
           <FieldLabel right={<RequiredPill />}>Foto del lugar</FieldLabel>
-          <UploadCard value={sceneRef} onChange={setSceneRef} hint="Subí la foto del lugar" slotType="scene" ratio="aspect-[4/5]" tag="Lugar" />
+          <UploadCard value={sceneRef} onChange={setSceneRef} hint="Subí la foto del lugar" slotType="scene" ratio="aspect-[4/5]" tag="Lugar" className="md:w-full md:max-w-[300px]" />
           <FieldLabel right={<OptionalNote>Opcional</OptionalNote>}>¿Qué se puede hacer ahí?</FieldLabel>
           <textarea
             value={sceneText}

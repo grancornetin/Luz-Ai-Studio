@@ -89,7 +89,7 @@ const ChannelIcon: React.FC<{ icon: string; size?: number; className?: string }>
 const UpgradeWall: React.FC<{ proCredits: number }> = ({ proCredits }) => {
   const navigate = useNavigate();
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-8 px-4">
+    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-8 px-4 py-12 md:py-14">
       <div className="w-20 h-20 bg-brand-50 border border-brand-100 rounded-[28px] flex items-center justify-center">
         <Megaphone className="w-10 h-10 text-brand-600" />
       </div>
@@ -1156,8 +1156,10 @@ const CampaignModule: React.FC = () => {
                     </div>
                   )}
 
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-8 items-start">
+                  <div className="md:col-span-7">
                   {/* Grid de anclas — preserva índices para labels correctos aunque una falle */}
-                  <div className="grid grid-cols-2 gap-3 mb-5 max-w-sm">
+                  <div className="grid grid-cols-2 gap-3 md:gap-5 mb-5 md:mb-0">
                     {anchorOptions.map((url, i) => {
                       if (!url) return null; // omitir slots vacías (ancla que falló)
                       const label     = i === 0 ? 'A' : 'B';
@@ -1165,7 +1167,7 @@ const CampaignModule: React.FC = () => {
                       const isSelected = selectedAnchor === url;
                       return (
                         <button key={i} type="button" onClick={() => setSelectedAnchor(url)}
-                          className={`relative aspect-[3/4] rounded-2xl overflow-hidden border-4 transition-all cursor-pointer group ${isSelected ? 'border-brand-600 shadow-xl' : 'border-transparent hover:border-slate-300'}`}>
+                          className={`relative min-w-0 aspect-[3/4] rounded-2xl overflow-hidden border-4 transition-all cursor-pointer group ${isSelected ? 'border-brand-600 shadow-xl' : 'border-transparent hover:border-slate-300'}`}>
                           <img src={url} alt={`Opción ${label}`} className="w-full h-full object-cover" />
                           <div className={`absolute inset-0 transition-opacity ${isSelected ? 'bg-brand-600/10' : 'bg-black/0 group-hover:bg-black/5'}`} />
                           {/* Badge seleccionado */}
@@ -1189,7 +1191,9 @@ const CampaignModule: React.FC = () => {
                       );
                     })}
                   </div>
+                  </div>
 
+                  <div className="md:col-span-5 md:sticky md:top-6">
                   {/* Botón principal — generar la campaña completa (ya cobrada en el paso 1) */}
                   <button type="button"
                     onClick={() => selectedAnchor && handleGenerateCampaign()}
@@ -1219,6 +1223,8 @@ const CampaignModule: React.FC = () => {
                   <div className="flex items-start gap-2 px-3.5 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-[1.5]">
                     <Lightbulb size={14} className="flex-shrink-0 mt-0.5 text-slate-400" />
                     Puedes cerrar la ventana. Te avisaremos cuando termine.
+                  </div>
+                  </div>
                   </div>
                 </div>
               )}

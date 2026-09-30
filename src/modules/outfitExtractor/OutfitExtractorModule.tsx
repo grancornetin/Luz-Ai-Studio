@@ -56,8 +56,8 @@ const StepHeader: React.FC<{ title: string; subtitle: string; icon: string }> = 
     <div className="w-9 h-9 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 shadow-sm flex-shrink-0">
       <i className={`fa-solid ${icon} text-sm md:text-xl`} />
     </div>
-    <div>
-      <h2 className="t-display text-sm md:text-xl text-slate-900">{title}</h2>
+    <div className="min-w-0">
+      <h2 className="t-display text-sm md:text-lg text-slate-900">{title}</h2>
       <p className="t-meta mt-0.5 md:mt-1">{subtitle}</p>
     </div>
   </div>
@@ -800,7 +800,7 @@ const OutfitExtractorModule: React.FC = () => {
           <div className={`grid grid-cols-1 lg:grid-cols-12 gap-8 px-4 md:px-0`}>
 
             {/* Columna izquierda: wizard */}
-            <div className="lg:col-span-4 space-y-6">
+            <div className="lg:col-span-5 xl:col-span-4 space-y-6">
               <section className="bg-white rounded-2xl md:rounded-[40px] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
                 <WizardStepper
                   steps={OUTFIT_WIZARD_STEPS}
@@ -1032,6 +1032,7 @@ const OutfitExtractorModule: React.FC = () => {
                   <WizardFooter
                     onContinue={startDetection}
                     continueLabel="Buscar prendas"
+                    block
                     disabled={!sourceImage}
                   />
                 )}
@@ -1041,6 +1042,7 @@ const OutfitExtractorModule: React.FC = () => {
                     onContinue={confirmSelectionAndRender}
                     continueLabel={`Generar ${selectedItemsCount > 0 ? `(${selectedItemsCount})` : ''}`}
                     disabled={selectedItemsCount === 0}
+                    block
                     costInfo={selectedItemsCount > 0 ? { cost: renderCost, label: 'Costo total' } : undefined}
                   />
                 )}
@@ -1089,6 +1091,7 @@ const OutfitExtractorModule: React.FC = () => {
                   <WizardFooter
                     onContinue={reset}
                     continueLabel="Nueva producción"
+                    block
                     secondaryAction={{
                       label: 'Descargar ZIP',
                       icon: <i className="fa-solid fa-file-zipper text-sm" />,
@@ -1105,7 +1108,7 @@ const OutfitExtractorModule: React.FC = () => {
                 completos en la columna izquierda: tarjeta de subida, tab
                 Foto/Lista) — "reviewing_renders" y "final_kit" sí tienen
                 contenido único que también se muestra en mobile. */}
-            <div className="lg:col-span-8">
+            <div className="lg:col-span-7 xl:col-span-8">
 
               {/* Estado idle: placeholder oscuro — solo desktop */}
               {step === 'idle' && (
