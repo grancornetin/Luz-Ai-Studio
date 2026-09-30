@@ -740,7 +740,7 @@ const CampaignModule: React.FC = () => {
             <h1 className="t-display text-3xl text-slate-900">
               Campaign <span className="text-brand-600">Generator</span>
             </h1>
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-2">
               <p className="text-slate-500 font-medium italic text-xs md:text-sm">
                 Crea las imágenes, los textos y el calendario de tu campaña
               </p>

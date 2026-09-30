@@ -670,8 +670,8 @@ else if (activePreview === targetImage) startIndex = images.indexOf(targetImage!
         <header className="flex items-center justify-between gap-3 px-4 pt-2 md:pt-2">
           <div>
             <h1 className="t-display text-[13px] md:text-4xl text-slate-900 leading-none">Recrear <span className="text-brand-600">foto</span></h1>
-            <div className="hidden md:flex items-center gap-2 mt-1">
-              <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.3em] italic">Usa una foto de inspiración con tu modelo o producto</p>
+            <div className="hidden md:flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
+              <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.18em] xl:tracking-[0.3em] italic">Usa una foto de inspiración con tu modelo o producto</p>
               <ModuleTutorial moduleId="sceneClone" steps={TUTORIAL_CONFIGS.sceneClone} />
             </div>
           </div>

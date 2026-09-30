@@ -858,7 +858,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-5 px-1 mb-4 md:mb-8">
           <div>
             <h1 className="t-display text-xl md:text-3xl text-slate-900">Foto de producto</h1>
-            <div className="flex items-center gap-2 mt-1 md:mt-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 md:mt-2">
               <p className="text-slate-500 font-medium italic text-xs md:text-sm">
                 Crea fotos para vender en 6 pasos.{' '}
                 <span className="hidden md:inline normal-case font-normal text-slate-300 text-[9px]">

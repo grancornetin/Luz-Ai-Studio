@@ -54,11 +54,11 @@ const ModuleTutorial: React.FC<ModuleTutorialProps> = ({
       {/* TRIGGER BUTTON */}
       <button
         onClick={open}
-        className={`flex items-center gap-1.5 text-slate-400 hover:text-brand-600 transition-colors ${
-          compact ? 'text-[9px]' : 'text-[10px]'
+        className={`flex items-center gap-1.5 text-slate-500 hover:text-brand-600 transition-colors min-h-8 px-1 whitespace-nowrap ${
+          compact ? 'text-[10px]' : 'text-[11px]'
         } font-black uppercase tracking-widest`}
       >
-        <HelpCircle className={compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} />
+        <HelpCircle className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
         {label}
       </button>
 
@@ -101,7 +101,8 @@ const ModuleTutorial: React.FC<ModuleTutorialProps> = ({
                 <button
                   key={i}
                   onClick={() => setCurrent(i)}
-                  className="relative flex items-center justify-center w-3 h-3"
+                  aria-label={`Ir al paso ${i + 1}`}
+                  className="relative flex items-center justify-center w-6 h-6"
                 >
                   {/* El punto base */}
                   <div 

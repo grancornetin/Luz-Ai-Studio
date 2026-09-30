@@ -252,7 +252,7 @@ const ModelDNAModule: React.FC<ModelDNAModuleProps> = ({ onSave }) => {
           <h1 className="t-display text-3xl text-slate-900">
             Model <span className="text-brand-600">DNA</span>
           </h1>
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-2">
             <p className="text-slate-500 font-medium italic text-xs md:text-sm">
               Clona un modelo digital fiel a una persona real
             </p>

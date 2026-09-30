@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { ShieldCheck, AlertTriangle } from 'lucide-react';
 
@@ -7,7 +8,7 @@ interface UploadConsentModalProps {
   onCancel: () => void;
 }
 
-const UploadConsentModal: React.FC<UploadConsentModalProps> = ({ onAccept, onCancel }) => (
+const UploadConsentModal: React.FC<UploadConsentModalProps> = ({ onAccept, onCancel }) => createPortal(
   <div
     className="fixed inset-0 z-[9000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-5"
     onClick={onCancel}
@@ -27,11 +28,11 @@ const UploadConsentModal: React.FC<UploadConsentModalProps> = ({ onAccept, onCan
           Al subir imágenes, confirmas que tienes todos los derechos, permisos y
           autorizaciones necesarias sobre el contenido (incluyendo identidades,
           marcas y elementos presentes), y aceptas nuestros{' '}
-          <Link to="/terminos" className="text-indigo-600 underline font-bold" target="_blank">
+          <Link to="/terminos" className="text-brand-600 underline font-bold" target="_blank">
             Términos de uso
           </Link>{' '}
           y{' '}
-          <Link to="/descargo" className="text-indigo-600 underline font-bold" target="_blank">
+          <Link to="/descargo" className="text-brand-600 underline font-bold" target="_blank">
             Descargo de responsabilidad
           </Link>.
         </p>
@@ -55,13 +56,14 @@ const UploadConsentModal: React.FC<UploadConsentModalProps> = ({ onAccept, onCan
         </button>
         <button
           onClick={onAccept}
-          className="flex-1 py-3.5 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+          className="flex-1 py-3.5 bg-gradient-to-br from-brand-400 to-brand-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest active:scale-[0.97] transition-all shadow-[0_12px_28px_rgba(247,44,91,0.32)]"
         >
           Acepto y continúo
         </button>
       </div>
     </div>
-  </div>
+  </div>,
+  document.body
 );
 
 export default UploadConsentModal;

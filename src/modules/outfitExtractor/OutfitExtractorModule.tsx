@@ -674,7 +674,7 @@ const OutfitExtractorModule: React.FC = () => {
         <header className="flex items-center justify-between gap-3 px-1 mb-2">
           <div>
             <h1 className="t-display text-[13px] md:text-3xl text-slate-900 leading-none">Extraer <span className="text-brand-600">prendas</span></h1>
-            <div className="hidden md:flex items-center gap-2 mt-2">
+            <div className="hidden md:flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-2">
               <p className="text-slate-500 font-medium italic text-xs md:text-sm">
                 Separa cada prenda de una foto y crea una imagen limpia para tu catálogo.
               </p>
