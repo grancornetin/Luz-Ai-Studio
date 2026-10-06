@@ -1,885 +1,542 @@
-/**
- * Dashboard.tsx — UPDATED
- * Punto 5: Añade Prompt Gallery e Historial como cards visibles
- * en el dashboard principal, no solo en el menú lateral.
- */
-import React, { useState, useEffect } from 'react';
-import { AvatarProfile, ProductProfile } from '../../types';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 // @ts-ignore
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../modules/auth/AuthContext';
 import {
-  Zap, TrendingUp, User, Package, AlertCircle,
-  Crown, ArrowRight, Sparkles, Clock, Images,
-  Settings, FileText, Mail, CreditCard, UserCircle, Gift, ShoppingCart, Tag, LogOut, FolderOpen,
-  CalendarDays, Megaphone, Palette,
+  AlertCircle, ArrowRight, CalendarDays, Camera, Check, CheckCircle2, ChevronDown, ChevronRight,
+  Circle, Clapperboard, Copy, Gift, Images, Megaphone, Package, Palette, Shirt, ShoppingBag,
+  SlidersHorizontal, Smartphone, Tag, UserRound, Users, WandSparkles, X, Zap,
 } from 'lucide-react';
+import { useAuth } from '../modules/auth/AuthContext';
+import { useBrandProfiles } from '../hooks/useBrandProfiles';
+import { generationHistoryService, type GenerationRecord } from '../services/generationHistoryService';
 import { MISSIONS, getUserMissions, completeMission, isMissionOnCooldown, type UserMissions } from '../services/missionsService';
 import { getReferralStats, redeemSpecialCode } from '../services/referralService';
 import DailyInspiration from '../components/DailyInspiration';
 
-// creditsGemini: costo con Nano Banana 2 | creditsSeedream: costo con Seedream
-// null = precio fijo (no varía con el modelo) | 0 = gratis
-const MODULE_GROUPS = [
-  {
-    groupLabel: 'Crear modelo digital',
-    groupColor: 'bg-indigo-600',
-    modules: [
-      {
-        path: '/crear/clonar',
-        title: 'CREAR MODELO',
-        subtitle: 'desde tus fotos',
-        description: 'Crea tu modelo digital a partir de fotos reales y úsalo en tus imágenes.',
-        icon: 'fa-camera',
-        accent: 'text-indigo-600',
-        bg: 'bg-indigo-50',
-        creditsGemini: 8,    // 4 imágenes × 2 cr — siempre Gemini
-        creditsSeedream: null, // no aplica — solo Gemini
-      },
-      {
-        path: '/crear/manual',
-        title: 'CREAR MODELO',
-        subtitle: 'desde cero',
-        description: 'Diseña el modelo perfecto para tu marca sin necesitar fotos de nadie.',
-        icon: 'fa-sliders',
-        accent: 'text-violet-600',
-        bg: 'bg-violet-50',
-        creditsGemini: 8,
-        creditsSeedream: null,
-      },
-      {
-        path: '/modelos',
-        title: 'MIS MODELOS',
-        subtitle: 'Tus modelos guardados',
-        description: 'Encuentra tus modelos guardados y descarga el que necesites.',
-        icon: 'fa-user-astronaut',
-        accent: 'text-purple-600',
-        bg: 'bg-purple-50',
-        creditsGemini: 0,
-        creditsSeedream: 0,
-      },
-    ]
-  },
-  {
-    groupLabel: 'Crear contenido',
-    groupColor: 'bg-emerald-600',
-    modules: [
-      {
-        path: '/prompt-studio',
-        title: 'CREAR IMAGEN LIBRE',
-        subtitle: 'Describe lo que quieres',
-        description: 'Describe la foto que necesitas o parte de un ejemplo listo para usar.',
-        icon: 'fa-wand-magic-sparkles',
-        accent: 'text-indigo-600',
-        bg: 'bg-indigo-50',
-        creditsGemini: 2,
-        creditsSeedream: 1,
-      },
-      {
-        path: '/studio-pro',
-        title: 'CONTENIDO PARA REDES',
-        subtitle: 'Fotos naturales para redes',
-        description: 'Crea fotos naturales con tu modelo, tu producto y el estilo de tu marca.',
-        icon: 'fa-mobile-screen-button',
-        accent: 'text-emerald-600',
-        bg: 'bg-emerald-50',
-        creditsGemini: 4,    // 2 cr × 2 (master + shot)
-        creditsSeedream: 2,
-      },
-      {
-        path: '/clonar',
-        title: 'CLONAR ESCENA',
-        subtitle: 'Recrea una foto con tu producto',
-        description: 'Sube una foto que te guste y recrea ese mismo estilo con tu producto o modelo.',
-        icon: 'fa-clone',
-        accent: 'text-blue-600',
-        bg: 'bg-blue-50',
-        creditsGemini: 2,
-        creditsSeedream: 1,
-      },
-    ]
-  },
-  {
-    groupLabel: 'Contenido para vender',
-    groupColor: 'bg-brand-600',
-    modules: [
-      {
-        path: '/campaign',
-        title: 'CAMPAÑAS PUBLICITARIAS',
-        subtitle: 'Ideas + piezas para vender',
-        description: 'Crea las imágenes y textos de una campaña para lanzar o promocionar tu producto.',
-        icon: 'fa-bullhorn',
-        accent: 'text-brand-600',
-        bg: 'bg-brand-50',
-        creditsGemini: 2,
-        creditsSeedream: null,
-        proCredit: true,
-        lucideIcon: 'megaphone',
-      },
-      {
-        path: '/photodump',
-        title: 'CONTENIDO ORGÁNICO',
-        subtitle: 'Historias para Instagram',
-        description: 'Crea una serie de fotos conectadas, con textos listos para publicar.',
-        icon: 'fa-images',
-        accent: 'text-violet-600',
-        bg: 'bg-violet-50',
-        creditsGemini: 2,
-        creditsSeedream: null,
-        proCredit: true,
-        lucideIcon: 'images',
-      },
-      {
-        path: '/planner',
-        title: 'PLANES DE CONTENIDO',
-        subtitle: 'Qué publicar cada día',
-        description: 'Organiza tu semana con ideas, textos y la herramienta indicada para crear cada pieza.',
-        icon: 'fa-calendar-days',
-        accent: 'text-rose-600',
-        bg: 'bg-rose-50',
-        creditsGemini: 0,
-        creditsSeedream: 0,
-        lucideIcon: 'calendar',
-      },
-    ]
-  },
-  {
-    groupLabel: 'Herramientas',
-    groupColor: 'bg-slate-700',
-    modules: [
-      {
-        path: '/outfit-extractor',
-        title: 'EXTRAER PRENDAS',
-        subtitle: 'Separa tu ropa para catálogo',
-        description: 'Sube una foto con ropa y te damos cada prenda por separado, lista para publicar.',
-        icon: 'fa-shirt',
-        accent: 'text-purple-600',
-        bg: 'bg-purple-50',
-        creditsGemini: 2,
-        creditsSeedream: 1,
-      },
-      {
-        path: '/productos',
-        title: 'FOTO DE PRODUCTO',
-        subtitle: 'Fotos de catálogo profesional',
-        description: 'Sube fotos simples de tu producto y obtén imágenes de catálogo listas para vender.',
-        icon: 'fa-gem',
-        accent: 'text-slate-700',
-        bg: 'bg-slate-100',
-        creditsGemini: 2,
-        creditsSeedream: 1,
-      },
-    ]
-  },
-  // Herramienta interna de diagnóstico, solo visible en desarrollo local.
-  ...(import.meta.env.DEV ? [{
-    groupLabel: 'Dev tools',
-    groupColor: 'bg-slate-800',
-    modules: [
-      {
-        path: '/director-lab',
-        title: 'DIRECTOR LAB',
-        subtitle: 'Diagnóstico interno',
-        description: 'Ejecuta el Director sobre los bancos reales y revisa su trazabilidad completa.',
-        icon: 'fa-clapperboard',
-        accent: 'text-slate-700',
-        bg: 'bg-slate-100',
-        creditsGemini: 0,
-        creditsSeedream: 0,
-      },
-    ]
-  }] : []),
-];
+type Icon = React.ComponentType<{ className?: string }>;
 
-interface DashboardProps {
-  avatars?: AvatarProfile[];
-  products?: ProductProfile[];
+interface Goal {
+  icon: Icon;
+  title: string;
+  description: string;
+  cta: { label: string; path: string };
+  links: { label: string; path: string }[];
+  featured?: boolean;
 }
 
-type DashTab = 'home' | 'account' | 'profile' | 'brands' | 'terms' | 'contact';
+const GOALS: Goal[] = [
+  {
+    icon: ShoppingBag,
+    title: 'Vender un producto',
+    description: 'Fotos de catálogo y campañas listas para publicar.',
+    cta: { label: 'Foto de producto', path: '/productos' },
+    links: [{ label: 'Campaña publicitaria', path: '/campaign' }, { label: 'Extraer prendas', path: '/outfit-extractor' }],
+    featured: true,
+  },
+  {
+    icon: Smartphone,
+    title: 'Contenido para redes',
+    description: 'Fotos naturales con tu avatar, tu producto y tu estilo.',
+    cta: { label: 'Crear para redes', path: '/studio-pro' },
+    links: [{ label: 'Clonar escena', path: '/clonar' }, { label: 'Historia en fotos', path: '/photodump' }],
+  },
+  {
+    icon: UserRound,
+    title: 'Un avatar digital',
+    description: 'Crea la cara de tu marca y úsala en todas tus fotos.',
+    cta: { label: 'Crear desde fotos', path: '/crear/clonar' },
+    links: [{ label: 'Diseñar desde cero', path: '/crear/manual' }, { label: 'Mis avatares', path: '/modelos' }],
+  },
+  {
+    icon: CalendarDays,
+    title: 'Planificar mi semana',
+    description: 'Qué publicar cada día, con textos y la herramienta indicada.',
+    cta: { label: 'Abrir planificador', path: '/planner' },
+    links: [{ label: 'Mis marcas', path: '/mis-marcas' }],
+  },
+];
 
-const NAV_TABS: { id: DashTab; label: string; icon: React.ReactNode; route?: string }[] = [
-  { id: 'home',    label: 'Inicio',     icon: <i className="fa-solid fa-house text-xs" /> },
-  { id: 'account', label: 'Cuenta',     icon: <CreditCard className="w-3.5 h-3.5" /> },
-  { id: 'profile', label: 'Perfil',     icon: <UserCircle className="w-3.5 h-3.5" />, route: '/cuenta' },
-  { id: 'brands',  label: 'Mis Marcas', icon: <Palette className="w-3.5 h-3.5" />,    route: '/mis-marcas' },
-  { id: 'terms',   label: 'Términos',   icon: <FileText className="w-3.5 h-3.5" />,   route: '/terminos' },
-  { id: 'contact', label: 'Contacto',   icon: <Mail className="w-3.5 h-3.5" />,       route: '/contacto' },
+interface Tool { icon: Icon; label: string; hint: string; cost: string; path: string }
+
+const TOOL_GROUPS: { label: string; tools: Tool[] }[] = [
+  {
+    label: 'Avatar digital',
+    tools: [
+      { icon: Camera, label: 'Crear desde fotos', hint: 'A partir de fotos reales', cost: '8 cr.', path: '/crear/clonar' },
+      { icon: SlidersHorizontal, label: 'Diseñar desde cero', hint: 'Sin fotos de nadie', cost: '8 cr.', path: '/crear/manual' },
+      { icon: Users, label: 'Mis avatares', hint: 'Tus avatares guardados', cost: '', path: '/modelos' },
+    ],
+  },
+  {
+    label: 'Crear contenido',
+    tools: [
+      { icon: WandSparkles, label: 'Imagen libre', hint: 'Describe lo que quieres', cost: '2 cr.', path: '/prompt-studio' },
+      { icon: Smartphone, label: 'Contenido para redes', hint: 'Fotos naturales', cost: '4 cr.', path: '/studio-pro' },
+      { icon: Copy, label: 'Clonar escena', hint: 'Recrea el estilo de una foto', cost: '2 cr.', path: '/clonar' },
+    ],
+  },
+  {
+    label: 'Vender',
+    tools: [
+      { icon: Megaphone, label: 'Campañas', hint: 'Imágenes y textos para vender', cost: 'Sesión Pro', path: '/campaign' },
+      { icon: Images, label: 'Historia en fotos', hint: 'Series para Instagram', cost: 'Sesión Pro', path: '/photodump' },
+      { icon: Package, label: 'Foto de producto', hint: 'Catálogo profesional', cost: '2 cr.', path: '/productos' },
+      { icon: Shirt, label: 'Extraer prendas', hint: 'Separa cada prenda', cost: '2 cr.', path: '/outfit-extractor' },
+      { icon: CalendarDays, label: 'Planificador', hint: 'Qué publicar cada día', cost: '', path: '/planner' },
+      { icon: Palette, label: 'Mis marcas', hint: 'El perfil de tu marca', cost: '', path: '/mis-marcas' },
+    ],
+  },
+  ...(import.meta.env.DEV ? [{
+    label: 'Interno',
+    tools: [{ icon: Clapperboard, label: 'Director Lab', hint: 'Diagnóstico interno', cost: '', path: '/director-lab' }],
+  }] : []),
 ];
 
 const PREVIEW_PLANS = ['free', 'weekly', 'starter', 'pro', 'studio'] as const;
 
-const Dashboard: React.FC<DashboardProps> = ({ avatars = [], products = [] }) => {
+const formatWhen = (iso: string) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const today = new Date();
+  const days = Math.floor((new Date(today.toDateString()).getTime() - new Date(d.toDateString()).getTime()) / 86400000);
+  if (days === 0) return `Hoy, ${d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}`;
+  if (days === 1) return 'Ayer';
+  return d.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' });
+};
+
+const SectionTitle: React.FC<{ title: string; action?: React.ReactNode }> = ({ title, action }) => (
+  <div className="mb-4 flex items-end justify-between gap-3">
+    <h2 className="t-display text-lg text-slate-900 md:text-xl">{title}</h2>
+    {action}
+  </div>
+);
+
+const TextLink: React.FC<{ onClick: () => void; children: React.ReactNode }> = ({ onClick, children }) => (
+  <button onClick={onClick} className="inline-flex min-h-10 shrink-0 items-center gap-1 text-sm font-bold text-brand-700 hover:text-brand-600">
+    {children} <ArrowRight className="h-4 w-4" />
+  </button>
+);
+
+const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { profile, credits, stats, isAdmin, user, previewPlan, setPreviewPlan, signOut, proCredits } = useAuth();
-  const [activeTab, setActiveTab]     = useState<DashTab>('home');
-  const [missions, setMissions]       = useState<UserMissions>({});
-  const [completing, setCompleting]   = useState<string | null>(null);
-  const [missionMsg, setMissionMsg]   = useState<string | null>(null);
-  const [referralCode, setReferralCode] = useState('');
-  const [referralCount, setReferralCount] = useState(0);
-  const [specialCode, setSpecialCode]   = useState('');
-  const [codeMsg, setCodeMsg]           = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [redeemingCode, setRedeemingCode] = useState(false);
+  const { profile, credits, stats, isAdmin, user, proCredits } = useAuth();
+  const { profiles: brands } = useBrandProfiles(user?.uid);
+  const [recent, setRecent] = useState<GenerationRecord[] | null>(null);
+  const [missions, setMissions] = useState<UserMissions>({});
+  const [earnOpen, setEarnOpen] = useState(false);
 
   useEffect(() => {
-    if (user?.uid) {
-      getUserMissions(user.uid).then(setMissions).catch(() => {});
-      getReferralStats(user.uid).then(s => {
-        setReferralCode(s.code);
-        setReferralCount(s.referralCount);
-      }).catch(() => {});
-    }
+    let alive = true;
+    generationHistoryService.getAll(4)
+      .then(r => { if (alive) setRecent(r); })
+      .catch(() => { if (alive) setRecent([]); });
+    return () => { alive = false; };
   }, [user?.uid]);
 
-  const handleRedeemCode = async () => {
-    if (!user?.uid || !specialCode.trim() || redeemingCode) return;
-    setRedeemingCode(true);
-    setCodeMsg(null);
-    const result = await redeemSpecialCode(user.uid, specialCode.trim());
-    setCodeMsg({ type: result.success ? 'success' : 'error', text: result.message });
-    if (result.success) setSpecialCode('');
-    setRedeemingCode(false);
-    setTimeout(() => setCodeMsg(null), 5000);
+  const reloadMissions = () => {
+    if (user?.uid) getUserMissions(user.uid).then(setMissions).catch(() => {});
   };
+  useEffect(reloadMissions, [user?.uid]);
 
-  const handleCompleteMission = async (missionId: string) => {
+  const displayName = profile?.displayName?.split(' ')[0] || 'Creador';
+  const availableCredits = credits?.available || 0;
+  const planName = credits?.plan || 'free';
+  const isOutOfCredits = !isAdmin && availableCredits === 0;
+  const isLowCredits = !isAdmin && availableCredits > 0 && availableCredits <= 5;
+
+  const hasCreations = (recent?.length ?? 0) > 0 || (stats?.totalGenerations ?? 0) > 0;
+  const steps = [
+    { done: brands.length > 0, title: 'Crea tu marca', text: 'Así la IA conoce tu estilo y tu público.', cta: 'Crear marca', path: '/mis-marcas' },
+    { done: (stats?.totalAvatars ?? 0) > 0, title: 'Crea tu avatar digital', text: 'La cara de tu marca, desde fotos o desde cero.', cta: 'Empezar', path: '/crear/clonar' },
+    { done: false, title: 'Tu primera foto', text: 'Prueba con una foto de producto: 2 créditos.', cta: 'Probar', path: '/productos' },
+  ];
+  const stepsDone = steps.filter(s => s.done).length;
+  const nextStep = steps.findIndex(s => !s.done);
+
+  return (
+    <div className="mx-auto max-w-6xl space-y-8 pb-24 animate-in fade-in duration-500 md:space-y-10">
+
+      {/* Estado */}
+      <section className="flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="t-display break-words text-3xl text-slate-900 md:text-[2.6rem]">
+            Hola, <span className="text-brand-600">{displayName}</span>
+          </h1>
+          <p className="mt-2 hidden text-sm text-slate-500 md:block">¿Qué quieres crear hoy?</p>
+        </div>
+        <div className="flex w-full items-center gap-1 rounded-[20px] border border-slate-200 bg-white py-1.5 pl-4 pr-1.5 sm:w-auto">
+          <button onClick={() => navigate('/pricing')} className="flex min-h-10 items-baseline gap-1.5 whitespace-nowrap pr-3 text-xs font-semibold text-slate-500" title="Ver planes">
+            <b className="text-lg font-black tabular-nums text-slate-900">{isAdmin ? '∞' : availableCredits}</b> créditos
+          </button>
+          <span className="mr-3 h-6 w-px bg-slate-200" />
+          <button onClick={() => navigate('/buy-credits')} className="flex min-h-10 items-baseline gap-1.5 whitespace-nowrap pr-3 text-xs font-semibold text-slate-500">
+            <b className="text-lg font-black tabular-nums text-slate-900">{isAdmin ? '∞' : proCredits}</b> sesiones Pro
+          </button>
+          <button
+            onClick={() => navigate('/buy-credits')}
+            className={`ml-auto inline-flex min-h-11 items-center gap-2 rounded-2xl px-4 text-sm font-extrabold text-white transition-colors ${isOutOfCredits ? 'bg-brand-600 hover:bg-brand-700' : 'bg-slate-900 hover:bg-slate-700'}`}
+          >
+            <Zap className="h-4 w-4" /> Recargar
+          </button>
+        </div>
+        {(isOutOfCredits || isLowCredits) && (
+          <div className={`flex w-full flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border px-4 py-3 text-sm font-semibold ${isOutOfCredits ? 'border-brand-200 bg-brand-50 text-brand-700' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+            <AlertCircle className="h-5 w-5 shrink-0" />
+            <span className="min-w-0 flex-1">
+              {isOutOfCredits
+                ? 'Te quedaste sin créditos. Recarga o elige un plan para seguir creando.'
+                : `Te ${availableCredits === 1 ? 'queda 1 crédito' : `quedan ${availableCredits} créditos`}. Recarga o gana más con misiones.`}
+            </span>
+            <button onClick={() => navigate('/pricing')} className="inline-flex min-h-10 items-center gap-1 font-bold underline-offset-2 hover:underline">
+              Ver planes <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+      </section>
+
+      {/* Retomar / primeros pasos */}
+      {recent === null ? (
+        <section aria-busy="true">
+          <SectionTitle title="Retoma donde quedaste" />
+          <div className="-mx-4 flex gap-3 overflow-x-hidden px-4 md:mx-0 md:grid md:grid-cols-4 md:px-0">
+            {[0, 1, 2, 3].map(i => <div key={i} className="aspect-[4/5] w-[58%] shrink-0 animate-pulse rounded-[20px] bg-slate-200/70 md:w-auto" />)}
+          </div>
+        </section>
+      ) : hasCreations && recent.length > 0 ? (
+        <section>
+          <SectionTitle title="Retoma donde quedaste" action={<TextLink onClick={() => navigate('/historial')}>Ver historial</TextLink>} />
+          <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 scrollbar-hide md:mx-0 md:grid md:grid-cols-4 md:gap-4 md:overflow-visible md:px-0">
+            {recent.map(r => (
+              <button
+                key={r.id}
+                onClick={() => navigate('/historial')}
+                className="group w-[58%] shrink-0 snap-start overflow-hidden rounded-[20px] border border-slate-200 bg-white text-left transition-shadow hover:shadow-lg md:w-auto"
+              >
+                <div className="relative aspect-[4/5] bg-slate-100">
+                  <img src={r.imageUrl} alt={r.moduleLabel} loading="lazy" className="h-full w-full object-cover" />
+                  <span className="absolute left-2.5 top-2.5 max-w-[85%] truncate rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-slate-900">
+                    {r.moduleLabel}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2 px-3 py-2.5">
+                  <span className="text-xs text-slate-500">{formatWhen(r.createdAt)}</span>
+                  <ChevronRight className="h-4 w-4 text-slate-300 transition-transform group-hover:translate-x-0.5" />
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : (
+        <section>
+          <SectionTitle
+            title="Tus primeros pasos"
+            action={
+              <div className="flex shrink-0 items-center gap-2.5 whitespace-nowrap text-xs font-bold text-slate-500">
+                <span className="h-1.5 w-14 sm:w-24 overflow-hidden rounded-full bg-slate-200">
+                  <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${(stepsDone / steps.length) * 100}%` }} />
+                </span>
+                {stepsDone} de {steps.length}
+              </div>
+            }
+          />
+          <div className="grid grid-cols-1 gap-2.5 md:grid-cols-3 md:gap-4">
+            {steps.map((s, i) => (
+              <button
+                key={s.title}
+                onClick={() => navigate(s.path)}
+                className="flex items-center gap-3 rounded-[20px] border border-slate-200 bg-white p-4 text-left transition-shadow hover:shadow-md md:flex-col md:items-start md:gap-3 md:p-5"
+              >
+                <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl text-sm font-black ${s.done ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-700'}`}>
+                  {s.done ? <Check className="h-5 w-5" /> : i + 1}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-bold text-slate-900">{s.title}</span>
+                  <span className="mt-0.5 block text-sm leading-snug text-slate-500">{s.done ? 'Listo.' : s.text}</span>
+                </span>
+                {!s.done && (
+                  <span className={`hidden min-h-11 items-center rounded-2xl px-4 text-sm font-extrabold md:inline-flex ${i === nextStep ? 'bg-brand-600 text-white' : 'border border-slate-200 text-slate-900'}`}>
+                    {s.cta}
+                  </span>
+                )}
+                <ChevronRight className="h-5 w-5 shrink-0 text-slate-300 md:hidden" />
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Objetivos */}
+      <section>
+        <SectionTitle title="¿Qué quieres lograr?" />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-4">
+          {GOALS.map(g => (
+            <div
+              key={g.title}
+              className={`flex flex-col gap-3 rounded-[22px] border p-5 ${g.featured ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white'}`}
+            >
+              <span className={`grid h-11 w-11 place-items-center rounded-2xl ${g.featured ? 'bg-white/10' : 'bg-brand-50'}`}>
+                <g.icon className={`h-[22px] w-[22px] ${g.featured ? 'text-white' : 'text-brand-600'}`} />
+              </span>
+              <div>
+                <h3 className="font-sans text-[17px] font-extrabold normal-case not-italic tracking-normal">{g.title}</h3>
+                <p className={`mt-1 text-sm leading-snug ${g.featured ? 'text-slate-300' : 'text-slate-500'}`}>{g.description}</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {g.links.map(l => (
+                  <button
+                    key={l.path}
+                    onClick={() => navigate(l.path)}
+                    className={`inline-flex min-h-9 items-center rounded-full border px-3 text-xs font-semibold transition-colors ${g.featured ? 'border-white/20 bg-white/5 text-slate-100 hover:bg-white/15' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300'}`}
+                  >
+                    {l.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => navigate(g.cta.path)}
+                className={`mt-auto inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl px-4 text-sm font-extrabold text-white transition-colors ${g.featured ? 'bg-brand-600 hover:bg-brand-700' : 'bg-slate-900 hover:bg-slate-700'}`}
+              >
+                {g.cta.label} <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <details className="group mt-4 overflow-hidden rounded-[20px] border border-slate-200 bg-white">
+          <summary className="flex min-h-[52px] cursor-pointer list-none items-center justify-between gap-3 px-5 text-sm font-extrabold text-slate-900 [&::-webkit-details-marker]:hidden">
+            Ver todas las herramientas
+            <ChevronDown className="h-5 w-5 transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="grid grid-cols-1 border-t border-slate-200 md:grid-cols-3">
+            {TOOL_GROUPS.map(group => (
+              <React.Fragment key={group.label}>
+                <p className="col-span-full border-b border-slate-200 bg-slate-50 px-5 pb-1.5 pt-2.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-slate-400">
+                  {group.label}
+                </p>
+                {group.tools.map(t => (
+                  <button
+                    key={t.path}
+                    onClick={() => navigate(t.path)}
+                    className="flex min-h-14 items-center gap-3 border-b border-slate-100 px-5 py-2.5 text-left transition-colors hover:bg-slate-50"
+                  >
+                    <t.icon className="h-[18px] w-[18px] shrink-0 text-slate-600" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold text-slate-900">{t.label}</span>
+                      <span className="block text-xs text-slate-400">{t.hint}</span>
+                    </span>
+                    {t.cost && <span className="ml-auto whitespace-nowrap text-[11px] font-extrabold text-slate-500">{t.cost}</span>}
+                  </button>
+                ))}
+              </React.Fragment>
+            ))}
+          </div>
+        </details>
+      </section>
+
+      {/* Inspiración + gana créditos */}
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <DailyInspiration userName={displayName} plan={planName} />
+        </div>
+        <div className="flex flex-col rounded-[22px] border border-slate-200 bg-white p-5">
+          <h2 className="t-display flex items-center gap-2 text-lg text-slate-900">
+            <Gift className="h-5 w-5 text-brand-600" /> Gana créditos
+          </h2>
+          <ul className="my-4 space-y-2.5">
+            {MISSIONS.slice(0, 3).map(m => {
+              const done = (missions[m.id]?.count ?? 0) >= m.maxCompletions;
+              return (
+                <li key={m.id} className="flex items-center gap-2.5 text-sm text-slate-700">
+                  {done ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" /> : <Circle className="h-4 w-4 shrink-0 text-slate-300" />}
+                  <span className={`min-w-0 flex-1 ${done ? 'text-slate-400 line-through' : ''}`}>{m.label}</span>
+                  <span className="text-xs font-extrabold text-emerald-600">+{m.credits}</span>
+                </li>
+              );
+            })}
+          </ul>
+          <button
+            onClick={() => setEarnOpen(true)}
+            className="mt-auto inline-flex min-h-11 w-full items-center justify-center rounded-2xl border border-slate-200 px-4 text-sm font-extrabold text-slate-900 transition-colors hover:bg-slate-50"
+          >
+            Misiones, referidos y códigos
+          </button>
+        </div>
+      </section>
+
+      {earnOpen && (
+        <EarnCreditsSheet
+          missions={missions}
+          onMissionsChange={reloadMissions}
+          onClose={() => setEarnOpen(false)}
+        />
+      )}
+    </div>
+  );
+};
+
+const EarnCreditsSheet: React.FC<{ missions: UserMissions; onMissionsChange: () => void; onClose: () => void }> = ({ missions, onMissionsChange, onClose }) => {
+  const { user, isAdmin, previewPlan, setPreviewPlan } = useAuth();
+  const [completing, setCompleting] = useState<string | null>(null);
+  const [missionMsg, setMissionMsg] = useState<string | null>(null);
+  const [referralCode, setReferralCode] = useState('');
+  const [referralCount, setReferralCount] = useState(0);
+  const [copied, setCopied] = useState(false);
+  const [specialCode, setSpecialCode] = useState('');
+  const [codeMsg, setCodeMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [redeeming, setRedeeming] = useState(false);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    getReferralStats(user.uid).then(s => { setReferralCode(s.code); setReferralCount(s.referralCount); }).catch(() => {});
+  }, [user?.uid]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const handleMission = async (missionId: string) => {
     if (!user?.uid || completing) return;
-
-    // Misión de Instagram: abrir perfil y completar simbólicamente sin esperar verificación
-    if (missionId === 'follow_instagram') {
-      window.open('https://www.instagram.com/luziastudio', '_blank', 'noopener,noreferrer');
-      setCompleting(missionId);
-      const result = await completeMission(user.uid, missionId);
-      setMissionMsg(result.message || null);
-      if (result.success) getUserMissions(user.uid).then(setMissions).catch(() => {});
-      setCompleting(null);
-      setTimeout(() => setMissionMsg(null), 3000);
-      return;
-    }
-
+    if (missionId === 'follow_instagram') window.open('https://www.instagram.com/luziastudio', '_blank', 'noopener,noreferrer');
     setCompleting(missionId);
     const result = await completeMission(user.uid, missionId);
     setMissionMsg(result.message || null);
-    if (result.success) getUserMissions(user.uid).then(setMissions).catch(() => {});
+    if (result.success) onMissionsChange();
     setCompleting(null);
     setTimeout(() => setMissionMsg(null), 3000);
   };
 
-  const modelId = 'gemini' as const;
-  const displayName      = profile?.displayName?.split(' ')[0] || 'Creador';
-  const availableCredits = credits?.available || 0;
-  const planName         = credits?.plan || 'free';
-  const totalGens        = stats?.totalGenerations || 0;
-  const isOutOfCredits   = !isAdmin && availableCredits === 0;
-  const isLowCredits     = !isAdmin && availableCredits > 0 && availableCredits <= 5;
-  const [dismissedLowCredits, setDismissedLowCredits] = useState(
-    localStorage.getItem('dismissedLowCredits') === 'true'
-  );
-
-  const handleTab = (tab: typeof NAV_TABS[0]) => {
-    if (tab.route) { navigate(tab.route); return; }
-    setActiveTab(tab.id);
+  const handleRedeem = async () => {
+    if (!user?.uid || !specialCode.trim() || redeeming) return;
+    setRedeeming(true);
+    setCodeMsg(null);
+    const result = await redeemSpecialCode(user.uid, specialCode.trim());
+    setCodeMsg({ type: result.success ? 'success' : 'error', text: result.message });
+    if (result.success) setSpecialCode('');
+    setRedeeming(false);
+    setTimeout(() => setCodeMsg(null), 5000);
   };
 
-  const renderModuleIcon = (mod: typeof MODULE_GROUPS[number]['modules'][number]) => {
-    const iconClassName = `w-5 h-5 ${mod.accent}`;
-    if ((mod as any).lucideIcon === 'megaphone') return <Megaphone className={iconClassName} />;
-    if ((mod as any).lucideIcon === 'images') return <Images className={iconClassName} />;
-    if ((mod as any).lucideIcon === 'calendar') return <CalendarDays className={iconClassName} />;
-    return <i className={`fa-solid ${mod.icon} ${mod.accent}`}></i>;
-  };
+  return createPortal(
+    <div className="fixed inset-0 z-[9000] flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-5" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Gana créditos"
+        onClick={e => e.stopPropagation()}
+        className="max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-t-[28px] bg-white p-5 shadow-2xl sm:rounded-[28px] sm:p-7"
+      >
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <h2 className="t-display flex items-center gap-2 text-xl text-slate-900"><Gift className="h-5 w-5 text-brand-600" /> Gana créditos</h2>
+          <button onClick={onClose} aria-label="Cerrar" className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
 
-  return (
-    <div className="space-y-8 animate-in fade-in duration-700 pb-24 max-w-full overflow-hidden">
-
-      {/* HEADER */}
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 px-1">
-        <div>
-          <h1 className="t-display text-3xl md:text-5xl text-slate-900 flex flex-wrap items-baseline gap-x-2 gap-y-0">
-            <span>Hola,</span>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-indigo-600 break-words pr-1">{displayName}</span>
-            <span>👋</span>
-          </h1>
-          <p className="t-body-sm mt-1">
-            Tu estudio de contenido está listo. ¿Qué creamos hoy?
+        {missionMsg && (
+          <p className="mb-3 flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700">
+            <CheckCircle2 className="h-4 w-4" /> {missionMsg}
           </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={() => navigate('/pricing')} className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-100 rounded-2xl t-meta text-slate-500 hover:text-indigo-600 hover:border-indigo-200 transition-all shadow-sm">
-            <Tag className="w-3.5 h-3.5" /> Planes
-          </button>
-          <button onClick={() => navigate('/buy-credits')} className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-2xl t-meta hover:bg-indigo-700 transition-all shadow-sm">
-            <ShoppingCart className="w-3.5 h-3.5" /> Recargar
-          </button>
-          <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-2xl border border-slate-100 shadow-sm">
-            <Crown className="w-4 h-4 text-amber-500" />
-            <span className="t-meta text-slate-600">
-              {isAdmin ? 'Admin' : (planName.charAt(0).toUpperCase() + planName.slice(1))}
-            </span>
-          </div>
-          <button
-            onClick={signOut}
-            className="flex items-center gap-2 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-2xl t-meta transition-all border border-rose-100"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Salir</span>
-          </button>
-        </div>
-      </header>
+        )}
 
-      {/* NAV TABS */}
-      <nav className="flex gap-1 bg-white border border-slate-100 rounded-2xl p-1 shadow-sm overflow-x-auto scrollbar-hide">
-        {NAV_TABS.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => handleTab(tab)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl t-meta whitespace-nowrap transition-all flex-shrink-0 ${
-              activeTab === tab.id && !tab.route
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            {tab.icon}
-            <span className="hidden sm:inline">{tab.label}</span>
-          </button>
-        ))}
-      </nav>
-
-      {/* TAB: PERFIL */}
-      {activeTab === 'profile' && (
-        <section className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-8 space-y-6 animate-in fade-in">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-indigo-100 flex items-center justify-center overflow-hidden border-2 border-white shadow">
-              {profile?.photoURL
-                ? <img src={profile.photoURL} alt="" className="w-full h-full object-cover" />
-                : <User className="w-7 h-7 text-indigo-400" />
-              }
-            </div>
-            <div>
-              <p className="t-title text-lg">{profile?.displayName || 'Usuario'}</p>
-              <p className="t-body-sm text-slate-400">{profile?.email}</p>
-            </div>
-          </div>
-          <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 text-center space-y-2">
-            <Settings className="w-8 h-8 text-slate-300 mx-auto" />
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Edición de perfil</p>
-            <p className="text-[10px] text-slate-400">Nombre de usuario, foto, descripción e intereses — disponible próximamente.</p>
-          </div>
-        </section>
-      )}
-
-      {/* TAB: CUENTA — créditos + stats + misiones + planes */}
-      {activeTab === 'account' && (
-        <section className="space-y-6 animate-in fade-in">
-
-          {/* Créditos y plan */}
-          <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <CreditCard className="w-5 h-5 text-indigo-500" />
-              <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Suscripción y créditos</h2>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Plan</p>
-                <p className="text-lg font-black text-slate-800 uppercase">{isAdmin ? 'Admin' : planName}</p>
-              </div>
-              <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 space-y-1">
-                <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Créditos</p>
-                <p className="text-2xl font-black text-indigo-700">{isAdmin ? '∞' : availableCredits}</p>
-              </div>
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Creaciones</p>
-                <p className="text-2xl font-black text-slate-700">{stats?.totalGenerations || 0}</p>
-              </div>
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Modelos</p>
-                <p className="text-2xl font-black text-slate-700">{stats?.totalAvatars || 0}</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => navigate('/pricing')}
-                className="py-3.5 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
-              >
-                <Tag className="w-3.5 h-3.5" /> Mejorar plan
-              </button>
-              <button
-                onClick={() => navigate('/buy-credits')}
-                className="py-3.5 bg-white border border-indigo-200 text-indigo-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 transition-all flex items-center justify-center gap-2"
-              >
-                <Zap className="w-3.5 h-3.5" /> Recargar créditos
-              </button>
-            </div>
-
-            {/* Admin: simular plan */}
-            {isAdmin && (
-              <div className="border-t border-slate-100 pt-4 space-y-3">
-                <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest">Admin — Simular plan</p>
-                <div className="flex flex-wrap gap-2">
-                  <button onClick={() => setPreviewPlan(null)}
-                    className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${!previewPlan ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
-                    Admin (real)
-                  </button>
-                  {PREVIEW_PLANS.map(p => (
-                    <button key={p} onClick={() => setPreviewPlan(previewPlan === p ? null : p)}
-                      className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${previewPlan === p ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
-                      {p}
-                    </button>
-                  ))}
-                </div>
-                {previewPlan && (
-                  <div className="bg-amber-50 border border-amber-200 px-4 py-2 rounded-xl">
-                    <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest">Simulando: {previewPlan.toUpperCase()}</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Misiones integradas en Cuenta */}
-          <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-6 space-y-5">
-            <div className="flex items-center gap-3">
-              <Gift className="w-5 h-5 text-indigo-500" />
-              <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Misiones · Gana créditos gratis</h2>
-            </div>
-
-            {missionMsg && (
-              <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-widest animate-in fade-in">
-                ✓ {missionMsg}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {MISSIONS.map(m => {
-                const status     = missions[m.id] || { completed: false, count: 0 };
-                const maxed      = status.count >= m.maxCompletions;
-                const onCooldown = isMissionOnCooldown(status, m);
-                const isLoading  = completing === m.id;
-                const blocked    = maxed || onCooldown;
-                const iconClass  = m.icon.startsWith('fa-brands') ? m.icon : `fa-solid ${m.icon}`;
-                let btnLabel = 'Completar';
-                if (maxed) btnLabel = '✓ Hecho';
-                else if (onCooldown) btnLabel = 'Mañana';
-                else if (isLoading) btnLabel = '...';
-                else if (m.id === 'follow_instagram') btnLabel = 'Seguir';
-
-                return (
-                  <div key={m.id} className={`flex items-start gap-3 p-4 rounded-2xl border transition-all ${
-                    maxed ? 'border-emerald-100 bg-emerald-50/40'
-                    : onCooldown ? 'border-slate-100 opacity-60'
-                    : 'border-slate-100 hover:border-indigo-200'
-                  }`}>
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${maxed ? 'bg-emerald-100' : 'bg-indigo-50'}`}>
-                      <i className={`${iconClass} text-sm ${maxed ? 'text-emerald-500' : 'text-indigo-500'}`} />
-                    </div>
-                    <div className="flex-1 min-w-0 space-y-0.5">
-                      <div className="flex items-center justify-between gap-1">
-                        <p className="text-[10px] font-black text-slate-800 uppercase tracking-tight">{m.label}</p>
-                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full flex-shrink-0 ${maxed ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-50 text-indigo-600'}`}>+{m.credits} cr</span>
-                      </div>
-                      <p className="text-[9px] text-slate-400">{m.description}</p>
-                      {m.repeatable && m.maxCompletions > 1 && (
-                        <p className="text-[8px] text-slate-300 font-bold uppercase">{status.count}/{m.maxCompletions}</p>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => !blocked && handleCompleteMission(m.id)}
-                      disabled={blocked || isLoading}
-                      className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${
-                        maxed ? 'bg-emerald-100 text-emerald-500 cursor-default'
-                        : onCooldown ? 'bg-slate-100 text-slate-400 cursor-default'
-                        : isLoading ? 'bg-slate-100 text-slate-400 cursor-wait'
-                        : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                      }`}
-                    >{btnLabel}</button>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Referidos */}
-            <div className="bg-slate-50 rounded-2xl p-4 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-[10px] font-black text-slate-700 uppercase tracking-tight">Tu código de referido</p>
-                  <p className="text-[9px] text-slate-400">+10 cr por cada amigo que genere · Máx 5 ({referralCount}/5)</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2">
-                  <p className="text-xs font-black text-slate-700 tracking-widest select-all">{referralCode || '...'}</p>
-                </div>
+        <h3 className="mb-2 text-xs font-extrabold uppercase tracking-[0.12em] text-slate-400">Misiones</h3>
+        <ul className="space-y-2">
+          {MISSIONS.map(m => {
+            const status = missions[m.id] || { completed: false, count: 0 };
+            const maxed = status.count >= m.maxCompletions;
+            const onCooldown = isMissionOnCooldown(status, m);
+            const loading = completing === m.id;
+            let label = m.id === 'follow_instagram' ? 'Seguir' : 'Completar';
+            if (maxed) label = 'Hecho';
+            else if (onCooldown) label = 'Mañana';
+            else if (loading) label = '...';
+            return (
+              <li key={m.id} className={`flex items-center gap-3 rounded-2xl border p-3 ${maxed ? 'border-emerald-100 bg-emerald-50/50' : 'border-slate-200'}`}>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-slate-900">{m.label}</span>
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-extrabold text-emerald-700">+{m.credits} cr</span>
+                  </span>
+                  <span className="mt-0.5 block text-xs text-slate-500">
+                    {m.description}{m.repeatable && m.maxCompletions > 1 ? ` · ${status.count}/${m.maxCompletions}` : ''}
+                  </span>
+                </span>
                 <button
-                  onClick={() => referralCode && navigator.clipboard.writeText(referralCode)}
-                  className="px-3 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
-                >Copiar</button>
-              </div>
-            </div>
-
-            {/* Código especial */}
-            <div className="space-y-2">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                <Tag className="w-3.5 h-3.5 text-amber-500" /> Canjear código especial
-              </p>
-              {codeMsg && (
-                <div className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest animate-in fade-in ${
-                  codeMsg.type === 'success' ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-rose-50 border border-rose-200 text-rose-700'
-                }`}>
-                  {codeMsg.type === 'success' ? '✓' : '✗'} {codeMsg.text}
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <input
-                  type="text" value={specialCode}
-                  onChange={e => setSpecialCode(e.target.value.toUpperCase())}
-                  onKeyDown={e => e.key === 'Enter' && handleRedeemCode()}
-                  placeholder="Ej: LAUNCH2025" maxLength={20}
-                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-black text-slate-800 uppercase tracking-widest outline-none focus:border-amber-400 transition-all placeholder:text-slate-300 placeholder:font-medium placeholder:normal-case placeholder:tracking-normal"
-                />
-                <button onClick={handleRedeemCode} disabled={redeemingCode || !specialCode.trim()}
-                  className="px-3 py-2.5 bg-amber-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-amber-600 disabled:opacity-40 transition-all">
-                  {redeemingCode ? '...' : 'Canjear'}
+                  onClick={() => handleMission(m.id)}
+                  disabled={maxed || onCooldown || loading}
+                  className={`inline-flex min-h-10 shrink-0 items-center gap-1 rounded-xl px-3.5 text-xs font-extrabold ${maxed ? 'bg-emerald-100 text-emerald-700' : onCooldown || loading ? 'bg-slate-100 text-slate-400' : 'bg-slate-900 text-white hover:bg-slate-700'}`}
+                >
+                  {maxed && <Check className="h-3.5 w-3.5" />}{label}
                 </button>
-              </div>
-            </div>
-          </div>
+              </li>
+            );
+          })}
+        </ul>
 
-        </section>
-      )}
-
-
-      {/* HOME TAB CONTENT */}
-      {activeTab === 'home' && (<>
-
-      {/* ALERTS */}
-      {isOutOfCredits && (
-        <div className="flex items-center justify-between gap-3 bg-rose-50 border border-rose-200 text-rose-700 px-5 py-4 rounded-2xl">
-          <div className="flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-            <div>
-              <p className="text-xs font-black uppercase tracking-tight">Sin créditos disponibles</p>
-              <p className="text-xs font-bold text-rose-500 mt-0.5">Recarga créditos o suscríbete para continuar generando.</p>
-            </div>
-          </div>
-          <div className="flex gap-2 flex-shrink-0">
-            <button onClick={() => navigate('/buy-credits')} className="px-3 py-2 bg-rose-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-700 transition-all">Recargar</button>
-            <button onClick={() => navigate('/pricing')} className="px-3 py-2 bg-white border border-rose-200 text-rose-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-50 transition-all">Planes</button>
-          </div>
+        <h3 className="mb-2 mt-6 text-xs font-extrabold uppercase tracking-[0.12em] text-slate-400">Invita a tus amigos</h3>
+        <p className="mb-2 text-sm text-slate-500">+10 créditos por cada amigo que cree su primera imagen. Máximo 5 ({referralCount}/5).</p>
+        <div className="flex items-center gap-2">
+          <span className="min-h-11 flex-1 select-all rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-black tracking-widest text-slate-800">{referralCode || '...'}</span>
+          <button
+            onClick={() => { if (referralCode) { void navigator.clipboard.writeText(referralCode); setCopied(true); setTimeout(() => setCopied(false), 1600); } }}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-slate-900 px-4 text-sm font-extrabold text-white hover:bg-slate-700"
+          >
+            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{copied ? 'Copiado' : 'Copiar'}
+          </button>
         </div>
-      )}
-      {isLowCredits && !dismissedLowCredits && (
-        <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 text-amber-700 px-5 py-4 rounded-2xl">
-          <div className="flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-            <div>
-              <p className="text-xs font-black uppercase tracking-tight">Te quedan pocos créditos</p>
-              <p className="text-xs font-bold text-amber-600 mt-0.5">
-                Te queda{availableCredits > 1 ? 'n' : ''} {availableCredits} crédito{availableCredits > 1 ? 's' : ''} — completa misiones o compra más.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button onClick={() => navigate('/pricing')} className="px-3 py-2 bg-amber-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all">Comprar</button>
-            <button
-              onClick={() => { localStorage.setItem('dismissedLowCredits', 'true'); setDismissedLowCredits(true); }}
-              className="text-amber-400 hover:text-amber-600 transition-colors p-1"
-              title="Cerrar"
-            >✕</button>
-          </div>
-        </div>
-      )}
 
-      {/* ── HERO: greeting card + gradient credit card ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Greeting + CTA */}
-        <div className="bg-white border border-slate-100 rounded-[28px] p-6 md:p-8 shadow-sm space-y-4">
-          <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Buenos días,</p>
-            <h2 className="t-display text-3xl md:text-4xl text-slate-900">{displayName}</h2>
-          </div>
-          <p className="text-sm text-slate-500 font-medium leading-relaxed">
-            Tu estudio de contenido está listo. ¿Qué creamos hoy?
-            {totalGens > 0 && <> Ya generaste <strong className="text-slate-700">{totalGens} imágenes</strong> en total.</>}
+        <h3 className="mb-2 mt-6 flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.12em] text-slate-400"><Tag className="h-3.5 w-3.5" /> Canjear código</h3>
+        {codeMsg && (
+          <p className={`mb-2 rounded-xl border px-4 py-2.5 text-sm font-bold ${codeMsg.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-brand-200 bg-brand-50 text-brand-700'}`}>
+            {codeMsg.text}
           </p>
-          <div className="flex flex-wrap gap-2 pt-1">
-            <button
-              onClick={() => navigate('/studio-pro')}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-pink-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-violet-200/60 hover:shadow-violet-300/60 transition-all"
-            >
-              <Sparkles className="w-3.5 h-3.5" /> Crear contenido
-            </button>
-            <button
-              onClick={() => navigate('/prompt-gallery')}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all"
-            >
-              Ver inspiración →
-            </button>
-          </div>
-        </div>
-
-        {/* Gradient credit card */}
-        <div className="relative bg-gradient-to-br from-violet-600 to-pink-600 rounded-[28px] p-6 md:p-8 text-white overflow-hidden shadow-xl shadow-violet-200/60">
-          <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-          <p className="text-[10px] font-black uppercase tracking-widest opacity-80 mb-1 relative">Saldo · {isAdmin ? 'Admin' : (planName.charAt(0).toUpperCase() + planName.slice(1))}</p>
-          <div className="flex items-baseline gap-3 relative">
-            <span className="text-5xl md:text-6xl font-black tracking-tighter leading-none">{isAdmin ? '∞' : availableCredits}</span>
-            <span className="text-sm opacity-85">créditos</span>
-          </div>
-          {!isAdmin && (
-            <p className="text-xs opacity-80 mt-1 relative">~{Math.floor(availableCredits / 2)} imágenes posibles</p>
-          )}
-          {!isAdmin && (
-            <div className="mt-4 h-1.5 bg-white/20 rounded-full overflow-hidden relative">
-              <div
-                className="h-full bg-white rounded-full transition-all duration-700"
-                style={{ width: `${Math.min(100, (availableCredits / 100) * 100)}%` }}
-              />
-            </div>
-          )}
-          {/* Pro-credits indicator */}
-          <div className="mt-4 pt-4 border-t border-white/20 relative flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-white opacity-80" />
-              <div>
-                <p className="text-[9px] font-black uppercase tracking-widest opacity-70">Sesiones Pro</p>
-                <p className="text-sm font-black leading-none">{isAdmin ? '∞' : proCredits} sesiones pro</p>
-              </div>
-            </div>
-            <button
-              onClick={() => navigate('/buy-credits')}
-              className="px-2.5 py-1.5 bg-white/20 hover:bg-white/30 text-white rounded-lg text-[9px] font-black uppercase tracking-widest transition-all"
-            >
-              + Comprar
-            </button>
-          </div>
-          <div className="flex items-center justify-between mt-3 relative">
-            <span className="text-[10px] opacity-75">
-              {isAdmin ? 'Acceso ilimitado' : `Plan ${planName}`}
-            </span>
-            <button
-              onClick={() => navigate('/pricing')}
-              className="px-3 py-1.5 bg-white text-violet-700 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-violet-50 transition-all"
-            >
-              Ver planes
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ── STATS (monthly) ── */}
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: 'Creaciones', value: String(totalGens), sub: 'totales', color: 'text-slate-900' },
-          { label: 'Modelos',      value: String(avatars?.length || 0), sub: 'guardados', color: 'text-purple-600' },
-          { label: 'Productos',    value: String(products?.length || 0), sub: 'en catálogo', color: 'text-blue-600' },
-        ].map((s, i) => (
-          <div key={i} className="bg-white px-4 py-4 rounded-2xl border border-slate-100 shadow-sm space-y-0.5">
-            <p className="t-meta text-slate-400">{s.label}</p>
-            <p className={`text-2xl font-black ${s.color} tracking-tight`}>{s.value}</p>
-            <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">{s.sub}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* ── INSPIRACIÓN DIARIA ── */}
-      <DailyInspiration userName={displayName} plan={planName} />
-
-      {/* ── QUICK ACTIONS 2×2 ── */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-3">
-          <div className="w-1.5 h-5 bg-violet-600 rounded-full" />
-          <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">¿Qué necesitas crear?</h2>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          {[
-            { t: 'Modelo digital',   s: 'Desde tus fotos',      cost: '8 cr',     accent: 'text-violet-600', bg: 'bg-violet-50',  path: '/crear/clonar' },
-            { t: 'Fotos para redes', s: 'Fotos naturales',      cost: '2-4 cr',   accent: 'text-pink-600',   bg: 'bg-pink-50',    path: '/studio-pro'   },
-            { t: 'Foto de producto', s: 'Lista para vender',    cost: '2 cr/foto',accent: 'text-indigo-600', bg: 'bg-indigo-50',  path: '/productos'    },
-            { t: 'Clonar escena',    s: 'Copia cualquier estilo',cost: '2 cr',    accent: 'text-emerald-600',bg: 'bg-emerald-50', path: '/clonar'       },
-          ].map(a => (
-            <button
-              key={a.t}
-              onClick={() => navigate(a.path)}
-              className="bg-white border border-slate-100 rounded-[20px] p-4 text-left hover:shadow-md hover:border-slate-200 transition-all group"
-            >
-              <div className={`w-8 h-8 rounded-xl ${a.bg} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
-                <Sparkles className={`w-4 h-4 ${a.accent}`} />
-              </div>
-              <p className="text-sm font-bold text-slate-800 leading-tight">{a.t}</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">{a.s}</p>
-              <p className={`text-[10px] font-black mt-2 ${a.accent}`}>{a.cost}</p>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── QUICK ACCESS: Gallery + History ── */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-3">
-          <div className="w-1.5 h-5 bg-indigo-600 rounded-full" />
-          <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">Acceso Rápido</h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-          {/* PROMPT GALLERY CARD */}
-          <div
-            onClick={() => navigate('/prompt-gallery')}
-            className="group relative bg-gradient-to-br from-indigo-600 to-violet-600 p-6 md:p-8 rounded-[32px] cursor-pointer hover:scale-[1.02] hover:shadow-2xl hover:shadow-indigo-200 transition-all overflow-hidden"
+        )}
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={specialCode}
+            onChange={e => setSpecialCode(e.target.value.toUpperCase())}
+            onKeyDown={e => e.key === 'Enter' && handleRedeem()}
+            placeholder="Ej: LAUNCH2025"
+            maxLength={20}
+            className="min-h-11 min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-black uppercase tracking-widest text-slate-800 outline-none placeholder:font-medium placeholder:normal-case placeholder:tracking-normal placeholder:text-slate-400 focus:border-slate-400"
+          />
+          <button
+            onClick={handleRedeem}
+            disabled={redeeming || !specialCode.trim()}
+            className="inline-flex min-h-11 items-center rounded-xl bg-brand-600 px-4 text-sm font-extrabold text-white hover:bg-brand-700 disabled:opacity-40"
           >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-20 h-20 bg-black/10 rounded-full translate-y-1/2 -translate-x-1/2" />
-
-            <div className="relative z-10 flex items-start justify-between gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                    <Sparkles className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="t-display text-lg text-white">Ideas para crear</h3>
-                    <p className="t-meta text-indigo-200">Comunidad</p>
-                  </div>
-                </div>
-                <p className="text-sm text-indigo-100 font-medium leading-relaxed max-w-xs">
-                  Explora ideas, guárdalas y adáptalas a tu marca.
-                </p>
-              </div>
-              <div className="w-9 h-9 rounded-full border border-white/30 flex items-center justify-center text-white/60 group-hover:bg-white group-hover:text-indigo-600 transition-all flex-shrink-0 mt-1">
-                <ArrowRight size={16} className="-rotate-45 group-hover:rotate-0 transition-transform" />
-              </div>
-            </div>
-          </div>
-
-          {/* GENERATION HISTORY CARD */}
-          <div
-            onClick={() => navigate('/historial')}
-            className="group relative bg-white border border-slate-100 p-6 md:p-8 rounded-[32px] cursor-pointer hover:scale-[1.02] hover:shadow-xl hover:border-slate-200 transition-all overflow-hidden"
-          >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-full -translate-y-1/2 translate-x-1/2" />
-
-            <div className="relative z-10 flex items-start justify-between gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 bg-slate-100 rounded-2xl flex items-center justify-center">
-                    <Clock className="w-5 h-5 text-slate-600" />
-                  </div>
-                  <div>
-                    <h3 className="t-display text-lg text-slate-900">Mis creaciones</h3>
-                    <p className="t-meta">Historial</p>
-                  </div>
-                </div>
-                <p className="text-sm text-slate-500 font-medium leading-relaxed max-w-xs">
-                  Todas las imágenes generadas. Descarga, filtra y gestiona tu trabajo.
-                </p>
-                {totalGens > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <Images className="w-3.5 h-3.5 text-slate-400" />
-                    <span className="t-meta">{totalGens} generacion{totalGens !== 1 ? 'es' : ''} totales</span>
-                  </div>
-                )}
-              </div>
-              <div className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center text-slate-300 group-hover:bg-slate-900 group-hover:text-white group-hover:border-slate-900 transition-all flex-shrink-0 mt-1">
-                <ArrowRight size={16} className="-rotate-45 group-hover:rotate-0 transition-transform" />
-              </div>
-            </div>
-          </div>
-
-          {/* PLANNER CARD */}
-          <div
-            onClick={() => navigate('/planner')}
-            className="group relative p-6 md:p-8 rounded-[32px] cursor-pointer hover:scale-[1.02] hover:shadow-2xl transition-all overflow-hidden"
-            style={{ background: 'linear-gradient(135deg, #F72C5B 0%, #C4224A 100%)', boxShadow: '0 8px 32px rgba(247,44,91,0.25)' }}
-          >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-20 h-20 bg-black/10 rounded-full translate-y-1/2 -translate-x-1/2" />
-
-            <div className="relative z-10 flex items-start justify-between gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                    <CalendarDays className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="t-display text-lg text-white">Planes de contenido</h3>
-                    <p className="t-meta text-white/70">Qué publicar cada día</p>
-                  </div>
-                </div>
-                <p className="text-sm text-white/85 font-medium leading-relaxed max-w-xs">
-                  Planifica tu semana, prepara textos y descubre ideas listas para tu producto.
-                </p>
-              </div>
-              <div className="w-9 h-9 rounded-full border border-white/30 flex items-center justify-center text-white/60 group-hover:bg-white transition-all flex-shrink-0 mt-1" style={{ '--hover-color': '#F72C5B' } as any}>
-                <ArrowRight size={16} className="-rotate-45 group-hover:rotate-0 transition-transform text-white group-hover:text-[#F72C5B]" />
-              </div>
-            </div>
-          </div>
-
+            {redeeming ? '...' : 'Canjear'}
+          </button>
         </div>
-      </div>
 
-      {/* MODULE GROUPS */}
-      {MODULE_GROUPS.map(group => (
-        <div key={group.groupLabel} className="space-y-4">
-          <div className="flex items-center gap-3">
-            <div className={`w-1.5 h-5 ${group.groupColor} rounded-full`} />
-            <h2 className="t-meta text-slate-500">{group.groupLabel}</h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
-            {group.modules.map((mod, i) => (
-              <div
-                key={i}
-                onClick={() => navigate(mod.path)}
-                className="group bg-white p-4 md:p-7 rounded-2xl md:rounded-[36px] border border-slate-100 shadow-sm hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer relative overflow-hidden flex md:block items-center gap-4 md:gap-0"
+        {isAdmin && (
+          <div className="mt-6 border-t border-slate-100 pt-4">
+            <h3 className="mb-2 text-xs font-extrabold uppercase tracking-[0.12em] text-brand-600">Admin: simular plan</h3>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setPreviewPlan(null)}
+                className={`min-h-10 rounded-xl px-3 text-xs font-extrabold uppercase ${!previewPlan ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
               >
-                <div className={`w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-[20px] ${mod.bg} flex-shrink-0 flex items-center justify-center text-lg md:text-xl md:mb-5 transition-transform group-hover:scale-110 group-hover:rotate-3`}>
-                  {renderModuleIcon(mod)}
-                </div>
-                <div className="flex-1 space-y-0.5 md:space-y-1 md:mb-4 min-w-0">
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    <h3 className="t-title text-base md:text-lg">{mod.title}</h3>
-                    {mod.subtitle && (
-                      <span className="t-meta">{mod.subtitle}</span>
-                    )}
-                  </div>
-                  <p className="t-body-sm leading-tight md:leading-relaxed line-clamp-2 md:line-clamp-none">{mod.description}</p>
-                  {mod.creditsGemini > 0 && (
-                    <div className="flex md:hidden items-center gap-1 mt-1">
-                      <Zap className="w-2.5 h-2.5 text-amber-400" />
-                      <span className="t-meta text-amber-500">{mod.creditsGemini} cr.</span>
-                    </div>
-                  )}
-                </div>
-                {(mod as any).proCredit && (
-                  <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
-                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-brand-50 border border-brand-100 text-brand-600 rounded-lg text-[9px] font-black uppercase tracking-wide">
-                      <Zap className="w-2.5 h-2.5" />
-                      {isAdmin ? '∞' : proCredits} sesiones
-                    </span>
-                  </div>
-                )}
-                {!(mod as any).proCredit && mod.creditsGemini > 0 && (
-                  <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
-                    <Zap className="w-3 h-3 text-amber-400" />
-                    <span className="t-meta whitespace-nowrap">{mod.creditsGemini} cr.</span>
-                  </div>
-                )}
-                <div className="hidden md:flex absolute top-7 right-7 w-9 h-9 rounded-full border border-slate-100 items-center justify-center text-slate-300 group-hover:bg-slate-900 group-hover:text-white group-hover:border-slate-900 transition-all">
-                  <ArrowRight size={14} className="-rotate-45 group-hover:rotate-0 transition-transform" />
-                </div>
-                <div className="md:hidden text-slate-300">
-                  <ArrowRight size={16} />
-                </div>
-              </div>
-            ))}
+                Admin (real)
+              </button>
+              {PREVIEW_PLANS.map(p => (
+                <button
+                  key={p}
+                  onClick={() => setPreviewPlan(previewPlan === p ? null : p)}
+                  className={`min-h-10 rounded-xl px-3 text-xs font-extrabold uppercase ${previewPlan === p ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
-
-      </>)}
-    </div>
+        )}
+      </div>
+    </div>,
+    document.body,
   );
 };
 

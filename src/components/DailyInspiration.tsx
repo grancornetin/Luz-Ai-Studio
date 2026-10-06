@@ -6,7 +6,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lightbulb, ArrowRight, Loader2, RefreshCw } from 'lucide-react';
+import { ArrowRight, Loader2, RefreshCw } from 'lucide-react';
 
 interface ContentIdea {
   title: string;
@@ -27,14 +27,6 @@ const MODULE_LABELS: Record<string, string> = {
   ugc:       'Fotos para redes',
   catalog:   'Fotos de producto',
   prompt:    'Crear una imagen',
-};
-
-const MODULE_COLORS: Record<string, string> = {
-  campaign:  'bg-brand-600/10 text-brand-400 border-brand-500/20',
-  photodump: 'bg-violet-600/10 text-violet-400 border-violet-500/20',
-  ugc:       'bg-emerald-600/10 text-emerald-400 border-emerald-500/20',
-  catalog:   'bg-sky-600/10 text-sky-400 border-sky-500/20',
-  prompt:    'bg-slate-600/10 text-slate-400 border-slate-500/20',
 };
 
 const MODULE_ROUTES: Record<string, string> = {
@@ -201,76 +193,63 @@ const DailyInspiration: React.FC<DailyInspirationProps> = ({ userName = 'Creador
   };
 
   return (
-    <div className="bg-white border border-slate-100 rounded-[28px] p-6 shadow-sm space-y-4">
-
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-amber-50 border border-amber-100 rounded-xl flex items-center justify-center">
-            <Lightbulb className="w-4 h-4 text-amber-500" />
-          </div>
-          <div>
-            <p className="text-xs font-black text-slate-900 uppercase tracking-tight">Inspiración de hoy</p>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-              {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </p>
-          </div>
+    <div className="h-full rounded-[22px] border border-slate-200 bg-white p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="t-display text-lg text-slate-900">Inspiración de hoy</h2>
+          <p className="mt-1 text-xs font-semibold capitalize text-slate-400">
+            {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
+          </p>
         </div>
-        <button
-          onClick={() => load(true)}
-          disabled={loading}
-          className="w-8 h-8 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-600 transition-all disabled:opacity-40"
-          title="Nuevas ideas"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            onClick={() => navigate('/prompt-gallery')}
+            className="inline-flex min-h-10 items-center gap-1 px-2 text-sm font-bold text-brand-700 hover:text-brand-600"
+          >
+            Galería <ArrowRight className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => load(true)}
+            disabled={loading}
+            aria-label="Nuevas ideas"
+            title="Nuevas ideas"
+            className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 disabled:opacity-40"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
 
-      {/* Loading */}
       {loading && ideas.length === 0 && (
-        <div className="flex items-center justify-center py-8 gap-3 text-slate-400">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          <span className="text-xs font-bold uppercase tracking-widest">Generando ideas para hoy...</span>
+        <div className="flex items-center justify-center gap-3 py-8 text-slate-400">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-sm font-semibold">Preparando ideas para hoy...</span>
         </div>
       )}
 
-      {/* Ideas */}
       {ideas.length > 0 && (
-        <div className="space-y-2">
+        <div className="-mx-5 mt-4 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-5 pb-1 scrollbar-hide sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0">
           {ideas.map((idea, i) => (
-            <div
+            <button
               key={i}
-              className="group flex items-start gap-3 p-3.5 rounded-2xl border border-slate-100 hover:border-slate-200 hover:bg-slate-50/50 transition-all cursor-pointer"
               onClick={() => handleUseIdea(idea)}
+              className="group flex w-[78%] shrink-0 snap-start flex-col gap-1.5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left transition-colors hover:border-slate-300 hover:bg-white sm:w-auto"
             >
-              {/* Número */}
-              <div className="w-6 h-6 bg-slate-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-[10px] font-black text-slate-500">{i + 1}</span>
-              </div>
-
-              {/* Contenido */}
-              <div className="flex-1 min-w-0 space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-xs font-black text-slate-900">{idea.title}</p>
-                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wide ${MODULE_COLORS[idea.module] ?? MODULE_COLORS.prompt}`}>
-                    {MODULE_LABELS[idea.module] ?? idea.module}
-                  </span>
-                  <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                    {idea.tag}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-500 leading-snug">{idea.description}</p>
-              </div>
-
-              {/* Flecha */}
-              <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all flex-shrink-0 mt-1" />
-            </div>
+              <span className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-brand-700">
+                {MODULE_LABELS[idea.module] ?? idea.module}{idea.tag ? ` · ${idea.tag}` : ''}
+              </span>
+              <span className="text-sm font-bold leading-snug text-slate-900">{idea.title}</span>
+              <span className="text-xs leading-relaxed text-slate-500">{idea.description}</span>
+              <span className="mt-auto inline-flex min-h-8 items-center gap-1 pt-1 text-sm font-bold text-brand-700">
+                Usar idea <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              </span>
+            </button>
           ))}
         </div>
       )}
 
       {error && (
-        <p className="text-[10px] text-slate-400 text-center">Ideas de ejemplo — conectate para ideas personalizadas</p>
+        <p className="mt-3 text-center text-xs text-slate-400">Ideas de ejemplo. Conéctate para recibir ideas personalizadas.</p>
       )}
     </div>
   );
