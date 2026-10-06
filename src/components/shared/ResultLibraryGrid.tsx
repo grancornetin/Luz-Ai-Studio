@@ -25,7 +25,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Search, SlidersHorizontal, CheckSquare, X, Trash2 } from 'lucide-react';
+import { Search, SlidersHorizontal, CheckSquare, X, Trash2, FolderOpen } from 'lucide-react';
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -248,7 +248,7 @@ export const ResultLibraryGrid: React.FC<ResultLibraryGridProps> = ({
       {isEmpty && (
         <div className="flex flex-col items-center justify-center py-20 text-center bg-white border-2 border-dashed border-slate-200 rounded-2xl">
           <div className="text-4xl mb-4 text-slate-200">
-            {emptyIcon ?? '🗂️'}
+            {emptyIcon ?? <FolderOpen className="w-10 h-10 text-slate-300" />}
           </div>
           <p className="text-[14px] font-bold text-slate-500 mb-1">{emptyTitle}</p>
           <p className="text-[12px] text-slate-400 mb-5 max-w-xs">{emptyDescription}</p>

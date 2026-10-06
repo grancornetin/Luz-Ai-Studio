@@ -70,8 +70,8 @@ const AvatarLibrary: React.FC<AvatarLibraryProps> = ({ avatars }) => {
           </div>
         </div>
         <div className="flex gap-2 w-full md:w-auto">
-          <button onClick={() => navigate('/crear/clonar')} className="flex-1 md:flex-none px-5 md:px-6 py-3 md:py-4 bg-brand-600 text-white rounded-[16px] md:rounded-[20px] text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-xl shadow-brand-100 hover:bg-brand-700 active:scale-95 transition-all">Crear desde fotos</button>
-          <button onClick={() => navigate('/crear/manual')} className="flex-1 md:flex-none px-5 md:px-6 py-3 md:py-4 bg-slate-900 text-white rounded-[16px] md:rounded-[20px] text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-xl shadow-slate-200 hover:bg-slate-800 active:scale-95 transition-all">Diseñar un modelo</button>
+          <button onClick={() => navigate('/crear/clonar')} className="flex-1 md:flex-none min-h-12 px-5 md:px-6 py-3 md:py-4 bg-brand-600 text-white rounded-[16px] md:rounded-[20px] text-[10px] font-black uppercase tracking-widest shadow-xl shadow-brand-100 hover:bg-brand-700 active:scale-95 transition-all">Crear desde fotos</button>
+          <button onClick={() => navigate('/crear/manual')} className="flex-1 md:flex-none min-h-12 px-5 md:px-6 py-3 md:py-4 bg-slate-900 text-white rounded-[16px] md:rounded-[20px] text-[10px] font-black uppercase tracking-widest shadow-xl shadow-slate-200 hover:bg-slate-800 active:scale-95 transition-all">Diseñar un modelo</button>
         </div>
       </header>
 
@@ -87,7 +87,6 @@ const AvatarLibrary: React.FC<AvatarLibraryProps> = ({ avatars }) => {
         emptyDescription="Crea tu primer modelo para encontrarlo aquí."
         emptyCtaLabel="Crear desde fotos"
         onEmpty={() => navigate('/crear/clonar')}
-        primaryAction={{ label: 'Diseñar un modelo', onClick: () => navigate('/crear/manual') }}
       >
         {avatars.map(avatar => (
           <ResultCard
@@ -187,7 +186,7 @@ const AvatarLibrary: React.FC<AvatarLibraryProps> = ({ avatars }) => {
                     </section>
 
                     <section className="space-y-4 md:space-y-6">
-                       <h4 className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Descripción del modelo</h4>
+                       <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Descripción del modelo</h4>
                        <div className="bg-brand-50/30 p-6 md:p-8 rounded-[32px] md:rounded-[40px] border border-brand-100/50">
                           <p className="text-xs md:text-base text-slate-700 leading-relaxed font-medium italic">
                              "{selectedAvatar.physicalDescription}"
