@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Zap, Megaphone, ArrowLeft, DollarSign, TrendingDown } from 'lucide-react';
+import { Zap, Megaphone, ArrowLeft, DollarSign, TrendingDown, Sparkles, Copy, Smartphone, Dna } from 'lucide-react';
 import { TOP_UP_PACKAGES, PRO_CREDIT_TOPUPS } from '../services/creditConfig';
 import { useCurrency } from '../hooks/useCurrency';
 import { useAuth } from '../modules/auth/AuthContext';
@@ -31,7 +31,7 @@ export default function BuyCredits() {
     <div className="max-w-4xl mx-auto space-y-10 pb-24 animate-in fade-in duration-500">
 
       {/* Header */}
-      <header className="flex items-center justify-between px-1 pt-2">
+      <header className="flex flex-col gap-4 px-1 pt-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <button onClick={() => navigate('/pricing')} className="flex items-center gap-2 text-slate-400 hover:text-slate-700 text-xs font-bold uppercase tracking-widest mb-4 transition-colors">
             <ArrowLeft className="w-3.5 h-3.5" /> Precios
@@ -43,7 +43,7 @@ export default function BuyCredits() {
         </div>
         <button
           onClick={toggle}
-          className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
+          className="flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
         >
           <DollarSign className="w-3.5 h-3.5" />
           {currency === 'USD' ? 'Ver en CLP' : 'Ver en USD'}
@@ -71,8 +71,8 @@ export default function BuyCredits() {
       </div>
 
       {/* Packages */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        {TOP_UP_PACKAGES.map((pkg) => {
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-5">
+        {TOP_UP_PACKAGES.map((pkg, idx) => {
           const pricePerCredit = pkg.priceUSD / pkg.credits;
           const isBest = pkg.credits === 500;
 
@@ -80,11 +80,12 @@ export default function BuyCredits() {
             <div
               key={pkg.id}
               className={`bg-white rounded-[28px] border p-6 flex flex-col gap-4 relative transition-all hover:shadow-lg ${
+                idx < 3 ? 'lg:col-span-2' : 'lg:col-span-3'} ${idx === TOP_UP_PACKAGES.length - 1 ? 'sm:col-span-2' : ''} ${
                 isBest ? 'border-indigo-300 shadow-lg shadow-indigo-50 ring-2 ring-indigo-400' : 'border-slate-100'
               }`}
             >
               {isBest && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest whitespace-nowrap px-3 py-1 rounded-full shadow">
                   Menor precio por crédito
                 </div>
               )}
@@ -108,7 +109,7 @@ export default function BuyCredits() {
 
               <button
                 onClick={() => handleBuy(pkg.id)}
-                className={`w-full py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                className={`w-full min-h-11 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
                   isBest
                     ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-100'
                     : 'bg-slate-900 text-white hover:bg-slate-700'
@@ -123,7 +124,7 @@ export default function BuyCredits() {
 
       {/* Sesiones Pro */}
       <section className="space-y-5">
-        <div className="flex items-center gap-3">
+        <div className="flex items-start gap-3">
           <div className="w-9 h-9 bg-violet-100 rounded-xl flex items-center justify-center flex-shrink-0">
             <Megaphone className="w-5 h-5 text-violet-600" />
           </div>
@@ -161,7 +162,7 @@ export default function BuyCredits() {
                 }`}
               >
                 {isBest && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-violet-600 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow">
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-violet-600 text-white text-[9px] font-black uppercase tracking-widest whitespace-nowrap px-3 py-1 rounded-full shadow">
                     Menor precio por sesión
                   </div>
                 )}
@@ -185,7 +186,7 @@ export default function BuyCredits() {
 
                 <button
                   onClick={() => handleBuyPro(pkg.id)}
-                  className={`w-full py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                  className={`w-full min-h-11 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
                     isBest
                       ? 'bg-violet-600 text-white hover:bg-violet-700 shadow-lg shadow-violet-100'
                       : 'bg-slate-900 text-white hover:bg-slate-700'
@@ -204,13 +205,13 @@ export default function BuyCredits() {
         <h3 className="text-sm font-black text-slate-800 uppercase italic tracking-tighter">¿Cuánto me alcanza?</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { label: 'Crear una imagen', cost: '1–2 cr.', note: 'por foto', icon: 'fa-wand-magic-sparkles' },
-            { label: 'Recrear una foto', cost: '1–2 cr.', note: 'por foto', icon: 'fa-clone' },
-            { label: 'Fotos para redes', cost: '7–14 cr.', note: 'por sesión', icon: 'fa-mobile-screen-button' },
-            { label: 'Modelo digital',   cost: '8 cr.',   note: '4 imágenes',  icon: 'fa-dna' },
+            { label: 'Crear una imagen', cost: '1–2 cr.', note: 'por foto', Icon: Sparkles },
+            { label: 'Recrear una foto', cost: '1–2 cr.', note: 'por foto', Icon: Copy },
+            { label: 'Fotos para redes', cost: '7–14 cr.', note: 'por sesión', Icon: Smartphone },
+            { label: 'Modelo digital',   cost: '8 cr.',   note: '4 imágenes',  Icon: Dna },
           ].map((item, i) => (
             <div key={i} className="bg-white rounded-2xl border border-slate-100 p-4 text-center space-y-1">
-              <i className={`fa-solid ${item.icon} text-indigo-500 text-lg`}></i>
+              <item.Icon className="mx-auto h-5 w-5 text-indigo-500" />
               <p className="text-[10px] font-black text-slate-700 uppercase tracking-tight leading-tight">{item.label}</p>
               <p className="text-xs font-black text-slate-600">{item.cost}</p>
               <p className="text-[9px] font-medium text-slate-400">{item.note}</p>

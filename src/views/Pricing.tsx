@@ -39,7 +39,7 @@ export default function Pricing() {
     <div className="max-w-6xl mx-auto space-y-10 pb-24 animate-in fade-in duration-500">
 
       {/* Header */}
-      <header className="flex items-center justify-between px-1 pt-2">
+      <header className="flex flex-col gap-5 px-1 pt-2 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 text-slate-400 hover:text-slate-700 text-xs font-bold uppercase tracking-widest mb-4 transition-colors">
             <ArrowLeft className="w-3.5 h-3.5" /> Volver
@@ -50,18 +50,18 @@ export default function Pricing() {
           <p className="text-slate-500 font-medium mt-2 text-sm">Elige según cuánto contenido quieres crear.</p>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Switch mensual / anual */}
           <div className="flex bg-slate-100 p-1 rounded-2xl">
             <button
               onClick={() => setBilling('monthly')}
-              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${billing === 'monthly' ? 'bg-white text-slate-900 shadow' : 'text-slate-400'}`}
+              className={`min-h-10 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${billing === 'monthly' ? 'bg-white text-slate-900 shadow' : 'text-slate-400'}`}
             >
               Mensual
             </button>
             <button
               onClick={() => setBilling('annual')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${billing === 'annual' ? 'bg-white text-slate-900 shadow' : 'text-slate-400'}`}
+              className={`flex min-h-10 items-center gap-1.5 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${billing === 'annual' ? 'bg-white text-slate-900 shadow' : 'text-slate-400'}`}
             >
               Anual
               <span className="bg-emerald-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full">-20%</span>
@@ -71,7 +71,7 @@ export default function Pricing() {
           {/* Toggle de moneda */}
           <button
             onClick={toggle}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
+            className="flex min-h-11 items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
           >
             <DollarSign className="w-3.5 h-3.5" />
             {currency === 'USD' ? 'Ver en CLP' : 'Ver en USD'}
@@ -109,7 +109,7 @@ export default function Pricing() {
               className={`bg-white rounded-[28px] border border-slate-100 p-6 flex flex-col gap-5 relative transition-all ${style.card}`}
             >
               {isPro && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest whitespace-nowrap px-3 py-1 rounded-full shadow">
                   Más popular
                 </div>
               )}
@@ -145,7 +145,7 @@ export default function Pricing() {
                 {plan.features.map((f, i) => (
                   <li key={i} className="flex items-start gap-2">
                     <Check className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5" />
-                    <span className="text-[11px] font-medium text-slate-600 leading-tight">{f}</span>
+                    <span className="text-xs font-medium text-slate-600 leading-snug">{f}</span>
                   </li>
                 ))}
               </ul>
@@ -153,7 +153,7 @@ export default function Pricing() {
               <button
                 onClick={() => handleSubscribe(key)}
                 disabled={isCurrent}
-                className={`w-full py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                className={`w-full min-h-11 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
                   isCurrent
                     ? 'bg-slate-100 text-slate-400 cursor-default'
                     : style.button
@@ -167,15 +167,15 @@ export default function Pricing() {
       </div>
 
       {/* Sección top-up */}
-      <div className="bg-slate-50 rounded-[32px] border border-slate-100 p-8 space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="bg-slate-50 rounded-[32px] border border-slate-100 p-6 sm:p-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-black text-slate-900 uppercase italic tracking-tighter">¿Necesitas más créditos?</h2>
             <p className="text-xs text-slate-400 font-medium mt-1">Recarga en cualquier momento sin cambiar de plan.</p>
           </div>
           <button
             onClick={() => navigate('/buy-credits')}
-            className="px-5 py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 transition-all"
+            className="min-h-11 shrink-0 px-5 py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 transition-all"
           >
             Ver recargas
           </button>

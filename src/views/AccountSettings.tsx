@@ -73,7 +73,7 @@ const FieldRow: React.FC<{ label: string; children: React.ReactNode; hint?: stri
   <div className="space-y-1.5">
     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">{label}</label>
     {children}
-    {hint && <p className="text-[9px] text-slate-300 font-medium">{hint}</p>}
+    {hint && <p className="text-[11px] text-slate-400 font-medium">{hint}</p>}
   </div>
 );
 
@@ -81,7 +81,7 @@ const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { prefix?: s
   <div className="flex items-center bg-slate-50 border border-slate-100 rounded-2xl overflow-hidden focus-within:border-indigo-400 focus-within:bg-white transition-all">
     {prefix && <span className="pl-4 text-sm font-medium text-slate-400 flex-shrink-0">{prefix}</span>}
     <input
-      className={`flex-1 px-4 py-3 bg-transparent outline-none text-sm font-medium text-slate-700 placeholder:text-slate-300 ${prefix ? 'pl-1' : ''} ${className || ''}`}
+      className={`flex-1 px-4 py-3 bg-transparent outline-none text-sm font-medium text-slate-700 placeholder:text-slate-400 ${prefix ? 'pl-1' : ''} ${className || ''}`}
       {...props}
     />
   </div>
@@ -103,7 +103,7 @@ const TagInput: React.FC<{ tags: string[]; onChange: (tags: string[]) => void; p
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
           placeholder={placeholder || 'Añadir tag...'}
-          className="flex-1 px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl outline-none text-sm font-medium text-slate-700 placeholder:text-slate-300 focus:border-indigo-400 focus:bg-white transition-all"
+          className="flex-1 px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl outline-none text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white transition-all"
         />
         <button onClick={add} className="px-4 py-3 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase hover:bg-indigo-700 transition-colors">
           +
@@ -333,7 +333,7 @@ const AccountSettings: React.FC = () => {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-black text-slate-800 uppercase tracking-tight">{profile?.displayName}</p>
                 <p className="text-[10px] text-slate-400 font-medium mt-0.5">{profile?.email}</p>
-                <p className="text-[9px] text-slate-300 mt-1">Foto de perfil gestionada por tu cuenta de Google.</p>
+                <p className="text-[11px] text-slate-400 mt-1">Foto de perfil gestionada por tu cuenta de Google.</p>
               </div>
             </div>
 
@@ -369,7 +369,7 @@ const AccountSettings: React.FC = () => {
                 onChange={e => setBio(e.target.value.slice(0, 160))}
                 rows={3}
                 placeholder="Cuéntanos brevemente quién eres y a qué te dedicas..."
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl outline-none text-sm font-medium text-slate-700 placeholder:text-slate-300 focus:border-indigo-400 focus:bg-white transition-all resize-none"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl outline-none text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white transition-all resize-none"
               />
             </FieldRow>
           </div>
@@ -438,7 +438,7 @@ const AccountSettings: React.FC = () => {
 
             <div className="grid md:grid-cols-2 gap-5">
               <div className="space-y-3">
-                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Personal</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Personal</p>
                 {(['instagram', 'twitter', 'tiktok', 'linkedin'] as const).map(net => (
                   <FieldRow key={net} label={net.charAt(0).toUpperCase() + net.slice(1)}>
                     <Input prefix="@" value={socials.personal?.[net] || ''} onChange={e => setSocial('personal', net, e.target.value)} placeholder={`tu_${net}`} />
@@ -446,7 +446,7 @@ const AccountSettings: React.FC = () => {
                 ))}
               </div>
               <div className="space-y-3">
-                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Negocio / Marca</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Negocio / Marca</p>
                 <FieldRow label="Sitio web">
                   <Input value={socials.business?.website || ''} onChange={e => setSocial('business', 'website', e.target.value)} placeholder="https://tutienda.com" />
                 </FieldRow>
@@ -599,7 +599,7 @@ const AccountSettings: React.FC = () => {
             <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-1">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email de cuenta</p>
               <p className="text-sm font-bold text-slate-700">{profile?.email}</p>
-              <p className="text-[9px] text-slate-300">Para cambiar el email ve a la pestaña Seguridad.</p>
+              <p className="text-[11px] text-slate-400">Para cambiar el email ve a la pestaña Seguridad.</p>
             </div>
           </div>
 
