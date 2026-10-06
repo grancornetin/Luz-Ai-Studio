@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, RefreshCw, Edit3, Check, AlertCircle } from 'lucide-react';
+import { Sparkles, RefreshCw, Edit3, Check, AlertCircle, X } from 'lucide-react';
 import type { BrandProfile } from '../types';
 import { brandProfileAiService } from '../../../services/brandProfileAiService';
 
@@ -175,8 +175,8 @@ export const BrandAISummaryStep: React.FC<Props> = ({ data, onChange }) => {
                   <div className="space-y-2">
                     {arr.map((item, i) => (
                       <div key={i} className="flex items-center gap-2">
-                        <span className={`text-[10px] font-bold ${isDo ? 'text-green-500' : 'text-rose-400'}`}>
-                          {isDo ? '✓' : '✗'}
+                        <span className={`shrink-0 ${isDo ? 'text-green-500' : 'text-rose-400'}`}>
+                          {isDo ? <Check size={14} /> : <X size={14} />}
                         </span>
                         <input
                           className="flex-1 text-xs border border-slate-100 rounded-lg px-2 py-1.5 outline-none focus:border-[#F72C5B] text-slate-700"

@@ -21,7 +21,7 @@ export default function MetricsCapture({ task, onSave }: { task: PlanTask; onSav
     try {
       const images = await Promise.all(files.map(file => new Promise<string>((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(',')[1]); r.onerror = reject; r.readAsDataURL(file); })));
       const parsed = await analyzeInsightsScreenshots(images, files.map(file => file.type));
-      if (Object.values(parsed).every(v => v === null)) { setMode('manual'); setError('No pude leer los números 😅. Prueba otra captura o escríbelos a mano.'); }
+      if (Object.values(parsed).every(v => v === null)) { setMode('manual'); setError('No pude leer los números. Prueba otra captura o escríbelos a mano.'); }
       else { setValues(parsed); setMode('screenshot'); }
     } catch { setMode('manual'); setError('No pude leer esta captura. Puedes escribir los números a mano.'); } finally { setLoading(false); }
   };

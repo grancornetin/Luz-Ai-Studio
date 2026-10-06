@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit3, Trash2, Star, StarOff, AlertCircle, Palette, Tag, Clock, CalendarDays, Download } from 'lucide-react';
+import { Plus, Edit3, Trash2, Star, StarOff, AlertCircle, Palette, Tag, Clock, CalendarDays, Download, Check } from 'lucide-react';
 import { downloadBrandReport } from '../../utils/brandReportUtils';
 
 function isColorDark(hex: string): boolean {
@@ -49,6 +49,7 @@ interface BrandCardProps {
 
 function BrandCard({ profile, onEdit, onDelete, onSetDefault, deleting }: BrandCardProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [logoFailed, setLogoFailed] = useState(false);
   const navigate = useNavigate();
   const primaryColor = profile.visualIdentity?.colors?.[0]?.hex || '#F72C5B';
   const initial = (profile.brandName || 'M').slice(0, 1).toUpperCase();
@@ -78,8 +79,8 @@ function BrandCard({ profile, onEdit, onDelete, onSetDefault, deleting }: BrandC
             className="w-12 h-12 rounded-xl flex-shrink-0 overflow-hidden flex items-center justify-center text-white font-black text-lg shadow-sm"
             style={{ background: avatarBg }}
           >
-            {logoAsset ? (
-              <img src={logoAsset.url} alt={profile.brandName} className="w-10 h-10 object-contain" />
+            {logoAsset && !logoFailed ? (
+              <img src={logoAsset.url} alt="" onError={() => setLogoFailed(true)} className="w-10 h-10 object-contain" />
             ) : initial}
           </div>
           <div className="flex-1 min-w-0">
@@ -116,25 +117,24 @@ function BrandCard({ profile, onEdit, onDelete, onSetDefault, deleting }: BrandC
           </div>
         )}
 
-        {/* Score */}
-          <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold">
-            <Clock size={11} />
-            {formatDate(profile.updatedAt)}
+        {/* Estado */}
+        <div className="mb-4 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-bold whitespace-nowrap">
+              <Clock size={11} />
+              {formatDate(profile.updatedAt)}
+            </div>
+            {isComplete ? (
+              <span className="text-green-600 text-[11px] font-black flex items-center gap-1 whitespace-nowrap">
+                <Check size={12} /> Lista para usar
+              </span>
+            ) : (
+              <span className="text-[11px] font-black whitespace-nowrap" style={{ color: '#F72C5B' }}>{profile.completionScore}% completo</span>
+            )}
           </div>
-          <p className="mb-3 text-xs text-slate-500">
+          <p className="text-xs leading-relaxed text-slate-500">
             {isComplete ? 'Tus planes ya salen a tu medida.' : 'Complétala para personalizar los textos de tus publicaciones.'}
           </p>
-          <div className="flex items-center gap-1.5 text-[10px]">
-            {!isComplete && (
-              <span className="font-black" style={{ color: '#F72C5B' }}>{profile.completionScore}% completo</span>
-            )}
-            {isComplete && (
-              <span className="text-green-600 font-black flex items-center gap-1">
-                ✓ Lista para usar
-              </span>
-            )}
-          </div>
         </div>
 
         {/* Acciones */}
@@ -160,21 +160,21 @@ function BrandCard({ profile, onEdit, onDelete, onSetDefault, deleting }: BrandC
         ) : (
           <div className="space-y-2">
             {isComplete ? (
-              <div className="flex gap-2">
+              <>
                 <button
-                  onClick={onEdit}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-black bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all"
-                >
-                  <Edit3 size={13} /> Abrir perfil
-                </button>
-                <button
-                  onClick={() => navigate('/planner')}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-black text-white transition-all shadow-sm"
+                  onClick={() => navigate('/planner/nuevo', { state: { brandId: profile.id } })}
+                  className="w-full flex items-center justify-center gap-1.5 min-h-11 py-2.5 rounded-xl text-xs font-black text-white transition-all shadow-sm"
                   style={{ background: primaryColor }}
                 >
-                  <CalendarDays size={13} /> Usar en el planificador
+                  <CalendarDays size={14} /> Usar en el planificador
                 </button>
-              </div>
+                <button
+                  onClick={onEdit}
+                  className="w-full flex items-center justify-center gap-1.5 min-h-11 py-2.5 rounded-xl text-xs font-black bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all"
+                >
+                  <Edit3 size={14} /> Abrir perfil
+                </button>
+              </>
             ) : (
               <button
                 onClick={onEdit}
@@ -189,7 +189,7 @@ function BrandCard({ profile, onEdit, onDelete, onSetDefault, deleting }: BrandC
               <button
                 onClick={onSetDefault}
                 title={profile.isDefault ? 'Ya es la predeterminada' : 'Marcar como predeterminada'}
-                className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-bold text-slate-500 hover:bg-slate-50 transition-all"
+                className="flex-1 flex items-center justify-center gap-1.5 min-h-10 py-1.5 rounded-xl text-[11px] font-bold text-slate-500 hover:bg-slate-50 transition-all"
               >
                 {profile.isDefault ? <Star size={12} style={{ fill: '#F72C5B', color: '#F72C5B' }} /> : <StarOff size={12} />}
                 {profile.isDefault ? 'Predeterminada' : 'Predeterminar'}
@@ -197,15 +197,15 @@ function BrandCard({ profile, onEdit, onDelete, onSetDefault, deleting }: BrandC
               <button
                 onClick={() => downloadBrandReport(profile)}
                 title="Descargar informe de marca"
-                className="flex items-center justify-center px-3 py-1.5 rounded-xl text-[11px] text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
+                className="flex items-center justify-center min-h-10 min-w-10 rounded-xl text-[11px] text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
               >
-                <Download size={12} />
+                <Download size={14} />
               </button>
               <button
                 onClick={() => setConfirmDelete(true)}
-                className="flex items-center justify-center px-3 py-1.5 rounded-xl text-[11px] text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all"
+                className="flex items-center justify-center min-h-10 min-w-10 rounded-xl text-[11px] text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all"
               >
-                <Trash2 size={12} />
+                <Trash2 size={14} />
               </button>
             </div>
           </div>
