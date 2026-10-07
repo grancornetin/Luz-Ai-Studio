@@ -149,7 +149,7 @@ const Dashboard: React.FC = () => {
   const steps = [
     { done: brands.length > 0, title: 'Crea tu marca', text: 'Así la IA conoce tu estilo y tu público.', cta: 'Crear marca', path: '/mis-marcas' },
     { done: (stats?.totalAvatars ?? 0) > 0, title: 'Crea tu avatar digital', text: 'La cara de tu marca, desde fotos o desde cero.', cta: 'Empezar', path: '/crear/clonar' },
-    { done: false, title: 'Tu primera foto', text: 'Prueba con una foto de producto: 2 créditos.', cta: 'Probar', path: '/productos' },
+    { done: (missions.first_generation?.count ?? 0) > 0, title: 'Tu primera foto', text: 'Prueba con una foto de producto: 2 créditos.', cta: 'Probar', path: '/productos' },
   ];
   const stepsDone = steps.filter(s => s.done).length;
   const nextStep = steps.findIndex(s => !s.done);
