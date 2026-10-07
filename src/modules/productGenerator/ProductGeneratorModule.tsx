@@ -1,16 +1,16 @@
 // src/modules/productGenerator/ProductGeneratorModule.tsx
-// Wizard guiado de 6 pasos conectado al productDirectorService:
-// — análisis automático inteligente (heurística → Gemini si confianza baja)
-// — cantidad real (Pack 1/2/4/6, Grid 1x2/2x2/3x3, Recrear 1/2)
-// — collage final automático cuando modo=grid
-// — recreate permite humanos solo si la referencia los tiene
-// — descuento total al apretar Generar + reembolso por fallos
-// — Paso 6 con reintento de fotos fallidas
-import React, { useState, useEffect } from 'react';
-import { Check } from 'lucide-react';
+// Fotos de producto — flujo corto de la reestructuración por módulos:
+//   1 Entrada (qué vas a lograr) → 2 Tu producto → 3 Estilo → 4 Revisa y crea
+//   → 5 Creando → 6 Listas (con guardado automático y qué hacer ahora).
+// La lógica de generación sigue conectada al productDirectorService:
+// — análisis automático (heurística → Gemini si confianza baja)
+// — cantidad real (fotos sueltas 1/2/4/6, collage 2/4/9, inspiración 1/2)
+// — descuento total al crear + devolución automática por fotos fallidas
+import React, { useEffect, useRef, useState } from 'react';
+import { Check, Package, Plus } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ResultCard } from '../../components/shared/ResultCard';
 import { ResultLibraryGrid } from '../../components/shared/ResultLibraryGrid';
-import { useSearchParams } from 'react-router-dom';
 import ModuleTutorial from '../../components/shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
 import { useCreditGuard } from '../../../hooks/useCreditGuard';
@@ -18,16 +18,14 @@ import NoCreditsModal from '../../components/shared/NoCreditsModal';
 import { MODEL_CREDIT_COST } from '../../services/creditConfig';
 import { useModelSelection } from '../../hooks/useModelSelection';
 import { ProductProfile } from '../../types';
-import { imageApiService, extractImageRef, newSessionId } from '../../services/imageApiService';
+import { imageApiService, extractImageRef, newSessionId, type ModelId } from '../../services/imageApiService';
 import { useAuth } from '../auth/AuthContext';
 import { generationHistoryService } from '../../services/generationHistoryService';
 import { getNotification } from '../../services/notificationsService';
 import { downloadAsZip, downloadImage } from '../../utils/imageUtils';
-
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
-import { type ProgressStep } from '../../components/shared/GenerationProgress';
+import { useImagePicker } from '../../components/shared/useImagePicker';
 
-// Director (nueva lógica)
 import {
   runProductDirector,
   buildPromptPayloadsFromDirectorResult,
@@ -38,38 +36,31 @@ import {
   type ProductPromptPayload,
   type ProductStyle,
 } from './productDirectorService';
-
-// Wizard pieces
-import { WizardStepper } from './WizardStepper';
-import { WizardFooter } from './WizardFooter';
-import { Step1Product } from './Step1Product';
-import { Step2Goal } from './Step2Goal';
-import { Step3Style } from './Step3Style';
-import { Step4Type } from './Step4Type';
-import { Step5Generating } from './Step5Generating';
-import { Step6Results } from './Step6Results';
 import {
-  WIZARD_STEPS,
   INITIAL_WIZARD_STATE,
   type WizardStep,
   type WizardState,
   type PackCount,
 } from './wizardTypes';
-
-// ─── Etapas de progreso narradas ──────────────────────────────────────────────
-const PRODUCT_STEPS: ProgressStep[] = [
-  { id: 'analyze',  label: 'Analizando producto y materiales' },
-  { id: 'plan',     label: 'Definiendo composición y dirección de arte' },
-  { id: 'generate', label: 'Generando imágenes' },
-  { id: 'collage',  label: 'Preparando el collage final' },
-  { id: 'done',     label: 'Set listo' },
-];
+import { EntryStep } from './flow/EntryStep';
+import { ProductStep } from './flow/ProductStep';
+import { StyleStep } from './flow/StyleStep';
+import { ReviewStep } from './flow/ReviewStep';
+import { GeneratingStep } from './flow/GeneratingStep';
+import { ResultsStep, type SaveState } from './flow/ResultsStep';
+import { CatalogSheet } from './flow/CatalogSheet';
+import { styleTitle } from './flow/styleOptions';
 
 interface ProductPhotographyProps {
-  saveProduct: (product: ProductProfile) => void;
+  saveProduct: (product: ProductProfile) => void | Promise<void>;
   products: ProductProfile[];
   standalone?: boolean;
 }
+
+// Este módulo ofrece solo "Mayor fidelidad" y "Más creativa"; la opción rápida
+// global no respeta bien el producto, así que se reemplaza por fidelidad.
+type ProductModelId = Exclude<ModelId, 'seedream'>;
+const toProductModel = (m: ModelId): ProductModelId => (m === 'seedream' ? 'gemini' : m);
 
 // Convierte el state del wizard al input del director.
 function toDirectorInput(wizard: WizardState): ProductDirectorInput {
@@ -98,7 +89,7 @@ function computeFinalCount(wizard: WizardState): { count: number; gridCollage: b
   return { count: r * c, gridCollage: true };
 }
 
-function computeCost(wizard: WizardState, modelId: 'gemini' | 'seedream' | 'gptimage'): number {
+function computeCost(wizard: WizardState, modelId: ProductModelId): number {
   const { count, gridCollage } = computeFinalCount(wizard);
   return count * MODEL_CREDIT_COST[modelId] + (gridCollage ? 1 : 0);
 }
@@ -108,43 +99,41 @@ const PRODUCT_STYLES: ProductStyle[] = ['minimal', 'premium', 'lifestyle', 'dark
 const PRODUCT_GRID_TYPES: ProductGridType[] = ['1x2', '2x2', '3x3'];
 const PACK_COUNTS: PackCount[] = [1, 2, 4, 6];
 
-function asProductObjective(value: unknown): ProductObjective | null {
-  return PRODUCT_OBJECTIVES.includes(value as ProductObjective) ? value as ProductObjective : null;
-}
+const asProductObjective = (v: unknown): ProductObjective | null =>
+  PRODUCT_OBJECTIVES.includes(v as ProductObjective) ? v as ProductObjective : null;
+const asProductStyle = (v: unknown): ProductStyle | null =>
+  PRODUCT_STYLES.includes(v as ProductStyle) ? v as ProductStyle : null;
+const asProductGridType = (v: unknown): ProductGridType | null =>
+  PRODUCT_GRID_TYPES.includes(v as ProductGridType) ? v as ProductGridType : null;
+const asPackCount = (v: unknown): PackCount | null =>
+  PACK_COUNTS.includes(v as PackCount) ? v as PackCount : null;
 
-function asProductStyle(value: unknown): ProductStyle | null {
-  return PRODUCT_STYLES.includes(value as ProductStyle) ? value as ProductStyle : null;
-}
-
-function asProductGridType(value: unknown): ProductGridType | null {
-  return PRODUCT_GRID_TYPES.includes(value as ProductGridType) ? value as ProductGridType : null;
-}
-
-function asPackCount(value: unknown): PackCount | null {
-  return PACK_COUNTS.includes(value as PackCount) ? value as PackCount : null;
-}
-
-// El director devuelve aspect ratios en su set propio ('1:1' | '3:4' | '4:5' | '9:16').
-// imageApiService acepta '1:1' | '3:4' | '4:3' | '9:16' | '16:9'.
-// Mapeamos '4:5' → '3:4' (vertical más cercano permitido).
+// El director devuelve '1:1' | '3:4' | '4:5' | '9:16'; la API de imágenes
+// acepta '1:1' | '3:4' | '4:3' | '9:16' | '16:9'. '4:5' → '3:4'.
 type ImageAspect = '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
 function mapAspectRatio(ar: '1:1' | '3:4' | '4:5' | '9:16'): ImageAspect {
   if (ar === '4:5') return '3:4';
   return ar;
 }
 
+// Proporción de las tarjetas = proporción real de la foto, para no recortar.
+const aspectClassFor = (goal: ProductObjective | null) => (goal === 'social' || !goal ? 'aspect-[3/4]' : 'aspect-square');
+
 const ProductPhotography: React.FC<ProductPhotographyProps> = ({
   saveProduct,
   products,
   standalone: _standalone,
 }) => {
-  const { modelId, setModelId } = useModelSelection();
+  const navigate = useNavigate();
+  const { modelId: globalModelId, setModelId } = useModelSelection();
+  const modelId = toProductModel(globalModelId);
   const { credits, isAdmin, user } = useAuth();
   const { checkAndDeduct, refundCredits, showNoCredits, requiredCredits, closeModal } = useCreditGuard();
+  const picker = useImagePicker();
 
   const [activeTab, setActiveTab] = useState<'create' | 'library'>('create');
-  // El paso del wizard vive en la URL (?paso=N) para que el botón atrás del
-  // navegador retroceda un paso en vez de sacar al usuario del módulo entero.
+  // El paso vive en la URL (?paso=N) para que el botón atrás del navegador
+  // retroceda un paso en vez de sacar a la usuaria del módulo.
   const [searchParams, setSearchParams] = useSearchParams();
   const stepFromUrl = Number(searchParams.get('paso'));
   const step: WizardStep = (stepFromUrl >= 1 && stepFromUrl <= 6 ? stepFromUrl : 1) as WizardStep;
@@ -154,10 +143,10 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
       p.set('paso', String(next));
       return p;
     }, { replace: options?.replace ?? false });
+    window.scrollTo({ top: 0 });
   };
   const [wizard, setWizard] = useState<WizardState>(INITIAL_WIZARD_STATE);
 
-  const [progressStepIndex, setProgressStepIndex] = useState(0);
   const [processingStatus, setProcessingStatus] = useState('');
   const [generatedShots, setGeneratedShots] = useState<string[]>([]); // 'error' marca fallidos
   const [collageShot, setCollageShot] = useState<string | null>(null);
@@ -166,9 +155,10 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isZipping, setIsZipping] = useState(false);
   const [retryingIndices, setRetryingIndices] = useState<number[]>([]);
-  // Notificaciones Nivel 3: ID único del set actual, para que el server agrupe
-  // todos los shots en una sola notificación que se va actualizando.
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [genError, setGenError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>('idle');
+  const savedProductIdRef = useRef<string | null>(null);
+  const [showCatalog, setShowCatalog] = useState(false);
 
   // ─── Lightbox ───────────────────────────────────────────────────────────────
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -178,10 +168,8 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
   const [selectedProduct, setSelectedProduct] = useState<ProductProfile | null>(null);
 
   // ─── Retomar sesión desde notificación (?session=xxx) ───────────────────────
-  // Cuando el usuario clickea una notificación, llega acá con el sessionId en
-  // la URL. Leemos la notificación de Firestore, reconstruimos los shots y
-  // saltamos al Paso 6 (resultados). Reusa searchParams/setSearchParams
-  // declarados arriba junto con el paso del wizard.
+  // Al tocar un aviso llega con el sessionId en la URL: reconstruimos las fotos
+  // desde Firestore y saltamos a "Listas".
   useEffect(() => {
     const sessionParam = searchParams.get('session');
     if (!sessionParam || !user) return;
@@ -190,24 +178,17 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
     (async () => {
       const notif = await getNotification(user.uid, sessionParam);
       if (cancelled || !notif) {
-        // Limpiar el query param aunque no se haya encontrado la notificación
         setSearchParams({}, { replace: true });
         return;
       }
 
-      // Reconstruir shots ordenados por index — los faltantes quedan como 'error'
+      // Las faltantes quedan como 'error'
       const reconstructed: string[] = new Array(notif.totalShots).fill('error');
       notif.shots.forEach(s => {
-        if (s.status === 'completed' && s.imageUrl) {
-          reconstructed[s.index] = s.imageUrl;
-        }
+        if (s.status === 'completed' && s.imageUrl) reconstructed[s.index] = s.imageUrl;
       });
-
-      setCurrentSessionId(notif.sessionId);
       setGeneratedShots(reconstructed);
 
-      // Reconstruir mínimo del wizard desde la metadata para que Step6 muestre
-      // título y stepper con el contexto correcto.
       const md = notif.metadata || {};
       setWizard(prev => ({
         ...prev,
@@ -218,16 +199,10 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
         },
         goal:  md.objective || prev.goal,
         style: { ...prev.style, preset: md.stylePreset || prev.style.preset },
-        type:  {
-          ...prev.type,
-          mode: md.mode || prev.type.mode,
-          finalCount: md.count || prev.type.finalCount,
-        },
+        type:  { ...prev.type, mode: md.mode || prev.type.mode, finalCount: md.count || prev.type.finalCount },
       }));
 
-      // Saltar a Paso 6 y limpiar ?session= en la misma escritura — hacerlo en
-      // dos pasos (setStep + setSearchParams({})) pisaba el ?paso=6 recién
-      // escrito, dejando la URL sin parámetro tras el refresh.
+      // Saltar a "Listas" y limpiar ?session= en la misma escritura.
       setSearchParams({ paso: '6' }, { replace: true });
     })();
 
@@ -235,13 +210,11 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid]);
 
-  // ─── Onboarding: activa el tour guiado cuando llega desde el wizard de registro ─
+  // ─── Onboarding: activa el tour guiado cuando llega desde el registro ───────
   useEffect(() => {
-    const tour = localStorage.getItem('onboarding_tour_active');
-    if (tour === 'product') {
+    if (localStorage.getItem('onboarding_tour_active') === 'product') {
       localStorage.removeItem('onboarding_tour_active');
-      // No generamos automáticamente — el usuario sigue el wizard normal del módulo.
-      // El flag onboarding_free_generation se lee en runGeneration para saltarse el cobro.
+      // El flag onboarding_free_generation se lee al crear para saltarse el cobro.
     }
   }, []);
 
@@ -254,38 +227,80 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
   const buildRefObjects = (state: WizardState): LabeledImageRef[] => {
     const productRefs = validFiles(state).map((img, i) => {
       try {
-        return {
-          ...extractImageRef(img, `productRef[${i}]`),
-          label: `PRODUCT_IDENTITY_REF_${i + 1}`,
-        };
-      }
-      catch { return null; }
+        return { ...extractImageRef(img, `productRef[${i}]`), label: `PRODUCT_IDENTITY_REF_${i + 1}` };
+      } catch { return null; }
     }).filter(Boolean) as LabeledImageRef[];
 
     let inspirationRef: LabeledImageRef | null = null;
     if (state.style.referenceImg) {
       try {
-        inspirationRef = {
-          ...extractImageRef(state.style.referenceImg, 'inspirationRef'),
-          label: 'INSPIRATION_SCENE_REF',
-        };
-      }
-      catch { /* no-op */ }
+        inspirationRef = { ...extractImageRef(state.style.referenceImg, 'inspirationRef'), label: 'INSPIRATION_SCENE_REF' };
+      } catch { /* no-op */ }
     }
     return inspirationRef ? [inspirationRef, ...productRefs] : productRefs;
   };
 
+  // ─── Guardado automático en el catálogo ─────────────────────────────────────
+  // Se guarda al terminar y se vuelve a guardar (mismo id) si se reintentan
+  // fotos, para que el catálogo siempre tenga el set completo.
+  const autoSave = async (
+    state: WizardState,
+    direction: ProductDirectorResult | null,
+    shots: string[],
+    collage: string | null,
+  ) => {
+    const finalShots = [...shots.filter((s) => s && s !== 'error'), ...(collage ? [collage] : [])];
+    if (!direction || finalShots.length === 0) return;
+    const files = validFiles(state);
+    const id = savedProductIdRef.current ?? Date.now().toString();
+    savedProductIdRef.current = id;
+    const product: ProductProfile = {
+      id,
+      name:                  state.product.title,
+      category:              direction.analysis.category,
+      baseImages:            files,
+      generatedImages:       finalShots,
+      productPrompt:         direction.analysis.productAnchor,
+      technicalDescription:  direction.analysis.technicalDescription,
+      commercialDescription: direction.analysis.commercialDescription,
+      metadata: {
+        material: (direction.analysis.metadata?.material as string) ?? '',
+        color:    (direction.analysis.metadata?.color as string) ?? '',
+        style:    state.style.preset ?? 'minimal',
+      },
+      inspirationImage: state.style.referenceImg,
+      generationConfig: {
+        productTitle: state.product.title,
+        productDescription: state.product.desc,
+        objective: state.goal,
+        stylePreset: state.style.preset,
+        mode: state.style.referenceImg ? 'recreate' : state.type.mode,
+        count: state.style.referenceImg
+          ? state.type.refCount
+          : state.type.mode === 'pack' ? state.type.packCount : state.type.gridSize,
+        modelId,
+      },
+      referenceSummary: { productImages: files, inspirationImage: state.style.referenceImg },
+      createdAt: Date.now(),
+    };
+    setSaveState('saving');
+    try {
+      await Promise.resolve(saveProduct(product));
+      setSaveState('saved');
+    } catch (e) {
+      console.error('No se pudo guardar en el catálogo:', e);
+      setSaveState('error');
+    }
+  };
+
   // ─── Generación principal: análisis + plan + N imágenes + collage ───────────
   const runGeneration = async (state: WizardState = wizard, free = false) => {
-    const files = validFiles(state);
-    if (!state.product.title.trim()) {
-      alert('Por favor, especifica el nombre del producto.');
+    if (!state.product.title.trim() || validFiles(state).length < 1) {
+      setGenError('Falta la foto o el nombre de tu producto.');
+      setStep(2);
       return;
     }
-    if (!free && files.length < 1) {
-      alert('Sube al menos 1 foto del producto (la frontal). Con más ángulos, mejor resultado.');
-      return;
-    }
+    setGenError(null);
 
     const totalCost = computeCost(state, modelId);
     const { count: finalCount, gridCollage } = computeFinalCount(state);
@@ -295,17 +310,16 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
       if (!ok) return;
     }
 
+    savedProductIdRef.current = null;
+    setSaveState('idle');
     setStep(5);
     setIsGenerating(true);
-    setProgressStepIndex(0);
-    setProcessingStatus('Escaneando materiales y contexto del producto...');
+    setProcessingStatus('Mirando los materiales y la forma de tu producto…');
     setGeneratedShots(new Array(finalCount).fill('') as string[]);
     setCollageShot(null);
 
-    // Nuevo sessionId para que el server agrupe todos los shots de este set
-    // en una sola notificación que se va actualizando shot por shot.
+    // Un sessionId por set: el server agrupa las fotos en un solo aviso.
     const sessionId = newSessionId();
-    setCurrentSessionId(sessionId);
     const sessionMetadata = {
       productTitle: state.product.title.trim(),
       productDescription: state.product.desc.trim() || undefined,
@@ -317,23 +331,19 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
 
     let creditsToRefund = 0;
     const shots = new Array<string>(finalCount).fill('');
+    let collage: string | null = null;
 
     try {
       const directorInput = toDirectorInput(state);
       const direction = await runProductDirector(directorInput);
       setDirectorResult(direction);
 
-      setProgressStepIndex(1);
-      setProcessingStatus('Definiendo composición y dirección de arte...');
-
-      const allPayloads = buildPromptPayloadsFromDirectorResult(directorInput, direction);
-      const payloads = allPayloads.slice(0, finalCount);
+      setProcessingStatus('Preparando la luz y la composición…');
+      const payloads = buildPromptPayloadsFromDirectorResult(directorInput, direction).slice(0, finalCount);
       setLastPayloads(payloads);
-
       const referenceObjects = buildRefObjects(state);
 
-      setProgressStepIndex(2);
-      setProcessingStatus(`Generando ${finalCount} ${finalCount === 1 ? 'imagen' : 'imágenes'}...`);
+      setProcessingStatus(finalCount === 1 ? 'Creando tu foto…' : `Creando tus ${finalCount} fotos…`);
 
       await Promise.allSettled(
         payloads.map(async (payload, i) => {
@@ -357,7 +367,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
             generationHistoryService.save({
               imageUrl:    img,
               module:      'catalog',
-              moduleLabel: `Product Studio (${payload.shotType})`,
+              moduleLabel: 'Fotos de producto',
               creditsUsed: free ? 0 : MODEL_CREDIT_COST[modelId],
               promptText:  payload.prompt,
             }).catch(console.error);
@@ -373,15 +383,14 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
       if (gridCollage) {
         const validShots = shots.filter((s) => s && s !== 'error');
         if (validShots.length >= 2) {
-          setProgressStepIndex(3);
-          setProcessingStatus('Preparando el collage final...');
+          setProcessingStatus('Armando tu collage…');
           try {
-            const collage = await generateCollage(state, direction, validShots, referenceObjects);
+            collage = await generateCollage(state, direction, validShots, referenceObjects);
             setCollageShot(collage);
             generationHistoryService.save({
               imageUrl:    collage,
               module:      'catalog',
-              moduleLabel: 'Product Studio (Grid Collage)',
+              moduleLabel: 'Fotos de producto (collage)',
               creditsUsed: free ? 0 : 1,
               promptText:  'collage final',
             }).catch(console.error);
@@ -398,31 +407,26 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
         await refundCredits(creditsToRefund);
       }
 
-      setProgressStepIndex(4);
-      setProcessingStatus('Producción completada.');
+      setProcessingStatus('Listo.');
       setStep(6);
+      autoSave(state, direction, shots, collage).catch(console.error);
     } catch (e: any) {
       console.error('Falla crítica en generación:', e);
-      if (!free && !isAdmin) {
-        await refundCredits(totalCost);
-      }
-      alert('Error en la generación: ' + (e?.message || 'desconocido'));
-      setStep(1);
+      if (!free && !isAdmin) await refundCredits(totalCost);
+      setGenError('No pudimos crear tus fotos por un error. Ya te devolvimos los créditos. Intenta de nuevo en un momento.');
+      setGeneratedShots([]);
       setProcessingStatus('');
+      setStep(4);
     } finally {
       setIsGenerating(false);
     }
   };
 
   // Convierte una URL pública o data URL a { data, mimeType } para la API.
-  // Las imágenes generadas llegan como URLs HTTPS — hay que fetchearlas y
-  // convertirlas a base64 porque la API solo acepta inlineData.
+  // Las imágenes generadas llegan como URLs HTTPS y la API solo acepta inlineData.
   const urlToRef = async (url: string, label: string): Promise<{ data: string; mimeType: string } | null> => {
     try {
-      // data URL o base64 sin prefijo → extractImageRef directo
       if (url.startsWith('data:')) return extractImageRef(url, label);
-
-      // URL pública → fetch → blob → base64
       const res = await fetch(url, { mode: 'cors' });
       if (!res.ok) throw new Error(`fetch ${res.status}`);
       const blob = await res.blob();
@@ -440,7 +444,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
     }
   };
 
-  // Genera el collage final pasando las N imágenes generadas como referencias adicionales.
+  // Genera el collage final pasando las N imágenes generadas como referencias.
   const generateCollage = async (
     state: WizardState,
     direction: ProductDirectorResult,
@@ -464,8 +468,6 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
       'HARD RULES: do not invent product details, preserve original product shape and colors, no human figures unless already present in the source shots.',
     ].join('\n');
 
-    // Convertir las URLs de los shots generados a base64 para pasarlas como
-    // inlineData a la API (las URLs HTTPS no son válidas como referenceImages).
     const shotRefs = (
       await Promise.all(validShots.map((img, i) => urlToRef(img, `gridCell[${i}]`)))
     ).filter(Boolean) as Array<{ data: string; mimeType: string }>;
@@ -476,7 +478,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
       referenceImages: [...productAndInspirationRefs, ...shotRefs],
       aspectRatio:     r === c ? '1:1' : '4:3',
       module:          'product',
-      moduleLabel:     'Foto de producto (grid)',
+      moduleLabel:     'Foto de producto (collage)',
       modelId,
       shotIndex:       0,
       totalShots:      1,
@@ -486,9 +488,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
 
   // ─── Reintentar fotos fallidas ──────────────────────────────────────────────
   const retryFailedShots = async () => {
-    const failedIndices = generatedShots
-      .map((s, i) => (s === 'error' ? i : -1))
-      .filter((i) => i >= 0);
+    const failedIndices = generatedShots.map((s, i) => (s === 'error' ? i : -1)).filter((i) => i >= 0);
     if (failedIndices.length === 0) return;
 
     const cost = failedIndices.length * MODEL_CREDIT_COST[modelId];
@@ -498,7 +498,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
     }
 
     setIsGenerating(true);
-    setRetryingIndices(failedIndices); // marcar todas como "reintentando" desde el inicio
+    setRetryingIndices(failedIndices);
     let creditsToRefund = 0;
     const refs = buildRefObjects(wizard);
     const next = [...generatedShots];
@@ -526,12 +526,12 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
             sessionId:       newSessionId(),
           });
           next[i] = img;
-          setRetryingIndices((prev) => prev.filter((idx) => idx !== i)); // retirar al completar
-          setGeneratedShots([...next]); // actualizar en tiempo real
+          setRetryingIndices((prev) => prev.filter((idx) => idx !== i));
+          setGeneratedShots([...next]);
           generationHistoryService.save({
             imageUrl:    img,
             module:      'catalog',
-            moduleLabel: `Product Studio (${payload.shotType} retry)`,
+            moduleLabel: 'Fotos de producto',
             creditsUsed: MODEL_CREDIT_COST[modelId],
             promptText:  payload.prompt,
           }).catch(console.error);
@@ -539,127 +539,91 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
           console.error(`Reintento falló para shot ${i}:`, e);
           next[i] = 'error';
           creditsToRefund += MODEL_CREDIT_COST[modelId];
-          setRetryingIndices((prev) => prev.filter((idx) => idx !== i)); // retirar aunque falle
+          setRetryingIndices((prev) => prev.filter((idx) => idx !== i));
           setGeneratedShots([...next]);
         }
       }),
     );
 
-    if (!isAdmin && creditsToRefund > 0) {
-      await refundCredits(creditsToRefund);
-    }
+    if (!isAdmin && creditsToRefund > 0) await refundCredits(creditsToRefund);
 
     setRetryingIndices([]);
     setGeneratedShots([...next]);
     setIsGenerating(false);
+    autoSave(wizard, directorResult, next, collageShot).catch(console.error);
   };
 
-  // ─── Acciones del Paso 6 ────────────────────────────────────────────────────
-  const allFinalShots = (): string[] => {
-    const valid = generatedShots.filter((s) => s && s !== 'error');
-    return collageShot ? [...valid, collageShot] : valid;
-  };
-
-  const handleSaveToCatalog = () => {
-    if (!directorResult) return;
-    const finalShots = allFinalShots();
-    if (finalShots.length === 0) return;
-    const files = validFiles();
-    const newProduct: ProductProfile = {
-      id:                    Date.now().toString(),
-      name:                  wizard.product.title,
-      category:              directorResult.analysis.category,
-      baseImages:            files,
-      generatedImages:       finalShots,
-      productPrompt:         directorResult.analysis.productAnchor,
-      technicalDescription:  directorResult.analysis.technicalDescription,
-      commercialDescription: directorResult.analysis.commercialDescription,
-      metadata: {
-        material: (directorResult.analysis.metadata?.material as string) ?? '',
-        color:    (directorResult.analysis.metadata?.color as string) ?? '',
-        style:    wizard.style.preset ?? 'minimal',
-      },
-      inspirationImage: wizard.style.referenceImg,
-      generationConfig: {
-        productTitle: wizard.product.title,
-        productDescription: wizard.product.desc,
-        objective: wizard.goal,
-        stylePreset: wizard.style.preset,
-        mode: wizard.style.referenceImg ? 'recreate' : wizard.type.mode,
-        count: wizard.style.referenceImg
-          ? wizard.type.refCount
-          : wizard.type.mode === 'pack'
-          ? wizard.type.packCount
-          : wizard.type.gridSize,
-        modelId,
-      },
-      referenceSummary: {
-        productImages: files,
-        inspirationImage: wizard.style.referenceImg,
-      },
-      createdAt: Date.now(),
-    };
-    saveProduct(newProduct);
-    alert('Producto guardado en tu catálogo.');
-    resetCreator();
-    setActiveTab('library');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleDownloadIndividual = async (url: string, filename: string) => {
-    await downloadImage(url, filename);
-  };
+  // ─── Acciones de "Listas" ───────────────────────────────────────────────────
+  const fileBase = () => wizard.product.title.replace(/\s+/g, '_') || 'producto';
 
   const handleDownloadZip = async () => {
-    const finalShots = allFinalShots();
+    const finalShots = [...generatedShots.filter((s) => s && s !== 'error'), ...(collageShot ? [collageShot] : [])];
     if (finalShots.length === 0) return;
     setIsZipping(true);
     try {
-      const zipName = `Set_${wizard.product.title.replace(/\s+/g, '_') || 'product'}.zip`;
-      const prefix = wizard.product.title.replace(/\s+/g, '_') || 'product';
-      await downloadAsZip(finalShots, zipName, prefix);
-    } catch {
-      alert('No pudimos preparar la descarga. Inténtalo de nuevo.');
+      if (finalShots.length === 1) await downloadImage(finalShots[0], `${fileBase()}_1.png`);
+      else await downloadAsZip(finalShots, `Fotos_${fileBase()}.zip`, fileBase());
+    } catch (e) {
+      console.error('No pudimos preparar la descarga:', e);
     } finally {
       setIsZipping(false);
     }
   };
 
-  const resetCreator = () => {
-    setWizard(INITIAL_WIZARD_STATE);
-    setStep(1);
-    setProgressStepIndex(0);
-    setProcessingStatus('');
+  const clearResults = () => {
     setGeneratedShots([]);
     setCollageShot(null);
     setDirectorResult(null);
     setLastPayloads([]);
     setRetryingIndices([]);
+    setProcessingStatus('');
+    setSaveState('idle');
+    savedProductIdRef.current = null;
+  };
+
+  const resetCreator = () => {
+    clearResults();
+    setWizard(INITIAL_WIZARD_STATE);
+    setGenError(null);
     setSelectedProduct(null);
-  };
-
-  // ─── Volver atrás desde el Paso 6 sin perder el wizard ──────────────────────
-  // Vuelve al Paso 4 (configuración de tipo/cantidad). Limpia los resultados
-  // anteriores pero preserva: producto, objetivo, estilo y configuración.
-  const backToConfig = () => {
-    setGeneratedShots([]);
-    setCollageShot(null);
-    setDirectorResult(null);
-    setLastPayloads([]);
-    setProcessingStatus('');
-    setProgressStepIndex(0);
-    setStep(4);
-  };
-
-  // Vuelve al Paso 1 conservando el producto pero permitiendo cambiar las fotos.
-  const backToStart = () => {
-    setGeneratedShots([]);
-    setCollageShot(null);
-    setDirectorResult(null);
-    setLastPayloads([]);
-    setProcessingStatus('');
-    setProgressStepIndex(0);
     setStep(1);
+  };
+
+  // ─── Partir desde un producto del catálogo ──────────────────────────────────
+  const prefillFromProduct = (product: ProductProfile) => {
+    const config = product.generationConfig ?? {};
+    const productRefs = (product.referenceSummary?.productImages ?? product.baseImages ?? []).filter(Boolean).slice(0, 4);
+    const inspiration = product.referenceSummary?.inspirationImage ?? product.inspirationImage ?? null;
+    const slots = [...productRefs, null, null, null, null].slice(0, 4) as (string | null)[];
+    const nextType = { ...INITIAL_WIZARD_STATE.type };
+    const refCount = config.count === 1 || config.count === 2 ? config.count : null;
+    const gridType = asProductGridType(config.count);
+    const packCount = asPackCount(config.count);
+
+    if (inspiration) nextType.refCount = refCount ?? nextType.refCount;
+    else if (config.mode === 'grid' && gridType) { nextType.mode = 'grid'; nextType.gridSize = gridType; }
+    else if (config.mode === 'pack' && packCount) { nextType.mode = 'pack'; nextType.packCount = packCount; }
+
+    clearResults();
+    setGenError(null);
+    setWizard({
+      product: {
+        title: config.productTitle ?? product.name ?? '',
+        desc: config.productDescription ?? '',
+        slots,
+      },
+      goal: asProductObjective(config.objective) ?? 'social',
+      style: {
+        referenceImg: inspiration,
+        preset: inspiration ? null : asProductStyle(config.stylePreset ?? product.metadata?.style),
+      },
+      type: nextType,
+    });
+    setShowCatalog(false);
+    setLightboxOpen(false);
+    setSelectedProduct(null);
+    setActiveTab('create');
+    setStep(3);
   };
 
   // ─── Lightbox helpers ───────────────────────────────────────────────────────
@@ -675,382 +639,239 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
     openLightbox(product.generatedImages, 0, product.name);
   };
 
-  const reuseSelectedProductSetup = () => {
-    if (!selectedProduct) return;
-
-    const config = selectedProduct.generationConfig ?? {};
-    const productRefs = (selectedProduct.referenceSummary?.productImages ?? selectedProduct.baseImages ?? [])
-      .filter(Boolean)
-      .slice(0, 4);
-    const inspiration = selectedProduct.referenceSummary?.inspirationImage ?? selectedProduct.inspirationImage ?? null;
-    const slots = [...productRefs, null, null, null, null].slice(0, 4) as (string | null)[];
-    const nextType = { ...INITIAL_WIZARD_STATE.type };
-    const refCount = config.count === 1 || config.count === 2 ? config.count : null;
-    const gridType = asProductGridType(config.count);
-    const packCount = asPackCount(config.count);
-
-    if (inspiration) {
-      nextType.refCount = refCount ?? nextType.refCount;
-    } else if (config.mode === 'grid' && gridType) {
-      nextType.mode = 'grid';
-      nextType.gridSize = gridType;
-    } else if (config.mode === 'pack' && packCount) {
-      nextType.mode = 'pack';
-      nextType.packCount = packCount;
-    }
-
-    setWizard({
-      product: {
-        title: config.productTitle ?? selectedProduct.name ?? '',
-        desc: config.productDescription ?? selectedProduct.commercialDescription ?? '',
-        slots,
-      },
-      goal: asProductObjective(config.objective),
-      style: {
-        referenceImg: inspiration,
-        preset: inspiration ? null : asProductStyle(config.stylePreset ?? selectedProduct.metadata?.style),
-      },
-      type: nextType,
-    });
-    setLightboxOpen(false);
-    setSelectedProduct(null);
-    setActiveTab('create');
-    setStep(inspiration ? 4 : 3);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
   const renderSelectedProductDetails = () => {
     if (!selectedProduct) return null;
-
-    const config = selectedProduct.generationConfig ?? {};
-    const productRefs = selectedProduct.referenceSummary?.productImages ?? selectedProduct.baseImages ?? [];
-    const inspiration = selectedProduct.referenceSummary?.inspirationImage ?? selectedProduct.inspirationImage;
-    const refs = [
-      ...productRefs.map((src: string, i: number) => ({ label: `Producto ${i + 1}`, src })),
-      ...(inspiration ? [{ label: 'Inspiración', src: inspiration }] : []),
-    ].filter((ref) => !!ref.src);
-    const configItems = [
-      config.objective ? `Objetivo: ${config.objective}` : null,
-      config.mode ? `Modo: ${config.mode}` : null,
-      config.stylePreset ? `Estilo: ${config.stylePreset}` : null,
-      config.count ? `Cantidad: ${config.count}` : null,
-      config.modelId ? `Modelo: ${config.modelId}` : null,
-    ].filter((item): item is string => Boolean(item));
-
     return (
-      <div className="rounded-2xl bg-white/10 border border-white/10 backdrop-blur-md p-3 text-white">
-        <div className="flex items-center justify-between gap-3 mb-2">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/50">Configuración guardada</p>
-            <p className="text-sm font-bold leading-tight">{selectedProduct.name}</p>
-          </div>
-          <span className="text-[10px] font-bold text-white/50">{selectedProduct.generatedImages?.length ?? 0} generadas</span>
-        </div>
-
-        {configItems.length > 0 && (
-          <div className="flex gap-1.5 flex-wrap mb-3">
-            {configItems.map((item) => (
-              <span key={item} className="text-[10px] text-white/75 bg-white/10 border border-white/10 px-2 py-1 rounded-full">
-                {item}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {refs.length > 0 && (
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/50 mb-2">
-              Referencias usadas
-            </p>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {refs.map((ref, i) => (
-                <div key={`${ref.label}-${i}`} className="w-16 flex-shrink-0">
-                  <div className="w-16 h-16 rounded-xl overflow-hidden bg-white/10 border border-white/10">
-                    <img src={ref.src} alt={ref.label} className="w-full h-full object-cover" />
-                  </div>
-                  <p className="mt-1 text-[9px] text-white/55 truncate">{ref.label}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
+      <div className="rounded-2xl bg-white/10 border border-white/10 p-3 text-white">
+        <p className="text-sm font-bold leading-tight">{selectedProduct.name}</p>
+        <p className="text-xs text-white/70 mt-0.5">
+          {selectedProduct.generatedImages?.length ?? 0} fotos · {styleTitle(asProductStyle(selectedProduct.generationConfig?.stylePreset ?? selectedProduct.metadata?.style))}
+        </p>
         <button
           type="button"
-          onClick={reuseSelectedProductSetup}
-          className="mt-3 w-full rounded-xl bg-white text-slate-900 px-3 py-2.5 text-[11px] font-black uppercase tracking-widest hover:bg-white/90 transition-colors"
+          onClick={() => prefillFromProduct(selectedProduct)}
+          className="mt-3 w-full rounded-xl bg-white text-slate-900 px-3 py-2.5 text-sm font-bold hover:bg-white/90 transition-colors"
         >
-          Reutilizar referencias
+          Crear más fotos de este producto
         </button>
       </div>
     );
   };
 
-  // ─── Validaciones por paso ──────────────────────────────────────────────────
-  const filledSlots = wizard.product.slots.filter(Boolean).length;
-  const totalCost = computeCost(wizard, modelId);
-  const canContinueByStep: Record<WizardStep, boolean> = {
-    1: filledSlots >= 1 && wizard.product.title.trim().length > 0,
-    2: !!wizard.goal,
-    3: !!wizard.style.referenceImg || !!wizard.style.preset,
-    4: isAdmin || credits.available >= totalCost,
-    5: false,
-    6: false,
-  };
-
-  // Si el paso de la URL no es alcanzable con lo que hay en memoria (ej.
-  // recarga a mitad del wizard, o alguien pegó/compartió el link directo) —
-  // evita mostrar una pantalla a medias y vuelve al paso 1. No aplica
-  // mientras se retoma una sesión desde notificación (carga async propia).
-  const canGoToStep2 = canContinueByStep[1];
-  const canGoToStep3 = canGoToStep2 && canContinueByStep[2];
-  const canGoToStep4 = canGoToStep3 && canContinueByStep[3];
+  // ─── Pasos alcanzables ──────────────────────────────────────────────────────
+  // Si el paso de la URL no se puede mostrar con lo que hay en memoria (recarga,
+  // link compartido), vuelve al inicio. No aplica al retomar desde un aviso.
+  const hasMain = !!wizard.product.slots[0];
+  const hasName = wizard.product.title.trim().length > 0;
+  const hasStyle = !!wizard.style.referenceImg || !!wizard.style.preset;
   useEffect(() => {
     if (searchParams.get('session')) return;
     const reachable =
       step === 1 ? true :
-      step === 2 ? canGoToStep2 :
-      step === 3 ? canGoToStep3 :
-      step === 4 ? canGoToStep4 :
-      // Los pasos 5 (generando) y 6 (resultados) solo son alcanzables si ya
-      // hay shots en curso o generados — si no, no tiene sentido mostrarlos.
+      step === 2 ? hasMain :
+      step === 3 ? hasMain && hasName :
+      step === 4 ? hasMain && hasName && hasStyle :
       (generatedShots.length > 0 || isGenerating);
     if (!reachable) setStep(1, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
-  // ─── Footer config ──────────────────────────────────────────────────────────
-  const footerCostInfo = step === 4 ? { cost: totalCost, label: 'Costo total' } : undefined;
-  const continueLabel = step === 4 ? 'Generar' : 'Continuar';
-  const showFooter = step >= 1 && step <= 4 && activeTab === 'create';
-
-  const handleContinue = () => {
-    if (step === 4) {
-      const isFreeOnboarding = localStorage.getItem('onboarding_free_generation') === 'true';
-      if (isFreeOnboarding) localStorage.removeItem('onboarding_free_generation');
-      runGeneration(wizard, isFreeOnboarding).catch(console.error);
-      return;
-    }
-    if (step < 6) setStep((step + 1) as WizardStep);
+  // ─── Acciones del flujo ─────────────────────────────────────────────────────
+  const handleCreate = () => {
+    const isFreeOnboarding = localStorage.getItem('onboarding_free_generation') === 'true';
+    if (isFreeOnboarding) localStorage.removeItem('onboarding_free_generation');
+    runGeneration(wizard, isFreeOnboarding).catch(console.error);
   };
 
-  const handleBack = () => {
-    if (step > 1 && !isGenerating) setStep((step - 1) as WizardStep);
+  const pickMainPhoto = () =>
+    picker.open((img) => {
+      setWizard((s) => {
+        const slots = [...s.product.slots];
+        slots[0] = img;
+        return { ...s, product: { ...s.product, slots } };
+      });
+      setStep(2);
+    });
+
+  const pickStyle = (style: ProductStyle) => {
+    setWizard((s) => ({ ...s, style: { referenceImg: null, preset: style } }));
+    // Pequeña pausa para que se vea la selección antes de avanzar.
+    window.setTimeout(() => setStep(4), 220);
   };
 
-  const { count: previewCount, gridCollage: previewCollage } = computeFinalCount(wizard);
-  const totalShotsForPreview = previewCount + (previewCollage ? 1 : 0);
+  const pickReference = (img: string) => {
+    setWizard((s) => ({ ...s, style: { referenceImg: img, preset: null } }));
+    setStep(4);
+  };
 
-  const modeLabel = wizard.style.referenceImg
-    ? 'Recrear inspiración'
-    : `${wizard.type.mode === 'pack' ? 'Pack' : 'Grid'}${wizard.style.preset ? ' · ' + wizard.style.preset : ''}`;
+  const finalCount = computeFinalCount(wizard);
+  const totalCost = computeCost(wizard, modelId);
+  const defaultCost = computeCost(INITIAL_WIZARD_STATE, modelId);
+  const aspectClass = aspectClassFor(wizard.goal);
 
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
     <>
-      <NoCreditsModal
-        isOpen={showNoCredits}
-        onClose={closeModal}
-        required={requiredCredits}
-        available={credits.available}
-      />
+      <NoCreditsModal isOpen={showNoCredits} onClose={closeModal} required={requiredCredits} available={credits.available} />
+      {picker.element}
 
-      <div className="max-w-7xl mx-auto pb-28 md:pb-20 animate-in fade-in duration-500">
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-5 px-1 mb-4 md:mb-8">
-          <div>
-            <h1 className="t-display text-xl md:text-3xl text-slate-900">Foto de producto</h1>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 md:mt-2">
-              <p className="text-slate-500 font-medium italic text-xs md:text-sm">
-                Crea fotos para vender en 6 pasos.{' '}
-                <span className="hidden md:inline normal-case font-normal text-slate-300 text-[9px]">
-                  (Product Studio)
-                </span>
-              </p>
+      <div className={`mx-auto pb-28 md:pb-20 ${activeTab === 'library' || step === 6 ? 'max-w-5xl' : 'max-w-xl'}`}>
+        {(activeTab === 'library' || step === 1) && (
+          <header className="flex items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-2 min-w-0">
+              <h1 className="text-[15px] font-bold text-slate-900">Fotos de producto</h1>
               <ModuleTutorial moduleId="catalog" steps={TUTORIAL_CONFIGS.catalog} />
             </div>
-          </div>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <div
-              className={`flex bg-white p-1 rounded-2xl shadow-sm border border-slate-100 transition-opacity duration-150 ${
-                isGenerating ? 'opacity-50' : ''
-              }`}
-            >
-            <button
-              type="button"
-              disabled={isGenerating}
-              onClick={() => {
-                if (isGenerating) return;
-                setActiveTab('create');
-                window.scrollTo(0, 0);
-                resetCreator();
-              }}
-              style={{ touchAction: 'manipulation' }}
-              className={`px-5 md:px-8 py-2 md:py-3 rounded-xl t-meta transition-colors duration-150 disabled:cursor-not-allowed ${
-                activeTab === 'create'
-                  ? 'bg-brand-600 text-white shadow-lg'
-                  : 'text-slate-400 md:hover:text-slate-700'
-              }`}
-            >
-              Laboratorio
-            </button>
-            <button
-              type="button"
-              disabled={isGenerating}
-              onClick={() => {
-                if (isGenerating) return;
-                setActiveTab('library');
-                window.scrollTo(0, 0);
-              }}
-              style={{ touchAction: 'manipulation' }}
-              className={`px-5 md:px-8 py-2 md:py-3 rounded-xl t-meta transition-colors duration-150 disabled:cursor-not-allowed ${
-                activeTab === 'library'
-                  ? 'bg-brand-600 text-white shadow-lg'
-                  : 'text-slate-400 md:hover:text-slate-700'
-              }`}
-            >
-              Catálogo ({products.length})
-            </button>
-          </div>
-          </div>
-        </header>
+            {activeTab === 'create' ? (
+              <button
+                type="button"
+                onClick={() => { setActiveTab('library'); window.scrollTo(0, 0); }}
+                className="shrink-0 inline-flex items-center gap-1.5 min-h-10 rounded-full border border-slate-200 bg-white px-3.5 text-[13px] font-semibold text-slate-700 hover:border-slate-300"
+              >
+                <Package size={16} /> Mi catálogo{products.length > 0 ? ` · ${products.length}` : ''}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setActiveTab('create'); resetCreator(); }}
+                className="shrink-0 inline-flex items-center gap-1.5 min-h-10 rounded-full bg-brand-600 px-3.5 text-[13px] font-bold text-white hover:bg-brand-700"
+              >
+                <Plus size={16} /> Crear fotos
+              </button>
+            )}
+          </header>
+        )}
 
         {activeTab === 'create' ? (
-          <div className="bg-white rounded-[28px] md:rounded-[36px] shadow-sm border border-slate-100 overflow-hidden flex flex-col min-h-[640px]">
-            <WizardStepper
-              steps={WIZARD_STEPS}
-              current={step}
-              onJump={(s) => !isGenerating && setStep(s)}
-            />
-
-            <div className="flex-1 overflow-auto">
-              {step === 1 && (
-                <Step1Product
-                  state={wizard.product}
-                  onChange={(next) => setWizard((s) => ({ ...s, product: next }))}
-                  disabled={isGenerating}
-                />
-              )}
-              {step === 2 && (
-                <Step2Goal
-                  goal={wizard.goal}
-                  onChange={(g) => setWizard((s) => ({ ...s, goal: g }))}
-                />
-              )}
-              {step === 3 && (
-                <Step3Style
-                  state={wizard.style}
-                  onChange={(next) => setWizard((s) => ({ ...s, style: next }))}
-                />
-              )}
-              {step === 4 && (
-                <Step4Type
-                  type={wizard.type}
-                  onChange={(next) => setWizard((s) => ({ ...s, type: next }))}
-                  hasReference={!!wizard.style.referenceImg}
-                  productTitle={wizard.product.title}
-                  creditsAvailable={credits.available}
-                  modelId={modelId}
-                  onModelChange={setModelId}
-                  generatingDisabled={isGenerating}
-                />
-              )}
-              {step === 5 && (
-                <Step5Generating
-                  steps={PRODUCT_STEPS}
-                  currentStepIndex={progressStepIndex}
-                  productTitle={wizard.product.title}
-                  totalShots={totalShotsForPreview}
-                  completedShots={[
-                    ...generatedShots
-                      .map((url, i) => ({ url, index: i }))
-                      .filter((s) => s.url && s.url !== 'error'),
-                    ...(collageShot ? [{ url: collageShot, index: generatedShots.length }] : []),
-                  ]}
-                  modeLabel={modeLabel}
-                  processingStatus={processingStatus}
-                />
-              )}
-              {step === 6 && (
-                <Step6Results
-                  productTitle={wizard.product.title}
-                  shots={collageShot ? [...generatedShots, collageShot] : generatedShots}
-                  collageIndex={collageShot ? generatedShots.length : null}
-                  isZipping={isZipping}
-                  hasFailed={generatedShots.some((s) => s === 'error')}
-                  isRetrying={isGenerating}
-                  retryingIndices={retryingIndices}
-                  onRetryFailed={retryFailedShots}
-                  onLightbox={(i) => {
-                    const all = collageShot ? [...generatedShots, collageShot] : generatedShots;
-                    const valid = all.filter((s) => s && s !== 'error');
-                    const validIndex = Math.min(i, valid.length - 1);
-                    openLightbox(valid, Math.max(0, validIndex), `${wizard.product.title} · Shot ${i + 1}`);
-                  }}
-                  onDownloadIndividual={handleDownloadIndividual}
-                  onDownloadZip={handleDownloadZip}
-                  onSaveToCatalog={handleSaveToCatalog}
-                  onRestart={resetCreator}
-                  onBackToConfig={backToConfig}
-                  onBackToStart={backToStart}
-                />
-              )}
-            </div>
-
-            {showFooter && (
-              <WizardFooter
-                onBack={step > 1 ? handleBack : undefined}
-                onContinue={handleContinue}
-                continueLabel={continueLabel}
-                disabled={!canContinueByStep[step]}
-                costInfo={footerCostInfo}
-                loading={isGenerating}
+          <>
+            {step === 1 && (
+              <EntryStep
+                defaultCost={defaultCost}
+                creditsAvailable={credits.available}
+                hasCatalog={products.length > 0}
+                isPicking={picker.isLoading}
+                onUpload={pickMainPhoto}
+                onUseCatalog={() => setShowCatalog(true)}
               />
             )}
-          </div>
+            {step === 2 && (
+              <ProductStep
+                state={wizard.product}
+                onChange={(next) => setWizard((s) => ({ ...s, product: next }))}
+                pickImage={picker.open}
+                onBack={() => setStep(1)}
+                onContinue={() => setStep(3)}
+              />
+            )}
+            {step === 3 && (
+              <StyleStep
+                state={wizard.style}
+                pickImage={picker.open}
+                onPickStyle={pickStyle}
+                onPickReference={pickReference}
+                onBack={() => setStep(2)}
+              />
+            )}
+            {step === 4 && (
+              <>
+                {genError && (
+                  <div role="alert" className="mb-3 rounded-[14px] bg-rose-50 px-3 py-2.5 text-[13px] font-semibold text-rose-800">
+                    {genError}
+                  </div>
+                )}
+                <ReviewStep
+                  wizard={wizard}
+                  finalCount={finalCount.count}
+                  cost={totalCost}
+                  creditsAvailable={credits.available}
+                  isAdmin={isAdmin}
+                  modelId={modelId}
+                  onModelChange={setModelId}
+                  onChange={setWizard}
+                  onEditProduct={() => setStep(2)}
+                  onEditStyle={() => setStep(3)}
+                  onBack={() => setStep(3)}
+                  onCreate={handleCreate}
+                  disabled={isGenerating}
+                />
+              </>
+            )}
+            {step === 5 && (
+              <GeneratingStep
+                shots={generatedShots}
+                collage={collageShot}
+                withCollage={finalCount.gridCollage}
+                aspectClass={aspectClass}
+                statusText={processingStatus}
+              />
+            )}
+            {step === 6 && (
+              <ResultsStep
+                productTitle={wizard.product.title}
+                shots={generatedShots}
+                collage={collageShot}
+                aspectClass={aspectClass}
+                retryingIndices={retryingIndices}
+                isRetrying={isGenerating}
+                isZipping={isZipping}
+                saveState={saveState}
+                onRetrySave={() => autoSave(wizard, directorResult, generatedShots, collageShot)}
+                onRetryFailed={retryFailedShots}
+                onOpen={(url) => {
+                  const valid = [...generatedShots, ...(collageShot ? [collageShot] : [])].filter((s) => s && s !== 'error');
+                  openLightbox(valid, Math.max(0, valid.indexOf(url)), wizard.product.title);
+                }}
+                onDownload={(url, i) => downloadImage(url, `${fileBase()}_${i + 1}.png`)}
+                onDownloadAll={handleDownloadZip}
+                onUseWithAvatar={() => navigate('/studio-pro')}
+                onMakeCampaign={() => navigate('/campaign')}
+                onOtherStyle={() => { clearResults(); setStep(3); }}
+                onOtherProduct={resetCreator}
+                onClose={resetCreator}
+              />
+            )}
+          </>
         ) : (
           <ResultLibraryGrid
             stats={[
               { label: 'Productos', value: products.length, sub: 'en catálogo' },
-              { label: 'Imágenes', value: products.reduce((s, p) => s + (p.generatedImages?.length ?? 0), 0), sub: 'generadas', color: 'text-brand-600' },
+              { label: 'Fotos', value: products.reduce((s, p) => s + (p.generatedImages?.length ?? 0), 0), sub: 'creadas', color: 'text-brand-600' },
             ]}
             searchTexts={products.map(p => `${p.name} ${p.category} ${p.metadata?.material ?? ''}`)}
-            emptyTitle="Catálogo vacío"
-            emptyDescription="Generá tu primer set de fotos de producto para verlo aquí"
-            emptyCtaLabel="Crear producto"
-            onEmpty={() => setActiveTab('create')}
+            emptyTitle="Tu catálogo está vacío"
+            emptyDescription="Crea las fotos de tu primer producto y aparecerán aquí."
+            emptyCtaLabel="Crear fotos"
+            onEmpty={() => { setActiveTab('create'); resetCreator(); }}
           >
             {products.map(product => (
               <ResultCard
                 key={product.id}
                 images={(product.generatedImages ?? []).filter(Boolean).slice(0, 1)}
                 title={product.name}
-                subtitle={`${product.category}${product.metadata?.material ? ` · ${product.metadata.material}` : ''}`}
+                subtitle={styleTitle(asProductStyle(product.generationConfig?.stylePreset ?? product.metadata?.style))}
                 date={product.createdAt}
                 badge={{ label: 'Guardado', color: 'green', icon: <Check size={10} strokeWidth={3} /> }}
-                pills={[product.category, product.metadata?.material, product.metadata?.style].filter(Boolean) as string[]}
                 accentColor="blue"
                 onClick={() => openProductDetail(product)}
                 actions={[
-                  { label: 'Ver detalle', onClick: e => { e.stopPropagation(); openProductDetail(product); }, variant: 'primary' },
+                  { label: 'Crear más fotos', onClick: e => { e.stopPropagation(); prefillFromProduct(product); }, variant: 'primary' },
                 ]}
               />
             ))}
           </ResultLibraryGrid>
         )}
 
+        {showCatalog && (
+          <CatalogSheet products={products} onPick={prefillFromProduct} onClose={() => setShowCatalog(false)} />
+        )}
+
         {lightboxOpen && lightboxImages.length > 0 && (
           <ImageLightbox
             images={lightboxImages}
             initialIndex={lightboxIndex}
-            onClose={() => {
-              setLightboxOpen(false);
-              setSelectedProduct(null);
-            }}
+            onClose={() => { setLightboxOpen(false); setSelectedProduct(null); }}
             onDownload={(url, idx) => {
-              handleDownloadIndividual(
-                url,
-                `${(selectedProduct?.name || wizard.product.title || 'product').replace(/\s+/g, '_')}_image_${idx + 1}.png`,
-              );
+              downloadImage(url, `${(selectedProduct?.name || wizard.product.title || 'producto').replace(/\s+/g, '_')}_${idx + 1}.png`);
             }}
             metadata={lightboxMetadata}
             details={renderSelectedProductDetails()}

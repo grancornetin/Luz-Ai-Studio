@@ -117,6 +117,18 @@
   animation-name: zoom-in-95;
 }
 
+/* Foto recién creada: aparece con un leve acercamiento */
+@keyframes photo-reveal {
+  from { opacity: 0; transform: scale(1.03); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.photo-reveal {
+  animation: photo-reveal 500ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .photo-reveal { animation: fade-in 200ms ease both; }
+}
+
 /* Para inputs y botones táctiles (garantiza touch target mínimo) */
 .touch-target {
   min-width: 44px;

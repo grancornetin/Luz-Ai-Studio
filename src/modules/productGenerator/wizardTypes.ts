@@ -60,18 +60,20 @@ export interface WizardStepDef {
   label: string;
 }
 
+// Pantallas del flujo (el número vive en la URL como ?paso=N; el 6 lo usan
+// también los avisos para abrir directo los resultados).
 export const WIZARD_STEPS: WizardStepDef[] = [
-  { id: 1, label: 'Producto' },
-  { id: 2, label: 'Objetivo' },
+  { id: 1, label: 'Inicio' },
+  { id: 2, label: 'Tu producto' },
   { id: 3, label: 'Estilo' },
-  { id: 4, label: 'Cantidad' },
-  { id: 5, label: 'Generando' },
-  { id: 6, label: 'Resultados' },
+  { id: 4, label: 'Revisa y crea' },
+  { id: 5, label: 'Creando' },
+  { id: 6, label: 'Listas' },
 ];
 
 export const INITIAL_WIZARD_STATE: WizardState = {
   product: { title: '', desc: '', slots: [null, null, null, null] },
-  goal: null,
+  goal: 'social',
   style: { referenceImg: null, preset: null },
   type: {
     mode: 'pack',
