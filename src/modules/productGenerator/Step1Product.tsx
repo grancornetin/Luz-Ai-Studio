@@ -40,7 +40,7 @@ export const Step1Product: React.FC<Step1ProductProps> = ({ state, onChange, dis
             Cuéntanos qué <span className="text-brand-600 italic normal-case">vamos a fotografiar.</span>
           </h2>
           <p className="text-sm text-slate-500 mt-2 leading-[1.55] max-w-[540px]">
-            Sube de 2 a 4 fotos desde distintos ángulos. Más vistas = mejor resultado, porque mantenemos forma y detalles del producto.
+            Sube de 1 a 4 fotos desde distintos ángulos. Con la frontal alcanza; más vistas = mejor resultado, porque mantenemos forma y detalles del producto.
           </p>
 
           <div className="mt-5 flex flex-col gap-3.5">
@@ -187,7 +187,7 @@ export const Step1Product: React.FC<Step1ProductProps> = ({ state, onChange, dis
               </>
             ) : (
               <>
-                <strong>Sube al menos 2 fotos</strong> desde distintos ángulos para mejores resultados.
+                <strong>Sube al menos 1 foto</strong> (la frontal). Si agregas más ángulos, el resultado sale mejor.
               </>
             )}
           </div>

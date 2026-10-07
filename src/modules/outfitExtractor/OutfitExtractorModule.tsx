@@ -408,7 +408,7 @@ const OutfitExtractorModule: React.FC = () => {
       const sessionId = newSessionId();
 
       if (options.initialDelayMs && options.initialDelayMs > 0) {
-        setLoadingMsg('Preparando tus renders...');
+        setLoadingMsg('Preparando las fotos de tus prendas...');
         await sleep(options.initialDelayMs);
       }
 
@@ -425,7 +425,7 @@ const OutfitExtractorModule: React.FC = () => {
 
         const hasMoreItems = itemIndex < renderItems.length - 1;
         if (hasMoreItems) {
-          setLoadingMsg('Seguimos preparando tus renders...');
+          setLoadingMsg('Seguimos preparando las fotos de tus prendas...');
           await sleep(RENDER_ITEM_DELAY_MS);
         }
       }
@@ -924,7 +924,7 @@ const OutfitExtractorModule: React.FC = () => {
                                 </div>
                                 <div className="h-px bg-white/10 my-1" />
                                 <div className="flex justify-between items-baseline">
-                                  <span className="opacity-85">Solo renders</span>
+                                  <span className="opacity-85">Solo fotos de prendas</span>
                                   <span className="t-display text-[28px] tracking-tight leading-none normal-case not-italic">
                                     {renderCost}{' '}
                                     <span className="text-xs opacity-70 font-semibold normal-case">cr</span>
@@ -994,7 +994,7 @@ const OutfitExtractorModule: React.FC = () => {
                                   type="button"
                                   onClick={(e) => { e.stopPropagation(); retryErroredRenders(item.id); }}
                                   className="px-2.5 py-1.5 rounded-lg bg-red-500 text-white text-[9px] font-black uppercase tracking-wider active:scale-95 transition-all flex items-center gap-1.5"
-                                  title="Reintentar render"
+                                  title="Reintentar esta foto"
                                 >
                                   <i className="fa-solid fa-rotate-right" />
                                   Reintentar
@@ -1067,7 +1067,7 @@ const OutfitExtractorModule: React.FC = () => {
                           className="flex-1 py-3 rounded-xl border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
                           <i className="fa-solid fa-floppy-disk text-slate-400" />
-                          <span className="hidden sm:inline">Guardar</span>
+                          <span>Guardar</span>
                         </button>
                         {/* Opción 2: generar imagen compuesta + guardar todo */}
                         <button
@@ -1178,7 +1178,7 @@ const OutfitExtractorModule: React.FC = () => {
                             type="button"
                             onClick={(e) => { e.stopPropagation(); retryErroredRenders(item.id); }}
                             className="w-full py-2 rounded-xl bg-red-50 text-red-600 text-[9px] font-black uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center gap-2"
-                            title="Reintentar render"
+                            title="Reintentar esta foto"
                           >
                             <i className="fa-solid fa-rotate-right" />
                             Reintentar

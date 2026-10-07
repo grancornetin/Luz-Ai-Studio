@@ -7,6 +7,7 @@
 // — descuento total al apretar Generar + reembolso por fallos
 // — Paso 6 con reintento de fotos fallidas
 import React, { useState, useEffect } from 'react';
+import { Check } from 'lucide-react';
 import { ResultCard } from '../../components/shared/ResultCard';
 import { ResultLibraryGrid } from '../../components/shared/ResultLibraryGrid';
 import { useSearchParams } from 'react-router-dom';
@@ -281,8 +282,8 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
       alert('Por favor, especifica el nombre del producto.');
       return;
     }
-    if (!free && files.length < 2) {
-      alert('Sube al menos 2 fotos del producto (frontal y trasera) para que la IA comprenda todas sus caras.');
+    if (!free && files.length < 1) {
+      alert('Sube al menos 1 foto del producto (la frontal). Con más ángulos, mejor resultado.');
       return;
     }
 
@@ -789,7 +790,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
   const filledSlots = wizard.product.slots.filter(Boolean).length;
   const totalCost = computeCost(wizard, modelId);
   const canContinueByStep: Record<WizardStep, boolean> = {
-    1: filledSlots >= 2 && wizard.product.title.trim().length > 0,
+    1: filledSlots >= 1 && wizard.product.title.trim().length > 0,
     2: !!wizard.goal,
     3: !!wizard.style.referenceImg || !!wizard.style.preset,
     4: isAdmin || credits.available >= totalCost,
@@ -1025,7 +1026,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
                 title={product.name}
                 subtitle={`${product.category}${product.metadata?.material ? ` · ${product.metadata.material}` : ''}`}
                 date={product.createdAt}
-                badge={{ label: '✓ Guardado', color: 'green' }}
+                badge={{ label: 'Guardado', color: 'green', icon: <Check size={10} strokeWidth={3} /> }}
                 pills={[product.category, product.metadata?.material, product.metadata?.style].filter(Boolean) as string[]}
                 accentColor="blue"
                 onClick={() => openProductDetail(product)}

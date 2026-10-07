@@ -10,7 +10,9 @@ import NoCreditsModal from '../../components/shared/NoCreditsModal';
 import { CREDIT_COSTS, MODEL_CREDIT_COST } from '../../services/creditConfig';
 import { downloadAsZip } from '../../utils/imageUtils';
 import { useAuth } from '../../modules/auth/AuthContext';
-import { newSessionId } from '../../services/imageApiService';
+import { newSessionId, REFUNDABLE_ERRORS } from '../../services/imageApiService';
+import { toAppError } from '../../components/shared/ErrorDisplay';
+import { AlertCircle, Check } from 'lucide-react';
 import { getNotification } from '../../services/notificationsService';
 import { useSearchParams } from 'react-router-dom';
 import { GenerateButton } from '../../components/shared/GenerateButton';
@@ -33,7 +35,7 @@ const DNA_STEPS: ProgressStep[] = [
 ];
 
 interface ManualCreatorModuleProps {
-  onSave: (avatar: AvatarProfile) => void;
+  onSave: (avatar: AvatarProfile) => void | Promise<void>;
 }
 
 const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => {
@@ -70,6 +72,12 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
   const [progressStep, setProgressStep] = useState(0);
   const [pendingAvatarData, setPendingAvatarData] = useState<AvatarProfile | null>(null);
   const [importedMode, setImportedMode] = useState(false);
+  // Error inline de la generación + si los créditos se devolvieron
+  const [genError, setGenError] = useState<string | null>(null);
+  const [creditsRefunded, setCreditsRefunded] = useState(false);
+  // El modelo generado se guarda solo al terminar (ya está pagado)
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // Lightbox state
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -93,11 +101,11 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
     hairType: 'liso perfecto',
     hairLength: 'melena',
     personality: 'Profesional y elegante',
-    expression: 'natural',
+    expression: 'Natural',
     outfit: OUTFITS_MUJER[0]
   });
 
-  const { checkAndDeduct, showNoCredits, requiredCredits, closeModal } = useCreditGuard();
+  const { checkAndDeduct, showNoCredits, requiredCredits, closeModal, refundCredits } = useCreditGuard();
 
   const totalCost = CREDIT_COSTS.CREATE_MODEL_MANUAL;
   const creditsAfter = Math.max(0, credits.available - totalCost);
@@ -119,10 +127,24 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
     document.body.removeChild(link);
   };
 
-  const handleSaveToLibrary = () => {
-    if (pendingAvatarData) {
+  const handleSaveToLibrary = async () => {
+    if (!pendingAvatarData || saved || saving) return;
+    // Importado desde JSON: comportamiento de siempre (guardar y limpiar)
+    if (importedMode) {
       onSave(pendingAvatarData);
       reset();
+      return;
+    }
+    // Generado: reintento manual si el guardado automático falló
+    setSaving(true);
+    try {
+      await onSave(pendingAvatarData);
+      setSaved(true);
+    } catch (e) {
+      console.error('[ManualCreator] Error al guardar el modelo:', e);
+      setGenError('No pudimos guardar tu modelo. Toca Guardar para intentarlo de nuevo.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -218,6 +240,9 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
     setIsProcessing(true);
     setPreviews([]);
     setPendingAvatarData(null);
+    setGenError(null);
+    setCreditsRefunded(false);
+    setSaved(false);
     setProgressStep(0);
     setStatus('Sintetizando ADN Maestro...');
 
@@ -284,8 +309,26 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
       setPendingAvatarData(newAvatar);
       setStatus('Identidad sintetizada correctamente.');
       setMobileTab('preview');
+
+      // Guardado automático: el modelo ya está pagado, no debe perderse
+      // si la usuaria cierra o sale sin tocar "Guardar".
+      try {
+        await onSave(newAvatar);
+        setSaved(true);
+      } catch (saveErr) {
+        console.error('[ManualCreator] Guardado automático falló:', saveErr);
+        setGenError('Tu modelo está listo, pero no pudimos guardarlo. Toca Guardar para intentarlo de nuevo.');
+      }
     } catch (e: any) {
-      alert('No pudimos crear el modelo. Inténtalo de nuevo.');
+      // Mismo criterio que Model DNA: devolver créditos si el fallo es del sistema
+      const appErr = toAppError(e);
+      let refunded = false;
+      if (REFUNDABLE_ERRORS.has(appErr.code as any)) {
+        refunded = await refundCredits(CREDIT_COSTS.CREATE_MODEL_MANUAL);
+      }
+      setCreditsRefunded(refunded);
+      setGenError('No pudimos crear el modelo. Inténtalo de nuevo.');
+      setStatus('');
     } finally {
       setIsProcessing(false);
     }
@@ -304,6 +347,9 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
     setProgressStep(0);
     setIsProcessing(false);
     setImportedMode(false);
+    setGenError(null);
+    setCreditsRefunded(false);
+    setSaved(false);
     setMobileTab('form');
   };
 
@@ -481,6 +527,18 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
             </div>
           </section>
 
+          {genError && !pendingAvatarData && !isProcessing && (
+            <div role="alert" className="flex items-start gap-2.5 rounded-2xl bg-rose-50 border border-rose-200 px-4 py-3.5 text-sm text-rose-800">
+              <AlertCircle size={16} className="flex-shrink-0 mt-0.5 text-rose-500" />
+              <div>
+                <p className="font-semibold">{genError}</p>
+                {creditsRefunded && (
+                  <p className="text-xs text-rose-700 mt-0.5">Te devolvimos los créditos de este intento.</p>
+                )}
+              </div>
+            </div>
+          )}
+
           {isProcessing && (
             <div className="bg-slate-50 border border-slate-100 rounded-[24px] md:rounded-[32px] p-4 md:p-6">
               <GenerationProgress
@@ -511,12 +569,20 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
                   </button>
                   <button
                     onClick={handleSaveToLibrary}
-                    className="flex-1 sm:flex-none px-6 py-3 bg-brand-500 text-white rounded-xl text-[9px] font-black uppercase shadow-lg hover:bg-brand-400 transition-all"
+                    disabled={saved || saving}
+                    className={`flex-1 sm:flex-none px-6 py-3 rounded-xl text-[9px] font-black uppercase shadow-lg transition-all flex items-center justify-center gap-1.5 ${saved ? 'bg-emerald-500/20 text-emerald-300 cursor-default' : 'bg-brand-500 text-white hover:bg-brand-400 disabled:opacity-60'}`}
                   >
-                    Guardar
+                    {saved ? <><Check size={12} strokeWidth={3} /> Guardado</> : saving ? 'Guardando...' : 'Guardar'}
                   </button>
                 </div>
               </header>
+
+              {genError && pendingAvatarData && (
+                <div role="alert" className="flex items-start gap-2 rounded-xl bg-rose-500/10 border border-rose-400/30 px-3.5 py-3 text-xs font-medium text-rose-200">
+                  <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                  {genError}
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3 md:gap-4">
                 {previews.map((p, i) => (

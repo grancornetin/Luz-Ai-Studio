@@ -54,12 +54,8 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
   };
 
   const handleCreateGrid = () => {
-    if (!canMakeGrid) return;
-    if (onCreateManualGrid) {
-      onCreateManualGrid(Array.from(selected));
-    } else {
-      alert('Función de grid manual: próximamente.');
-    }
+    if (!canMakeGrid || !onCreateManualGrid) return;
+    onCreateManualGrid(Array.from(selected));
   };
 
   return (
@@ -92,7 +88,9 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
             <span className="text-brand-600 italic normal-case">está listo.</span>
           </h2>
           <p className="text-sm text-slate-500 mt-2 leading-[1.55] max-w-[540px]">
-            Toca cualquier imagen para ampliarla. Selecciona varias para crear un collage o descargar lo que elijas.
+            {onCreateManualGrid
+              ? 'Toca cualquier imagen para ampliarla. Selecciona varias para crear un collage.'
+              : 'Toca cualquier imagen para ampliarla.'}
           </p>
         </div>
 
@@ -262,9 +260,11 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
               <div className="text-[13px] font-semibold">
                 {selected.size} {selected.size === 1 ? 'imagen seleccionada' : 'imágenes seleccionadas'}
               </div>
-              <div className="text-[11px] opacity-70">
-                {canMakeGrid ? 'Listas para crear un collage' : 'Selecciona 1 más para hacer un collage'}
-              </div>
+              {onCreateManualGrid && (
+                <div className="text-[11px] opacity-70">
+                  {canMakeGrid ? 'Listas para crear un collage' : 'Selecciona 1 más para hacer un collage'}
+                </div>
+              )}
             </div>
           </div>
           <div className="flex-1" />
@@ -275,19 +275,21 @@ export const Step6Results: React.FC<Step6ResultsProps> = ({
           >
             Limpiar
           </button>
-          <button
-            type="button"
-            disabled={!canMakeGrid}
-            onClick={handleCreateGrid}
-            className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
-              canMakeGrid
-                ? 'bg-gradient-to-br from-brand-600 to-brand-400 text-white shadow-[0_8px_20px_rgba(247,44,91,0.4)]'
-                : 'bg-white/5 text-slate-500 cursor-not-allowed'
-            }`}
-          >
-            <Grid3x3 size={14} />
-            Crear collage · 1 cr
-          </button>
+          {onCreateManualGrid && (
+            <button
+              type="button"
+              disabled={!canMakeGrid}
+              onClick={handleCreateGrid}
+              className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+                canMakeGrid
+                  ? 'bg-gradient-to-br from-brand-600 to-brand-400 text-white shadow-[0_8px_20px_rgba(247,44,91,0.4)]'
+                  : 'bg-white/5 text-slate-500 cursor-not-allowed'
+              }`}
+            >
+              <Grid3x3 size={14} />
+              Crear collage · 1 cr
+            </button>
+          )}
         </div>
       )}
 

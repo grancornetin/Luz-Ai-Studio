@@ -366,7 +366,9 @@ const GenerationHistory: React.FC = () => {
                       </div>
                     )}
 
-                    <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 flex-wrap p-3">
+                    {/* Acciones: en pantallas táctiles (sin hover) siempre visibles
+                        como barra inferior; con mouse, overlay completo al pasar. */}
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent pt-8 pb-2.5 px-2 transition-opacity flex items-end justify-center gap-2 flex-wrap [@media(hover:hover)]:top-0 [@media(hover:hover)]:items-center [@media(hover:hover)]:p-3 [@media(hover:hover)]:bg-none [@media(hover:hover)]:bg-black/55 [@media(hover:hover)]:opacity-0 group-hover:opacity-100">
                       <button
                         onClick={e => { e.stopPropagation(); downloadImage(record.imageUrl, idx); }}
                         className="p-2 bg-white/20 backdrop-blur-sm text-white rounded-xl hover:bg-white/30 transition-colors"
@@ -424,7 +426,7 @@ const GenerationHistory: React.FC = () => {
                       className={`absolute top-2 left-2 w-6 h-6 rounded-lg flex items-center justify-center transition-all ${
                         isSelected
                           ? 'bg-indigo-600 text-white opacity-100'
-                          : 'bg-black/40 text-white opacity-0 group-hover:opacity-100'
+                          : 'bg-black/40 text-white [@media(hover:hover)]:opacity-0 group-hover:opacity-100'
                       }`}
                     >
                       {isSelected ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}

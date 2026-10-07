@@ -1,14 +1,15 @@
 import React from 'react';
 import { X, UserRound, Camera, Smartphone, Sparkles, ImageIcon, Shirt } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { MODULE_COST_LABELS } from '../../services/creditConfig';
 
 const modules = [
-  { name: 'Crear modelo',     tech: 'Model DNA',     icon: UserRound,   path: '/crear/clonar',      cost: '8 cr' },
-  { name: 'Fotos de producto',tech: '',              icon: Camera,      path: '/productos',          cost: '2 cr' },
-  { name: 'Fotos para redes', tech: '',              icon: Smartphone,  path: '/studio-pro',         cost: '6-14 cr' },
-  { name: 'Generador con IA', tech: 'Prompt Studio', icon: Sparkles,    path: '/prompt-studio',      cost: '2 cr' },
-  { name: 'Recrear una foto', tech: '',              icon: ImageIcon,   path: '/clonar',             cost: '2 cr' },
-  { name: 'Separar prendas',  tech: '',              icon: Shirt,       path: '/outfit-extractor',   cost: '0 cr' },
+  { name: 'Crear modelo',     tech: 'Model DNA',     icon: UserRound,   path: '/crear/clonar',      cost: MODULE_COST_LABELS.modelClone },
+  { name: 'Fotos de producto',tech: '',              icon: Camera,      path: '/productos',          cost: MODULE_COST_LABELS.product },
+  { name: 'Fotos para redes', tech: '',              icon: Smartphone,  path: '/studio-pro',         cost: MODULE_COST_LABELS.studioPro },
+  { name: 'Generador con IA', tech: 'Prompt Studio', icon: Sparkles,    path: '/prompt-studio',      cost: MODULE_COST_LABELS.promptStudio },
+  { name: 'Recrear una foto', tech: '',              icon: ImageIcon,   path: '/clonar',             cost: MODULE_COST_LABELS.sceneClone },
+  { name: 'Separar prendas',  tech: '',              icon: Shirt,       path: '/outfit-extractor',   cost: MODULE_COST_LABELS.outfitExtractor },
 ];
 
 interface BottomSheetProps {

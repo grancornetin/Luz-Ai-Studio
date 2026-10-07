@@ -289,7 +289,27 @@ const PhotodumpModule: React.FC = () => {
   // canStep1 se eliminó (sep 2026): el paso 1 ya no tiene footer con
   // "Continuar" — auto-avanza al tocar una receta (siempre había una
   // seleccionada de todas formas, así que nunca bloqueaba nada real).
-  const canStep2Receta = basePrompt.trim().length >= 5;
+  // Fotos obligatorias de la receta: se valida ANTES de cobrar (handleGenerate
+  // descuenta créditos al inicio). Producto y prendas cuentan cualquier slot
+  // cargado (principal o extras), no solo el primero.
+  const missingRefs: string[] = (() => {
+    if (isFree) return [];
+    const cfg = RECIPE_META[recipe].refs;
+    const out: string[] = [];
+    if (cfg.avatar === 'required' && !refs.avatarRef) out.push('tu foto');
+    if (cfg.outfit === 'required' && !(refs.outfitRef || (refs.outfitRefs ?? []).some(Boolean))) out.push('al menos una prenda');
+    if (cfg.producto === 'required' && !(refs.productRef || (refs.productRefs ?? []).some(Boolean))) out.push('la foto del producto');
+    if (cfg.escena === 'required' && !(refs.sceneRef || (refs.sceneRefs ?? []).some(Boolean))) out.push('la foto del lugar');
+    return out;
+  })();
+  const refsReady = missingRefs.length === 0;
+  const briefReady = basePrompt.trim().length >= 5;
+  const canStep2Receta = briefReady && refsReady;
+  const step2Hint = !briefReady
+    ? 'Escribe de qué se trata tu historia para continuar.'
+    : missingRefs.length > 0
+      ? `Para continuar, sube ${missingRefs.join(' y ')}.`
+      : null;
   // En modo libre no hay un botón global de generar — cada escena se genera por separado
 
   // ── Librería ──────────────────────────────────────────────
@@ -476,6 +496,8 @@ const PhotodumpModule: React.FC = () => {
 
   // ── GENERACIÓN PRINCIPAL modo recetas ─────────────────────
   const handleGenerate = async () => {
+    // Nunca cobrar si faltan el brief o las fotos obligatorias de la receta.
+    if (!canStep2Receta) return;
     if (!hasProCredits) return;
 
     if (!isAdmin) {
@@ -2202,14 +2224,21 @@ const PhotodumpModule: React.FC = () => {
                 PDStep1.tsx), el usuario nunca llega a ver este botón. */}
             {/* Paso 2 modo recetas */}
             {step === 2 && !isFree && (
-              <WizardFooter
-                onBack={() => setStep(1)}
-                onContinue={handleGenerate}
-                continueLabel={`Crear historia visual · ${count} imágenes`}
-                disabled={!canStep2Receta || insufficient}
-                costInfo={{ cost: imageCreditCost, label: 'Créditos totales' }}
-                loading={isGenerating}
-              />
+              <div className="sticky bottom-0 z-10">
+                {step2Hint && (
+                  <p role="status" className="bg-white border-t border-slate-100 px-4 pt-2.5 pb-1 text-center text-[13px] font-medium text-slate-500">
+                    {step2Hint}
+                  </p>
+                )}
+                <WizardFooter
+                  onBack={() => setStep(1)}
+                  onContinue={handleGenerate}
+                  continueLabel={`Crear historia visual · ${count} imágenes`}
+                  disabled={!canStep2Receta || insufficient}
+                  costInfo={{ cost: imageCreditCost, label: 'Créditos totales' }}
+                  loading={isGenerating}
+                />
+              </div>
             )}
             {/* Paso 2 modo libre — no hay footer global, la generación es por escena */}
             {step === 2 && isFree && (

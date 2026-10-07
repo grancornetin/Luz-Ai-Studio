@@ -50,6 +50,13 @@ const PromptStudioView: React.FC = () => {
       setCopilotBanner(true);
       // Clean URL without reload
       window.history.replaceState({}, document.title, location.pathname);
+    } else {
+      // Sin `mode` (ej. "Crear ahora" del Planner): solo precargar el prompt
+      const urlPrompt = params.get('prompt');
+      if (urlPrompt && urlPrompt.trim()) {
+        setInitialPrompt(urlPrompt);
+        window.history.replaceState({}, document.title, location.pathname);
+      }
     }
   }, [location]);
 

@@ -13,6 +13,7 @@ import { generationHistoryService, type GenerationRecord } from '../services/gen
 import { MISSIONS, getUserMissions, completeMission, isMissionOnCooldown, type UserMissions } from '../services/missionsService';
 import { getReferralStats, redeemSpecialCode } from '../services/referralService';
 import DailyInspiration from '../components/DailyInspiration';
+import { MODULE_COST_LABELS } from '../services/creditConfig';
 
 type Icon = React.ComponentType<{ className?: string }>;
 
@@ -63,17 +64,17 @@ const TOOL_GROUPS: { label: string; tools: Tool[] }[] = [
   {
     label: 'Avatar digital',
     tools: [
-      { icon: Camera, label: 'Crear desde fotos', hint: 'A partir de fotos reales', cost: '8 cr.', path: '/crear/clonar' },
-      { icon: SlidersHorizontal, label: 'Diseñar desde cero', hint: 'Sin fotos de nadie', cost: '8 cr.', path: '/crear/manual' },
+      { icon: Camera, label: 'Crear desde fotos', hint: 'A partir de fotos reales', cost: MODULE_COST_LABELS.modelClone, path: '/crear/clonar' },
+      { icon: SlidersHorizontal, label: 'Diseñar desde cero', hint: 'Sin fotos de nadie', cost: MODULE_COST_LABELS.modelManual, path: '/crear/manual' },
       { icon: Users, label: 'Mis avatares', hint: 'Tus avatares guardados', cost: '', path: '/modelos' },
     ],
   },
   {
     label: 'Crear contenido',
     tools: [
-      { icon: WandSparkles, label: 'Imagen libre', hint: 'Describe lo que quieres', cost: '2 cr.', path: '/prompt-studio' },
-      { icon: Smartphone, label: 'Contenido para redes', hint: 'Fotos naturales', cost: '4 cr.', path: '/studio-pro' },
-      { icon: Copy, label: 'Clonar escena', hint: 'Recrea el estilo de una foto', cost: '2 cr.', path: '/clonar' },
+      { icon: WandSparkles, label: 'Imagen libre', hint: 'Describe lo que quieres', cost: MODULE_COST_LABELS.promptStudio, path: '/prompt-studio' },
+      { icon: Smartphone, label: 'Contenido para redes', hint: 'Fotos naturales', cost: MODULE_COST_LABELS.studioPro, path: '/studio-pro' },
+      { icon: Copy, label: 'Clonar escena', hint: 'Recrea el estilo de una foto', cost: MODULE_COST_LABELS.sceneClone, path: '/clonar' },
     ],
   },
   {
@@ -81,8 +82,8 @@ const TOOL_GROUPS: { label: string; tools: Tool[] }[] = [
     tools: [
       { icon: Megaphone, label: 'Campañas', hint: 'Imágenes y textos para vender', cost: 'Sesión Pro', path: '/campaign' },
       { icon: Images, label: 'Historia en fotos', hint: 'Series para Instagram', cost: 'Sesión Pro', path: '/photodump' },
-      { icon: Package, label: 'Foto de producto', hint: 'Catálogo profesional', cost: '2 cr.', path: '/productos' },
-      { icon: Shirt, label: 'Extraer prendas', hint: 'Separa cada prenda', cost: '2 cr.', path: '/outfit-extractor' },
+      { icon: Package, label: 'Foto de producto', hint: 'Catálogo profesional', cost: MODULE_COST_LABELS.product, path: '/productos' },
+      { icon: Shirt, label: 'Extraer prendas', hint: 'Separa cada prenda', cost: MODULE_COST_LABELS.outfitExtractor, path: '/outfit-extractor' },
       { icon: CalendarDays, label: 'Planificador', hint: 'Qué publicar cada día', cost: '', path: '/planner' },
       { icon: Palette, label: 'Mis marcas', hint: 'El perfil de tu marca', cost: '', path: '/mis-marcas' },
     ],

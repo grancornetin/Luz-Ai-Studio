@@ -254,6 +254,24 @@ export const getPhotodumpCredits = (n: number): number => n * CREDIT_COSTS.PHOTO
 export const getOutfitCredits    = (n: number): number => n * CREDIT_COSTS.OUTFIT_PER_GARMENT;
 export const getUGCCredits       = (n: number): number => n * CREDIT_COSTS.UGC_PER_SHOT;
 
+// ── ETIQUETAS DE COSTO POR MÓDULO (Dashboard, menú mobile) ──────────────────
+// Derivadas de los costos de arriba con el modelo por defecto (Gemini), para
+// que todos los accesos muestren lo mismo que cobra cada módulo.
+// Studio Pro cobra (1 foto de prueba + N fotos) × costo por imagen; N = 2, 4 o 6
+// (ver getQtyOptions en ContentStudioProModule.tsx).
+const STUDIO_PRO_MIN_SHOTS = 2;
+const STUDIO_PRO_MAX_SHOTS = 6;
+
+export const MODULE_COST_LABELS = {
+  modelClone:      `${CREDIT_COSTS.CREATE_MODEL_CLONE} cr`,
+  modelManual:     `${CREDIT_COSTS.CREATE_MODEL_MANUAL} cr`,
+  promptStudio:    `${CREDIT_COSTS.PROMPT_NO_PERSON} cr`,
+  sceneClone:      `${CREDIT_COSTS.CLONE_IMAGE} cr`,
+  product:         `${CREDIT_COSTS.PRODUCT_GENERATION} cr`,
+  studioPro:       `${imageCost(1 + STUDIO_PRO_MIN_SHOTS)}-${imageCost(1 + STUDIO_PRO_MAX_SHOTS)} cr`,
+  outfitExtractor: `${CREDIT_COSTS.OUTFIT_PER_GARMENT} cr/prenda`,
+} as const;
+
 export const PLAN_CREDITS: Record<string, number> = {
   free:    PLANS.free.credits,
   weekly:  PLANS.weekly.credits,

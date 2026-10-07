@@ -11,6 +11,7 @@ import {
 } from './types';
 import { SLOT_CATALOG, buildTag } from './slotCatalog';
 import HaulReferenceTypeSelector from './HaulReferenceTypeSelector';
+import { useAuth } from '../auth/AuthContext';
 
 // Colores por slot
 const SLOT_STYLE = {
@@ -68,6 +69,7 @@ const OUTFIT_CHECK_MIN_COUNT = 1;
 const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
   recipe, count, basePrompt, refs, outfitMode, onCount, onPrompt, onRefs, onOutfitMode,
 }) => {
+  const { isAdmin } = useAuth();
   const [openSlot, setOpenSlot] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const toggle = (key: string) => setOpenSlot(p => p === key ? null : key);
@@ -812,6 +814,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                   amplio y libre de categorías fijas, Y genera las imágenes
                   reales a partir de ese razonamiento (conectado 13 ago 2026,
                   ver openBankAdapter.ts) — ya NO cae al banco estático. */}
+              {isAdmin && (
               <label className="flex items-center gap-2 mt-3 px-1 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -823,6 +826,7 @@ const PDStep2Receta: React.FC<PDStep2RecetaProps> = ({
                   Experimental: director con banco abierto (sin categorías fijas — genera las imágenes reales con este razonamiento)
                 </span>
               </label>
+              )}
             </div>
           )}
 

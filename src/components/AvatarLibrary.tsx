@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Trash2, Loader2 } from 'lucide-react';
 import { AvatarProfile } from '../types';
 import ModuleTutorial from './shared/ModuleTutorial';
 import { TUTORIAL_CONFIGS } from './shared/tutorialConfigs';
@@ -8,11 +9,16 @@ import { ResultLibraryGrid } from './shared/ResultLibraryGrid';
 
 interface AvatarLibraryProps {
   avatars: AvatarProfile[];
+  onDelete: (avatarId: string) => Promise<void>;
 }
 
-const AvatarLibrary: React.FC<AvatarLibraryProps> = ({ avatars }) => {
+const AvatarLibrary: React.FC<AvatarLibraryProps> = ({ avatars, onDelete }) => {
   const navigate = useNavigate();
   const [selectedAvatar, setSelectedAvatar] = useState<AvatarProfile | null>(null);
+  // Confirmación de borrado dentro de la página (sin confirm/alert del navegador)
+  const [pendingDelete, setPendingDelete] = useState<AvatarProfile | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [imgIdx, setImgIdx] = useState<Record<string, number>>({});
   // Tutorial: ahora usa ModuleTutorial
 
@@ -29,11 +35,25 @@ const AvatarLibrary: React.FC<AvatarLibraryProps> = ({ avatars }) => {
     document.body.removeChild(link);
   };
 
-  const deleteAvatar = async (id: string, e: React.MouseEvent) => {
+  const askDelete = (avatar: AvatarProfile, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm("¿Seguro que quieres eliminar este modelo permanentemente?")) {
-      alert("Operación de borrado activada para: " + id);
-      // Implement actual delete logic here with dbService.deleteAvatar(id)
+    setDeleteError(null);
+    setPendingDelete(avatar);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await onDelete(pendingDelete.id);
+      if (selectedAvatar?.id === pendingDelete.id) setSelectedAvatar(null);
+      setPendingDelete(null);
+    } catch (err) {
+      console.error('[AvatarLibrary] Error al eliminar el modelo:', err);
+      setDeleteError('No pudimos eliminar el modelo. Inténtalo de nuevo.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -108,11 +128,53 @@ const AvatarLibrary: React.FC<AvatarLibraryProps> = ({ avatars }) => {
             onClick={() => setSelectedAvatar(avatar)}
             actions={[
               { label: 'Ver modelo', onClick: e => { e.stopPropagation(); setSelectedAvatar(avatar); }, variant: 'primary' },
-              { label: '', icon: <i className="fa-solid fa-trash text-xs" />, onClick: e => deleteAvatar(avatar.id, e), variant: 'danger', title: 'Eliminar' },
+              { label: '', icon: <i className="fa-solid fa-trash text-xs" />, onClick: e => askDelete(avatar, e), variant: 'danger', title: 'Eliminar' },
             ]}
           />
         ))}
       </ResultLibraryGrid>
+
+      {pendingDelete && (
+        <div
+          className="fixed inset-0 z-[10001] bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
+          onClick={() => { if (!deleting) setPendingDelete(null); }}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-avatar-title"
+            className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-11 h-11 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center mb-4">
+              <Trash2 size={20} />
+            </div>
+            <h3 id="delete-avatar-title" className="text-lg font-bold text-slate-900">¿Eliminar a {pendingDelete.name}?</h3>
+            <p className="text-sm text-slate-600 mt-1.5 leading-relaxed">
+              El modelo y sus fotos base se borrarán de tu biblioteca. Esto no se puede deshacer.
+            </p>
+            {deleteError && <p role="alert" className="text-sm text-rose-600 mt-3">{deleteError}</p>}
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => setPendingDelete(null)}
+                disabled={deleting}
+                className="flex-1 min-h-12 rounded-2xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDelete()}
+                disabled={deleting}
+                className="flex-1 min-h-12 rounded-2xl bg-rose-600 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {deleting ? <><Loader2 size={16} className="animate-spin" /> Eliminando...</> : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {selectedAvatar && (
         <div className="fixed inset-0 z-[10000] bg-slate-900/98 backdrop-blur-xl flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300">

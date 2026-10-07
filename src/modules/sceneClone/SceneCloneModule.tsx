@@ -502,7 +502,7 @@ export default function CloneImageModule() {
     }
 
     if (!hasFinalChanges) {
-      setError({ message: 'Elige al menos un cambio: ropa de la primera persona, ropa de la segunda o producto.' });
+      setError({ message: 'Elige al menos un cambio: la ropa o el producto.' });
       return;
     }
 

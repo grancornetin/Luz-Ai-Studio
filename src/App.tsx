@@ -368,6 +368,11 @@ const AppContent: React.FC = () => {
     setAvatars(prev => [avatar, ...prev]);
   };
 
+  const deleteAvatar = async (avatarId: string) => {
+    await dbService.deleteAvatar(avatarId);
+    setAvatars(prev => prev.filter(a => a.id !== avatarId));
+  };
+
   const saveProduct = async (product: ProductProfile) => {
     await dbService.saveProduct(product);
     setProducts(prev => [product, ...prev]);
@@ -430,7 +435,7 @@ const AppContent: React.FC = () => {
                   <Route path="/dashboard"      element={<Dashboard />} />
                   <Route path="/historial"      element={<GenerationHistory />} />
                   <Route path="/notifications"  element={<NotificationsPanel />} />
-                  <Route path="/modelos"        element={<AvatarLibrary avatars={avatars} />} />
+                  <Route path="/modelos"        element={<AvatarLibrary avatars={avatars} onDelete={deleteAvatar} />} />
                   <Route path="/crear/clonar"   element={<CloningModule onSave={saveAvatar} />} />
                   <Route path="/crear/manual"   element={<ManualCreatorModule onSave={saveAvatar} />} />
                   <Route path="/productos"      element={<ProductGeneratorModule saveProduct={saveProduct} products={products} />} />

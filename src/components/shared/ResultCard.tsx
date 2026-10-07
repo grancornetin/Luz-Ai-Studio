@@ -62,6 +62,7 @@ export interface ResultCardProps {
   badge?: {
     label: string;
     color: BadgeColor;
+    icon?: React.ReactNode;
   };
 
   // Imágenes de referencia (slots) que usó el usuario
@@ -234,7 +235,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({
         {/* Badge + fecha */}
         <div className="flex items-center justify-between mb-2">
           {badge
-            ? <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${BADGE_STYLE[badge.color]}`}>{badge.label}</span>
+            ? <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${BADGE_STYLE[badge.color]}`}>{badge.icon}{badge.label}</span>
             : <span />}
           {date && <span className="text-[10px] text-slate-400">{formatDate(date)}</span>}
         </div>

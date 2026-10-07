@@ -161,7 +161,7 @@ const PromptCard: React.FC<PromptCardProps> = ({
             ) : (
               <button
                 onClick={handleDeleteClick}
-                className="w-8 h-8 bg-rose-500/80 hover:bg-rose-600 text-white rounded-xl flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-all"
+                className="w-8 h-8 bg-rose-500/80 hover:bg-rose-600 text-white rounded-xl flex items-center justify-center shadow-lg [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-all"
                 title="Eliminar"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -171,7 +171,8 @@ const PromptCard: React.FC<PromptCardProps> = ({
         )}
 
         {/* HOVER OVERLAY */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3">
+        {/* En pantallas táctiles (sin hover) las acciones quedan siempre visibles */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3">
           <div className="flex gap-1.5">
             {/* RECREAR */}
             <button
