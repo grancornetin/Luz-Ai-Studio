@@ -3,13 +3,21 @@ import { userService } from './userService';
 import { auth } from '../firebase';
 
 // ──────────────────────────────────────────
-// dbService — migrado de IndexedDB a Firestore
+// dbService — Firestore + Storage (ver userLibraryStore.ts)
 // Todos los datos viven bajo users/{uid}/...
 // Compatible con la misma API que usaba antes
 // para no romper ningún módulo existente.
 // ──────────────────────────────────────────
 
 const getUid = (): string | null => auth.currentUser?.uid || null;
+
+// Para guardar/borrar la sesión es obligatoria: sin ella fallamos en voz alta
+// en vez de "guardar" en el vacío.
+const requireUid = (): string => {
+  const uid = getUid();
+  if (!uid) throw new Error('Inicia sesión para guardar en tu biblioteca.');
+  return uid;
+};
 
 export const dbService = {
 
@@ -20,14 +28,12 @@ export const dbService = {
   },
 
   async saveAvatar(avatar: AvatarProfile): Promise<void> {
-    const uid = getUid();
-    if (!uid) return;
+    const uid = requireUid();
     await userService.saveAvatar(uid, avatar);
   },
 
   async deleteAvatar(avatarId: string): Promise<void> {
-    const uid = getUid();
-    if (!uid) return;
+    const uid = requireUid();
     await userService.deleteAvatar(uid, avatarId);
   },
 
@@ -38,14 +44,12 @@ export const dbService = {
   },
 
   async saveProduct(product: ProductProfile): Promise<void> {
-    const uid = getUid();
-    if (!uid) return;
+    const uid = requireUid();
     await userService.saveProduct(uid, product);
   },
 
   async deleteProduct(productId: string): Promise<void> {
-    const uid = getUid();
-    if (!uid) return;
+    const uid = requireUid();
     await userService.deleteProduct(uid, productId);
   },
 
@@ -56,14 +60,12 @@ export const dbService = {
   },
 
   async saveSet(set: GenerationSet): Promise<void> {
-    const uid = getUid();
-    if (!uid) return;
+    const uid = requireUid();
     await userService.saveSet(uid, set);
   },
 
   async deleteSet(id: string): Promise<void> {
-    const uid = getUid();
-    if (!uid) return;
+    const uid = requireUid();
     await userService.deleteSet(uid, id);
   },
 

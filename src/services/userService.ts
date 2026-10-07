@@ -10,6 +10,7 @@ import { PLAN_CREDITS } from './creditConfig';
 import { resetPeriodIfNeeded, getEffectiveCredits } from './creditsService';
 import type { PlanId } from './creditsService';
 import { generateReferralCode } from './referralService';
+import { getItems, saveItem, deleteItem } from './userLibraryStore';
 
 // ── Interfaces exportadas ─────────────────────────────────────────────────────
 
@@ -139,58 +140,43 @@ export const userService = {
     }
   },
 
-  // ── Avatars (localStorage — sin cambios) ──────────────────────────────────
+  // ── Avatars / Products / Sets (Firestore + Storage, ver userLibraryStore) ──
+  // Los saves lanzan error si algo falla: la UI no debe mostrar "Guardado" en falso.
 
   async getAvatars(uid: string) {
-    return getLocal(`avatars_${uid}`) || [];
+    return getItems(uid, 'avatars');
   },
 
   async saveAvatar(uid: string, avatar: any): Promise<void> {
-    const avatars = await this.getAvatars(uid);
-    const index   = avatars.findIndex((a: any) => a.id === avatar.id);
-    if (index >= 0) avatars[index] = avatar; else avatars.push(avatar);
-    setLocal(`avatars_${uid}`, avatars);
+    await saveItem(uid, 'avatars', avatar);
   },
 
   async deleteAvatar(uid: string, avatarId: string): Promise<void> {
-    const avatars = await this.getAvatars(uid);
-    setLocal(`avatars_${uid}`, avatars.filter((a: any) => a.id !== avatarId));
+    await deleteItem(uid, 'avatars', avatarId);
   },
 
-  // ── Products (localStorage — sin cambios) ─────────────────────────────────
-
   async getProducts(uid: string) {
-    return getLocal(`products_${uid}`) || [];
+    return getItems(uid, 'products');
   },
 
   async saveProduct(uid: string, product: any): Promise<void> {
-    const products = await this.getProducts(uid);
-    const index    = products.findIndex((p: any) => p.id === product.id);
-    if (index >= 0) products[index] = product; else products.push(product);
-    setLocal(`products_${uid}`, products);
+    await saveItem(uid, 'products', product);
   },
 
   async deleteProduct(uid: string, productId: string): Promise<void> {
-    const products = await this.getProducts(uid);
-    setLocal(`products_${uid}`, products.filter((p: any) => p.id !== productId));
+    await deleteItem(uid, 'products', productId);
   },
 
-  // ── Generation Sets (localStorage — sin cambios) ──────────────────────────
-
   async getSets(uid: string) {
-    return getLocal(`sets_${uid}`) || [];
+    return getItems(uid, 'sets');
   },
 
   async saveSet(uid: string, set: any): Promise<void> {
-    const sets  = await this.getSets(uid);
-    const index = sets.findIndex((s: any) => s.id === set.id);
-    if (index >= 0) sets[index] = set; else sets.push(set);
-    setLocal(`sets_${uid}`, sets);
+    await saveItem(uid, 'sets', set);
   },
 
   async deleteSet(uid: string, setId: string): Promise<void> {
-    const sets = await this.getSets(uid);
-    setLocal(`sets_${uid}`, sets.filter((s: any) => s.id !== setId));
+    await deleteItem(uid, 'sets', setId);
   },
 };
 
@@ -198,12 +184,4 @@ export const userService = {
 
 function defaultStats(): UserStats {
   return { totalGenerations: 0, totalAvatars: 0, totalProducts: 0, creditsUsed: 0, lastActiveAt: '' };
-}
-
-function getLocal(key: string) {
-  try { return JSON.parse(localStorage.getItem(`luz_${key}`) || 'null'); } catch { return null; }
-}
-
-function setLocal(key: string, data: any) {
-  try { localStorage.setItem(`luz_${key}`, JSON.stringify(data)); } catch { /* ignore */ }
 }

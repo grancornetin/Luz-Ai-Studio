@@ -129,10 +129,18 @@ const ManualCreatorModule: React.FC<ManualCreatorModuleProps> = ({ onSave }) => 
 
   const handleSaveToLibrary = async () => {
     if (!pendingAvatarData || saved || saving) return;
-    // Importado desde JSON: comportamiento de siempre (guardar y limpiar)
+    // Importado desde JSON: guardar y limpiar (solo si el guardado funcionó)
     if (importedMode) {
-      onSave(pendingAvatarData);
-      reset();
+      setSaving(true);
+      try {
+        await onSave(pendingAvatarData);
+        reset();
+      } catch (e) {
+        console.error('[ManualCreator] Error al guardar el modelo importado:', e);
+        setGenError('No pudimos guardar tu modelo. Toca Guardar para intentarlo de nuevo.');
+      } finally {
+        setSaving(false);
+      }
       return;
     }
     // Generado: reintento manual si el guardado automático falló

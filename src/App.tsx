@@ -365,7 +365,7 @@ const AppContent: React.FC = () => {
 
   const saveAvatar = async (avatar: AvatarProfile) => {
     await dbService.saveAvatar(avatar);
-    setAvatars(prev => [avatar, ...prev]);
+    setAvatars(prev => [avatar, ...prev.filter(a => a.id !== avatar.id)]);
   };
 
   const deleteAvatar = async (avatarId: string) => {
@@ -375,7 +375,7 @@ const AppContent: React.FC = () => {
 
   const saveProduct = async (product: ProductProfile) => {
     await dbService.saveProduct(product);
-    setProducts(prev => [product, ...prev]);
+    setProducts(prev => [product, ...prev.filter(p => p.id !== product.id)]);
   };
 
   // Páginas legales públicas (sin auth, con header propio)

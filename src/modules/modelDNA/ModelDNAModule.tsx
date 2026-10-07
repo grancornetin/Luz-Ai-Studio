@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Plus, X, UserCircle2, AlertTriangle, Download, Sparkles,
-  Check, Lightbulb, Info, CircleCheck,
+  Check, Lightbulb, Info, CircleCheck, Loader2, RotateCcw,
 } from 'lucide-react';
 import { AvatarProfile } from '../../types';
 import { startClone, waitForCloneComplete } from '../../services/avatarCloneService';
@@ -40,7 +40,7 @@ const VIEW_META = [
 ];
 
 interface ModelDNAModuleProps {
-  onSave: (avatar: AvatarProfile) => void;
+  onSave: (avatar: AvatarProfile) => void | Promise<void>;
 }
 
 const ModelDNAModule: React.FC<ModelDNAModuleProps> = ({ onSave }) => {
@@ -53,6 +53,20 @@ const ModelDNAModule: React.FC<ModelDNAModuleProps> = ({ onSave }) => {
   const [cloneError, setCloneError] = useState<AppError | null>(null);
   const [creditsRefunded, setCreditsRefunded] = useState(false);
   const [progressStep, setProgressStep] = useState(0);
+  // Guardado en la biblioteca (nube): se muestra el estado real, no un "Guardado" fijo
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [pendingAvatar, setPendingAvatar] = useState<AvatarProfile | null>(null);
+
+  const persistAvatar = async (avatar: AvatarProfile) => {
+    setSaveState('saving');
+    try {
+      await onSave(avatar);
+      setSaveState('saved');
+    } catch (e) {
+      console.error('[ModelDNA] Error al guardar el modelo:', e);
+      setSaveState('error');
+    }
+  };
 
   // Retomar sesión desde notificación (?session=xxx)
   const [searchParams, setSearchParams] = useSearchParams();
@@ -188,7 +202,10 @@ const ModelDNAModule: React.FC<ModelDNAModuleProps> = ({ onSave }) => {
         },
         createdAt: Date.now(),
       };
-      onSave(newAvatar);
+      // Sin await: el resultado se muestra ya y el badge refleja el guardado real.
+      // persistAvatar captura su propio error (no debe disparar reembolso).
+      setPendingAvatar(newAvatar);
+      void persistAvatar(newAvatar);
 
       // Guardar las 4 vistas en historial
       const viewLabels = ['Body Master', 'Vista Trasera', 'Vista Lateral', 'Face Master'];
@@ -225,6 +242,8 @@ const ModelDNAModule: React.FC<ModelDNAModuleProps> = ({ onSave }) => {
     setProgressStep(0);
     setLightboxOpen(false);
     setCloneError(null);
+    setSaveState('idle');
+    setPendingAvatar(null);
   };
 
   const handleDownloadZip = async () => {
@@ -404,11 +423,31 @@ const ModelDNAModule: React.FC<ModelDNAModuleProps> = ({ onSave }) => {
             <div className="fade-in p-4 md:p-8 flex flex-col gap-5">
               <div className="flex items-center justify-between">
                 <h2 className="t-display text-[22px] md:text-[26px] text-slate-900 italic normal-case">{name}</h2>
-                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
-                  <Check size={11} strokeWidth={3} /> Guardado
-                </span>
+                {saveState === 'error' ? (
+                  <button
+                    type="button"
+                    onClick={() => pendingAvatar && persistAvatar(pendingAvatar)}
+                    className="flex items-center gap-1 text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-full"
+                  >
+                    <RotateCcw size={11} strokeWidth={3} /> Reintentar guardado
+                  </button>
+                ) : saveState === 'saving' ? (
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-full">
+                    <Loader2 size={11} strokeWidth={3} className="animate-spin" /> Guardando
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
+                    <Check size={11} strokeWidth={3} /> Guardado
+                  </span>
+                )}
               </div>
-              <p className="text-sm text-slate-500 -mt-3">Ya está en tu biblioteca de modelos, lista para usar en cualquier módulo.</p>
+              <p className={`text-sm -mt-3 ${saveState === 'error' ? 'text-rose-600' : 'text-slate-500'}`}>
+                {saveState === 'error'
+                  ? 'Tu modelo está listo, pero no pudimos guardarlo en tu biblioteca. Toca Reintentar guardado.'
+                  : saveState === 'saving'
+                  ? 'Guardando en tu biblioteca de modelos…'
+                  : 'Ya está en tu biblioteca de modelos, lista para usar en cualquier módulo.'}
+              </p>
 
               {/* Tarjetas grandes y verticales apiladas — se ven bien, se descargan fácil */}
               <div className="flex flex-col gap-3">
