@@ -28,6 +28,7 @@ const CheckoutSuccess       = lazy(() => import('./views/CheckoutSuccess'));
 const CheckoutCancel        = lazy(() => import('./views/CheckoutCancel'));
 // Herramienta interna solo para desarrollo local — nunca se importa en build de producción.
 const DirectorLabModule     = import.meta.env.DEV ? lazy(() => import('./modules/directorLab/DirectorLabModule')) : null;
+const ProductFlowPreview    = import.meta.env.DEV ? lazy(() => import('./dev/ProductFlowPreview')) : null;
 
 const LazyFallback = (
   <div className="flex items-center justify-center h-screen bg-[#06060D]">
@@ -414,12 +415,15 @@ const AppContent: React.FC = () => {
         )
       } />
       {legalRoutes}
+      {import.meta.env.DEV && ProductFlowPreview && (
+        <Route path="/__preview/producto" element={<ProductFlowPreview />} />
+      )}
 
       {/* App autenticada */}
       <Route path="/*" element={
         <ProtectedRoute>
           {/* overflow-x-hidden en el wrapper raíz elimina el horizontal overflow global */}
-          <div className="flex min-h-screen bg-slate-50 overflow-x-hidden">
+          <div data-app-frame className="flex min-h-screen bg-slate-50 overflow-x-hidden">
             {!isDashboard && (
               <div className="hidden md:block">
                 <Sidebar
@@ -430,7 +434,7 @@ const AppContent: React.FC = () => {
               </div>
             )}
             <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
-<main className="flex-1 p-4 md:py-10 md:pl-[88px] md:pr-24 overflow-x-hidden pb-24 md:pb-10">
+<main data-app-main className="flex-1 p-4 md:py-10 md:pl-[88px] md:pr-24 overflow-x-hidden pb-24 md:pb-10">
                 <Routes>
                   <Route path="/dashboard"      element={<Dashboard />} />
                   <Route path="/historial"      element={<GenerationHistory />} />
@@ -464,14 +468,17 @@ const AppContent: React.FC = () => {
                   <Route path="*"               element={<Navigate to="/dashboard" replace />} />
                 </Routes>
               </main>
-              <MobileBottomNav onSearchOpen={() => setIsSearchOpen(true)} />
+              {/* data-app-chrome: lo flotante de la app, se esconde dentro de un flujo (ver FlowShell) */}
+              <div data-app-chrome className="contents"><MobileBottomNav onSearchOpen={() => setIsSearchOpen(true)} /></div>
             </div>
           </div>
           {isNewUser && <OnboardingWizard onDone={markOnboardingDone} />}
-          <AppAssistant />
-          <AdminResetButton />
-          <PlannerTaskBubble />
-          <NotificationsHUD />
+          <div data-app-chrome className="contents">
+            <AppAssistant />
+            <AdminResetButton />
+            <PlannerTaskBubble />
+            <NotificationsHUD />
+          </div>
           <GlobalSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
         </ProtectedRoute>
       } />

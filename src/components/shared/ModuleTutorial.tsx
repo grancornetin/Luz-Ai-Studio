@@ -20,13 +20,19 @@ interface ModuleTutorialProps {
   steps: TutorialStep[];
   label?: string;
   compact?: boolean;
+  /** Abrir sola la primera vez (por defecto sí). */
+  autoOpen?: boolean;
+  /** Disparador propio, p. ej. un enlace de texto dentro de un flujo. */
+  renderTrigger?: (open: () => void) => React.ReactNode;
 }
 
 const ModuleTutorial: React.FC<ModuleTutorialProps> = ({
   moduleId,
   steps,
   label = '¿Cómo funciona?',
-  compact = false
+  compact = false,
+  autoOpen = true,
+  renderTrigger,
 }) => {
   const [isOpen, setIsOpen]   = useState(false);
   const [current, setCurrent] = useState(0);
@@ -34,11 +40,11 @@ const ModuleTutorial: React.FC<ModuleTutorialProps> = ({
   // Abre automáticamente la primera vez
   useEffect(() => {
     const key = `tutorial_seen_${moduleId}`;
-    if (!localStorage.getItem(key)) {
+    if (autoOpen && !localStorage.getItem(key)) {
       setIsOpen(true);
       localStorage.setItem(key, 'true');
     }
-  }, [moduleId]);
+  }, [moduleId, autoOpen]);
 
   const step    = steps[current];
   const isFirst = current === 0;
@@ -52,6 +58,7 @@ const ModuleTutorial: React.FC<ModuleTutorialProps> = ({
   return (
     <>
       {/* TRIGGER BUTTON */}
+      {renderTrigger ? renderTrigger(open) : (
       <button
         onClick={open}
         className={`flex items-center gap-1.5 text-slate-500 hover:text-brand-600 transition-colors min-h-8 px-1 whitespace-nowrap ${
@@ -61,6 +68,7 @@ const ModuleTutorial: React.FC<ModuleTutorialProps> = ({
         <HelpCircle className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
         {label}
       </button>
+      )}
 
       {/* MODAL */}
       {isOpen && (

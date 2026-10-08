@@ -117,16 +117,113 @@
   animation-name: zoom-in-95;
 }
 
-/* Foto recién creada: aparece con un leve acercamiento */
-@keyframes photo-reveal {
-  from { opacity: 0; transform: scale(1.03); }
-  to   { opacity: 1; transform: scale(1); }
+/* ============================================
+   FLUJOS DE TAREA (FlowShell) — marco compartido por todos los módulos.
+   Tokens, modo inmersivo, materiales, transiciones entre pasos.
+   ============================================ */
+.flow-root {
+  --bg: #FFFFFF;
+  --fill: #F4F4F6;
+  --fill-pressed: #E9E9EC;
+  --separator: rgba(60, 60, 67, 0.12);
+  --text: #0F0F12;
+  --text-2: #5B5B66;
+  --placeholder: #6E6E78;
+  --brand: #F72C5B;
+  --action: #E5214F;
+  --action-pressed: #C4224A;
+  --tint: #FFF0F3;
+  --warn-fg: #9A5B00;
+  --danger-fg: #B4123A;
+  --ok-fg: #0F7B53;
+  --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.011em;
 }
-.photo-reveal {
-  animation: photo-reveal 500ms cubic-bezier(0.23, 1, 0.32, 1) both;
+.flow-root h1, .flow-root h2, .flow-root h3 { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+.flow-root .flow-display { font-family: 'Syne', 'Inter', sans-serif; font-style: italic; font-weight: 700; letter-spacing: -0.01em; }
+
+/* Material translúcido (barra superior y barra de acción) */
+.flow-material {
+  background: rgba(255, 255, 255, 0.78);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  backdrop-filter: blur(20px) saturate(1.8);
 }
+@media (prefers-reduced-transparency: reduce) {
+  .flow-material { background: #FFFFFF; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+/* Modo inmersivo en celular: dentro de un flujo se esconde todo lo flotante
+   de la app (barra inferior, burbujas, avisos) y el contenedor pierde su
+   relleno — el flujo maneja su propio espacio. */
+@media (max-width: 767px) {
+  body.flow-immersive [data-app-chrome] { display: none !important; }
+  body.flow-immersive [data-app-main] { padding: 0 !important; }
+  body.flow-immersive [data-app-frame] { background: #FFFFFF; }
+}
+
+/* Con el teclado abierto, la barra de acción deja solo el botón principal */
+.flow-root[data-kb="open"] .flow-kb-hide { display: none; }
+
+/* Carrusel de resultados: margen al inicio y al final, la siguiente foto asoma */
+.flow-carousel { scroll-padding-inline: 16px; scrollbar-width: none; }
+.flow-carousel::-webkit-scrollbar { display: none; }
+
+/* Botones y filas: respuesta instantánea al tocar */
+.flow-press { transition: transform 160ms ease-out, background-color 150ms ease; }
+.flow-press:active { transform: scale(0.97); transition-duration: 100ms; }
+
+/* Transición entre pasos (View Transitions). Adelante entra desde la derecha;
+   atrás es el espejo exacto. La barra superior y la de acción solo cruzan. */
+.flow-content { view-transition-name: flow-content; }
+.flow-nav { view-transition-name: flow-nav; }
+.flow-actions { view-transition-name: flow-actions; }
+::view-transition-old(flow-content),
+::view-transition-new(flow-content) { animation-duration: 380ms; animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1); }
+::view-transition-old(flow-nav), ::view-transition-new(flow-nav),
+::view-transition-old(flow-actions), ::view-transition-new(flow-actions) { animation-duration: 200ms; }
+html.flow-forward::view-transition-new(flow-content) { animation-name: flow-in-right; }
+html.flow-forward::view-transition-old(flow-content) { animation-name: flow-out-left; }
+html.flow-back::view-transition-new(flow-content) { animation-name: flow-in-left; }
+html.flow-back::view-transition-old(flow-content) { animation-name: flow-out-right; }
+@keyframes flow-in-right { from { transform: translateX(100%); } }
+@keyframes flow-out-left { to { transform: translateX(-25%); opacity: 0.85; } }
+@keyframes flow-in-left { from { transform: translateX(-25%); opacity: 0.85; } }
+@keyframes flow-out-right { to { transform: translateX(100%); } }
 @media (prefers-reduced-motion: reduce) {
-  .photo-reveal { animation: fade-in 200ms ease both; }
+  html.flow-forward::view-transition-new(flow-content), html.flow-back::view-transition-new(flow-content) { animation: fade-in 150ms ease both; }
+  html.flow-forward::view-transition-old(flow-content), html.flow-back::view-transition-old(flow-content) { animation: none; opacity: 0; }
+}
+
+/* Foto recién creada: se materializa (desenfoque → nítida) */
+@keyframes photo-reveal {
+  from { opacity: 0; filter: blur(12px); transform: scale(1.02); }
+  to   { opacity: 1; filter: blur(0); transform: scale(1); }
+}
+.photo-reveal { animation: photo-reveal 500ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+
+/* Espacio de foto en espera: una banda de luz recorre el espacio */
+@keyframes photo-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.photo-sweep::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,0.65) 50%, transparent 80%);
+  animation: photo-sweep 1.4s linear infinite;
+}
+
+/* Hoja inferior */
+@keyframes sheet-in { from { transform: translateY(100%); } }
+@keyframes scrim-in { from { opacity: 0; } }
+.flow-sheet { animation: sheet-in 400ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+.flow-scrim { animation: scrim-in 250ms ease both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .photo-reveal { animation: fade-in 150ms ease both; }
+  .photo-sweep::after { animation: none; background: rgba(255,255,255,0.25); }
+  .flow-sheet { animation: fade-in 150ms ease both; }
+  .flow-press:active { transform: none; }
 }
 
 /* Para inputs y botones táctiles (garantiza touch target mínimo) */

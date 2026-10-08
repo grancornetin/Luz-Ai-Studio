@@ -1,7 +1,8 @@
-// Mientras se crean las fotos: aparecen una a una y se avisa que puede salir.
+// Creando: las fotos aparecen una a una; se avisa que puede salir.
 import React from 'react';
 import { Bell } from 'lucide-react';
-import { FlowHeading } from './ui';
+import { FlowShell } from '../../../components/shared/flow/FlowShell';
+import { Footnote, LargeTitle, PhotoLayout, ProgressBar, TextButton, useEstimatedProgress } from '../../../components/shared/flow/primitives';
 
 interface GeneratingStepProps {
   shots: string[];          // '' en curso, 'error' fallida, url lista
@@ -9,49 +10,48 @@ interface GeneratingStepProps {
   withCollage: boolean;
   aspectClass: string;
   statusText: string;
+  running: boolean;
+  onExit: () => void;
 }
 
-export const GeneratingStep: React.FC<GeneratingStepProps> = ({ shots, collage, withCollage, aspectClass, statusText }) => {
+const Slot: React.FC<{ src: string; aspectClass: string; label?: string; index: number }> = ({ src, aspectClass, label, index }) => (
+  <div className={`relative ${aspectClass} overflow-hidden rounded-[16px] bg-[color:var(--fill)] ${src === '' ? 'photo-sweep' : ''}`}>
+    {src && src !== 'error' && (
+      <img src={src} alt={`Foto ${index + 1}`} className="photo-reveal h-full w-full object-cover" />
+    )}
+    {src === 'error' && (
+      <span className="absolute inset-0 flex items-center justify-center px-3 text-center text-[13px] font-medium tracking-normal text-[color:var(--text-2)]">
+        No se pudo crear
+      </span>
+    )}
+    {label && <span className="absolute bottom-2 left-2 rounded-full bg-black/55 px-2.5 py-1 text-[12px] font-semibold tracking-normal text-white backdrop-blur-md">{label}</span>}
+  </div>
+);
+
+export const GeneratingStep: React.FC<GeneratingStepProps> = ({ shots, collage, withCollage, aspectClass, statusText, running, onExit }) => {
   const total = shots.length + (withCollage ? 1 : 0);
   const done = shots.filter((s) => s !== '').length + (collage ? 1 : 0);
-  const progress = total > 0 ? Math.max(0.06, done / total) : 0.06;
-  const slots = withCollage ? [...shots, collage ?? ''] : shots;
+  // Una foto de producto tarda alrededor de un minuto en total.
+  const progress = useEstimatedProgress(running, done, total, 60);
 
   return (
-    <div className="flex flex-col gap-4" aria-live="polite">
-      <span className="text-[15px] font-bold text-slate-900 min-h-11 flex items-center">Creando tus fotos</span>
-      <FlowHeading>{done >= total && total > 0 ? 'Listo' : done === 0 ? 'Estamos fotografiando tu producto' : `Lista ${done} de ${total}`}</FlowHeading>
-      <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
-        <div
-          className="h-full w-full origin-left rounded-full bg-brand-600 transition-transform duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
-          style={{ transform: `scaleX(${progress})` }}
+    <FlowShell title="Creando tus fotos" trailing={<TextButton onClick={onExit} className="text-[17px] font-normal">Salir</TextButton>}>
+      <LargeTitle>Creando tus fotos</LargeTitle>
+      <p key={statusText} className="photo-reveal mt-1 text-[16px] leading-6 text-[color:var(--text-2)]" aria-live="polite">{statusText}</p>
+      <div className="mt-4">
+        <ProgressBar value={progress} label="Progreso de tus fotos" />
+      </div>
+
+      <div className="mt-6">
+        <PhotoLayout
+          items={shots.map((s, i) => <Slot key={i} src={s} index={i} aspectClass={aspectClass} />)}
+          trailingWide={withCollage ? <Slot src={collage ?? ''} index={shots.length} aspectClass="aspect-square" label="Collage" /> : undefined}
         />
       </div>
-      <p className="text-sm text-slate-500 -mt-1">{statusText}</p>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-        {slots.map((s, i) => (
-          <div key={i} className={`relative ${aspectClass} rounded-[18px] overflow-hidden bg-slate-200`}>
-            {s && s !== 'error' && (
-              <img src={s} alt={`Foto ${i + 1}`} className="w-full h-full object-cover photo-reveal" />
-            )}
-            {s === '' && <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent animate-pulse" />}
-            {s === 'error' && (
-              <span className="absolute inset-0 flex items-center justify-center px-3 text-center text-xs font-semibold text-slate-500">
-                No se pudo crear
-              </span>
-            )}
-            {withCollage && i === slots.length - 1 && (
-              <span className="absolute left-2 bottom-2 rounded-full bg-slate-900/75 px-2 py-0.5 text-[11px] font-semibold text-white">Collage</span>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div className="flex items-center gap-2.5 rounded-2xl border border-slate-200 bg-white p-3 text-[13px] text-slate-700">
-        <Bell size={20} className="shrink-0 text-brand-600" />
+      <Footnote className="mt-5" icon={<Bell size={15} />}>
         Puedes salir de la app. Te avisamos cuando estén listas.
-      </div>
-    </div>
+      </Footnote>
+    </FlowShell>
   );
 };

@@ -7,12 +7,8 @@
 // — cantidad real (fotos sueltas 1/2/4/6, collage 2/4/9, inspiración 1/2)
 // — descuento total al crear + devolución automática por fotos fallidas
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, Package, Plus } from 'lucide-react';
+import { Package, Plus } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ResultCard } from '../../components/shared/ResultCard';
-import { ResultLibraryGrid } from '../../components/shared/ResultLibraryGrid';
-import ModuleTutorial from '../../components/shared/ModuleTutorial';
-import { TUTORIAL_CONFIGS } from '../../components/shared/tutorialConfigs';
 import { useCreditGuard } from '../../../hooks/useCreditGuard';
 import NoCreditsModal from '../../components/shared/NoCreditsModal';
 import { MODEL_CREDIT_COST } from '../../services/creditConfig';
@@ -25,6 +21,8 @@ import { getNotification } from '../../services/notificationsService';
 import { downloadAsZip, downloadImage } from '../../utils/imageUtils';
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
 import { useImagePicker } from '../../components/shared/useImagePicker';
+import { FlowShell, flowTransition } from '../../components/shared/flow/FlowShell';
+import { LargeTitle, PrimaryButton } from '../../components/shared/flow/primitives';
 
 import {
   runProductDirector,
@@ -137,13 +135,19 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
   const [searchParams, setSearchParams] = useSearchParams();
   const stepFromUrl = Number(searchParams.get('paso'));
   const step: WizardStep = (stepFromUrl >= 1 && stepFromUrl <= 6 ? stepFromUrl : 1) as WizardStep;
-  const setStep = (next: WizardStep, options?: { replace?: boolean }) => {
-    setSearchParams(prev => {
-      const p = new URLSearchParams(prev);
-      p.set('paso', String(next));
-      return p;
-    }, { replace: options?.replace ?? false });
-    window.scrollTo({ top: 0 });
+  // Cada paso es una entrada del historial (el gesto de volver de Safari
+  // retrocede un paso) y entra deslizándose: adelante desde la derecha.
+  const setStep = (next: WizardStep, options?: { replace?: boolean; animate?: boolean }) => {
+    const apply = () => {
+      setSearchParams(prev => {
+        const p = new URLSearchParams(prev);
+        p.set('paso', String(next));
+        return p;
+      }, { replace: options?.replace ?? false });
+      window.scrollTo({ top: 0 });
+    };
+    if (options?.animate === false || options?.replace) apply();
+    else flowTransition(next >= step ? 'forward' : 'back', apply);
   };
   const [wizard, setWizard] = useState<WizardState>(INITIAL_WIZARD_STATE);
 
@@ -157,6 +161,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
   const [retryingIndices, setRetryingIndices] = useState<number[]>([]);
   const [genError, setGenError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [saveErrorDetail, setSaveErrorDetail] = useState<string | null>(null);
   const savedProductIdRef = useRef<string | null>(null);
   const [showCatalog, setShowCatalog] = useState(false);
 
@@ -289,6 +294,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
       setSaveState('saved');
     } catch (e) {
       console.error('No se pudo guardar en el catálogo:', e);
+      setSaveErrorDetail(e instanceof Error ? e.message : String(e));
       setSaveState('error');
     }
   };
@@ -556,15 +562,31 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
   // ─── Acciones de "Listas" ───────────────────────────────────────────────────
   const fileBase = () => wizard.product.title.replace(/\s+/g, '_') || 'producto';
 
-  const handleDownloadZip = async () => {
+  // "Guardar en mi celular": en iPhone abre la hoja de compartir del sistema
+  // (Guardar imágenes → Fotos). Si el navegador no lo permite, descarga.
+  const handleSaveToDevice = async () => {
     const finalShots = [...generatedShots.filter((s) => s && s !== 'error'), ...(collageShot ? [collageShot] : [])];
     if (finalShots.length === 0) return;
     setIsZipping(true);
     try {
-      if (finalShots.length === 1) await downloadImage(finalShots[0], `${fileBase()}_1.png`);
-      else await downloadAsZip(finalShots, `Fotos_${fileBase()}.zip`, fileBase());
-    } catch (e) {
-      console.error('No pudimos preparar la descarga:', e);
+      const files = await Promise.all(finalShots.map(async (url, i) => {
+        const blob = await (await fetch(url)).blob();
+        const ext = blob.type.includes('png') ? 'png' : 'jpg';
+        return new File([blob], `${fileBase()}_${i + 1}.${ext}`, { type: blob.type || 'image/jpeg' });
+      }));
+      if (navigator.canShare?.({ files })) {
+        await navigator.share({ files, title: wizard.product.title });
+        return;
+      }
+      throw new Error('share-unavailable');
+    } catch (e: any) {
+      if (e?.name === 'AbortError') return; // la usuaria cerró la hoja de compartir
+      try {
+        if (finalShots.length === 1) await downloadImage(finalShots[0], `${fileBase()}_1.png`);
+        else await downloadAsZip(finalShots, `Fotos_${fileBase()}.zip`, fileBase());
+      } catch (err) {
+        console.error('No pudimos preparar la descarga:', err);
+      }
     } finally {
       setIsZipping(false);
     }
@@ -710,174 +732,161 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
   const aspectClass = aspectClassFor(wizard.goal);
 
   // ─── Render ─────────────────────────────────────────────────────────────────
+  const exitModule = () => navigate('/dashboard');
+  const styleLabel = wizard.style.referenceImg ? 'Tu inspiración' : styleTitle(wizard.style.preset);
+
   return (
     <>
       <NoCreditsModal isOpen={showNoCredits} onClose={closeModal} required={requiredCredits} available={credits.available} />
       {picker.element}
 
-      <div className={`mx-auto pb-28 md:pb-20 ${activeTab === 'library' || step === 6 ? 'max-w-5xl' : 'max-w-xl'}`}>
-        {(activeTab === 'library' || step === 1) && (
-          <header className="flex items-center justify-between gap-3 mb-4">
-            <div className="flex items-center gap-2 min-w-0">
-              <h1 className="text-[15px] font-bold text-slate-900">Fotos de producto</h1>
-              <ModuleTutorial moduleId="catalog" steps={TUTORIAL_CONFIGS.catalog} />
+      {activeTab === 'create' ? (
+        <>
+          {step === 1 && (
+            <EntryStep
+              defaultCost={defaultCost}
+              creditsAvailable={credits.available}
+              hasCatalog={products.length > 0}
+              isPicking={picker.isLoading}
+              onUpload={pickMainPhoto}
+              onUseCatalog={() => setShowCatalog(true)}
+              onOpenCatalog={() => { setActiveTab('library'); window.scrollTo({ top: 0 }); }}
+              onClose={exitModule}
+            />
+          )}
+          {step === 2 && (
+            <ProductStep
+              state={wizard.product}
+              onChange={(next) => setWizard((s) => ({ ...s, product: next }))}
+              pickImage={picker.open}
+              onBack={() => setStep(1)}
+              onContinue={() => setStep(3)}
+            />
+          )}
+          {step === 3 && (
+            <StyleStep
+              state={wizard.style}
+              pickImage={picker.open}
+              onPickStyle={pickStyle}
+              onPickReference={pickReference}
+              onBack={() => setStep(2)}
+            />
+          )}
+          {step === 4 && (
+            <ReviewStep
+              wizard={wizard}
+              finalCount={finalCount.count}
+              cost={totalCost}
+              creditsAvailable={credits.available}
+              isAdmin={isAdmin}
+              modelId={modelId}
+              onModelChange={setModelId}
+              onChange={setWizard}
+              onEditProduct={() => setStep(2)}
+              onEditStyle={() => setStep(3)}
+              onBack={() => setStep(3)}
+              onCreate={handleCreate}
+              error={genError}
+              disabled={isGenerating}
+            />
+          )}
+          {step === 5 && (
+            <GeneratingStep
+              shots={generatedShots}
+              collage={collageShot}
+              withCollage={finalCount.gridCollage}
+              aspectClass={aspectClass}
+              statusText={processingStatus}
+              running={isGenerating}
+              onExit={exitModule}
+            />
+          )}
+          {step === 6 && (
+            <ResultsStep
+              productTitle={wizard.product.title}
+              styleLabel={styleLabel}
+              shots={generatedShots}
+              collage={collageShot}
+              aspectClass={aspectClass}
+              retryingIndices={retryingIndices}
+              isRetrying={isGenerating}
+              isSavingToDevice={isZipping}
+              saveState={saveState}
+              saveErrorDetail={isAdmin ? saveErrorDetail : null}
+              onRetrySave={() => autoSave(wizard, directorResult, generatedShots, collageShot)}
+              onRetryFailed={retryFailedShots}
+              onOpen={(url) => {
+                const valid = [...generatedShots, ...(collageShot ? [collageShot] : [])].filter((s) => s && s !== 'error');
+                openLightbox(valid, Math.max(0, valid.indexOf(url)), wizard.product.title);
+              }}
+              onDownload={(url, i) => downloadImage(url, `${fileBase()}_${i + 1}.png`)}
+              onSaveToDevice={handleSaveToDevice}
+              onUseWithAvatar={() => navigate('/studio-pro')}
+              onMakeCampaign={() => navigate('/campaign')}
+              onOtherStyle={() => { clearResults(); setStep(3); }}
+              onOtherProduct={resetCreator}
+              onDone={resetCreator}
+            />
+          )}
+        </>
+      ) : (
+        <FlowShell
+          title="Mi catálogo"
+          wide
+          leading={{ kind: 'back', onPress: () => { setActiveTab('create'); window.scrollTo({ top: 0 }); } }}
+          actions={
+            <PrimaryButton onClick={() => { setActiveTab('create'); resetCreator(); }} icon={<Plus size={20} />}>
+              Crear fotos de un producto
+            </PrimaryButton>
+          }
+        >
+          <LargeTitle subtitle={products.length > 0 ? `${products.length} ${products.length === 1 ? 'producto' : 'productos'}` : undefined}>
+            Mi catálogo
+          </LargeTitle>
+          {products.length === 0 ? (
+            <div className="mt-10 flex flex-col items-center text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-[16px] bg-[color:var(--tint)] text-[color:var(--action)]">
+                <Package size={26} />
+              </span>
+              <p className="mt-4 text-[17px] font-semibold">Todavía no hay productos</p>
+              <p className="mt-1 max-w-[30ch] text-[15px] leading-5 text-[color:var(--text-2)]">Crea las fotos de tu primer producto y quedarán guardadas aquí.</p>
             </div>
-            {activeTab === 'create' ? (
-              <button
-                type="button"
-                onClick={() => { setActiveTab('library'); window.scrollTo(0, 0); }}
-                className="shrink-0 inline-flex items-center gap-1.5 min-h-10 rounded-full border border-slate-200 bg-white px-3.5 text-[13px] font-semibold text-slate-700 hover:border-slate-300"
-              >
-                <Package size={16} /> Mi catálogo{products.length > 0 ? ` · ${products.length}` : ''}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => { setActiveTab('create'); resetCreator(); }}
-                className="shrink-0 inline-flex items-center gap-1.5 min-h-10 rounded-full bg-brand-600 px-3.5 text-[13px] font-bold text-white hover:bg-brand-700"
-              >
-                <Plus size={16} /> Crear fotos
-              </button>
-            )}
-          </header>
-        )}
+          ) : (
+            <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-5 md:grid-cols-4">
+              {products.map((product) => {
+                const cover = (product.generatedImages ?? []).find(Boolean);
+                const n = product.generatedImages?.length ?? 0;
+                return (
+                  <button key={product.id} type="button" onClick={() => openProductDetail(product)} className="flow-press text-left">
+                    <span className="block aspect-[4/5] overflow-hidden rounded-[16px] bg-[color:var(--fill)]">
+                      {cover && <img src={cover} alt="" className="h-full w-full object-cover" loading="lazy" />}
+                    </span>
+                    <span className="mt-2 block truncate text-[15px] font-semibold">{product.name}</span>
+                    <span className="block text-[13px] tracking-normal text-[color:var(--text-2)]">
+                      {n} {n === 1 ? 'foto' : 'fotos'} · {styleTitle(asProductStyle(product.generationConfig?.stylePreset ?? product.metadata?.style))}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </FlowShell>
+      )}
 
-        {activeTab === 'create' ? (
-          <>
-            {step === 1 && (
-              <EntryStep
-                defaultCost={defaultCost}
-                creditsAvailable={credits.available}
-                hasCatalog={products.length > 0}
-                isPicking={picker.isLoading}
-                onUpload={pickMainPhoto}
-                onUseCatalog={() => setShowCatalog(true)}
-              />
-            )}
-            {step === 2 && (
-              <ProductStep
-                state={wizard.product}
-                onChange={(next) => setWizard((s) => ({ ...s, product: next }))}
-                pickImage={picker.open}
-                onBack={() => setStep(1)}
-                onContinue={() => setStep(3)}
-              />
-            )}
-            {step === 3 && (
-              <StyleStep
-                state={wizard.style}
-                pickImage={picker.open}
-                onPickStyle={pickStyle}
-                onPickReference={pickReference}
-                onBack={() => setStep(2)}
-              />
-            )}
-            {step === 4 && (
-              <>
-                {genError && (
-                  <div role="alert" className="mb-3 rounded-[14px] bg-rose-50 px-3 py-2.5 text-[13px] font-semibold text-rose-800">
-                    {genError}
-                  </div>
-                )}
-                <ReviewStep
-                  wizard={wizard}
-                  finalCount={finalCount.count}
-                  cost={totalCost}
-                  creditsAvailable={credits.available}
-                  isAdmin={isAdmin}
-                  modelId={modelId}
-                  onModelChange={setModelId}
-                  onChange={setWizard}
-                  onEditProduct={() => setStep(2)}
-                  onEditStyle={() => setStep(3)}
-                  onBack={() => setStep(3)}
-                  onCreate={handleCreate}
-                  disabled={isGenerating}
-                />
-              </>
-            )}
-            {step === 5 && (
-              <GeneratingStep
-                shots={generatedShots}
-                collage={collageShot}
-                withCollage={finalCount.gridCollage}
-                aspectClass={aspectClass}
-                statusText={processingStatus}
-              />
-            )}
-            {step === 6 && (
-              <ResultsStep
-                productTitle={wizard.product.title}
-                shots={generatedShots}
-                collage={collageShot}
-                aspectClass={aspectClass}
-                retryingIndices={retryingIndices}
-                isRetrying={isGenerating}
-                isZipping={isZipping}
-                saveState={saveState}
-                onRetrySave={() => autoSave(wizard, directorResult, generatedShots, collageShot)}
-                onRetryFailed={retryFailedShots}
-                onOpen={(url) => {
-                  const valid = [...generatedShots, ...(collageShot ? [collageShot] : [])].filter((s) => s && s !== 'error');
-                  openLightbox(valid, Math.max(0, valid.indexOf(url)), wizard.product.title);
-                }}
-                onDownload={(url, i) => downloadImage(url, `${fileBase()}_${i + 1}.png`)}
-                onDownloadAll={handleDownloadZip}
-                onUseWithAvatar={() => navigate('/studio-pro')}
-                onMakeCampaign={() => navigate('/campaign')}
-                onOtherStyle={() => { clearResults(); setStep(3); }}
-                onOtherProduct={resetCreator}
-                onClose={resetCreator}
-              />
-            )}
-          </>
-        ) : (
-          <ResultLibraryGrid
-            stats={[
-              { label: 'Productos', value: products.length, sub: 'en catálogo' },
-              { label: 'Fotos', value: products.reduce((s, p) => s + (p.generatedImages?.length ?? 0), 0), sub: 'creadas', color: 'text-brand-600' },
-            ]}
-            searchTexts={products.map(p => `${p.name} ${p.category} ${p.metadata?.material ?? ''}`)}
-            emptyTitle="Tu catálogo está vacío"
-            emptyDescription="Crea las fotos de tu primer producto y aparecerán aquí."
-            emptyCtaLabel="Crear fotos"
-            onEmpty={() => { setActiveTab('create'); resetCreator(); }}
-          >
-            {products.map(product => (
-              <ResultCard
-                key={product.id}
-                images={(product.generatedImages ?? []).filter(Boolean).slice(0, 1)}
-                title={product.name}
-                subtitle={styleTitle(asProductStyle(product.generationConfig?.stylePreset ?? product.metadata?.style))}
-                date={product.createdAt}
-                badge={{ label: 'Guardado', color: 'green', icon: <Check size={10} strokeWidth={3} /> }}
-                accentColor="blue"
-                onClick={() => openProductDetail(product)}
-                actions={[
-                  { label: 'Crear más fotos', onClick: e => { e.stopPropagation(); prefillFromProduct(product); }, variant: 'primary' },
-                ]}
-              />
-            ))}
-          </ResultLibraryGrid>
-        )}
+      <CatalogSheet open={showCatalog} products={products} onPick={prefillFromProduct} onClose={() => setShowCatalog(false)} />
 
-        {showCatalog && (
-          <CatalogSheet products={products} onPick={prefillFromProduct} onClose={() => setShowCatalog(false)} />
-        )}
-
-        {lightboxOpen && lightboxImages.length > 0 && (
-          <ImageLightbox
-            images={lightboxImages}
-            initialIndex={lightboxIndex}
-            onClose={() => { setLightboxOpen(false); setSelectedProduct(null); }}
-            onDownload={(url, idx) => {
-              downloadImage(url, `${(selectedProduct?.name || wizard.product.title || 'producto').replace(/\s+/g, '_')}_${idx + 1}.png`);
-            }}
-            metadata={lightboxMetadata}
-            details={renderSelectedProductDetails()}
-          />
-        )}
-      </div>
+      {lightboxOpen && lightboxImages.length > 0 && (
+        <ImageLightbox
+          images={lightboxImages}
+          initialIndex={lightboxIndex}
+          onClose={() => { setLightboxOpen(false); setSelectedProduct(null); }}
+          onDownload={(url, idx) => {
+            downloadImage(url, `${(selectedProduct?.name || wizard.product.title || 'producto').replace(/\s+/g, '_')}_${idx + 1}.png`);
+          }}
+          metadata={lightboxMetadata}
+          details={renderSelectedProductDetails()}
+        />
+      )}
     </>
   );
 };
