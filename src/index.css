@@ -138,6 +138,7 @@
   --ok-fg: #0F7B53;
   --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --stage: #F5F5F7;
   background: var(--bg);
   color: var(--text);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -164,6 +165,35 @@
   body.flow-immersive [data-app-main] { padding: 0 !important; }
   body.flow-immersive [data-app-frame] { background: #FFFFFF; }
 }
+
+/* Tableta y computador: el flujo es una "ventana" que llena la pantalla con
+   12px de margen; a la izquierda queda la franja del botón de menú de la app.
+   Lo flotante (asistente, burbujas, avisos) se esconde igual que en celular:
+   tapaba el botón principal. Ver docs/flow-layouts.md. */
+@media (min-width: 768px) {
+  body.flow-immersive [data-app-chrome] { display: none !important; }
+  body.flow-immersive [data-app-main] { padding: 12px 12px 12px 76px !important; }
+  .flow-panel {
+    box-shadow: 0 0 0 0.5px rgba(60, 60, 67, 0.14), 0 1px 2px rgba(15, 15, 18, 0.04), 0 16px 40px -12px rgba(15, 15, 18, 0.10);
+  }
+  .flow-stage { view-transition-name: flow-stage; }
+}
+
+/* Solo con mouse o trackpad: estados al pasar el puntero. Nada depende de esto. */
+@media (hover: hover) and (pointer: fine) {
+  .flow-root .flow-hover-fill:hover { background-color: var(--fill-pressed); }
+  .flow-root .flow-hover-bg:hover { background-color: var(--fill); }
+  .flow-root .flow-text-btn:hover:not(:disabled) { background-color: var(--tint); }
+  .flow-primary:hover:not(:disabled) { background-color: var(--action-pressed); }
+  .flow-root .flow-card img { transition: transform 300ms var(--ease-out), filter 200ms ease; }
+  .flow-root .flow-card:hover img { transform: scale(1.025); }
+  .flow-root .flow-hover-reveal { opacity: 0; transition: opacity 150ms ease; }
+  .flow-root .flow-card:hover .flow-hover-reveal,
+  .flow-root .flow-hover-reveal:focus-visible { opacity: 1; }
+}
+
+/* Foco visible para teclado en todo lo que se puede tocar */
+.flow-root :is(button, a, [role="button"]):focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
 /* Con el teclado abierto, la barra de acción deja solo el botón principal */
 .flow-root[data-kb="open"] .flow-kb-hide { display: none; }
@@ -193,6 +223,20 @@ html.flow-back::view-transition-old(flow-content) { animation-name: flow-out-rig
 @keyframes flow-out-left { to { transform: translateX(-25%); opacity: 0.85; } }
 @keyframes flow-in-left { from { transform: translateX(-25%); opacity: 0.85; } }
 @keyframes flow-out-right { to { transform: translateX(100%); } }
+/* Tableta y computador: desplazamiento corto con fundido; un empuje de
+   pantalla completa en una ventana grande se siente lento. El lienzo cruza. */
+@media (min-width: 768px) {
+  ::view-transition-old(flow-content), ::view-transition-new(flow-content) { animation-duration: 260ms; animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1); }
+  ::view-transition-old(flow-stage), ::view-transition-new(flow-stage) { animation-duration: 260ms; }
+  html.flow-forward::view-transition-new(flow-content) { animation-name: flow-fade-in-right; }
+  html.flow-forward::view-transition-old(flow-content) { animation-name: flow-fade-out-left; }
+  html.flow-back::view-transition-new(flow-content) { animation-name: flow-fade-in-left; }
+  html.flow-back::view-transition-old(flow-content) { animation-name: flow-fade-out-right; }
+}
+@keyframes flow-fade-in-right { from { transform: translateX(24px); opacity: 0; } }
+@keyframes flow-fade-out-left { to { transform: translateX(-12px); opacity: 0; } }
+@keyframes flow-fade-in-left { from { transform: translateX(-24px); opacity: 0; } }
+@keyframes flow-fade-out-right { to { transform: translateX(12px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   html.flow-forward::view-transition-new(flow-content), html.flow-back::view-transition-new(flow-content) { animation: fade-in 150ms ease both; }
   html.flow-forward::view-transition-old(flow-content), html.flow-back::view-transition-old(flow-content) { animation: none; opacity: 0; }
@@ -218,6 +262,11 @@ html.flow-back::view-transition-old(flow-content) { animation-name: flow-out-rig
 @keyframes scrim-in { from { opacity: 0; } }
 .flow-sheet { animation: sheet-in 400ms cubic-bezier(0.32, 0.72, 0, 1) both; }
 .flow-scrim { animation: scrim-in 250ms ease both; }
+/* Tableta y computador: hoja centrada que aparece con escala y opacidad */
+@keyframes sheet-pop { from { opacity: 0; transform: scale(0.96); } }
+@media (min-width: 768px) {
+  .flow-sheet { animation: sheet-pop 220ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .photo-reveal { animation: fade-in 150ms ease both; }

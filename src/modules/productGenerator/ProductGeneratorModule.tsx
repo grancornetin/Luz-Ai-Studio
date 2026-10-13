@@ -7,7 +7,6 @@
 // — cantidad real (fotos sueltas 1/2/4/6, collage 2/4/9, inspiración 1/2)
 // — descuento total al crear + devolución automática por fotos fallidas
 import React, { useEffect, useRef, useState } from 'react';
-import { Package, Plus } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCreditGuard } from '../../../hooks/useCreditGuard';
 import NoCreditsModal from '../../components/shared/NoCreditsModal';
@@ -21,8 +20,8 @@ import { getNotification } from '../../services/notificationsService';
 import { downloadAsZip, downloadImage } from '../../utils/imageUtils';
 import { ImageLightbox } from '../../components/shared/ImageLightbox';
 import { useImagePicker } from '../../components/shared/useImagePicker';
-import { FlowShell, flowTransition } from '../../components/shared/flow/FlowShell';
-import { LargeTitle, PrimaryButton } from '../../components/shared/flow/primitives';
+import { flowTransition } from '../../components/shared/flow/FlowShell';
+import { hasPrecisePointer } from '../../components/shared/flow/layout';
 
 import {
   runProductDirector,
@@ -47,6 +46,7 @@ import { ReviewStep } from './flow/ReviewStep';
 import { GeneratingStep } from './flow/GeneratingStep';
 import { ResultsStep, type SaveState } from './flow/ResultsStep';
 import { CatalogSheet } from './flow/CatalogSheet';
+import { LibraryStep } from './flow/LibraryStep';
 import { styleTitle } from './flow/styleOptions';
 
 interface ProductPhotographyProps {
@@ -564,6 +564,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
 
   // "Guardar en mi celular": en iPhone abre la hoja de compartir del sistema
   // (Guardar imágenes → Fotos). Si el navegador no lo permite, descarga.
+  // Con mouse (computador) se descarga directo, sin hoja de compartir.
   const handleSaveToDevice = async () => {
     const finalShots = [...generatedShots.filter((s) => s && s !== 'error'), ...(collageShot ? [collageShot] : [])];
     if (finalShots.length === 0) return;
@@ -574,7 +575,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
         const ext = blob.type.includes('png') ? 'png' : 'jpg';
         return new File([blob], `${fileBase()}_${i + 1}.${ext}`, { type: blob.type || 'image/jpeg' });
       }));
-      if (navigator.canShare?.({ files })) {
+      if (!hasPrecisePointer() && navigator.canShare?.({ files })) {
         await navigator.share({ files, title: wizard.product.title });
         return;
       }
@@ -705,15 +706,17 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
     runGeneration(wizard, isFreeOnboarding).catch(console.error);
   };
 
-  const pickMainPhoto = () =>
-    picker.open((img) => {
-      setWizard((s) => {
-        const slots = [...s.product.slots];
-        slots[0] = img;
-        return { ...s, product: { ...s.product, slots } };
-      });
-      setStep(2);
+  const setMainPhoto = (img: string) => {
+    setWizard((s) => {
+      const slots = [...s.product.slots];
+      slots[0] = img;
+      return { ...s, product: { ...s.product, slots } };
     });
+    setStep(2);
+  };
+  const pickMainPhoto = () => picker.open(setMainPhoto);
+  // Computador: foto soltada sobre la ventana de la Entrada.
+  const dropMainPhoto = (file: File) => { picker.fromFile(file, setMainPhoto).catch(console.error); };
 
   const pickStyle = (style: ProductStyle) => {
     setWizard((s) => ({ ...s, style: { referenceImg: null, preset: style } }));
@@ -752,6 +755,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
               onUseCatalog={() => setShowCatalog(true)}
               onOpenCatalog={() => { setActiveTab('library'); window.scrollTo({ top: 0 }); }}
               onClose={exitModule}
+              onDropPhoto={dropMainPhoto}
             />
           )}
           {step === 2 && (
@@ -759,6 +763,7 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
               state={wizard.product}
               onChange={(next) => setWizard((s) => ({ ...s, product: next }))}
               pickImage={picker.open}
+              dropImage={(file, cb) => { picker.fromFile(file, cb).catch(console.error); }}
               onBack={() => setStep(1)}
               onContinue={() => setStep(3)}
             />
@@ -770,6 +775,8 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
               onPickStyle={pickStyle}
               onPickReference={pickReference}
               onBack={() => setStep(2)}
+              productImg={wizard.product.slots[0]}
+              productTitle={wizard.product.title}
             />
           )}
           {step === 4 && (
@@ -830,47 +837,13 @@ const ProductPhotography: React.FC<ProductPhotographyProps> = ({
           )}
         </>
       ) : (
-        <FlowShell
-          title="Mi catálogo"
-          wide
-          leading={{ kind: 'back', onPress: () => { setActiveTab('create'); window.scrollTo({ top: 0 }); } }}
-          actions={
-            <PrimaryButton onClick={() => { setActiveTab('create'); resetCreator(); }} icon={<Plus size={20} />}>
-              Crear fotos de un producto
-            </PrimaryButton>
-          }
-        >
-          <LargeTitle subtitle={products.length > 0 ? `${products.length} ${products.length === 1 ? 'producto' : 'productos'}` : undefined}>
-            Mi catálogo
-          </LargeTitle>
-          {products.length === 0 ? (
-            <div className="mt-10 flex flex-col items-center text-center">
-              <span className="flex h-14 w-14 items-center justify-center rounded-[16px] bg-[color:var(--tint)] text-[color:var(--action)]">
-                <Package size={26} />
-              </span>
-              <p className="mt-4 text-[17px] font-semibold">Todavía no hay productos</p>
-              <p className="mt-1 max-w-[30ch] text-[15px] leading-5 text-[color:var(--text-2)]">Crea las fotos de tu primer producto y quedarán guardadas aquí.</p>
-            </div>
-          ) : (
-            <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-5 md:grid-cols-4">
-              {products.map((product) => {
-                const cover = (product.generatedImages ?? []).find(Boolean);
-                const n = product.generatedImages?.length ?? 0;
-                return (
-                  <button key={product.id} type="button" onClick={() => openProductDetail(product)} className="flow-press text-left">
-                    <span className="block aspect-[4/5] overflow-hidden rounded-[16px] bg-[color:var(--fill)]">
-                      {cover && <img src={cover} alt="" className="h-full w-full object-cover" loading="lazy" />}
-                    </span>
-                    <span className="mt-2 block truncate text-[15px] font-semibold">{product.name}</span>
-                    <span className="block text-[13px] tracking-normal text-[color:var(--text-2)]">
-                      {n} {n === 1 ? 'foto' : 'fotos'} · {styleTitle(asProductStyle(product.generationConfig?.stylePreset ?? product.metadata?.style))}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </FlowShell>
+        <LibraryStep
+          products={products}
+          styleLabelOf={(product) => styleTitle(asProductStyle(product.generationConfig?.stylePreset ?? product.metadata?.style))}
+          onBack={() => { setActiveTab('create'); window.scrollTo({ top: 0 }); }}
+          onCreate={() => { setActiveTab('create'); resetCreator(); }}
+          onOpen={openProductDetail}
+        />
       )}
 
       <CatalogSheet open={showCatalog} products={products} onPick={prefillFromProduct} onClose={() => setShowCatalog(false)} />

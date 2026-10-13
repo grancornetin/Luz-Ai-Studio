@@ -2,9 +2,10 @@
 // Piezas de interfaz de los flujos, con la escala tipográfica y los tokens
 // definidos en index.css (.flow-root). Inter en todo; Syne solo en el título
 // de entrada de cada módulo (LargeTitle display).
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronRight, Loader2 } from 'lucide-react';
+import { Check, ChevronRight, Loader2, X } from 'lucide-react';
+import { useFlowActionsPlacement, useFlowLayout } from './layout';
 
 // ─── Texto ────────────────────────────────────────────────────────────────────
 
@@ -13,12 +14,12 @@ export const LargeTitle: React.FC<{ children: React.ReactNode; display?: boolean
     <h1
       data-flow-large-title
       className={display
-        ? 'flow-display text-[32px] leading-[36px] text-balance'
-        : 'text-[28px] leading-[34px] font-bold tracking-[-0.021em] text-balance'}
+        ? 'flow-display text-[32px] leading-[36px] md:text-[38px] md:leading-[42px] lg:text-[44px] lg:leading-[48px] text-balance'
+        : 'text-[28px] leading-[34px] md:text-[30px] md:leading-[36px] font-bold tracking-[-0.021em] text-balance'}
     >
       {children}
     </h1>
-    {subtitle && <p className="mt-1.5 text-[16px] leading-6 text-[color:var(--text-2)]">{subtitle}</p>}
+    {subtitle && <p className="mt-1.5 text-[16px] leading-6 md:text-[17px] md:leading-[25px] text-[color:var(--text-2)]">{subtitle}</p>}
   </div>
 );
 
@@ -44,31 +45,62 @@ export const Footnote: React.FC<{ icon?: React.ReactNode; children: React.ReactN
 
 export const PrimaryButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { loading?: boolean; icon?: React.ReactNode }> = ({
   children, loading, icon, className = '', disabled, ...rest
-}) => (
-  <button
-    type="button"
-    disabled={disabled}
-    {...rest}
-    className={`flow-press w-full h-[52px] rounded-full bg-[color:var(--action)] active:bg-[color:var(--action-pressed)] text-white text-[17px] leading-[22px] font-semibold flex items-center justify-center gap-2 disabled:bg-[color:var(--fill)] disabled:text-[color:var(--placeholder)] disabled:active:scale-100 ${className}`}
-  >
-    {loading ? <Loader2 size={20} className="animate-spin" /> : icon}
-    {children}
-  </button>
-);
+}) => {
+  // En la barra superior (galerías en tableta/computador) es un botón compacto.
+  const toolbar = useFlowActionsPlacement() === 'toolbar';
+  const size = toolbar ? 'h-10 px-4 text-[15px] leading-5' : 'w-full h-[52px] text-[17px] leading-[22px]';
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      {...rest}
+      className={`flow-press flow-primary ${size} rounded-full bg-[color:var(--action)] active:bg-[color:var(--action-pressed)] text-white font-semibold flex items-center justify-center gap-2 disabled:bg-[color:var(--fill)] disabled:text-[color:var(--placeholder)] disabled:active:scale-100 ${className}`}
+    >
+      {loading ? <Loader2 size={toolbar ? 18 : 20} className="animate-spin" /> : icon}
+      {children}
+    </button>
+  );
+};
 
 export const TextButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({ children, className = '', ...rest }) => (
   <button
     type="button"
     {...rest}
-    className={`min-h-11 px-3 rounded-full text-[16px] leading-[22px] font-semibold text-[color:var(--action)] active:opacity-60 transition-opacity duration-100 disabled:opacity-40 ${className}`}
+    className={`flow-text-btn min-h-11 px-3 rounded-full text-[16px] leading-[22px] font-semibold text-[color:var(--action)] active:opacity-60 transition-[opacity,background-color] duration-100 disabled:opacity-40 ${className}`}
   >
     {children}
   </button>
 );
 
-export const ActionCaption: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <p className="flow-kb-hide pb-0.5 text-center text-[13px] leading-[18px] font-medium tracking-normal text-[color:var(--text-2)] tabular-nums">{children}</p>
-);
+export const ActionCaption: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  if (useFlowActionsPlacement() === 'toolbar') return null;
+  return <p className="flow-kb-hide pb-0.5 text-center text-[13px] leading-[18px] font-medium tracking-normal text-[color:var(--text-2)] tabular-nums">{children}</p>;
+};
+
+// Botón de la barra superior: en celular solo ícono; en tableta y computador
+// ícono con texto, para que se entienda sin adivinar.
+export const NavButton: React.FC<{ icon: React.ReactNode; label: string; onPress: () => void }> = ({ icon, label, onPress }) => {
+  const compact = useFlowLayout() === 'compact';
+  return compact ? (
+    <button
+      type="button"
+      onClick={onPress}
+      aria-label={label}
+      className="w-11 h-11 flex items-center justify-center rounded-full text-[color:var(--action)] active:opacity-60 transition-opacity duration-100"
+    >
+      {icon}
+    </button>
+  ) : (
+    <button
+      type="button"
+      onClick={onPress}
+      className="flow-hover-bg flex h-10 items-center gap-2 rounded-full px-3.5 text-[15px] font-semibold text-[color:var(--action)] active:opacity-60 transition-[opacity,background-color] duration-150"
+    >
+      {icon}
+      {label}
+    </button>
+  );
+};
 
 // ─── Campo de texto ───────────────────────────────────────────────────────────
 
@@ -149,7 +181,7 @@ export const GroupedRow: React.FC<GroupedRowProps> = ({ leading, title, subtitle
   const cls = 'flex w-full items-center gap-3';
   const style = { paddingLeft: inset };
   return onPress ? (
-    <button type="button" onClick={onPress} aria-pressed={ariaPressed} className={`${cls} active:bg-[color:var(--fill-pressed)] transition-colors duration-150`} style={style}>{body}</button>
+    <button type="button" onClick={onPress} aria-pressed={ariaPressed} className={`${cls} flow-hover-fill active:bg-[color:var(--fill-pressed)] transition-colors duration-150`} style={style}>{body}</button>
   ) : (
     <div className={cls} style={style}>{body}</div>
   );
@@ -213,10 +245,13 @@ export const InlineBanner: React.FC<{
 
 // ─── Hoja inferior ────────────────────────────────────────────────────────────
 
-export const BottomSheet: React.FC<{ open: boolean; onClose: () => void; title: string; children: React.ReactNode }> = ({ open, onClose, title, children }) => {
+// En celular es hoja inferior con agarradera y gesto; en tableta y computador
+// es una hoja centrada (480px, o 720px con size="large") con botón cerrar.
+export const BottomSheet: React.FC<{ open: boolean; onClose: () => void; title: string; size?: 'regular' | 'large'; children: React.ReactNode }> = ({ open, onClose, title, size = 'regular', children }) => {
   const sheetRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ y: number; t: number; dy: number } | null>(null);
   const [dy, setDy] = useState(0);
+  const centered = useFlowLayout() !== 'compact';
 
   useEffect(() => {
     if (!open) return;
@@ -230,6 +265,7 @@ export const BottomSheet: React.FC<{ open: boolean; onClose: () => void; title: 
 
   // Arrastrar hacia abajo para cerrar: basta pasar 30% del alto o un gesto rápido.
   const onPointerDown = (e: React.PointerEvent) => {
+    if (centered) return;
     drag.current = { y: e.clientY, t: performance.now(), dy: 0 };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
@@ -250,25 +286,41 @@ export const BottomSheet: React.FC<{ open: boolean; onClose: () => void; title: 
   };
 
   return createPortal(
-    <div className="flow-root fixed inset-0 z-[960] flex items-end md:items-center justify-center bg-transparent">
+    <div className="flow-root fixed inset-0 z-[960] !flex items-end md:items-center justify-center !bg-transparent md:p-6">
       <div className="flow-scrim absolute inset-0 bg-black/35" onClick={onClose} />
       <div
         ref={sheetRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="flow-sheet relative w-full md:max-w-[480px] max-h-[86dvh] overflow-y-auto rounded-t-[24px] md:rounded-[24px] bg-white shadow-[0_-8px_32px_rgba(0,0,0,0.12)]"
+        className={`flow-sheet relative w-full max-h-[86dvh] overflow-y-auto rounded-t-[24px] md:rounded-[20px] bg-white shadow-[0_-8px_32px_rgba(0,0,0,0.12)] md:shadow-[0_24px_64px_-12px_rgba(15,15,18,0.28),0_0_0_0.5px_rgba(60,60,67,0.12)] ${size === 'large' ? 'md:max-w-[720px]' : 'md:max-w-[480px]'}`}
         style={{
           transform: dy ? `translateY(${dy}px)` : undefined,
           transition: drag.current ? 'none' : 'transform 300ms cubic-bezier(0.32,0.72,0,1)',
-          paddingBottom: 'max(20px, env(safe-area-inset-bottom, 0px))',
+          paddingBottom: centered ? 24 : 'max(20px, env(safe-area-inset-bottom, 0px))',
         }}
       >
-        <div className="sticky top-0 z-10 bg-white pt-2 pb-1 touch-none" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
-          <div className="mx-auto h-[5px] w-9 rounded-full bg-[#D1D1D6]" />
-          <p className="mt-3 px-4 text-center text-[17px] leading-[22px] font-semibold">{title}</p>
-        </div>
-        <div className="px-4 pt-3">{children}</div>
+        {centered ? (
+          <div className="sticky top-0 z-10 grid grid-cols-[40px_1fr_40px] items-center bg-white px-3 pt-3 pb-1">
+            <span />
+            <p className="text-center text-[17px] leading-[22px] font-semibold">{title}</p>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Cerrar"
+              title="Cerrar (Esc)"
+              className="flow-hover-bg flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--fill)] text-[color:var(--text-2)] transition-colors duration-150"
+            >
+              <X size={17} strokeWidth={2.4} />
+            </button>
+          </div>
+        ) : (
+          <div className="sticky top-0 z-10 bg-white pt-2 pb-1 touch-none" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
+            <div className="mx-auto h-[5px] w-9 rounded-full bg-[#D1D1D6]" />
+            <p className="mt-3 px-4 text-center text-[17px] leading-[22px] font-semibold">{title}</p>
+          </div>
+        )}
+        <div className={centered ? 'px-6 pt-4' : 'px-4 pt-3'}>{children}</div>
       </div>
     </div>,
     document.body,
@@ -287,6 +339,61 @@ export const PhotoLayout: React.FC<{ items: React.ReactNode[]; trailingWide?: Re
         <div key={i} className={n === 1 || (n % 2 === 1 && i === 0) ? 'col-span-2' : ''}>{item}</div>
       ))}
       {trailingWide && <div className={`col-span-2 ${n >= 4 ? 'md:col-span-4' : ''}`}>{trailingWide}</div>}
+    </div>
+  );
+};
+
+// ─── Galería ajustada al lienzo (tableta y computador) ────────────────────────
+// Calcula columnas y tamaño para que todas las fotos quepan completas en el
+// espacio disponible, sin recortar y sin desplazar:
+// 1 · 2 · 3 en fila · 4 = 2×2 · 6 = 3×2 · 9 = 3×3. `trailing` (el collage)
+// va al final y completa la última fila, así nunca quedan filas a medias.
+
+export const FitGallery: React.FC<{
+  items: React.ReactNode[];
+  /** ancho / alto de cada celda (3:4 = 0.75) */
+  ratio: number;
+  trailing?: React.ReactNode;
+  gap?: number;
+  /** ancho máximo de cada celda en px */
+  maxCell?: number;
+  className?: string;
+}> = ({ items, ratio, trailing, gap = 16, maxCell = 560, className = '' }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      setBox((b) => (b && Math.abs(b.w - r.width) < 1 && Math.abs(b.h - r.height) < 1 ? b : { w: r.width, h: r.height }));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const n = items.length + (trailing ? 1 : 0);
+  const cols = n <= 3 ? Math.max(1, n) : n === 4 ? 2 : 3;
+  const rows = Math.max(1, Math.ceil(n / cols));
+  const trailingSpan = trailing ? cols - ((n - 1) % cols) : 1;
+  let cellW = 0;
+  let cellH = 0;
+  if (box) {
+    cellW = Math.floor(Math.min(maxCell, (box.w - gap * (cols - 1)) / cols, ((box.h - gap * (rows - 1)) / rows) * ratio));
+    cellH = Math.floor(cellW / ratio);
+  }
+
+  return (
+    <div ref={ref} className={`flex min-h-0 w-full flex-1 items-center justify-center ${className}`}>
+      {box && cellW > 0 && (
+        <div className="grid" style={{ gap, gridTemplateColumns: `repeat(${cols}, ${cellW}px)`, gridAutoRows: `${cellH}px` }}>
+          {items.map((item, i) => <div key={i} className="relative min-w-0">{item}</div>)}
+          {trailing && <div className="relative min-w-0" style={{ gridColumn: `span ${trailingSpan}` }}>{trailing}</div>}
+        </div>
+      )}
     </div>
   );
 };

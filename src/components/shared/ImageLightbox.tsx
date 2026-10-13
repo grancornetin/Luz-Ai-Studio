@@ -181,6 +181,8 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
   // elementos fixed (como la navegación). Montar en <body> lo evita del todo.
   return createPortal(
     <div
+      role="dialog"
+      aria-modal="true"
       className="fixed inset-0 z-[9999] bg-black md:bg-black/70 md:backdrop-blur-sm flex flex-col md:items-center md:justify-center md:p-8"
       style={{ height: '100dvh' }}
       onTouchStart={handleTouchStart}

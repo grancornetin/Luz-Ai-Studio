@@ -1,12 +1,17 @@
 // Listas: fotos grandes, guardado automático y siguiente paso.
+// Computador: la galería llena el lienzo (ajustada, sin recortar) y el panel
+// lateral trae el resumen, "Siguiente paso" y "Descargar todas".
+// Tableta: galería ajustada arriba, el resto debajo.
 import React, { useRef, useState } from 'react';
 import {
   AlertTriangle, Check, CalendarDays, Download, Loader2, Palette, Plus, Share, UserRound,
 } from 'lucide-react';
 import { FlowShell } from '../../../components/shared/flow/FlowShell';
 import {
-  Footnote, GroupedList, GroupedRow, InlineBanner, LargeTitle, PhotoLayout, PrimaryButton, SectionTitle, TextButton,
+  FitGallery, Footnote, GroupedList, GroupedRow, InlineBanner, LargeTitle, PhotoLayout, PrimaryButton, SectionTitle, TextButton,
 } from '../../../components/shared/flow/primitives';
+import { useFlowLayout, usePrecisePointer } from '../../../components/shared/flow/layout';
+import { ratioOf } from './GeneratingStep';
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -49,6 +54,9 @@ export const ResultsStep: React.FC<ResultsStepProps> = ({
   const [active, setActive] = useState(0);
   const [showDetail, setShowDetail] = useState(false);
   const cards = collage ? [...shots, collage] : shots;
+  const layout = useFlowLayout();
+  const compact = layout === 'compact';
+  const fine = usePrecisePointer();
 
   const onScroll = () => {
     const el = scrollerRef.current;
@@ -62,11 +70,11 @@ export const ResultsStep: React.FC<ResultsStepProps> = ({
     const retrying = retryingIndices.includes(i);
     const failed = url === 'error' && !retrying;
     return (
-      <div className={`relative ${aspect} overflow-hidden rounded-[16px] bg-[color:var(--fill)] ${retrying ? 'photo-sweep' : ''}`}>
+      <div className={`flow-card relative ${aspect} overflow-hidden rounded-[16px] ${layout === 'wide' ? 'bg-[color:var(--fill-pressed)]' : 'bg-[color:var(--fill)]'} ${retrying ? 'photo-sweep' : ''}`}>
         {url && url !== 'error' && !retrying && (
           <>
             <button type="button" onClick={() => onOpen(url)} className="block h-full w-full" aria-label={`Ver foto ${i + 1} en grande`}>
-              <img src={url} alt={`Foto ${i + 1} de ${productTitle}`} className="photo-reveal h-full w-full object-cover" style={{ animationDelay: `${i * 60}ms` }} />
+              <img src={url} alt={`Foto ${i + 1} de ${productTitle}`} className={`photo-reveal h-full w-full ${isCollage && !compact ? 'object-contain' : 'object-cover'}`} style={{ animationDelay: `${i * 60}ms` }} />
             </button>
             {isCollage && (
               <span className="absolute bottom-3 left-3 rounded-full bg-black/55 px-2.5 py-1 text-[12px] font-semibold tracking-normal text-white backdrop-blur-md">Collage</span>
@@ -75,7 +83,8 @@ export const ResultsStep: React.FC<ResultsStepProps> = ({
               type="button"
               onClick={() => onDownload(url, i)}
               aria-label={`Descargar foto ${i + 1}`}
-              className="flow-press absolute bottom-2.5 right-2.5 flex h-10 w-10 items-center justify-center rounded-full bg-white/80 text-[color:var(--text)] shadow-[0_1px_3px_rgba(0,0,0,0.18)] backdrop-blur-xl"
+              title={fine ? 'Descargar' : undefined}
+              className={`flow-press absolute bottom-2.5 right-2.5 flex ${fine && !compact ? 'flow-hover-reveal' : ''} h-10 w-10 items-center justify-center rounded-full bg-white/80 text-[color:var(--text)] shadow-[0_1px_3px_rgba(0,0,0,0.18)] backdrop-blur-xl`}
             >
               <Download size={18} strokeWidth={2.2} />
             </button>
@@ -94,14 +103,28 @@ export const ResultsStep: React.FC<ResultsStepProps> = ({
 
   const count = okCount === 1 ? '1 foto' : `${okCount} fotos`;
 
+  // Con mouse se descarga directo; en tableta se abre la hoja de compartir.
+  const saveLabel = compact ? 'Guardar en mi celular'
+    : fine ? (okCount === 1 ? 'Descargar foto' : 'Descargar todas')
+    : 'Guardar en mis fotos';
+  const fitted = (
+    <FitGallery
+      ratio={ratioOf(aspectClass)}
+      gap={layout === 'wide' ? 16 : 12}
+      items={shots.map((url, i) => <React.Fragment key={i}>{renderCard(url, i, 'h-full w-full')}</React.Fragment>)}
+      trailing={collage ? renderCard(collage, cards.length - 1, 'h-full w-full') : undefined}
+    />
+  );
+
   return (
     <FlowShell
       title="Listas"
       wide
+      aside={layout === 'wide' && cards.length > 0 ? fitted : undefined}
       trailing={<TextButton onClick={onDone} className="text-[17px]">Listo</TextButton>}
       actions={okCount > 0 ? (
-        <PrimaryButton onClick={onSaveToDevice} loading={isSavingToDevice} icon={<Share size={20} />}>
-          Guardar en mi celular
+        <PrimaryButton onClick={onSaveToDevice} loading={isSavingToDevice} icon={!compact && fine ? <Download size={20} /> : <Share size={20} />}>
+          {saveLabel}
         </PrimaryButton>
       ) : undefined}
     >
@@ -109,7 +132,11 @@ export const ResultsStep: React.FC<ResultsStepProps> = ({
         {okCount === 0 ? 'No pudimos crear tus fotos' : okCount === 1 ? 'Tu foto está lista' : 'Tus fotos están listas'}
       </LargeTitle>
 
-      <div className="mt-4">
+      {layout === 'regular' && cards.length > 0 && (
+        <div className="mt-4 flex h-[max(320px,calc(100dvh-560px))] flex-col">{fitted}</div>
+      )}
+
+      {compact && <div className="mt-4">
         {cards.length >= 2 ? (
           <>
             {/* Celular: carrusel, la siguiente foto asoma 28px. Escritorio: grilla. */}
@@ -140,7 +167,7 @@ export const ResultsStep: React.FC<ResultsStepProps> = ({
         ) : cards.length === 1 ? (
           <div className="mx-auto w-full max-w-[min(520px,calc(62dvh*0.75))]">{renderCard(cards[0], 0)}</div>
         ) : null}
-      </div>
+      </div>}
 
       <div className="mt-3 min-h-[18px]">
         {saveState === 'saved' && (

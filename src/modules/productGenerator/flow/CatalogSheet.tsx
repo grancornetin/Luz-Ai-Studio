@@ -11,12 +11,12 @@ interface CatalogSheetProps {
 }
 
 export const CatalogSheet: React.FC<CatalogSheetProps> = ({ open, products, onPick, onClose }) => (
-  <BottomSheet open={open} onClose={onClose} title="Elige un producto">
-    <div className="grid grid-cols-2 gap-x-3 gap-y-4 pb-2 md:grid-cols-3">
+  <BottomSheet open={open} onClose={onClose} title="Elige un producto" size="large">
+    <div className="grid grid-cols-2 gap-x-3 gap-y-4 pb-2 md:grid-cols-4 md:gap-x-4">
       {products.map((p) => {
         const cover = p.generatedImages?.find(Boolean) ?? p.baseImages?.find(Boolean);
         return (
-          <button key={p.id} type="button" onClick={() => onPick(p)} className="flow-press text-left">
+          <button key={p.id} type="button" onClick={() => onPick(p)} className="flow-press flow-card text-left">
             <span className="block aspect-[4/5] overflow-hidden rounded-[16px] bg-[color:var(--fill)]">
               {cover && <img src={cover} alt="" className="h-full w-full object-cover" loading="lazy" />}
             </span>

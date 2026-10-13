@@ -46,6 +46,18 @@ export function useImagePicker() {
     inputRef.current?.click();
   };
 
+  // Foto soltada sobre la ventana (computador): mismo consentimiento y compresión.
+  const fromFile = async (file: File, onPicked: OnPicked) => {
+    if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return;
+    callbackRef.current = onPicked;
+    if (hasConsented() || await hasRemoteConsent()) {
+      await process(file);
+    } else {
+      pendingFileRef.current = file;
+      setShowConsent(true);
+    }
+  };
+
   const element = (
     <>
       {showConsent && (
@@ -75,5 +87,5 @@ export function useImagePicker() {
     </>
   );
 
-  return { open, element, isLoading };
+  return { open, fromFile, element, isLoading };
 }

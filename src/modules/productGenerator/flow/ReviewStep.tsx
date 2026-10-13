@@ -8,9 +8,11 @@ import type { ProductGridType, ProductObjective } from '../productDirectorServic
 import { STYLE_OPTIONS, USE_OPTIONS, styleTitle } from './styleOptions';
 import { FlowShell } from '../../../components/shared/flow/FlowShell';
 import {
-  ActionCaption, BottomSheet, ChoiceList, FieldLabel, Footnote, GroupedList, GroupedRow, InlineBanner,
+  ActionCaption, BottomSheet, ChoiceList, FieldLabel, FitGallery, Footnote, GroupedList, GroupedRow, InlineBanner,
   LargeTitle, PrimaryButton, SegmentedControl, Switch, TextButton,
 } from '../../../components/shared/flow/primitives';
+import { useFlowLayout } from '../../../components/shared/flow/layout';
+import { PRODUCT_FLOW_STEPS } from './ProductStep';
 
 interface ReviewStepProps {
   wizard: WizardState;
@@ -27,6 +29,8 @@ interface ReviewStepProps {
   onCreate: () => void;
   error?: string | null;
   disabled?: boolean;
+  /** Solo para la vista previa de desarrollo. */
+  initialOptionsOpen?: boolean;
 }
 
 const QUALITY: { value: ModelId; label: string; hint: string }[] = [
@@ -40,11 +44,30 @@ const GRID_OPTIONS: { value: ProductGridType; label: string }[] = [
   { value: '3x3', label: '9' },
 ];
 
+const SummaryTile: React.FC<{ src?: string | null; kicker: string; title: string; onChange: () => void }> = ({ src, kicker, title, onChange }) => (
+  <div className="flow-card relative h-full w-full overflow-hidden rounded-[20px] bg-[color:var(--fill)] shadow-[0_1px_2px_rgba(15,15,18,0.06)]">
+    {src && <img src={src} alt="" className="h-full w-full object-cover" />}
+    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-b from-transparent to-black/55 px-4 pb-3.5 pt-14 text-white">
+      <p className="text-[13px] font-medium tracking-normal text-white/85">{kicker}</p>
+      <p className="truncate text-[17px] font-semibold leading-[22px]">{title}</p>
+    </div>
+    <button
+      type="button"
+      onClick={onChange}
+      aria-label={`Cambiar ${kicker.toLowerCase()}`}
+      className="flow-press absolute right-3 top-3 flex h-9 items-center rounded-full bg-white/85 px-3.5 text-[15px] font-semibold text-[color:var(--text)] shadow-[0_1px_3px_rgba(0,0,0,0.18)] backdrop-blur-xl"
+    >
+      Cambiar
+    </button>
+  </div>
+);
+
 export const ReviewStep: React.FC<ReviewStepProps> = ({
   wizard, finalCount, cost, creditsAvailable, isAdmin, modelId, onModelChange,
-  onChange, onEditProduct, onEditStyle, onBack, onCreate, error, disabled,
+  onChange, onEditProduct, onEditStyle, onBack, onCreate, error, disabled, initialOptionsOpen = false,
 }) => {
-  const [optionsOpen, setOptionsOpen] = useState(false);
+  const layout = useFlowLayout();
+  const [optionsOpen, setOptionsOpen] = useState(initialOptionsOpen);
   const hasRef = !!wizard.style.referenceImg;
   const isCollage = !hasRef && wizard.type.mode === 'grid';
   const styleImg = hasRef ? wizard.style.referenceImg! : STYLE_OPTIONS.find((s) => s.id === wizard.style.preset)?.img;
@@ -60,11 +83,26 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
     </span>
   );
 
+  // Tableta y computador: producto y estilo como dos fotos grandes.
+  const summaryTiles = (
+    <FitGallery
+      ratio={0.8}
+      gap={layout === 'wide' ? 20 : 16}
+      items={[
+        <SummaryTile key="p" src={wizard.product.slots[0]} kicker="Producto" title={wizard.product.title || 'Tu producto'} onChange={onEditProduct} />,
+        <SummaryTile key="s" src={styleImg} kicker="Estilo" title={hasRef ? 'Tu foto de inspiración' : styleTitle(wizard.style.preset)} onChange={onEditStyle} />,
+      ]}
+    />
+  );
+
   return (
     <FlowShell
       title="Todo listo"
       leading={{ kind: 'back', onPress: onBack }}
       progress={1}
+      steps={{ labels: PRODUCT_FLOW_STEPS, current: 2 }}
+      aside={layout === 'wide' ? summaryTiles : undefined}
+      onEnter={disabled ? undefined : onCreate}
       actions={
         <>
           <PrimaryButton onClick={onCreate} disabled={disabled}>{createLabel}</PrimaryButton>
@@ -81,25 +119,30 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
         </div>
       )}
 
-      <GroupedList className="mt-4">
-        <GroupedRow
-          inset={12}
-          leading={thumb(wizard.product.slots[0])}
-          title={wizard.product.title || 'Tu producto'}
-          subtitle="Producto"
-          trailing={<TextButton onClick={onEditProduct} className="-mr-2 text-[15px]">Cambiar</TextButton>}
-        />
-        <GroupedRow
-          inset={12}
-          last
-          leading={thumb(styleImg)}
-          title={hasRef ? 'Tu foto de inspiración' : styleTitle(wizard.style.preset)}
-          subtitle="Estilo"
-          trailing={<TextButton onClick={onEditStyle} className="-mr-2 text-[15px]">Cambiar</TextButton>}
-        />
-      </GroupedList>
+      {layout === 'compact' && (
+        <GroupedList className="mt-4">
+          <GroupedRow
+            inset={12}
+            leading={thumb(wizard.product.slots[0])}
+            title={wizard.product.title || 'Tu producto'}
+            subtitle="Producto"
+            trailing={<TextButton onClick={onEditProduct} className="-mr-2 text-[15px]">Cambiar</TextButton>}
+          />
+          <GroupedRow
+            inset={12}
+            last
+            leading={thumb(styleImg)}
+            title={hasRef ? 'Tu foto de inspiración' : styleTitle(wizard.style.preset)}
+            subtitle="Estilo"
+            trailing={<TextButton onClick={onEditStyle} className="-mr-2 text-[15px]">Cambiar</TextButton>}
+          />
+        </GroupedList>
+      )}
+      {layout === 'regular' && (
+        <div className="mt-5 flex h-[min(34dvh,400px)] flex-col">{summaryTiles}</div>
+      )}
 
-      <div className="mt-8">
+      <div className={layout === 'wide' ? 'mt-6' : 'mt-8'}>
         <FieldLabel>{isCollage ? '¿Cuántas fotos en el collage?' : '¿Cuántas fotos?'}</FieldLabel>
         {hasRef ? (
           <SegmentedControl
