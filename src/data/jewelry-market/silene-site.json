@@ -1,0 +1,106 @@
+{
+  "meta": {
+    "brand": "Silene",
+    "site": "https://silene.cl",
+    "consulted": "2026-10-22",
+    "platform": { "value": "Shopify", "evidence": "INFERIDO", "source": "https://www.silene.cl/products.json (feed Shopify), rutas /collections y /products" },
+    "note": "Texto leído con WebFetch (resumen automático). Las fotos no se pudieron ver. Ver CIERRE_MVP/investigacion/huecos-01.md",
+    "foundedYear": { "value": 2020, "evidence": "OBSERVADO", "source": "https://silene.cl/pages/quienes-somos" }
+  },
+  "categories": [
+    { "name": "Joyas de plata 925", "children": ["aros (pegados, argolla, ear cuff, piercing, bañados en oro)", "anillos", "collares (puntos de luz, con piedras, plata sola, cadenas)", "pulseras"], "productCount": 613, "evidence": "OBSERVADO", "source": "https://www.silene.cl/collections/ver-todo-plata-925" },
+    { "name": "Joyas bañadas (acero inoxidable con baño de oro 18K)", "children": ["aros", "anillos", "collares", "tobilleras", "aros hechos a mano", "Sensitive kids"], "evidence": "OBSERVADO", "source": "https://www.silene.cl (menú principal)" },
+    { "name": "Accesorios", "children": ["Joyeros (5 productos)", "Insumos"], "evidence": "OBSERVADO", "source": "https://www.silene.cl/collections/joyeros" },
+    { "name": "Ofertas", "productCount": 377, "evidence": "OBSERVADO", "source": "https://silene.cl/collections/ofertas-1" },
+    { "name": "Colecciones temáticas", "children": ["Amuletos", "Valentines / Be Romantic (151)", "Océano 2026", "Petit", "Sensitive kids", "Primavera", "Zodiac (31)", "New in (172)"], "evidence": "OBSERVADO", "source": "https://www.silene.cl; https://silene.cl/collections/valentines-day; https://silene.cl/collections/coleccion-zodiac; https://silene.cl/collections/new-in" },
+    { "name": "Regalos por presupuesto", "children": ["hasta $10.000", "hasta $15.000", "hasta $20.000", "hasta $30.000", "desde $30.000", "Regalos con sentido (176)"], "evidence": "OBSERVADO", "source": "https://silene.cl/collections/regalo-hasta-10-000; https://silene.cl/collections/regalos-con-sentido" }
+  ],
+  "navigationAxes": { "value": ["material", "tipo de pieza", "ocasión/presupuesto"], "evidence": "INFERIDO", "source": "menú principal del home" },
+  "collectionPageFeatures": { "value": { "sortOptions": ["más relevantes", "más vendidos", "A-Z", "Z-A", "precio", "fecha"], "filters": ["precio desde/hasta"], "collectionDescriptionText": false }, "evidence": "OBSERVADO", "source": "https://www.silene.cl/collections/ver-todo-plata-925" },
+  "priceRangesCLP": [
+    { "category": "Aros pegados acero bañado en oro", "min": 18320, "max": 18320, "listPrice": 22900, "note": "20% dcto sobre 22.900", "evidence": "OBSERVADO", "source": "https://www.silene.cl/products.json?limit=250" },
+    { "category": "Aros pegados plata 925", "min": 12720, "max": 19120, "evidence": "OBSERVADO", "source": "https://silene.cl/collections/new-in" },
+    { "category": "Aros argolla/huggie plata 925", "min": 15120, "max": 49900, "note": "max es precio lista", "evidence": "OBSERVADO", "source": "https://silene.cl/collections/new-in; products.json" },
+    { "category": "Aros piercing nariz", "min": 2800, "max": 3500, "evidence": "OBSERVADO", "source": "https://silene.cl/collections/regalo-hasta-10-000" },
+    { "category": "Ear cuff", "min": 6320, "max": 9760, "evidence": "OBSERVADO", "source": "https://silene.cl/collections/regalo-hasta-10-000" },
+    { "category": "Collares acero/bañado en oro", "min": 16900, "max": 19900, "evidence": "OBSERVADO", "source": "https://www.silene.cl/products.json?limit=250&page=3" },
+    { "category": "Collares plata 925", "min": 29900, "max": 79900, "note": "79.900 es el más caro visto (Be Romantic)", "evidence": "OBSERVADO", "source": "products.json p.3; https://silene.cl/collections/valentines-day" },
+    { "category": "Pulseras acero/bañado en oro", "min": 16900, "max": 21900, "evidence": "OBSERVADO", "source": "products.json p.3" },
+    { "category": "Pulseras plata 925", "min": 32900, "max": 49900, "evidence": "OBSERVADO", "source": "https://www.silene.cl/collections/ver-todo-plata-925" },
+    { "category": "Anillos ajustables plata 925", "min": 25990, "max": 38900, "evidence": "OBSERVADO", "source": "https://silene.cl/collections/regalos-con-sentido; ver-todo-plata-925" },
+    { "category": "Zodiac collar/anillo", "min": 14900, "max": 38900, "evidence": "OBSERVADO", "source": "https://silene.cl/collections/coleccion-zodiac" },
+    { "category": "Joyeros", "min": 11990, "max": 22900, "evidence": "OBSERVADO", "source": "https://www.silene.cl/collections/joyeros" },
+    { "category": "Caja y bolsa de regalo", "min": 1200, "max": 1500, "evidence": "OBSERVADO", "source": "https://silene.cl/collections/regalo-hasta-10-000" },
+    { "category": "Collar Medallón Personalizable", "min": 32990, "max": 45990, "note": "12 variantes, 13 fotos", "evidence": "OBSERVADO", "source": "https://www.silene.cl/products.json?limit=250" }
+  ],
+  "priceStructure": { "value": "Dos pisos: acero bañado en oro 16.900-22.900; plata 925 28.000-50.000. Ticket de entrada muy bajo para regalos.", "evidence": "INFERIDO", "source": "tabla priceRangesCLP" },
+  "photography": {
+    "photosPerProduct": { "value": "1 a 4 por ficha en feed; 2-3 en fichas leídas; 13 en el medallón personalizable", "evidence": "OBSERVADO", "source": "products.json; https://www.silene.cl/products/collar-aura-luz" },
+    "altText": { "value": "Solo nombre del producto", "evidence": "OBSERVADO", "source": "https://www.silene.cl/products/collar-aura-luz" },
+    "fileNames": { "value": "DSC00310, SILENE_ECOM_38 (cámara propia y serie ecom)", "evidence": "OBSERVADO", "source": "https://www.silene.cl/products/collar-aura-luz" },
+    "background": { "value": null, "evidence": "NO_VISTO", "source": "ver huecos-01.md" },
+    "light": { "value": null, "evidence": "NO_VISTO", "source": "ver huecos-01.md" },
+    "shotTypes": { "value": null, "evidence": "NO_VISTO", "source": "ver huecos-01.md" },
+    "typicalShotTypesForCategory": { "value": ["catálogo fondo liso", "detalle primer plano", "en cuerpo con modelo"], "evidence": "HIPOTESIS", "source": "conocimiento general, no comprobado en Silene" }
+  },
+  "productPageStructure": {
+    "title": { "value": "tipo de pieza + forma/motivo + nombre propio o material (ej. 'Aros argolla huggie aqua petit')", "evidence": "OBSERVADO", "source": "https://www.silene.cl/products/aros-argolla-huggie-aqua" },
+    "description": { "value": "1-2 frases cortas con sugerencia de uso (solo, en capas, uso diario o look especial)", "evidence": "OBSERVADO", "source": "https://www.silene.cl/products/collar-aura-luz" },
+    "measures": { "value": ["peso (por par en aros)", "tamaño/largo", "largo de cadena ajustable (ej. 40 y 45 cm)", "dije en mm"], "evidence": "OBSERVADO", "source": "https://www.silene.cl/products/collar-aura-luz; products.json p.3 (15 fichas)" },
+    "materials": { "value": "'Plata 925 libre de níquel', 'hipoalergénico'", "evidence": "OBSERVADO", "source": "https://www.silene.cl/products/collar-aura-luz" },
+    "care": { "value": "No va en la ficha; página aparte enlazada desde el pie", "evidence": "OBSERVADO", "source": "https://www.silene.cl/products/aros-argolla-huggie-aqua" },
+    "pricing": { "value": "Precio habitual + precio de oferta + insignia 'Oferta' / '20% DCTO'", "evidence": "OBSERVADO", "source": "https://www.silene.cl/collections/ver-todo-plata-925" },
+    "cta": { "value": ["Agregar al carrito", "Pagar pedido", "Seguir comprando", "selector de cantidad"], "evidence": "OBSERVADO", "source": "https://www.silene.cl/products/collar-aura-luz" },
+    "urgency": { "value": "'¡Compra ahora, solo quedan 7!' (convive con etiqueta Agotado)", "evidence": "OBSERVADO", "source": "https://www.silene.cl/products/collar-aura-luz" },
+    "reviewsWidget": { "value": "existe, sin contenido visible", "evidence": "OBSERVADO", "source": "https://www.silene.cl/products/collar-aura-luz" },
+    "relatedProducts": { "value": "no visibles", "evidence": "OBSERVADO", "source": "https://www.silene.cl/products/collar-aura-luz" },
+    "seoTitle": { "value": "'Nombre del producto – Silene.cl'; meta descripción no vista", "evidence": "OBSERVADO", "source": "https://www.silene.cl/products/collar-aura-luz" }
+  },
+  "policies": {
+    "freeShippingThresholdCLP": { "value": 70000, "evidence": "OBSERVADO", "source": "https://www.silene.cl (cinta superior)" },
+    "shipping": { "value": "RM: delivery privado; regiones: Blueexpress con días hábiles extra; fecha informada al pagar; costo bajo 70.000 se calcula al pagar", "evidence": "OBSERVADO", "source": "https://silene.cl/policies/shipping-policy; https://silene.cl/blogs/news" },
+    "returns": { "value": "15 días desde recepción, sin uso y con embalaje; solicitud por Reversso; cliente paga envío de devolución; reembolso máx. 72 h", "evidence": "OBSERVADO", "source": "https://www.silene.cl/policies/refund-policy" },
+    "warranty": { "value": "30 días para fallas: reparación, cambio o devolución; no cubre daño por uso", "evidence": "OBSERVADO", "source": "https://www.silene.cl/policies/refund-policy" }
+  },
+  "trustMessages": [
+    { "text": "Plata 925 de alta calidad (cinta en portada)", "evidence": "OBSERVADO", "source": "https://www.silene.cl" },
+    { "text": "Libre de níquel / hipoalergénico en fichas", "evidence": "OBSERVADO", "source": "https://www.silene.cl/products/collar-aura-luz" },
+    { "text": "92,5% plata pura explicado en FAQ", "evidence": "OBSERVADO", "source": "https://silene.cl/blogs/news" },
+    { "text": "Boleta de regalo llega solo al correo del comprador", "evidence": "OBSERVADO", "source": "https://silene.cl/blogs/news" },
+    { "text": "Guía de cuidado y guía de talla de anillo (método con regla)", "evidence": "OBSERVADO", "source": "https://silene.cl/pages/como-cuidar-tus-joyas-silene; https://silene.cl/pages/tabla-anillo" },
+    { "text": "'Acompaña a miles de mujeres en todo Chile' y equipo con nombres", "evidence": "OBSERVADO", "source": "https://silene.cl/pages/quienes-somos" },
+    { "text": "Pagos Amex, Diners, Mastercard, Visa; WhatsApp y correo", "evidence": "OBSERVADO", "source": "https://www.silene.cl" }
+  ],
+  "packaging": {
+    "promise": { "value": "'packaging cuidado para regalo'", "evidence": "OBSERVADO", "source": "https://www.silene.cl (La experiencia Silene)" },
+    "paidItems": { "value": "Caja y bolsa de regalo 1.200-1.500; joyeros de terciopelo 11.990-22.900", "evidence": "OBSERVADO", "source": "regalo-hasta-10-000; joyeros" },
+    "isUpsell": { "value": true, "evidence": "INFERIDO", "source": "se vende como producto separado" },
+    "photos": { "value": null, "evidence": "NO_VISTO", "source": "ver huecos-01.md" }
+  },
+  "salesClosing": {
+    "discounts": { "value": "20% la norma, 25% joyero, 47-57% en liquidaciones de collares; 377 productos en Ofertas", "evidence": "OBSERVADO", "source": "https://silene.cl/collections/ofertas-1; regalo-hasta-10-000" },
+    "permanentDiscountPositioning": { "value": true, "evidence": "INFERIDO", "source": "377 productos con precio tachado" },
+    "giftByBudget": { "value": true, "evidence": "OBSERVADO", "source": "menú Regalos" },
+    "bestSellers": { "value": "bloque 'Los más vendidos de la semana'", "evidence": "OBSERVADO", "source": "https://www.silene.cl" },
+    "coupons": { "value": "se ingresan antes de pagar", "evidence": "OBSERVADO", "source": "https://silene.cl/blogs/news" }
+  },
+  "occasions": {
+    "seen": { "value": ["Valentines/Be Romantic", "Zodiac", "Amuletos", "Primavera", "Océano 2026", "regalos por presupuesto"], "evidence": "OBSERVADO", "source": "menú principal" },
+    "navidadDiaDeLaMadre": { "value": null, "evidence": "NO_VISTO", "source": "ver huecos-01.md" }
+  },
+  "caution": { "value": "Casi todos los productos aparecen 'Agotado' en la lectura; no se pudo confirmar si es real", "evidence": "OBSERVADO", "source": "ver-todo-plata-925; regalos-con-sentido" },
+  "appliesToZeroStart": [
+    "Ejes material / tipo / regalo por presupuesto, en versión mini (INFERIDO)",
+    "Ficha: título, 1-2 frases de uso, Medidas, Materiales (OBSERVADO)",
+    "Caja/bolsa de regalo como upsell barato (OBSERVADO)",
+    "Política clara de cambios y garantía 30 días (OBSERVADO)",
+    "Guía de cuidado y de talla en páginas aparte (OBSERVADO)"
+  ],
+  "doesNotApplyToZeroStart": [
+    "Escala de 600+ productos y menú de 8+ colecciones (INFERIDO)",
+    "Descuento permanente del 20% y liquidaciones del 50% (INFERIDO)",
+    "Prueba social 'miles de mujeres' (OBSERVADO en Silene, no replicable)",
+    "SEO por volumen de colecciones; ella parte sin tráfico (HIPOTESIS)",
+    "Carencias de Silene: fichas con 1-2 fotos, sin cuidado ni reseñas visibles (OBSERVADO)"
+  ]
+}

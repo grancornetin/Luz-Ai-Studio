@@ -1,0 +1,46 @@
+{
+  "meta": {"competitor": "Silene", "handle": "@silenejoyas", "consulted_at": "2026-10-22", "method": "WebFetch/WebSearch publico, sin login", "status": "parcial"},
+  "instagram": {
+    "url": "https://www.instagram.com/silenejoyas/",
+    "followers": {"value": 102000, "evidence": "OBSERVADO", "source": "https://www.instagram.com/silenejoyas/"},
+    "following": {"value": 3610, "evidence": "OBSERVADO", "source": "https://www.instagram.com/silenejoyas/"},
+    "verified": {"value": true, "evidence": "OBSERVADO", "source": "https://www.instagram.com/silenejoyas/"},
+    "total_posts": {"value": null, "evidence": "NO_VISIBLE", "source": "https://www.instagram.com/silenejoyas/"},
+    "bio": {"value": ["Joyas de Plata 925 y dorados", "Envios a todo Chile", "Escribenos al DM o WhatsApp", "Compra en nuestra web (silene.cl)"], "evidence": "OBSERVADO", "source": "https://www.instagram.com/silenejoyas/"},
+    "highlights": {"value": {"count": 4, "titles": ["Clientes"], "content_seen": false}, "evidence": "OBSERVADO", "source": "https://www.instagram.com/silenejoyas/"},
+    "visible_grid": {"value": {"window": "2026-10-01 a 2026-10-22", "pieces": 12, "carousel": 1, "clip": 1, "photo": 2, "video": 7, "tagged_by_other_account": 1, "tagged_account": "@pamecore_"}, "evidence": "OBSERVADO", "source": "https://www.instagram.com/silenejoyas/"},
+    "posting_frequency": {"value": "aprox. una pieza cada 2 dias en octubre 2026", "evidence": "INFERIDO", "source": "12 piezas con fecha en la cuadricula; sin conteo oficial"},
+    "format_mix": {"value": "predomina video; foto y carrusel minoritarios", "evidence": "INFERIDO", "source": "cuadricula visible de 12 piezas"},
+    "captions_hooks_cta_dm_handling": {"value": null, "evidence": "NO_VISIBLE", "source": "la pagina publica solo entrega texto alternativo de imagenes"}
+  },
+  "website": {
+    "url": "https://silene.cl/",
+    "value_proposition": {"value": "Joyas delicadas para el dia a dia y momentos especiales; presentacion lista para regalar", "evidence": "OBSERVADO", "source": "https://silene.cl/"},
+    "materials": {"value": ["plata 925", "acero dorado / bañado 18K"], "evidence": "OBSERVADO", "source": "https://silene.cl/"},
+    "collections": {"value": ["Amuletos", "Be Romantic", "Oceano", "Petit", "Sensitive Kids", "Spring Season", "Zodiac", "New In"], "evidence": "OBSERVADO", "source": "https://silene.cl/"},
+    "gift_sections": {"value": "Regalos por rango de precio desde $10.000 hasta mas de $30.000", "evidence": "OBSERVADO", "source": "https://silene.cl/"},
+    "promotions": {"value": "descuentos 20/25/32% y seccion Ofertas; envio gratis sobre $70.000", "evidence": "OBSERVADO", "source": "https://silene.cl/"},
+    "sales_channels": {"value": ["web", "DM Instagram", "WhatsApp", "correo"], "evidence": "OBSERVADO", "source": "https://silene.cl/ y bio de Instagram"},
+    "reviews_on_site": {"value": null, "evidence": "NO_VISIBLE", "source": "https://silene.cl/"}
+  },
+  "brand": {
+    "founded": {"value": 2020, "evidence": "OBSERVADO", "source": "https://silene.cl/pages/quienes-somos"},
+    "team": {"value": "diseno/identidad visual, una cara oficial de la marca y asistente de ecommerce; partio con 2 personas", "evidence": "OBSERVADO", "source": "https://silene.cl/pages/quienes-somos"},
+    "tone": {"value": "cercano, emotivo, elegante", "evidence": "OBSERVADO", "source": "https://silene.cl/pages/quienes-somos"},
+    "brand_face_is_key": {"value": true, "evidence": "INFERIDO", "source": "cara oficial declarada en quienes-somos"}
+  },
+  "other_networks": {
+    "tiktok": {"url": "https://www.tiktok.com/@silenejoyas", "exists": {"value": true, "evidence": "OBSERVADO", "source": "enlace en pie de https://silene.cl/"}, "data": {"value": null, "evidence": "NO_VISIBLE", "source": "pagina no cargo"}},
+    "facebook": {"url": "https://www.facebook.com/silene.joyas", "exists": {"value": true, "evidence": "OBSERVADO", "source": "enlace en pie de https://silene.cl/"}, "data": {"value": null, "evidence": "NO_VISIBLE", "source": "solo titulo accesible"}},
+    "youtube": {"value": null, "evidence": "NO_ENCONTRADO", "source": "no enlazado en la web"},
+    "press_coverage": {"value": null, "evidence": "NO_ENCONTRADO", "source": "busquedas web 2026-10-22 sin resultados"}
+  },
+  "hypotheses": [
+    {"text": "Destacados Clientes funcionan como prueba social", "evidence": "HIPOTESIS", "source": "solo se vio el titulo"},
+    {"text": "Etiquetas y colaboraciones alimentan alcance", "evidence": "HIPOTESIS", "source": "1 pieza de @pamecore_ en la cuadricula"},
+    {"text": "Ocasiones se trabajan via Regalos y Be Romantic", "evidence": "HIPOTESIS", "source": "estructura de la web; feed no verificado"}
+  ],
+  "applies_from_zero": ["bio en 4 lineas (material, envios, como comprar, link)", "3-4 piezas semanales, mayoria video corto", "cara o voz recurrente", "tres vias de compra (web, DM, WhatsApp)", "destacado de clientas como prueba social", "regalos por rango de precio y colecciones tematicas como banco de ideas"],
+  "does_not_apply": ["102K seguidores y verificacion", "catalogo amplio y equipo de 4 o mas", "descuentos 20-32% sin calcular margen", "contenido de clientas masivo", "formulas de reels no verificadas"],
+  "gaps_file": "CIERRE_MVP/investigacion/huecos-02.md"
+}

@@ -1,0 +1,187 @@
+{
+  "version": 1,
+  "generadoEn": "2026-10-22",
+  "zonaHoraria": "America/Santiago",
+  "nota": "evidence: OBSERVADO = visto en fuente con URL; INFERIDO = calculado por calendario a partir de una regla observada; HIPOTESIS = sin fuente, validar antes de usar.",
+  "eventos": [
+    {
+      "id": "cyberday-2026",
+      "nombre": "CyberDay Chile 2026 (YA PASO: lunes 1 al miercoles 3 de junio)",
+      "fechaISO": "2026-06-01",
+      "fechaFinISO": "2026-06-03",
+      "tipo": "ecommerce",
+      "relevancia": "baja_ya_paso",
+      "fuente": "https://www.elmostrador.cl/datos-utiles/2026/05/31/cyberday-2026-confirman-la-fecha-exacta-para-comprar-en-chile-y-el-truco-para-evitar-estafas/ ; https://www.pauta.cl/dato-en-pauta/2026/05/25/cyberday-2026-ya-tiene-fecha-cuando-comienza-el-evento-de-descuentos-y-que-categorias-concentraran-las-ofertas.html",
+      "verificadoEn": "2026-10-22",
+      "evidence": "OBSERVADO"
+    },
+    {
+      "id": "cyberday-2027",
+      "nombre": "CyberDay Chile 2027 (fecha por confirmar)",
+      "fechaISO": "2027-06-01",
+      "tipo": "ecommerce",
+      "relevancia": "media",
+      "fuente": "Sin anuncio. Radio Agricultura indica que tradicionalmente es a fines de mayo o inicios de junio: https://www.radioagricultura.cl/noticias/nacional/cyberday-2026-cual-es-la-fecha-oficial-del-evento_20260512/",
+      "verificadoEn": "2026-10-22",
+      "evidence": "HIPOTESIS",
+      "nota": "La fechaISO es solo un marcador aproximado; no usar como fecha real."
+    },
+    {
+      "id": "cybermonday-chile-2026",
+      "nombre": "CyberMonday Chile 2026 (YA PASO: lunes 5 al miercoles 7 de octubre)",
+      "fechaISO": "2026-10-05",
+      "fechaFinISO": "2026-10-07",
+      "tipo": "ecommerce",
+      "relevancia": "baja_ya_paso",
+      "fuente": "https://www.pauta.cl/dato-en-pauta/2026/10/05/cuando-termina-el-cybermonday-2026-esta-es-la-fecha-y-hora-de-cierre.html",
+      "verificadoEn": "2026-10-22",
+      "evidence": "OBSERVADO"
+    },
+    {
+      "id": "black-friday-2026",
+      "nombre": "Black Friday Chile 2026 (viernes 27 al lunes 30 de noviembre, desde las 00:00 del viernes)",
+      "fechaISO": "2026-11-27",
+      "fechaFinISO": "2026-11-30",
+      "tipo": "ecommerce",
+      "relevancia": "alta",
+      "fuente": "https://www.meganoticias.cl/dato-util/534087-black-friday-2026-en-chile-confirman-fecha-del-evento-en-linea-que-promete-revolucionar-la-navidad-dtcf01-18-10-2026.html ; https://www.radioagricultura.cl/noticias/nacional/black-friday-chile-2026-ya-tiene-fecha-revisa-cuando-comienza-y-como-participar_20261014/ (organizadores del sitio blackfriday.cl; cada comercio define su horario)",
+      "verificadoEn": "2026-10-22",
+      "evidence": "OBSERVADO"
+    },
+    {
+      "id": "cyber-monday-internacional-2026",
+      "nombre": "Cyber Monday internacional (lunes despues de Black Friday; coincide con el cierre del Black Friday chileno)",
+      "fechaISO": "2026-11-30",
+      "tipo": "ecommerce",
+      "relevancia": "media",
+      "fuente": "Calculado a partir del cierre del Black Friday Chile (lunes 30 nov). Ver fuente de black-friday-2026.",
+      "verificadoEn": "2026-10-22",
+      "evidence": "INFERIDO",
+      "nota": "No confundir con el CyberMonday Chile de la CCS, que fue el 5-7 de octubre."
+    },
+    {
+      "id": "corte-despacho-regiones",
+      "nombre": "Sugerencia: ultimo dia para pedidos con despacho a regiones antes de Navidad",
+      "fechaISO": "2026-12-14",
+      "tipo": "logistica",
+      "relevancia": "alta",
+      "fuente": "Referencia de 2022: RM 2-3 dias, regiones 4-6 dias habiles, semana mas cargada 12-18 dic: https://www.radioagricultura.cl/tendencias/lo-que-debes-tener-presente-para-realizar-tus-compras-navidenas-online-sin-arriesgarte_20221211/",
+      "verificadoEn": "2026-10-22",
+      "evidence": "HIPOTESIS",
+      "nota": "No hay fecha oficial de corte. Ajustar al courier real de la emprendedora."
+    },
+    {
+      "id": "corte-despacho-rm",
+      "nombre": "Sugerencia: ultimo dia para pedidos con despacho en Region Metropolitana antes de Navidad",
+      "fechaISO": "2026-12-18",
+      "tipo": "logistica",
+      "relevancia": "alta",
+      "fuente": "Misma referencia 2022 (2-3 dias en RM).",
+      "verificadoEn": "2026-10-22",
+      "evidence": "HIPOTESIS"
+    },
+    {
+      "id": "nochebuena-2026",
+      "nombre": "Nochebuena (jueves)",
+      "fechaISO": "2026-12-24",
+      "tipo": "festividad",
+      "relevancia": "alta",
+      "fuente": "Fecha fija del calendario (24 dic). Dia de la semana calculado.",
+      "verificadoEn": "2026-10-22",
+      "evidence": "INFERIDO"
+    },
+    {
+      "id": "navidad-2026",
+      "nombre": "Navidad (viernes, feriado)",
+      "fechaISO": "2026-12-25",
+      "tipo": "festividad",
+      "relevancia": "alta",
+      "fuente": "Fecha fija; dia de la semana calculado. Una guia de feriados 2027 muestra Navidad 2027 en sabado, coherente con viernes en 2026: https://hacecuentas.com/feriados-chile-2027",
+      "verificadoEn": "2026-10-22",
+      "evidence": "INFERIDO"
+    },
+    {
+      "id": "ano-nuevo-2027",
+      "nombre": "Año Nuevo 2027 (viernes 1 de enero, feriado)",
+      "fechaISO": "2027-01-01",
+      "tipo": "festividad",
+      "relevancia": "media",
+      "fuente": "https://hacecuentas.com/feriados-chile-2027 ; https://www.jibble.io/es?p=399451",
+      "verificadoEn": "2026-10-22",
+      "evidence": "OBSERVADO"
+    },
+    {
+      "id": "san-valentin-2027",
+      "nombre": "San Valentin / Dia de los Enamorados (domingo 14 de febrero de 2027)",
+      "fechaISO": "2027-02-14",
+      "tipo": "regalo",
+      "relevancia": "alta",
+      "fuente": "Fecha fija 14 feb; dia de la semana calculado. El Registro Civil reporta un pico de ceremonias cada 14 feb: https://www.cnnchile.com/pais/alta-demanda-por-san-valentin-544-parejas-celebraran-su-matrimonio-o-acuerdo-de-union-civil-este-14-de-febrero/",
+      "verificadoEn": "2026-10-22",
+      "evidence": "INFERIDO"
+    },
+    {
+      "id": "dia-madre-2027",
+      "nombre": "Dia de la Madre 2027 (comercial: domingo 9 de mayo; fecha oficial fija: 10 de mayo, lunes)",
+      "fechaISO": "2027-05-09",
+      "tipo": "regalo",
+      "relevancia": "alta",
+      "fuente": "Regla observada (oficial 10 de mayo, Decreto 1.110 de 1976; celebracion el segundo domingo; en 2026 fue domingo 10 de mayo): https://www.elmostrador.cl/datos-utiles/2026/04/04/dia-de-la-madre-en-chile/ . Dia de la semana 2027 calculado.",
+      "verificadoEn": "2026-10-22",
+      "evidence": "INFERIDO"
+    },
+    {
+      "id": "dia-padre-2027",
+      "nombre": "Dia del Padre 2027 (comercial: domingo 20 de junio; oficial 19 de junio, sabado)",
+      "fechaISO": "2027-06-20",
+      "tipo": "regalo",
+      "relevancia": "media",
+      "fuente": "Regla observada en 2026 (oficial 19 de junio, comercial tercer domingo = 21 de junio de 2026): https://www.radioagricultura.cl/noticias/cuando-es-el-dia-del-padre-2026-en-chile-revisa-la-fecha-oficial-y-la-celebracion-comercial_20260609/ . 2027 calculado.",
+      "verificadoEn": "2026-10-22",
+      "evidence": "INFERIDO"
+    },
+    {
+      "id": "dia-amistad-2027",
+      "nombre": "Dia de la Amistad (20 de julio)",
+      "fechaISO": "2027-07-20",
+      "tipo": "regalo",
+      "relevancia": "baja",
+      "fuente": "Unica fuente: https://www.calendariochile.com/fecha/1945/dia-de-la-amistad (sitio con inconsistencias; sin fuente oficial)",
+      "verificadoEn": "2026-10-22",
+      "evidence": "HIPOTESIS"
+    },
+    {
+      "id": "graduaciones-licenciaturas",
+      "nombre": "Temporada de graduaciones y licenciaturas (fin de año escolar y universitario)",
+      "fechaISO": "2026-11-23",
+      "fechaFinISO": "2026-12-20",
+      "tipo": "temporada",
+      "relevancia": "media",
+      "fuente": "Sin fuente verificada. Rango estimado desde el cierre habitual del año escolar.",
+      "verificadoEn": "2026-10-22",
+      "evidence": "HIPOTESIS"
+    },
+    {
+      "id": "temporada-matrimonios",
+      "nombre": "Temporada de matrimonios: sube desde septiembre; enero y febrero concentran mas ceremonias",
+      "fechaISO": "2026-09-01",
+      "fechaFinISO": "2027-03-31",
+      "tipo": "temporada",
+      "relevancia": "media",
+      "fuente": "https://www.latercera.com/nacional/noticia/matrimonio-y-auc-en-cifras-como-fue-el-si-acepto-en-chile-los-ultimos-anos/7QZLTWL4HVC33PYIAH7EH2VEGY/ ; cifras ene-mar 2026 (febrero 7.725, enero 7.109, marzo 6.441): https://www.emol.com/noticias/Nacional/2026/07/08/1204974/matrimonio-cifras-chile-meses-regiones.html",
+      "verificadoEn": "2026-10-22",
+      "evidence": "OBSERVADO"
+    },
+    {
+      "id": "vacaciones-verano-2027",
+      "nombre": "Vacaciones escolares de verano (calendario 2027 aun no publicado; en 2026 las clases partieron el 2 de marzo)",
+      "fechaISO": "2026-12-20",
+      "fechaFinISO": "2027-03-01",
+      "tipo": "temporada",
+      "relevancia": "baja",
+      "fuente": "Calendario 2026: https://www.radioagricultura.cl/noticias/dato-practico/mineduc-confirma-el-calendario-escolar-2026_20260128/ . Fechas 2027 sin publicar.",
+      "verificadoEn": "2026-10-22",
+      "evidence": "HIPOTESIS"
+    }
+  ]
+}

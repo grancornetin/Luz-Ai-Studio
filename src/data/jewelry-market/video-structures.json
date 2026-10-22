@@ -1,0 +1,211 @@
+{
+  "meta": {
+    "fecha": "2026-10-22",
+    "advertencia": "Son ESTRUCTURAS abstractas. No se copia video, texto, musica ni personas. Los planos son INFERIDOS (no se pudo ver ningun video cuadro a cuadro); lo OBSERVADO es duracion, texto del anuncio, formato y fechas en Meta Ad Library, y las descripciones de blogs de marketing citados.",
+    "escala_riesgo_infidelidad": "bajo = el producto casi no cambia entre cuadros; medio = detalles finos pueden deformarse; alto = manos/piel/texto de packaging/movimiento complejo"
+  },
+  "structures": [
+    {
+      "id": "loop_brillo_macro",
+      "nombre": "Loop de brillo (macro del producto)",
+      "objetivo": "Detener el scroll y mostrar calidad/brillo de una pieza",
+      "duracion_s": [6, 8],
+      "planos": [
+        "0-2 s: macro de la pieza ya brillando (gancho visual, sin intro)",
+        "2-5 s: movimiento lento de camara o de luz (reflejo recorre la joya)",
+        "5-7 s: plano un poco mas abierto, la pieza completa en el fondo limpio",
+        "Opcional: ultimo cuadro igual al primero para que haga loop"
+      ],
+      "texto_en_pantalla": "Ninguno o una linea corta con nombre/material (ej. plata 925)",
+      "necesita": ["foto limpia del producto en alta resolucion", "fondo neutro o tela"],
+      "riesgo_infidelidad_ia": "bajo-medio: el producto es el protagonista y casi no se mueve; riesgo en cadenas finas y grabados",
+      "imagen_a_video_un_clip": "SI: una foto -> un clip de 5-8 s con movimiento de luz/camara",
+      "evidence": "OBSERVADO (duraciones 6, 7 y 14 s de reels de marca con copy de 'detalle y brillo' en Ad Library) + INFERIDO (planos)",
+      "source": [
+        "https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=CL&q=Silene.cl&search_type=keyword_exact_phrase&media_type=all (ids 822345340871751, 1004893932454327, 1004981859040091; vistos 2026-10-22)",
+        "https://branvas.com/blogs/news/instagram-reels-ideas-jewelry-brand (idea de close-ups con luz y trending audio, bajo 15 s)"
+      ]
+    },
+    {
+      "id": "me_lo_puse_uso_cotidiano",
+      "nombre": "Me lo puse / uso cotidiano (el look del dia)",
+      "objetivo": "Mostrar que la joya se usa a diario, no solo en eventos",
+      "duracion_s": [8, 12],
+      "planos": [
+        "0-2 s: plano de la joya puesta (cuello/oreja/mano) con gancho de texto",
+        "2-5 s: segundo plano del mismo look (otro angulo)",
+        "5-8 s: tercer plano en contexto cotidiano (cafe, escritorio, salida)",
+        "8-12 s: cierre con producto solo + CTA al sitio"
+      ],
+      "texto_en_pantalla": "Frase de uso cotidiano ('un jueves cualquiera') + nombre del sitio",
+      "necesita": ["foto del producto puesto (modelo propia o de banco)", "una escena de apoyo opcional"],
+      "riesgo_infidelidad_ia": "medio-alto: piel, cuello y mano pueden deformarse; la joya puede cambiar de forma al moverse la modelo",
+      "imagen_a_video_un_clip": "PARCIAL: mejor 2-3 clips de 3-4 s unidos que un solo clip largo",
+      "evidence": "OBSERVADO (reel de 12 s con texto 'no necesitas un evento especial... un cafe, una reunion', CTA Comprar) + INFERIDO (planos)",
+      "source": [
+        "Meta Ad Library CL, id 1633451071543785, visto 2026-10-22",
+        "https://branvas.com/blogs/news/instagram-reels-ideas-jewelry-brand (idea 'Get Ready With Me')"
+      ]
+    },
+    {
+      "id": "unboxing_packaging_reveal",
+      "nombre": "Unboxing / packaging con revelacion",
+      "objetivo": "Convertir: mostrar el regalo y el cuidado del envio",
+      "duracion_s": [10, 20],
+      "planos": [
+        "0-2 s: caja o bolsa cerrada, plano cenital con luz natural",
+        "2-6 s: se desata cinta / se abre papel de seda / se levanta la tapa",
+        "6-10 s: primer plano de la joya dentro de la caja captando luz",
+        "10-15 s: texto precio/nombre + CTA"
+      ],
+      "texto_en_pantalla": "Nombre del producto y precio (segun blog); 'caja de regalo incluida'",
+      "necesita": ["foto de la caja/bolsa cerrada", "foto de la caja abierta con la joya", "mano opcional"],
+      "riesgo_infidelidad_ia": "alto: manos abriendo cajas, logos/texto del packaging y cinta se deforman; sin mano baja a medio",
+      "imagen_a_video_un_clip": "PARCIAL: dos fotos (cerrada/abierta) y transicion; la apertura animada con mano es poco confiable",
+      "evidence": "OBSERVADO (Silene promociona caja y bolsa de regalo en un anuncio activo; Silene.cl destaca packaging cuidado; LUI JOYAS ofrece packaging regalo) + OBSERVADO en blog (secuencia de unboxing descrita) + INFERIDO (tiempos)",
+      "source": [
+        "Meta Ad Library CL, id 1809406660217688 (Silene, caja y bolsa), id 1392433178973696 (LUI JOYAS), visto 2026-10-22",
+        "https://silene.cl (WebFetch 2026-10-22)",
+        "https://branvas.com/blogs/news/instagram-reels-ideas-jewelry-brand"
+      ]
+    },
+    {
+      "id": "asmr_cierre_empaque",
+      "nombre": "ASMR de empaque / cierre de pedido",
+      "objetivo": "Atraer con sonido y satisfaccion; reforzar confianza del emprendimiento",
+      "duracion_s": [10, 25],
+      "planos": [
+        "0-2 s: manos doblando papel o pegando sticker (primer plano, sonido nitido)",
+        "2-8 s: cinta, bolsita, tarjeta de agradecimiento, cierre de caja",
+        "8-12 s: caja lista junto a la joya, sin texto o con una linea"
+      ],
+      "texto_en_pantalla": "Ninguno; sonido natural sin musica (segun blog)",
+      "necesita": ["grabacion real del empaque (con audio)", "manos"],
+      "riesgo_infidelidad_ia": "muy alto: depende de sonido y manos reales; generar con IA no es recomendable",
+      "imagen_a_video_un_clip": "NO (se graba; la app puede guiar el guion)",
+      "evidence": "OBSERVADO en blog (descripcion de 'Packaging Close-Up ASMR', menos de 30 s, sonido natural) + INFERIDO",
+      "source": [
+        "https://branvas.com/blogs/news/instagram-reels-ideas-jewelry-brand",
+        "https://www.nationaljeweler.com/articles/14532-beyond-unboxing-creative-reveals-to-drive-reach-and-engagement (sonidos de taller/ASMR, segun resumen de busqueda)"
+      ]
+    },
+    {
+      "id": "tres_formas_o_tres_razones",
+      "nombre": "3 formas de usar / 3 razones",
+      "objetivo": "Educar y generar guardados; dar razones de compra",
+      "duracion_s": [15, 25],
+      "planos": [
+        "0-2 s: titulo grande '3 formas de usar...' sobre la pieza",
+        "2-8 s: forma 1 (ej. sola) con etiqueta",
+        "8-14 s: forma 2 (ej. en capas con otra pieza)",
+        "14-20 s: forma 3 (ej. de dia vs noche) + CTA"
+      ],
+      "texto_en_pantalla": "Titulo + etiqueta por cada forma",
+      "necesita": ["3 fotos de la pieza en 3 contextos o combinaciones", "modelo o torso en al menos una"],
+      "riesgo_infidelidad_ia": "medio-alto: combinar piezas en capas exige consistencia del producto entre tres imagenes",
+      "imagen_a_video_un_clip": "PARCIAL: 3 clips cortos de 3-5 s (uno por forma), con texto sobreimpuesto por la app",
+      "evidence": "OBSERVADO (Silene usa el formato lista en un anuncio estatico '3 razones para usar joyas', id 1809406660217688) + OBSERVADO en blog ('3 Ways to Style', cada segmento menos de 10 s) + INFERIDO (adaptacion a video)",
+      "source": [
+        "Meta Ad Library CL, id 1809406660217688, visto 2026-10-22",
+        "https://branvas.com/blogs/news/instagram-reels-ideas-jewelry-brand"
+      ]
+    },
+    {
+      "id": "escala_con_mano",
+      "nombre": "Escala con mano / dedo",
+      "objetivo": "Mostrar tamano real y delicadeza (aros, anillos, cadenas)",
+      "duracion_s": [6, 10],
+      "planos": [
+        "0-2 s: la pieza en la palma o en el dedo, plano cerrado",
+        "2-5 s: giro suave de la mano para captar brillo",
+        "5-8 s: pieza junto a un objeto de referencia (ej. moneda) opcional"
+      ],
+      "texto_en_pantalla": "Medida en mm si aplica",
+      "necesita": ["foto de la pieza en mano", "buena luz"],
+      "riesgo_infidelidad_ia": "alto: dedos y proporciones se deforman, y la escala es justo el dato que no puede fallar",
+      "imagen_a_video_un_clip": "PARCIAL: clip corto con movimiento minimo; revisar proporciones antes de publicar",
+      "evidence": "HIPOTESIS (no se observo un anuncio especifico con este formato en la muestra; pedido de captura en huecos-05.md) + referencia generica de blog sobre close-ups",
+      "source": [
+        "https://branvas.com/blogs/news/instagram-reels-ideas-jewelry-brand (close-ups)"
+      ]
+    },
+    {
+      "id": "oferta_urgencia_texto",
+      "nombre": "Oferta con urgencia (3x2, % off, Black)",
+      "objetivo": "Convertir con una promo clara y limitada",
+      "duracion_s": [10, 33],
+      "planos": [
+        "0-2 s: texto grande con la oferta ('3x2 solo esta semana' / 'hasta 60%')",
+        "2-6 s: 3-4 piezas mostradas rapido (cadena, pulsera, aros)",
+        "6-10 s: prueba social breve ('+12 mil clientes') y CTA"
+      ],
+      "texto_en_pantalla": "Oferta, plazo, categoria incluida, CTA",
+      "necesita": ["3-4 fotos de producto limpias", "reglas de la oferta definidas por la duena"],
+      "riesgo_infidelidad_ia": "bajo: es mayormente composicion de fotos reales con texto",
+      "imagen_a_video_un_clip": "SI para el fondo; mejor armar con fotos fijas, transiciones y texto de la app (no depende de IA generativa)",
+      "evidence": "OBSERVADO (Silverice 3x2 en video de 33 s; Mis Joyas 'Black hasta 60%' en video de 10 s; Isabel recomienda 2x1 en 37 s)",
+      "source": [
+        "Meta Ad Library CL ids 1715718073092655, 1115369304408395, 2196068867881989, visto 2026-10-22"
+      ]
+    },
+    {
+      "id": "significado_amuleto_historia",
+      "nombre": "Joya con significado / historia",
+      "objetivo": "Diferenciarse del precio: venderla como regalo con sentido o causa",
+      "duracion_s": [20, 40],
+      "planos": [
+        "0-3 s: frase gancho sobre el significado ('no todas las joyas dicen algo...')",
+        "3-12 s: la pieza y cada detalle/simbolo, uno por plano",
+        "12-25 s: beneficios en lista corta (material, ajustable, caja)",
+        "25-35 s: oferta o CTA"
+      ],
+      "texto_en_pantalla": "Frase de significado + lista de 2-3 beneficios",
+      "necesita": ["fotos de cada detalle/amuleto", "texto de significado escrito por la duena"],
+      "riesgo_infidelidad_ia": "medio: detalles pequenos (amuletos) pueden cambiar; recomendable fotos reales por plano",
+      "imagen_a_video_un_clip": "PARCIAL: clips de 3-5 s por detalle; el relato va en texto/voz",
+      "evidence": "OBSERVADO (Isabel recomienda 37 s; Boaz 'compra con causa' 22 s; Bendito Amor 'joyas con significado' en imagen; Boaz zodiaco)",
+      "source": [
+        "Meta Ad Library CL ids 2196068867881989, 2819303145111372, 2178780766381935, 2626693501106541, visto 2026-10-22"
+      ]
+    },
+    {
+      "id": "ugc_creadora_codigo",
+      "nombre": "Creadora o clienta + codigo",
+      "objetivo": "Prueba social y conversion con codigo propio de la creadora",
+      "duracion_s": [20, 100],
+      "planos": [
+        "0-3 s: la creadora hablando a camara con el gancho ('queria mostrarles estas joyitas')",
+        "3-40 s: piezas puestas, comentarios de diseno y calidad",
+        "final: codigo de descuento y pregunta de favorita"
+      ],
+      "texto_en_pantalla": "Codigo y marca etiquetada",
+      "necesita": ["una persona real que participe (clienta, amiga, micro-creadora)", "pieza enviada"],
+      "riesgo_infidelidad_ia": "no aplica: no se debe generar con IA (autenticidad, transparencia)",
+      "imagen_a_video_un_clip": "NO. La app puede dar guion y checklist para pedirle el video a una clienta",
+      "evidence": "OBSERVADO (Silene: 6 anuncios activos de creadoras/clientas, de 7 s a 1:43; uno con codigo de 15%)",
+      "source": [
+        "Meta Ad Library CL ids 1554217159787547, 1628610305345914, 1795576724963674, 1593655982253581, 2312379329574394, visto 2026-10-22"
+      ]
+    },
+    {
+      "id": "transicion_flat_lay",
+      "nombre": "Transicion flat lay (piezas que aparecen)",
+      "objetivo": "Mostrar variedad de una coleccion de forma limpia",
+      "duracion_s": [8, 15],
+      "planos": [
+        "Plano cenital fijo sobre fondo neutro",
+        "Cada 1-2 s cambia la pieza o su posicion (corte rapido al ritmo)",
+        "Ultimo plano: todas juntas + CTA"
+      ],
+      "texto_en_pantalla": "Nombre de coleccion",
+      "necesita": ["fotos cenitales del mismo fondo", "varias piezas"],
+      "riesgo_infidelidad_ia": "bajo: se hace con fotos fijas y cortes; no necesita video generativo",
+      "imagen_a_video_un_clip": "No necesario: montaje de fotos con ritmo",
+      "evidence": "OBSERVADO en blog (tripode, mover la joya entre clips, fondo neutro) + INFERIDO",
+      "source": [
+        "https://branvas.com/blogs/news/instagram-reels-ideas-jewelry-brand"
+      ]
+    }
+  ],
+  "regla_de_oro_ia": "Para joyeria, la foto real del producto manda. La IA puede mover luz, camara y fondo, pero hay que revisar el producto cuadro a cuadro antes de publicar (forma, numero de piedras, cierres, grabados)."
+}

@@ -1,0 +1,643 @@
+{
+  "meta": {
+    "observation_date": "2026-10-22",
+    "method": "WebSearch + WebFetch públicos, sin login",
+    "evidence_legend": {
+      "OBSERVADO": "visto en la URL citada",
+      "INFERIDO": "deducción con razón explícita",
+      "HIPOTESIS": "sin base directa",
+      "HUECO": "no visto"
+    },
+    "warning": "Ninguna fuente prueba cómo crecieron estas marcas; los campos growth_* son INFERIDOS salvo cuando la prensa lo declara.",
+    "scope": "Piloto automático para joyería - Luz IA Studio"
+  },
+  "brands": [
+    {
+      "id": "mestiza-joyeria",
+      "name": "Mestiza Joyería",
+      "country": "Chile",
+      "role": "modelo principal",
+      "profile_url": {
+        "value": "https://www.instagram.com/mestizajoyeria/",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/mestizajoyeria/"
+      },
+      "followers": {
+        "value": 9350,
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/mestizajoyeria/ (2026-10-22)"
+      },
+      "following": {
+        "value": 1434,
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/mestizajoyeria/"
+      },
+      "category_materials": {
+        "value": "plata 950 y picoyo de araucaria, hecho a mano",
+        "evidence": "OBSERVADO",
+        "source": "https://radio.uchile.cl/?p=781363"
+      },
+      "price_range_clp": {
+        "value": null,
+        "evidence": "HUECO",
+        "source": null
+      },
+      "visual_identity": {
+        "value": "no observada (perfil devolvió solo texto); tono de bio cálido y artesanal",
+        "evidence": "HUECO",
+        "source": "https://www.instagram.com/mestizajoyeria/"
+      },
+      "formats": {
+        "value": "carruseles predominantes (9 de 12), 1 clip, 3 fotos en las últimas 12 publicaciones",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/mestizajoyeria/"
+      },
+      "themes": {
+        "value": [
+          "ferias (feriaCLUB, Finde Citylab)",
+          "Londres London Craft Week",
+          "sello UNESCO 2016",
+          "activa desde 2011"
+        ],
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/mestizajoyeria/"
+      },
+      "frequency": {
+        "value": "12 publicaciones visibles entre 2025-10-28 y 2026-10-11, ~1 al mes",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/mestizajoyeria/"
+      },
+      "sales_channels": {
+        "value": "ferias presenciales + Instagram; web propia no verificada",
+        "evidence": "INFERIDO",
+        "source": "bio sin link a tienda; mestizajoyeria.cl no respondió"
+      },
+      "differentiator": {
+        "value": "material endémico chileno (picoyo) y pertenencia al colectivo Almas Andinas",
+        "evidence": "OBSERVADO",
+        "source": "https://radio.uchile.cl/?p=781363"
+      },
+      "growth_claim": {
+        "value": "crecimiento no documentado; activa desde 2011 y apoyada en ferias/colectivo",
+        "evidence": "INFERIDO",
+        "source": "bio y destacadas; ninguna fuente explica cómo creció"
+      },
+      "copy_structure": [
+        "frase de marca con material + origen",
+        "destacadas de credibilidad (ferias, sellos)",
+        "ritmo bajo sostenido apoyado en cuentas aliadas",
+        "colectivo/feria que presta audiencia"
+      ],
+      "gaps": [
+        "precios",
+        "fotos y paleta",
+        "web propia",
+        "métricas de publicaciones"
+      ]
+    },
+    {
+      "id": "an-charmante",
+      "name": "AN Charmante",
+      "country": "Chile (fundadora venezolana)",
+      "role": "modelo: reels + cursos",
+      "profile_url": {
+        "value": "https://www.instagram.com/ancharmante/",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/ancharmante/"
+      },
+      "followers": {
+        "value": 7333,
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/ancharmante/ (2026-10-22)"
+      },
+      "following": {
+        "value": 7534,
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/ancharmante/"
+      },
+      "category_materials": {
+        "value": "joyas y accesorios propios (arcos/diademas, pulseras, collares) + cursos y kits de técnicas",
+        "evidence": "OBSERVADO",
+        "source": "https://www.eldinamo.cl/empren-d/2020/06/02/an-charmante-empren-d-chile-rancagua-emprendimiento-sueno/ y destacadas IG"
+      },
+      "price_range_clp": {
+        "value": null,
+        "evidence": "HUECO",
+        "source": null
+      },
+      "visual_identity": {
+        "value": "no observada; bio \"Joyas Encantadoras\"",
+        "evidence": "HUECO",
+        "source": "https://www.instagram.com/ancharmante/"
+      },
+      "formats": {
+        "value": "solo clips/reels en las últimas 12 publicaciones",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/ancharmante/"
+      },
+      "themes": {
+        "value": [
+          "arcos",
+          "eventos y frases",
+          "kits de técnicas",
+          "diademas",
+          "pulseras",
+          "collares"
+        ],
+        "evidence": "OBSERVADO",
+        "source": "destacadas https://www.instagram.com/ancharmante/"
+      },
+      "frequency": {
+        "value": "12 clips entre 2025-08-26 y 2026-10-05; 11 de ellos entre ago y dic 2025 (ráfagas y pausas)",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/ancharmante/"
+      },
+      "sales_channels": {
+        "value": "Instagram y correo (2020); hoy enlace acesse.one (destino no abierto)",
+        "evidence": "OBSERVADO",
+        "source": "El Dínamo 2020-06-02; bio IG"
+      },
+      "differentiator": {
+        "value": "vende joya terminada y enseña a hacerla (cursos, talleres, kits)",
+        "evidence": "OBSERVADO",
+        "source": "El Dínamo 2020-06-02"
+      },
+      "growth_claim": {
+        "value": "primeras ventas en la cafetería del hospital donde trabajaba; pandemia dio tiempo para nuevos diseños",
+        "evidence": "OBSERVADO",
+        "source": "El Dínamo 2020-06-02"
+      },
+      "growth_pattern_hint": {
+        "value": "sigue 7.534 cuentas y tiene 7.333 seguidores: patrón de seguir-para-que-te-sigan; audiencia posiblemente de otras hacedoras",
+        "evidence": "HIPOTESIS",
+        "source": "https://www.instagram.com/ancharmante/"
+      },
+      "copy_structure": [
+        "un formato único repetible (reel de proceso)",
+        "línea educativa/kit para monetizar a quien quiere hacerlo",
+        "primeras ventas en círculo cercano"
+      ],
+      "gaps": [
+        "precios",
+        "destino del link",
+        "paleta y estilo de foto",
+        "pies de foto"
+      ]
+    },
+    {
+      "id": "divas-joyeria",
+      "name": "Divas Joyería",
+      "country": "Chile",
+      "role": "modelo de venta mayorista por WhatsApp",
+      "profile_url": {
+        "value": "https://www.instagram.com/divasjoyeria108/",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/divasjoyeria108/"
+      },
+      "followers": {
+        "value": 9140,
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/divasjoyeria108/ (2026-10-22)"
+      },
+      "following": {
+        "value": 229,
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/divasjoyeria108/"
+      },
+      "category_materials": {
+        "value": "joyas en acero quirúrgico al por mayor, Estación Central",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/divasjoyeria108/"
+      },
+      "price_range_clp": {
+        "value": "destacada \"Aros valor:600\" (unidad y moneda no indicadas)",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/divasjoyeria108/"
+      },
+      "visual_identity": {
+        "value": "no observada; nombre genérico, sin frase de marca",
+        "evidence": "INFERIDO",
+        "source": "bio IG"
+      },
+      "formats": {
+        "value": "solo clips/reels",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/divasjoyeria108/"
+      },
+      "themes": {
+        "value": [
+          "anillos nuevos",
+          "cristal",
+          "aros de tope",
+          "pulseras",
+          "para caballeros",
+          "pastilleros",
+          "relojes"
+        ],
+        "evidence": "OBSERVADO",
+        "source": "destacadas IG"
+      },
+      "frequency": {
+        "value": "12 clips entre 2024-06-04 y 2026-06-13, ~0,5 al mes",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/divasjoyeria108/"
+      },
+      "sales_channels": {
+        "value": "WhatsApp en bio, envíos a todo Chile, local en Estación Central; sin web",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/divasjoyeria108/"
+      },
+      "differentiator": {
+        "value": "precio y catálogo por categoría en destacadas; cierre directo por WhatsApp",
+        "evidence": "INFERIDO",
+        "source": "destacadas y bio"
+      },
+      "growth_claim": {
+        "value": "proporción seguidores/seguidos sana (9.140 / 229); causa del crecimiento desconocida",
+        "evidence": "INFERIDO",
+        "source": "https://www.instagram.com/divasjoyeria108/"
+      },
+      "copy_structure": [
+        "precio como información visible",
+        "un solo canal de cierre claro",
+        "catálogo en destacadas por tipo"
+      ],
+      "gaps": [
+        "cómo ganó audiencia",
+        "paleta y foto",
+        "audiencia es revendedora, no clienta final (INFERIDO)"
+      ]
+    },
+    {
+      "id": "la-catalana-joyas",
+      "name": "La Catalana Joyas",
+      "country": "Chile",
+      "role": "modelo: plata 950 + piedras chilenas",
+      "profile_url": {
+        "value": "https://www.instagram.com/la_catalana/",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/la_catalana/"
+      },
+      "followers": {
+        "value": 18100,
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/la_catalana/ (2026-10-22)"
+      },
+      "following": {
+        "value": 1735,
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/la_catalana/"
+      },
+      "category_materials": {
+        "value": "plata 950 hecha a mano, piedras semipreciosas chilenas; anillos y pulseras visibles en la web",
+        "evidence": "OBSERVADO",
+        "source": "https://www.lacatalanajoyas.cl y https://genias.cl/blogs/blog/hecho-en-chile-los-emprendimientos-de-joyerias-que-tienes-que-conocer"
+      },
+      "price_range_clp": {
+        "value": null,
+        "evidence": "HUECO",
+        "source": null
+      },
+      "visual_identity": {
+        "value": "no observada",
+        "evidence": "HUECO",
+        "source": "https://www.instagram.com/la_catalana/"
+      },
+      "formats": {
+        "value": "carruseles predominantes; 1 foto, 1 video, 1 reel entre las últimas 12",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/la_catalana/"
+      },
+      "themes": {
+        "value": [
+          "piezas de plata",
+          "piedras chilenas"
+        ],
+        "evidence": "INFERIDO",
+        "source": "genias.cl; pies de foto no vistos"
+      },
+      "frequency": {
+        "value": "12 publicaciones entre 2025-12 y 2026-10, ~1,2 al mes",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/la_catalana/"
+      },
+      "sales_channels": {
+        "value": "WhatsApp e Instagram mientras la tienda web está en renovación",
+        "evidence": "OBSERVADO",
+        "source": "https://www.lacatalanajoyas.cl"
+      },
+      "differentiator": {
+        "value": "foco en piedras chilenas estudiadas por la fundadora",
+        "evidence": "OBSERVADO",
+        "source": "genias.cl"
+      },
+      "growth_claim": {
+        "value": "crecimiento no documentado",
+        "evidence": "HUECO",
+        "source": null
+      },
+      "copy_structure": [
+        "carrusel como formato principal",
+        "bio con acción: pedidos y preguntas",
+        "plan B de venta por WhatsApp",
+        "material como identidad"
+      ],
+      "errors_visible": [
+        "tienda online en renovación sin fecha"
+      ],
+      "gaps": [
+        "precios",
+        "año de fundación",
+        "paleta y foto"
+      ]
+    },
+    {
+      "id": "threads-peru",
+      "name": "Threads",
+      "country": "Perú (Chiclayo)",
+      "role": "modelo: bisutería/acero con personalización",
+      "profile_url": {
+        "value": "https://www.instagram.com/threadscix/",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/threadscix/"
+      },
+      "followers": {
+        "value": 11800,
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/threadscix/ (2026-10-22)"
+      },
+      "following": {
+        "value": 582,
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/threadscix/"
+      },
+      "followers_history": {
+        "value": "~2.000 máximo en 2019; ~11.000 en jun 2022; 11.800 en oct 2026",
+        "evidence": "OBSERVADO",
+        "source": "https://infomercado.pe/threads-el-hobbie-que-se-convirtio-en-un-exitoso-emprendimiento-que-ahora-llega-a-todo-el-peru-020622-vd/ + IG"
+      },
+      "category_materials": {
+        "value": "pulseras, collares, aretes, chokers, ear cuffs de hilo o acero inoxidable bañado en oro; perlas de río y piedras naturales",
+        "evidence": "OBSERVADO",
+        "source": "Infomercado 2022-06-02 + bio IG"
+      },
+      "price_range_clp": {
+        "value": null,
+        "evidence": "HUECO",
+        "source": null
+      },
+      "visual_identity": {
+        "value": "no observada; bio \"Modelos únicos en tendencia\"",
+        "evidence": "HUECO",
+        "source": "https://www.instagram.com/threadscix/"
+      },
+      "formats": {
+        "value": "carruseles y clips; varios carruseles compartidos desde cuenta \"El Bazar\"",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/threadscix/"
+      },
+      "themes": {
+        "value": [
+          "oro 18k",
+          "mamá",
+          "familia",
+          "novedades"
+        ],
+        "evidence": "OBSERVADO",
+        "source": "destacadas IG"
+      },
+      "frequency": {
+        "value": "9 publicaciones entre 2026-09-18 y 2026-10-14, ~2 por semana en ese mes",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/threadscix/"
+      },
+      "sales_channels": {
+        "value": "Instagram, Facebook, WhatsApp, link beacons.page/threads (403 al abrir), envíos a todo Perú",
+        "evidence": "OBSERVADO",
+        "source": "Infomercado 2022 + bio IG"
+      },
+      "differentiator": {
+        "value": "personalización con nota o dulce y limpieza de materiales con bicarbonato antes de empacar",
+        "evidence": "OBSERVADO",
+        "source": "Infomercado 2022-06-02"
+      },
+      "growth_claim": {
+        "value": "creó redes en 2017; visibilidad en 2018 con piezas de apoyo al Mundial; pandemia para innovar",
+        "evidence": "OBSERVADO",
+        "source": "Infomercado 2022-06-02"
+      },
+      "growth_pattern_hint": {
+        "value": "casi sin crecimiento 2022-2026 (11K a 11,8K)",
+        "evidence": "INFERIDO",
+        "source": "comparación de dos fechas"
+      },
+      "el_bazar_account": {
+        "value": "cuenta aliada o tienda que republica; no verificada",
+        "evidence": "HIPOTESIS",
+        "source": "https://www.instagram.com/threadscix/"
+      },
+      "copy_structure": [
+        "detalle de empaque/experiencia",
+        "cuenta aliada que republica",
+        "personalización como oferta",
+        "link-in-bio único"
+      ],
+      "errors_visible": [
+        "techo de audiencia",
+        "muchos reposts de terceros"
+      ],
+      "gaps": [
+        "precios actuales",
+        "destino del beacons",
+        "paleta y foto"
+      ]
+    },
+    {
+      "id": "victoria-oddo",
+      "name": "Victoria Oddo",
+      "country": "Chile",
+      "role": "techo alto; no parte de cero",
+      "profile_url": {
+        "value": "https://www.instagram.com/victoriaoddo/",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/victoriaoddo/"
+      },
+      "site_url": {
+        "value": "https://www.victoriaoddo.com",
+        "evidence": "OBSERVADO",
+        "source": "https://www.victoriaoddo.com"
+      },
+      "followers": {
+        "value": 25400,
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/victoriaoddo/ (2026-10-22)"
+      },
+      "following": {
+        "value": 7077,
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/victoriaoddo/"
+      },
+      "category_materials": {
+        "value": "joyería de autor: aros, collares, colgantes, pulseras, broches, novias, hombres, tocados en arriendo; materiales no especificados",
+        "evidence": "OBSERVADO",
+        "source": "https://www.victoriaoddo.com"
+      },
+      "price_range_clp": {
+        "value": "59.000 a 380.000 CLP (ejemplos: broche 59.000; aros 138.000; collar 150.000-380.000)",
+        "evidence": "OBSERVADO",
+        "source": "https://www.victoriaoddo.com"
+      },
+      "visual_identity": {
+        "value": "tono audaz y lúdico, mayúsculas y exclamaciones; \"fina pero intensa, grandiosa, exagerada\"; paleta no observada",
+        "evidence": "OBSERVADO",
+        "source": "victoriaoddo.com y genias.cl"
+      },
+      "formats": {
+        "value": "mezcla de carruseles, clips y fotos",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/victoriaoddo/"
+      },
+      "themes": {
+        "value": [
+          "collares",
+          "aros",
+          "prendedores",
+          "taller",
+          "inspiración",
+          "Wonderfriends",
+          "La Clé",
+          "R+ODDO"
+        ],
+        "evidence": "OBSERVADO",
+        "source": "destacadas IG"
+      },
+      "frequency": {
+        "value": "12 publicaciones entre 2025-02-10 y 2026-10-19, ~1 al mes",
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/victoriaoddo/"
+      },
+      "sales_channels": {
+        "value": "tienda física (Alonso de Córdova), web propia, WhatsApp",
+        "evidence": "OBSERVADO",
+        "source": "victoriaoddo.com + bio IG"
+      },
+      "differentiator": {
+        "value": "colecciones con nombre y personajes, línea nupcial y arriendo de tocados",
+        "evidence": "OBSERVADO",
+        "source": "victoriaoddo.com"
+      },
+      "growth_claim": {
+        "value": "marca de diseñadora con taller propio; origen del crecimiento no documentado",
+        "evidence": "HUECO",
+        "source": null
+      },
+      "copy_structure": [
+        "colecciones con nombre",
+        "destacadas de taller e inspiración",
+        "hashtag propio",
+        "línea para ocasiones"
+      ],
+      "gaps": [
+        "fotos y paleta",
+        "antigüedad de la cuenta",
+        "métricas"
+      ]
+    }
+  ],
+  "out_of_range_references": [
+    {
+      "name": "Tatuara",
+      "country": "Chile",
+      "followers": {
+        "value": 91500,
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/tatuara_/ (2026-10-22)"
+      },
+      "note": "plata 925 de uso diario, Providencia, envíos todo Chile, mayormente reels; fuera de alcance"
+    },
+    {
+      "name": "Delacons Joyas",
+      "country": "Chile",
+      "followers": {
+        "value": "122K+ (cifra de prensa)",
+        "evidence": "OBSERVADO",
+        "source": "https://www.emol.com/noticias/Economia/2025/02/24/1158165/empresa-chilena-emprendedora-joyeria-fundadora.html (2025-02-24)"
+      },
+      "note": "plata 950, inversión inicial 500.000 CLP, financiamiento propio; Emol no detalla estrategia de contenido; fuera de alcance"
+    },
+    {
+      "name": "Love It",
+      "country": "Chile",
+      "followers": {
+        "value": 273000,
+        "evidence": "OBSERVADO",
+        "source": "https://www.instagram.com/loveit.chile/ (2026-10-22)"
+      },
+      "note": "plata 925, joyas de protección energética; web loveit.cl redirigía a un dominio ajeno el 2026-10-22 (no seguido); fuera de alcance"
+    }
+  ],
+  "patterns": [
+    {
+      "text": "material o territorio como identidad",
+      "evidence": "INFERIDO",
+      "source": "bios de Mestiza, La Catalana, Threads"
+    },
+    {
+      "text": "destacadas como vitrina y credibilidad",
+      "evidence": "OBSERVADO",
+      "source": "destacadas de 5 de 6 perfiles"
+    },
+    {
+      "text": "ritmo bajo constante (~1 al mes en feed visible)",
+      "evidence": "OBSERVADO",
+      "source": "fechas de publicaciones; el feed visible excluye historias"
+    },
+    {
+      "text": "acción de cierre clara en bio (WhatsApp o link)",
+      "evidence": "OBSERVADO",
+      "source": "bios"
+    },
+    {
+      "text": "carruseles y reels, poca foto suelta",
+      "evidence": "OBSERVADO",
+      "source": "últimas 12 publicaciones"
+    },
+    {
+      "text": "aliados que prestan audiencia (ferias, colectivos, cuentas que republican)",
+      "evidence": "INFERIDO",
+      "source": "Mestiza, Threads"
+    },
+    {
+      "text": "primeras ventas en círculo cercano",
+      "evidence": "OBSERVADO",
+      "source": "El Dínamo 2020; La Cámara 2022"
+    }
+  ],
+  "common_errors": [
+    {
+      "text": "techo de audiencia (Threads 11K a 11,8K en 4 años)",
+      "evidence": "OBSERVADO",
+      "source": "Infomercado 2022 + IG"
+    },
+    {
+      "text": "seguir masivamente para ganar seguidores",
+      "evidence": "INFERIDO",
+      "source": "AN Charmante 7.534 seguidos; Victoria Oddo 7.077"
+    },
+    {
+      "text": "ráfagas y silencios",
+      "evidence": "OBSERVADO",
+      "source": "AN Charmante"
+    },
+    {
+      "text": "tienda online caída sin fecha",
+      "evidence": "OBSERVADO",
+      "source": "lacatalanajoyas.cl"
+    },
+    {
+      "text": "marca sin identidad",
+      "evidence": "INFERIDO",
+      "source": "Divas Joyería"
+    }
+  ]
+}

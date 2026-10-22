@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "generadoEn": "2026-10-22",
+  "evidence": "HIPOTESIS",
+  "advertencia": "No se pudo medir el volumen real de cada hashtag (las busquedas no entregan conteos y Instagram los muestra solo dentro de la app). El tamano (nicho/medio/grande) es una estimacion por tipo de termino. La app debe pedir a la usuaria que verifique cada hashtag en la busqueda de Instagram/TikTok (conteo de publicaciones y que los resultados recientes sean de joyas) antes de usarlo, y retirar los que muestren contenido ajeno.",
+  "como_verificar": [
+    "Buscar el hashtag en Instagram y abrir la pestana de publicaciones recientes.",
+    "Descartar si mas de 3 de las 9 primeras publicaciones no tienen relacion con joyas.",
+    "Anotar el conteo de publicaciones: bajo 50 mil = nicho, 50 mil a 500 mil = medio, sobre 500 mil = grande (umbrales propuestos, no oficiales)."
+  ],
+  "mezcla_recomendada": "3 nicho + 2 medio + 1 grande por publicacion, entre 5 y 8 en total. Evidencia de cantidad optima: no verificada; HIPOTESIS.",
+  "categorias": {
+    "aros": {
+      "nicho": ["#arosdeplatachile", "#arosminimalistaschile", "#arosargollachile", "#arosparaelrostro", "#arosdetemporada"],
+      "medio": ["#aroschile", "#arosdemoda", "#arosminimalistas"],
+      "grande": ["#aros", "#earrings"]
+    },
+    "collares": {
+      "nicho": ["#collaresdelicadoschile", "#collaresminimalistas", "#collaresparaelcuello", "#collardeplata"],
+      "medio": ["#collareschile", "#collaresdemoda", "#cadenasdeplata"],
+      "grande": ["#collares", "#necklace"]
+    },
+    "anillos": {
+      "nicho": ["#anillosdeplatachile", "#anillosminimalistas", "#anillosapilables", "#tallaanillo"],
+      "medio": ["#anilloschile", "#anillosdemoda"],
+      "grande": ["#anillos", "#rings"]
+    },
+    "pulseras": {
+      "nicho": ["#pulserasdeplata", "#pulserasdelicadas", "#pulserasapilables"],
+      "medio": ["#pulserachile", "#pulserasdemoda"],
+      "grande": ["#pulseras", "#bracelet"]
+    },
+    "plata_925": {
+      "nicho": ["#plata925chile", "#joyasdeplata925", "#platachilena", "#cuidadodelaplata"],
+      "medio": ["#plata925", "#joyasdeplata"],
+      "grande": ["#silverjewelry", "#sterlingsilver"]
+    },
+    "regalos": {
+      "nicho": ["#regalosdenavidadchile", "#regalosparamama", "#regalosparaella", "#regalosoriginaleschile", "#ideasderegalojoyas"],
+      "medio": ["#regalosdenavidad", "#ideasderegalo", "#regalosoriginales"],
+      "grande": ["#regalos", "#navidad"]
+    },
+    "chile": {
+      "nicho": ["#emprendedorasdechile", "#joyeriachilena", "#emprendimientochileno", "#marcaschilenas", "#joyasenchile"],
+      "medio": ["#emprendimientochile", "#moda_chile", "#modachilena"],
+      "grande": ["#chile", "#santiagodechile"]
+    },
+    "evergreen_joyeria": {
+      "nicho": ["#joyeriaindependiente", "#joyasartesanales", "#hechoamano"],
+      "medio": ["#joyeria", "#joyasdemoda", "#accesorios"],
+      "grande": ["#jewelry", "#fashion"]
+    }
+  },
+  "usar_con_cuidado": [
+    "#hipoalergenico (solo si material confirmado y demostrable)",
+    "#oro (solo si es oro; para bano usar 'bano de oro' u otra descripcion confirmada)",
+    "#sorteo (solo si realmente hay sorteo y se cumplen las bases)"
+  ]
+}
