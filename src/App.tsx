@@ -39,6 +39,7 @@ const LazyFallback = (
 // Servicios y Contexto
 import { dbService } from './services/dbService';
 import { AuthProvider, useAuth } from './modules/auth/AuthContext';
+import { usePilotAccess } from './modules/piloto/usePilotAccess';
 import { ModelSelectionProvider } from './contexts/ModelSelectionContext';
 import AuthModal from './modules/auth/components/AuthModal';
 import OnboardingWizard from './modules/auth/components/OnboardingWizard';
@@ -57,6 +58,7 @@ const PlannerV3Week = lazy(() => import('./modules/planner/v3/PlannerV3Week'));
 const PlannerV3Wizard = lazy(() => import('./modules/planner/v3/PlannerV3Wizard'));
 const PlannerV3Closing = lazy(() => import('./modules/planner/v3/PlannerV3Closing'));
 const BrandProfilesModule = lazy(() => import('./modules/brandProfiles/BrandProfilesModule'));
+const PilotoModule = lazy(() => import('./modules/piloto/PilotoModule'));
 
 const PLAN_STYLES: Record<string, { label: string; className: string }> = {
   free:    { label: 'Free',    className: 'bg-slate-100 text-slate-500' },
@@ -205,6 +207,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
   const { profile, credits, isAdmin, signOut } = useAuth();
   const { unreadCount } = useNotifications();
   const planStyle = PLAN_STYLES[credits.plan] || PLAN_STYLES.free;
+  const hasPilot = usePilotAccess();
   const isActive = (path: string) => location.pathname === path || (path !== '/' && location.pathname.startsWith(path));
 
   const navLink = (path: string, label: string, icon: string) => (
@@ -260,6 +263,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
         <div className="flex-1 overflow-y-auto px-6 space-y-6 pb-4">
           <div className="space-y-1">
             {navLink('/dashboard', 'Inicio', 'fa-house')}
+            {hasPilot && navLink('/mi-negocio', 'Mi negocio', 'fa-gem')}
             {notificationsLink()}
             {navLink('/historial', 'Mis creaciones', 'fa-clock-rotate-left')}
           </div>
@@ -460,6 +464,7 @@ const AppContent: React.FC = () => {
                   <Route path="/projects"        element={<Navigate to="/planner" replace />} />
                   <Route path="/projects/:id"   element={<Navigate to="/planner" replace />} />
                   <Route path="/mis-marcas"     element={<BrandProfilesModule />} />
+                  <Route path="/mi-negocio/*"   element={<PilotoModule />} />
                   <Route path="/prompt-library" element={<Navigate to="/prompt-gallery" replace />} />
                   <Route path="/admin/batch"    element={<BatchProgressPanel />} />
                   {import.meta.env.DEV && DirectorLabModule && (
