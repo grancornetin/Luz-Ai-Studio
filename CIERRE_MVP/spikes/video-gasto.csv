@@ -1,0 +1,3 @@
+fecha_hora,etiqueta,modelo,region,segundos,audio,resolucion,costo_estimado_usd,costo_real_usd,tiempo_gen_s,estado,notas
+2026-10-22T13:17:47.360Z,clip1-giro,veo-3.1-fast-generate-001,us-central1,6,no,720p,0,0,2,error,{"error":{"code":403;"message":"This API method requires billing to be enabled. Please enable billing on project #gen-lang-client-0895574081 by visiting https://console.developers.google.com/billing/enable?project=gen-lang-client-0895574081 then retry. If you enabled billing for this project recently; wait a few minutes for the action to propagate to our systems and retry.";"status":"PERMISSION_DE
+2026-10-22T13:20:36.662Z,clip1-giro,veo-3.1-fast-generate-001,us-central1,6,no,720p,0.90,,139,ok, respuesta=bytes

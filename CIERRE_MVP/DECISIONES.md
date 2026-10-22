@@ -27,3 +27,8 @@ Registro de decisiones, recortes y verificaciones. Cada entrada con fecha.
 ## Verificaciones con fecha
 
 - 2026-10-22: tsc limpio en `main` (e8c688e).
+
+## 2026-10-22 — Puerta A (decisión del orquestador)
+- **Fidelidad: PASA CON RECETAS RESTRINGIDAS.** Estrategia por defecto: componer el recorte del producto original sobre fondo generado (nunca regenerar la joya). Recetas activas: catálogo limpio, flatlay, macro con revisión. Fuera por ahora: "en el cuerpo" y estilo de vida (no probada). Control automático = alarma, no juez. Sin validar con producto real (U1).
+- **Video: CONFIRMADO CON CONDICIONES.** Veo 3.1 fast, ~139 s/clip, requiere worker con sondeo; Veo 3.1 se retira el 17-nov-2026; acceso en luz-creative-engine-2 sin confirmar. Queda detrás de flag; es lo primero que se recorta.
+- **Presupuesto:** créditos vencen 29-dic-2026 (~68 días), ~USD 290 → ~USD 4/día.

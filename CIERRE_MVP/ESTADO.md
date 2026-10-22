@@ -10,9 +10,9 @@
 | W1c Marcas chicas | agente | En curso | — | — |
 | W1d Patrones + calendario | agente | Entregado; JSON sin tildes → corregir | Hashtags sin volumen medido | — |
 | W1e Anuncios + video público | agente | En curso | — | — |
-| Spike fidelidad (W5) | agente | En curso | Fotos reales U1 | — |
-| Spike video (W6) | agente | En curso | Acceso/cuota Veo U3 | — |
-| W8 Gasto + acceso | agente (worktree `../luz-piloto-w8`, rama `piloto/w8-gasto`) | En curso | — | — |
+| Spike fidelidad (W5) | agente | ENTREGADO: informe en spikes/fidelidad-informe.md. Puerta A: pasa con recetas restringidas (estrategia C = recorte sobre fondo) | Fotos reales U1 | — |
+| Spike video (W6) | agente | ENTREGADO: Veo 3.1 fast funciona (139 s/clip); falta chequear acceso en luz-creative-engine-2 | Acceso/cuota Veo U3 | — |
+| W8 Gasto + acceso | agente (worktree `../luz-piloto-w8`, rama `piloto/w8-gasto`) | A MEDIAS (pausa por uso): ledger e integración listos; faltan reglas, guía y informe | — | — |
 | W2 Identidad | — | Pendiente (arranca tras Puerta A) | — | — |
 | W3 Catálogo | — | Pendiente | — | — |
 | W4 Estrategia | — | Pendiente | necesita W1 | — |
