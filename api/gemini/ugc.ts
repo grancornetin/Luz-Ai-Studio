@@ -5,6 +5,7 @@ import { Redis } from '@upstash/redis';
 import { Client as QStashClient } from '@upstash/qstash';
 import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, checkRateLimit, sanitizeUid, verifyAuth } from '../../src/server/api/middleware.js';
 import { concurrencyAcquire } from '../../src/server/api/concurrency.js';
+import { isPilotUid } from '../piloto/ledger.js';
 
 const RETRY_DELAY_MS = 3000;
 
@@ -148,6 +149,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       verifiedUid = await verifyAuth(req);
     } catch {
       return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Piloto privado (W8): esta ruta (UGC) no pasa por el libro de gasto, así que
+    // para uids del piloto queda cerrada (evita gasto sin medir). Otros: sin cambios.
+    if (isPilotUid(verifiedUid) && action === 'generateImageAsync') {
+      return res.status(403).json({ error: 'Esta función no está disponible en el piloto.', code: 'PILOT_ROUTE_OFF' });
     }
 
     // Rate limiting en generaciones

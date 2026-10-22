@@ -41,7 +41,8 @@ export interface RecordSpendInput {
   model: string;
   units: number;
   unit: LedgerEntry['unit'];
-  costUSD: number;
+  /** Omitido + reservationId = confirma exactamente lo reservado. */
+  costUSD?: number;
   taskId?: string;
   /** Si viene, confirma esa reserva (ajustando la diferencia). */
   reservationId?: string;
@@ -256,11 +257,12 @@ export function createLedger(deps: LedgerDeps) {
     const ts = now();
     let day = dayKey(ts);
     try {
-      const costMicros = toMicros(Math.max(0, input.costUSD));
+      let costMicros = input.costUSD == null ? -1 : toMicros(Math.max(0, input.costUSD));
       if (input.reservationId) {
         const r = await takeReservation(input.reservationId);
         if (r) {
           day = r.day;
+          if (costMicros < 0) costMicros = r.micros;
           const delta = costMicros - r.micros; // real - reservado
           if (delta !== 0) {
             const keys = keysFor(r.uid, r.kind, r.day, r.week);

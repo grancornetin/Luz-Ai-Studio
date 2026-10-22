@@ -16,6 +16,7 @@ import { Redis } from '@upstash/redis';
 import { GoogleGenAI } from '@google/genai';
 import { reportShotResult, appendToHistory } from '../../src/server/api/notifications.js';
 import { concurrencyRelease } from '../../src/server/api/concurrency.js';
+import { recordSpend } from '../piloto/ledger.js';
 
 // ─── Redis ───────────────────────────────────────────────────────────────────
 const redis = new Redis({
@@ -50,6 +51,7 @@ interface ImageJob {
   metadata?: Record<string, any>;
   refunded?: boolean;
   userPlan?: string;
+  budgetResv?: string; // reserva del libro de gasto (piloto)
 }
 
 // ─── Helpers Redis ────────────────────────────────────────────────────────────
@@ -88,6 +90,16 @@ async function persistJobOutcome(job: ImageJob, success: boolean): Promise<void>
   // Liberar slot de concurrencia siempre — éxito o fallo
   if (job.uid) {
     await concurrencyRelease(job.uid).catch(() => {});
+  }
+
+  // Piloto (W8): confirmar el gasto en el libro. Idempotente (reintentos de QStash).
+  // Si la imagen falló se cobra solo un mínimo (la entrada pudo facturarse).
+  if (job.uid && job.budgetResv) {
+    await recordSpend({
+      uid: job.uid, kind: 'image', model: 'gemini-3.1-flash-image', units: 1, unit: 'image',
+      costUSD: success ? undefined : 0.005,
+      taskId: job.id, reservationId: job.budgetResv,
+    }).catch(() => {});
   }
 
   if (!job.uid || !job.sessionId || job.totalShots == null || job.shotIndex == null) {
