@@ -217,10 +217,29 @@ service cloud.firestore {
         allow delete: if isOwner(userId) || isAdmin();
       }
 
+      // Piloto joyería (W8): catálogo y archivos generados, solo la dueña.
+      match /catalog/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+      match /pilotAssets/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+      // Libro de gasto en USD: el cliente SOLO lee el suyo; escribe únicamente el servidor (Admin SDK).
+      match /budgetLedger/{docId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+
       // Module Preset System — presets de configuración por módulo
       match /modulePresets/{presetId} {
         allow read, write: if isOwner(userId) || isAdmin();
       }
+    }
+
+    // Espejo de solo lectura de la allowlist del piloto (lo escribe la consola/servidor).
+    match /config/pilot {
+      allow read: if isAuthenticated() && request.auth.uid in resource.data.uids;
+      allow write: if false;
     }
 
     // ═══════════════════════════════════════════════════════════

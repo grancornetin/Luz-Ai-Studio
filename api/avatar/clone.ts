@@ -2,6 +2,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Redis } from '@upstash/redis';
 import { Client as QStashClient } from '@upstash/qstash';
+import { isPilotUid } from '../piloto/ledger.js';
 import { setCorsHeaders, setSecurityHeaders, validateBase64Image, getImageRatelimit, checkRateLimit, sanitizeUid, verifyAuth } from '../../src/server/api/middleware.js';
 
 const redis = new Redis({
@@ -44,6 +45,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     verifiedUid = await verifyAuth(req);
   } catch {
     return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  // Piloto privado (W8): ruta sin medir en el libro de gasto -> cerrada para uids piloto.
+  if (isPilotUid(verifiedUid)) {
+    return res.status(403).json({ error: 'Esta función no está disponible en el piloto.', code: 'PILOT_ROUTE_OFF' });
   }
 
   const { action, payload } = req.body;

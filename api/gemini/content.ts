@@ -245,6 +245,7 @@ import {
   validateChatPrompt,
   verifyAuth,
 } from '../../src/server/api/middleware.js';
+import { checkBudget, recordSpend, isPilotUid, isLockdownOn, estimateContentRequestUSD } from '../piloto/ledger.js';
 
 function extractText(response: any): string {
   return response.candidates?.[0]?.content?.parts
@@ -809,6 +810,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!isStatusPoll && !(await checkRateLimit(getDataRatelimit(), uid, res))) return;
   } catch {
     return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  // ── Piloto privado (W8): libro de gasto para texto/visión ───────────────────
+  // Solo uids de PILOT_UIDS. Se cobra la estimación al iniciar (reserva y
+  // confirmación inmediata): conservador y sin depender de los workers.
+  if (!isStatusPoll) {
+    if (isLockdownOn() && !isPilotUid(uid)) {
+      return res.status(403).json({ error: 'Esta app está en modo privado por ahora.', code: 'PRIVATE_MODE' });
+    }
+    if (isPilotUid(uid)) {
+      const est = estimateContentRequestUSD(body);
+      const budget = await checkBudget(uid, est.kind, est.usd, { model: body.model || 'gemini-2.5-flash', taskId: body.action });
+      if (!budget.allowed) {
+        return res.status(402).json({ error: (budget as any).reason, code: 'BUDGET_LIMIT', budgetCode: (budget as any).code });
+      }
+      await recordSpend({
+        uid, kind: est.kind, model: body.model || 'gemini-2.5-flash', units: 1, unit: 'token1k',
+        taskId: body.action, reservationId: (budget as any).reservationId,
+      });
+    }
   }
 
   try {

@@ -45,6 +45,7 @@ interface ImageJob {
   metadata?: Record<string, any>;
   refunded?: boolean; // marcado por el worker cuando reembolsa server-side
   userPlan?: string;  // plan del usuario — usado por el worker para concurrencyRelease
+  budgetResv?: string; // reserva del libro de gasto (solo uids del piloto)
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -69,7 +70,9 @@ async function getJob(jobId: string): Promise<ImageJob | null> {
 }
 
 import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, getBatchImageRatelimit, checkRateLimit, sanitizeUid, verifyAuth } from '../../src/server/api/middleware.js';
-import { concurrencyAcquire } from '../../src/server/api/concurrency.js';
+import { concurrencyAcquire, concurrencyRelease } from '../../src/server/api/concurrency.js';
+import { checkBudget, releaseReservation, isPilotUid, isLockdownOn } from '../piloto/ledger.js';
+import { estimateImageUSD } from '../../src/modules/piloto/budget/pricing.js';
 
 // ─── Circuit breaker ──────────────────────────────────────────────────────────
 // Cuando un proveedor agota su cuota, se marca en Redis por 2h.
@@ -218,12 +221,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const jobId   = generateJobId();
       const safeUid = verifiedUid ? sanitizeUid(verifiedUid) : undefined;
 
+      // ── Piloto privado (W8): libro de gasto en USD ────────────────────────
+      // Solo afecta a uids de PILOT_UIDS. Va ANTES de concurrencyAcquire para
+      // no dejar un slot tomado si se rechaza. Otras cuentas: sin cambios.
+      let budgetResv: string | undefined;
+      if (!isBatch && verifiedUid) {
+        if (isLockdownOn() && !isPilotUid(verifiedUid)) {
+          return res.status(403).json({ error: 'Esta app está en modo privado por ahora.', code: 'PRIVATE_MODE' });
+        }
+        if (isPilotUid(verifiedUid)) {
+          if (resolvedModel !== 'gemini') {
+            return res.status(400).json({ error: 'En el piloto solo se usa el motor de imágenes de Google.', code: 'PILOT_MODEL' });
+          }
+          const refs = Array.isArray(referenceImages) ? referenceImages.length : 0;
+          const budget = await checkBudget(
+            safeUid!, 'image',
+            estimateImageUSD({ model: 'gemini-3.1-flash-image', refs }),
+            { model: 'gemini-3.1-flash-image', taskId: jobId },
+          );
+          if (!budget.allowed) {
+            return res.status(402).json({ error: (budget as any).reason, code: 'BUDGET_LIMIT', budgetCode: (budget as any).code });
+          }
+          budgetResv = (budget as any).reservationId;
+        }
+      }
+
       // Control de concurrencia: limitar jobs activos por usuario según su plan.
       // Batch importer y jobs sin uid quedan exentos del límite.
       if (safeUid && !isBatch) {
         const plan = (userPlan as string) || 'free';
         const hasSlot = await concurrencyAcquire(safeUid, plan);
         if (!hasSlot) {
+          if (budgetResv) await releaseReservation(budgetResv);
           return res.status(429).json({
             error: 'Estamos preparando tus imágenes. Espera un momento y vuelve a intentar.',
             code:  'CONCURRENCY_LIMIT',
@@ -244,15 +273,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         moduleLabel: moduleLabel,
         metadata:    metadata,
         userPlan:    userPlan as string | undefined,
+        budgetResv,
       };
 
       // Guardar parts en Redis para todos los modelos
-      await Promise.all([
-        saveJob(job),
-        redis.set(`img_parts:${jobId}`, JSON.stringify(parts), { ex: 3600 }),
-        // Guardar el modelo resuelto para que el cliente sepa cuál se usó
-        redis.set(`img_model:${jobId}`, resolvedModel, { ex: 3600 }),
-      ]);
+      try {
+        await Promise.all([
+          saveJob(job),
+          redis.set(`img_parts:${jobId}`, JSON.stringify(parts), { ex: 3600 }),
+          // Guardar el modelo resuelto para que el cliente sepa cuál se usó
+          redis.set(`img_model:${jobId}`, resolvedModel, { ex: 3600 }),
+        ]);
+      } catch (e) {
+        if (budgetResv) { await releaseReservation(budgetResv); if (safeUid) await concurrencyRelease(safeUid).catch(() => {}); }
+        throw e;
+      }
 
       // Enrutar al worker según el modelo disponible
       let workerUrl: string;
@@ -269,11 +304,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         workerBody = { jobId };
       }
 
-      await qstash.publishJSON({
-        url:     workerUrl,
-        body:    workerBody,
-        retries: 2,
-      });
+      try {
+        await qstash.publishJSON({
+          url:     workerUrl,
+          body:    workerBody,
+          retries: 2,
+        });
+      } catch (e) {
+        // Piloto: si no se pudo encolar, no se cobra ni se deja el slot tomado.
+        if (budgetResv) { await releaseReservation(budgetResv); if (safeUid) await concurrencyRelease(safeUid).catch(() => {}); }
+        throw e;
+      }
 
       console.log(`[Image] Job ${jobId} enqueued model=${resolvedModel}${resolvedModel !== modelId ? ` (fallback desde ${modelId})` : ''} (module: ${moduleName || 'unknown'})`);
       return res.status(202).json({
