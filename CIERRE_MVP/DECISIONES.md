@@ -39,3 +39,8 @@ Registro de decisiones, recortes y verificaciones. Cada entrada con fecha.
 - W8 (libro de gasto) se mantiene y se termina. Video apagado por flag.
 - Dueño consigue las fotos reales (U1) esta semana.
 - Corrección de memoria: el banco Photodump tiene 733 fotos (no 911) y el snapshot ya incluye arquetipos.
+
+## 2026-10-23 — Fotos de producto con varios ángulos es el camino principal
+- El dueño confirma que Fotos de producto (estilo `minimal`, varias fotos del mismo producto desde distintos ángulos) ya generaba aros fieles con estas mismas fotos reales. El spike de fidelidad usó 1 sola referencia por pieza, así que su conclusión sobre "regenerar" es pesimista.
+- Camino principal: `runProductDirector` + referencias múltiples por pieza. Catálogo = grupos de 2-4 fotos por pieza. Recorte sobre fondo (rama piloto/w5-recorte) = plan B.
+- Hibernación: etiqueta `luz-completa-2026-10-23` y rama `archive/luz-completa-2026-10-23` en GitHub guardan la app completa. Módulos se ocultan con interruptor, no se borran.
