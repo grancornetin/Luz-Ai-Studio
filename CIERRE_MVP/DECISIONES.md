@@ -32,3 +32,10 @@ Registro de decisiones, recortes y verificaciones. Cada entrada con fecha.
 - **Fidelidad: PASA CON RECETAS RESTRINGIDAS.** Estrategia por defecto: componer el recorte del producto original sobre fondo generado (nunca regenerar la joya). Recetas activas: catálogo limpio, flatlay, macro con revisión. Fuera por ahora: "en el cuerpo" y estilo de vida (no probada). Control automático = alarma, no juez. Sin validar con producto real (U1).
 - **Video: CONFIRMADO CON CONDICIONES.** Veo 3.1 fast, ~139 s/clip, requiere worker con sondeo; Veo 3.1 se retira el 17-nov-2026; acceso en luz-creative-engine-2 sin confirmar. Queda detrás de flag; es lo primero que se recorta.
 - **Presupuesto:** créditos vencen 29-dic-2026 (~68 días), ~USD 290 → ~USD 4/día.
+
+## 2026-10-23 — Giro de arquitectura (decidido por el dueño en el chat)
+- **El piloto es una capa delgada que REUTILIZA módulos existentes**, no una fábrica paralela. Marca = Mis Marcas con entrada rápida; Plan = Planner v3 con meta `start`, playbook `joyeria`, catálogo y campos de receta; Fotos = director de Fotos de producto (`runProductDirector` / `buildPromptPayloadsFromDirectorResult` + `imageApiService`) + pieza NUEVA de recorte sobre fondo (única estrategia fiel). Auditoría en `CIERRE_MVP/auditoria/`.
+- **Photodump director = fase 2** (reglas duras se conservan; sin probar con receta de joyería en producción). Tomas con persona (mano/cuello) apagadas.
+- W8 (libro de gasto) se mantiene y se termina. Video apagado por flag.
+- Dueño consigue las fotos reales (U1) esta semana.
+- Corrección de memoria: el banco Photodump tiene 733 fotos (no 911) y el snapshot ya incluye arquetipos.
