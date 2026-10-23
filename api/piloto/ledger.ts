@@ -414,8 +414,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try { uid = await verifyAuth(req); } catch { return res.status(401).json({ error: 'Unauthorized' }); }
 
   const action = req.body?.action;
-  if (action !== 'status') return res.status(400).json({ error: 'Unknown action' });
+  if (action !== 'status' && action !== 'reserve') return res.status(400).json({ error: 'Unknown action' });
   if (!isPilotUid(uid)) return res.status(200).json({ pilot: false });
+  if (action === 'reserve') {
+    // Para llamadas que NO pasan por image.ts/content.ts. El monto lo manda el cliente,
+    // por eso se acota (maximo USD 1 por reserva) y siempre cuenta contra los topes.
+    const kind = req.body?.kind as BudgetKind;
+    const usd = Number(req.body?.estimatedUSD);
+    const taskId = String(req.body?.taskId || '').slice(0, 80);
+    if (!['image', 'video', 'text', 'vision'].includes(kind) || !(usd > 0) || usd > 1) {
+      return res.status(400).json({ error: 'Datos de reserva invalidos' });
+    }
+    const d = await real().checkBudget(uid, kind, usd, { taskId });
+    if (!('reservationId' in d)) return res.status(402).json({ allowed: false, code: (d as any).code, reason: (d as any).reason });
+    await real().recordSpend({ uid, kind, model: 'cliente', units: 1, unit: 'image', taskId, reservationId: d.reservationId });
+    return res.status(200).json({ allowed: true, alert: d.alert });
+  }
   try {
     return res.status(200).json(await real().getStatus(uid));
   } catch (err: any) {

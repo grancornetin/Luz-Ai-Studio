@@ -9,7 +9,7 @@ Rama: piloto/w8-gasto (worktree luz-piloto-w8). Sin push.
 - Integracion: api/gemini/image.ts (reserva antes de concurrencyAcquire; libera si 429/falla de encolado), image-worker.ts (confirma/ libera tras concurrencyRelease), content.ts (cobro estimado al inicio), ugc.ts (cerrada para uids piloto).
 - tsc: solo 4 errores previos (src/data/trainer/inteligencia ugc/*.json no existen), ninguno mio.
 
-## Pendiente (nada empezado)
+## Pendiente: NADA. W8 cerrado (ver w8-informe.md)
 1. firestore.rules: agregar users/{uid}/catalog, pilotAssets (owner rw), budgetLedger (owner SOLO read; write false), config/pilot (read si uid in resource.data.uids; write false). Probar: no hay firebase.json/emulador en el repo -> analisis manual.
 2. storage.rules: ya cubre users/{uid}/** solo-dueno; opcional regla explicita pilotAssets con limite de tamano/tipo.
 3. CIERRE_MVP/GUIA_PRESUPUESTO_GCP.md (5 pasos: Billing > Budgets & alerts, 50/80/100 %, cuotas Vertex).

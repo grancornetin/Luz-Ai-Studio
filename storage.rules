@@ -14,6 +14,14 @@ service firebase.storage {
                    && request.resource.contentType.matches('image/.*');
     }
 
+    // ── Piloto joyería (W8): activos del piloto, solo la dueña, imagen/video, máx 50 MB ──
+    match /users/{userId}/pilotAssets/{allPaths=**} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId
+                   && request.resource.size < 50 * 1024 * 1024
+                   && request.resource.contentType.matches('(image|video)/.*');
+    }
+
     // ── Otros archivos del usuario (avatars, products, etc.) ───
     match /users/{userId}/{allPaths=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;

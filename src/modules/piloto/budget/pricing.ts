@@ -77,7 +77,8 @@ export interface BudgetCaps {
 }
 
 export const DEFAULT_CAPS: BudgetCaps = {
-  totalCapUSD: 270,
+  // Saldo ~USD 290 (proyecto luz-creative-engine-2, vence 29-dic-2026) -> ~10 % de colchon.
+  totalCapUSD: 260,
   dailyCapUSD: 4,
   weeklyCapByKind: { image: 17, text: 2, vision: 2, video: 0 },
   videoPerClipCapUSD: 1.5,
