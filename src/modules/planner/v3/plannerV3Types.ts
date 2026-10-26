@@ -6,13 +6,14 @@
 
 // ── Enfoque del mes ──────────────────────────────────────────────
 
-export type PlanGoal = 'sell' | 'grow' | 'launch' | 'maintain';
+export type PlanGoal = 'sell' | 'grow' | 'launch' | 'maintain' | 'start';
 
 export const GOAL_LABELS: Record<PlanGoal, string> = {
   sell: 'Vender más',
   grow: 'Ganar seguidores',
   launch: 'Lanzar algo nuevo',
   maintain: 'Mantener presencia',
+  start: 'Arrancar de cero: primeras seguidoras y primeras ventas',
 };
 
 export interface MonthlyFocus {
@@ -208,6 +209,14 @@ export interface ContentPlan {
 
   /** Referencia al plan anterior de la cadena (si existe) */
   previousPlanId?: string;
+
+  /** Piloto joyería: esquema del calendario de lanzamiento (semanas 1-6).
+   *  Solo la semana en curso trae tareas completas; el resto se detalla
+   *  al cerrar cada semana con datos reales. Opcional: planes viejos no lo tienen. */
+  launchOutline?: import('./launchTypes').LaunchOutlineWeek[];
+
+  /** Recordatorio de etiquetar contenido hecho con inteligencia artificial (política de Meta). */
+  aiDisclosureReminder?: string;
 }
 
 // ── Respuesta cruda de Gemini al generar un plan ─────────────────
