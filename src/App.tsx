@@ -40,6 +40,7 @@ const LazyFallback = (
 import { dbService } from './services/dbService';
 import { AuthProvider, useAuth } from './modules/auth/AuthContext';
 import { usePilotAccess } from './modules/piloto/usePilotAccess';
+import { HibernationGuard, useHibernated } from './modules/piloto/hibernate';
 import { ModelSelectionProvider } from './contexts/ModelSelectionContext';
 import AuthModal from './modules/auth/components/AuthModal';
 import OnboardingWizard from './modules/auth/components/OnboardingWizard';
@@ -208,6 +209,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
   const { unreadCount } = useNotifications();
   const planStyle = PLAN_STYLES[credits.plan] || PLAN_STYLES.free;
   const hasPilot = usePilotAccess();
+  const hibernated = useHibernated(); // ver modules/piloto/hibernate.tsx
   const isActive = (path: string) => location.pathname === path || (path !== '/' && location.pathname.startsWith(path));
 
   const navLink = (path: string, label: string, icon: string) => (
@@ -262,21 +264,21 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
 
         <div className="flex-1 overflow-y-auto px-6 space-y-6 pb-4">
           <div className="space-y-1">
-            {navLink('/dashboard', 'Inicio', 'fa-house')}
-            {hasPilot && navLink('/mi-negocio', 'Mi negocio', 'fa-gem')}
-            {notificationsLink()}
-            {navLink('/historial', 'Mis creaciones', 'fa-clock-rotate-left')}
+            {!hibernated && navLink('/dashboard', 'Inicio', 'fa-house')}
+            {(hasPilot || hibernated) && navLink('/mi-negocio', 'Mi negocio', 'fa-gem')}
+            {!hibernated && notificationsLink()}
+            {!hibernated && navLink('/historial', 'Mis creaciones', 'fa-clock-rotate-left')}
           </div>
 
           <div className="space-y-1">
             <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-3 px-2">Cuenta</p>
             {navLink('/cuenta',      'Mi perfil',  'fa-user-pen')}
-            {navLink('/pricing',     'Planes',     'fa-tag')}
-            {navLink('/buy-credits', 'Recargar',   'fa-bolt')}
-            {navLink('/contacto',    'Contacto',   'fa-envelope')}
+            {!hibernated && navLink('/pricing',     'Planes',     'fa-tag')}
+            {!hibernated && navLink('/buy-credits', 'Recargar',   'fa-bolt')}
+            {!hibernated && navLink('/contacto',    'Contacto',   'fa-envelope')}
           </div>
 
-          {MENU_GROUPS.map(group => (
+          {!hibernated && MENU_GROUPS.map(group => (
             <div key={group.label} className="space-y-1">
               <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-3 px-2">{group.label}</p>
               {group.items.map(item => navLink(item.path, item.label, item.icon))}
@@ -439,6 +441,7 @@ const AppContent: React.FC = () => {
             )}
             <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
 <main data-app-main className="flex-1 p-4 md:py-10 md:pl-[88px] md:pr-24 overflow-x-hidden pb-24 md:pb-10">
+                <HibernationGuard>
                 <Routes>
                   <Route path="/dashboard"      element={<Dashboard />} />
                   <Route path="/historial"      element={<GenerationHistory />} />
@@ -472,6 +475,7 @@ const AppContent: React.FC = () => {
                   )}
                   <Route path="*"               element={<Navigate to="/dashboard" replace />} />
                 </Routes>
+                </HibernationGuard>
               </main>
               {/* data-app-chrome: lo flotante de la app, se esconde dentro de un flujo (ver FlowShell) */}
               <div data-app-chrome className="contents"><MobileBottomNav onSearchOpen={() => setIsSearchOpen(true)} /></div>
