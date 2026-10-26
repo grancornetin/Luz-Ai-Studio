@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Home, Plus, Bell, MessageCircle } from 'lucide-react';
+import { Home, Plus, Bell, MessageCircle, User } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { BottomSheet } from './BottomSheet';
 import { useNotifications } from '../../hooks/useNotifications';
+import { useHibernated } from '../../modules/piloto/hibernate';
 
 interface MobileBottomNavProps {
   /** Mantenido por compatibilidad con llamadas existentes (no se usa). */
@@ -23,6 +24,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = () => {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const { unreadCount } = useNotifications();
+  const hibernated = useHibernated();
 
   // Sincronizar el estado visual del botón con el del AppAssistant.
   useEffect(() => {
@@ -46,6 +48,37 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = () => {
         ? 'bg-gradient-to-br from-brand-400 to-brand-600 text-white shadow-[0_6px_16px_rgba(247,44,91,0.35)]'
         : 'text-slate-500 active:bg-slate-100'
     }`;
+
+  // Hibernación (modules/piloto/hibernate.tsx): solo Mi negocio y Mi perfil.
+  if (hibernated) {
+    return (
+      <nav
+        className="fixed bottom-0 left-1/2 -translate-x-1/2 z-50 md:hidden"
+        style={{ marginBottom: 'calc(0.9rem + env(safe-area-inset-bottom))' }}
+      >
+        <div className="flex items-center gap-1 bg-white/95 backdrop-blur-lg border border-slate-200/80 rounded-full p-1.5 shadow-[0_10px_32px_rgba(23,20,23,0.16)]">
+          <button
+            aria-label="Mi negocio"
+            aria-current={location.pathname.startsWith('/mi-negocio') ? 'page' : undefined}
+            onClick={() => navigate('/mi-negocio')}
+            style={{ touchAction: 'manipulation' }}
+            className={itemClass(location.pathname.startsWith('/mi-negocio'))}
+          >
+            <Home size={20} />
+          </button>
+          <button
+            aria-label="Mi perfil"
+            aria-current={isActive('/cuenta') ? 'page' : undefined}
+            onClick={() => navigate('/cuenta')}
+            style={{ touchAction: 'manipulation' }}
+            className={itemClass(isActive('/cuenta'))}
+          >
+            <User size={20} />
+          </button>
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <>
