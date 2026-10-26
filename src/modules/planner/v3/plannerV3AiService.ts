@@ -29,6 +29,10 @@ import {
 } from './plannerV3Types';
 import { MODULE_CATALOG_FOR_AI } from './moduleCatalog';
 import { pickPlaybook } from './playbooks';
+import type { CatalogItem, PilotPlanTask, PilotSeed } from '../../piloto/types';
+import type { LaunchOutlineWeek, LaunchPlanResult } from './launchTypes';
+import { runLaunchPlan, type ModelResponse } from './launchPlanEngine';
+import { todayInSantiago } from './launchCalendar';
 
 const CONTENT_ENDPOINT = '/api/gemini/content';
 const MODEL = 'gemini-2.5-flash';
@@ -220,6 +224,7 @@ Plataformas disponibles: ${platforms.join(', ')}
    meta "Ganar seguidores" → ~50% atraer, 25% generar_deseo, 15% construir_confianza, 10% convertir.
    meta "Lanzar algo nuevo" → ~35% atraer, 35% generar_deseo, 15% construir_confianza, 15% convertir.
    meta "Mantener presencia" → ~35% atraer, 25% generar_deseo, 30% construir_confianza, 10% convertir.
+   meta "Arrancar de cero" → ~40% atraer, 30% generar_deseo, 20% construir_confianza, 10% convertir (la marca no tiene audiencia: primero que la descubran y la deseen; convertir sube solo en semanas de Black Friday o Navidad).
 2. VARIEDAD: no repitas el mismo contentType dos veces en la semana, y no repitas los tipos del historial reciente salvo que hayan sido el MEJOR resultado (los ganadores SÍ se repiten, con variación).
 3. DATOS REALES MANDAN: si el historial muestra qué funcionó, la semana debe reflejarlo y "whyThisContent" debe citar la evidencia con números ("tu reel antes/después alcanzó 2.400 cuentas, el doble de tu promedio").
 4. HONESTIDAD EN expectedResult: si hay datos, usa rangos basados en SUS números reales ("entre 800 y 1.500 cuentas, tu rango habitual en reels"). Si NO hay datos, sé cualitativa ("buscamos guardados y comentarios; esta semana define tu punto de partida"). PROHIBIDO prometer cifras sin base o hablar de "viral".
@@ -491,5 +496,79 @@ export function buildHistorySummary(plan: ContentPlan): WeekHistorySummary {
     topPerformer,
     worstPerformer,
     reportRecommendations: plan.weeklyReport?.recommendations ?? [],
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// PILOTO JOYERÍA — Calendario de lanzamiento de 6 semanas
+//
+// generateLaunchPlan() entrega la semana detallada (tareas completas con
+// receta + piezas reales + sceneBrief, sin "Crear ahora → otro módulo") y
+// el esquema de las 6 semanas. Para detallar la semana 2-6 se vuelve a
+// llamar con weekNumber, el outline guardado y el historial real.
+// Toda la lógica vive en launchPlanEngine.ts (pura y probada); aquí solo
+// se conecta con el endpoint de texto existente.
+// ─────────────────────────────────────────────────────────────────
+
+async function callTextModel(prompt: string, opts: { temperature: number }): Promise<ModelResponse> {
+  const headers = await authHeaders();
+  const res = await fetch(CONTENT_ENDPOINT, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      action: 'generateText',
+      model: MODEL,
+      prompt,
+      generationConfig: { temperature: opts.temperature, maxOutputTokens: 12288 },
+    }),
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || 'Error generando el plan');
+  return data as ModelResponse;
+}
+
+export async function generateLaunchPlan(params: {
+  brand: BrandProfile;
+  seed: PilotSeed;
+  catalog: CatalogItem[];
+  /** Semana a detallar (1 por defecto) */
+  weekNumber?: number;
+  /** Esquema ya guardado del calendario (para semanas 2-6) */
+  outline?: LaunchOutlineWeek[];
+  history?: WeekHistorySummary[];
+  /** Tareas de la semana anterior (rotación entre semanas) */
+  previousTasks?: PilotPlanTask[];
+  /** Solo para pruebas: fecha de "hoy" */
+  today?: Date;
+}): Promise<LaunchPlanResult> {
+  const { brand, seed, catalog } = params;
+  return runLaunchPlan({
+    brandName: brand.brandName,
+    brandText: serializeBrandForAI(brand),
+    mainCategory: brand.mainCategory,
+    shortDescription: brand.shortDescription,
+    seed,
+    catalog,
+    todayISO: todayInSantiago(params.today),
+    weekNumber: params.weekNumber,
+    outline: params.outline,
+    history: params.history,
+    previousTasks: params.previousTasks,
+    callModel: callTextModel,
+  });
+}
+
+/** Campos que se agregan al ContentPlan al guardar un plan de lanzamiento (todos opcionales en el contrato). */
+export function launchResultToPlanFields(result: LaunchPlanResult): {
+  strategySummary: string;
+  tasks: PilotPlanTask[];
+  launchOutline: LaunchOutlineWeek[];
+  aiDisclosureReminder: string;
+} {
+  return {
+    strategySummary: result.strategySummary,
+    tasks: result.tasks,
+    launchOutline: result.outline,
+    aiDisclosureReminder: result.aiDisclosureReminder,
   };
 }
