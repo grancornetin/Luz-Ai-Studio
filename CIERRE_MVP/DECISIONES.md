@@ -44,3 +44,7 @@ Registro de decisiones, recortes y verificaciones. Cada entrada con fecha.
 - El dueño confirma que Fotos de producto (estilo `minimal`, varias fotos del mismo producto desde distintos ángulos) ya generaba aros fieles con estas mismas fotos reales. El spike de fidelidad usó 1 sola referencia por pieza, así que su conclusión sobre "regenerar" es pesimista.
 - Camino principal: `runProductDirector` + referencias múltiples por pieza. Catálogo = grupos de 2-4 fotos por pieza. Recorte sobre fondo (rama piloto/w5-recorte) = plan B.
 - Hibernación: etiqueta `luz-completa-2026-10-23` y rama `archive/luz-completa-2026-10-23` en GitHub guardan la app completa. Módulos se ocultan con interruptor, no se borran.
+
+## 2026-10-26 — Prueba real de Fotos de producto (hecha por el dueño)
+- 2 fotos reales en mano (aros de resina verde marmolada) → 3 imágenes en estilo minimal: forma, veteado, color, traslucidez y cierres fieles; verde algo más oscuro/opaco; escala no verificable. VEREDICTO: Fotos de producto sirve tal cual. Se descarta recorte (plan B, rama piloto/w5-recorte sin mergear) y verificador complejo.
+- Construcción en 3 frentes con módulos reutilizados: w23 (Mi marca + Catálogo), w4 (Plan), w57 (Despachador + pantalla Hoy).
