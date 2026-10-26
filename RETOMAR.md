@@ -4,6 +4,16 @@ Actualizado: 2026-10-22 (día 1)  ·  Cuenta/sesión: orquestador, cuenta A
 ## Estado en una frase
 Día 1 en curso: cimientos (W0) y dossier de mercado v1 (W1) ya están en main; faltan terminar el spike de fidelidad, el spike de video y W8 (libro de gasto), que siguen corriendo.
 
+## ESTADO 26-oct (PAUSA por uso 92 %, retomar en ~2 h)
+- main al día (be0366c W8 + decisiones). Camino principal de fotos = Fotos de producto con varios ángulos, estilo minimal: VERIFICADO por el dueño con fotos reales (fiel). Recorte = plan B (rama piloto/w5-recorte, sin mergear, falla con fotos en mano).
+- 3 agentes en worktrees (pausa pedida; cada uno deja su PUNTO-DE-RETOMA en su carpeta, relanzar con 'Ya existe trabajo previo; léelo y continúa'):
+  - ../luz-piloto-w23-marca-catalogo (rama piloto/w23-marca-catalogo): Mi marca + Catálogo → CIERRE_MVP/informes/PUNTO-DE-RETOMA-w23.md
+  - ../luz-piloto-w4-plan (piloto/w4-plan): Planner arranque 6 semanas + playbook joyería → ...-w4.md
+  - ../luz-piloto-w57-hoy (piloto/w57-hoy): contentFactory + pantalla Hoy + interruptor de hibernación → ...-w57.md
+- Orden de merge: w23 → w4 → w57; tras cada uno tsc + build; push; recién al final vercel deploy --prod.
+- Respaldo de la app completa: tag y rama archive/luz-completa-2026-10-23.
+- Pendiente del dueño: crear config/pilot en Firebase, GCP_PROJECT_ID=luz-creative-engine-2 en Vercel, alerta de presupuesto (CIERRE_MVP/GUIA_PRESUPUESTO_GCP.md), PILOT_LOCKDOWN=1 y cerrar registro, uid de ella (U4), reponer fotos con datos de material/precio.
+
 ## AVISO DE USO (22-oct)
 El dueño informó 87 % de la sesión y 80 % semanal. Se pidió pausa a los agentes en marcha (fidelidad y W8). No se lanza trabajo nuevo hasta cambiar de cuenta.
 Spike de video TERMINADO: ver CIERRE_MVP/spikes/video-informe.md (Veo 3.1 fast funciona, ~139 s por clip; proyecto con USD 300 por confirmar, U3; Veo 3.1 se retira el 17-nov-2026).
