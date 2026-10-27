@@ -157,7 +157,9 @@ async function offline(): Promise<boolean> {
     const inp = baseInput(async () => ({ json: { strategySummary: 'Plan con IA viral', tasks: [1, 2, 3, 4, 5].map(bad) } }));
     const res = await runLaunchPlan(inp);
     const { issues, w1ok } = auditResult(res, inp);
-    const blob = JSON.stringify(res.tasks).toLowerCase();
+    const vals: string[] = []; // solo los VALORES de texto (los nombres de campo, como "prompt", no son texto para ella)
+    JSON.stringify(res.tasks, (_k, v) => { if (typeof v === 'string') vals.push(v); return v; });
+    const blob = vals.join(' | ').toLowerCase();
     const leaks = ['hipoalerg', 'garant', 'silene', 'clientas', '500', 'quedan 3', 'viral', 'prompt', '{medida}', 'en_el_cuerpo', 'no-existe', '19 de diciembre'].filter(w => blob.includes(w));
     all = check('respuesta hostil: nada prohibido llega a la usuaria', issues.length === 0 && w1ok && leaks.length === 0, `source=${res.source}, llamadas=${res.modelCalls}, fugas=${leaks.join(',') || 'ninguna'}`) && all;
   }
