@@ -1,0 +1,56 @@
+// Stub de firebase/auth, firestore, storage y app: nada sale a la red.
+const noop = (..._a: unknown[]): any => undefined;
+const nothing = async (..._a: unknown[]): Promise<any> => undefined;
+export const getAuth = () => ({ currentUser: { uid: 'preview-uid', getIdToken: async () => 'tok' } });
+export const onAuthStateChanged = noop;
+export const signOut = nothing;
+export const initializeApp = () => ({});
+export const getApp = () => ({});
+export const getApps = () => [];
+export const getFirestore = () => ({});
+export const collection = noop;
+export const doc = noop;
+export const getDoc = async () => ({ exists: () => false, data: () => undefined });
+export const getDocs = async () => ({ docs: [], empty: true, forEach: noop });
+export const setDoc = nothing;
+export const addDoc = nothing;
+export const updateDoc = nothing;
+export const deleteDoc = nothing;
+export const query = noop;
+export const where = noop;
+export const orderBy = noop;
+export const limit = noop;
+export const onSnapshot = () => () => undefined;
+export const serverTimestamp = () => Date.now();
+export const writeBatch = () => ({ set: noop, update: noop, delete: noop, commit: nothing });
+export const runTransaction = nothing;
+export const increment = (n: number) => n;
+export const arrayUnion = (...a: unknown[]) => a;
+export const arrayRemove = (...a: unknown[]) => a;
+export class Timestamp { static now() { return new Timestamp(); } toMillis() { return Date.now(); } }
+export const getStorage = () => ({});
+export const ref = noop;
+export const uploadBytes = nothing;
+export const uploadBytesResumable = nothing;
+export const uploadString = nothing;
+export const getDownloadURL = async () => '';
+export const deleteObject = nothing;
+export const listAll = async () => ({ items: [], prefixes: [] });
+export type User = any; export type DocumentData = any; export type QueryDocumentSnapshot = any;
+export const getCountFromServer = async () => ({ data: () => ({ count: 0 }) });
+export class EmailAuthProvider { static credential() { return {}; } }
+export class GoogleAuthProvider {}
+export const createUserWithEmailAndPassword = nothing;
+export const getRedirectResult = async () => null;
+export const reauthenticateWithCredential = nothing;
+export const sendPasswordResetEmail = nothing;
+export const signInAnonymously = nothing;
+export const signInWithCustomToken = nothing;
+export const signInWithEmailAndPassword = nothing;
+export const signInWithPopup = nothing;
+export const signInWithRedirect = nothing;
+export const startAfter = noop;
+export const updateEmail = nothing;
+export const updatePassword = nothing;
+export const updateProfile = nothing;
+export type QueryConstraint = any; export type DocumentSnapshot = any; export type Unsubscribe = any;
