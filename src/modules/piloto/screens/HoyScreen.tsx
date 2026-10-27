@@ -20,6 +20,7 @@ import {
 } from '../contentFactory';
 import { contentPlanService, loadActivePlan, loadBrand, loadCatalog, type PilotBrand } from '../pilotData';
 import { identityService } from '../services/identityService';
+import { AI_DISCLOSURE_TASK_STEP } from '../../planner/v3/jewelryCopy';
 import { generateLaunchPlan, launchResultToPlanFields } from '../../planner/v3/plannerV3AiService';
 import type { PlanPlatform } from '../../planner/v3/plannerV3Types';
 
@@ -433,6 +434,7 @@ const HoyScreen: React.FC = () => {
         <Footnote icon={<Clock size={15} />}>Hora sugerida: {today.suggestedTime}</Footnote>
         {today.whyThisContent && <Footnote icon={<Lightbulb size={15} />}>{today.whyThisContent}</Footnote>}
         {today.engagementHook && <Footnote icon={<Tag size={15} />}>{today.engagementHook}</Footnote>}
+        {plan?.aiDisclosureReminder && <Footnote icon={<AlertTriangle size={15} />}>{AI_DISCLOSURE_TASK_STEP}</Footnote>}
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-2 min-[400px]:grid-cols-2">
