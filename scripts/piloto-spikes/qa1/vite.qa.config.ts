@@ -1,3 +1,4 @@
+// @ts-nocheck
 // QA1: servidor de vista previa SOLO para revisión visual de las pantallas de Mi negocio, con datos de ejemplo.
 // No toca la app: monta las pantallas reales con servicios simulados (sin login, sin red, sin gasto).
 // Uso (desde la raíz del repo):  npx vite --config scripts/piloto-spikes/qa1/vite.qa.config.ts --port 5199

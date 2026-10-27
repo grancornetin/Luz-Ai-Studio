@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Fábrica real, pero con una entrada/salida simulada (no gasta ni usa la red).
 import type { FactoryIO } from '@repo/modules/piloto/contentFactory?real';
 import { ph, qaState, wait } from './qa';

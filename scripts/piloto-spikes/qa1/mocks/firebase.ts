@@ -1,3 +1,4 @@
+// @ts-nocheck
 export const app = {};
 export const db = {};
 export const storage = {};

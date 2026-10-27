@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { ph, qaState, wait } from './qa';
 
 const iso = (add: number) => {

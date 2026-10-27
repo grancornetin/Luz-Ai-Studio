@@ -1,3 +1,4 @@
+// @ts-nocheck
 export const runProductDirector = async () => ({});
 export const buildShotPlans = () => [];
 export const buildPromptPayloadsFromDirectorResult = () => [];

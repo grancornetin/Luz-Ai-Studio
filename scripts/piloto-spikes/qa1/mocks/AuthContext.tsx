@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React from 'react';
 const fakeUser: any = { uid: 'preview-uid', email: 'ella@ejemplo.cl', displayName: 'Camila', getIdToken: async () => 'tok' };
 const value: any = {

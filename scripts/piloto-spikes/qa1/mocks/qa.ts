@@ -1,3 +1,4 @@
+// @ts-nocheck
 export function qaState(): string {
   try {
     const u = new URLSearchParams(location.search).get('state');

@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Stub de firebase/auth, firestore, storage y app: nada sale a la red.
 const noop = (..._a: unknown[]): any => undefined;
 const nothing = async (..._a: unknown[]): Promise<any> => undefined;

@@ -1,3 +1,4 @@
+// @ts-nocheck
 export * from '@repo/modules/piloto/services/catalogService?real';
 import { catalogService as real } from '@repo/modules/piloto/services/catalogService?real';
 import { ph, qaState } from './qa';
