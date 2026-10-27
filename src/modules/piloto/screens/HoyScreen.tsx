@@ -19,6 +19,9 @@ import {
   preGenerateWindow, produceTask, variantOf, type PreGenProgress,
 } from '../contentFactory';
 import { contentPlanService, loadActivePlan, loadBrand, loadCatalog, type PilotBrand } from '../pilotData';
+import { identityService } from '../services/identityService';
+import { generateLaunchPlan, launchResultToPlanFields } from '../../planner/v3/plannerV3AiService';
+import type { PlanPlatform } from '../../planner/v3/plannerV3Types';
 
 type PlanWithTasks = NonNullable<Awaited<ReturnType<typeof loadActivePlan>>>;
 type Phase = 'loading' | 'error' | 'needs-brand' | 'needs-catalog' | 'needs-plan' | 'ready';
@@ -138,6 +141,7 @@ const HoyScreen: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState('');
   const [busyAction, setBusyAction] = useState<'' | 'publish' | 'fresh'>('');
+  const [creatingPlan, setCreatingPlan] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const aborter = useRef({ aborted: false });
   const fileCache = useRef(new Map<string, File>());
@@ -244,7 +248,8 @@ const HoyScreen: React.FC = () => {
     if (!plan || !today) return;
     setBusyAction('publish');
     try {
-      await contentPlanService.updateTaskStatus(plan.id, today.id, 'done');
+      // QA1: mismo carril serial que la fábrica; updateTaskStatus (leer-todo/escribir-todo) pisaba las fotos recién guardadas.
+      await io.patchTask(uid, plan.id, today.id, { status: 'done' });
       patchLocal(today.id, { status: 'done' });
       setSaved('');
     } catch {
@@ -268,6 +273,38 @@ const HoyScreen: React.FC = () => {
       else setGenError(e instanceof FactoryError ? e.message : 'No pudimos crear otras fotos ahora. Inténtalo en un rato.');
     }
     setBusyAction('');
+  };
+
+  // Arma la semana (la 1 del calendario de 6 semanas, o la siguiente si ya cerró la anterior).
+  // QA1: antes ningún botón llamaba al motor del plan de arranque; "Armar mi semana" iba al asistente genérico.
+  const onCreatePlan = async () => {
+    setCreatingPlan(true); setGenError(''); setBudgetMsg('');
+    try {
+      const pb = await identityService.getPilotBrand(uid);
+      if (!pb?.pilotSeed) { nav('/planner/nuevo'); return; }
+      const plans = await contentPlanService.listPlans();
+      const prev = plans.find(p => p.brandId === pb.id && p.status === 'closed' && p.launchOutline?.length);
+      const weekNumber = prev ? Math.min(6, prev.weekNumber + 1) : 1;
+      const history = prev ? await contentPlanService.getHistoryForBrand(pb.id) : [];
+      const result = await generateLaunchPlan({
+        brand: pb, seed: pb.pilotSeed, catalog: items, weekNumber,
+        outline: prev?.launchOutline, history, previousTasks: prev?.tasks as PilotPlanTask[] | undefined,
+      });
+      const fields = launchResultToPlanFields(result);
+      const platforms = Array.from(new Set(fields.tasks.map(t => t.platform))) as PlanPlatform[];
+      const n = fields.tasks.length;
+      await contentPlanService.createPlan({
+        brandId: pb.id, brandName: pb.brandName,
+        monthlyFocus: { goal: 'start', focusProduct: '', notes: '' },
+        weekNumber, frequency: n <= 3 ? 3 : n <= 5 ? 5 : 7, platforms, status: 'active',
+        ...fields, previousPlanId: prev?.id,
+      });
+      genKey.current = '';
+      await load();
+    } catch (e: any) {
+      setGenError(/tope|BUDGET/i.test(String(e?.message)) ? BUDGET_MESSAGE : 'No pudimos armar tu semana. Revisa tu conexión e inténtalo de nuevo.');
+    }
+    setCreatingPlan(false);
   };
 
   const retryGen = () => { genKey.current = ''; if (plan && today) { genKey.current = `${plan.id}|${today.id}|retry${Date.now()}`; void startPreGen(plan, now); } };
@@ -304,12 +341,16 @@ const HoyScreen: React.FC = () => {
     : phase === 'needs-catalog'
       ? { title: 'Ahora sube tus joyas', text: 'Sube fotos de cada pieza, de varios lados si puedes. Las tuyas nunca se modifican.', cta: 'Subir mis joyas', to: '/mi-negocio/catalogo', icon: <Gem size={20} /> }
       : phase === 'needs-plan'
-        ? { title: 'Falta armar tu semana', text: 'Elige qué quieres lograr y te dejamos las publicaciones listas, con fotos, texto y hora.', cta: 'Armar mi semana', to: '/planner/nuevo', icon: <CalendarCheck size={20} /> }
+        ? { title: 'Falta armar tu semana', text: 'Te dejamos las publicaciones listas, con fotos, texto y hora. Toma menos de un minuto.', cta: 'Armar mi semana', to: '', icon: <CalendarCheck size={20} /> }
         : null;
   if (emptyStep) {
+    const isPlanStep = phase === 'needs-plan';
     return (
-      <FlowShell title="Hoy" trailing={trailing} actions={<PrimaryButton onClick={() => nav(emptyStep.to)} icon={emptyStep.icon}>{emptyStep.cta}</PrimaryButton>}>
+      <FlowShell title="Hoy" trailing={trailing} actions={<PrimaryButton onClick={() => (isPlanStep ? void onCreatePlan() : nav(emptyStep.to))} loading={isPlanStep && creatingPlan} icon={emptyStep.icon}>{emptyStep.cta}</PrimaryButton>}>
         <LargeTitle subtitle={emptyStep.text}>{emptyStep.title}</LargeTitle>
+        {isPlanStep && (genError || budgetMsg) && (
+          <div className="mt-4"><InlineBanner tone={genError ? 'danger' : 'warn'} icon={<AlertTriangle size={20} />}>{genError || budgetMsg}</InlineBanner></div>
+        )}
       </FlowShell>
     );
   }

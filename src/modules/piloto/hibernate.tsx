@@ -16,8 +16,9 @@ import { useAuth } from '../auth/AuthContext';
 
 export const HIBERNATE = true;
 
-/** Rutas que siguen disponibles en hibernación (Mi negocio y la cuenta para salir). */
-const ALLOWED_PREFIXES = ['/mi-negocio', '/cuenta'];
+/** Rutas que siguen disponibles en hibernación (Mi negocio, la cuenta para salir y el Planner:
+ *  la pantalla Hoy manda a /planner/:id/cierre para el cierre semanal; sin esto rebotaba a /mi-negocio). */
+const ALLOWED_PREFIXES = ['/mi-negocio', '/cuenta', '/planner'];
 
 export function isAllowedWhenHibernated(pathname: string): boolean {
   return ALLOWED_PREFIXES.some(p => pathname === p || pathname.startsWith(`${p}/`));
