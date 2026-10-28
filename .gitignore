@@ -91,3 +91,6 @@ UsersNICOTR~1AppDataLocalTempclaudec--Users-Nico-Trabajo-Downloads-luz-ia-studio
 
 # Piloto joyería: datos de mercado que la app lee en runtime
 !src/data/jewelry-market/*.json
+
+# Segundo cerebro (Obsidian), solo local
+cerebro-luz/
