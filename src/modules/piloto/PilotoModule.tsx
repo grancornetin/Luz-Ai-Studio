@@ -3,7 +3,7 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { FlowShell } from '../../components/shared/flow/FlowShell';
 import { LargeTitle } from '../../components/shared/flow/primitives';
-import { usePilotAccess } from './usePilotAccess';
+import { usePilotAccessState } from './usePilotAccess';
 import { HIBERNATE } from './hibernate';
 import HoyScreen from './screens/HoyScreen';
 
@@ -42,9 +42,11 @@ const Loading = (
 );
 
 const PilotoModule: React.FC = () => {
-  const allowed = usePilotAccess();
+  const access = usePilotAccessState();
+  const allowed = access === 'yes';
   const nav = useNavigate();
 
+  if (access === 'checking') return Loading;
   if (!allowed) {
     // Sin acceso: con la app hibernada no hay otro lugar al que ir (evita un bucle de redirecciones).
     if (!HIBERNATE) return <Navigate to="/dashboard" replace />;

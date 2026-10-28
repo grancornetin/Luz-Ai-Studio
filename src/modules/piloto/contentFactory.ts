@@ -38,6 +38,9 @@ const RECIPE_SHOTS: Partial<Record<RecipeId, ProductShotType[]>> = {
   detalle_macro: ['DETAIL', 'DETAIL', 'HERO'],
   flatlay_regalo: ['TOP', 'TOP', 'TOP'],
   estilo_de_vida: ['CONTEXT', 'CONTEXT', 'CONTEXT'],
+  // QA1: recipes.ts las deja activas y el plan las elige; sin esto caían en "usamos tus fotos originales".
+  carrusel_educativo: ['HERO', 'DETAIL', 'ANGLE'],
+  story_venta: ['HERO', 'HERO'],
 };
 
 export const EXECUTABLE_RECIPES = Object.keys(RECIPE_SHOTS) as RecipeId[];
@@ -49,6 +52,8 @@ const RECIPE_EXTRA: Partial<Record<RecipeId, string>> = {
   detalle_macro: 'Close-up macro of the piece only. Do not invent texture, stones or engraving that the product photos do not show. No people.',
   flatlay_regalo: 'Top-down flat lay. A simple neutral gift-style setting is allowed (paper, linen, ribbon) but never replaces or hides the piece. No people.',
   estilo_de_vida: 'Everyday still-life scene (vanity table, soft window light). No people, no hands, no faces. The piece stays the clear hero.',
+  carrusel_educativo: 'Clean photos of the piece from different angles on a neutral surface. No people, no hands. Do not write any text on the image.',
+  story_venta: 'Vertical-friendly composition: the piece large and clear on a plain surface with empty space at top and bottom. No people, no hands. Do not write any text on the image.',
 };
 
 const VARIATION_NOTES = [
@@ -627,7 +632,10 @@ export function createDefaultIO(): FactoryIO {
     async buildPayloads(input, shotTypes) {
       const direction = await runProductDirector(input);
       const shots = buildShotPlans(shotTypes, direction.analysis);
-      return buildPromptPayloadsFromDirectorResult(input, { ...direction, shots });
+      const base = buildPromptPayloadsFromDirectorResult(input, { ...direction, shots });
+      // QA1: buildShotPlans quita las tomas repetidas (['TOP','TOP','TOP'] -> 1 sola), y la receta pide
+      // varias opciones. Se repiten las tomas hasta completar; cada opción lleva su propia variación de composición.
+      return base.length ? shotTypes.map((_, i) => base[i % base.length]) : base;
     },
 
     async generate(payload, refs, meta) {

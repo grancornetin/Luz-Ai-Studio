@@ -327,6 +327,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
 // ── APP CONTENT PRINCIPAL ──
 const AppContent: React.FC = () => {
   const { user, isNewUser, markOnboardingDone } = useAuth();
+  const hibernatedApp = useHibernated(); // QA1: el tour de módulos no aplica cuando la app está hibernada
   const [avatars, setAvatars] = useState<AvatarProfile[]>([]);
   const [products, setProducts] = useState<ProductProfile[]>([]);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -481,7 +482,7 @@ const AppContent: React.FC = () => {
               <div data-app-chrome className="contents"><MobileBottomNav onSearchOpen={() => setIsSearchOpen(true)} /></div>
             </div>
           </div>
-          {isNewUser && <OnboardingWizard onDone={markOnboardingDone} />}
+          {isNewUser && !hibernatedApp && <OnboardingWizard onDone={markOnboardingDone} />}
           <div data-app-chrome className="contents">
             <AppAssistant />
             <AdminResetButton />
