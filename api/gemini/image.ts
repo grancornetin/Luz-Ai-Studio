@@ -71,7 +71,7 @@ async function getJob(jobId: string): Promise<ImageJob | null> {
 
 import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, getBatchImageRatelimit, checkRateLimit, sanitizeUid, verifyAuth } from '../../src/server/api/middleware.js';
 import { concurrencyAcquire, concurrencyRelease } from '../../src/server/api/concurrency.js';
-import { checkBudget, releaseReservation, isPilotUid, isLockdownOn } from '../piloto/ledger.js';
+import { checkBudget, releaseReservation, isPilotUid, isLockdownOn } from '../_piloto/ledger.js';
 import { estimateImageUSD } from '../../src/modules/piloto/budget/pricing.js';
 
 // ─── Circuit breaker ──────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 // scripts/piloto-spikes/ledger-test.mjs
 // Pruebas del libro de gasto (W8). Ejecutar:  node scripts/piloto-spikes/ledger-test.mjs
-// No instala nada: usa esbuild (ya viene con vite) para compilar api/piloto/ledger.ts
+// No instala nada: usa esbuild (ya viene con vite) para compilar api/_piloto/ledger.ts
 // y lo prueba con un Redis y un Firestore falsos en memoria.
 
 import { build } from 'esbuild';
@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const outfile = path.join(root, `node_modules/.cache-ledger-test-${process.pid}.mjs`);
 await build({
-  entryPoints: [path.join(root, 'api/piloto/ledger.ts')],
+  entryPoints: [path.join(root, 'api/_piloto/ledger.ts')],
   bundle: true, platform: 'node', format: 'esm', outfile, logLevel: 'error',
   external: ['@upstash/redis', 'firebase-admin', 'firebase-admin/*', '@vercel/node'],
 });

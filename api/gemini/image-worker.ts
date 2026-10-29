@@ -16,7 +16,7 @@ import { Redis } from '@upstash/redis';
 import { GoogleGenAI } from '@google/genai';
 import { reportShotResult, appendToHistory } from '../../src/server/api/notifications.js';
 import { concurrencyRelease } from '../../src/server/api/concurrency.js';
-import { recordSpend } from '../piloto/ledger.js';
+import { recordSpend } from '../_piloto/ledger.js';
 
 // ─── Redis ───────────────────────────────────────────────────────────────────
 const redis = new Redis({

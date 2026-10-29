@@ -4,6 +4,12 @@ Actualizado: 2026-10-22 (día 1)  ·  Cuenta/sesión: orquestador, cuenta A
 ## Estado en una frase
 Día 1 en curso: cimientos (W0) y dossier de mercado v1 (W1) ya están en main; faltan terminar el spike de fidelidad, el spike de video y W8 (libro de gasto), que siguen corriendo.
 
+## ESTADO 28-oct (QA mergeado)
+- main = 6855faa (merge qa1, pusheado; tsc 0 errores, build ok). QA arregló: plan de 6 semanas desde Hoy, Planner permitido en hibernación, config/pilot leído por la app, fotos por receta, "Ya lo publiqué" no pisa fotos, tour oculto, etiqueta IA de Meta. Informe: CIERRE_MVP/informes/qa1/INFORME.md
+- Falta (dueño): rotar llaves de .env.production (está en git; luego lo saco del repo), Vercel PILOT_UIDS + GCP_PROJECT_ID + GEMINI_SERVICE_ACCOUNT_KEY, doc config/pilot, publicar reglas Firestore/Storage, credencial Gemini válida para prueba de texto, prueba real con cuenta de ella, decidir si se muestran láminas del carrusel/texto de story.
+- 28-oct tarde: .env.production sacado del repo (70b5954; repo es PÚBLICO → rotar llaves SÍ o SÍ: GOOGLE_SERVICE_ACCOUNT_KEY de Firebase, KV/Redis y QSTASH; Dodo/Evolink venían vacías). Reglas Firestore+Storage publicadas. PILOT_UIDS cargado en Vercel (usuaria camilabahamondes2a@gmail.com, entra con Google). Faltan SOLO con navegador: llave nueva de luz-creative-engine-2 → GEMINI_SERVICE_ACCOUNT_KEY + GCP_PROJECT_ID (juntas, si no se rompe la generación), rotar las 3 llaves, config/pilot (reglas: solo escribe servidor), luego deploy y prueba de texto. Vercel guarda las llaves "solo escritura": no se pueden leer con env pull. Extensión Chrome no conecta en esta cuenta de Claude.
+- Deploy `vercel deploy --prod` aún NO hecho (manual desde el repo principal).
+
 ## ESTADO 26-oct (PAUSA por uso 92 %, retomar en ~2 h)
 - main al día (be0366c W8 + decisiones). Camino principal de fotos = Fotos de producto con varios ángulos, estilo minimal: VERIFICADO por el dueño con fotos reales (fiel). Recorte = plan B (rama piloto/w5-recorte, sin mergear, falla con fotos en mano).
 - 3 agentes en worktrees (pausa pedida; cada uno deja su PUNTO-DE-RETOMA en su carpeta, relanzar con 'Ya existe trabajo previo; léelo y continúa'):

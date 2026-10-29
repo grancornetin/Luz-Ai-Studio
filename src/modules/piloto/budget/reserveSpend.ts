@@ -12,10 +12,10 @@ export async function reserveSpend(kind: BudgetKind, estimatedUSD: number, taskI
   try {
     const token = await getAuth().currentUser?.getIdToken();
     if (!token) return { allowed: false, reason: 'Inicia sesión para continuar.' };
-    const r = await fetch('/api/piloto/ledger', {
+    const r = await fetch('/api/gemini/content', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ action: 'reserve', kind, estimatedUSD, taskId }),
+      body: JSON.stringify({ action: 'pilotLedger', ledgerAction: 'reserve', kind, estimatedUSD, taskId }),
     });
     const j = await r.json().catch(() => ({}));
     if (r.status === 402) return { allowed: false, reason: j.reason };

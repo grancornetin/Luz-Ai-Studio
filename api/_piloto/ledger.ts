@@ -404,8 +404,8 @@ export function estimateContentRequestUSD(body: any): { kind: BudgetKind; usd: n
 }
 
 // ─── Endpoint: estado del gasto para la app ─────────────────────────────────
-// POST /api/piloto/ledger {action:'status'}  (requiere sesión)
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+// POST /api/gemini/content {action:'pilotLedger', ledgerAction:'status'|'reserve'}  (requiere sesión; vive en content.ts porque Vercel Hobby limita a 12 funciones)
+export async function pilotLedgerHandler(req: VercelRequest, res: VercelResponse) {
   const { setCorsHeaders, setSecurityHeaders, verifyAuth } = await import('../../src/server/api/middleware.js');
   setSecurityHeaders(res);
   if (setCorsHeaders(req, res)) return;
@@ -413,7 +413,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let uid: string;
   try { uid = await verifyAuth(req); } catch { return res.status(401).json({ error: 'Unauthorized' }); }
 
-  const action = req.body?.action;
+  const action = req.body?.ledgerAction;
   if (action !== 'status' && action !== 'reserve') return res.status(400).json({ error: 'Unknown action' });
   if (!isPilotUid(uid)) return res.status(200).json({ pilot: false });
   if (action === 'reserve') {

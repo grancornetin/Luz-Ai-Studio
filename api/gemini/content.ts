@@ -122,6 +122,7 @@ function getGenAIClient(location: string = 'us-central1'): GoogleGenAI {
 
 interface ContentRequest {
   action:
+    | 'pilotLedger'
     | 'extractAvatarProfile'
     | 'analyzeProduct'
     | 'analyzeOutfit'
@@ -245,7 +246,7 @@ import {
   validateChatPrompt,
   verifyAuth,
 } from '../../src/server/api/middleware.js';
-import { checkBudget, recordSpend, isPilotUid, isLockdownOn, estimateContentRequestUSD } from '../piloto/ledger.js';
+import { checkBudget, recordSpend, isPilotUid, isLockdownOn, estimateContentRequestUSD, pilotLedgerHandler } from '../_piloto/ledger.js';
 
 function extractText(response: any): string {
   return response.candidates?.[0]?.content?.parts
@@ -763,6 +764,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = req.body as ContentRequest;
   if (!body.action) return res.status(400).json({ error: 'Missing action' });
+  if (body.action === 'pilotLedger') return pilotLedgerHandler(req, res);
 
   if (body.action === 'runContentJob') {
     const signature = req.headers['upstash-signature'] as string;

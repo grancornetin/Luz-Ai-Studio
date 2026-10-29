@@ -5,7 +5,7 @@ import { Redis } from '@upstash/redis';
 import { Client as QStashClient } from '@upstash/qstash';
 import { setCorsHeaders, setSecurityHeaders, validateBase64Image, validatePrompt, getImageRatelimit, checkRateLimit, sanitizeUid, verifyAuth } from '../../src/server/api/middleware.js';
 import { concurrencyAcquire } from '../../src/server/api/concurrency.js';
-import { isPilotUid } from '../piloto/ledger.js';
+import { isPilotUid } from '../_piloto/ledger.js';
 
 const RETRY_DELAY_MS = 3000;
 
