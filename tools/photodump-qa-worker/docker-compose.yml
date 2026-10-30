@@ -1,0 +1,11 @@
+services:
+  photodump-qa-worker:
+    build: .
+    container_name: luz-photodump-qa
+    restart: unless-stopped
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      QA_MODEL: ${QA_MODEL:-gemini-2.5-flash}
+      QA_JOBS_DIR: /jobs
+    volumes:
+      - ./jobs:/jobs
