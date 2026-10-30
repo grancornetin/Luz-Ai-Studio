@@ -17,9 +17,9 @@
 // ─────────────────────────────────────────────────────────────────
 
 import { collection, deleteDoc, doc, getDocs, orderBy, query, setDoc, updateDoc } from 'firebase/firestore';
-import { deleteObject, getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
+import { uploadImageBlob } from './cloudImages';
 import { getAuth } from 'firebase/auth';
-import { db, storage } from '../../../firebase';
+import { db } from '../../../firebase';
 import type { CatalogItem, PhotoQuality, PilotCategory, PilotPriceRange } from '../types';
 import { cleanClaims, extractJson } from './identityService';
 
@@ -298,11 +298,8 @@ function clean<T extends object>(o: T): T {
 async function uploadOriginal(uid: string, itemId: string, file: File): Promise<{ url: string; path: string }> {
   const p = await prepareOriginal(file);
   // Ruta nueva y única en cada subida: un original jamás se sobrescribe.
-  const path = `users/${uid}/pilotAssets/originals/${itemId}/${Date.now()}-${uid8()}.${p.ext}`;
-  const r = storageRef(storage, path);
-  await uploadBytes(r, p.blob, { contentType: p.contentType, customMetadata: { immutable: 'true' } });
-  const url = await getDownloadURL(r);
-  return { url, path };
+  const path = `pilotAssets/${uid}/originals/${itemId}/${Date.now()}-${uid8()}`;
+  return uploadImageBlob(p.blob, path);
 }
 
 export const catalogService = {
@@ -374,9 +371,8 @@ export const catalogService = {
     return next;
   },
 
-  /** Borra la pieza (solo si ella lo pide) y, sin bloquear, sus fotos. */
+  /** Borra la pieza (solo si ella lo pide). Las fotos quedan en Cloudinary (borrar exige clave privada). */
   async remove(uid: string, item: CatalogItemExt): Promise<void> {
     await deleteDoc(catalogDoc(uid, item.id));
-    await Promise.allSettled(item.originalPhotos.map((p) => deleteObject(storageRef(storage, p.path))));
   },
 };

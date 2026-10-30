@@ -14,8 +14,8 @@
 
 import { getAuth } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
-import { auth, db, storage } from '../../firebase';
+import { uploadImageBlob } from './services/cloudImages';
+import { auth, db } from '../../firebase';
 import { imageApiService, newSessionId } from '../../services/imageApiService';
 import {
   buildPromptPayloadsFromDirectorResult,
@@ -681,11 +681,9 @@ export function createDefaultIO(): FactoryIO {
     },
 
     async saveGenerated(uid, fileName, dataUrl) {
-      const path = `users/${uid}/pilotAssets/generated/${fileName}`;
+      const path = `pilotAssets/${uid}/generated/${fileName.replace(/\.[a-z0-9]+$/i, '')}`;
       const blob = await dataUrlToJpegBlob(dataUrl);
-      const r = storageRef(storage, path);
-      await uploadBytes(r, blob, { contentType: 'image/jpeg' });
-      return { url: await getDownloadURL(r), path };
+      return uploadImageBlob(blob, path);
     },
 
     async saveAssetDoc(uid, asset) {
