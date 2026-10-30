@@ -23,7 +23,9 @@ export interface PilotBrand extends BrandHint {
 
 export async function loadBrand(uid: string): Promise<PilotBrand | null> {
   const brands = await brandProfileService.getBrandProfiles(uid);
-  const b = brands.find(x => x.isDefault) ?? brands[0];
+  // Solo cuenta la marca creada en el cuestionario del Piloto (pilotSeed). Cuentas con marcas
+  // viejas de Mis Marcas deben pasar igual por las preguntas.
+  const b = brands.find(x => !!(x as { pilotSeed?: unknown }).pilotSeed);
   if (!b) return null;
   return { id: b.id, name: b.brandName, toneKeywords: b.voice?.toneKeywords ?? [] };
 }
