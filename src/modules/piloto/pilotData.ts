@@ -30,8 +30,10 @@ export async function loadBrand(uid: string): Promise<PilotBrand | null> {
   return { id: b.id, name: b.brandName, toneKeywords: b.voice?.toneKeywords ?? [] };
 }
 
-export async function loadActivePlan(): Promise<(Omit<ContentPlan, 'tasks'> & { tasks: PilotPlanTask[] }) | null> {
-  const plan = await contentPlanService.getActivePlan();
+/** Plan activo de la marca del Piloto. Planes de otras marcas (p. ej. del Planner antiguo) no cuentan. */
+export async function loadActivePlan(brandId: string): Promise<(Omit<ContentPlan, 'tasks'> & { tasks: PilotPlanTask[] }) | null> {
+  const plans = await contentPlanService.listPlans();
+  const plan = plans.find(p => p.status === 'active' && p.brandId === brandId) ?? null;
   return plan as (Omit<ContentPlan, 'tasks'> & { tasks: PilotPlanTask[] }) | null;
 }
 

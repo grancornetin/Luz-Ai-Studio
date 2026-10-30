@@ -163,7 +163,8 @@ const HoyScreen: React.FC = () => {
     setPhase('loading');
     setNow(new Date());
     try {
-      const [b, cat, p] = await Promise.all([loadBrand(uid), loadCatalog(uid), loadActivePlan()]);
+      const [b, cat] = await Promise.all([loadBrand(uid), loadCatalog(uid)]);
+      const p = b ? await loadActivePlan(b.id) : null;
       setBrand(b); setItems(cat); setPlan(p);
       setPhase(!b ? 'needs-brand' : !cat.length ? 'needs-catalog' : !p ? 'needs-plan' : 'ready');
     } catch {
